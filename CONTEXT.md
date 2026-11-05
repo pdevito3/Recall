@@ -39,6 +39,17 @@ _Avoid_: Conflict, merge
 The state of a Session whose current Raw Draft is at a newer Revision than the Revision that the last successful Cleanup read. It has this one definition. An edit of Cleaned by hand and a save that lost Last-write-wins do not make a Session stale. A Person rename also does not. If the rename makes a Raw Revision on a Session that is not stale, the Revision that the last Cleanup read moves to the new Revision. A stale Session stays stale. These three rules on a rename are one choice _(agent default)_.
 _Avoid_: Dirty, outdated
 
+**Client session ID**:
+The ID that a client makes for a Session before it has a connection, so a replay of the create finds the same Session. It is unique for one User. It is not an OAuth client ID.
+
+**Sync feed**:
+The ordered list of each change in the journal of one User. A client pulls it from a cursor and gets each changed row once, in its newest state.
+_Avoid_: Change log (the Audit log records who changed what)
+
+**Tombstone**:
+The line that the Sync feed keeps for a deleted row. It holds the IDs of the row and no words.
+_Avoid_: Soft delete (the deleted words are gone)
+
 ### AI
 
 **Cleanup**:

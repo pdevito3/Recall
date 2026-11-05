@@ -1,0 +1,63 @@
+# Spec: the journal
+
+## 1. Scope
+
+A person opens the phone, dictates, and the entry is captured with no friction. This spec covers the Session and its Revisions, the directory of People, the Corrections, the settings of a User, and the sync feed. Issue #9 gives the reasons. The words of a person are the source of truth, AI never changes them, and no other person can read them.
+
+This spec leaves out Cleanup, Summaries, audio, and each screen. Later units build them. The `CleanupStatus` values and the Revision that the last Cleanup read exist here, so that Cleanup only fills them in.
+
+[ADR 0019](../adr/0019-last-write-wins-for-drafts.md) records Last-write-wins, and [ADR 0020](../adr/0020-journal-rules-in-the-database.md) records the triggers, the delete, and the feed.
+
+## 2. Entities and states
+
+| Entity | Root of | Fields that a user sets | States |
+|---|---|---|---|
+| `Session` | `RawRevision`, `CleanedRevision` | client session ID, start time, location, Raw, Cleaned, activity, Moods, Topics | None. A Session has no lifecycle. |
+| `Person` | | label | None |
+| `Correction` | | canonical term, mishearings, hard replace | None |
+| `UserSetting` | | time zone, location capture, People review | None |
+| `SyncChange` | | None. Triggers write it. | Live, or tombstone |
+
+`CleanupStatus` comes from three stored values, and nothing stores it:
+
+| From | To | Method | Who |
+|---|---|---|---|
+| NotRun, Clean, Failed | Running | `Session.BeginCleanup` | Cleanup |
+| Running | Clean | `Session.CompleteCleanup` | Cleanup |
+| Running | Failed | `Session.FailCleanup` | Cleanup |
+
+A `Session` shows `Stale` when its Raw Draft is at a newer Revision than the Revision that the last successful Cleanup read, and no Cleanup runs.
+
+## 3. Rules
+
+| ID | Rule | Enforced by | Backstop |
+|---|---|---|---|
+| SES-1 | One client session ID of a User makes one Session. A replay of the create returns that Session with 200. | `AddSession` | Unique index on `sessions.user_id, client_session_id` |
+| SES-2 | A Session stores an absolute UTC start time that is not in the future. | `Session.Create` | |
+| SES-3 | The Journaling day comes from the start time and the time zone of the User. No column stores it, so a change of the zone moves the Session to its new day. A zone change does not put the Sessions in the sync feed, so a client derives the day from the start time and the zone of the settings row. A User with no zone uses UTC. | `SessionMapper.ToSessionDto`, `GetSessionPage` | |
+| SES-4 | `Stale` has one definition: the Raw Draft is at a newer Revision than the Revision that the last Cleanup read. A save that lost and a hand edit of Cleaned do not make a Session stale. | `Session.CleanupStatusOf` | |
+| SES-5 | A save based on the current Draft wins. A save based on an older Revision wins with a save time that is not before the save time of the Draft. | `DraftSlot.Decide` | Primary key on the number of a Revision |
+| SES-6 | A save that loses changes no Draft, and its words stay as the newest Revision. | `DraftSlot.Decide`, `Session.SaveRaw`, `Session.SaveCleaned` | |
+| SES-7 | A claimed time in the future becomes the time of the server, so a fast clock cannot win each later save. | `DraftSave.Of`, `UserSetting.Change`, `Session.SetMetadata` | |
+| SES-8 | A replay of a save makes no Revision. A replay matches on its words and the time that the client claimed, so a fast clock cannot make a replay look new. | `DraftSlot.Decide`, `SaveRawDraft`, `SaveCleanedDraft` | |
+| SES-9 | A Person rename changes the label of each mention in Raw and in Cleaned, and makes a Revision of each text that changes. A save that arrives after the rename with the old label keeps that label, also a save that commits during the rename, because the words of a save are not changed. | `RenamePerson`, `Session.RenamePerson` | |
+| SES-10 | On a Session that is not stale, a rename also moves the Revision that the last Cleanup read, so it stays not stale. A stale Session stays stale. A rename does not change the Synopsis. | `Session.RenamePerson` | |
+| SES-11 | A Revision is append-only. | `RawRevision`, `CleanedRevision` have no setter | Triggers refuse an update and a delete while the Session stays. `INSERT OR REPLACE` from outside the server fires no trigger, and no code of the server sends it. |
+| SES-12 | A delete removes the Session and each of its Revisions, and leaves a tombstone with the two IDs. A replay of its create then gives 409. | `DeleteSession`, `AddSession` | Foreign key cascade, trigger on `sessions` |
+| SES-13 | A delete of a User, also through a delete of the tenant, removes the journal of the User and its lines in the feed. | | Trigger on `users` |
+| SES-14 | Each journal read has a filter on the owner. The row of another person gives 404, also for an Admin. | `FilterByJournalOwner`, `ApplyJournalOwner` | Test that a handler does not turn the filter off |
+| SES-15 | A machine agent, an all-tenants client, a delegated agent, and a system scope have no journal. They get 403 where a route has no ID, and 404 where it has one. | `CallerIdentity.JournalOwnerId`, `RequireJournalOwner` | |
+| SES-16 | A pull from a cursor gives each change once and in order, also when two saves have the same timestamp. A save during the read comes in the next page. | `GetSyncChangePage` | Triggers with an `AUTOINCREMENT` sequence |
+| SES-17 | A cursor ahead of the newest change of the User gives 422. A cursor that is not a sequence gives 400. | `GetSyncChangePage`, `SyncCursor.Parse` | |
+| SES-18 | A location with capture off, partial, or not on the globe is not stored. | `CapturedLocation.Admit` | |
+| SES-19 | No journal text reaches a log, a span, or an audit value. | `AuditModel`, `DraftSave`, each handler | Test with a marker through each write route |
+| SES-20 | Cleanup does not change Raw. A successful Cleanup replaces Cleaned and keeps the copy as a Revision, and a hand edit after it marks Cleaned. | `Session.CompleteCleanup`, `Session.SaveCleaned` | |
+| SES-21 | The Moods and the Topics of a Session are trimmed, in one spelling, and have no duplicate. A change by the User keeps the AI Topics, a change with an older save time does nothing, and a retry of a change from a fast clock does nothing. | `SessionMetadata.Of`, `Session.SetMetadata` | |
+| SES-22 | The People of a Session are the Persons that its Raw and its Cleaned mention, and no other list. | `Session.RefreshFromDrafts` | |
+| SES-23 | The preview has the first 200 characters of the plain text of Raw, and a rename or a save changes it. | `Session.RefreshFromDrafts` | |
+| SES-24 | The label of a Person is trimmed and not blank. | `Person.Create`, `Person.Rename` | |
+| SES-25 | A Correction has a trimmed term that is not blank. Its mishearings are trimmed, have no duplicate, and do not hold the term. | `Correction.Create`, `Correction.Update` | |
+| SES-26 | A settings change with a save time older than the stored change does nothing, a retry of a change from a fast clock does nothing, and location capture is off until the User turns it on. | `UserSetting.Change` | Unique index on `user_settings.user_id` |
+| SES-27 | After a delete with no long reader, the words of the Session are not in the database file or in the WAL. A reader that holds on past the wait of the truncate can keep the old pages in the database file or the WAL until a later checkpoint passes the delete. | `PRAGMA secure_delete`, `WalScrub` | |
+| SES-28 | A timeline page gives no row twice and misses no row, also when two Sessions have the same start time and a Session arrives between two pages. | `GetSessionPage`, `SessionCursor` | Index on `sessions.user_id, started_at, id` |
+| SES-29 | Any text saves and comes back exactly, also a text that is not a good ProseMirror document. Its preview is the text, it mentions no Person, and a rename does not stop on it. | `ProseMirrorNode.TryRead`, `Session.PreviewOf` | |
