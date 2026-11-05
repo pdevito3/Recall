@@ -43,7 +43,7 @@ The script writes a tenant-owned root with add, get, list, update, and delete. I
 - The entity graph blueprint, the rules of the fakes, and the unit, integration, and functional tests.
 - Lines in the shared files, at each `// new-feature:<slot>` marker: the `DbSet`, the permission, the gRPC map, `PermissionTests`, `StringColumnLengthTests`, `TenantDeleteOwnedRowsTests`, and `EndpointAccessSweepTests`.
 
-A second run with the same input changes nothing. When a file that the script writes exists with other content, the script stops before it writes. CI runs the script for two samples on each pull request, and then builds and tests them (the `new-feature` job). To run the same steps before you push a change to `scripts/new-feature.cs` or to a marker, run [scripts/ci/new-feature.cs](../../../scripts/ci/new-feature.cs): `dotnet run scripts/ci/new-feature.cs`. It works on a throwaway copy of the checkout, so it does not change your files. It needs Docker and buf.
+A second run with the same input changes nothing. When a file that the script writes exists with other content, the script stops before it writes. CI runs the script for two samples on each pull request, and then builds and tests them (the `new-feature` job). To run the same steps before you push a change to `scripts/new-feature.cs` or to a marker, run [scripts/ci/new-feature.cs](../../../scripts/ci/new-feature.cs): `dotnet run scripts/ci/new-feature.cs`. It works on a throwaway copy of the checkout, so it does not change your files. It needs buf.
 
 ### Write the domain rules
 

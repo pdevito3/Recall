@@ -3,6 +3,8 @@
 // result, on a throwaway copy of the checkout. See job.cs.
 //
 //   dotnet run scripts/ci/new-feature.cs
+//
+// The tools: git, the .NET SDK, and buf.
 
 #:include job.cs
 

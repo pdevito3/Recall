@@ -1,5 +1,6 @@
 namespace Recall.Server.Resources.Storage;
 
+using System.Text;
 using Domain;
 using Exceptions;
 
@@ -12,6 +13,8 @@ public sealed partial class FileKey : ValueObject
     internal const string TemporaryFolder = ".tmp";
 
     private const char Separator = '/';
+
+    private const int LongestSegmentInBytes = 255;
 
     public string Value { get; }
 
@@ -28,6 +31,8 @@ public sealed partial class FileKey : ValueObject
         {
             if (segment.Length == 0)
                 throw new InvalidFileKeyException("A file key cannot have an empty segment.");
+            if (Encoding.UTF8.GetByteCount(segment) > LongestSegmentInBytes)
+                throw new InvalidFileKeyException("A file key cannot have a segment that is longer than a file name can be.");
             if (segment is "." or "..")
                 throw new InvalidFileKeyException("A file key cannot have a segment that points to a folder.");
             // A file system on a Mac or on Windows does not see the case of a name

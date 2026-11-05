@@ -44,6 +44,34 @@ public class FileKeyTests
     }
 
     [Test]
+    [Arguments(255, true)]
+    [Arguments(256, false)]
+    public void a_segment_can_be_as_long_as_a_file_name(int length, bool isKey)
+    {
+        // Arrange
+        var value = $"tenants/{new string('a', length)}";
+
+        // Act
+        var act = () => FileKey.Of(value);
+
+        // Assert
+        if (isKey)
+            act().Value.ShouldBe(value);
+        else
+            Should.Throw<InvalidFileKeyException>(act);
+    }
+
+    [Test]
+    public void a_long_segment_is_measured_in_bytes_and_not_in_characters()
+    {
+        // Arrange
+        var value = new string('é', 128);
+
+        // Act & Assert
+        Should.Throw<InvalidFileKeyException>(() => FileKey.Of(value));
+    }
+
+    [Test]
     public void the_key_of_a_tenant_is_its_folder_and_a_path_goes_under_it()
     {
         // Act & Assert
