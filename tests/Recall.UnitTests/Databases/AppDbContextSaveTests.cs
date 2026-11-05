@@ -119,7 +119,7 @@ public sealed class AppDbContextSaveTests
     }
 
     private sealed class NoteContext(ITenantScopeProvider tenantScopes, DomainEventDispatcher dispatcher) : AppDbContext(
-        new DbContextOptionsBuilder<AppDbContext>().UseNpgsql("Host=unused").UseSnakeCaseNamingConvention().Options,
+        new DbContextOptionsBuilder<AppDbContext>().UseSqlite("Data Source=unused.db").UseSnakeCaseNamingConvention().Options,
         TimeProvider.System, Substitute.For<ICurrentUserService>(), Substitute.For<ICallerIdentityResolver>(),
         tenantScopes, dispatcher)
     {
@@ -143,7 +143,7 @@ public sealed class AppDbContextSaveTests
     private static AppDbContext CreateContext(DomainEventDispatcher? dispatcher = null)
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql("Host=unused")
+            .UseSqlite("Data Source=unused.db")
             .UseSnakeCaseNamingConvention()
             .Options;
         return new AppDbContext(options, TimeProvider.System, Substitute.For<ICurrentUserService>(),

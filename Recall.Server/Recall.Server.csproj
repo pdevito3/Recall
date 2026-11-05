@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Recall.UnitTests" />
+    <InternalsVisibleTo Include="Recall.IntegrationTests" />
   </ItemGroup>
 
   <!-- BannedSymbols.txt bans the APIs that write without the save, so without an audit entry, the LIKE calls with no escape character, and the regex and reflection APIs that a source generator replaces -->
@@ -46,9 +47,9 @@
     <PackageReference Include="Grpc.StatusProto" />
     <PackageReference Include="ModelContextProtocol.AspNetCore" />
     <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" />
-    <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" />
-    <PackageReference Include="DistributedLock.Postgres" />
     <PackageReference Include="EFCore.NamingConventions" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
       <PrivateAssets>all</PrivateAssets>

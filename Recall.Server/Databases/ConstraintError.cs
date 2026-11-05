@@ -1,6 +1,5 @@
 namespace Recall.Server.Databases;
 
-/// <summary>What a unique index or an exclusion constraint means to the caller when it stops a save.</summary>
 public abstract record ConstraintError
 {
     private ConstraintError()

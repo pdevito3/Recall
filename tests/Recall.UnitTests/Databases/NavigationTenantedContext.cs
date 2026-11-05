@@ -31,7 +31,7 @@ internal sealed class NavigationTenantedContext() : AppDbContext(TestModelOption
 file static class TestModelOptions
 {
     public static readonly DbContextOptions<AppDbContext> Options = new DbContextOptionsBuilder<AppDbContext>()
-        .UseNpgsql("Host=unused")
+        .UseSqlite("Data Source=unused.db")
         .UseSnakeCaseNamingConvention()
         .Options;
 }

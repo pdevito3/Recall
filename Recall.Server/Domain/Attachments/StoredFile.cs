@@ -71,7 +71,7 @@ public sealed partial class StoredFile : ValueObject
         ValidationException.ThrowWhenNullOrWhitespace(name, "fileName", "The file has no name. Rename the file, then upload it again.");
         ValidationException.ThrowWhenLongerThan(name, NameMaxLength, "fileName",
             $"A file name can have no more than {NameMaxLength} characters. Rename the file, then upload it again.");
-        ValidationException.ThrowWhenHasCharacterPostgresCannotStore(name, "fileName",
+        ValidationException.ThrowWhenHasCharacterNotStorable(name, "fileName",
             "The file name has a character that is not allowed. Rename the file, then upload it again.");
         ValidationException.MustNot(name.IndexOfAny(['/', '\\']) >= 0, "fileName",
             "A file name cannot have a slash or a backslash. Rename the file, then upload it again.");

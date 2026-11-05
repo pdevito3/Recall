@@ -4,13 +4,6 @@ using Microsoft.Extensions.Options;
 
 namespace Recall.Bff.Authentication;
 
-/// <summary>
-/// Limits each refresh call to the token endpoint to <see cref="RefreshOptions.TokenRequestTimeout"/> on the
-/// <see cref="TimeProvider"/> of the app. The refresh lock holds a <c>bffdb</c> connection and the advisory lock
-/// during the call, so a hung identity provider must not hold them until the timeout of the backchannel. A call
-/// that reaches the limit gives the temporary failure <see cref="TimeoutError"/>, so the failure rules of the token
-/// attach apply.
-/// </summary>
 public sealed class RefreshTimeout(
     IOpenIdConnectUserTokenEndpoint inner,
     IOptionsMonitor<RefreshOptions> options,

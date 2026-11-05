@@ -5,7 +5,7 @@ using Recall.Server.Exceptions;
 using Recall.Server.Resources.Entrypoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
+using Microsoft.Data.Sqlite;
 using Shouldly;
 
 /// <summary>
@@ -21,9 +21,9 @@ public class StaleVersionIndexTests : TestBase
     public async Task second_current_revision_of_a_document_is_a_stale_version()
     {
         // Arrange
-        await using var connection = new NpgsqlConnection(TestFixture.UnpooledConnectionString);
+        await using var connection = new SqliteConnection(TestFixture.UnpooledConnectionString);
         await connection.OpenAsync();
-        await using (var command = new NpgsqlCommand(
+        await using (var command = new SqliteCommand(
             $"""
             CREATE TEMP TABLE revisions (id uuid PRIMARY KEY, document_id uuid NOT NULL, is_current boolean NOT NULL);
             CREATE UNIQUE INDEX {CurrentRevisionIndex} ON revisions (document_id) WHERE is_current;
@@ -40,7 +40,7 @@ public class StaleVersionIndexTests : TestBase
         var failure = await Should.ThrowAsync<DbUpdateException>(() => dbContext.SaveChangesAsync());
 
         // Assert
-        failure.InnerException.ShouldBeOfType<PostgresException>().ConstraintName.ShouldBe(CurrentRevisionIndex);
+        failure.InnerException.ShouldBeOfType<SqliteException>().SqliteExtendedErrorCode.ShouldBe(2067);
         var exception = DatabaseConflict.From(failure, dbContext.Model).ShouldBeOfType<StaleVersionException>();
         exception.InnerException.ShouldBeSameAs(failure);
         DomainProblemDetails.StatusCodeFor(exception).ShouldBe(StatusCodes.Status409Conflict);
@@ -50,9 +50,9 @@ public class StaleVersionIndexTests : TestBase
     public async Task save_that_replaces_the_current_revision_is_not_stopped()
     {
         // Arrange
-        await using var connection = new NpgsqlConnection(TestFixture.UnpooledConnectionString);
+        await using var connection = new SqliteConnection(TestFixture.UnpooledConnectionString);
         await connection.OpenAsync();
-        await using (var command = new NpgsqlCommand(
+        await using (var command = new SqliteCommand(
             $"""
             CREATE TEMP TABLE revisions (id uuid PRIMARY KEY, document_id uuid NOT NULL, is_current boolean NOT NULL);
             CREATE UNIQUE INDEX {CurrentRevisionIndex} ON revisions (document_id) WHERE is_current;
@@ -71,10 +71,10 @@ public class StaleVersionIndexTests : TestBase
         await dbContext.SaveChangesAsync();
     }
 
-    private sealed class RevisionContext(NpgsqlConnection connection) : DbContext
+    private sealed class RevisionContext(SqliteConnection connection) : DbContext
     {
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-            => optionsBuilder.UseNpgsql(connection);
+            => optionsBuilder.UseSqlite(connection);
 
         protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
             => configurationBuilder.MapConstraintErrors();

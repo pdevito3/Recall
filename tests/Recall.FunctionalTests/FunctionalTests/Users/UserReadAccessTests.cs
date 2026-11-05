@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Npgsql;
+using Microsoft.Data.Sqlite;
 using Shouldly;
 using TestUtilities;
 
@@ -365,9 +365,9 @@ public class UserReadAccessTests : TestBase
     {
         var connectionString = await ExecuteScopeAsync(sp => Task.FromResult(
             sp.GetRequiredService<IConfiguration>().GetConnectionString(DatabaseConsts.DatabaseName)));
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync();
-        await using var command = new NpgsqlCommand("UPDATE users SET is_deleted = true WHERE id = @id", connection);
+        await using var command = new SqliteCommand("UPDATE users SET is_deleted = true WHERE id = @id", connection);
         command.Parameters.AddWithValue("id", user.Id);
         (await command.ExecuteNonQueryAsync()).ShouldBe(1);
     }

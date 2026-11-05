@@ -5,9 +5,9 @@ using Recall.Server.Databases;
 using Recall.Server.Exceptions;
 using Recall.Server.Resources.Entrypoints;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Npgsql;
 using Shouldly;
 
 public class DatabaseConflictTests
@@ -16,6 +16,11 @@ public class DatabaseConflictTests
     private const string DefaultConflictType = "https://tools.ietf.org/html/rfc9110#section-15.5.10";
 
     private const string CurrentRevisionIndex = "ix_revisions_document_id_current";
+    private const string DuplicateIdentifier = "UNIQUE constraint failed: users.identifier";
+    private const string DuplicateCurrentRevision = "UNIQUE constraint failed: Revision.DocumentId";
+    private const string DuplicateRevisionNumber = "UNIQUE constraint failed: Revision.Number";
+    private const int UniqueViolation = 2067;
+    private const int ForeignKeyViolation = 787;
 
     private static readonly IModel Model = new AppDbContextFactory().CreateDbContext([]).Model;
     private static readonly IModel RevisionModel = new RevisionContext().Model;
@@ -24,7 +29,7 @@ public class DatabaseConflictTests
     public void unique_violation_is_a_conflict_with_the_field_and_the_message_of_the_index()
     {
         // Act
-        var exception = DatabaseConflict.From(SaveFailure(PostgresErrorCodes.UniqueViolation, "ix_users_identifier"), Model)
+        var exception = DatabaseConflict.From(SaveFailure(UniqueViolation, DuplicateIdentifier), Model)
             .ShouldBeOfType<ConstraintConflictException>();
 
         // Assert
@@ -39,7 +44,7 @@ public class DatabaseConflictTests
     public void unique_violation_problem_has_the_message_under_the_field_of_the_index()
     {
         // Arrange
-        var context = ContextFor(DatabaseConflict.From(SaveFailure(PostgresErrorCodes.UniqueViolation, "ix_users_identifier"), Model)!);
+        var context = ContextFor(DatabaseConflict.From(SaveFailure(UniqueViolation, DuplicateIdentifier), Model)!);
 
         // Act
         DomainProblemDetails.Customize(context);
@@ -56,41 +61,13 @@ public class DatabaseConflictTests
     public void unique_violation_problem_does_not_show_the_constraint()
     {
         // Arrange
-        var context = ContextFor(DatabaseConflict.From(SaveFailure(PostgresErrorCodes.UniqueViolation), Model)!);
+        var context = ContextFor(DatabaseConflict.From(SaveFailure(UniqueViolation, "UNIQUE constraint failed: other_table.other_column"), Model)!);
 
         // Act
         DomainProblemDetails.Customize(context);
 
         // Assert
         context.ProblemDetails.Detail.ShouldBe("A record with this value already exists.");
-        context.ProblemDetails.Extensions["errors"].ShouldBeOfType<Dictionary<string, string[]>>().ShouldBeEmpty();
-    }
-
-    [Test]
-    public void exclusion_violation_is_a_conflict_with_the_field_and_the_message_of_the_constraint()
-    {
-        // Act
-        var exception = DatabaseConflict.From(SaveFailure(PostgresErrorCodes.ExclusionViolation, "ix_tenants_name"), Model)
-            .ShouldBeOfType<ConstraintConflictException>();
-
-        // Assert
-        exception.Constraint.ShouldBe("ix_tenants_name");
-        exception.Property.ShouldBe("name");
-        exception.Message.ShouldBe("A tenant with this name already exists.");
-        DomainProblemDetails.StatusCodeFor(exception).ShouldBe(StatusCodes.Status409Conflict);
-    }
-
-    [Test]
-    public void exclusion_violation_problem_of_an_unknown_constraint_does_not_show_the_constraint()
-    {
-        // Arrange
-        var context = ContextFor(DatabaseConflict.From(SaveFailure(PostgresErrorCodes.ExclusionViolation, "ex_bookings_room_period"), Model)!);
-
-        // Act
-        DomainProblemDetails.Customize(context);
-
-        // Assert
-        context.ProblemDetails.Detail.ShouldBe("This value overlaps a record that exists.");
         context.ProblemDetails.Extensions["errors"].ShouldBeOfType<Dictionary<string, string[]>>().ShouldBeEmpty();
     }
 
@@ -127,7 +104,7 @@ public class DatabaseConflictTests
     public void unique_violation_of_a_stale_version_index_is_a_stale_version()
     {
         // Arrange
-        var failure = SaveFailure(PostgresErrorCodes.UniqueViolation, CurrentRevisionIndex);
+        var failure = SaveFailure(UniqueViolation, DuplicateCurrentRevision);
 
         // Act
         var exception = DatabaseConflict.From(failure, RevisionModel).ShouldBeOfType<StaleVersionException>();
@@ -142,7 +119,7 @@ public class DatabaseConflictTests
     public void unique_violation_of_a_stale_version_index_has_the_problem_of_a_concurrency_failure()
     {
         // Arrange
-        var staleIndex = DatabaseConflict.From(SaveFailure(PostgresErrorCodes.UniqueViolation, CurrentRevisionIndex), RevisionModel)!;
+        var staleIndex = DatabaseConflict.From(SaveFailure(UniqueViolation, DuplicateCurrentRevision), RevisionModel)!;
         var staleRow = DatabaseConflict.From(new DbUpdateConcurrencyException("The row changed."), Model)!;
         var (staleIndexContext, staleRowContext) = (ContextFor(staleIndex), ContextFor(staleRow));
 
@@ -168,7 +145,7 @@ public class DatabaseConflictTests
     public void unique_violation_of_another_index_of_a_model_with_a_stale_version_index_is_a_conflict()
     {
         // Act
-        var exception = DatabaseConflict.From(SaveFailure(PostgresErrorCodes.UniqueViolation, "ix_revisions_number"), RevisionModel)
+        var exception = DatabaseConflict.From(SaveFailure(UniqueViolation, DuplicateRevisionNumber), RevisionModel)
             .ShouldBeOfType<ConstraintConflictException>();
 
         // Assert
@@ -180,7 +157,7 @@ public class DatabaseConflictTests
     public void unique_violation_of_an_index_with_an_unknown_constraint_error_throws()
     {
         // Arrange
-        var failure = SaveFailure(PostgresErrorCodes.UniqueViolation, "ix_revisions_number");
+        var failure = SaveFailure(UniqueViolation, DuplicateRevisionNumber);
 
         // Act
         var exception = Should.Throw<UnreachableException>(() => DatabaseConflict.From(failure, new UnknownErrorContext().Model));
@@ -191,10 +168,21 @@ public class DatabaseConflictTests
     }
 
     [Test]
+    public void an_index_that_only_a_migration_adds_is_known_by_the_columns_that_the_error_names()
+    {
+        // Act
+        var name = DatabaseConflict.ConstraintNameOf(
+            "SQLite Error 19: 'UNIQUE constraint failed: users.tenant_id, users.first_name'.", Model);
+
+        // Assert
+        name.ShouldBe("users.tenant_id, users.first_name");
+    }
+
+    [Test]
     public void other_database_failure_is_not_a_conflict()
     {
         // Act & Assert
-        DatabaseConflict.From(SaveFailure(PostgresErrorCodes.ForeignKeyViolation), Model).ShouldBeNull();
+        DatabaseConflict.From(SaveFailure(ForeignKeyViolation, "FOREIGN KEY constraint failed"), Model).ShouldBeNull();
     }
 
     private static ProblemDetailsContext ContextFor(Exception exception) => new()
@@ -207,7 +195,7 @@ public class DatabaseConflictTests
     private sealed class RevisionContext : DbContext
     {
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-            => optionsBuilder.UseNpgsql("Host=unused");
+            => optionsBuilder.UseSqlite("Data Source=unused.db");
 
         protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
             => configurationBuilder.MapConstraintErrors();
@@ -230,7 +218,7 @@ public class DatabaseConflictTests
     private sealed class UnknownErrorContext : DbContext
     {
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-            => optionsBuilder.UseNpgsql("Host=unused");
+            => optionsBuilder.UseSqlite("Data Source=unused.db");
 
         protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
             => configurationBuilder.MapConstraintErrors();
@@ -263,8 +251,7 @@ public class DatabaseConflictTests
         public bool IsCurrent { get; set; }
     }
 
-    private static DbUpdateException SaveFailure(string sqlState, string? constraintName = null)
+    private static DbUpdateException SaveFailure(int extendedCode, string message)
         => new("An error occurred while saving the entity changes.",
-            new PostgresException("duplicate key value violates unique constraint \"ix_users_identifier\"",
-                "ERROR", "ERROR", sqlState, constraintName: constraintName));
+            new SqliteException($"SQLite Error 19: '{message}'.", 19, extendedCode));
 }

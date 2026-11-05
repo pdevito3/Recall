@@ -63,27 +63,11 @@ public class WriteGuardTests
     }
 
     [Test]
-    [Arguments("DO $$ BEGIN UPDATE users SET first_name = 'x'; END $$")]
-    [Arguments("CALL rename_users()")]
-    [Arguments("SELECT $q$users$q$")]
-    public void hidden_code_runs_only_from_ef_itself_even_with_no_guarded_table(string sql)
-    {
-        // Act
-        var refused = Sources.Where(source => WriteGuard.Refusal(source, sql, false, GuardedTables) is not null);
-
-        // Assert
-        refused.ShouldBe(
-            [CommandSource.Unknown, CommandSource.FromSqlQuery, CommandSource.ExecuteSqlRaw, CommandSource.ExecuteDelete,
-                CommandSource.ExecuteUpdate],
-            ignoreOrder: true);
-    }
-
-    [Test]
     public void refusal_names_the_table_and_the_way_to_write_it()
     {
         // Act & Assert
         WriteGuard.Refusal(CommandSource.ExecuteUpdate, WriteOfUsers, false, GuardedTables).ShouldBe(
-            "users is audited, so write it through SaveChangesAsync or BulkInsertAsync. ExecuteUpdate, ExecuteDelete, " +
+            "users is audited, so write it through SaveChangesAsync. ExecuteUpdate, ExecuteDelete, " +
             "and raw SQL do not write audit entries. An entity type that needs no audit has [NotAudited(reason)].");
     }
 

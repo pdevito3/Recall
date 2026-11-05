@@ -2,6 +2,7 @@ namespace Recall.Server.Databases.EntityConfigurations;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Domain;
 using Domain.DPoPProofs;
 
 public sealed class UsedDPoPProofConfiguration : IEntityTypeConfiguration<UsedDPoPProof>
@@ -13,7 +14,7 @@ public sealed class UsedDPoPProofConfiguration : IEntityTypeConfiguration<UsedDP
         // A base64url SHA-256 has 43 characters
         builder.Property(e => e.Id)
             .HasMaxLength(64)
-            .UseCollation("C");
+            .UseCollation(EntityId.Collation);
 
         // The cleanup deletes on this column
         builder.HasIndex(e => e.Expires);

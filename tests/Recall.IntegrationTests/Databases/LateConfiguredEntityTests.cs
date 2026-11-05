@@ -13,7 +13,7 @@ using Shouldly;
 
 public sealed class LateConfiguredEntityTests : IAsyncDisposable
 {
-    private readonly PostgresTestDatabase _database = new();
+    private readonly SqliteTestDatabase _database = new();
 
     public async ValueTask DisposeAsync() => await _database.DisposeAsync();
 
@@ -21,7 +21,6 @@ public sealed class LateConfiguredEntityTests : IAsyncDisposable
     public async Task new_entity_saves_with_the_id_that_it_made()
     {
         // Arrange
-        await _database.StartAsync();
         var memo = new Memo("first");
 
         // Act
@@ -37,7 +36,6 @@ public sealed class LateConfiguredEntityTests : IAsyncDisposable
     public async Task save_of_a_row_that_changed_after_the_load_is_a_stale_version()
     {
         // Arrange
-        await _database.StartAsync();
         var memo = new Memo("first");
         await AddAsync(memo);
         await using var first = await CreateContextAsync();
@@ -57,7 +55,6 @@ public sealed class LateConfiguredEntityTests : IAsyncDisposable
     public async Task query_shows_no_deleted_row()
     {
         // Arrange
-        await _database.StartAsync();
         var kept = new Memo("kept");
         var deleted = new Memo("deleted");
         await AddAsync(kept, deleted);
@@ -86,7 +83,7 @@ public sealed class LateConfiguredEntityTests : IAsyncDisposable
     private async Task<MemoContext> CreateContextAsync()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(_database.ConnectionString)
+            .UseSqlite(_database.ConnectionString)
             .UseSnakeCaseNamingConvention()
             .Options;
         var scopeProvider = Substitute.For<ITenantScopeProvider>();

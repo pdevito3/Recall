@@ -3,6 +3,7 @@ namespace Recall.Bff.Tests.Integration;
 using System.Globalization;
 using Recall.Bff.Sessions;
 using Recall.Bff.Tests.Fakes;
+using Recall.SharedTestHelpers.Utilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog.Core;
@@ -15,8 +16,7 @@ public class BffDatabaseMigratorTests
     public async Task startup_migration_on_a_missing_database_creates_it_and_logs_no_error()
     {
         // Arrange
-        await using var database = new PostgresTestDatabase();
-        await database.StartAsync(createDatabase: false);
+        await using var database = new SqliteTestDatabase();
         var logs = new CapturedLogs();
 
         // Act

@@ -4,7 +4,7 @@ using Recall.Bff.Sessions;
 using Recall.Bff.Tests.Fakes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Npgsql;
+using Microsoft.Data.Sqlite;
 using Serilog.Core;
 using Shouldly;
 
@@ -28,7 +28,7 @@ public class HostLogTests
         await using (var scope = failing.Services.CreateAsyncScope())
         {
             var dbContext = scope.ServiceProvider.GetRequiredService<BffDbContext>();
-            await Should.ThrowAsync<NpgsqlException>(() => dbContext.UsedLogoutTokens.TagWith(tag).ToListAsync());
+            await Should.ThrowAsync<SqliteException>(() => dbContext.UsedLogoutTokens.TagWith(tag).ToListAsync());
         }
 
         // Assert

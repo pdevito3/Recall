@@ -16,6 +16,16 @@ public static class Isolation
     public static bool IsIsolated(this IDistributedApplicationBuilder builder)
         => builder.Configuration.GetValue<bool>(RandomizePortsKey);
 
+    public static string DataDirectory(this IDistributedApplicationBuilder builder)
+    {
+        if (builder.Configuration["RECALL_DATA_DIR"] is { Length: > 0 } directory)
+            return Path.GetFullPath(directory);
+
+        return builder.IsIsolated()
+            ? Path.Combine(Path.GetTempPath(), $"recall-{Guid.NewGuid():N}")
+            : Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", ".data"));
+    }
+
     /// <summary>
     /// Adds a data volume in a normal run. The default volume name has a hash of the AppHost path,
     /// so each worktree gets its own data. An isolated run gets no volume and starts with empty data,

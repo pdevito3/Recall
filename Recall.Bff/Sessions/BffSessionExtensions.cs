@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Recall.Bff.Authentication;
 using Recall.Bff.BackChannel;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -6,6 +5,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using Recall.Server.Databases.Sqlite;
 
 namespace Recall.Bff.Sessions;
 
@@ -37,8 +37,7 @@ public static class BffSessionExtensions
                 ?? throw new InvalidOperationException($"The connection string '{BffDbContext.DatabaseName}' is required.");
             ConfigureBffDb(options, connectionString);
         });
-        // Health checks, retries, and the Npgsql traces and metrics
-        builder.EnrichNpgsqlDbContext<BffDbContext>();
+        services.AddHealthChecks().AddDbContextCheck<BffDbContext>();
 
         // First, so that the migrations run before the other hosted services, such as the Data Protection key ring
         services.AddHostedService<BffDatabaseMigrator>();
@@ -68,14 +67,8 @@ public static class BffSessionExtensions
         return builder;
     }
 
-    /// <summary>
-    /// The Npgsql options of <c>bffdb</c>, for the app and for the EF Core tools.
-    /// </summary>
     public static void ConfigureBffDb(DbContextOptionsBuilder options, string connectionString) =>
-        options.UseNpgsql(connectionString, npgsql => npgsql.ConfigureDataSource(dataSource =>
-                dataSource.ConfigureTracing(tracing => tracing
-                    // A command with no recorded activity, such as a query of the /health request, would export
-                    // as a trace of its own
-                    .ConfigureCommandFilter(_ => Activity.Current is { IsAllDataRequested: true }))))
-            .UseSnakeCaseNamingConvention();
+        options.UseSqlite(connectionString)
+            .UseSnakeCaseNamingConvention()
+            .AddInterceptors(SqliteConnectionSetup.Instance, UtcTextParameters.Instance);
 }

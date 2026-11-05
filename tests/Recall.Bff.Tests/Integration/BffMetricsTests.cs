@@ -1,9 +1,12 @@
 namespace Recall.Bff.Tests.Integration;
 
 using System.Net;
+using Recall.Bff.Authentication;
 using Recall.Bff.Sessions;
 using Recall.Bff.Tests.Fakes;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Shouldly;
 
 /// <summary>
@@ -108,24 +111,30 @@ public sealed class BffMetricsTests : IDisposable
     }
 
     [Test]
-    public async Task a_lock_timeout_is_one_temporary_failure_and_ends_no_session()
+    public async Task a_wait_for_another_refresh_that_reaches_its_limit_is_one_temporary_failure_and_ends_no_session()
     {
         // Arrange
-        await using var app = BffApp.StartAnotherInstance(new Dictionary<string, string?>
-        {
-            ["Bff:Refresh:LockTimeout"] = "00:00:00.300",
-            ["Bff:Refresh:TokenRequestTimeout"] = "00:00:00.200",
-        });
-        var (cookie, key) = await RefreshLockTests.SignInAsync(app, $"test_sub={NewSubject()}&test_expires_in=60");
-        await using var holder = await RefreshLockTests.HoldLockAsync(key);
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var write = new PauseAtCommand(RefreshLockTests.SessionWrite);
+        await using var app = RefreshLockTests.StartWithClock(clock, pause: write);
+        var (cookie, _) = await RefreshLockTests.SignInAsync(app, $"test_sub={NewSubject()}&test_expires_in=60");
+        write.Arm();
         using var browser = RefreshLockTests.Cookieless(app);
+        var first = browser.SendAsync(RefreshLockTests.ApiRequest(cookie));
+        await write.Arrived;
+        var second = browser.SendAsync(RefreshLockTests.ApiRequest(cookie));
+        await RefreshLockTests.WaitForInProcessWaiterAsync(app);
 
-        // Act & Assert
-        (await browser.SendAsync(RefreshLockTests.ApiRequest(cookie))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        // Act
+        clock.Advance(app.Services.GetRequiredService<IOptionsMonitor<RefreshOptions>>().CurrentValue.InProcessWaitLimit);
 
+        // Assert
+        (await second).StatusCode.ShouldBe(HttpStatusCode.OK);
         _metrics.Sum("bff.refresh.failures").ShouldBe(1);
         _metrics.Sum("bff.refresh.failures", ("kind", "temporary")).ShouldBe(1);
         _metrics.Sum("bff.sessions.ended").ShouldBe(0);
+        write.Release();
+        (await first).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Test]

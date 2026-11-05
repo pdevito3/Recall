@@ -6,12 +6,6 @@ using System.Diagnostics;
 /// Promotes the EF query tags written by <see cref="QueryTagging"/> from SQL comments into span
 /// identity and attributes.
 /// </summary>
-/// <remarks>
-/// Npgsql traces every command, and its tracing callback sees the final command text, so this is the
-/// last point where the comments are still available. Only tagged queries are renamed. An untagged
-/// query keeps the Npgsql default name, so framework queries and SaveChanges batches are never
-/// mislabeled as feature work.
-/// </remarks>
 internal static class QueryTagEnrichment
 {
     /// <summary>

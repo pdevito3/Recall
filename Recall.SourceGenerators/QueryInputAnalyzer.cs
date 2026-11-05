@@ -13,7 +13,7 @@ public sealed class QueryInputAnalyzer : DiagnosticAnalyzer
 	internal static readonly DiagnosticDescriptor RawRequestText = new(
 		id: "FSTQRY001",
 		title: "A query compares a text of the request",
-		messageFormat: "The query compares the request value '{0}', which can hold a NUL that Postgres cannot take. Compare the entity value, or check the input with EntityId.IsValid or PostgresText.CanStore first. For a list, check each item. See docs/backend/features-and-cqrs.md.",
+		messageFormat: "The query compares the request value '{0}', which can hold a NUL or a lone surrogate that SQLite text does not keep. Compare the entity value, or check the input with EntityId.IsValid or StorableText.CanStore first. For a list, check each item. See docs/backend/features-and-cqrs.md.",
 		category: "QueryInput",
 		defaultSeverity: DiagnosticSeverity.Error,
 		isEnabledByDefault: true);
@@ -73,7 +73,7 @@ public sealed class QueryInputAnalyzer : DiagnosticAnalyzer
 			yield return text;
 	}
 
-	// EF evaluates a compare of a request value with null on the client, so the text does not go to Postgres
+	// EF evaluates a compare of a request value with null on the client, so the text does not go to the database
 	private static bool IsNull(IOperation operand) => operand.ConstantValue is { HasValue: true, Value: null };
 
 	private static List<ISymbol>? PathFromFirstParameter(IOperation operand, InputTypes types)
@@ -255,7 +255,7 @@ public sealed class QueryInputAnalyzer : DiagnosticAnalyzer
 
 	private sealed class InputTypes(
 		INamedTypeSymbol entityId,
-		INamedTypeSymbol postgresText,
+		INamedTypeSymbol storableText,
 		INamedTypeSymbol dbFunctions,
 		INamedTypeSymbol genericEnumerable,
 		INamedTypeSymbol queryable,
@@ -266,7 +266,7 @@ public sealed class QueryInputAnalyzer : DiagnosticAnalyzer
 		public static InputTypes? From(Compilation compilation)
 		{
 			var entityId = compilation.GetTypeByMetadataName("Recall.Server.Domain.EntityId");
-			var postgresText = compilation.GetTypeByMetadataName("Recall.Server.Databases.PostgresText");
+			var storableText = compilation.GetTypeByMetadataName("Recall.Server.Databases.StorableText");
 			var dbFunctions = compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.DbFunctions");
 			var genericEnumerable = compilation.GetSpecialType(SpecialType.System_Collections_Generic_IEnumerable_T);
 			var queryable = compilation.GetTypeByMetadataName("System.Linq.IQueryable");
@@ -277,14 +277,14 @@ public sealed class QueryInputAnalyzer : DiagnosticAnalyzer
 				.OfType<INamedTypeSymbol>()
 				.ToImmutableArray();
 
-			return entityId is null || postgresText is null || dbFunctions is null || queryable is null || lambdaExpression is null || requestHandlers.IsEmpty
+			return entityId is null || storableText is null || dbFunctions is null || queryable is null || lambdaExpression is null || requestHandlers.IsEmpty
 				? null
-				: new InputTypes(entityId, postgresText, dbFunctions, genericEnumerable, queryable, lambdaExpression, likePattern, requestHandlers);
+				: new InputTypes(entityId, storableText, dbFunctions, genericEnumerable, queryable, lambdaExpression, likePattern, requestHandlers);
 		}
 
 		public bool IsCheck(IMethodSymbol method)
 			=> (method.Name == "IsValid" && SymbolEqualityComparer.Default.Equals(method.ContainingType, entityId))
-				|| (method.Name == "CanStore" && SymbolEqualityComparer.Default.Equals(method.ContainingType, postgresText));
+				|| (method.Name == "CanStore" && SymbolEqualityComparer.Default.Equals(method.ContainingType, storableText));
 
 		public bool IsLikePattern(IMethodSymbol method)
 			=> likePattern is not null && SymbolEqualityComparer.Default.Equals(method.ContainingType, likePattern);
@@ -294,7 +294,7 @@ public sealed class QueryInputAnalyzer : DiagnosticAnalyzer
 			{
 				"Equals" or "StartsWith" or "EndsWith" => method.ContainingType.SpecialType == SpecialType.System_String,
 				"Contains" => true,
-				"Like" or "ILike" => method.Parameters.Length > 0 && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, dbFunctions),
+				"Like" => method.Parameters.Length > 0 && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, dbFunctions),
 				_ => false,
 			};
 

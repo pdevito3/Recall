@@ -7,8 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 public static class QueryableExtensions
 {
-    /// <exception cref="NotFoundException">No row has the ID. An ID that is not valid for the entity, such as one with a
-    /// NUL that Postgres text cannot hold, gets no query.</exception>
+    /// <exception cref="NotFoundException">No row has the ID.</exception>
     public static async Task<TEntity> GetById<TEntity>(
         this IQueryable<TEntity> query,
         string id,

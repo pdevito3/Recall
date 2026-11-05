@@ -30,15 +30,6 @@ namespace Recall.Bff.Authentication;
 /// wrong ID token is a sign of a wrong or attacked identity provider, so a retry must not use it. The new refresh
 /// token is revoked, when revocation is active, because no BFF session holds it.
 /// </para>
-/// <para>
-/// The checks and the revocation do not use the token of the refresh call. <see cref="RefreshTimeout"/> cancels
-/// it at <see cref="RefreshOptions.TokenRequestTimeout"/>, and a cancellation gives the temporary
-/// <see cref="RefreshTimeout.TimeoutError"/>, so the BFF session would stay. The checks and the revocation each get
-/// their own limit of <see cref="RefreshOptions.TokenRequestTimeout"/>. Signing keys that do not load within the
-/// limit fail the checks. A revocation that does not end within the limit is logged. Thus a request that waits for
-/// this refresh can reach <see cref="RefreshOptions.LockTimeout"/> and get a temporary failure, but the refresh
-/// lock still ends the BFF session.
-/// </para>
 /// </summary>
 public sealed class RefreshIdTokenValidation(
     IOpenIdConnectUserTokenEndpoint inner,

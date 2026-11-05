@@ -12,7 +12,7 @@ using Shouldly;
 public class BffSessionStoreContractTests
 {
     public const string Memory = "memory";
-    public const string Postgres = "postgres";
+    public const string Sqlite = "sqlite";
 
     /// <summary>
     /// The tests that delete ended rows run one at a time, because a delete removes each ended row in the
@@ -22,7 +22,7 @@ public class BffSessionStoreContractTests
 
     [Test]
     [Arguments(Memory)]
-    [Arguments(Postgres)]
+    [Arguments(Sqlite)]
     public async Task a_created_row_reads_back_with_a_version(string adapter)
     {
         // Arrange
@@ -49,8 +49,8 @@ public class BffSessionStoreContractTests
     [Test]
     [Arguments(Memory, 1, 5)]
     [Arguments(Memory, 5, 1)]
-    [Arguments(Postgres, 1, 5)]
-    [Arguments(Postgres, 5, 1)]
+    [Arguments(Sqlite, 1, 5)]
+    [Arguments(Sqlite, 5, 1)]
     public async Task a_read_rejects_a_row_past_its_sliding_expiry_or_its_absolute_limit(string adapter, int slidingHours, int absoluteHours)
     {
         // Arrange
@@ -70,7 +70,7 @@ public class BffSessionStoreContractTests
 
     [Test]
     [Arguments(Memory)]
-    [Arguments(Postgres)]
+    [Arguments(Sqlite)]
     public async Task a_renewal_with_the_read_version_writes_and_moves_the_version(string adapter)
     {
         // Arrange
@@ -97,7 +97,7 @@ public class BffSessionStoreContractTests
 
     [Test]
     [Arguments(Memory)]
-    [Arguments(Postgres)]
+    [Arguments(Sqlite)]
     public async Task a_write_with_an_old_version_changes_nothing_and_returns_the_current_row(string adapter)
     {
         // Arrange
@@ -121,7 +121,7 @@ public class BffSessionStoreContractTests
 
     [Test]
     [Arguments(Memory)]
-    [Arguments(Postgres)]
+    [Arguments(Sqlite)]
     public async Task an_expiry_renewal_keeps_the_ticket(string adapter)
     {
         // Arrange
@@ -141,7 +141,7 @@ public class BffSessionStoreContractTests
 
     [Test]
     [Arguments(Memory)]
-    [Arguments(Postgres)]
+    [Arguments(Sqlite)]
     public async Task a_write_to_a_deleted_row_is_missing_and_creates_no_row(string adapter)
     {
         // Arrange
@@ -163,7 +163,7 @@ public class BffSessionStoreContractTests
 
     [Test]
     [Arguments(Memory)]
-    [Arguments(Postgres)]
+    [Arguments(Sqlite)]
     public async Task the_delete_returns_the_row_with_the_last_write(string adapter)
     {
         // Arrange
@@ -187,7 +187,7 @@ public class BffSessionStoreContractTests
 
     [Test]
     [Arguments(Memory)]
-    [Arguments(Postgres)]
+    [Arguments(Sqlite)]
     public async Task the_rows_are_found_by_sub_and_by_sid(string adapter)
     {
         // Arrange
@@ -209,7 +209,7 @@ public class BffSessionStoreContractTests
     [Test]
     [NotInParallel(EndedRowDeletes)]
     [Arguments(Memory)]
-    [Arguments(Postgres)]
+    [Arguments(Sqlite)]
     public async Task the_ended_rows_are_deleted_in_batches_and_the_live_rows_stay(string adapter)
     {
         // Arrange

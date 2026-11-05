@@ -1,11 +1,10 @@
 namespace Recall.UnitTests.Exceptions;
 
-using Recall.Server.Databases;
 using Recall.Server.Exceptions;
 using Recall.Server.Resources.Entrypoints;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using QueryKit.Exceptions;
 using Shouldly;
 
@@ -139,37 +138,10 @@ public class DomainProblemDetailsTests
     }
 
     [Test]
-    public void exclusion_violation_problem_is_a_conflict_with_the_message_under_the_field()
-    {
-        // Arrange
-        var exception = DatabaseConflict.From(SaveFailure(PostgresErrorCodes.ExclusionViolation, "ix_tenants_name"),
-            new AppDbContextFactory().CreateDbContext([]).Model)!;
-        var context = new ProblemDetailsContext
-        {
-            HttpContext = new DefaultHttpContext(),
-            Exception = exception,
-            ProblemDetails = new() { Status = StatusCodes.Status409Conflict, Type = DefaultConflictType },
-        };
-
-        // Act
-        var status = DomainProblemDetails.StatusCodeFor(exception);
-        DomainProblemDetails.Customize(context);
-
-        // Assert
-        status.ShouldBe(StatusCodes.Status409Conflict);
-        context.ProblemDetails.Type.ShouldBe(DefaultConflictType);
-        context.ProblemDetails.Title.ShouldBe("The request conflicts with a record that exists.");
-        context.ProblemDetails.Detail.ShouldBe("A tenant with this name already exists.");
-        var error = context.ProblemDetails.Extensions["errors"].ShouldBeOfType<Dictionary<string, string[]>>().ShouldHaveSingleItem();
-        error.Key.ShouldBe("name");
-        error.Value.ShouldBe(["A tenant with this name already exists."]);
-    }
-
-    [Test]
     public void database_failure_that_the_db_context_does_not_translate_is_a_server_error()
     {
         // Arrange
-        var exception = SaveFailure(PostgresErrorCodes.ForeignKeyViolation);
+        var exception = SaveFailure(787, "FOREIGN KEY constraint failed");
 
         // Act
         var status = DomainProblemDetails.StatusCodeFor(exception);
@@ -206,8 +178,7 @@ public class DomainProblemDetailsTests
         status.ShouldBe(expected);
     }
 
-    private static DbUpdateException SaveFailure(string sqlState, string? constraintName = null)
+    private static DbUpdateException SaveFailure(int extendedCode, string message)
         => new("An error occurred while saving the entity changes.",
-            new PostgresException("duplicate key value violates unique constraint \"ix_users_identifier\"",
-                "ERROR", "ERROR", sqlState, constraintName: constraintName));
+            new SqliteException($"SQLite Error 19: '{message}'.", 19, extendedCode));
 }

@@ -77,61 +77,21 @@ public class PauseAtQueryTests : TestBase
     public async Task wait_until_blocked_returns_when_the_rival_waits_on_a_lock_of_the_held_request()
     {
         // Arrange
-        var key = Random.Shared.NextInt64();
-        var pause = PauseAtQuery.After("pause_test.lock");
+        var pause = PauseAtQuery.After("pause_test.tagged");
         await using var services = pause.BuildServices();
-        var database = new TestingServiceScope(services).GetService<AppDbContext>().Database;
-        var underTest = database.CreateExecutionStrategy().ExecuteAsync(async () =>
-        {
-            await using var transaction = await database.BeginTransactionAsync();
-            await database.SqlQuery<int>($"""
-                -- pause_test.lock
-                SELECT 1 AS "Value" FROM pg_advisory_xact_lock({key})
-                """).ToListAsync();
-            await transaction.CommitAsync();
-        });
+        var dbContext = new TestingServiceScope(services).GetService<AppDbContext>();
+        var underTest = dbContext.Tenants.TagWith("pause_test.tagged").IgnoreQueryFilters().ToListAsync();
         await pause.ReachedAsync();
+        var rival = new TaskCompletionSource();
+        var checks = 0;
 
         // Act
-        var rival = TestFixture.ExecuteOutOfBandAsync("SELECT pg_advisory_xact_lock(@key)", ("key", key));
-        await pause.WaitUntilBlockedAsync(rival);
+        await pause.WaitUntilBlockedAsync(rival.Task, () => ++checks == 3);
 
         // Assert
-        rival.IsCompleted.ShouldBeFalse();
+        checks.ShouldBe(3);
         pause.Release();
         await underTest;
-        await rival;
     }
 
-    [Test]
-    public async Task held_requests_leave_the_pooled_connections_to_the_rivals()
-    {
-        // Arrange
-        var pauses = Enumerable.Range(0, PostgresTestDatabase.MaxPoolSize)
-            .Select(_ => PauseAtQuery.Before("pause_test.tagged"))
-            .ToList();
-        var providers = pauses.Select(pause => pause.BuildServices()).ToList();
-        var reads = providers
-            .Select(services => new TestingServiceScope(services).GetService<AppDbContext>()
-                .Tenants.TagWith("pause_test.tagged").IgnoreQueryFilters().CountAsync())
-            .ToList();
-        try
-        {
-            await Task.WhenAll(pauses.Select(pause => pause.ReachedAsync()));
-
-            // Act
-            var rival = await new TestingServiceScope().ExecuteDbContextAsync(db =>
-                db.Tenants.IgnoreQueryFilters().CountAsync()).WaitAsync(TimeSpan.FromSeconds(10));
-
-            // Assert
-            rival.ShouldBeGreaterThan(0);
-        }
-        finally
-        {
-            pauses.ForEach(pause => pause.Release());
-            await Task.WhenAll(reads);
-            foreach (var services in providers)
-                await services.DisposeAsync();
-        }
-    }
 }

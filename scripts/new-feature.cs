@@ -1011,7 +1011,7 @@ internal static class Templates
                 $"{TooLong(s, f, "")}");
             """;
         var character = $"""
-            ValidationException.ThrowWhenHasCharacterPostgresCannotStore({value}, "{f.Json}",
+            ValidationException.ThrowWhenHasCharacterNotStorable({value}, "{f.Json}",
                 "{BadCharacter(s, f)}");
             """;
         return f.Kind switch
@@ -1241,7 +1241,7 @@ internal static class Templates
             start.AddRange([$"Activity.Current?.SetTag(\"app.{p.Snake}_id\", request.Dto.{r.Name});", ""]);
             body.AddRange([
                 $$"""
-                // A malformed ID matches no row, and Postgres cannot read some of them, such as one with U+0000
+                // A malformed ID matches no row
                 var {{p.Var}} = EntityId.IsValid(request.Dto.{{r.Name}}, {{p.Entity}}.IdPrefix)
                     ? await dbContext.{{p.Plural}}
                         .TagWithOperationCallSite("{{n.SnakePlural}}.add.load_{{p.Snake}}")

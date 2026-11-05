@@ -22,7 +22,7 @@ using WebMotions.Fake.Authentication.JwtBearer;
 /// </summary>
 public sealed class TestingWebApplicationFactory : WebApplicationFactory<Program>
 {
-    private readonly PostgresTestDatabase _database = new();
+    private readonly SqliteTestDatabase _database = new();
 
     public FlociTestStorage Storage { get; } = new();
 
@@ -117,7 +117,7 @@ public sealed class TestingWebApplicationFactory : WebApplicationFactory<Program
         // Tests never reload configuration. A file watcher on appsettings can hang on macOS when the system is busy.
         Environment.SetEnvironmentVariable("DOTNET_hostBuilder__reloadConfigOnChange", "false");
 
-        await Task.WhenAll(_database.StartAsync(), Storage.StartAsync());
+        await Storage.StartAsync();
         Storage.SetEnvironmentVariables();
 
         Environment.SetEnvironmentVariable(
@@ -135,9 +135,6 @@ public sealed class TestingWebApplicationFactory : WebApplicationFactory<Program
 
         // Aspire sets this on each project in development, so the request spans keep the query as the browser sent it
         Environment.SetEnvironmentVariable("OTEL_DOTNET_EXPERIMENTAL_ASPNETCORE_DISABLE_URL_QUERY_REDACTION", "true");
-
-        // Disable Aspire health checks that require database connectivity during startup
-        Environment.SetEnvironmentVariable("Aspire__Npgsql__EntityFrameworkCore__PostgreSQL__DisableHealthChecks", "true");
 
         AutoFaker.Configure(builder =>
         {

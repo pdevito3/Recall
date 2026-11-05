@@ -49,7 +49,7 @@ public class ModelSnapshotTests
     // The same lookup as `dotnet ef`: the provider names its design-time services in an assembly attribute.
     private static IDesignTimeServices ProviderDesignTimeServices()
     {
-        var provider = typeof(NpgsqlDbContextOptionsBuilderExtensions).Assembly;
+        var provider = typeof(SqliteDbContextOptionsBuilderExtensions).Assembly;
         var typeName = provider.GetCustomAttribute<DesignTimeProviderServicesAttribute>()!.TypeName;
         return (IDesignTimeServices)Activator.CreateInstance(provider.GetType(typeName, throwOnError: true)!)!;
     }

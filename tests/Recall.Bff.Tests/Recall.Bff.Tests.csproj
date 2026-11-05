@@ -19,7 +19,6 @@
         <PackageReference Include="Shouldly" />
         <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
         <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
-        <PackageReference Include="Testcontainers.PostgreSql" />
     </ItemGroup>
 
     <ItemGroup>
@@ -30,14 +29,10 @@
         <ProjectReference Include="..\..\Recall.Bff\Recall.Bff.csproj" />
     </ItemGroup>
 
-    <!-- The Postgres image tag of the app. The tests run the same version. -->
-    <ItemGroup>
-        <Compile Include="..\..\Recall.AppHost\Config.cs" Link="AppHostConfig.cs" />
-    </ItemGroup>
-
-    <!-- A reference to SharedTestHelpers also brings in the Server, so the tests compile its one database helper. -->
+    <!-- A reference to SharedTestHelpers also brings in the Server, so the tests compile its database helpers. -->
     <ItemGroup>
         <Compile Include="..\Recall.SharedTestHelpers\Utilities\PauseAtQuery.cs" Link="Fakes\PauseAtQuery.cs" />
+        <Compile Include="..\Recall.SharedTestHelpers\Utilities\SqliteTestDatabase.cs" Link="Fakes\SqliteTestDatabase.cs" />
     </ItemGroup>
 
 </Project>

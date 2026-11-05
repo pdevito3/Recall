@@ -118,7 +118,7 @@ public class GetUserByIdentifierQueryTests : TestBase
 
         // Assert
         exactResult.Id.ShouldBe(fakeUser.Id);
-        // The default Postgres collation compares with case
+        // The default BINARY collation of SQLite compares with case
         await lowercase.ShouldThrowAsync<NotFoundException>();
         await uppercase.ShouldThrowAsync<NotFoundException>();
     }

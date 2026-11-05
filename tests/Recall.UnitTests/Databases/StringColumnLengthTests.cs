@@ -16,7 +16,6 @@ public class StringColumnLengthTests
 {
     public sealed record CallerColumn(string RequestField, Func<string, int, string> ValueOfLength, Action<string> Write);
 
-    // Postgres counts U+1F600 as one character, and .NET counts it as two UTF-16 units.
     private static readonly string[] Characters = ["a", "\U0001F600"];
 
     private static string Text(string character, int length) => string.Concat(Enumerable.Repeat(character, length));
@@ -123,13 +122,13 @@ public class StringColumnLengthTests
         writeTooLong.ShouldThrow<ValidationException>().Property.ShouldBe(callerColumn.RequestField);
     }
 
-    private static readonly string[] CharactersPostgresCannotStore = ["\0", "\uD800", "\uDC00"];
+    private static readonly string[] CharactersNotStorable = ["\0", "\uD800", "\uDC00"];
 
-    public static IEnumerable<(string, string)> CallerColumnsAndCharactersPostgresCannotStore =>
-        CallerColumns.Keys.SelectMany(column => CharactersPostgresCannotStore.Select(character => (column, character)));
+    public static IEnumerable<(string, string)> CallerColumnsAndCharactersNotStorable =>
+        CallerColumns.Keys.SelectMany(column => CharactersNotStorable.Select(character => (column, character)));
 
     [Test]
-    [MethodDataSource(nameof(CallerColumnsAndCharactersPostgresCannotStore))]
+    [MethodDataSource(nameof(CallerColumnsAndCharactersNotStorable))]
     public void the_domain_refuses_a_character_that_postgres_cannot_store_with_a_validation_error(string column, string character)
     {
         // Arrange

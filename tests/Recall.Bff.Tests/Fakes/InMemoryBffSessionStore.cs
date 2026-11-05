@@ -3,10 +3,6 @@ namespace Recall.Bff.Tests.Fakes;
 using System.Collections.Concurrent;
 using Recall.Bff.Sessions;
 
-/// <summary>
-/// The in-memory adapter of <see cref="IBffSessionStore"/>, for tests only. Each write gives the row a new
-/// version, as <c>xmin</c> does on Postgres, and a write with an old version changes nothing.
-/// </summary>
 public sealed class InMemoryBffSessionStore(TimeProvider timeProvider) : IBffSessionStore
 {
     private readonly ConcurrentDictionary<string, BffSession> _rows = new(StringComparer.Ordinal);

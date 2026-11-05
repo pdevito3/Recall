@@ -15,10 +15,8 @@ public class TenantScopeFilterTests : TestBase
             .AddUser(out var user)
             .BuildAsync();
 
-        // The domain does not let a row have an empty tenant ID. The filter must deny without this rule,
-        // so the test writes the row directly. The replica role turns off the foreign key trigger.
         await TestFixture.ExecuteOutOfBandAsync(
-            "SET session_replication_role = replica; UPDATE users SET tenant_id = @tenantId WHERE id = @id; SET session_replication_role = origin;",
+            "PRAGMA foreign_keys = OFF; UPDATE users SET tenant_id = @tenantId WHERE id = @id;",
             ("tenantId", string.Empty), ("id", user.Id));
 
         try

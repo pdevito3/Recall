@@ -44,8 +44,9 @@ fi
 
 echo "launch: starting the isolated stack with AuthProvider=$AUTH_PROVIDER and the $BUILD build of the SPA (run $RUN_ID)..."
 (cd "$ROOT" && dotnet tool restore >/dev/null)
+DATA_DIR="$RUN_DIR/data"
 # login() in browse.mjs signs in at this provider, whatever the default AuthProvider in appsettings.json is
-start_json="$(AuthProvider="$AUTH_PROVIDER" SpaBuild="$SPA_BUILD" aspire start --isolated --format Json --apphost "$APPHOST_DIR")"
+start_json="$(AuthProvider="$AUTH_PROVIDER" SpaBuild="$SPA_BUILD" RECALL_DATA_DIR="$DATA_DIR" aspire start --isolated --format Json --apphost "$APPHOST_DIR")"
 echo "$start_json" > "$RUN_DIR/aspire-start.json"
 echo "$RUN_ID" > "$CURRENT_FILE"
 
@@ -91,13 +92,14 @@ jq -n \
   --arg runId "$RUN_ID" \
   --arg authProvider "$AUTH_PROVIDER" \
   --arg build "$BUILD" \
+  --arg dataDirectory "$DATA_DIR" \
   --arg gitRev "$(git -C "$ROOT" rev-parse HEAD)" \
   --arg dirty "$(git -C "$ROOT" status --porcelain | wc -l | tr -d ' ')" \
   --argjson start "$start_json" \
   --arg web "$web" \
   --arg bff "$(url_of bff https)" \
   --arg server "$(url_of server https)" \
-  '{runId: $runId, authProvider: $authProvider, build: $build, gitRev: $gitRev, dirtyFiles: ($dirty | tonumber), appHostPath: $start.appHostPath,
+  '{runId: $runId, authProvider: $authProvider, build: $build, dataDirectory: $dataDirectory, gitRev: $gitRev, dirtyFiles: ($dirty | tonumber), appHostPath: $start.appHostPath,
     appHostPid: $start.appHostPid, dashboardUrl: $start.dashboardUrl,
     urls: {web: $web, bff: $bff, server: $server}}' > "$RUN_DIR/stack.json"
 

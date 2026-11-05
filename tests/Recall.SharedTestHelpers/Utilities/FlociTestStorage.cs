@@ -11,8 +11,7 @@ using Recall.AppHost;
 /// Gives a test run its own empty bucket on a shared Floci container, the S3 emulator of the AppHost.
 /// </summary>
 /// <remarks>
-/// Local runs reuse one container, as <see cref="PostgresTestDatabase"/> does. Each run creates a new bucket, so
-/// the objects of earlier runs and other test projects never collide with this run. Floci checks each signature,
+/// Floci checks each signature,
 /// so a presigned URL that the server signs wrong fails the test.
 /// </remarks>
 public sealed class FlociTestStorage : IAsyncDisposable
@@ -92,7 +91,9 @@ public sealed class FlociTestStorage : IAsyncDisposable
         await s3.DeleteBucketAsync(BucketName);
     }
 
-    // The test projects start at the same time. See PostgresTestDatabase.AcquireStartLockAsync.
+    // The test projects start at the same time. Testcontainers finds a reusable container by its hash, but it does not
+    // lock across processes, so each project can create a container with the same hash. The next run then fails with
+    // "Sequence contains more than one element". The lock lets one process at a time start it.
     private static async Task<FileStream> AcquireStartLockAsync()
     {
         var path = Path.Combine(Path.GetTempPath(), "recall-test-floci.lock");
