@@ -94,12 +94,12 @@ Write telemetry to answer a question that a person asks during an incident. If n
    - Name it `app.[entities].[past-tense verb]`, for example `app.users.role_changed`. Give the unit in braces, for example `{user}`.
    - Give it tags from a small fixed set of values only, such as a role, a reason, or an outcome.
 9. Give background work its own trace with `Telemetry.TraceRoot`.
-   - Write one `Information` log with the result and the counts, for example "Deleted {Count} expired proofs".
+   - Write one `Information` log with the result and the counts, for example "Deleted {Count} expired login attempts".
    - Catch the exception at the top of the job. Call `Telemetry.RecordError` and write an `Error` log. A background job has no `RequestTracingBehavior` to record it.
-   - See `MigrationHostedService.cs` and the DPoP replay cache cleanup in `DPoPAuthentication.cs`.
+   - See `MigrationHostedService.cs` and `AuthSweepService.cs`.
 10. If a trace must cross a hop that has no `traceparent` header, carry it with `TraceContext`. Examples are a queued message, a stored job row, and a redirect.
     - If the work on the other side continues the same story, make the context the parent of the new span.
-    - If the work is a different story with a cause between the two, add the context as a link. `LoginTraceLink.cs` in the BFF uses a link.
+    - If the work is a different story with a cause between the two, add the context as a link.
 11. Obey the privacy rule. Telemetry carries ids, operation names, counts, and values from a fixed set.
     - Never put personal data or user-entered text in a tag, a log property, or a metric tag. Examples are names, email addresses, and free text.
     - If a log property comes from the caller, such as a path or a header, clean it with `LogValue.Clean`.
@@ -149,7 +149,7 @@ Before you add a tag name, search the code for a tag with the same meaning. Use 
 | `Error` | A server error that the code caught, or a failure that needs a person | "Could not apply the migrations of {DbContext}" |
 | `Warning` | A degraded path. The request succeeded, but not in the normal way. | "Skipped {Count} rows with no tenant" |
 | `Information` | A state change or a business decision | "Created tenant {TenantId} for new user {UserId}" |
-| `Debug` | Data for a developer only. The default minimum level drops it. | "Sent the request again with the DPoP nonce" |
+| `Debug` | Data for a developer only. The default minimum level drops it. | "Read the discovery document of {Issuer} from the cache" |
 
 Production keeps `Information` and higher (`appsettings.json`). Thus a `Debug` log is not available during an incident.
 

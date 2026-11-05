@@ -298,29 +298,19 @@ The umask covers the whole process. A backup job that reads through a group lose
 
 ## Provider tokens
 
-`Auth:Authority` and `Auth:Audience` turn on the JWT path, for Swagger UI, MCP, and agents. With no `Auth:Authority`, the Server registers no JWT handler, no DPoP handler, and no MCP metadata. The AppHost sets both for a stack with a provider.
+`Auth:Authority` and `Auth:Audience` turn on the JWT path, for Swagger UI, MCP, and agents. With no `Auth:Authority`, the Server registers no JWT handler and no MCP metadata. The AppHost sets both for a stack with a provider.
 
-The default scheme chooses by the credential. A `Bearer` or `DPoP` value with the prefix `rcl_` goes to the session handler. Another value goes to the JWT handler. With no such header, a session cookie goes to the session handler. Other Authorization schemes, such as Basic from a proxy, do not hide the cookie.
+The default scheme chooses by the credential. A `Bearer` value with the prefix `rcl_` goes to the session handler. Another value goes to the JWT handler. With no such header, a session cookie goes to the session handler. Other Authorization schemes, such as Basic from a proxy, do not hide the cookie.
 
 The JWT handler refuses a token whose client is `recall`, or whose `sub` has the prefix of a user ID. So a provider token cannot name itself a session.
+
+The JWT handler also refuses a token with a `cnf` claim, with 401. Such a token is bound to a key of its client, and the Server does not check a proof of possession.
 
 A provider token has a provider `sub`, and a user that a login adds has its own ID as its identifier. This has these results:
 
 - Swagger UI still signs in. `GET /api/v1/users/me` answers with the identifier from the claims, and a read of tenant data gets a refusal.
 - A delegated agent gets `UnknownClient`, because its token names no user of the app.
 - A machine agent works as before.
-
-### DPoP
-
-DPoP (RFC 9449) binds a provider token to a key of its client. The Server has no use for it in a login, and an agent can use it. The Server accepts both token types. A token with a `cnf.jkt` claim must come with `Authorization: DPoP` and a valid proof. The same token as a Bearer token gets 401. The Server checks each rule of RFC 9449 sections 4.3 and 7, and it answers with `WWW-Authenticate: DPoP error="invalid_dpop_proof"` or `error="invalid_token"`. A proof can pass one time: the Server keeps its `jti` in the table `used_dpop_proofs` until the proof is too old, and a background service deletes the expired rows. The Server builds the URL of the proof from the scheme, the host, the path base, and the path of the request.
-
-| Setting | Default | Content |
-|---|---|---|
-| `Auth:DPoP:ProofLifetime` | 60 s | The oldest `iat` that a proof can have. |
-| `Auth:DPoP:ClockSkew` | 5 s | How far in the future an `iat` can be. |
-| `Auth:DPoP:CleanupInterval` | 5 min | How often the Server deletes expired replay rows. |
-
-The Server tags the span of a DPoP request with `app.auth.scheme=DPoP` and `app.dpop.jkt_prefix`, the first 8 characters of the thumbprint. No log or tag has a token, a proof, or a key.
 
 ## Auth provider in the AppHost
 
@@ -427,7 +417,7 @@ Agents need a provider that can give a client other than the first-party client 
 
 The server publishes OAuth protected resource metadata (RFC 9728) for `/mcp`. Thus an MCP client that follows the MCP authorization spec finds the provider with no settings from the operator:
 
-1. The client sends a request to `/mcp` with no token. The server answers `401`. The first challenge in `WWW-Authenticate` is `Bearer resource_metadata="{Mcp:PublicOrigin}/.well-known/oauth-protected-resource/mcp"`. If the token is not valid, the same challenge also has `error` and `error_description`. The `DPoP` challenge comes after it.
+1. The client sends a request to `/mcp` with no token. The server answers `401`. The first challenge in `WWW-Authenticate` is `Bearer resource_metadata="{Mcp:PublicOrigin}/.well-known/oauth-protected-resource/mcp"`. If the token is not valid, the same challenge also has `error` and `error_description`.
 2. The client gets that URL with no token. The JSON document has `resource`, which is `{Mcp:PublicOrigin}/mcp`, `authorization_servers`, and `scopes_supported`.
 3. The client reads the discovery document of the provider, gets a token, and calls `/mcp` with the token.
 
@@ -435,7 +425,7 @@ The server publishes OAuth protected resource metadata (RFC 9728) for `/mcp`. Th
 
 `authorization_servers` has `Auth:Authority`, the same value that the JWT bearer handler uses. `scopes_supported` has the scopes that Swagger UI asks for: `Auth:Scopes` if it is set, else `openid`, `profile`, and `Auth:Audience` when `Auth:UseAudienceAsScope` is `true`.
 
-Other paths of the server do not get `resource_metadata`. A request that fails a DPoP check gets only the `DPoP` challenge. This includes a DPoP-bound token that the client sends with the `Bearer` scheme. The server does not support dynamic client registration, so a tenant must register each agent first (see [Register an agent](#register-an-agent)).
+Other paths of the server do not get `resource_metadata`. The server does not support dynamic client registration, so a tenant must register each agent first (see [Register an agent](#register-an-agent)).
 
 ## E2E tests
 

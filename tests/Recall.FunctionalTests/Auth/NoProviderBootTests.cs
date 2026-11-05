@@ -69,7 +69,6 @@ public class NoProviderBootTests
             start.Environment["ConnectionStrings__appdb"] = $"Data Source={Path.Combine(data, "recall.db")}";
             start.Environment["FileStore__Root"] = Path.Combine(data, "files");
             start.Environment["Kestrel__Endpoints__http__Url"] = $"http://127.0.0.1:{httpPort}";
-            start.Environment["Kestrel__Endpoints__grpc__Url"] = $"http://127.0.0.1:{FreePort()}";
 
             var process = Process.Start(start)!;
             process.OutputDataReceived += (_, _) => { };

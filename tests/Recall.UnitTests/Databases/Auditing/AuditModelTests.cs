@@ -165,7 +165,7 @@ public class AuditModelTests
         // Assert
         guarded.ShouldContain("users");
         guarded.ShouldContain("audit_entries");
-        guarded.ShouldNotContain("used_dpop_proofs");
+        guarded.ShouldNotContain("auth_login_attempts");
     }
 
     [Test]

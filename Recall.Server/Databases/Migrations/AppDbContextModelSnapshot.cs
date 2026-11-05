@@ -525,28 +525,6 @@ namespace Recall.Server.Databases.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Recall.Server.Domain.DPoPProofs.UsedDPoPProof", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("id")
-                        .UseCollation("BINARY");
-
-                    b.Property<string>("Expires")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("expires");
-
-                    b.HasKey("Id")
-                        .HasName("pk_used_dpop_proofs");
-
-                    b.HasIndex("Expires")
-                        .HasDatabaseName("ix_used_dpop_proofs_expires");
-
-                    b.ToTable("used_dpop_proofs", (string)null);
-                });
-
             modelBuilder.Entity("Recall.Server.Domain.Tenants.Tenant", b =>
                 {
                     b.Property<string>("Id")

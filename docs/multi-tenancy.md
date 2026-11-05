@@ -56,7 +56,7 @@ The filter then shows a row only if the owner is in the tenant of the caller. Th
 `TenantQueryFilterTests` checks the model of `AppDbContext`. Each entity must have the tenant filter, or be on a list in the test that gives the reason why it has no tenant filter. A new entity with no filter fails the test, so you must make a decision for it:
 
 - If the entity holds the data of a tenant, implement `ITenantable` or call `ApplyTenanting`.
-- If the entity has no tenant data, such as the replay cache of the DPoP check, add it to the list in the test. Each audit entry has a tenant, so such an entity cannot be a `BaseEntity`. Make it a class with `[NotAudited(reason)]`, as `UsedDPoPProof` is.
+- If the entity has no tenant data, such as a login in flight, add it to the list in the test. Each audit entry has a tenant, so such an entity cannot be a `BaseEntity`. Make it a class with `[NotAudited(reason)]`, as `LoginAttempt` is.
 
 An entity with a foreign key to an entity that has the tenant filter holds the data of that tenant. The test fails for such an entity if it has no tenant filter, also when it is on the list.
 
@@ -138,7 +138,6 @@ These rules stop a caller from joining a tenant that is not theirs:
 - A caller with `TenantScope.AllTenants` has no tenant of its own, so it must send `tenantId` in the body. If the tenant does not exist, the request gets 422.
 - If a user sends `tenantId`, it must be their own tenant. Other requests get 403.
 - `POST /api/v1/users/initiate` creates a tenant and its first user. The caller must be able to manage all tenants. Other requests get 403, including a user of a first-party client. The first login of a person creates their user and tenant, as `docs/authentication.md` says.
-- The SPA page `Start a tenant` (`/start-tenant`) stays until a later change removes it. The server refuses the call that it sends.
 - If a user that is not deleted already has the identifier, in any tenant, `POST /api/v1/users` and `initiate` return 409. A user belongs to one tenant only. A deleted user frees its identifier, so the same person can sign up again.
 
 ## Delete a tenant

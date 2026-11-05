@@ -10,7 +10,6 @@
     "issuerParameter": true,
     "backChannelLogout": true,
     "endSession": true,
-    "pushedAuthorization": true,
-    "dpop": true
+    "pushedAuthorization": true
   }
 }

@@ -36,9 +36,7 @@ public sealed class KeycloakAuthProvider : IAuthProvider
             })
             .WithSeedFiles(this, "/opt/keycloak/data/import")
             .WithClientUrls(clientUrls)
-            // The dpop feature adds dpop_signing_alg_values_supported to discovery and lets the token endpoint accept proofs.
-            // It changes nothing for a client that sends no proof.
-            .WithArgs("start-dev", "--import-realm", "--features=dpop")
+            .WithArgs("start-dev", "--import-realm")
             .WaitFor(keycloakDb)
             // Health check ensures Keycloak and the realm are ready before server starts
             .WithHttpHealthCheck($"/realms/{realmName}/.well-known/openid-configuration");

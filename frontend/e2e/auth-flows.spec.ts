@@ -366,7 +366,6 @@ test.describe(`Provider discovery - ${currentIdp.name}`, () => {
       backChannelLogout: discovery.backchannel_logout_supported === true,
       endSession: typeof discovery.end_session_endpoint === 'string',
       pushedAuthorization: typeof discovery.pushed_authorization_request_endpoint === 'string',
-      dpop: Array.isArray(discovery.dpop_signing_alg_values_supported) && discovery.dpop_signing_alg_values_supported.length > 0,
     }
     expect(live).toEqual(currentIdp.capabilities)
   })
