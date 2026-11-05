@@ -46,6 +46,9 @@ public sealed class SessionStoreTests : TestBase
                     services.ConfigureDbContext<AppDbContext>((_, options) => options.AddInterceptors(interceptors));
             }, TestFixture.UnpooledConnectionString);
 
+        public Host(AuthTestDatabase database)
+            => Services = database.BuildServices(configure: services => services.AddSingleton<TimeProvider>(Clock));
+
         public async Task<T> WithStoreAsync<T>(Func<SessionStore, Task<T>> work)
         {
             await using var scope = Services.GetRequiredService<IServiceScopeFactory>().CreateAsyncScope();
@@ -466,21 +469,26 @@ public sealed class SessionStoreTests : TestBase
     public async Task the_sweep_deletes_what_ended_and_keeps_what_is_live()
     {
         // Arrange
-        await using var host = new Host();
-        var expiredCode = await host.WithStoreAsync(store => store.AddAppCodeAsync(UserId, Mode, "recall://auth/callback", "challenge", null, CancellationToken.None));
+        // A database of its own, because this sweep at a later time deletes what the parallel tests of this class hold
+        await using var database = await AuthTestDatabase.CreateAsync();
+        await using var host = new Host(database);
+        var login = await host.Services.GetRequiredService<Provisioner>().ResolveAsync(
+            new ExternalIdentity("https://a.example", "swept", new Profile("Ada", null, "Ada", null, "ada")), CancellationToken.None);
+        var userId = login.ShouldBeOfType<ProvisionOutcome.Provisioned>().UserId;
+        var expiredCode = await host.WithStoreAsync(store => store.AddAppCodeAsync(userId, Mode, "recall://auth/callback", "challenge", null, CancellationToken.None));
         var expiredState = Secrets.New();
         await host.WithStoreAsync(async store =>
         {
             await store.AddAttemptAsync(Attempt(expiredState, Start.AddMinutes(10)), CancellationToken.None);
             return true;
         });
-        var revoked = await host.WithStoreAsync(store => store.StartWebAsync(UserId, Mode, CancellationToken.None));
+        var revoked = await host.WithStoreAsync(store => store.StartWebAsync(userId, Mode, CancellationToken.None));
         await host.WithStoreAsync(async store =>
         {
             await store.RevokeAsync(revoked.SessionId, RevokeReason.Logout, CancellationToken.None);
             return true;
         });
-        var native = await host.WithStoreAsync(store => store.StartNativeAsync(UserId, Mode, CancellationToken.None));
+        var native = await host.WithStoreAsync(store => store.StartNativeAsync(userId, Mode, CancellationToken.None));
         host.Clock.Advance(SessionPolicy.KeepEndedSession + TimeSpan.FromDays(1));
         var liveState = Secrets.New();
         await host.WithStoreAsync(async store =>
@@ -488,7 +496,7 @@ public sealed class SessionStoreTests : TestBase
             await store.AddAttemptAsync(Attempt(liveState, host.Clock.GetUtcNow().AddMinutes(10)), CancellationToken.None);
             return true;
         });
-        var liveCode = await host.WithStoreAsync(store => store.AddAppCodeAsync(UserId, Mode, "recall://auth/callback", "challenge", null, CancellationToken.None));
+        var liveCode = await host.WithStoreAsync(store => store.AddAppCodeAsync(userId, Mode, "recall://auth/callback", "challenge", null, CancellationToken.None));
 
         // Act
         await host.WithStoreAsync(async store =>
