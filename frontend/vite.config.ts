@@ -58,7 +58,6 @@ const failOverFirstPageBudget: Plugin = {
   },
 }
 
-// Aspire sets it. The Vitest server has no Server, so it proxies nothing.
 const serverTarget = process.env.SERVER_HTTP
 const serverTimeoutMs = 30_000
 
@@ -83,8 +82,6 @@ const failStalledServerRequests: ProxyOptions['configure'] = (proxy) => {
   })
 }
 
-// The paths that the dev server sends to the Server: the login and session routes, the API, and the session routes of
-// the SPA. /auth/ keeps its slash, so that an SPA route such as /authors stays with Vite.
 const serverPaths = ['/auth/', '/api', '/bff']
 
 // With no Server, Vite answers each path with its index.html, so a request of the app gets HTML and no error.
@@ -190,7 +187,6 @@ export default defineConfig({
     ],
   },
   server: {
-    // changeOrigin stays off: the Server builds the redirect URI of a login from the Host that the browser sent
     proxy: serverTarget
       ? Object.fromEntries(
           serverPaths.map((path) => [path, { target: serverTarget, changeOrigin: false, configure: failStalledServerRequests }]),

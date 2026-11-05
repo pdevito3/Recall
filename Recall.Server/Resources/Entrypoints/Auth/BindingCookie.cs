@@ -5,10 +5,7 @@ using System.Text;
 using Recall.Server.Auth;
 using Recall.Server.Auth.Entities;
 
-/// <summary>
-/// Ties an attempt to the browser that started it. There is one cookie for each attempt, so two restored tabs do not
-/// overwrite each other. On TLS the <c>__Host-</c> name keeps a sibling host from planting it.
-/// </summary>
+/// <summary>On TLS the <c>__Host-</c> name keeps a sibling host from planting it.</summary>
 public static class BindingCookie
 {
     private const string SecurePrefix = "__Host-recall_login_";

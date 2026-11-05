@@ -3,9 +3,10 @@ namespace Recall.FunctionalTests.Auth;
 using System.Net;
 using Shouldly;
 
-/// <summary>The bounds of an anonymous caller: the host name and the rate of login starts.</summary>
 public class HostLimitTests
 {
+    private const int MostStartsInTwoWindows = 40;
+
     [Test]
     public async Task with_allowed_hosts_set_a_forged_host_is_refused_before_a_login_starts()
     {
@@ -36,7 +37,6 @@ public class HostLimitTests
         var codes = answers.Select(answer => answer.StatusCode).ToList();
         codes.ShouldContain(HttpStatusCode.TooManyRequests);
         codes.ShouldContain(HttpStatusCode.Redirect);
-        // A window boundary can fall in the run, so two windows are the most that can pass
-        codes.Count(code => code == HttpStatusCode.Redirect).ShouldBeLessThanOrEqualTo(40);
+        codes.Count(code => code == HttpStatusCode.Redirect).ShouldBeLessThanOrEqualTo(MostStartsInTwoWindows);
     }
 }

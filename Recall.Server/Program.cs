@@ -35,8 +35,6 @@ try
     var app = builder.Build();
     OwnerOnlyFiles.TightenAtStartup(app.Configuration);
 
-    // Only the scheme. The Host and the remote address stay as they are, so a client that forges this header gets a
-    // Secure cookie that its own browser refuses. A terminator that preserves Host now matches the DPoP htu.
     var forwardedHeaders = new ForwardedHeadersOptions { ForwardedHeaders = ForwardedHeaders.XForwardedProto };
     forwardedHeaders.KnownIPNetworks.Clear();
     forwardedHeaders.KnownProxies.Clear();

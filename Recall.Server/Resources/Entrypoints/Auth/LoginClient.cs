@@ -6,7 +6,6 @@ using System.Text.RegularExpressions;
 using Recall.Server.Auth;
 using Recall.Server.Auth.Entities;
 
-/// <summary>Who started a login. A value of this type passed its rules at the boundary.</summary>
 public abstract record LoginClient
 {
     public sealed record Web(string ReturnPath) : LoginClient;
@@ -16,7 +15,6 @@ public abstract record LoginClient
         public override string ToString() => "[native client]";
     }
 
-    /// <summary>The query of a start request, or false for a value that breaks a rule, so that no redirect happens.</summary>
     public static bool TryParseStart(IQueryCollection query, [NotNullWhen(true)] out LoginClient? client)
     {
         client = null;
@@ -45,7 +43,6 @@ public abstract record LoginClient
         if (attempt.ClientKind == SessionKind.Web)
             return new Web(attempt.ReturnPath ?? "/");
 
-        // The row holds a value that passed this parse at the start of the attempt
         if (!NativeRedirect.TryParse(attempt.NativeRedirect, out var redirect))
             throw new InvalidOperationException("A native login attempt has no valid redirect.");
         return new Native(redirect, attempt.NativeChallenge!, attempt.NativeState!);

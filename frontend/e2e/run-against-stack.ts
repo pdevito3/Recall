@@ -35,7 +35,6 @@ function environmentOf(resource: string): Record<string, string> {
     ?.environment ?? {}
 }
 
-// The authority of the provider, for the test that reads its discovery document
 function serverAuthority(): string {
   const authority = environmentOf('server').Auth__Authority
   if (!authority) {
@@ -71,7 +70,6 @@ const env: NodeJS.ProcessEnv = {
   ...process.env,
   IDP: idp,
   BASE_URL: endpointUrl('webfrontend', 'http'),
-  // The https endpoint uses a development certificate, and the Playwright setting ignoreHTTPSErrors accepts it
   SERVER_URL: endpointUrl('server', 'https'),
   AUTHORITY: serverAuthority(),
 }

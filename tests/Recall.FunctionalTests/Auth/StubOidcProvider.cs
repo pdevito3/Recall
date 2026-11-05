@@ -11,7 +11,6 @@ using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
 using Recall.Server.Auth;
 
-/// <summary>What the person at the provider does, and each way a test can break the answer of the provider.</summary>
 public sealed record StubLogin(string Subject)
 {
     public string Name { get; init; } = "Ada Lovelace";
@@ -21,7 +20,6 @@ public sealed record StubLogin(string Subject)
     public string? TokenBody { get; init; }
 }
 
-/// <summary>The query that the Server sends to the authorize endpoint of the provider.</summary>
 public sealed record AuthorizeRequest(string State, string Nonce, string CodeChallenge, string RedirectUri, string ClientId)
 {
     public static AuthorizeRequest Of(Uri location)
@@ -31,10 +29,6 @@ public sealed record AuthorizeRequest(string State, string Nonce, string CodeCha
     }
 }
 
-/// <summary>
-/// A provider that follows the OIDC rules, with its own HTTP client handler in place of the network. It refuses what a
-/// real provider refuses, so that a change to the client of the Server fails here.
-/// </summary>
 public sealed class StubOidcProvider : HttpMessageHandler
 {
     public const string Issuer = "https://idp.test";
@@ -52,7 +46,6 @@ public sealed class StubOidcProvider : HttpMessageHandler
 
     public bool Down { get; set; }
 
-    /// <summary>Each code, ID token, and access token that this provider gave out.</summary>
     public IReadOnlyCollection<string> HandedOut => _handedOut;
 
     public string Approve(AuthorizeRequest request, StubLogin login)

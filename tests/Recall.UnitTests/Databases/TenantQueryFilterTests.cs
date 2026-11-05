@@ -14,9 +14,6 @@ using Shouldly;
 
 public class TenantQueryFilterTests
 {
-    // Authentication reads these before a caller exists. A tenant filter here would pin an empty tenant scope for
-    // the whole request, because the scope is memoized for each context. A row names a user, and a user who is not
-    // live reads nothing, because each read of tenant data goes through FindLiveUserAsync.
     private static readonly Type[] AuthEntitiesReadBeforeACallerExists =
         [typeof(ExternalLogin), typeof(AuthSession), typeof(AppCode)];
 

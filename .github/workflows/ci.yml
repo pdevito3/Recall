@@ -8,7 +8,6 @@ name: CI
 # The grpc-contract job lints the .proto files and fails on a breaking change against main. See buf.yaml.
 # The new-feature job runs scripts/ci/new-feature.cs, which runs scripts/new-feature.cs for two sample entities, then lints, builds, and tests the result.
 # A job that calls a script under scripts/ci/ keeps its steps there, so that an agent can run them locally. The script works on a throwaway copy of the checkout.
-# The bff-tests job runs only when the changes job finds a BFF change, and the e2e job only for a change to the stack. Both also run on workflow_dispatch.
 # There is no nightly run. See section 7 of docs/specs/home-rolled-bff.md.
 
 on:
@@ -90,7 +89,6 @@ jobs:
         working-directory: frontend
         run: pnpm test
 
-      # The functional suite: the SPA in a headless Chromium, with each call to the Server mocked in the browser.
       - name: Run the functional tests
         working-directory: frontend
         run: pnpm test:e2e
@@ -243,10 +241,8 @@ jobs:
             bff:
               - 'Recall.Bff/**'
               - 'tests/Recall.Bff.Tests/**'
-              # The BFF tests compile these helpers with a link
               - 'tests/Recall.SharedTestHelpers/Utilities/PauseAtQuery.cs'
               - 'tests/Recall.SharedTestHelpers/Utilities/SqliteTestDatabase.cs'
-              # The BFF compiles these Server files with a link
               - 'Recall.Server/Resources/Extensions/CallerCancellationHealthCheck.cs'
               - 'Recall.Server/Databases/Sqlite/NetworkMountCheck.cs'
               - 'Recall.Server/Databases/Sqlite/SqliteConnectionSetup.cs'
@@ -258,7 +254,6 @@ jobs:
               - 'global.json'
             stack:
               - 'Recall.AppHost/**'
-              # The login and the token check of the Server, which the e2e tests drive
               - 'Recall.Server/Auth/**'
               - 'Recall.Server/Resources/Entrypoints/**'
               - 'Directory.Packages.props'

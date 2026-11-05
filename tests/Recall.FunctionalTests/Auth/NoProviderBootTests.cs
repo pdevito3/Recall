@@ -109,7 +109,6 @@ public class NoProviderBootTests
                 }
                 catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
                 {
-                    // The port does not answer until the boot ends
                 }
 
                 await Task.Delay(TimeSpan.FromMilliseconds(100));

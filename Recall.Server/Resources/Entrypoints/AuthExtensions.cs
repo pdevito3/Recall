@@ -12,11 +12,6 @@ using Microsoft.IdentityModel.Tokens;
 /// </summary>
 public static class AuthExtensions
 {
-    /// <summary>
-    /// Adds the JWT half of authentication, for an install with <c>Auth:Authority</c>. Then <c>Auth:Audience</c> is
-    /// required. Reads Auth:Authority, Auth:Audience, Auth:RequireHttpsMetadata, Auth:NameClaimType, and
-    /// Auth:RoleClaimType from configuration.
-    /// </summary>
     public static IServiceCollection AddJwtBearerAuthentication(
         this IServiceCollection services,
         IConfiguration configuration,
@@ -78,8 +73,6 @@ public static class AuthExtensions
         return services;
     }
 
-    // Each user who can hold a session has an identifier with the user ID prefix. So a provider that lets a person pick
-    // a sub, or a client ID, cannot act as a Recall user.
     private static bool NamesAnAppSession(ClaimsPrincipal? principal)
     {
         if (principal is null)

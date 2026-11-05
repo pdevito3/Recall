@@ -10,8 +10,6 @@ import { defineConfig, devices } from '@playwright/test'
  *
  * The script e2e/run-against-stack.ts reads the URLs from `dotnet aspire describe` and sets BASE_URL, SERVER_URL,
  * and IDP from the resources of the stack. See docs/authentication.md.
- *
- * The functional suite, with the Server mocked in the browser, is in playwright.config.ts.
  */
 export default defineConfig({
   testDir: './e2e',
@@ -30,7 +28,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    ignoreHTTPSErrors: true, // The Swagger tests call the https endpoint of the Server, with no certificate trust on the machine
+    ignoreHTTPSErrors: true,
   },
 
   projects: [

@@ -1,6 +1,6 @@
 namespace Recall.Server.Resources.Entrypoints.Auth;
 
-/// <summary>The one place that knows the session cookie. On https the reader sees only the <c>__Host-</c> name, so a plain-http neighbor cannot plant one.</summary>
+/// <summary>On https the reader sees only the <c>__Host-</c> name, so a plain-http neighbor cannot plant one.</summary>
 public static class SessionCookie
 {
     public const string SecureName = "__Host-recall";

@@ -100,7 +100,6 @@ public static class InitiateUserAndTenant
             };
         }
 
-        // A person starts the first tenant by signing in, which is the first-owner rule of the Provisioner.
         private async Task GuardCallerManagesAllTenantsAsync(CancellationToken cancellationToken)
         {
             var caller = await callerIdentityResolver.GetAsync(cancellationToken);

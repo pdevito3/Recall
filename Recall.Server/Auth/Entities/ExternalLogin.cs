@@ -5,7 +5,6 @@ using Domain.Users;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-/// <summary>A provider identity that signs in as a Recall user. The pair of issuer and subject names one person.</summary>
 [NotAudited("A link that the login writes for the person who signs in. The audit log records the user, and the row holds no business data.")]
 public sealed record ExternalLogin
 {

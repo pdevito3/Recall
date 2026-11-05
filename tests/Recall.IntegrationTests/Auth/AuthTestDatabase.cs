@@ -9,9 +9,6 @@ using Recall.Server.Databases;
 using Recall.Server.Domain.Tenants;
 using Recall.SharedTestHelpers.Utilities;
 
-/// <summary>
-/// A database of its own, because the first-owner rule reads whether any tenant exists, and the shared database has one.
-/// </summary>
 internal sealed class AuthTestDatabase : IAsyncDisposable
 {
     private readonly SqliteTestDatabase _database = new();

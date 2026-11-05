@@ -7,10 +7,6 @@ using Microsoft.Data.Sqlite;
 using Resources.Storage;
 using Serilog;
 
-/// <summary>
-/// A journal is private, so each file of this process is for its owner. The umask covers each new file, so no walk
-/// exists. At startup the data root, the database files, and the file store root get their modes, best effort.
-/// </summary>
 public static partial class OwnerOnlyFiles
 {
     public const UnixFileMode DirectoryMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
@@ -20,7 +16,6 @@ public static partial class OwnerOnlyFiles
 
     private static readonly string[] DatabaseFileSuffixes = ["", "-wal", "-shm"];
 
-    /// <summary>How this code reads and sets a mode. A test injects a volume that ignores modes.</summary>
     public sealed record ModeAccess(Func<string, UnixFileMode> Get, Action<string, UnixFileMode> Set)
     {
         [UnsupportedOSPlatform("windows")]
@@ -60,7 +55,6 @@ public static partial class OwnerOnlyFiles
         }
     }
 
-    /// <summary>Returns each path that kept a wider mode. It skips a link, and it never changes an owner.</summary>
     public static IReadOnlyList<string> Tighten(IEnumerable<string> directories, IEnumerable<string> files, ModeAccess modes)
     {
         var refused = new List<string>();

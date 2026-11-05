@@ -56,10 +56,6 @@ public class User : BaseEntity, ITenantable, IDeletedWithEvent
         return user;
     }
 
-    /// <summary>
-    /// The only source of a user who can hold a session. The identifier equals the ID, so that the <c>sub</c> of a
-    /// session finds the user with no extra read.
-    /// </summary>
     public static User CreateFromLogin(NewPerson person, string tenantId, UserRole role)
     {
         var id = EntityId.New(IdPrefix);

@@ -5,7 +5,6 @@ using Serilog;
 using Serilog.Core;
 using Serilog.Events;
 
-/// <summary>Writes to two loggers, and each keeps its own levels and overrides.</summary>
 internal sealed class TeeLogger(ILogger first, ILogger second) : ILogger
 {
     public ILogger ForContext(ILogEventEnricher enricher)

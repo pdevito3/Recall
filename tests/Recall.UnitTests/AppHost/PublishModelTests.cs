@@ -23,7 +23,6 @@ public class PublishModelTests
     public async Task a_publish_has_no_storage_container()
     {
         // Act
-        // ZeroFactor, the default provider, refuses a publish
         await using var builder = await DistributedApplicationTestingBuilder.CreateAsync(
             typeof(Isolation), ["--operation", "publish", "--publisher", "default", "--AuthProvider=Keycloak"], (options, _) => options.DisableDashboard = true);
 

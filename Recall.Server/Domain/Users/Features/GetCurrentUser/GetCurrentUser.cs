@@ -17,7 +17,6 @@ public static class GetCurrentUser
             var identifier = currentUserService.UserIdentifier
                 ?? throw new ForbiddenAccessException("Only a signed-in user can do this. The token has no subject.");
 
-            // An app session has no name claim, because the user row owns the name
             var name = currentUserService.Name;
             if (name is null)
             {

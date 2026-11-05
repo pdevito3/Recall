@@ -13,10 +13,6 @@ using ModelContextProtocol.Server;
 using Serilog.Core;
 using Spa;
 
-/// <summary>
-/// Adds and maps the external entrypoints: the HTTP API, gRPC, and MCP. All three use the same authentication, so
-/// each one sees the same caller and the same tenant scope. The core services come from <c>ConfigureServices</c>.
-/// </summary>
 public static class EntrypointRegistration
 {
     /// <summary>The path of the MCP streamable HTTP endpoint.</summary>
@@ -56,11 +52,6 @@ public static class EntrypointRegistration
         builder.Services.AddSingleton<ILogEventFilter, McpProtocolErrorLogFilter>();
     }
 
-    /// <summary>
-    /// Adds the middleware of the entrypoints: the problem details of HTTP errors, the SPA when the web root has it,
-    /// the OpenAPI document in Development, and authentication. The SPA fallback runs before authentication, so that
-    /// HTML has no session lookup.
-    /// </summary>
     public static void UseEntrypoints(this WebApplication app)
     {
         app.UseExceptionHandler(new ExceptionHandlerOptions

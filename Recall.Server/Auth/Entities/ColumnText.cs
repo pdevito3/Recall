@@ -2,7 +2,6 @@ namespace Recall.Server.Auth.Entities;
 
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
-/// <summary>The text of <see cref="SessionKind"/> in a column. The check constraints of the tables name these values.</summary>
 public static class SessionKindText
 {
     public const string Web = "web";
@@ -18,7 +17,6 @@ public static class SessionKindText
     public static string Of(SessionKind kind) => kind == SessionKind.Web ? Web : Native;
 }
 
-/// <summary>The text of <see cref="RevokeReason"/> in a column.</summary>
 public static class RevokeReasonText
 {
     public const string Logout = "logout";

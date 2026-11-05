@@ -1,9 +1,6 @@
 namespace Recall.Server.Resources.Entrypoints.Http;
 
-/// <summary>
-/// Gives a problem body to a 413, with the text that the SPA shows. Kestrel throws when a body passes its limit, and a
-/// 413 with no body gets the same answer.
-/// </summary>
+/// <summary>Kestrel throws when a body passes its limit, and a 413 with no body gets the same answer.</summary>
 public static class RequestTooLargeProblem
 {
     public const string Detail = "The file is too large to send. Choose a smaller file.";

@@ -3,7 +3,7 @@ import { isFilter, isFilterGroup } from '../types'
 import { LogicalOperators } from './operators'
 
 /**
- * A new ID for a filter or a group. crypto.randomUUID is undefined on http://LAN-IP, which is not a secure context.
+ * crypto.randomUUID is undefined on http://LAN-IP, which is not a secure context.
  * crypto.getRandomValues works in each context.
  */
 export function newFilterId(): string {

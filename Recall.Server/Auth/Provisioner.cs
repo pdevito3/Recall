@@ -30,10 +30,6 @@ public abstract record ProvisionOutcome
     public sealed record Failed(LoginFailure Failure) : ProvisionOutcome;
 }
 
-/// <summary>
-/// Turns a proved identity into a user: an existing link, then the owner claim, then the first owner, then open sign-up.
-/// The unique indexes decide each race. A loser drops its scope and decides again from what the winner wrote.
-/// </summary>
 public sealed class Provisioner(
     IServiceScopeFactory scopeFactory,
     IOptions<AuthOptions> options,
@@ -82,18 +78,14 @@ public sealed class Provisioner(
         if (link is not null)
             return await SignInLinkedAsync(dbContext, link, identity.Profile, cancellationToken);
 
-        // A deleted tenant counts, so that a person cannot become an Owner after the Owner deleted the journal.
-        var anyTenantEver = await dbContext.Tenants
-            .TagWithOperationCallSite("auth.provision.any_tenant_ever")
+        var tenants = await dbContext.Tenants
+            .TagWithOperationCallSite("auth.provision.tenants_ever")
             .IgnoreQueryFilters()
-            .AnyAsync(cancellationToken);
-
-        // This read comes second, so a rival's first tenant seen above is also seen here and never reads as a deleted one.
-        var oldestTenantId = await dbContext.Tenants
-            .TagWithOperationCallSite("auth.provision.oldest_tenant")
             .OrderBy(t => t.Id)
-            .Select(t => t.Id)
-            .FirstOrDefaultAsync(cancellationToken);
+            .Select(t => new { t.Id, t.IsDeleted })
+            .ToListAsync(cancellationToken);
+        var anyTenantEver = tenants.Count > 0;
+        var oldestTenantId = tenants.FirstOrDefault(t => !t.IsDeleted)?.Id;
 
         if (claim.Take() && oldestTenantId is not null)
             return await ClaimOwnerAsync(dbContext, identity, oldestTenantId, cancellationToken);
@@ -118,7 +110,6 @@ public sealed class Provisioner(
 
         link.LastLoginAt = timeProvider.GetUtcNow();
 
-        // An edit in Recall wins and an absent claim clears nothing, so only an empty value takes the claim.
         var lastName = user.LastName ?? NewPerson.LastNameOf(profile);
         var email = user.Email?.Value ?? NewPerson.EmailOf(profile);
         if (lastName != user.LastName || email != user.Email?.Value)
@@ -163,7 +154,6 @@ public sealed class Provisioner(
     private async Task<ProvisionOutcome> JoinAsync(
         AppDbContext dbContext, ExternalIdentity identity, string tenantId, UserRole role, CancellationToken cancellationToken)
     {
-        // The shared lock keeps a tenant delete out until the save, so the user does not land in a deleted tenant.
         return await RootLock.Tenant.RunSharedAsync<ProvisionOutcome>(dbContext, tenantId, async ct =>
         {
             var tenantIsLive = await dbContext.Tenants
@@ -195,7 +185,6 @@ public sealed class Provisioner(
         };
     }
 
-    // A login that took the file and then lost a race on its save still holds the claim, because the file is gone.
     private sealed class ClaimOfThisLogin(OwnerClaim ownerClaim)
     {
         private bool _won;

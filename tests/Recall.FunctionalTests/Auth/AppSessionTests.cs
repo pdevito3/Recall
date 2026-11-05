@@ -6,7 +6,6 @@ using System.Text.Json;
 using Recall.Server.Auth;
 using Shouldly;
 
-/// <summary>What a session can do after a login, for a cookie and for a bearer value.</summary>
 public class AppSessionTests
 {
     private const string Me = "/auth/me";

@@ -32,7 +32,6 @@ export function sessionPage(page: Page) {
       return { rendered }
     },
 
-    /** The page is gone when the login opens, so a script in the page reports each navigation at once. */
     async openAndCountLoginNavigations(path: string) {
       let navigations = 0
       await page.exposeFunction('reportLoginNavigation', () => {

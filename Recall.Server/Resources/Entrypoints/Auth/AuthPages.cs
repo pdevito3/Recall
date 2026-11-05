@@ -5,7 +5,6 @@ using System.Security.Cryptography;
 using System.Text;
 using Recall.Server.Auth;
 
-/// <summary>The pages of the Server. The style has a hash in the policy, and the pages have no script.</summary>
 public static class AuthPages
 {
 #pragma warning disable FSTMSG001 // An operator reads this one, and it must name the settings to set.

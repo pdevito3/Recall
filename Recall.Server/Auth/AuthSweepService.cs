@@ -3,7 +3,6 @@ namespace Recall.Server.Auth;
 using Resources;
 using Serilog;
 
-/// <summary>Removes expired attempts and codes, and sessions that ended 30 days ago. Each hour, in bounded batches.</summary>
 public sealed class AuthSweepService(IServiceScopeFactory scopeFactory, TimeProvider timeProvider) : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromHours(1);
@@ -29,13 +28,11 @@ public sealed class AuthSweepService(IServiceScopeFactory scopeFactory, TimeProv
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
-            // A normal stop
         }
     }
 
     public async Task SweepAsync(CancellationToken cancellationToken)
     {
-        // The sweep has no request, so it starts its own trace.
         using var trace = Telemetry.TraceRoot([], "auth.sweep");
         try
         {

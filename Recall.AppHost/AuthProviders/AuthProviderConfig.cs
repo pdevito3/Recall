@@ -73,10 +73,6 @@ public sealed record AuthClientUrls(
 /// </summary>
 public static class AuthProviderExtensions
 {
-    /// <summary>
-    /// Gives the Server the provider as its login method (<c>Auth:Providers:0</c>) and as its JWT authority
-    /// (<c>Auth:Authority</c>), which Swagger, MCP, gRPC, and agents use.
-    /// </summary>
     public static IResourceBuilder<T> WithServerAuth<T>(
         this IResourceBuilder<T> resource,
         AuthProviderConfig authProvider,
@@ -102,13 +98,11 @@ public static class AuthProviderExtensions
             resource.WithEnvironment(name, value);
         }
 
-        // A login reads the discovery document of the provider, so the Server waits for its health check
         if (authProvider.AuthResource is not null)
             resource.WaitFor(authProvider.AuthResource);
 
         resource.WithEnvironment(context =>
         {
-            // A static URL, or the container endpoint with the path of the realm
             var issuer = authProvider.AuthResource is { } container
                 ? ReferenceExpression.Create($"{container.GetEndpoint("http")}{authProvider.AuthorityPathSuffix}")
                 : ReferenceExpression.Create($"{authProvider.Authority}");
@@ -119,10 +113,6 @@ public static class AuthProviderExtensions
         return resource;
     }
 
-    /// <summary>
-    /// Gives the Server the login settings of the AppHost configuration, for a stack with no provider of its own.
-    /// With no <c>Auth:Providers</c> the Server boots with no login method.
-    /// </summary>
     public static IResourceBuilder<T> WithForwardedAuth<T>(
         this IResourceBuilder<T> resource,
         IConfiguration configuration) where T : IResourceWithEnvironment

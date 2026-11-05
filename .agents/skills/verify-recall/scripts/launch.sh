@@ -79,8 +79,6 @@ while :; do
 done
 
 web="$(web_url "$BUILD")"
-# The SPA can serve HTML before the Vite proxy reaches the Server. Wait until the Server answers through it, so that the
-# SPA and the Server are both up.
 server_answered=false
 for _ in $(seq 1 60); do
   server_rejects_anonymous "$web" && { server_answered=true; break; }

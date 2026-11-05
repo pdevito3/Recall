@@ -68,7 +68,6 @@ public partial class PortTableTests
     private static IEnumerable<(int Port, string Resource, string Endpoint)> ReadmePortTable()
     {
         var readme = File.ReadAllText(Path.Combine(RepositoryRoot(), "README.md"));
-        // A row is "| 24713 | `server` | https |". The resource is the first name in backticks, or the plain text.
         return PortRow().Matches(readme).Select(row => (
             int.Parse(row.Groups["port"].Value, System.Globalization.CultureInfo.InvariantCulture),
             BacktickName().Match(row.Groups["resource"].Value) is { Success: true } code ? code.Groups[1].Value : row.Groups["resource"].Value.Trim(),

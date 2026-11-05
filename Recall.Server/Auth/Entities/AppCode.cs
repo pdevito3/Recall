@@ -5,7 +5,6 @@ using Domain.Users;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-/// <summary>The one-time code that the app trades for its first token pair. Each row lives 2 minutes.</summary>
 [NotAudited("A one-time code of a native login. A row holds a hash and no business data, and it lives for minutes.")]
 public sealed record AppCode
 {

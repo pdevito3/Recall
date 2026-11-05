@@ -8,7 +8,6 @@ using Recall.Server.Auth.Entities;
 using Recall.Server.Domain.Users;
 using Recall.Server.Domain.Users.Features;
 
-/// <summary>The contract for a client of any kind. <c>docs/authentication.md</c> states it, because these routes are not in the OpenAPI document.</summary>
 public static class AuthEndpoints
 {
     public sealed record StatusMode(string Kind, string Id, string DisplayName, string State, string? Detail, string StartUrl);
@@ -44,7 +43,6 @@ public static class AuthEndpoints
         endpoints.MapGet(AuthRoutes.Me, MeAsync).RequireAuthorization(AppSessionOnly).ExcludeFromDescription();
     }
 
-    /// <summary>Extends a web session, at most once a day. Only this call and <c>/bff/user</c> write, so that an API call never does.</summary>
     public static async Task SlideAsync(HttpContext http, SessionStore store, string sessionId, CancellationToken cancellationToken)
     {
         if (await store.SlideWebAsync(sessionId, cancellationToken) is { } expires && SessionCookie.Read(http.Request) is { } cookie)
@@ -79,7 +77,6 @@ public static class AuthEndpoints
         var signedOut = query.ContainsKey("signedOut");
         var hasError = query.ContainsKey("error");
 
-        // A navigation has no X-CSRF header, so this reads the cookie itself
         if (!signedOut && SessionCookie.Read(http.Request) is { } cookie
             && await store.FindByAccessAsync(TokenHash.Of(cookie), SessionKind.Web, cancellationToken) is not null)
             return new AuthRedirect(returnPath);

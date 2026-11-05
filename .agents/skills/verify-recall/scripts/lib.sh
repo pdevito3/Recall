@@ -39,8 +39,6 @@ web_url() {
   if [[ "$1" == "production" ]]; then url_of server https; else url_of webfrontend http; fi
 }
 
-# server_rejects_anonymous <web>: true when an anonymous GET of /api/v1/users/me at the web URL gets the 401 of the
-# Server, with its Bearer challenge. A proxy that does not reach the Server sends no such challenge.
 server_rejects_anonymous() {
   local headers
   headers="$(curl -sk -o /dev/null -D - -H 'X-CSRF: 1' "$1/api/v1/users/me" | tr -d '\r' || true)"

@@ -2,7 +2,6 @@ namespace Recall.Server.Resources.Entrypoints.Auth;
 
 using Recall.Server.Auth;
 
-/// <summary>The single step that turns a resolved user into a session. A later login mode calls this too.</summary>
 public sealed class LoginCompletion(SessionStore store, LoginModes modes)
 {
     public Task<IResult> CompleteAsync(LoginClient client, ProvisionOutcome outcome, string modeId, HttpContext http, CancellationToken cancellationToken)

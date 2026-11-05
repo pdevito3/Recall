@@ -6,7 +6,6 @@ using System.Text.Json;
 using Microsoft.AspNetCore.WebUtilities;
 using Shouldly;
 
-/// <summary>The login itself: the cookies, who a login resolves to, and the native steps.</summary>
 public class OidcLoginTests
 {
     private static string NewSubject() => $"subject-{Guid.NewGuid():N}";

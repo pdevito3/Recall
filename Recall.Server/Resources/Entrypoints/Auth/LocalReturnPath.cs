@@ -4,11 +4,6 @@ using System.Buffers;
 using System.Globalization;
 using System.Text;
 
-/// <summary>
-/// The open-redirect defense of the return path, with the rules of the BFF. A value is local if it starts with one
-/// slash and has no backslash, no control character, and no lone surrogate, within the length limit. Each other value
-/// gives <c>/</c>.
-/// </summary>
 public static class LocalReturnPath
 {
     public const int MaxLength = 2048;

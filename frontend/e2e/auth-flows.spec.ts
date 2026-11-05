@@ -7,11 +7,6 @@ import { loadIdp, type IdpCapabilities, type IdpConfig } from './idps.ts'
 /**
  * Authentication flow tests for all supported Identity Providers.
  *
- * These tests verify:
- * 1. React UI login through the Server, a signed-in API call, and logout
- * 2. The login of a native app: /auth/status, the browser flow, the token grants, and replay
- * 3. Swagger OAuth authorization and secure API access
- *
  * Test users (from docs/authentication.md):
  * - Keycloak/FusionAuth/Authentik/Cognito: admin@example.com / password123!
  * - Duende Demo: bob / bob
@@ -94,7 +89,6 @@ test.describe(`Auth Flows - ${currentIdp.name}`, () => {
       const logoutButton = page.getByRole('button', { name: /logout/i })
       await expect(logoutButton).toBeVisible({ timeout: 10000 })
 
-      // Step 6: The home page shows the name of the session
       await expect(page.getByText(/^Signed in as /)).toBeVisible({ timeout: 10000 })
 
       // Step 7: Click Logout. The 200 before the logout proves that the 204 after it comes from the logout
@@ -103,7 +97,6 @@ test.describe(`Auth Flows - ${currentIdp.name}`, () => {
       expect((await bffUser()).status(), 'the session before the logout').toBe(200)
       await logoutButton.click()
 
-      // Step 8: Logout ends the session of the app, and the Server shows its signed-out page. The session at the IdP stays.
       await page.waitForURL((url) => url.pathname === '/auth/login' && url.searchParams.get('signedOut') === '1', { timeout: 30000 })
       await expect(page.getByRole('heading', { name: 'You are signed out' })).toBeVisible()
       await expect(page).toHaveTitle('You are signed out - Recall')
@@ -159,7 +152,6 @@ async function sentSessionCookie(request: Request) {
   return cookie.split(';').some((pair) => pair.trim().startsWith(`${sessionCookieName}=`))
 }
 
-// The session cookie is SameSite=Strict
 test.describe(`Session cookie - ${currentIdp.name}`, () => {
   test('should set the login binding cookie with Lax and the session cookie with Strict, and end signed in on the first load', async ({
     page,
@@ -180,7 +172,6 @@ test.describe(`Session cookie - ${currentIdp.name}`, () => {
     await page.waitForURL('/', { timeout: 30000 })
     await expect(page.getByRole('button', { name: /logout/i })).toBeVisible({ timeout: 10000 })
 
-    // BASE_URL is plain http, so the Server sets the name with no __Host- prefix and no Secure attribute
     const cookies = await context.cookies()
     expect(cookies.find((c) => c.name === sessionCookieName)).toMatchObject({ sameSite: 'Strict', secure: false, httpOnly: true, path: '/' })
     expect(cookies.some((c) => c.name.startsWith('recall_login_')), 'the callback deletes the binding cookie').toBe(false)
@@ -256,7 +247,6 @@ test.describe(`Swagger - ${currentIdp.name}`, () => {
     await expect(page.getByText('/api/v1/users/me')).toBeVisible({ timeout: 5000 })
   })
 
-  // The Server reads a provider JWT from its claims, so this call works and tenant reads are refused (docs/authentication.md)
   test('should authorize and call the current user endpoint', async ({ page }) => {
     // Step 1: Navigate to Swagger UI
     await page.goto(`${serverUrl}/swagger`, {
@@ -411,7 +401,6 @@ test.describe(`Native app login - ${currentIdp.name}`, () => {
     return status.modes[0].startUrl
   }
 
-  /** Runs the browser half of the flow against a loopback server, as an app does, and exchanges the code. */
   async function signInAsApp(page: Page, origin: string): Promise<TokenPair> {
     const loopback = createServer()
     const callback = new Promise<URL>((resolve) => {
@@ -434,7 +423,6 @@ test.describe(`Native app login - ${currentIdp.name}`, () => {
 
       await page.goto(`${origin}${await readStartUrl(origin)}&${parameters}`)
       await loginAtIdp(page, currentIdp)
-      // A provider can sign the person in with no click, so the Server asks before the code reaches the app
       await expect(page.getByRole('heading', { name: 'Sign in the Recall app?' })).toBeVisible({ timeout: 30000 })
       await page.getByRole('button', { name: 'Continue' }).click()
 

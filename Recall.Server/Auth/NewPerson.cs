@@ -4,19 +4,16 @@ using Databases;
 using Domain.EmailAddresses;
 using Domain.Users;
 
-/// <summary>The profile claims of a provider. Any of them can be absent or odd.</summary>
 public sealed record Profile(string? GivenName, string? FamilyName, string? Name, string? Email, string? PreferredUsername)
 {
     public override string ToString() => "[profile]";
 }
 
-/// <summary>A person whom a provider has proved. The subject comes only from the ID token.</summary>
 public sealed record ExternalIdentity(string Issuer, string Subject, Profile Profile)
 {
     public override string ToString() => "[external identity]";
 }
 
-/// <summary>The values of a new user. They always pass the rules of <see cref="User"/>, so an odd claim never fails a login.</summary>
 public sealed record NewPerson(string FirstName, string? LastName, string? Email, string Username)
 {
     private const string FallbackFirstName = "Recall user";
@@ -42,10 +39,8 @@ public sealed record NewPerson(string FirstName, string? LastName, string? Email
         return new NewPerson(firstName, lastName, email, username ?? Clean(email, User.UsernameMaxLength) ?? Clean(firstName, User.UsernameMaxLength)!);
     }
 
-    /// <summary>The last name that the provider states, with no fallback. A repeat login fills an empty value with it.</summary>
     public static string? LastNameOf(Profile profile) => Clean(profile.FamilyName, User.LastNameMaxLength);
 
-    /// <summary>The valid email that the provider states, with no fallback. A repeat login fills an empty value with it.</summary>
     public static string? EmailOf(Profile profile)
     {
         var email = Clean(profile.Email, int.MaxValue);

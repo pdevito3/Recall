@@ -1,4 +1,3 @@
-# Build frontend
 FROM node:22-alpine AS frontend
 WORKDIR /app
 # Corepack uses the pnpm version of packageManager in package.json
@@ -28,7 +27,6 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
 COPY --from=build /app/publish .
-# The Server serves the SPA from its web root
 COPY --from=frontend /app/dist ./wwwroot
 
 # Kestrel:Endpoints in appsettings.json binds 8080 (HTTP/1.1) and 8081 (HTTP/2 only, h2c, for gRPC).

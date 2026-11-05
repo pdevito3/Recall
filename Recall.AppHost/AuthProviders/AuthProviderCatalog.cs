@@ -21,10 +21,6 @@ public interface IAuthProvider
     /// </summary>
     bool RunsE2eTests => true;
 
-    /// <summary>
-    /// Adds the resources of the provider to the stack and returns the settings for the Server. Null means that the
-    /// stack adds no provider and the Server takes its login methods from the AppHost configuration.
-    /// </summary>
     AuthProviderConfig? AddTo(IDistributedApplicationBuilder builder, AuthClientUrls clientUrls);
 }
 

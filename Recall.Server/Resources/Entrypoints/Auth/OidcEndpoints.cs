@@ -3,7 +3,6 @@ namespace Recall.Server.Resources.Entrypoints.Auth;
 using Recall.Server.Auth;
 using Recall.Server.Auth.Entities;
 
-/// <summary>The three steps of a provider login: start, the provider redirect, and the confirm step of a native app.</summary>
 public static class OidcEndpoints
 {
     private static readonly string[] HtmlTypes = ["text/html"];
@@ -67,7 +66,6 @@ public static class OidcEndpoints
         if (attempt is null || !BindingCookie.Matches(http.Request, stateHash, attempt))
             return AuthPages.Refused();
 
-        // The check above comes first, so a stranger with a guessed state burns nothing
         if (!await store.ConsumeAttemptAsync(attempt, cancellationToken))
             return AuthPages.Refused();
 

@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Starts the providers of the lab. All secrets are made at run time under LAB_DIR. Nothing here touches the machine trust store.
 # Usage: lab.sh up | env | pocket-login-url <username> | down
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"

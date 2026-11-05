@@ -8,7 +8,6 @@ using Recall.Server.Auth;
 using Recall.Server.Auth.Entities;
 using Shouldly;
 
-/// <summary>Each test starts from a login that passes, and breaks one thing, so it fails if the check goes away.</summary>
 public class AuthRefusalTests
 {
     private static string NewSubject() => $"subject-{Guid.NewGuid():N}";
@@ -335,7 +334,6 @@ public class AuthRefusalTests
         var me = await browser.GetAsync("/auth/me", authorization: $"Bearer {tokens.AccessToken}");
         var userId = (await me.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("sub").GetString()!;
         await DeleteUserAsync(userId);
-        // A delete removes the codes of the user in its save, so this is the code of a login that finished just after it
         var code = await AuthHosts.Open.WithStoreAsync(store =>
             store.AddAppCodeAsync(userId, AuthFlowFactory.ModeId, app.Redirect, app.Challenge, app.ClientState, CancellationToken.None));
 

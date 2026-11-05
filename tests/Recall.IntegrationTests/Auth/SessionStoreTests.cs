@@ -19,7 +19,6 @@ public sealed class SessionStoreTests : TestBase
 
     private const string Mode = "oidc";
 
-    // A user for each test, because a test that ends the other sessions of a user would end those of a parallel test.
     private string UserId { get; set; } = null!;
 
     [Before(Test)]
@@ -469,7 +468,6 @@ public sealed class SessionStoreTests : TestBase
     public async Task the_sweep_deletes_what_ended_and_keeps_what_is_live()
     {
         // Arrange
-        // A database of its own, because this sweep at a later time deletes what the parallel tests of this class hold
         await using var database = await AuthTestDatabase.CreateAsync();
         await using var host = new Host(database);
         var login = await host.Services.GetRequiredService<Provisioner>().ResolveAsync(

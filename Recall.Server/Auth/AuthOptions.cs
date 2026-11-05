@@ -20,9 +20,6 @@ public sealed class OidcProviderOptions
     public override string ToString() => $"[provider {Id}]";
 }
 
-/// <summary>
-/// The sign-in settings. No provider is a valid state: the server boots and <c>/auth/status</c> says what to set.
-/// </summary>
 public sealed class AuthOptions
 {
     public const string SectionName = "Auth";
@@ -39,7 +36,6 @@ public sealed class AuthOptions
         => string.IsNullOrWhiteSpace(provider.Id) ? $"oidc{position}" : provider.Id;
 }
 
-/// <summary>A typo in a provider stops the boot with a named message, because it is not the same as no provider.</summary>
 public sealed class AuthOptionsValidator : IValidateOptions<AuthOptions>
 {
     public ValidateOptionsResult Validate(string? name, AuthOptions options)

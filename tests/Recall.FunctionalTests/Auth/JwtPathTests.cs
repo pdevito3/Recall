@@ -7,7 +7,6 @@ using System.Text.Json;
 using Microsoft.IdentityModel.Tokens;
 using Shouldly;
 
-/// <summary>The real JWT scheme behind the real selector, signed by the key that the provider publishes.</summary>
 public class JwtPathTests
 {
     private const string ProtectedPath = "/api/v1/tenants";

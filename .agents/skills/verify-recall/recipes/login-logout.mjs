@@ -1,4 +1,3 @@
-// Feature: login-logout. Server login through the IdP of the stack. See features/login-logout.md.
 // The page is on the IdP when the visitor has no session, so a check of the app sends its own request. The context
 // sends the cookies of the app with it.
 const appStatus = async (page, path) => (await page.request.get(path, { headers: { 'X-CSRF': '1' } })).status()

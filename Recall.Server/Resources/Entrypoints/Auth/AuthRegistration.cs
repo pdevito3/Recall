@@ -7,7 +7,6 @@ using Microsoft.Extensions.Options;
 using Recall.Server.Auth;
 using Serilog.Core;
 
-/// <summary>The default scheme, the conditional JWT half, and the routes of sign-in.</summary>
 public static class AuthRegistration
 {
     public const string PolicyScheme = "Recall";
@@ -44,10 +43,6 @@ public static class AuthRegistration
         return services;
     }
 
-    /// <summary>
-    /// A scheme name compares with no case. Only Bearer and DPoP are credentials here, so nginx Basic or a proxy header
-    /// never hides the cookie.
-    /// </summary>
     public static string SelectScheme(HttpRequest request, bool jwtOn)
     {
         var token = AppSessionHandler.CredentialOf(request.Headers.Authorization.ToString());

@@ -14,7 +14,6 @@ using Microsoft.IdentityModel.Tokens;
 using Resources;
 using Serilog;
 
-/// <summary>Builds the HTTP handler of one provider. A test swaps it for a stub provider.</summary>
 public delegate HttpMessageHandler OidcHandlerFactory(OidcProviderOptions provider);
 
 public sealed record OidcDiscovery(
@@ -26,7 +25,6 @@ public sealed record OidcDiscovery(
     IReadOnlyList<string> TokenEndpointAuthMethods,
     bool AdvertisesIssParameter);
 
-/// <summary>The values of the provider redirect. They exist as text only for this call.</summary>
 public sealed record OidcCallback(string? Code, string? Iss, string? Error)
 {
     public override string ToString() => "[oidc callback]";
@@ -37,7 +35,6 @@ public sealed record RedeemResult(ExternalIdentity? Identity, LoginFailure? Fail
     public static RedeemResult Failed(LoginFailure failure) => new(null, failure);
 }
 
-/// <summary>The login modes of this install, in the order of the settings.</summary>
 public sealed class LoginModes(IOptions<AuthOptions> options, OidcHandlerFactory handlers, TimeProvider timeProvider) : IDisposable
 {
     private readonly List<OidcLoginMode> _modes = options.Value.Providers
@@ -56,10 +53,7 @@ public sealed class LoginModes(IOptions<AuthOptions> options, OidcHandlerFactory
     }
 }
 
-/// <summary>
-/// One OpenID Connect provider, with this Server as the client. Discovery runs on demand, so a provider that is down does
-/// not stop the boot. The client has no retry, because a retry of a code redemption fails and burns the code.
-/// </summary>
+/// <summary>The client has no retry, because a retry of a code redemption fails and burns the code.</summary>
 public sealed class OidcLoginMode : ILoginMode, IDisposable
 {
     private const string Scope = "openid profile email";
@@ -122,7 +116,6 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
     public async Task<LoginModeState> ProbeAsync(CancellationToken cancellationToken)
         => await DiscoverAsync(cancellationToken) is null ? LoginModeState.Unreachable : LoginModeState.Ready;
 
-    /// <summary>The discovery document, or null when the provider does not answer with one for its own issuer.</summary>
     public Task<OidcDiscovery?> DiscoverAsync(CancellationToken cancellationToken)
     {
         Task<OidcDiscovery?> running;
@@ -341,18 +334,23 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
         };
 
         if (discovery.UserinfoEndpoint is { } endpoint && accessToken is not null
-            && !await MergeUserinfoAsync(endpoint, accessToken, subject, claims, cancellationToken))
+            && await MergeUserinfoAsync(endpoint, accessToken, subject, claims, cancellationToken) == UserinfoSubject.Other)
             return Refuse("the subject of userinfo is not the subject of the ID token");
 
         var profile = new Profile(claims["given_name"], claims["family_name"], claims["name"], claims["email"], claims["preferred_username"]);
         return new RedeemResult(new ExternalIdentity(discovery.Issuer, subject, profile), null);
     }
 
+    private enum UserinfoSubject
+    {
+        NotDifferent,
+        Other,
+    }
+
     private static string? ClaimOf(JsonWebToken token, string name)
         => token.TryGetPayloadValue<string>(name, out var value) ? value : null;
 
-    /// <summary>False only for a different subject. A userinfo that does not answer leaves the claims of the ID token.</summary>
-    private async Task<bool> MergeUserinfoAsync(
+    private async Task<UserinfoSubject> MergeUserinfoAsync(
         string endpoint, string accessToken, string subject, Dictionary<string, string?> claims, CancellationToken cancellationToken)
     {
         try
@@ -361,14 +359,14 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
             using var response = await _http.SendAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode)
-                return true;
+                return UserinfoSubject.NotDifferent;
 
             using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
             var root = body.RootElement;
             if (root.ValueKind != JsonValueKind.Object)
-                return true;
+                return UserinfoSubject.NotDifferent;
             if (Text(root, "sub") is { } sub && sub != subject)
-                return false;
+                return UserinfoSubject.Other;
 
             foreach (var name in claims.Keys.ToList())
             {
@@ -376,11 +374,11 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
                     claims[name] = value;
             }
 
-            return true;
+            return UserinfoSubject.NotDifferent;
         }
         catch (Exception exception) when (exception is HttpRequestException or JsonException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
         {
-            return true;
+            return UserinfoSubject.NotDifferent;
         }
     }
 

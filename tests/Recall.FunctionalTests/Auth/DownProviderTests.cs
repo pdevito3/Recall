@@ -40,7 +40,6 @@ public class DownProviderTests
         refresh.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
-    // A probe answer stays for 2 seconds, so the state changes within about that time
     private static async Task WaitForDegradedAsync(AuthBrowser browser)
     {
         for (var attempt = 0; attempt < 100; attempt++)

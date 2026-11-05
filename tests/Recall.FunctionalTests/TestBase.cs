@@ -81,9 +81,6 @@ public class TestBase : IDisposable
     protected static IReadOnlyList<Activity> AllExportedSpans()
         => Factory.ExportedActivities.Snapshot();
 
-    /// <summary>
-    /// The spans of the startup of this host.
-    /// </summary>
     protected static IReadOnlyList<Activity> StartupSpans()
         => Factory.ExportedActivities.Snapshot().Take(Factory.SpansAtStartup).ToList();
 

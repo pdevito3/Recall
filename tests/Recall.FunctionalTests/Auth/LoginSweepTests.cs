@@ -7,11 +7,6 @@ using Recall.Server.Auth;
 using Serilog.Events;
 using Shouldly;
 
-/// <summary>
-/// A full web login and a full native login with a refresh, on an app that logs at Debug. No raw credential may reach a
-/// log line or a span. The app sends the logs of Microsoft.Extensions.Logging through Serilog, so the capture is a
-/// Serilog sink, the same place each line of the app goes through.
-/// </summary>
 public class LoginSweepTests
 {
     [Test]
@@ -65,7 +60,6 @@ public class LoginSweepTests
 
         // Assert
         var logLines = host.Logs.All.Select(TextOf).ToList();
-        // The capture works: the login routes were seen at Debug, by both, or an empty capture would pass.
         logLines.ShouldContain(line => line.Contains("/auth/token", StringComparison.Ordinal));
         logLines.ShouldContain(line => line.Contains("Debug", StringComparison.Ordinal));
         logLines.ShouldContain(line => line.Contains("auth_sessions", StringComparison.Ordinal));

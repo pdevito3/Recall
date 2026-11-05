@@ -165,10 +165,10 @@ page.on('response', (r) => {
 // The errors that already have a failure capture, so that an outer step or the runner does not capture again.
 const capturedErrors = new Set()
 
-// A page of the Server has no such panel, and its Content-Security-Policy refuses the style.
 function hideRouterDevtoolsOfDevBuild() {
   document.addEventListener('DOMContentLoaded', () => {
-    if (!document.getElementById('root')) return
+    const isSpaPage = document.getElementById('root') !== null
+    if (!isSpaPage) return
     const style = document.createElement('style')
     style.textContent = '.TanStackRouterDevtools { display: none !important; }'
     document.head.append(style)
@@ -223,9 +223,6 @@ async function capture(name, { fullPage = true } = {}) {
   if (sweep && name !== 'failure') await sweepCapture({ page, cdp, settle, outDir, capture: base, faults: sweepFaults, holdsOverlay: !fullPage })
 }
 
-// Logs in through the Server and the IdP of the stack, then returns the user's `name` claim from the session.
-// The SPA sends a visitor with no session to the IdP at once, and the IdP sends the browser back to the page that
-// the visitor opened. The first login of a new database makes that user the Owner of the tenant `Recall`.
 // `user` is a user of that IdP. Without it, the IdP's first user signs in.
 //   ZeroFactor (default): admin@example.com (Admin User), user@example.com (Test User). One click signs in.
 //   DuendeDemo: bob (Bob Smith), alice (Alice Smith). The password is the user name.
@@ -268,7 +265,6 @@ async function signInAtDuendeDemo(user) {
   await page.locator('button[value="login"]').click()
 }
 
-// Logs out of the app. The Server ends the session and shows its signed-out page. The session of the IdP stays.
 async function logout() {
   await page.getByRole('button', { name: 'Logout' }).click()
   await page.waitForURL((u) => u.pathname === '/auth/login' && u.searchParams.has('signedOut'), { waitUntil: 'domcontentloaded', timeout: 30_000 })

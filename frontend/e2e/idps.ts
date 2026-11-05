@@ -22,23 +22,15 @@ export interface IdpConfig {
   twoStepLogin?: boolean
   // Second step submit selector for two-step login (if different from submitSelector)
   secondStepSubmitSelector?: string
-  // What the discovery document of the provider lists. Each value is a fact about the provider, and the Server uses
-  // none of them to log in, so a test fails when a provider upgrade adds or drops one.
   capabilities: IdpCapabilities
 }
 
 export interface IdpCapabilities {
-  // revocation_endpoint (RFC 7009)
   revocation: boolean
-  // authorization_response_iss_parameter_supported (RFC 9207)
   issuerParameter: boolean
-  // backchannel_logout_supported
   backChannelLogout: boolean
-  // end_session_endpoint
   endSession: boolean
-  // pushed_authorization_request_endpoint (RFC 9126)
   pushedAuthorization: boolean
-  // dpop_signing_alg_values_supported (RFC 9449). Keycloak lists it because the AppHost starts it with --features=dpop.
   dpop: boolean
 }
 

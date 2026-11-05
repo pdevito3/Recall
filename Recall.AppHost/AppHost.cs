@@ -29,7 +29,6 @@ try
     // endpoint a random port and skips the data volumes, so that worktrees can run the full stack at the same time.
     // See Isolation.cs.
     var server = builder.AddProject<Projects.Recall_Server>("server")
-        // The probe uses the http endpoint, so that the stack does not need a trusted development certificate
         .WithHttpHealthCheck("/health", endpointName: "http")
         .WithExternalHttpEndpoints()
         // The endpoints come from Kestrel:Endpoints in the appsettings of the Server, with the HTTP/2-only "grpc"
@@ -48,7 +47,6 @@ try
         var dataDirectory = builder.DataDirectory();
         server.WithEnvironment("ConnectionStrings__appdb", $"Data Source={Path.Combine(dataDirectory, "recall.db")}");
         server.WithEnvironment("FileStore__Root", Path.Combine(dataDirectory, "files"));
-        // SpaBuild runs the stack on a production build: the Server serves the SPA, as it does when published
         if (builder.Configuration["SpaBuild"] is { Length: > 0 } spaBuild)
             server.WithEnvironment("ASPNETCORE_WEBROOT", Path.GetFullPath(spaBuild));
     }
@@ -62,11 +60,9 @@ try
     else
         server.WithForwardedAuth(builder.Configuration);
 
-    // The UI starts only when a login and an API call can work. The Server waits for the auth provider.
     webfrontend.WithReference(server)
         .WaitFor(server);
 
-    // The Server serves the SPA in production.
     server.PublishWithContainerFiles(webfrontend, "wwwroot");
 
     // Labcoat finds the test projects of the solution and shows a web UI to run them. Aspire tests and publish skip it.

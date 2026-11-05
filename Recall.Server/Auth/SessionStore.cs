@@ -8,10 +8,8 @@ using Microsoft.EntityFrameworkCore;
 using Resources;
 using Serilog;
 
-/// <summary>What a valid credential proves.</summary>
 public sealed record SessionPrincipal(string SessionId, string UserId, SessionKind Kind, DateTimeOffset AccessExpiresAt);
 
-/// <summary>A new web session. The cookie value exists as text only here and in the response.</summary>
 public sealed record WebSession(string SessionId, string CookieValue, DateTimeOffset ExpiresAt)
 {
     public const string CookiePrefix = "rcl_ck_";
@@ -19,14 +17,8 @@ public sealed record WebSession(string SessionId, string CookieValue, DateTimeOf
     public override string ToString() => $"[web session {SessionId}]";
 }
 
-/// <summary>The answer to a refresh. No pair means <c>invalid_grant</c>.</summary>
 public sealed record RefreshResult(TokenPair? Pair, RefreshDecision? Decision);
 
-/// <summary>
-/// The one owner of the session, attempt, and code rows. It sits on the context with no MediatR, because the hot path
-/// cannot pay for a pipeline. All of its tables have no tenant, so it never reads the caller and never pins the tenant
-/// scope of the request.
-/// </summary>
 [SuppressMessage("ApiDesign", "RS0030:Do not use banned APIs",
     Justification = "auth_sessions, auth_login_attempts, and auth_app_codes are [NotAudited], so these writes need no audit entry.")]
 public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvider)
@@ -35,7 +27,6 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
 
     private readonly ILogger _logger = Log.ForContext<SessionStore>();
 
-    /// <summary>One read of the unique index and no write. It runs on each authenticated request.</summary>
     public async Task<SessionPrincipal?> FindByAccessAsync(TokenHash hash, SessionKind kind, CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
@@ -97,10 +88,6 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
         return pair;
     }
 
-    /// <summary>
-    /// One read by family and one conditional update. Two copies of one request can race, so a lost update reads again
-    /// and decides once more. A second lost update refuses with no revoke, because it proves no replay.
-    /// </summary>
     public async Task<RefreshResult> RefreshAsync(RefreshToken token, RetryKey? retryKey, CancellationToken cancellationToken)
     {
         var familyHash = TokenHash.Of(token.Family).Hex;
@@ -155,10 +142,6 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
         return new RefreshResult(null, null);
     }
 
-    /// <summary>
-    /// Writes only if the last slide is older than <see cref="SessionPolicy.WebSlideEvery"/>, and never past the absolute
-    /// limit. It returns the new expiry when the caller must send the cookie again.
-    /// </summary>
     public async Task<DateTimeOffset?> SlideWebAsync(string sessionId, CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
@@ -198,7 +181,6 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
                 .SetProperty(s => s.RevokedReason, reason), cancellationToken);
     }
 
-    /// <summary>A token of the family is enough, so that a client can end a session with an old token.</summary>
     public async Task RevokeByRefreshAsync(RefreshToken token, CancellationToken cancellationToken)
     {
         var familyHash = TokenHash.Of(token.Family).Hex;
@@ -228,7 +210,6 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    /// <summary>A live attempt only, and no write, so that a stranger with a guessed state burns nothing.</summary>
     public async Task<LoginAttempt?> FindAttemptAsync(TokenHash state, CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
@@ -238,7 +219,6 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
             .FirstOrDefaultAsync(a => a.StateHash == state.Hex && a.ExpiresAt > now, cancellationToken);
     }
 
-    /// <summary>The caller that deletes the row wins. Each other caller gets false.</summary>
     public async Task<bool> ConsumeAttemptAsync(LoginAttempt attempt, CancellationToken cancellationToken)
     {
         var deleted = await dbContext.Set<LoginAttempt>()
@@ -248,7 +228,6 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
         return deleted == 1;
     }
 
-    /// <summary>Returns the code that the app trades for its tokens. The value exists as text only here and in the response.</summary>
     public async Task<string> AddAppCodeAsync(
         string userId, string loginMode, string redirectUri, string challenge, string? clientState, CancellationToken cancellationToken)
     {
@@ -267,7 +246,6 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
         return code;
     }
 
-    /// <summary>A live code only, and no write. The confirm page reads the code and leaves it for the app.</summary>
     public async Task<AppCode?> FindAppCodeAsync(TokenHash code, CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
@@ -277,7 +255,6 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
             .FirstOrDefaultAsync(c => c.CodeHash == code.Hex && c.ExpiresAt > now, cancellationToken);
     }
 
-    /// <summary>The caller that deletes the row gets it. Each other caller gets null.</summary>
     public async Task<AppCode?> ConsumeAppCodeAsync(TokenHash code, CancellationToken cancellationToken)
     {
         var found = await FindAppCodeAsync(code, cancellationToken);
@@ -291,7 +268,6 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
         return deleted == 1 ? found : null;
     }
 
-    /// <summary>Deletes expired attempts and codes, and sessions that ended long enough ago. Each statement deletes one bounded batch.</summary>
     public async Task SweepAsync(CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();

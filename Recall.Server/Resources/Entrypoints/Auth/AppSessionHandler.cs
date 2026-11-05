@@ -8,10 +8,7 @@ using Recall.Server.Auth;
 using Recall.Server.Auth.Entities;
 using Recall.Server.Domain.Users;
 
-/// <summary>
-/// Reads a bearer value of a native session or the cookie of a web session. It never writes, so that no API call pays
-/// for a commit. A cookie needs <c>X-CSRF: 1</c>, and a cross-site page cannot send that header.
-/// </summary>
+/// <summary>A cookie needs <c>X-CSRF: 1</c>, and a cross-site page cannot send that header.</summary>
 public sealed class AppSessionHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
@@ -27,7 +24,6 @@ public sealed class AppSessionHandler(
 
     public static bool HasCsrfHeader(HttpRequest request) => request.Headers[CsrfHeader] == "1";
 
-    /// <summary>The value after <c>Bearer </c> or <c>DPoP </c>, with no case in the scheme name. Each other scheme is not a credential here.</summary>
     public static string? CredentialOf(string authorization)
     {
         foreach (var scheme in (ReadOnlySpan<string>)["Bearer ", "DPoP "])

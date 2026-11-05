@@ -14,11 +14,6 @@ using Recall.Server.Domain.Tenants;
 using Recall.SharedTestHelpers.Utilities;
 using Serilog.Core;
 
-/// <summary>
-/// The real app with a stub provider, the real scheme selector, and a database of its own, because the first-owner rule
-/// reads whether any tenant exists. <see cref="TestingWebApplicationFactory"/> swaps the default scheme for a fake one,
-/// so it cannot test sign-in.
-/// </summary>
 public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> settings) : WebApplicationFactory<Program>
 {
     public const string ModeId = "stub";

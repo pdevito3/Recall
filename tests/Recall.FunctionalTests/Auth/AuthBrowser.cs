@@ -11,7 +11,6 @@ using Shouldly;
 
 public sealed record NativeTokens(string AccessToken, string RefreshToken, int ExpiresIn);
 
-/// <summary>The app on a phone: a PKCE verifier, a redirect, and a state for one login.</summary>
 public sealed record NativeApp(string Redirect, string Verifier, string ClientState)
 {
     public const string AppCallback = "recall://auth/callback";
@@ -24,10 +23,6 @@ public sealed record NativeApp(string Redirect, string Verifier, string ClientSt
         + $"&redirect_uri={Uri.EscapeDataString(Redirect)}&code_challenge={Challenge}&code_challenge_method=S256&state={ClientState}";
 }
 
-/// <summary>
-/// A browser with no redirect following. It holds cookies by the rules of the Set-Cookie lines, so a test sees the
-/// exact lines, and a path or a delete works as it does in a browser.
-/// </summary>
 public sealed partial class AuthBrowser(AuthFlowFactory host, bool tls = false) : IDisposable
 {
     private readonly HttpClient _client = host.NewClient();
@@ -100,7 +95,6 @@ public sealed partial class AuthBrowser(AuthFlowFactory host, bool tls = false) 
 
     public async Task<AuthorizeRequest> StartNativeAsync(NativeApp app) => ToProvider(await GetAsync(app.StartUrl));
 
-    /// <summary>The redirect back from the provider, with the given answer.</summary>
     public Task<HttpResponseMessage> CallbackAsync(string state, string? code, string? iss = StubOidcProvider.Issuer, string? error = null)
     {
         var values = new Dictionary<string, string?> { ["state"] = state };
@@ -123,7 +117,6 @@ public sealed partial class AuthBrowser(AuthFlowFactory host, bool tls = false) 
         SessionCookie.ShouldNotBeNull();
     }
 
-    /// <summary>A native login up to the confirm page, and the code in that page.</summary>
     public async Task<string> PendingCodeAsync(NativeApp app, string subject)
     {
         var page = await FinishAtProviderAsync(await StartNativeAsync(app), new StubLogin(subject));

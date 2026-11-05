@@ -1,6 +1,5 @@
 name: e2e
 
-# ci.yml calls this workflow when its changes job finds a change to the stack, and on workflow_dispatch.
 # GitHub does not expand the matrix of a job that its if skips. So a skipped matrix job in ci.yml showed its raw name
 # template, e2e (${{ matrix.provider }}), as its check name. The caller job has no matrix, so a skipped run shows as e2e.
 
@@ -71,8 +70,6 @@ jobs:
       - name: Restore the .NET tools
         run: dotnet tool restore
 
-      # Kestrel and the Aspire dashboard load this certificate for their https endpoints. Nothing calls them with a trust
-      # check: the browser and the Server use the http endpoints, and the Swagger tests set ignoreHTTPSErrors.
       - name: Create the development certificate
         run: dotnet dev-certs https
 
@@ -87,12 +84,8 @@ jobs:
           echo "STACK_START=$(date -u +%s)" >> "$GITHUB_ENV"
           dotnet aspire start --isolated --non-interactive --apphost Recall.AppHost
 
-      # The Server waits for the identity provider
       - name: Wait for healthy resources
         run: |
-          # The server waits for the provider container with no log line. So wait for the provider first,
-          # with a short timeout, to fail fast with its name. The slowest provider, Authentik, starts in about 80 s.
-          # DuendeDemo is a public service and has no container.
           if [ "$IDP" != duendedemo ]; then
             dotnet aspire wait "$IDP" --status up --timeout 300 --non-interactive --apphost Recall.AppHost
           fi

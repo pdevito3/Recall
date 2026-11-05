@@ -1,5 +1,3 @@
-// Feature: start-tenant. The first login of a new database makes the Owner and its tenant. A second person sees the
-// refusal page. See features/start-tenant.md.
 export default async ({ page, context, step, capture, expect, login, logout }) => {
   const owner = await step('the first login makes the Owner: an Admin of the tenant Recall', async () => {
     const { name } = await login('admin@example.com')

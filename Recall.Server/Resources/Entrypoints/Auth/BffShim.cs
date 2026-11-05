@@ -7,7 +7,6 @@ using Recall.Server.Auth;
 using Recall.Server.Auth.Entities;
 using Recall.Server.Domain.Users.Features;
 
-/// <summary>The paths that the SPA calls today, answered by the Server. R4 moves the SPA to <c>/auth/*</c> and deletes this one file.</summary>
 public static class BffShim
 {
     public const string LogoutUrlClaim = "bff:logout_url";
@@ -41,7 +40,6 @@ public static class BffShim
             || result.Principal.FindFirst(AppSessionHandler.ClientKindClaim)?.Value != SessionKindText.Web)
             return Results.NoContent();
 
-        // The default scheme of the host can differ from this one, and the feature reads the principal of the request
         http.User = result.Principal;
         var current = await sender.Send(new GetCurrentUser.Query(), cancellationToken);
         var sessionId = result.Principal.FindFirst(AppSessionHandler.SessionIdClaim)!.Value;
@@ -61,7 +59,6 @@ public static class BffShim
         return Results.Json(claims);
     }
 
-    /// <summary>This is a GET, so the <c>sid</c> query is its CSRF defense. A cross-site page does not know the value.</summary>
     private static async Task<IResult> LogoutAsync(HttpContext http, SessionStore store, CancellationToken cancellationToken)
     {
         if (SessionCookie.Read(http.Request) is { } cookie

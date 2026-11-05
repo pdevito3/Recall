@@ -4,10 +4,6 @@ using Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-/// <summary>
-/// A login between the redirect to the provider and the callback. The nonce and the verifier are plain, because the
-/// Server compares the one and sends the other. Each row lives 10 minutes and is used once.
-/// </summary>
 [NotAudited("A login in flight. A row holds no business data, and the callback or the sweep removes it within minutes.")]
 public sealed record LoginAttempt
 {

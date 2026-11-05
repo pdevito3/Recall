@@ -15,6 +15,5 @@ public static class AuthRoutes
     public const string BffUser = "/bff/user";
     public const string BffLogout = "/bff/logout";
 
-    /// <summary>The origin of this request. The scheme comes from the connection or from <c>X-Forwarded-Proto</c>, and the host only from <c>Host</c>.</summary>
     public static string OriginOf(HttpRequest request) => $"{request.Scheme}://{request.Host}";
 }

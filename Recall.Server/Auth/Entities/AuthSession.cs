@@ -19,10 +19,6 @@ public enum RevokeReason
     RevokeOthers,
 }
 
-/// <summary>
-/// One signed-in device. The row holds hashes only. A web row has a cookie and no refresh state, and a native row has a
-/// bearer and a refresh token.
-/// </summary>
 [NotAudited("One row for each signed-in device, written at login and at each refresh. It holds hashes and no business data.")]
 public sealed record AuthSession
 {

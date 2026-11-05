@@ -1,9 +1,5 @@
 namespace Recall.Server.Resources.Entrypoints.Spa;
 
-/// <summary>
-/// Serves the SPA build when the web root has <c>index.html</c>. In development Vite serves it, and this code does
-/// nothing. A route of the SPA has no endpoint and no file extension, so it gets <c>index.html</c>.
-/// </summary>
 public static class SpaHosting
 {
     private const string IndexFile = "index.html";

@@ -3,10 +3,6 @@ namespace Recall.Server.Auth;
 using Databases;
 using Microsoft.Data.Sqlite;
 
-/// <summary>
-/// The recovery of a lost Owner. An operator proves control of the disk with an empty file <c>claim-owner</c> in the data
-/// directory, and the next login with an unlinked identity takes it.
-/// </summary>
 public sealed class OwnerClaim(string claimFilePath)
 {
     public const string FileName = "claim-owner";
