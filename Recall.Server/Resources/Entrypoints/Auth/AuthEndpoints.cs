@@ -158,7 +158,9 @@ public static class AuthEndpoints
             && RefreshToken.TryParse(AuthForm.OneValue(form, "refresh_token"), out var token))
             await store.RevokeByRefreshAsync(token, cancellationToken);
 
-        SessionCookie.Clear(http.Response, http.Request);
+        if (AppSessionHandler.HasCsrfHeader(http.Request))
+            SessionCookie.Clear(http.Response, http.Request);
+
         return Results.NoContent();
     }
 

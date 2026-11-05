@@ -249,6 +249,8 @@ public class AppSessionTests
 
         // Assert
         noHeader.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        noHeader.Headers.Contains("Set-Cookie").ShouldBeFalse();
+        forged.SessionCookie.ShouldBe(cookie);
         aliveAfterForgery.StatusCode.ShouldBe(HttpStatusCode.OK);
         withHeader.StatusCode.ShouldBe(HttpStatusCode.NoContent);
         browser.SessionCookie.ShouldBeNull();
