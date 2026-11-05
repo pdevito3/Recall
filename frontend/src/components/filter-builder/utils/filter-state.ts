@@ -3,6 +3,15 @@ import { isFilter, isFilterGroup } from '../types'
 import { LogicalOperators } from './operators'
 
 /**
+ * A new ID for a filter or a group. crypto.randomUUID is undefined on http://LAN-IP, which is not a secure context.
+ * crypto.getRandomValues works in each context.
+ */
+export function newFilterId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+/**
  * Add a filter to the root level of the state
  */
 export function addFilter(state: FilterState, filter: Filter): FilterState {
@@ -143,7 +152,7 @@ export function createGroup(
   }
 
   const newGroup: FilterGroup = {
-    id: crypto.randomUUID(),
+    id: newFilterId(),
     type: 'group',
     filters: filtersToGroup,
     logicalOperator,
@@ -221,7 +230,7 @@ export function createGroupFromSelected(
     })
 
     const newGroup: FilterGroup = {
-      id: crypto.randomUUID(),
+      id: newFilterId(),
       type: 'group',
       filters: filtersToGroup,
       logicalOperator,
@@ -263,7 +272,7 @@ function createGroupFromSelectedRecursive(
 
     if (filtersToGroup.length >= 2) {
       const newGroup: FilterGroup = {
-        id: crypto.randomUUID(),
+        id: newFilterId(),
         type: 'group',
         filters: filtersToGroup,
         logicalOperator,
