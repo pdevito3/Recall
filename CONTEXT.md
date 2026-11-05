@@ -106,7 +106,7 @@ An AI narrative of one User over one period: `Day`, `Week`, `Month`, `Quarter`, 
 _Avoid_: Report, digest
 
 **Roll-up**:
-The sources of a Summary. Day and Week read Sessions, and each reads Cleaned when it is present and Raw when it is not. Month reads Day Summaries, Quarter reads Months, and Year reads Quarters. A Week can cross two Months, so it is outside that chain.
+The sources of a Summary. Day and Week read Sessions, and each reads Cleaned when it is present and Raw when it is not. Month reads Day Summaries, Quarter reads Months, and Year reads Quarters. A Week can cross two Months, so it is outside that chain. _(agent default)_
 
 **Stale summary**:
 A Summary whose sources changed after it was made. A Person rename counts as a change, so that a Summary does not keep the old name _(agent default)_. The change goes up the chain to each Summary that reads it. A missing or stale Summary generates when a person opens its period, and a nightly job handles the stale periods _(agent default)_.
