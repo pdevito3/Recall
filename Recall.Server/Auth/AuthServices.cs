@@ -14,5 +14,6 @@ public static class AuthServices
         services.AddSingleton(provider => new OwnerClaim(OwnerClaim.PathFor(provider.GetRequiredService<IConfiguration>())));
         services.AddSingleton<Provisioner>();
         services.AddScoped<SessionStore>();
+        services.AddHostedService<AuthSweepService>();
     }
 }

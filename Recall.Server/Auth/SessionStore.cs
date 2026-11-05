@@ -9,7 +9,7 @@ using Resources;
 using Serilog;
 
 /// <summary>What a valid credential proves.</summary>
-public sealed record SessionPrincipal(string SessionId, string UserId, SessionKind Kind);
+public sealed record SessionPrincipal(string SessionId, string UserId, SessionKind Kind, DateTimeOffset AccessExpiresAt);
 
 /// <summary>A new web session. The cookie value exists as text only here and in the response.</summary>
 public sealed record WebSession(string SessionId, string CookieValue, DateTimeOffset ExpiresAt)
@@ -43,9 +43,9 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
             .AsNoTracking()
             .TagWithOperationCallSite("auth.sessions.find_by_access")
             .Where(s => s.AccessHash == hash.Hex && s.ClientKind == kind && s.RevokedAt == null && s.AccessExpiresAt > now)
-            .Select(s => new { s.Id, s.UserId })
+            .Select(s => new { s.Id, s.UserId, s.AccessExpiresAt })
             .FirstOrDefaultAsync(cancellationToken);
-        return row is null ? null : new SessionPrincipal(row.Id, row.UserId, kind);
+        return row is null ? null : new SessionPrincipal(row.Id, row.UserId, kind, row.AccessExpiresAt);
     }
 
     public async Task<WebSession> StartWebAsync(string userId, string loginMode, CancellationToken cancellationToken)

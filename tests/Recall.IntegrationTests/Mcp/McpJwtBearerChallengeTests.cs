@@ -98,6 +98,8 @@ public class McpJwtBearerChallengeTests : TestBase
         builder.Configuration["Auth:Audience"] = "test-api";
         builder.Configuration[McpResourceMetadata.PublicOriginKey] = "https://server.test";
         builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme);
+        builder.Services.AddAuthorization();
         builder.Services.AddJwtBearerAuthentication(builder.Configuration, builder.Environment);
         builder.Services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, UseDiscoveryWithNoSigningKeys);
 

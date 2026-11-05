@@ -143,7 +143,6 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
 
     public string BuildAuthorizeUrl(OidcDiscovery discovery, string state, string nonce, string verifier, string redirectUri)
     {
-        var challenge = Base64UrlEncoder.Encode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
         var separator = discovery.AuthorizationEndpoint.Contains('?', StringComparison.Ordinal) ? '&' : '?';
         return discovery.AuthorizationEndpoint + separator
             + "response_type=code"
@@ -152,7 +151,7 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
             + "&redirect_uri=" + Uri.EscapeDataString(redirectUri)
             + "&state=" + Uri.EscapeDataString(state)
             + "&nonce=" + Uri.EscapeDataString(nonce)
-            + "&code_challenge=" + challenge
+            + "&code_challenge=" + Pkce.ChallengeOf(verifier)
             + "&code_challenge_method=S256";
     }
 

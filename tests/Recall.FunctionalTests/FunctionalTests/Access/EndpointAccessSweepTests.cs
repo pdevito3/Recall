@@ -8,6 +8,7 @@ using System.Text.Json.Nodes;
 using Recall.Server.Domain;
 using Recall.Server.Domain.Users;
 using Recall.Server.Resources.Entrypoints;
+using Recall.Server.Resources.Entrypoints.Auth;
 using Recall.Server.Resources.Entrypoints.Http;
 using Recall.Server.Resources.Entrypoints.Mcp;
 using Recall.SharedTestHelpers.EntityGraphs;
@@ -35,7 +36,7 @@ public class EndpointAccessSweepTests : TestBase
         ["GetTenantList"] = new("Each member lists the own tenant. The tenant filter hides each other tenant."),
         ["/recall.tenants.v1.TenantsService/GetTenant"] = new("The gRPC method of GetTenant."),
         ["/recall.tenants.v1.TenantsService/ListTenants"] = new("The gRPC method of GetTenantList."),
-        ["GetCurrentUser"] = new("Each signed-in caller reads the own identity. It takes no ID and reads no tenant rows."),
+        ["GetCurrentUser"] = new("Each signed-in caller reads the own identity. It takes no ID, and its one read is the own user row behind the tenant filter."),
         ["get_tenant"] = new("ToolAccessKind.Read. Each member reads the own tenant, and the tenant filter hides the others."),
         ["list_tenants"] = new("ToolAccessKind.Read. Each member lists the own tenant, and the tenant filter hides the others."),
         // new-feature:open-to-each-member
@@ -47,6 +48,18 @@ public class EndpointAccessSweepTests : TestBase
         ["/alive"] = "The liveness probe of the host. It shows no tenant data.",
         [$"{EntrypointRegistration.McpPath}/"] = "The MCP transport. The MCP test sweeps each tool behind it.",
         [McpResourceMetadata.Path] = "The public OAuth metadata of the MCP endpoint (RFC 9728). It shows no tenant data.",
+        [AuthRoutes.Status] = "Public. A phone reads it before sign-in. It names the sign-in methods and shows no tenant data.",
+        [AuthRoutes.Login] = "Public. The chooser page and its redirects. It shows no tenant data.",
+        [AuthRoutes.Start] = "Public and rate limited. It starts a login and shows no tenant data.",
+        [AuthRoutes.Callback] = "The binding cookie and the state prove this request. AuthRefusalTests covers each refusal.",
+        [AuthRoutes.Confirm] = "The one-time code in the form proves this request. It writes nothing and shows no tenant data.",
+        [AuthRoutes.Token] = "The code and PKCE verifier, or the refresh token, prove this request. AuthRefusalTests covers each refusal.",
+        [AuthRoutes.Logout] = "Tolerant. It ends only a session that the request proves, and it shows no tenant data.",
+        [AuthRoutes.RevokeOthers] = "Each session ends only the other sessions of its own user. AppSessionTests covers it.",
+        [AuthRoutes.Me] = "Each session reads its own identity. It takes no ID. AppSessionTests covers it.",
+        [AuthRoutes.BffLogin] = "Public. A redirect to the sign-in page. R4 deletes it.",
+        [AuthRoutes.BffUser] = "Each web session reads its own claims. It takes no ID. R4 deletes it.",
+        [AuthRoutes.BffLogout] = "The sid of the session proves this GET. AppSessionTests covers it. R4 deletes it.",
     };
 
     // The sample body of an update sends version 0, so the control call of an update gets the stale-version code

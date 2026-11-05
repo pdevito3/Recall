@@ -1,5 +1,6 @@
 namespace Recall.Server.Resources.Entrypoints;
 
+using Auth;
 using Domain.Tenants.Grpc.V1;
 // new-feature:grpc-usings
 using Domain.Users;
@@ -10,11 +11,11 @@ using Mcp;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 using Serilog.Core;
+using Spa;
 
 /// <summary>
-/// Adds and maps the external entrypoints: the HTTP API, gRPC, and MCP. All three use the same JWT bearer
-/// authentication, so each one sees the same caller and the same tenant scope. The core services come from
-/// <c>ConfigureServices</c>.
+/// Adds and maps the external entrypoints: the HTTP API, gRPC, and MCP. All three use the same authentication, so
+/// each one sees the same caller and the same tenant scope. The core services come from <c>ConfigureServices</c>.
 /// </summary>
 public static class EntrypointRegistration
 {
@@ -23,7 +24,7 @@ public static class EntrypointRegistration
 
     public static void AddEntrypoints(this WebApplicationBuilder builder)
     {
-        builder.Services.AddJwtBearerAuthentication(builder.Configuration, builder.Environment);
+        builder.Services.AddRecallAuthentication(builder.Configuration, builder.Environment);
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddScoped<ICurrentPrincipalAccessor, HttpContextPrincipalAccessor>();
 
@@ -56,8 +57,9 @@ public static class EntrypointRegistration
     }
 
     /// <summary>
-    /// Adds the middleware of the entrypoints: the problem details of HTTP errors, the OpenAPI document in
-    /// Development, and authentication.
+    /// Adds the middleware of the entrypoints: the problem details of HTTP errors, the SPA when the web root has it,
+    /// the OpenAPI document in Development, and authentication. The SPA fallback runs before authentication, so that
+    /// HTML has no session lookup.
     /// </summary>
     public static void UseEntrypoints(this WebApplication app)
     {
@@ -67,6 +69,8 @@ public static class EntrypointRegistration
             // A client error is an expected outcome, so it is not logged as an unhandled exception.
             SuppressDiagnosticsCallback = context => DomainProblemDetails.IsClientError(context.Exception),
         });
+        app.UseRequestTooLargeProblem();
+        app.UseSpaStaticFiles();
         // Routing checks the request content type, so the text/json rewrite must run before routing
         app.UseMiddleware<JsonMediaTypeMiddleware>();
         app.UseRouting();
@@ -77,6 +81,8 @@ public static class EntrypointRegistration
             app.UseSwaggerExtension(app.Configuration);
         }
 
+        app.UseSpaFallback();
+        app.UseRateLimiter();
         app.UseAuthentication();
         app.UseAuthorization();
     }
@@ -88,6 +94,8 @@ public static class EntrypointRegistration
         // new-feature:grpc-services
         McpToolAccess.Validate(app.Services.GetRequiredService<IOptions<McpServerOptions>>().Value.ToolCollection ?? []);
         app.MapMcp(McpPath).RequireAuthorization();
-        app.MapMcpResourceMetadata();
+        if (AuthRegistration.JwtIsOn(app.Configuration))
+            app.MapMcpResourceMetadata();
+        app.MapRecallAuth();
     }
 }

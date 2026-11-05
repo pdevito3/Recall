@@ -32,6 +32,9 @@ public sealed class AuthOptions
     /// <summary>True lets a person with no user join the oldest tenant as a User. The default closes sign-up after the Owner.</summary>
     public bool OpenSignup { get; set; }
 
+    /// <summary>How many login starts the server takes in each 10 seconds, over all callers. A start writes a row and can call the provider.</summary>
+    public int StartPermitsPerWindow { get; set; } = 20;
+
     public static string ModeIdOf(OidcProviderOptions provider, int position)
         => string.IsNullOrWhiteSpace(provider.Id) ? $"oidc{position}" : provider.Id;
 }

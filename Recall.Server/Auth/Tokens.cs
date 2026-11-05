@@ -13,6 +13,20 @@ public readonly record struct TokenHash(string Hex)
     public override string ToString() => "[token hash]";
 }
 
+/// <summary>RFC 7636 with the S256 method. It is the only method that this server speaks.</summary>
+public static class Pkce
+{
+    public const int VerifierMinLength = 43;
+    public const int VerifierMaxLength = 128;
+
+    public static string ChallengeOf(string verifier) => Base64Url.EncodeToString(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
+
+    public static bool Matches(string verifier, string challenge)
+        => verifier.Length is >= VerifierMinLength and <= VerifierMaxLength
+            && Ascii.IsValid(verifier)
+            && CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(ChallengeOf(verifier)), Encoding.ASCII.GetBytes(challenge));
+}
+
 /// <summary>Creates the random values of the sign-in flow. Each value holds 256 random bits in base64url.</summary>
 public static class Secrets
 {
