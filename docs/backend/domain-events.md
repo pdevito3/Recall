@@ -8,7 +8,6 @@ A save commits the change and every handler change in one database transaction, 
 
 - If a handler throws an exception, the save writes nothing and the caller gets the exception. A client error, such as a `ValidationException`, gives a 4xx response. Any other exception gives a 500.
 - If the save fails with a 409 conflict, the save writes nothing, also the handler changes. A retry of the request runs the handlers again from the start.
-- If the database has a transient failure, EF sends the SQL again. The handlers do not run again.
 - A handler never runs after the commit. So a saved change never loses the effect of its handler.
 
 For example, an inspection fails, and a handler takes the vehicle out of service. The failed inspection and the out-of-service vehicle commit together, or neither commits. No reader sees a failed inspection with the vehicle still in service.

@@ -26,7 +26,7 @@ Each entry repeats the facts of its save:
 
 Each entry names its entity (`entity_type`, `entity_id`), its aggregate root (`root_type`, `root_id`), and the tenant of the root. The root is the owner at the end of the `Cascade` foreign keys. Thus the history of a user shows the changes of its `UserPermission` rows. An entity whose optional owner key is null is its own root. The entry of a child that moves to another owner names the root after the move, and it holds the old and the new owner key. The tenant comes from the root, not from the caller, so the change of a domain event handler in another tenant goes to that tenant.
 
-The key is `(occurred_at, record_id, ordinal)`. One index serves the history of a root, and one serves the list of a tenant, each newest first. The table has no foreign keys, because an entry outlives its entity. Triggers refuse `UPDATE`, `DELETE`, and `TRUNCATE`.
+The key is `(occurred_at, record_id, ordinal)`. One index serves the history of a root, and one serves the list of a tenant, each newest first. The table has no foreign keys, because an entry outlives its entity. Triggers refuse `UPDATE` and `DELETE`.
 
 ## Rules
 
@@ -70,7 +70,7 @@ await dbContext.SaveChangesAsync(cancellationToken);
 `ExecuteUpdate`, `ExecuteDelete`, raw SQL, and a command on the connection of the context or on a new SQLite connection write no audit entry. Two checks catch them:
 
 - **The build.** `Recall.Server/BannedSymbols.txt` bans these APIs in the Server (RS0030): `Database.GetDbConnection()`, `IRelationalConnection.DbConnection`, the `SqliteConnection` constructors, and `SqliteTransaction.Connection`. The error names the fix.
-- **The run time.** `WriteGuard` checks each command that EF does not make itself. It refuses a DO block, a CALL, and dollar-quoted text, because their writes are not in the words of the SQL. It refuses a command that can write and that names a guarded table. The guarded tables are each table of the model, `audit_entries` too, except the tables of a `[NotAudited]` type. A LINQ query, a save, a migration, a value generator, and scaffolding run. A raw query with `FromSql` runs when it does not write. While domain event handlers run, only LINQ queries run (see [domain-events.md](domain-events.md#errors)).
+- **The run time.** `WriteGuard` checks each command that EF does not make itself. It refuses a command that can write and that names a guarded table. A name is a word, a quoted name, or a string literal where SQLite reads a table name, as in `UPDATE 'users'`. The guarded tables are each table of the model, `audit_entries` too, except the tables of a `[NotAudited]` type. A LINQ query, a save, a migration, a value generator, and scaffolding run. A raw query with `FromSql` runs when it does not write. While domain event handlers run, only LINQ queries run (see [domain-events.md](domain-events.md#errors)).
 
 The checks catch mistakes, not code that wants to skip them. The guard does not see the writes of a function that a `SELECT` calls. Reflection or a suppressed ban gets past the build.
 

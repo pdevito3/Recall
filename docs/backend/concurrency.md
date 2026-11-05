@@ -89,7 +89,6 @@ A command that is marked `IRunsAgainWhenRaced` can take a lock. A lost race thro
 
 These options do not fit:
 
-- **A `SERIALIZABLE` transaction around the checks and the save.** One save is one transaction ([ADR 0010](../adr/0010-domain-events-in-the-save-transaction.md)), and `AppDbContext` refuses a save inside a transaction that the handler opens.
-- **`SELECT ... FOR SHARE` on the root row.** A row lock ends with its transaction, so it needs the same transaction around the checks and the save.
+- **A transaction around the checks and the save.** One save is one transaction ([ADR 0010](../adr/0010-domain-events-in-the-save-transaction.md)), and `AppDbContext` refuses a save inside a transaction that the handler opens.
 - **A write to the shared root row in each write that adds to the set, so that its version catches the race.** Each booking of a clinic then conflicts with each other booking of that clinic, and the caller gets a 409 for a booking that had no problem.
 
