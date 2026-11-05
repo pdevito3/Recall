@@ -81,6 +81,8 @@ Do not use an effect for these jobs:
 | Fetch data | TanStack Query |
 | Update state after another state update | Do both updates in one event handler |
 
+The search box of a list changes its text during render when the URL changes from outside, not with a `key`. A `key` would remount the box on each URL change, and the remount would drop the text that the user typed after the last search: [`SearchBox`](../../frontend/src/components/search-box.tsx).
+
 The debounce timer of a search box is an effect with a cleanup: [`useDebouncedCallback`](../../frontend/src/hooks/use-debounced-callback.ts).
 
 ## Memoization

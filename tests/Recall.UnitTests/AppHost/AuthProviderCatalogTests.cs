@@ -75,7 +75,7 @@ public class AuthProviderCatalogTests
 
         // Act & Assert
         File.Exists(Path.Combine(appHost, "AuthProviders", name, $"{name}AuthProvider.cs")).ShouldBeTrue(
-            $"The class {name}AuthProvider must be in AuthProviders/{name}/, because each provider is one folder.");
+            $"The class {name}AuthProvider must be in AuthProviders/{name}/, so that a delete of that folder deletes the provider (ADR 0007).");
         File.Exists(Path.Combine(root, "frontend", "e2e", "idps", $"{name.ToLowerInvariant()}.json")).ShouldBe(provider.RunsE2eTests,
             $"The e2e tests need the login form of {name} in frontend/e2e/idps/{name.ToLowerInvariant()}.json, but only if RunsE2eTests is true.");
     }
