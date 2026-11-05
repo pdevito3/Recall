@@ -1,6 +1,7 @@
 namespace Recall.UnitTests.Databases;
 
 using System.Globalization;
+using Recall.Server.Auth.Entities;
 using Recall.Server.Databases;
 using Recall.Server.Domain.Agents;
 using Recall.Server.Domain.AuditEntries;
@@ -42,6 +43,9 @@ public class StringColumnLengthTests
         ["audit_entries.kind"] = Enum.GetNames<AuditEntryKind>(),
         ["user_permissions.permission"] = Permission.GetAll().Select(p => p.Value).ToList(),
         ["agent_permissions.permission"] = Permission.GetAll().Select(p => p.Value).ToList(),
+        ["auth_sessions.client_kind"] = SessionKindText.All,
+        ["auth_sessions.revoked_reason"] = RevokeReasonText.All,
+        ["auth_login_attempts.client_kind"] = SessionKindText.All,
         // new-feature:fixed-option-columns
     };
 
@@ -57,6 +61,23 @@ public class StringColumnLengthTests
         "audit_entries.root_type",
         "audit_entries.tenant_id",
         "audit_entries.trace_id",
+        "auth_app_codes.challenge",
+        "auth_app_codes.client_state",
+        "auth_app_codes.login_mode",
+        "auth_app_codes.redirect_uri",
+        "auth_login_attempts.binding_hash",
+        "auth_login_attempts.mode_id",
+        "auth_login_attempts.native_challenge",
+        "auth_login_attempts.native_redirect",
+        "auth_login_attempts.native_state",
+        "auth_login_attempts.nonce",
+        "auth_login_attempts.pkce_verifier",
+        "auth_login_attempts.redirect_uri",
+        "auth_login_attempts.return_path",
+        "auth_sessions.access_hash",
+        "auth_sessions.login_mode",
+        "auth_sessions.refresh_family_hash",
+        "auth_sessions.refresh_hash",
     ];
 
     [Test]

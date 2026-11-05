@@ -18,6 +18,283 @@ namespace Recall.Server.Databases.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
 
+            modelBuilder.Entity("Recall.Server.Auth.Entities.AppCode", b =>
+                {
+                    b.Property<string>("CodeHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("code_hash")
+                        .UseCollation("BINARY");
+
+                    b.Property<string>("Challenge")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("challenge");
+
+                    b.Property<string>("ClientState")
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("client_state");
+
+                    b.Property<string>("ExpiresAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("LoginMode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("login_mode");
+
+                    b.Property<string>("RedirectUri")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("redirect_uri");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id")
+                        .UseCollation("BINARY");
+
+                    b.HasKey("CodeHash")
+                        .HasName("pk_auth_app_codes");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_auth_app_codes_expires_at");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_auth_app_codes_user_id");
+
+                    b.ToTable("auth_app_codes", (string)null);
+                });
+
+            modelBuilder.Entity("Recall.Server.Auth.Entities.AuthSession", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id")
+                        .UseCollation("BINARY");
+
+                    b.Property<string>("AccessExpiresAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("access_expires_at");
+
+                    b.Property<string>("AccessHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("access_hash")
+                        .UseCollation("BINARY");
+
+                    b.Property<string>("ClientKind")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("client_kind");
+
+                    b.Property<string>("CreatedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("ExpiresAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("LastSlidAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_slid_at");
+
+                    b.Property<string>("LoginMode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("login_mode");
+
+                    b.Property<string>("RefreshFamilyHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("refresh_family_hash")
+                        .UseCollation("BINARY");
+
+                    b.Property<string>("RefreshHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("refresh_hash")
+                        .UseCollation("BINARY");
+
+                    b.Property<string>("RevokedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<string>("RevokedReason")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("revoked_reason");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id")
+                        .UseCollation("BINARY");
+
+                    b.HasKey("Id")
+                        .HasName("pk_auth_sessions");
+
+                    b.HasIndex("AccessHash")
+                        .IsUnique()
+                        .HasDatabaseName("ux_auth_sessions_access_hash");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_auth_sessions_sweep");
+
+                    b.HasIndex("RefreshFamilyHash")
+                        .IsUnique()
+                        .HasDatabaseName("ux_auth_sessions_refresh_family")
+                        .HasFilter("refresh_family_hash IS NOT NULL");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_auth_sessions_user_id");
+
+                    b.ToTable("auth_sessions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_auth_sessions_client_kind", "client_kind IN ('web', 'native')");
+
+                            t.HasCheckConstraint("ck_auth_sessions_refresh_state", "(client_kind = 'web' AND refresh_family_hash IS NULL AND refresh_hash IS NULL) OR (client_kind = 'native' AND refresh_family_hash IS NOT NULL AND refresh_hash IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("Recall.Server.Auth.Entities.ExternalLogin", b =>
+                {
+                    b.Property<string>("Issuer")
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("issuer")
+                        .UseCollation("BINARY");
+
+                    b.Property<string>("Subject")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("subject")
+                        .UseCollation("BINARY");
+
+                    b.Property<string>("CreatedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("LastLoginAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_login_at");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id")
+                        .UseCollation("BINARY");
+
+                    b.HasKey("Issuer", "Subject")
+                        .HasName("pk_auth_external_logins");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_auth_external_logins_user_id");
+
+                    b.ToTable("auth_external_logins", (string)null);
+                });
+
+            modelBuilder.Entity("Recall.Server.Auth.Entities.LoginAttempt", b =>
+                {
+                    b.Property<string>("StateHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("state_hash")
+                        .UseCollation("BINARY");
+
+                    b.Property<string>("BindingHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("binding_hash")
+                        .UseCollation("BINARY");
+
+                    b.Property<string>("ClientKind")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("client_kind");
+
+                    b.Property<string>("ExpiresAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("ModeId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("mode_id");
+
+                    b.Property<string>("NativeChallenge")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("native_challenge");
+
+                    b.Property<string>("NativeRedirect")
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("native_redirect");
+
+                    b.Property<string>("NativeState")
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("native_state");
+
+                    b.Property<string>("Nonce")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("nonce");
+
+                    b.Property<string>("PkceVerifier")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("pkce_verifier");
+
+                    b.Property<string>("RedirectUri")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("redirect_uri");
+
+                    b.Property<string>("ReturnPath")
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("return_path");
+
+                    b.HasKey("StateHash")
+                        .HasName("pk_auth_login_attempts");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_auth_login_attempts_expires_at");
+
+                    b.ToTable("auth_login_attempts", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_auth_login_attempts_client_kind", "client_kind IN ('web', 'native')");
+                        });
+                });
+
             modelBuilder.Entity("Recall.Server.Domain.Agents.Agent", b =>
                 {
                     b.Property<string>("Id")
@@ -441,6 +718,36 @@ namespace Recall.Server.Databases.Migrations
                         .HasDatabaseName("ix_user_permissions_user_id");
 
                     b.ToTable("user_permissions", (string)null);
+                });
+
+            modelBuilder.Entity("Recall.Server.Auth.Entities.AppCode", b =>
+                {
+                    b.HasOne("Recall.Server.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.ClientNoAction)
+                        .IsRequired()
+                        .HasConstraintName("fk_auth_app_codes_users_user_id");
+                });
+
+            modelBuilder.Entity("Recall.Server.Auth.Entities.AuthSession", b =>
+                {
+                    b.HasOne("Recall.Server.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.ClientNoAction)
+                        .IsRequired()
+                        .HasConstraintName("fk_auth_sessions_users_user_id");
+                });
+
+            modelBuilder.Entity("Recall.Server.Auth.Entities.ExternalLogin", b =>
+                {
+                    b.HasOne("Recall.Server.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.ClientNoAction)
+                        .IsRequired()
+                        .HasConstraintName("fk_auth_external_logins_users_user_id");
                 });
 
             modelBuilder.Entity("Recall.Server.Domain.Agents.Agent", b =>

@@ -1,6 +1,7 @@
 namespace Recall.UnitTests.Databases;
 
 using System.Reflection;
+using Recall.Server.Auth.Entities;
 using Recall.Server.Databases;
 using Recall.Server.Domain.DPoPProofs;
 using Recall.Server.Resources;
@@ -13,7 +14,14 @@ using Shouldly;
 
 public class TenantQueryFilterTests
 {
-    private static readonly Type[] EntitiesWithNoTenantData = [typeof(UsedDPoPProof)];
+    // Authentication reads these before a caller exists. A tenant filter here would pin an empty tenant scope for
+    // the whole request, because the scope is memoized for each context. A row names a user, and a user who is not
+    // live reads nothing, because each read of tenant data goes through FindLiveUserAsync.
+    private static readonly Type[] AuthEntitiesReadBeforeACallerExists =
+        [typeof(ExternalLogin), typeof(AuthSession), typeof(AppCode)];
+
+    private static readonly Type[] EntitiesWithNoTenantData =
+        [typeof(UsedDPoPProof), typeof(LoginAttempt), .. AuthEntitiesReadBeforeACallerExists];
 
     [Test]
     public void every_entity_has_the_tenant_filter_unless_it_is_named_as_an_entity_with_no_tenant_filter()
@@ -43,6 +51,7 @@ public class TenantQueryFilterTests
             .Where(e => !e.IsOwned() && !HasTenantFilter(e))
             .Where(e => e.GetForeignKeys().Any(fk => HasTenantFilter(fk.PrincipalEntityType)))
             .Select(e => e.ClrType)
+            .Except(AuthEntitiesReadBeforeACallerExists)
             .ToList();
 
         // Assert
