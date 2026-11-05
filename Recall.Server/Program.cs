@@ -23,9 +23,10 @@ try
     CSharpReplGuard.ThrowIfLoadedOutsideDevelopment(builder.Environment);
 
     builder.AddServiceDefaults(); // OpenTelemetry, Serilog, health checks, resilience, service discovery
+    // Hosted services start in this order. A bad data directory is the first refusal, because it also stops the file store.
+    builder.Services.AddHostedService<MigrationHostedService<AppDbContext>>();
     builder.ConfigureServices();
     builder.AddEntrypoints();
-    builder.Services.AddHostedService<MigrationHostedService<AppDbContext>>();
     OpenApiBuildTime.RemoveHostedServices(builder.Services);
 
     var app = builder.Build();
