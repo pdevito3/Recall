@@ -40,6 +40,7 @@ public sealed class TestFixture : IAsyncDisposable
     private readonly SqliteTestDatabase _database = new();
 
     public static FlociTestStorage Storage { get; } = new();
+    private static readonly TemporaryFileRoot FileRoot = new();
 
     public async Task InitializeAsync()
     {
@@ -104,6 +105,7 @@ public sealed class TestFixture : IAsyncDisposable
             EnvironmentName = TestingConsts.IntegrationTestingEnvName
         });
         builder.Configuration[$"ConnectionStrings:{DatabaseConsts.DatabaseName}"] = connectionString ?? _connectionString;
+        builder.Configuration["FileStore:Root"] = FileRoot.Path;
 
         builder.Configuration["Auth:Authority"] = "https://localhost";
         builder.Configuration["Auth:Audience"] = "test-api";
@@ -122,6 +124,7 @@ public sealed class TestFixture : IAsyncDisposable
     {
         await _database.DisposeAsync();
         await Storage.DisposeAsync();
+        FileRoot.Dispose();
     }
 
     private static void ConfigureAutoFaker()

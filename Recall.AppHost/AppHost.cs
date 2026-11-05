@@ -74,6 +74,7 @@ try
     {
         var dataDirectory = builder.DataDirectory();
         server.WithEnvironment("ConnectionStrings__appdb", $"Data Source={Path.Combine(dataDirectory, "recall.db")}");
+        server.WithEnvironment("FileStore__Root", Path.Combine(dataDirectory, "files"));
         bff.WithEnvironment("ConnectionStrings__bffdb", $"Data Source={Path.Combine(dataDirectory, "bff.db")}");
         if (builder.Configuration["SpaBuild"] is { Length: > 0 } spaBuild)
             bff.WithEnvironment("ASPNETCORE_WEBROOT", Path.GetFullPath(spaBuild));

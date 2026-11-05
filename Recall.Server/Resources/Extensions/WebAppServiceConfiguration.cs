@@ -32,6 +32,7 @@ public static class WebAppServiceConfiguration
         builder.Services.AddApplicationServices();
         builder.Services.AddScoped<SystemTenantAccess>();
         builder.AddObjectStorage();
+        builder.AddFileStore();
         builder.Services.AddScoped<AttachmentStorage>();
         builder.Services.AddMediatR(cfg =>
         {
