@@ -320,6 +320,32 @@ public sealed class ProvisionerTests
     }
 
     [Test]
+    public async Task the_owner_claim_passes_over_an_admin_whose_identifier_is_not_its_id()
+    {
+        // Arrange
+        await using var database = await AuthTestDatabase.CreateAsync();
+        var provisioner = ProvisionerOf(database.BuildServices());
+        var owner = UserIdOf(await provisioner.ResolveAsync(Person("old-subject"), CancellationToken.None));
+        await database.ReadAsync(async db =>
+        {
+            var user = await db.Users.SingleAsync(u => u.Id == owner);
+            db.Entry(user).Property(u => u.Identifier).CurrentValue = "old-provider-subject";
+            return await db.SaveChangesAsync();
+        });
+        await File.WriteAllTextAsync(database.ClaimFilePath, "");
+
+        // Act
+        var claimed = UserIdOf(await provisioner.ResolveAsync(Person("new-subject", IssuerB), CancellationToken.None));
+
+        // Assert
+        claimed.ShouldNotBe(owner);
+        var user = await database.ReadAsync(db => db.Users.SingleAsync(u => u.Id == claimed));
+        user.Identifier.ShouldBe(claimed);
+        user.Role.Value.ShouldBe(UserRole.Admin().Value);
+        File.Exists(database.ClaimFilePath).ShouldBeFalse();
+    }
+
+    [Test]
     public async Task the_owner_claim_goes_to_one_of_two_logins_at_the_same_time()
     {
         // Arrange

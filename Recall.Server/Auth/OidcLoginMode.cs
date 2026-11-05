@@ -365,7 +365,9 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
             var root = body.RootElement;
             if (root.ValueKind != JsonValueKind.Object)
                 return UserinfoSubject.NotDifferent;
-            if (Text(root, "sub") is { } sub && sub != subject)
+            if (Text(root, "sub") is not { } sub)
+                return UserinfoSubject.NotDifferent;
+            if (sub != subject)
                 return UserinfoSubject.Other;
 
             foreach (var name in claims.Keys.ToList())

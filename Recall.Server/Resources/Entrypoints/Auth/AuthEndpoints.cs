@@ -131,9 +131,11 @@ public static class AuthEndpoints
 
     private static async Task<TokenOutcome> RefreshAsync(IFormCollection form, SessionStore store, CancellationToken cancellationToken)
     {
-        if (!RetryKey.TryParse(AuthForm.OneValue(form, "retry_key"), out var retryKey))
+        if (form["retry_key"].Count > 1 || !RetryKey.TryParse(AuthForm.OneValue(form, "retry_key"), out var retryKey))
             return new TokenOutcome(null, "invalid_request");
-        if (!RefreshToken.TryParse(AuthForm.OneValue(form, "refresh_token"), out var token))
+        if (AuthForm.OneValue(form, "refresh_token") is not { } refreshText)
+            return new TokenOutcome(null, "invalid_request");
+        if (!RefreshToken.TryParse(refreshText, out var token))
             return new TokenOutcome(null, "invalid_grant");
 
         var result = await store.RefreshAsync(token, retryKey, cancellationToken);

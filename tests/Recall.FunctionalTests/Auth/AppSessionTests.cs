@@ -392,6 +392,23 @@ public class AppSessionTests
     }
 
     [Test]
+    public async Task bff_logout_with_no_cookie_clears_nothing_and_ends_nothing()
+    {
+        // Arrange
+        using var browser = await SignedInBrowserAsync();
+        using var crossSite = NewBrowser();
+
+        // Act
+        var response = await crossSite.GetAsync("/bff/logout");
+        var alive = await browser.GetAsync(Me, csrf: true);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        response.Headers.Contains("Set-Cookie").ShouldBeFalse();
+        alive.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Test]
     public async Task bff_logout_needs_the_session_id_and_then_ends_the_session()
     {
         // Arrange

@@ -172,7 +172,7 @@ Each later login finds the user through the pair of issuer and subject in `auth_
 
 A user that an Admin adds through the API has no link, so that user cannot sign in today.
 
-A repeat login fills only a stored value that is empty. An edit in Recall stays.
+A repeat login fills only a stored value that is empty. A changed value stays. A value that a person clears comes back from the provider at the next login.
 
 ### Recover a lost Owner
 
@@ -182,7 +182,7 @@ A changed issuer, a new provider, a provider restored with a new `sub`, or a del
 2. Create an empty file named `claim-owner` in the data directory.
 3. Sign in with the identity that you want.
 
-The Server links that identity to the oldest live Admin of the oldest live tenant, logs a warning with the user ID and the issuer, and removes the file. If the tenant has no live Admin, the Server adds a new Admin. A deleted tenant is the one case that the claim cannot recover.
+The Server links that identity to the oldest live Admin of the oldest live tenant whose identifier is its own ID, logs a warning with the user ID and the issuer, and removes the file. If the tenant has no such Admin, the Server adds a new Admin. A deleted tenant is the one case that the claim cannot recover.
 
 ### Delete old development data
 
@@ -229,7 +229,7 @@ Each provider is one entry under `Auth:Providers`. As environment variables, the
 | `Id` | The name in the URLs. It has letters, digits, dashes, or underscores. The default is `oidc{position}`. |
 | `DisplayName` | The name on the pages |
 | `Issuer` | The issuer URL |
-| `ClientId`, `ClientSecret` | The confidential client at the provider. Both are required. |
+| `ClientId`, `ClientSecret` | The confidential client at the provider. Both are required. The provider must sign its ID tokens with RS, PS, or ES keys. |
 | `AllowHttp` | Must be `true` for an http issuer |
 | `CaCertificatePath` | A file with the certificates of a private CA |
 
@@ -275,7 +275,7 @@ The default scheme chooses by the credential. A `Bearer` or `DPoP` value with th
 
 The JWT handler refuses a token whose client is `recall`, or whose `sub` has the prefix of a user ID. So a provider token cannot name itself a session.
 
-A provider token has a provider `sub`, and no user has that identifier. This has these results:
+A provider token has a provider `sub`, and a user that a login adds has its own ID as its identifier. This has these results:
 
 - Swagger UI still signs in. `GET /api/v1/users/me` answers with the identifier from the claims, and a read of tenant data gets a refusal.
 - A delegated agent gets `UnknownClient`, because its token names no user of the app.

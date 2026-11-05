@@ -1,5 +1,7 @@
 namespace Recall.Server.Auth;
 
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using Entities;
 using Microsoft.Extensions.Options;
 
@@ -41,6 +43,9 @@ public sealed class AuthOptionsValidator : IValidateOptions<AuthOptions>
     public ValidateOptionsResult Validate(string? name, AuthOptions options)
     {
         var failures = new List<string>();
+        if (options.StartPermitsPerWindow < 1)
+            failures.Add($"Auth:{nameof(AuthOptions.StartPermitsPerWindow)} must be 1 or more.");
+
         var seen = new HashSet<string>(StringComparer.Ordinal);
         for (var position = 0; position < options.Providers.Count; position++)
         {
@@ -55,8 +60,8 @@ public sealed class AuthOptionsValidator : IValidateOptions<AuthOptions>
                 failures.Add($"{key}:ClientId is missing.");
             if (string.IsNullOrWhiteSpace(provider.ClientSecret))
                 failures.Add($"{key}:ClientSecret is missing.");
-            if (!string.IsNullOrWhiteSpace(provider.CaCertificatePath) && !File.Exists(provider.CaCertificatePath))
-                failures.Add($"{key}:CaCertificatePath names a file that does not exist.");
+            if (!string.IsNullOrWhiteSpace(provider.CaCertificatePath) && !CanReadCertificates(provider.CaCertificatePath))
+                failures.Add($"{key}:CaCertificatePath must name a file of PEM certificates.");
 
             if (!Uri.TryCreate(provider.Issuer, UriKind.Absolute, out var issuer) || issuer.Scheme is not ("https" or "http"))
                 failures.Add($"{key}:Issuer must be an absolute http or https URL.");
@@ -65,5 +70,19 @@ public sealed class AuthOptionsValidator : IValidateOptions<AuthOptions>
         }
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
+    }
+
+    private static bool CanReadCertificates(string path)
+    {
+        try
+        {
+            var certificates = new X509Certificate2Collection();
+            certificates.ImportFromPemFile(path);
+            return certificates.Count > 0;
+        }
+        catch (Exception exception) when (exception is CryptographicException or IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 }

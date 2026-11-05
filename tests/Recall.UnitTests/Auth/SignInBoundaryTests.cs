@@ -297,6 +297,35 @@ public class SignInBoundaryTests
     }
 
     [Test]
+    public void a_file_with_no_certificate_names_the_setting()
+    {
+        // Arrange
+        var path = Path.GetTempFileName();
+        File.WriteAllText(path, "not a certificate");
+        var provider = GoodProvider();
+        provider.CaCertificatePath = path;
+
+        // Act
+        var result = new AuthOptionsValidator().Validate(null, new AuthOptions { Providers = [provider] });
+        File.Delete(path);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+        result.FailureMessage!.ShouldContain("CaCertificatePath");
+    }
+
+    [Test]
+    public void a_login_limit_under_one_names_the_setting()
+    {
+        // Act
+        var result = new AuthOptionsValidator().Validate(null, new AuthOptions { StartPermitsPerWindow = 0 });
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+        result.FailureMessage!.ShouldContain("StartPermitsPerWindow");
+    }
+
+    [Test]
     public void two_providers_with_one_id_name_the_repeat()
     {
         // Arrange

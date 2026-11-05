@@ -1,5 +1,6 @@
 namespace Recall.Server.Resources.Entrypoints.Auth;
 
+using Microsoft.Net.Http.Headers;
 /// <summary>
 /// A redirect that writes the header itself. <c>Results.Redirect</c> logs its destination, and a destination here holds
 /// a state, a code, or a challenge.
@@ -22,7 +23,8 @@ public static class AuthForm
 
     public static async Task<IFormCollection?> ReadAsync(HttpRequest request, CancellationToken cancellationToken)
     {
-        if (request.ContentType?.StartsWith("application/x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase) != true
+        if (!MediaTypeHeaderValue.TryParse(request.ContentType, out var contentType)
+            || !contentType.MediaType.Equals("application/x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase)
             || request.ContentLength > MaxBytes)
             return null;
 

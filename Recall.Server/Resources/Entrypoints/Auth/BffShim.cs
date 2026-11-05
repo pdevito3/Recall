@@ -61,16 +61,19 @@ public static class BffShim
 
     private static async Task<IResult> LogoutAsync(HttpContext http, SessionStore store, CancellationToken cancellationToken)
     {
-        if (SessionCookie.Read(http.Request) is { } cookie
-            && await store.FindByAccessAsync(TokenHash.Of(cookie), SessionKind.Web, cancellationToken) is { } session)
+        if (SessionCookie.Read(http.Request) is { } cookie)
         {
-            if (http.Request.Query["sid"] != session.SessionId)
-                return AuthPages.BadRequest();
+            if (await store.FindByAccessAsync(TokenHash.Of(cookie), SessionKind.Web, cancellationToken) is { } session)
+            {
+                if (http.Request.Query["sid"] != session.SessionId)
+                    return AuthPages.BadRequest();
 
-            await store.RevokeAsync(session.SessionId, RevokeReason.Logout, cancellationToken);
+                await store.RevokeAsync(session.SessionId, RevokeReason.Logout, cancellationToken);
+            }
+
+            SessionCookie.Clear(http.Response, http.Request);
         }
 
-        SessionCookie.Clear(http.Response, http.Request);
         return new AuthRedirect($"{AuthRoutes.Login}?signedOut=1");
     }
 }

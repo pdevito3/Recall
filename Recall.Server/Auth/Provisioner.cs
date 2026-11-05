@@ -125,7 +125,7 @@ public sealed class Provisioner(
         var adminRole = UserRole.Admin().Value;
         var admin = await dbContext.Users
             .TagWithOperationCallSite("auth.provision.oldest_admin")
-            .Where(u => u.TenantId == tenantId && u.Role.Value == adminRole)
+            .Where(u => u.TenantId == tenantId && u.Role.Value == adminRole && u.Identifier == u.Id)
             .OrderBy(u => u.Id)
             .FirstOrDefaultAsync(cancellationToken);
         if (admin is null)

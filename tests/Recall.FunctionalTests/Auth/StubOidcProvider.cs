@@ -17,6 +17,8 @@ public sealed record StubLogin(string Subject)
     public string? IdTokenIssuer { get; init; }
     public string? Nonce { get; init; }
     public string? UserinfoSubject { get; init; }
+    public bool UserinfoOmitsSubject { get; init; }
+    public string? UserinfoName { get; init; }
     public string? TokenBody { get; init; }
 }
 
@@ -159,7 +161,11 @@ public sealed class StubOidcProvider : HttpMessageHandler
         if (request.Headers.Authorization?.Parameter is not { } token || !_accessTokens.TryGetValue(token, out var login))
             return new HttpResponseMessage(HttpStatusCode.Unauthorized);
 
-        return Json(new Dictionary<string, object> { ["sub"] = login.UserinfoSubject ?? login.Subject, ["name"] = login.Name });
+        var body = new Dictionary<string, object> { ["name"] = login.UserinfoName ?? login.Name };
+        if (!login.UserinfoOmitsSubject)
+            body["sub"] = login.UserinfoSubject ?? login.Subject;
+
+        return Json(body);
     }
 
     private static HttpResponseMessage Refused(string error)

@@ -495,6 +495,74 @@ public class AuthRefusalTests
     }
 
     [Test]
+    public async Task a_refresh_with_two_retry_keys_is_invalid_request_with_no_write()
+    {
+        // Arrange
+        using var browser = NewBrowser();
+        var tokens = await browser.LoginNativeAsync(NewSubject());
+        var key = Convert.ToHexString(new byte[32]);
+
+        // Act
+        var refused = await browser.PostFormAsync(
+            "/auth/token", [("grant_type", "refresh_token"), ("refresh_token", tokens.RefreshToken), ("retry_key", key), ("retry_key", key)]);
+        var passed = await browser.RefreshAsync(tokens.RefreshToken);
+
+        // Assert
+        (await AuthBrowser.ErrorOf(refused)).ShouldBe("invalid_request");
+        passed.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Test]
+    public async Task a_refresh_with_no_token_is_invalid_request()
+    {
+        // Arrange
+        using var browser = NewBrowser();
+
+        // Act
+        var refused = await browser.PostFormAsync("/auth/token", [("grant_type", "refresh_token")]);
+
+        // Assert
+        (await AuthBrowser.ErrorOf(refused)).ShouldBe("invalid_request");
+    }
+
+    [Test]
+    [Arguments("application/x-www-form-urlencoded-x")]
+    [Arguments("application/x-www-form-urlencodedfoo")]
+    [Arguments("not a type")]
+    public async Task a_token_request_of_another_content_type_is_refused(string contentType)
+    {
+        // Arrange
+        using var browser = NewBrowser();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/auth/token")
+        {
+            Content = new ByteArrayContent("grant_type=refresh_token"u8.ToArray()),
+        };
+        request.Content.Headers.TryAddWithoutValidation("Content-Type", contentType);
+
+        // Act
+        var response = await browser.SendAsync(request);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Test]
+    public async Task a_userinfo_with_no_subject_adds_nothing_to_the_person()
+    {
+        // Arrange
+        using var browser = NewBrowser();
+        var authorize = await browser.StartWebAsync();
+
+        // Act
+        await browser.FinishAtProviderAsync(authorize, new StubLogin(NewSubject()) { UserinfoOmitsSubject = true, UserinfoName = "From Userinfo" });
+        var me = await (await browser.GetAsync("/auth/me", csrf: true)).Content.ReadAsStringAsync();
+
+        // Assert
+        browser.SessionCookie.ShouldNotBeNull();
+        me.ShouldNotContain("From Userinfo");
+    }
+
+    [Test]
     public async Task a_token_body_over_its_limit_is_refused()
     {
         // Arrange
