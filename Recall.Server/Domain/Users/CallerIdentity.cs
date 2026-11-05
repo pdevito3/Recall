@@ -20,8 +20,8 @@ public abstract record CallerIdentity
     public sealed record AllTenantsClient(string ClientId, bool CanManage) : CallerIdentity;
 
     /// <summary>
-    /// A user of a first-party client (the BFF or Swagger UI). <paramref name="LiveUser"/> is null when the user has
-    /// no live user record.
+    /// A user of a first-party client (an app session or Swagger UI). <paramref name="LiveUser"/> is null when the
+    /// user has no live user record.
     /// </summary>
     public sealed record User(string Subject, LiveUser? LiveUser) : CallerIdentity;
 

@@ -33,7 +33,7 @@ public sealed class PaginationHeaderFilter : IEndpointFilter
         if (pagedList is null)
             return;
 
-        // The browser calls the BFF on the same origin as the SPA, so the header needs no CORS expose entry
+        // The browser calls the Server on the same origin as the SPA, so the header needs no CORS expose entry
         httpContext.Response.Headers[PaginationMetadata.HeaderName] =
             JsonSerializer.Serialize(PaginationMetadata.From(pagedList), EntrypointJsonContext.Default.PaginationMetadata);
     }
