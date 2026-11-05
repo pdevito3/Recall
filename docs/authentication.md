@@ -352,7 +352,9 @@ The script also gives the tests the client id and the client secret of the BFF, 
 
 ## Conformance
 
-The OpenID Foundation conformance suite tests the BFF as a relying party. In this repository, `pnpm test:conformance` in `frontend` runs these five test plans against a local stack:
+Recall dropped the conformance run, and R4 deletes the BFF. Recall has no `pnpm test:conformance` script, no `frontend/conformance` folder, no `Conformance` provider, and no `conformance` workflow. The rename of the template deleted them, and `scripts/init.cs`, which did the rename, is also gone. So no run in this repository proves the results below.
+
+The OpenID Foundation conformance suite tests the BFF as a relying party. The template runs these five test plans against a local stack, and it gave these results before the rename:
 
 | Plan | Result |
 |---|---|
@@ -360,13 +362,13 @@ The OpenID Foundation conformance suite tests the BFF as a relying party. In thi
 | `oidcc-client-config-certification-test-plan` | Passes |
 | `oidcc-client-rp-initiated-logout-rp-basic` | Passes |
 | `oidcc-client-back-channel-logout-rp-basic` | Passes |
-| `oidcc-client-refreshtoken-test-plan` | Passes. It is not part of the certification program. The BFF does not call the user info endpoint after a refresh, but the server does, because it checks the opaque access tokens of the suite there. |
+| `oidcc-client-refreshtoken-test-plan` | Passes. It is not part of the certification program. The BFF does not call the user info endpoint after a refresh, but the server of the template does, because it checks the opaque access tokens of the suite there. |
 
-[`frontend/conformance/accepted-results.json`](https://github.com/pdevito3/FullstackTemplate/blob/main/frontend/conformance/accepted-results.json) lists each accepted warning with its reason. The header of [`frontend/conformance/run-conformance.ts`](https://github.com/pdevito3/FullstackTemplate/blob/main/frontend/conformance/run-conformance.ts) tells how to start the stack and the suite. The `conformance` workflow of this repository runs the same plans. The `Conformance` provider of the AppHost, the `frontend/conformance` folder, the conformance scripts, and the `conformance` workflow are only in this repository. `scripts/init.cs` deletes them when it renames the app.
+[`frontend/conformance/accepted-results.json`](https://github.com/pdevito3/FullstackTemplate/blob/main/frontend/conformance/accepted-results.json) lists each accepted warning with its reason. The header of [`frontend/conformance/run-conformance.ts`](https://github.com/pdevito3/FullstackTemplate/blob/main/frontend/conformance/run-conformance.ts) tells how to start the stack and the suite in the template.
 
 ### Certify your own deployment
 
-The OpenID Foundation certifies a deployment, not this repository. To certify your deployment, use the same plans with the hosted suite:
+The OpenID Foundation certifies a deployment, not a repository. To certify your deployment, use the same plans with the hosted suite:
 
 1. Deploy the app, so that the BFF has a public HTTPS URL.
 2. Log in to the hosted suite at <https://www.certification.openid.net/>.

@@ -1,5 +1,7 @@
 # Replace Duende BFF with our own BFF
 
+> Status: Recall dropped the conformance run, so its CI does not run the OpenID Foundation conformance suite, and R4 deletes the BFF. See [Conformance](../authentication.md#conformance).
+
 The BFF no longer uses `Duende.BFF` or `Duende.BFF.Yarp`. Our own code in `Recall.Bff` does the BFF work, on top of the Microsoft `OpenIdConnect` and `Cookies` handlers, YARP, and `Duende.AccessTokenManagement.OpenIdConnect` (Apache 2.0). As a result, the template has no dependency with a license cost, and each BFF behavior is visible in our code. The wire contract for the browser does not change. The design is in [the home-rolled BFF spec](../specs/home-rolled-bff.md).
 
 ## Considered options
