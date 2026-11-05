@@ -27,14 +27,13 @@ aws cognito-idp create-user-pool-client \
   --explicit-auth-flows ALLOW_USER_PASSWORD_AUTH ALLOW_REFRESH_TOKEN_AUTH \
   --enable-token-revocation \
   --callback-urls \
-    "$APP_FRONTEND_URL/signin-oidc" \
-    "$APP_BFF_URL/signin-oidc" \
+    "$APP_FRONTEND_URL/auth/oidc/callback" \
+    "$APP_SERVER_URL/auth/oidc/callback" \
+    "$APP_SERVER_HTTP_URL/auth/oidc/callback" \
     "$APP_SERVER_URL/swagger/oauth2-redirect.html" \
     "$APP_SERVER_HTTP_URL/swagger/oauth2-redirect.html" \
   --logout-urls \
     "$APP_FRONTEND_URL" \
-    "$APP_FRONTEND_URL/signout-callback-oidc" \
-    "$APP_BFF_URL/signout-callback-oidc" \
   > /dev/null
 
 aws cognito-idp create-group --user-pool-id "$POOL_ID" --group-name admin > /dev/null

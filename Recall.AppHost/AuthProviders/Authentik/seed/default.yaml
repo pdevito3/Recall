@@ -38,18 +38,13 @@ entries:
       grant_types:
         - authorization_code
         - refresh_token
-      # The worker sends the back-channel logout token to the BFF through the Aspire container network
-      logout_uri: !Env APP_BFF_BACKCHANNEL_URL
-      logout_method: backchannel
       redirect_uris:
-        # end_session accepts a post_logout_redirect_uri only if it is a redirect URI of the logout type
         - matching_mode: "strict"
-          url: !Format ["%s/signout-callback-oidc", !Env APP_BFF_URL]
-          redirect_uri_type: logout
+          url: !Format ["%s/auth/oidc/callback", !Env APP_FRONTEND_URL]
         - matching_mode: "strict"
-          url: !Format ["%s/signin-oidc", !Env APP_FRONTEND_URL]
+          url: !Format ["%s/auth/oidc/callback", !Env APP_SERVER_URL]
         - matching_mode: "strict"
-          url: !Format ["%s/signin-oidc", !Env APP_BFF_URL]
+          url: !Format ["%s/auth/oidc/callback", !Env APP_SERVER_HTTP_URL]
         # Swagger OAuth redirect for API testing
         - matching_mode: "strict"
           url: !Format ["%s/swagger/oauth2-redirect.html", !Env APP_SERVER_URL]

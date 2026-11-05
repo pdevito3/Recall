@@ -7,8 +7,6 @@ namespace Recall.AppHost.AuthProviders;
 /// </summary>
 public sealed class KeycloakAuthProvider : IAuthProvider
 {
-    public bool TestedWithDPoP => true;
-
     public AuthProviderConfig AddTo(IDistributedApplicationBuilder builder, AuthClientUrls clientUrls)
     {
         const string realmName = "aspire";
@@ -56,9 +54,7 @@ public sealed class KeycloakAuthProvider : IAuthProvider
             NameClaimType = "email",
             RoleClaimType = "roles",
             AuthResource = keycloak,
-            AuthorityPathSuffix = $"/realms/{realmName}",
-            // Keycloak asks the user to confirm a logout with no id_token_hint, then ends its session
-            EndSessionWithoutIdTokenHint = true
+            AuthorityPathSuffix = $"/realms/{realmName}"
         };
     }
 }

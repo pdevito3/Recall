@@ -7,12 +7,9 @@ namespace Recall.AppHost.AuthProviders;
 /// so the AppHost knows the authority before Floci starts.
 /// </summary>
 /// <remarks>
-/// Cognito is different from the other providers in four ways:
+/// Cognito is different from the other providers in two ways:
 /// <list type="bullet">
-///   <item>It rejects the offline_access scope, and it returns a refresh token without it.</item>
 ///   <item>The access token has no aud claim. It has client_id instead.</item>
-///   <item>The discovery document has no end_session_endpoint and no revocation_endpoint. The BFF sends client_id
-///   and logout_uri to LogoutPath, and it does not revoke the refresh token.</item>
 ///   <item>The roles are in cognito:groups. The access token has no email, and its username is the sub UUID.</item>
 /// </list>
 /// Test users: admin@example.com (roles admin and user) and user@example.com (role user). The password is password123!.
@@ -31,8 +28,8 @@ public sealed class CognitoAuthProvider : IAuthProvider
         var flociEndpoint = floci.GetEndpoint("http");
 
         floci
-            // The issuer of the tokens comes from FLOCI_BASE_URL. It must be the host URL that the BFF,
-            // the server, and the browser use, so that the issuer check passes.
+            // The issuer of the tokens comes from FLOCI_BASE_URL. It must be the host URL that the Server and the
+            // browser use, so that the issuer check passes.
             .WithEnvironment(context =>
             {
                 context.EnvironmentVariables["FLOCI_BASE_URL"] = flociEndpoint.Url;
@@ -53,11 +50,9 @@ public sealed class CognitoAuthProvider : IAuthProvider
             NameClaimType = "username",
             RoleClaimType = "cognito:groups",
             UseAudienceAsScope = false, // The app client allows only the openid, profile, and email scopes
-            RequestOfflineAccess = false,
             AudienceClaimType = "client_id",
             AuthResource = floci,
-            AuthorityPathSuffix = $"/{userPoolId}",
-            LogoutPath = "/cognito-idp/logout"
+            AuthorityPathSuffix = $"/{userPoolId}"
         };
     }
 }
