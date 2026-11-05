@@ -67,6 +67,7 @@ public class FileStoreProofLogTests : TestBase
             // Act
             var firstProbe = check.CheckHealthAsync(context);
             var secondProbe = check.CheckHealthAsync(context);
+            await EventuallyAsync(() => Volatile.Read(ref proofs) > 0);
             clock.Advance(FileStoreHealthCheck.LongestWaitForAProof);
             var whileHung = await Task.WhenAll(firstProbe, secondProbe).WaitAsync(RegressionLimit);
             var pastTheLimit = await check.CheckHealthAsync(context).WaitAsync(RegressionLimit);
@@ -136,10 +137,11 @@ public class FileStoreProofLogTests : TestBase
         // Act
         var result = await check.CheckHealthAsync(ContextOf(check));
         clock.Advance(FileStoreHealthCheck.LongestWaitForAProof);
-        await Task.Yield();
+        var pastTheLimit = await check.CheckHealthAsync(ContextOf(check));
 
         // Assert
         result.Status.ShouldBe(HealthStatus.Healthy);
+        pastTheLimit.Status.ShouldBe(HealthStatus.Healthy);
         logs.Holding(root).ShouldBeEmpty();
     }
 
