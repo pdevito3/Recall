@@ -486,6 +486,7 @@ public class AppSessionTests
         var html = await page.Content.ReadAsStringAsync();
         html.ShouldNotContain("You are signed out");
         html.ShouldContain("<h1>Sign in to Recall</h1>");
+        html.ShouldContain("<title>Sign in to Recall</title>");
         html.ShouldContain("/auth/oidc/stub/start?client=web");
     }
 

@@ -37,6 +37,7 @@ export default async ({ page, context, step, capture, expect, login, logout }) =
     expect((await refused).status()).toBe(403)
     await expect(page.getByRole('heading', { name: 'This server does not accept new people' })).toBeVisible()
     await expect(page).toHaveTitle('This server does not accept new people - Recall')
+    await expect(page.getByRole('link', { name: 'Use another account' })).toHaveAttribute('href', /prompt=login/)
   })
   await capture('signup-closed')
 

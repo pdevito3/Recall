@@ -129,7 +129,7 @@ public static class AuthPages
 
     private static PageResult Page(int status, string heading, string body, string? policy = null)
         => new(status, policy ?? StrictPolicy,
-            $"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{E(heading)} - Recall</title><style>{Style}</style></head><body><main><h1>{E(heading)}</h1>{body}</main></body></html>");
+            $"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{E(heading.Contains("Recall", StringComparison.Ordinal) ? heading : $"{heading} - Recall")}</title><style>{Style}</style></head><body><main><h1>{E(heading)}</h1>{body}</main></body></html>");
 
     private sealed class PageResult(int status, string policy, string html) : IResult
     {

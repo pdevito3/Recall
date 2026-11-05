@@ -23,7 +23,7 @@ Preconditions:
 
 - **First owner.** Run `login('admin@example.com')`. `fetch('/api/v1/users/me')` in the page gives 200 with the `name` of the login. `page.getByRole('region', { name: 'No tenant' })` has count 0.
 - **Permissions.** `fetch('/api/v1/users')` in the page gives 200 with one row, role `Admin`, and the `identifier` of `/api/v1/users/me`.
-- **Second person.** Run `logout()` and `context.clearCookies()`, so that the session of the IdP ends too. Open `/`, then click `[data-testid="user-user@example.com"]`. The response of `/auth/oidc/callback` is 403. The heading is `This server does not accept new people`, and the title is `This server does not accept new people - Recall`. `/bff/user` gives 204.
+- **Second person.** Run `logout()` and `context.clearCookies()`, so that the session of the IdP ends too. Open `/`, then click `[data-testid="user-user@example.com"]`. The response of `/auth/oidc/callback` is 403. The heading is `This server does not accept new people`, and the title is `This server does not accept new people - Recall`. The link `Use another account` starts a new login with `prompt=login`. `/bff/user` gives 204.
 - **Proof.** Run `node $S/scripts/browse.mjs $S/recipes/start-tenant.mjs`. The captures `home-of-owner` and `signup-closed` show the two states.
 
 ## Gotchas
