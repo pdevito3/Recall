@@ -71,5 +71,5 @@ return Job.Run("new-feature",
     }),
     new("Lint the gRPC contract", copy => copy.Run("buf", "lint")),
     new("Build the solution", copy => copy.Run("dotnet", "build", "Recall.slnx", "-p:OpenApiGenerateDocuments=false")),
-    new("Run the .NET tests", copy => copy.Run("dotnet", "test", "--solution", "Recall.slnx", "--no-build", "-p:OpenApiGenerateDocuments=false", "-p:SkipBffTests=true")),
+    new("Run the .NET tests", copy => copy.Run("dotnet", "test", "--solution", "Recall.slnx", "--no-build", "-p:OpenApiGenerateDocuments=false")),
 ]);

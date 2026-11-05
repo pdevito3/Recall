@@ -9,9 +9,6 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 /// <see cref="Release"/>. Thus a test can put a rival request at one step of the request under test. See
 /// <c>docs/backend.md</c>, section "Race tests".
 /// </summary>
-/// <remarks>
-/// The Bff tests compile this file with a link, because a reference to this project also brings in the Server.
-/// </remarks>
 public sealed class PauseAtQuery : DbCommandInterceptor
 {
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
