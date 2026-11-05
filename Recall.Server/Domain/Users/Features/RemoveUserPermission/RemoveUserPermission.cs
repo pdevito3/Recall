@@ -27,29 +27,35 @@ public static class RemoveUserPermission
             Activity.Current?.SetTag("app.permission.name", permission.Value);
             caller.Require(permission);
 
-            var user = await dbContext.Users
-                .TagWithOperationCallSite("users.remove_permission.load")
-                .Include(u => u.UserPermissions)
-                .GetById(request.Id, cancellationToken);
-            user.GuardAllows(UserAction.RemovePermission(), caller);
-
-            var existingPermissions = user.UserPermissions.ToList();
-
-            user.RemovePermission(permission);
-
-            // Explicitly remove permissions that were removed from the collection
-            var remainingIds = user.UserPermissions.Select(p => p.Id).ToHashSet();
-            foreach (var existingPermission in existingPermissions)
+            var (user, removed) = await LastAdmin.RunWithTenantLockAsync(dbContext, request.Id, async ct =>
             {
-                if (!remainingIds.Contains(existingPermission.Id))
+                var user = await dbContext.Users
+                    .TagWithOperationCallSite("users.remove_permission.load")
+                    .Include(u => u.UserPermissions)
+                    .GetById(request.Id, ct);
+                user.GuardAllows(UserAction.RemovePermission(), caller);
+                if (permission == Permission.ManageUserAccess())
+                    await LastAdmin.GuardAsync(dbContext, user, ct);
+
+                var existingPermissions = user.UserPermissions.ToList();
+
+                user.RemovePermission(permission);
+
+                // Explicitly remove permissions that were removed from the collection
+                var remainingIds = user.UserPermissions.Select(p => p.Id).ToHashSet();
+                foreach (var existingPermission in existingPermissions)
                 {
-                    dbContext.UserPermissions.Remove(existingPermission);
+                    if (!remainingIds.Contains(existingPermission.Id))
+                    {
+                        dbContext.UserPermissions.Remove(existingPermission);
+                    }
                 }
-            }
 
-            await dbContext.SaveChangesAsync(cancellationToken);
+                await dbContext.SaveChangesAsync(ct);
+                return (user, user.UserPermissions.Count < existingPermissions.Count);
+            }, cancellationToken);
 
-            if (user.UserPermissions.Count < existingPermissions.Count)
+            if (removed)
                 _logger.Here().Information("Removed permission {Permission} from user {UserId}", permission.Value, user.Id);
 
             return user.ToUserDto(caller);

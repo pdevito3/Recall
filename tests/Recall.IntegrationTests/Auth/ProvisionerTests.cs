@@ -386,6 +386,38 @@ public sealed class ProvisionerTests
     }
 
     [Test]
+    public async Task an_owner_claim_holds_the_tenant_lock_so_a_user_delete_cannot_run_under_it()
+    {
+        // Arrange
+        await using var database = await AuthTestDatabase.CreateAsync();
+        var plain = database.BuildServices();
+        var owner = UserIdOf(await ProvisionerOf(plain).ResolveAsync(Person("old-subject"), CancellationToken.None));
+        var tenant = await database.ReadAsync(db => db.Users.Where(u => u.Id == owner).Select(u => u.TenantId).SingleAsync());
+        await File.WriteAllTextAsync(database.ClaimFilePath, "");
+        var pause = PauseAtQuery.After("auth.provision.oldest_admin");
+        var underTest = ProvisionerOf(database.BuildServices(interceptor: pause));
+
+        // Act
+        var claim = underTest.ResolveAsync(Person("new-subject", IssuerB), CancellationToken.None);
+        await pause.ReachedAsync();
+        var linksSeenByTheDelete = ExclusiveCountOfLinksAsync(plain, tenant);
+        await pause.WaitUntilBlockedAsync(linksSeenByTheDelete, () => RootLock.Tenant.HasWaiter(tenant));
+        pause.Release();
+
+        // Assert
+        UserIdOf(await claim).ShouldBe(owner);
+        (await linksSeenByTheDelete).ShouldBe(2);
+    }
+
+    private static async Task<int> ExclusiveCountOfLinksAsync(IServiceProvider services, string tenantId)
+    {
+        await using var scope = services.GetRequiredService<IServiceScopeFactory>().CreateSystemScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await RootLock.Tenant.RunExclusiveAsync(
+            dbContext, tenantId, ct => dbContext.Set<ExternalLogin>().CountAsync(ct), CancellationToken.None);
+    }
+
+    [Test]
     public async Task an_owner_claim_inside_the_age_limit_works()
     {
         // Arrange

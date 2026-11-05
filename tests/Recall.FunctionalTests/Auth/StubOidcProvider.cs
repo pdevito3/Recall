@@ -145,7 +145,7 @@ public sealed class StubOidcProvider : HttpMessageHandler
         };
     }
 
-    // A real provider has no reason to publish this. Without it, no key can check an HS256 token, so only the allowed algorithms would stop one in a test that loosens them.
+    // A real provider has no reason to publish this. It gives an HS256 token a key to pass with, once a change loosens both the algorithms and the key list.
     private Dictionary<string, string> HmacJwk() => new()
     {
         ["kty"] = "oct",

@@ -69,7 +69,8 @@ public static class AuthPages
             StatusCodes.Status403Forbidden,
             "This server does not accept new people",
             "<p>Your sign-in worked, but this Recall server has no account for you. Use the account that you use for Recall, or ask the owner of this server to let you in.</p>"
-                + $"<ul>{string.Concat(items)}</ul>");
+                + $"<ul>{string.Concat(items)}</ul>"
+                + "<p>If the provider signs in the same account again, sign out at the provider first.</p>");
     }
 
     public static IResult TooManyStarts(int seconds, string startUrl) => Page(
@@ -98,7 +99,7 @@ public static class AuthPages
     public static IResult LogoutFromElsewhere() => Page(
         StatusCodes.Status403Forbidden,
         "Sign-out did not finish",
-        "<p>You are still signed in, because this request came from outside Recall. To sign out, go back to Recall and use Sign out there.</p>" + BackToRecall);
+        "<p>This request ended no session, because it came from outside Recall. To sign out, go back to Recall and use Sign out there.</p>" + BackToRecall);
 
     public static IResult NotFound() => Page(
         StatusCodes.Status404NotFound, "This sign-in method does not exist", "<p>This server has no such sign-in method.</p>" + TryAgain);

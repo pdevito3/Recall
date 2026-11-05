@@ -467,7 +467,7 @@ public class AppSessionTests
         response.Headers.Contains("Set-Cookie").ShouldBeFalse();
         var page = await response.Content.ReadAsStringAsync();
         page.ShouldContain("<h1>Sign-out did not finish</h1>");
-        page.ShouldContain("You are still signed in");
+        page.ShouldContain("This request ended no session");
         page.ShouldContain(">Back to Recall</a>");
         alive.StatusCode.ShouldBe(HttpStatusCode.OK);
     }

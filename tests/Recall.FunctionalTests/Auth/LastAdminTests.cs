@@ -49,6 +49,22 @@ public class LastAdminTests
         (await browser.GetAsync($"/{ApiRoutes.Users.GetList}", csrf: true)).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
+    [Test]
+    public async Task an_owner_who_removes_their_own_access_to_manage_people_gets_a_conflict()
+    {
+        // Arrange
+        using var browser = new AuthBrowser(AuthHosts.Closed);
+        await browser.LoginWebAsync("owner");
+        var ownerId = await OwnerIdAsync();
+
+        // Act
+        var response = await browser.SendAsync(WithCsrf(HttpMethod.Delete, $"/{ApiRoutes.Users.RemovePermission(ownerId, "manage_user_access")}"));
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await DetailOf(response)).ShouldBe(LastAdmin.RefusedMessage);
+    }
+
     private static Task<string> OwnerIdAsync()
         => AuthHosts.Closed.WithDatabaseAsync(db => db.Set<ExternalLogin>()
             .IgnoreQueryFilters()

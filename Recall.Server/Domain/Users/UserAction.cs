@@ -7,6 +7,7 @@ using Exceptions;
 /// A command that a caller can send for a user record. Each action names the permissions that it needs, so
 /// <see cref="User.AllowedActions"/> and <see cref="User.GuardAllows"/> read one table and cannot disagree.
 /// A permission that the request names, such as the new role, is not in the table. The command checks it.
+/// A rule over other rows, such as <see cref="LastAdmin"/>, is not in the table either. The command refuses with a 409, and the UI shows that refusal.
 /// </summary>
 public partial class UserAction : ValueObject, IFixedNames
 {

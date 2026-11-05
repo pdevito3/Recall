@@ -30,6 +30,7 @@ public partial class AuthPagesTests
         // Assert
         refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         page.ShouldContain("Use another account");
+        page.ShouldContain("sign out at the provider first");
         action.ShouldContain("returnUrl=%2Fentries");
         again.Prompt.ShouldBe("login");
     }

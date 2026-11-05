@@ -131,18 +131,23 @@ public sealed class Provisioner(
         AppDbContext dbContext, ExternalIdentity identity, string tenantId, CancellationToken cancellationToken)
     {
         var adminRole = UserRole.Admin().Value;
-        var admin = await dbContext.Users
-            .TagWithOperationCallSite("auth.provision.oldest_admin")
-            .Where(u => u.TenantId == tenantId && u.Role.Value == adminRole && u.Identifier == u.Id)
-            .OrderBy(u => u.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-        if (admin is null)
-            return await JoinAsync(dbContext, identity, tenantId, UserRole.Admin(), cancellationToken);
+        var linked = await RootLock.Tenant.RunSharedAsync<ProvisionOutcome?>(dbContext, tenantId, async ct =>
+        {
+            var admin = await dbContext.Users
+                .TagWithOperationCallSite("auth.provision.oldest_admin")
+                .Where(u => u.TenantId == tenantId && u.Role.Value == adminRole && u.Identifier == u.Id)
+                .OrderBy(u => u.Id)
+                .FirstOrDefaultAsync(ct);
+            if (admin is null)
+                return null;
 
-        dbContext.Set<ExternalLogin>().Add(LinkOf(identity, admin.Id));
-        await dbContext.SaveChangesAsync(cancellationToken);
-        _logger.Here().Warning("The owner claim file linked a login of issuer {Issuer} to user {UserId}", identity.Issuer, admin.Id);
-        return new ProvisionOutcome.Provisioned(admin.Id, admin.FullName);
+            dbContext.Set<ExternalLogin>().Add(LinkOf(identity, admin.Id));
+            await dbContext.SaveChangesAsync(ct);
+            _logger.Here().Warning("The owner claim file linked a login of issuer {Issuer} to user {UserId}", identity.Issuer, admin.Id);
+            return new ProvisionOutcome.Provisioned(admin.Id, admin.FullName);
+        }, cancellationToken);
+
+        return linked ?? await JoinAsync(dbContext, identity, tenantId, UserRole.Admin(), cancellationToken);
     }
 
     private async Task<ProvisionOutcome> AddFirstOwnerAsync(
