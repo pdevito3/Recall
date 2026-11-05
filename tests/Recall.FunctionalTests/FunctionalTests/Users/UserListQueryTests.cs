@@ -33,7 +33,7 @@ public class UserListQueryTests : TestBase
         var filters = filterTemplate
             .Replace("{firstName}", target.FirstName)
             .Replace("{lastName}", target.LastName)
-            .Replace("{email}", target.Email.Value)
+            .Replace("{email}", target.Email!.Value)
             .Replace("{username}", target.Username)
             .Replace("{identifier}", target.Identifier)
             .Replace("{id}", target.Id.ToString())

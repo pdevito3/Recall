@@ -336,7 +336,6 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnName("last_modified_on");
 
                     b.Property<string>("LastName")
-                        .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("TEXT")
                         .HasColumnName("last_name");
@@ -361,8 +360,6 @@ namespace Recall.Server.Databases.Migrations
 
                     b.ComplexProperty(typeof(Dictionary<string, object>), "Email", "Recall.Server.Domain.Users.User.Email#EmailAddress", b1 =>
                         {
-                            b1.IsRequired();
-
                             b1.Property<string>("Value")
                                 .IsRequired()
                                 .HasMaxLength(320)

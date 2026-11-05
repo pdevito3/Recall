@@ -2225,10 +2225,8 @@
           "id",
           "tenantId",
           "firstName",
-          "lastName",
           "fullName",
           "identifier",
-          "email",
           "username",
           "role",
           "permissions",
@@ -2247,7 +2245,10 @@
             "type": "string"
           },
           "lastName": {
-            "type": "string"
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "fullName": {
             "type": "string"
@@ -2256,7 +2257,10 @@
             "type": "string"
           },
           "email": {
-            "type": "string"
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "username": {
             "type": "string"
@@ -2308,9 +2312,7 @@
       "UserForCreationDto": {
         "required": [
           "firstName",
-          "lastName",
           "identifier",
-          "email",
           "username",
           "role"
         ],
@@ -2329,7 +2331,10 @@
           },
           "lastName": {
             "maxLength": 200,
-            "type": "string"
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "identifier": {
             "maxLength": 255,
@@ -2337,7 +2342,10 @@
           },
           "email": {
             "maxLength": 320,
-            "type": "string"
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "username": {
             "maxLength": 100,
@@ -2355,8 +2363,6 @@
       "UserForUpdateDto": {
         "required": [
           "firstName",
-          "lastName",
-          "email",
           "username",
           "version"
         ],
@@ -2368,11 +2374,17 @@
           },
           "lastName": {
             "maxLength": 200,
-            "type": "string"
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "email": {
             "maxLength": 320,
-            "type": "string"
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "username": {
             "maxLength": 100,

@@ -47,7 +47,7 @@ public static partial class UserMapper
     private static List<string> NamesOf(IEnumerable<UserAction> actions) => actions.Select(a => a.Value).ToList();
     private static string MapEmail(EmailAddress email) => email.Value;
     // The projection inlines this expression, so EF can filter and sort on FullName. User.FullName is not a column.
-    private static string MapFullName(User user) => user.FirstName + " " + user.LastName;
+    private static string MapFullName(User user) => user.LastName == null ? user.FirstName : user.FirstName + " " + user.LastName;
     private static string MapRole(UserRole role) => role.Value;
     // Mapperly uses this method only when its return type is the type of UserDto.Permissions.
     // With List<string>, Mapperly ignores it and maps each permission with ToString().

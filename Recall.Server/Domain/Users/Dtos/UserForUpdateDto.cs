@@ -8,12 +8,10 @@ public sealed record UserForUpdateDto
     [RequiredField]
     [SchemaMaxLength(typeof(User), nameof(User.FirstNameMaxLength))]
     public string FirstName { get; init; } = default!;
-    [RequiredField]
     [SchemaMaxLength(typeof(User), nameof(User.LastNameMaxLength))]
-    public string LastName { get; init; } = default!;
-    [RequiredField]
+    public string? LastName { get; init; }
     [SchemaMaxLength(typeof(EmailAddress), nameof(EmailAddress.MaxLength))]
-    public string Email { get; init; } = default!;
+    public string? Email { get; init; }
     [RequiredField]
     [SchemaMaxLength(typeof(User), nameof(User.UsernameMaxLength))]
     public string Username { get; init; } = default!;

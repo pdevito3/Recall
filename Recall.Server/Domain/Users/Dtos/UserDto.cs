@@ -5,10 +5,10 @@ public sealed record UserDto
     public string Id { get; init; } = default!;
     public string TenantId { get; init; } = default!;
     public string FirstName { get; init; } = default!;
-    public string LastName { get; init; } = default!;
+    public string? LastName { get; init; }
     public string FullName { get; init; } = default!;
     public string Identifier { get; init; } = default!;
-    public string Email { get; init; } = default!;
+    public string? Email { get; init; }
     public string Username { get; init; } = default!;
     [NamesOf<UserRole>]
     public string Role { get; init; } = default!;

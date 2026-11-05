@@ -16,16 +16,16 @@ public class User : BaseEntity, ITenantable, IDeletedWithEvent
 
     [NotSensitive] public string TenantId { get; private set; } = default!;
     [Sensitive] public string FirstName { get; private set; } = default!;
-    [Sensitive] public string LastName { get; private set; } = default!;
+    [Sensitive] public string? LastName { get; private set; }
     [Sensitive] public string Identifier { get; private set; } = default!;
-    [Sensitive] public EmailAddress Email { get; private set; } = default!;
+    [Sensitive] public EmailAddress? Email { get; private set; }
     [Sensitive] public string Username { get; private set; } = default!;
     [NotSensitive] public UserRole Role { get; private set; } = default!;
 
     private readonly List<UserPermission> _userPermissions = [];
     public IReadOnlyCollection<UserPermission> UserPermissions => _userPermissions.AsReadOnly();
 
-    public string FullName => $"{FirstName} {LastName}";
+    public string FullName => LastName is null ? FirstName : $"{FirstName} {LastName}";
 
     /// <summary>The save refuses to delete a user that did not queue <see cref="UserDeleted"/>.</summary>
     [NotMapped]
@@ -39,7 +39,7 @@ public class User : BaseEntity, ITenantable, IDeletedWithEvent
             FirstName = userForCreation.FirstName,
             LastName = userForCreation.LastName,
             Identifier = userForCreation.Identifier,
-            Email = EmailAddress.Of(userForCreation.Email),
+            Email = EmailOf(userForCreation.Email),
             Username = userForCreation.Username,
             Role = UserRole.Of(userForCreation.Role)
         };
@@ -60,7 +60,7 @@ public class User : BaseEntity, ITenantable, IDeletedWithEvent
         GuardVersion(userForUpdate.Version);
         FirstName = userForUpdate.FirstName;
         LastName = userForUpdate.LastName;
-        Email = EmailAddress.Of(userForUpdate.Email);
+        Email = EmailOf(userForUpdate.Email);
         Username = userForUpdate.Username;
 
         ValidateUser(this);
@@ -69,11 +69,11 @@ public class User : BaseEntity, ITenantable, IDeletedWithEvent
         return this;
     }
 
-    public User UpdateFromIdp(string firstName, string lastName, string email, string username)
+    public User UpdateFromIdp(string firstName, string? lastName, string? email, string username)
     {
         FirstName = firstName;
         LastName = lastName;
-        Email = EmailAddress.Of(email);
+        Email = EmailOf(email);
         Username = username;
 
         ValidateUser(this);
@@ -180,6 +180,8 @@ public class User : BaseEntity, ITenantable, IDeletedWithEvent
     private Caller OnThisRecord(Caller caller, Permission[] permissions)
         => caller.IsUser(Id) ? new Caller.Member(Id, permissions) : caller;
 
+    private static EmailAddress? EmailOf(string? value) => value is null ? null : EmailAddress.Of(value);
+
     private static void ValidateUser(User user)
     {
         Exceptions.ValidationException.ThrowWhenNullOrWhitespace(user.TenantId, "tenantId", "Please provide a tenant.");
@@ -189,11 +191,14 @@ public class User : BaseEntity, ITenantable, IDeletedWithEvent
             $"A first name can have no more than {FirstNameMaxLength} characters.");
         Exceptions.ValidationException.ThrowWhenHasCharacterNotStorable(user.FirstName, "firstName",
             "A first name has a character that is not allowed.");
-        Exceptions.ValidationException.ThrowWhenNullOrWhitespace(user.LastName, "lastName", "Please provide a last name.");
-        Exceptions.ValidationException.ThrowWhenLongerThan(user.LastName, LastNameMaxLength, "lastName",
-            $"A last name can have no more than {LastNameMaxLength} characters.");
-        Exceptions.ValidationException.ThrowWhenHasCharacterNotStorable(user.LastName, "lastName",
-            "A last name has a character that is not allowed.");
+        if (user.LastName is not null)
+        {
+            Exceptions.ValidationException.ThrowWhenNullOrWhitespace(user.LastName, "lastName", "Please provide a last name.");
+            Exceptions.ValidationException.ThrowWhenLongerThan(user.LastName, LastNameMaxLength, "lastName",
+                $"A last name can have no more than {LastNameMaxLength} characters.");
+            Exceptions.ValidationException.ThrowWhenHasCharacterNotStorable(user.LastName, "lastName",
+                "A last name has a character that is not allowed.");
+        }
         Exceptions.ValidationException.ThrowWhenNullOrWhitespace(user.Identifier, "identifier", "Please provide an identifier.");
         Exceptions.ValidationException.ThrowWhenLongerThan(user.Identifier, IdentifierMaxLength, "identifier",
             $"An identifier can have no more than {IdentifierMaxLength} characters.");

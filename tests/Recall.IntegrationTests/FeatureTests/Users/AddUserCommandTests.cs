@@ -32,7 +32,7 @@ public class AddUserCommandTests : TestBase
         userInDb.ShouldNotBeNull();
         userInDb.FirstName.ShouldBe(fakeUserDto.FirstName);
         userInDb.LastName.ShouldBe(fakeUserDto.LastName);
-        userInDb.Email.Value.ShouldBe(fakeUserDto.Email);
+        userInDb.Email!.Value.ShouldBe(fakeUserDto.Email);
         userInDb.Username.ShouldBe(fakeUserDto.Username);
         userInDb.Identifier.ShouldBe(fakeUserDto.Identifier);
         userInDb.TenantId.ShouldBe(TestFixture.DefaultTenant.Id);
@@ -64,7 +64,7 @@ public class AddUserCommandTests : TestBase
         userInDb.LastName.ShouldBe(fakeUserDto.LastName);
         userInDb.Identifier.ShouldBe(fakeUserDto.Identifier);
         userInDb.Username.ShouldBe(fakeUserDto.Username);
-        userInDb.Email.Value.ShouldBe(fakeUserDto.Email);
+        userInDb.Email!.Value.ShouldBe(fakeUserDto.Email);
     }
 
     [Test]

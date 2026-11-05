@@ -34,7 +34,7 @@ public class User : BaseEntity, ITenantable, IDeletedWithEvent
     [NotSensitive] public string TenantId { get; private set; } = default!;
     [Sensitive] public string FirstName { get; private set; } = default!;
     // ...
-    [Sensitive] public EmailAddress Email { get; private set; } = default!;
+    [Sensitive] public EmailAddress? Email { get; private set; }
     // ...
     [NotSensitive] public UserRole Role { get; private set; } = default!;
 
@@ -49,7 +49,7 @@ public class User : BaseEntity, ITenantable, IDeletedWithEvent
             TenantId = userForCreation.TenantId,
             FirstName = userForCreation.FirstName,
             // ...
-            Email = EmailAddress.Of(userForCreation.Email),
+            Email = EmailOf(userForCreation.Email),
             // ...
             Role = UserRole.Of(userForCreation.Role)
         };

@@ -49,7 +49,7 @@ public class GetAuditEntryPageTests : TestBase
         var values = (await result.Content.ReadFromJsonAsync<AuditEntryPageDto>())!.Items.ShouldHaveSingleItem()
             .Values.ToDictionary(v => v.Name);
         values["FirstName"].ShouldBe(new AuditValueDto { Name = "FirstName", New = target.FirstName });
-        values["Email"].ShouldBe(new AuditValueDto { Name = "Email", New = target.Email.Value });
+        values["Email"].ShouldBe(new AuditValueDto { Name = "Email", New = target.Email!.Value });
     }
 
     [Test]

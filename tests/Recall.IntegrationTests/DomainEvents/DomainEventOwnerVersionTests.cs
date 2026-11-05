@@ -48,7 +48,7 @@ public class DomainEventOwnerVersionTests : TestBase
             {
                 FirstName = "Stale",
                 LastName = saved.LastName,
-                Email = saved.Email.Value,
+                Email = saved.Email!.Value,
                 Username = saved.Username,
                 Version = loadedVersion,
             }));
@@ -76,7 +76,7 @@ public class DomainEventOwnerVersionTests : TestBase
         {
             FirstName = "Stale",
             LastName = staleUser.LastName,
-            Email = staleUser.Email.Value,
+            Email = staleUser.Email!.Value,
             Username = staleUser.Username,
             Version = staleUser.Version,
         });

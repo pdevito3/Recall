@@ -40,8 +40,8 @@ public class RequestValidationBehaviorTests
             () => Send(new AddUser.Command(new UserForCreationDto { FirstName = "Ada" })));
 
         // Assert
-        exception.Errors.Keys.ShouldBe(["lastName", "identifier", "email", "username", "role"], ignoreOrder: true);
-        exception.Errors["lastName"].ShouldBe(["The lastName field is required."]);
+        exception.Errors.Keys.ShouldBe(["identifier", "username", "role"], ignoreOrder: true);
+        exception.Errors["username"].ShouldBe(["The username field is required."]);
     }
 
     [Test]
