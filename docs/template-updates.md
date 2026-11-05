@@ -1,5 +1,7 @@
 # Take updates from the template
 
+Recall takes template fixes by cherry-pick and does not use this guide by default. See [ADR 0017](adr/0017-template-fixes-by-cherry-pick.md). The rest of this page is the guide of the template, unchanged.
+
 This guide tells how to bring new commits of the template ([pdevito3/FullstackTemplate](https://github.com/pdevito3/FullstackTemplate)) into an app that `scripts/init.cs` made.
 
 A plain `git merge` of the template does not work well. The template has its own name in file names and file contents, and the app has the app name. Thus Git sees a conflict at each change of the template near a name, adds the files again that `init.cs` deleted, and adds new lines that have the template name. The script `scripts/template-merge.cs` of the template prevents this. It renames the template on both sides of the merge with `init.cs` first, and then merges.

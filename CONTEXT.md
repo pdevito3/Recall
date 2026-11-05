@@ -1,8 +1,129 @@
 # Recall
 
-A multi-tenant web app template. A browser talks only to the BFF, and the BFF signs the user in with an external identity provider and calls the server API for the user.
+A self-hosted journal. A person opens the phone, dictates, and the entry is captured with no friction. AI can make a polished copy of the words, and it never changes the words of the person.
 
 ## Language
+
+### Journal
+
+**Session**:
+The root of the journal: one act of journaling by a User. A Session has no parent, and a Journaling day holds any number of Sessions. A bare "Session" always means this. An auth session always has a qualifier, such as BFF session.
+_Avoid_: Entry (the Session is the entry)
+
+**Journaling day**:
+The calendar day of a Session in the time zone of its User. It is a grouping that the app derives from the time of the Session, and it is not a record.
+_Avoid_: Date, parent day
+
+**Raw**:
+The words that the User wrote or dictated. It is the source of truth that the User owns. The User can edit it at any time, and AI never changes it.
+_Avoid_: Original, transcript
+
+**Cleaned**:
+The polished copy of Raw that Cleanup makes. The User can also edit it by hand. A new Cleanup replaces it, and the prior copy stays as a Revision. If the copy has edits by hand, Cleanup warns the User first.
+_Avoid_: Edited, final, processed
+
+**Draft**:
+The current, autosaved working text of Raw or of Cleaned. A Draft changes, and a Revision does not.
+
+**Revision**:
+An append-only snapshot of Raw or of Cleaned, made at a save point. Each change to the text makes one, and that includes the change that a Person rename makes. Revisions are history inside one Session, and search reads only the current state.
+_Avoid_: Version (the concurrency token of a row), history entry
+
+**Last-write-wins**:
+The rule for two saves of one Draft. The later save time holds the Draft, and the earlier save stays as a Revision, so no words go away.
+_Avoid_: Conflict, merge
+
+**Stale**:
+The state of a Session whose current Raw Draft is at a newer Revision than the Revision that the last successful Cleanup read. It has this one definition. An edit of Cleaned by hand and a save that lost Last-write-wins do not make a Session stale. A Person rename also does not. If the rename makes a Raw Revision on a Session that is not stale, the Revision that the last Cleanup read moves to the new Revision. A stale Session stays stale.
+_Avoid_: Dirty, outdated
+
+### AI
+
+**Cleanup**:
+The work that reads Raw and makes Cleaned, the Synopsis, the Suggestions, and the People proposals. A person starts it at any time. On the `Server` engine, it continues after the client closes. A Session has no lifecycle, so Cleanup never completes a Session.
+_Avoid_: Processing, evaluation
+
+**Cleanup status**:
+Where a Session stands with Cleanup: `NotRun`, `Running`, `Clean`, `Stale`, or `Failed`. `Stale` comes from the definition of Stale and is never stored.
+
+**Cleanup engine**:
+Where the model of a Cleanup runs: `Server`, or `OnDevice` on the iPhone of the User. The engine does not change what a Cleanup is or what it makes.
+_Avoid_: Runner, provider
+
+**Model provider**:
+The AI service that an Admin connects for the app. The `Server` engine uses it.
+_Avoid_: Bare "provider", which can also mean an Identity provider
+
+**Transcription engine**:
+What turns audio into Raw: the server, a cloud model, or a speech model on the device. It is not a Cleanup engine.
+_Avoid_: Recognizer, bare "engine"
+
+**Synopsis**:
+The short AI recap of one Session. A Summary covers a period, and a Synopsis does not. A Person rename does not change a Synopsis, so it can keep the old name.
+_Avoid_: Recap, abstract
+
+**Correction**:
+A term of one User, with its common mishearings, that fixes dictation mistakes in Cleaned. By default it is a hint to the model, and a User can flag it to replace the words each time. It never changes Raw.
+_Avoid_: Lexicon, vocabulary, dictionary
+
+### Metadata
+
+**Topic**:
+A life-area tag on a Session, such as work or trips. Each User has their own Topics, and a Session can have many. A Topic is the only metadata with Provenance.
+
+**Provenance**:
+Who set a Topic: `UserSet` or `AiSuggested`. AI never replaces a `UserSet` Topic.
+_Avoid_: Source, origin
+
+**Mood**:
+How the User felt: a known mood or the free text of the User. A Session can have many Moods, and a Mood has no Provenance.
+
+**Activity**:
+What the User physically did while journaling. A Session has exactly one, and only the User sets it. The value `None` means that the User did not say, and there is no other unset state. Life areas are Topics, and feelings are Moods.
+_Avoid_: Unset, null activity
+
+**Person**:
+A record in the directory of one User. A mention in the text refers to the Person, and the People of a Session are the Persons that its Raw and its Cleaned mention. A rename changes the label of each mention and makes a Revision of each text that changes.
+_Avoid_: Contact, person tag
+
+**Suggestion**:
+A Topic or a Mood that AI proposes, which the User accepts or rejects. It is not metadata until the User accepts it. A Person is never a Suggestion.
+
+**People proposal**:
+A name that Cleanup proposes as a mention of a Person, which the User approves or rejects one Person at a time. An approval adds the mention to Cleaned. A User can turn off this review, and then Cleanup adds the mentions itself.
+_Avoid_: People suggestion
+
+**Location**:
+An optional single point (latitude and longitude) on a Session from its creation. The User opts in, and the default is off. The User can decline it for one Session.
+_Avoid_: Place, address
+
+### Summaries
+
+**Summary**:
+An AI narrative of one User over one period: `Day`, `Week`, `Month`, `Quarter`, or `Year`. Summaries roll up as needed. A period with no sources has no Summary.
+_Avoid_: Report, digest
+
+**Roll-up**:
+The sources of a Summary. Day and Week read Sessions, and each reads Cleaned when it is present and Raw when it is not. Month reads Day Summaries, Quarter reads Months, and Year reads Quarters. A Week can cross two Months, so it is outside that chain.
+
+**Stale summary**:
+A Summary whose sources changed after it was made. A Person rename counts as a change, so that a Summary does not keep the old name. The change goes up the chain to each Summary that reads it. A missing or stale Summary generates when a person opens its period, and a nightly job handles the stale periods.
+
+### Identity
+
+**User**:
+A person with a login, and the owner of their journal data. Recall keeps one seeded tenant, so a tenant does not separate one person from another. All journal data belongs to exactly one User.
+_Avoid_: Account
+
+**Admin**:
+A User who manages users, app-wide settings, and system health. An Admin has no access to the journal of another User.
+_Avoid_: Superuser
+
+**Member**:
+A User with full use of their own journal and no admin pages. The code names this role `User`.
+
+**Privacy invariant**:
+No User, an Admin included, can read the journal data of another User.
 
 ### Authentication
 

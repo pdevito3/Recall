@@ -4,7 +4,9 @@ Guidance for coding agents that work in this repository.
 
 ## Overview
 
-This is a .NET Aspire application with a React frontend. It uses the Backend-For-Frontend (BFF) pattern. It has multi-tenancy, a CQRS architecture, and a configurable auth provider. The `AuthProvider` setting of the AppHost selects it. See [docs/authentication.md](docs/authentication.md).
+Recall is a self-hosted journal. A person opens the phone, dictates, and the entry is captured with no friction. Read [CONTEXT.md](CONTEXT.md) for its language and [docs/adr/](docs/adr/) for its decisions. ADRs 0013 to 0016 give the target shape, and the code moves to it PR by PR.
+
+Today this is a .NET Aspire application with a React frontend. It uses the Backend-For-Frontend (BFF) pattern. It has multi-tenancy, a CQRS architecture, and a configurable auth provider. The `AuthProvider` setting of the AppHost selects it. See [docs/authentication.md](docs/authentication.md).
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -49,7 +51,8 @@ Read the doc for an area before you change code in that area.
 | [docs/examples.md](docs/examples.md) | The example code, its markers, and the script that deletes it |
 | [docs/specs/](docs/specs/) | The specs of a domain or an effort. Start a new spec from [TEMPLATE.md](docs/specs/TEMPLATE.md): each rule has an ID, and a test names the ID |
 | [docs/csharp-repl.md](docs/csharp-repl.md) | CSharpRepl in the running server: the hook wiring and the Development-only guards |
-| [docs/template-updates.md](docs/template-updates.md) | Merge new template commits into the app with `scripts/template-merge.cs` of the template |
+| [docs/adr/0017-template-fixes-by-cherry-pick.md](docs/adr/0017-template-fixes-by-cherry-pick.md) | How Recall takes template fixes, and the template commit that Recall started from |
+| [docs/template-updates.md](docs/template-updates.md) | The merge script of the template. Recall does not use it by default. See ADR 0017 |
 
 The pattern rules are in `docs/backend/` and `docs/frontend/`. Before you write code in an area, read its rule doc. Obey the rules in it.
 
