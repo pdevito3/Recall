@@ -10,7 +10,7 @@ public enum SweepCall
     AdminWithOwnTenantIds,
 }
 
-/// <param name="Key">The endpoint name, the tool name, or the full gRPC method name. The allow list uses it.</param>
+/// <param name="Key">The endpoint name or the tool name. The allow list uses it.</param>
 public sealed record SweepTarget(string Key, string Label, bool NamesARecord);
 
 /// <param name="Anonymous">A call with no user does not get the code of a missing token.</param>

@@ -81,15 +81,11 @@ public class EntrypointBoundaryTests
         // Assert
         adapters.ShouldContain("Recall.Server.Domain.Tenants.Features.AddTenantEndpoint");
         adapters.ShouldContain("Recall.Server.Domain.Tenants.Features.AddTenantTool");
-        adapters.ShouldContain("Recall.Server.Domain.Tenants.Grpc.V1.TenantsGrpcService");
-        adapters.ShouldContain("Recall.Server.Domain.Tenants.Grpc.V1.TenantGrpcMappings");
-        Server.Value.GrpcContractNamespaces().ShouldContain("Recall.Server.Domain.Tenants.Grpc.V1");
 
         var core = Server.Value.CoreNames();
         core.ShouldContain("Recall.Server.Databases.AppDbContext");
         core.ShouldContain("Recall.Server.Domain.Tenants.Features.AddTenant");
         core.ShouldContain("Recall.Server.Domain.Users.CurrentUserService");
-        core.ShouldNotContain("Recall.Server.Domain.Tenants.Grpc.V1.TenantsReflection");
     }
 
     [Test]
@@ -114,7 +110,6 @@ public class EntrypointBoundaryTests
         Fixtures.Value.CoreThatUsesAnEntrypoint().ShouldBe(
         [
             "Recall.ArchitectureFixtures.Core.CoreWithAdapter",
-            "Recall.ArchitectureFixtures.Core.CoreWithGrpcContract",
             "Recall.ArchitectureFixtures.Core.CoreWithSharedPlumbing",
         ]);
     }
@@ -126,9 +121,7 @@ public class EntrypointBoundaryTests
         Fixtures.Value.AdaptersThatUseTheDatabase().ShouldBe(
         [
             "Recall.ArchitectureFixtures.Adapters.EndpointWithDatabase",
-            "Recall.ArchitectureFixtures.Adapters.GrpcServiceWithDatabase",
             "Recall.ArchitectureFixtures.Adapters.ToolWithDatabase",
-            "Recall.ArchitectureFixtures.Contract.Grpc.V1.HandWrittenGrpcMappings",
             "Recall.ArchitectureFixtures.Resources.Entrypoints.PlumbingWithDatabase",
         ]);
     }
@@ -155,9 +148,6 @@ public class EntrypointBoundaryTests
 
         // Assert
         adapters.ShouldContain("Recall.ArchitectureFixtures.Adapters.CleanEndpoint");
-        adapters.ShouldContain("Recall.ArchitectureFixtures.Contract.Grpc.V1.HandWrittenGrpcMappings");
-        adapters.ShouldNotContain("Recall.ArchitectureFixtures.Contract.Grpc.V1.GeneratedMessage");
-        Fixtures.Value.GrpcContractNamespaces().ShouldBe(["Recall.ArchitectureFixtures.Contract.Grpc.V1"]);
 
         // A clean core type, and a core type that uses only the allowed transport type, are not in rule 1
         var core = Fixtures.Value.CoreNames();

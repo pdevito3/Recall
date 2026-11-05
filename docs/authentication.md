@@ -298,7 +298,7 @@ The umask covers the whole process. A backup job that reads through a group lose
 
 ## Provider tokens
 
-`Auth:Authority` and `Auth:Audience` turn on the JWT path, for Swagger UI, MCP, gRPC, and agents. With no `Auth:Authority`, the Server registers no JWT handler, no DPoP handler, and no MCP metadata. The AppHost sets both for a stack with a provider.
+`Auth:Authority` and `Auth:Audience` turn on the JWT path, for Swagger UI, MCP, and agents. With no `Auth:Authority`, the Server registers no JWT handler, no DPoP handler, and no MCP metadata. The AppHost sets both for a stack with a provider.
 
 The default scheme chooses by the credential. A `Bearer` or `DPoP` value with the prefix `rcl_` goes to the session handler. Another value goes to the JWT handler. With no such header, a session cookie goes to the session handler. Other Authorization schemes, such as Basic from a proxy, do not hide the cookie.
 

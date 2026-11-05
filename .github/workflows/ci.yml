@@ -5,7 +5,6 @@ name: CI
 # The job also builds, lints, and tests the frontend against the contract, and runs the functional suite of the frontend. The test job runs the .NET tests.
 # The line-endings job fails when a tracked text file has a CR. .gitattributes stores each text file with LF.
 # The template-name job fails when code or config has the template name. See docs/adr/0017-template-fixes-by-cherry-pick.md.
-# The grpc-contract job lints the .proto files and fails on a breaking change against main. See buf.yaml.
 # The new-feature job runs scripts/ci/new-feature.cs, which runs scripts/new-feature.cs for two sample entities, then lints, builds, and tests the result.
 # A job that calls a script under scripts/ci/ keeps its steps there, so that an agent can run them locally. The script works on a throwaway copy of the checkout.
 # There is no nightly run. See section 7 of docs/specs/home-rolled-bff.md.
@@ -139,32 +138,6 @@ jobs:
             exit 1
           fi
 
-  grpc-contract:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          persist-credentials: false
-          # buf breaking reads the contract of main from the local clone
-          fetch-depth: 0
-
-      - uses: bufbuild/buf-action@85aebf73123b5c15fd5528aaecbf9129cddf7fa7 # v1.6.0
-        with:
-          version: 1.74.0
-          setup_only: true
-
-      - name: Lint the gRPC contract
-        run: buf lint
-
-      - name: Fail on a breaking change to the gRPC contract
-        run: |
-          if git ls-tree -r --name-only origin/main -- Recall.Server/Domain | grep -q '\.proto$'; then
-            buf breaking --against '.git#ref=refs/remotes/origin/main'
-          else
-            echo "main has no gRPC contract yet, so there is nothing to compare."
-          fi
-
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -209,11 +182,6 @@ jobs:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
           restore-keys: nuget-${{ runner.os }}-
-
-      - uses: bufbuild/buf-action@85aebf73123b5c15fd5528aaecbf9129cddf7fa7 # v1.6.0
-        with:
-          version: 1.74.0
-          setup_only: true
 
       - name: Run the steps of the job
         run: dotnet run scripts/ci/new-feature.cs -- --examples ${{ matrix.examples }}

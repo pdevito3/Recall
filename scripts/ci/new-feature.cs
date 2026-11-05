@@ -4,7 +4,7 @@
 //
 //   dotnet run scripts/ci/new-feature.cs
 //
-// The tools: git, the .NET SDK, and buf.
+// The tools: git and the .NET SDK.
 
 #:include job.cs
 
@@ -31,15 +31,11 @@ const string ShipmentFields = "Label:text:public, Carrier:ref, Memo:text?, Count
 void GenerateSamples(JobCopy copy)
 {
     copy.Run("dotnet", "run", "scripts/new-feature.cs", "--", "Carrier", "--entrypoints", "http,mcp", "--fields", CarrierFields);
-    copy.Run("dotnet", "run", "scripts/new-feature.cs", "--", "Shipment", "--entrypoints", "http,grpc,mcp", "--fields", ShipmentFields);
+    copy.Run("dotnet", "run", "scripts/new-feature.cs", "--", "Shipment", "--entrypoints", "http,mcp", "--fields", ShipmentFields);
 }
 
 return Job.Run("new-feature",
 [
-    new("Check the tools", copy =>
-    {
-        copy.RequireTool("buf", "--version", "Install the buf version that .github/workflows/ci.yml names: https://buf.build/docs/cli/installation/");
-    }),
     .. examplesSteps,
     new("Generate the sample features", GenerateSamples),
     new("Fail if a second run changes a file", copy =>
@@ -69,7 +65,6 @@ return Job.Run("new-feature",
         copy.Run("git", "reset", "--quiet", "--hard", "HEAD");
         copy.Run("git", "clean", "--force", "-d", "--quiet");
     }),
-    new("Lint the gRPC contract", copy => copy.Run("buf", "lint")),
     new("Build the solution", copy => copy.Run("dotnet", "build", "Recall.slnx", "-p:OpenApiGenerateDocuments=false")),
     new("Run the .NET tests", copy => copy.Run("dotnet", "test", "--solution", "Recall.slnx", "--no-build", "-p:OpenApiGenerateDocuments=false")),
 ]);

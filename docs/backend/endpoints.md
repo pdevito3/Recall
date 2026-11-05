@@ -1,6 +1,6 @@
 # Endpoints
 
-An endpoint is an adapter. It gets a request from a transport, sends a MediatR request, and returns the response of that transport. It has no other logic. The Server has three transports: the HTTP API, gRPC, and MCP. All three use the same JWT bearer authentication, so each one sees the same caller and the same tenant scope.
+An endpoint is an adapter. It gets a request from a transport, sends a MediatR request, and returns the response of that transport. It has no other logic. The Server has two transports: the HTTP API and MCP. Both use the same JWT bearer authentication, so each one sees the same caller and the same tenant scope.
 
 Each adapter lives in the folder of its feature, next to the request and the handler:
 
@@ -10,16 +10,10 @@ Domain/Tenants/
 │   └── AddTenant/
 │       ├── AddTenant.cs           # Core: the MediatR command and its handler
 │       ├── AddTenant.Http.cs      # HTTP: AddTenantEndpoint, an IEndpoint
-│       ├── AddTenant.Grpc.cs      # gRPC: the AddTenant method of the partial TenantsGrpcService
 │       └── AddTenant.Mcp.cs       # MCP: AddTenantTool, an [McpServerToolType] static class
-└── Grpc/
-    └── v1/
-        ├── tenants.proto          # The gRPC v1 contract
-        ├── TenantsGrpcService.cs  # The root of the partial service class
-        └── TenantGrpcMappings.cs  # The maps from the DTOs to the messages
 ```
 
-Each adapter is optional. A feature has only the adapters that it needs, and it can have none. For example, a feature that only a domain event handler or a background job sends has no adapter. A feature with no file for a transport is not exposed on that transport. Now, all of the Agents, AuditEntries, Tenants, and Users features have HTTP. Only `GetTenant`, `GetTenantList`, and `AddTenant` have gRPC. `AddTenant`, `GetTenant`, `GetTenantList`, and `UpdateTenant` have MCP.
+Each adapter is optional. A feature has only the adapters that it needs, and it can have none. For example, a feature that only a domain event handler or a background job sends has no adapter. A feature with no file for a transport is not exposed on that transport. Now, all of the Agents, AuditEntries, Tenants, and Users features have HTTP. `AddTenant`, `GetTenant`, `GetTenantList`, and `UpdateTenant` have MCP.
 
 The reason for this layout is in [ADR 0002](../adr/0002-colocate-entrypoints-with-features.md).
 
@@ -27,22 +21,22 @@ The reason for this layout is in [ADR 0002](../adr/0002-colocate-entrypoints-wit
 
 Do these steps for each new feature:
 
-1. Find the callers of the feature. The SPA uses HTTP. A service client can use HTTP or gRPC. An AI agent uses MCP.
+1. Find the callers of the feature. The SPA uses HTTP. A service client can use HTTP. An AI agent uses MCP.
 2. If you do not know the callers, ask. Do not add an adapter because other features have one.
-3. Add one file for each transport that a caller needs: [HTTP](#http), [gRPC](#grpc), or [MCP](#mcp).
+3. Add one file for each transport that a caller needs: [HTTP](#http) or [MCP](#mcp).
 4. If no caller is outside the Server, add no adapter.
 
 To expose an existing feature on one more transport, add only the file of that transport. The core file and the other adapters do not change.
 
-The shared plumbing is in `Resources/Entrypoints/`: the registration, the problem details, auth, the OpenAPI transformers, the gRPC error interceptor, and the MCP error filter.
+The shared plumbing is in `Resources/Entrypoints/`: the registration, the problem details, auth, the OpenAPI transformers, and the MCP error filter.
 
 ## Rules for each adapter
 
 1. Send a MediatR request. Do not inject `AppDbContext` and do not use EF Core. `EntrypointBoundaryTests` fails if an adapter uses the database.
-2. Do not put transport types in the core. A request, a handler, an entity, a DTO, or a service must not use `Microsoft.AspNetCore.Http`, `Microsoft.AspNetCore.Mvc`, `Microsoft.AspNetCore.Routing`, gRPC, Protobuf, or MCP. `EntrypointBoundaryTests` fails if it does. When the core needs a value of the request, add an interface in the core and implement it in `Resources/Entrypoints/`. For example, `CurrentUserService` reads the caller from `ICurrentPrincipalAccessor`, and `HttpContextPrincipalAccessor` gives the principal of the HTTP request.
+2. Do not put transport types in the core. A request, a handler, an entity, a DTO, or a service must not use `Microsoft.AspNetCore.Http`, `Microsoft.AspNetCore.Mvc`, `Microsoft.AspNetCore.Routing`, or MCP. `EntrypointBoundaryTests` fails if it does. When the core needs a value of the request, add an interface in the core and implement it in `Resources/Entrypoints/`. For example, `CurrentUserService` reads the caller from `ICurrentPrincipalAccessor`, and `HttpContextPrincipalAccessor` gives the principal of the HTTP request.
 
 `BoundaryScanner` in the unit tests applies these rules. It reads the compiled code, so it also sees a method body, an attribute argument, and a generic constraint. The tests also run it on `tests/Recall.ArchitectureFixtures`, which has one violation for each rule. If the scan stops finding a violation, that test fails. `HostExtensions` wires the host, the same as `Program`, so the scan does not check it. Add a type to this list or to the allowed transport types only with a reason in `EntrypointBoundaryTests`.
-3. Do not catch exceptions. The shared plumbing of each transport maps the domain exceptions: problem details for HTTP, a status code for gRPC, and a tool error for MCP. See [backend.md](../backend.md#error-responses).
+3. Do not catch exceptions. The shared plumbing of each transport maps the domain exceptions: problem details for HTTP and a tool error for MCP. See [backend.md](../backend.md#error-responses).
 
 ## HTTP
 
@@ -104,7 +98,7 @@ A create endpoint returns `TypedResults.CreatedAtRoute(result, "GetUser", new { 
 
 ### Request validation
 
-`RequestValidationBehavior` is a MediatR behavior, so it runs the same rules for HTTP, gRPC, and MCP. It runs the DataAnnotations rules of the request and of each DTO in the request, before the handler. It also runs the rules of each DTO in a DTO and of each element of a list of DTOs, at any depth. It does not check the elements of a list of lists or the values of a dictionary. It skips a `null` element of a list of DTOs, so the `null` element gets to the handler. Put only DTOs and values in a request, not a domain entity, because the behavior would walk the full graph of the entity, such as its value objects, its permission lists, and its domain events. A broken rule throws `RequestValidationException`. HTTP gives 400 with the errors of each camelCase field, gRPC gives `InvalidArgument`, and MCP gives an `invalid_argument` tool error. Give each string property of a request DTO that is not nullable `[RequiredField]`. Then a missing value gives 400, and an empty value goes to the domain rules, which give 422. Do not use `[Required]` for these properties. If an adapter sends a value of the DTO, not the DTO, put the rule on the property of the command, for example `[property: RequiredField] string Role`. The key of a field of the request or of its body DTO is the JSON name of the field, for example `lastName`. The key of a field of a DTO below them has the path of the field, for example `shipTo.city` or `lines[1].name`. The message names only the field, because a form shows it under the field. For example, the error under `lines[1].name` is "The name field is required."
+`RequestValidationBehavior` is a MediatR behavior, so it runs the same rules for HTTP and MCP. It runs the DataAnnotations rules of the request and of each DTO in the request, before the handler. It also runs the rules of each DTO in a DTO and of each element of a list of DTOs, at any depth. It does not check the elements of a list of lists or the values of a dictionary. It skips a `null` element of a list of DTOs, so the `null` element gets to the handler. Put only DTOs and values in a request, not a domain entity, because the behavior would walk the full graph of the entity, such as its value objects, its permission lists, and its domain events. A broken rule throws `RequestValidationException`. HTTP gives 400 with the errors of each camelCase field, and MCP gives an `invalid_argument` tool error. Give each string property of a request DTO that is not nullable `[RequiredField]`. Then a missing value gives 400, and an empty value goes to the domain rules, which give 422. Do not use `[Required]` for these properties. If an adapter sends a value of the DTO, not the DTO, put the rule on the property of the command, for example `[property: RequiredField] string Role`. The key of a field of the request or of its body DTO is the JSON name of the field, for example `lastName`. The key of a field of a DTO below them has the path of the field, for example `shipTo.city` or `lines[1].name`. The message names only the field, because a form shows it under the field. For example, the error under `lines[1].name` is "The name field is required."
 
 A value that does not bind, such as `pageNumber=abc` or a body that is not valid JSON, also gives 400 with errors. `RouteHandlerOptions.ThrowOnBadRequest` makes the endpoint throw, and `DomainProblemDetails` shows the error. `BindingProblem` gives the message, for example "The value 'abc' is not valid for pageNumber." A body value of the wrong type, such as a text, a null, or a value out of range for a number, gives a message that names the kind of value that the field takes. For example, `version` gives "The version field is not a valid whole number, or it is out of range." The JSON error is the same for a text, `1.5`, and a value out of range, so the message for a whole number or a decimal names both causes. The kinds are a whole number, a number, a date and time, and a date. A field of another type gives "The name field is not valid." A bad item of a list, such as `"x"` in `"counts": [1, "x"]`, gives "An item of the counts field is not a valid whole number, or it is out of range." under the key `counts[1]`. The error is under the key of the field, for example `version` or `lines[1].hours`. A body value that is not valid JSON, such as `1.2.3` for a number, gives "The version field is not valid JSON." under the key of the field. Other JSON that does not parse, such as a body that is not JSON or a missing comma between members, gives "The request body is not valid JSON." under the empty key. A body that stops before its end, such as `{ "name": `, gives the error under the last member that the reader got to, for example "The name field is not valid JSON." A JSON error that a custom converter throws keeps its `$.path` key and its own message. As for request validation, the message names the field, not its path, so the error under `lines[1].hours` is "The hours field is not a valid number, or it is out of range." The framework stops at the first value that does not bind, so the 400 names only that value. This is an accepted limit.
 
@@ -112,33 +106,9 @@ A value that does not bind, such as `pageNumber=abc` or a body that is not valid
 
 Add a new version when a change breaks callers: a removed or renamed DTO property, a changed type, a changed route, or a removed endpoint. Add `V2` to `ApiVersions`. Then add a second endpoint class with `.MapToApiVersion(ApiVersions.V2)`, for example `GetUserV2Endpoint` in the same feature folder. Keep the v1 endpoint for the clients that use v1. Then add the version to `SupportedVersions`. See [backend.md](../backend.md#api-versioning).
 
-## gRPC
+### Kestrel endpoints
 
-The gRPC service of a domain is a partial class. The example is `Domain/Tenants/Grpc/v1/`.
-
-1. Put the contract in `Domain/[EntityName]s/Grpc/v{n}/[entityname]s.proto`. Put the version in the package and in the C# namespace: `package recall.tenants.v1;` and `option csharp_namespace = "Recall.Server.Domain.Tenants.Grpc.V1";`. The csproj compiles each `Domain/**/Grpc/v*/*.proto` with `GrpcServices="Server"`, so the Server has only the service base. A caller generates its own client from the proto. The functional tests do this with `GrpcServices="Client"`.
-2. Give each RPC its own request and response message, for example `GetTenantRequest` and `GetTenantResponse`. `buf lint` fails if an RPC returns a shared message.
-3. Put the root of the service in `Grpc/v{n}/[EntityName]sGrpcService.cs`: a `sealed partial` class with `[Authorize]` and a primary constructor that takes `IMediator`.
-4. Put each RPC in the folder of its feature, in `[FeatureName].Grpc.cs`. Use the namespace of the service, not the namespace of the feature, so that the file can extend the partial class. Add `using global::Grpc.Core;`, because the name `Grpc` binds to the namespace segment.
-5. Put a map that more than one RPC uses in `Grpc/v{n}/[EntityName]GrpcMappings.cs`.
-6. If a field can have no value, mark it `optional`, for example the page fields of `ListTenantsRequest`. Read `Has[FieldName]`, and send `null` when it is false, so that the DTO gives its default. A field that is not `optional` has no unset state: `0` and `""` are values.
-7. Map the service in `EntrypointRegistration.MapEntrypoints` with `MapGrpcService<T>()`.
-
-gRPC needs HTTP/2. Without TLS, Kestrel serves HTTP/2 only on a port that serves only HTTP/2. So the Server has two named Kestrel endpoints in `Kestrel:Endpoints` of `appsettings.json`. The `grpc` endpoint serves gRPC in plaintext (h2c) on 8081, with `Protocols` set to `Http2`. The `http` endpoint serves the HTTP API, MCP, and the health checks on 8080 with HTTP/1.1. `appsettings.Development.json` adds `https` and the local ports. Aspire reads these names, makes one endpoint for each, and replaces each `Url`. Do not set `ASPNETCORE_URLS`, because Kestrel ignores it when the configuration has endpoints.
-
-`DomainErrorInterceptor` maps the domain exceptions to status codes: `InvalidArgument` (a validation error or a bad input), `NotFound`, `PermissionDenied`, `AlreadyExists` (a conflict with a record that exists), and `Aborted` (a stale version, or a concurrent change after the last run again). If the error names request fields, the status has a `google.rpc.BadRequest` detail with one field violation for each message. These are the same fields as the `errors` of an HTTP problem. A client reads them with `RpcException.GetRpcStatus()` and `GetDetail<BadRequest>()`.
-
-### gRPC versions
-
-CI runs `buf lint` and `buf breaking` against main (see `buf.yaml`). A change that breaks the wire or the generated code fails the build: a removed field, a changed field number or type, a renamed RPC, or a changed `csharp_namespace`. Add a field with a new number instead.
-
-To make a breaking change, add v2 next to v1:
-
-1. Copy `Grpc/v1/` to `Grpc/v2/`. Set the package to `recall.tenants.v2` and the namespace to `...Tenants.Grpc.V2`.
-2. Make the change in the v2 proto.
-3. Add `[FeatureName].Grpc.V2.cs` in the folder of each feature that v2 serves, with the namespace `...Tenants.Grpc.V2`.
-4. Map the v2 service next to v1 in `MapEntrypoints`. Both versions send the same MediatR requests.
-5. Remove v1 when no caller uses it. `buf breaking` then reports the removed file, so remove it in a change that says so.
+The Server has named Kestrel endpoints in `Kestrel:Endpoints` of `appsettings.json`. The `http` endpoint serves the HTTP API, MCP, and the health checks on 8080. `appsettings.Development.json` adds `https` and the local ports. Aspire reads these names, makes one endpoint for each, and replaces each `Url`. Do not set `ASPNETCORE_URLS`, because Kestrel ignores it when the configuration has endpoints.
 
 ## MCP
 
@@ -166,7 +136,7 @@ Each MCP tool is a static class. The example is `Domain/Tenants/Features/AddTena
 
 Use a `Permission.Names` constant, so that the compiler checks the name. If the handler checks more than one permission, name the permission that each call needs. The handler checks the others. If the handler lets a user act on their own record with `Caller.RequireSelfOr`, use `ToolAccessKind.Read`, so that the handler decides. A permission in the attribute would hide the tool from that user.
 
-`ToolAccessKind.Read` is stricter on MCP than on HTTP and gRPC. An unknown client gets a `permission_denied` tool error that tells it to ask for a registration. Over HTTP and gRPC, the same caller gets an empty list or 404, because the tenant filter shows it no rows.
+`ToolAccessKind.Read` is stricter on MCP than on HTTP. An unknown client gets a `permission_denied` tool error that tells it to ask for a registration. Over HTTP, the same caller gets an empty list or 404, because the tenant filter shows it no rows.
 
 `McpToolAccess.ListFilter` removes from `tools/list` each tool that the caller cannot use. `McpToolAccess.CallFilter` denies a call to such a tool. It runs inside `McpDomainErrors.Filter`, so the denial is a `permission_denied` tool error with the message of `Caller`. Both filters load the caller with `IPermissionGuard.GetCallerAsync` and ask `Caller`, so the list, the call, and the handler give the same answer. For an agent, the caller holds only the permissions of its grant. See [Agents](../authentication.md#agents).
 
@@ -174,7 +144,7 @@ At startup, `McpToolAccess.Validate` stops the server if a tool has no `[ToolAcc
 
 The attribute repeats the permission of the handler. If the two differ, the result fails closed: the list hides the tool from a caller who could use it, or the handler denies the call.
 
-`McpDomainErrors` maps a domain exception to a tool error with `isError` set and the same fields as an HTTP problem. The `code` has the name of the gRPC status, for example `already_exists` for a conflict and `aborted` for a stale version or a concurrent change. A missing required argument gives an `invalid_argument` tool error with the message "The name field is required.", the same as a missing body field. An argument of the wrong JSON type gives an `invalid_argument` tool error with one message for each such argument, for example "The value 'ten' is not valid for pageSize.", the same as a query value that does not bind. A tool call that is not valid JSON does not get to the tool. The SDK returns 400 with the JSON-RPC error `-32600`.
+`McpDomainErrors` maps a domain exception to a tool error with `isError` set and the same fields as an HTTP problem. The `code` names the kind of error, for example `already_exists` for a conflict and `aborted` for a stale version or a concurrent change. A missing required argument gives an `invalid_argument` tool error with the message "The name field is required.", the same as a missing body field. An argument of the wrong JSON type gives an `invalid_argument` tool error with one message for each such argument, for example "The value 'ten' is not valid for pageSize.", the same as a query value that does not bind. A tool call that is not valid JSON does not get to the tool. The SDK returns 400 with the JSON-RPC error `-32600`.
 
 `McpCallTelemetry.Filter` is the first call filter. It puts the tool name (`gen_ai.tool.name`), the caller tags, and the `error.type` of a failed call on the span of the HTTP request. A call that fails before its feature runs has no feature span, so this span is the only one that names the tool and the caller. The `error.type` is the `code` of a tool error, or the type of the exception that the SDK answers. The name of an unknown tool comes from the caller, so the tag has its first 128 characters, with the control characters removed. A call to an unknown tool gets the JSON-RPC error `-32602` of the SDK. The SDK logs this error at `Error`, but it is a client error, so `McpProtocolErrorLogFilter` drops the log.
 

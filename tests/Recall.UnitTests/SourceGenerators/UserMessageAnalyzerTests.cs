@@ -757,7 +757,7 @@ public class UserMessageAnalyzerTests
 
                     public static ValidationFailure Failure() => new("status", "Use CheckedIn.");
 
-                    public static Grpc.Core.Status Missing(string orderId) => new(Grpc.Core.StatusCode.NotFound, $"Order {orderId} was not found.");
+                    public static ValidationFailure Missing(string orderId) => new("order", $"Order {orderId} was not found.");
 
                     public static string Placeholder() => throw new ValidationException("status", "Status CheckedIn} is closed.");
                 }

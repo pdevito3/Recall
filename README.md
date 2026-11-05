@@ -79,7 +79,6 @@ A normal run uses the same ports at each start. All of them are in the block 247
 | 24710 | `webfrontend` (the app URL) | http |
 | 24713 | `server` | https |
 | 24714 | `server` | http |
-| 24715 | `server` | grpc |
 | 24730 | `keycloak` | http |
 | 24731 | `keycloak-postgres` | tcp |
 | 24740 | `zerofactor` | http |
@@ -142,7 +141,7 @@ The repository has these guides for Claude Code:
 
 - **`AGENTS.md`** - Main agent guide with the architecture and an index of `docs/`
 - **`docs/`** - Guides for the backend, telemetry, multi-tenancy, auth, and frontend
-- **`docs/backend/`** - Backend pattern rules: entities, features, DTOs, endpoints (HTTP, gRPC, MCP), domain events, and EF configurations
+- **`docs/backend/`** - Backend pattern rules: entities, features, DTOs, endpoints (HTTP, MCP), domain events, and EF configurations
 - **`docs/frontend/`** - Frontend pattern rules: server state, client state, and code style
 - **`.claude/skills/`** - Automated scaffolding skills
 

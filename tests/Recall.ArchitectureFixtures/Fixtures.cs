@@ -23,7 +23,6 @@ namespace Recall.ArchitectureFixtures.Databases
 namespace Recall.ArchitectureFixtures.Core
 {
     using Adapters;
-    using Contract.Grpc.V1;
     using Recall.Server.Domain.Users.Features;
     using Recall.Server.Resources;
     using MediatR;
@@ -90,12 +89,6 @@ namespace Recall.ArchitectureFixtures.Core
     public static class CoreWithAdapter
     {
         public static Type Get() => typeof(CleanEndpoint);
-    }
-
-    // Rule 2: core uses the gRPC contract
-    public static class CoreWithGrpcContract
-    {
-        public static GeneratedMessage Create() => new();
     }
 
     // Rule 2: core uses the shared plumbing
@@ -189,40 +182,10 @@ namespace Recall.ArchitectureFixtures.Resources.Entrypoints
     }
 }
 
-namespace Recall.ArchitectureFixtures.Contract.Grpc.V1
-{
-    using System.CodeDom.Compiler;
-    using Databases;
-    using global::Grpc.Core;
-
-    // The contract: protoc marks each member with GeneratedCode. The contract can use the transport libraries.
-    public sealed class GeneratedMessage
-    {
-        [GeneratedCode("protoc", null)]
-        public global::Google.Protobuf.ByteString Data { get; set; } = global::Google.Protobuf.ByteString.Empty;
-    }
-
-    [BindServiceMethod(typeof(GeneratedServiceBase), "BindService")]
-    public abstract class GeneratedServiceBase
-    {
-        [GeneratedCode("grpc_csharp_plugin", null)]
-        public virtual Task<GeneratedMessage> Get(GeneratedMessage request, ServerCallContext context)
-            => Task.FromResult(request);
-    }
-
-    // Rule 3: a hand-written type in a gRPC namespace is an adapter, and it uses the database
-    public static class HandWrittenGrpcMappings
-    {
-        public static GeneratedMessage ToMessage(FixtureDb db) => new() { Data = global::Google.Protobuf.ByteString.CopyFromUtf8(db.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)) };
-    }
-}
-
 namespace Recall.ArchitectureFixtures.Adapters
 {
-    using Contract.Grpc.V1;
     using Databases;
     using Recall.Server.Resources.Entrypoints.Http;
-    using global::Grpc.Core;
     using Microsoft.AspNetCore.Builder;
     using Microsoft.AspNetCore.Routing;
     using ModelContextProtocol.Server;
@@ -251,12 +214,5 @@ namespace Recall.ArchitectureFixtures.Adapters
     {
         [McpServerTool(Name = "fixture")]
         public static string Run(Microsoft.EntityFrameworkCore.DbContext db) => db.GetType().Name;
-    }
-
-    // Rule 3: a gRPC service uses the database
-    public sealed class GrpcServiceWithDatabase : GeneratedServiceBase
-    {
-        public override Task<GeneratedMessage> Get(GeneratedMessage request, ServerCallContext context)
-            => Task.FromResult(HandWrittenGrpcMappings.ToMessage(new FixtureDb()));
     }
 }

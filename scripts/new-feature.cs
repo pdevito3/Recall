@@ -3,7 +3,7 @@
 // tests. See .agents/skills/backend-feature/SKILL.md.
 //
 //   dotnet run scripts/new-feature.cs -- SupplyItem --fields "Name:text, Notes:text?, Quantity:int, IsActive:bool"
-//   dotnet run scripts/new-feature.cs -- SupplyItem --fields "..." --entrypoints http,grpc,mcp --plural SupplyItems --prefix sup
+//   dotnet run scripts/new-feature.cs -- SupplyItem --fields "..." --entrypoints http,mcp --plural SupplyItems --prefix sup
 //   dotnet run scripts/new-feature.cs -- Delivery --fields "Title:text, SupplyItem:ref, DueOn:zoned-date"
 //
 // A second run with the same input changes nothing. A run that would change a file that exists stops before it writes.
@@ -22,7 +22,7 @@ try
     var root = Path.GetFullPath(Path.Combine((string)AppContext.GetData("EntryPointFileDirectoryPath")!, ".."));
     var repo = Repo.Load(root);
     var messagesOnly = args.Contains("--messages");
-    var spec = Spec.Parse([.. args.Where(a => a != "--messages")], repo.App, repo.ProtoPackage);
+    var spec = Spec.Parse([.. args.Where(a => a != "--messages")], repo.App);
     if (messagesOnly)
     {
         foreach (var line in Texts.All(spec))
@@ -75,7 +75,7 @@ internal sealed class FeatureException(string message) : Exception(message);
 internal enum Kind { Text, Int, Bool, Date, Instant, ZonedDate, TimeZone, ParentId }
 
 [Flags]
-internal enum Entrypoints { None = 0, Http = 1, Grpc = 2, Mcp = 4 }
+internal enum Entrypoints { None = 0, Http = 1, Mcp = 2 }
 
 internal sealed record Field(string Name, Kind Kind, bool Optional, bool Sensitive)
 {
@@ -107,7 +107,7 @@ internal sealed record Parent(string Entity, string Namespace, string Plural, st
     public string Snake => Naming.Snake(Entity);
 }
 
-internal sealed record Names(string App, string Entity, string Plural, string Prefix, string ProtoPackage)
+internal sealed record Names(string App, string Entity, string Plural, string Prefix)
 {
     public string Server => $"{App}.Server";
     public string Ns => $"{Server}.Domain.{Plural}";
@@ -123,8 +123,6 @@ internal sealed record Names(string App, string Entity, string Plural, string Pr
     public string PermissionWords => $"manage {WordsPlural}";
     public string Folder => $"{Server}/Domain/{Plural}";
     public string EntityFile => $"{Folder}/{Entity}.cs";
-    public string GrpcPackage => $"{ProtoPackage}.{SnakePlural}.v1";
-    public string GrpcService => $"{Plural}Service";
     public string Migration => $"Add{Plural}";
 }
 
@@ -156,13 +154,13 @@ internal sealed record Spec(Names Names, IReadOnlyList<Field> Fields, Entrypoint
                        Carrier:ref is the property CarrierId: the ID of a Carrier of the same tenant. An entity has
                        at most one ref, and the add sets it.
                        Example: "Name:text:public, Carrier:ref, Quantity:int, IsActive:bool, DueOn:zoned-date"
-        --entrypoints  A list of http, grpc, and mcp, or none. The default is http.
+        --entrypoints  A list of http and mcp, or none. The default is http.
         --plural       The plural of the entity. The default adds s, es, or ies.
         --prefix       The prefix of the ID: 1 to 17 lower-case letters. The default is the first 3 letters.
         --messages     Print each text of the feature that a person reads, and change no file.
         """;
 
-    public static Spec Parse(string[] args, string app, string protoPackage)
+    public static Spec Parse(string[] args, string app)
     {
         if (args.Length == 0 || args.Contains("--help") || args.Contains("-h"))
             throw new FeatureException(Usage);
@@ -199,11 +197,8 @@ internal sealed record Spec(Names Names, IReadOnlyList<Field> Fields, Entrypoint
         if (parsed.Any(f => f.Kind == Kind.ParentId && f.Name == $"{entity}Id"))
             throw new FeatureException($"An entity cannot refer to itself. Remove {entity}:ref.");
         var points = ParseEntrypoints(entrypoints ?? "http");
-        if (points.HasFlag(Entrypoints.Grpc) && parsed.FirstOrDefault(f => f.Kind is Kind.Date or Kind.ZonedDate) is { } date)
-            throw new FeatureException(
-                $"The property {date.Name} is a date, and protobuf has no date type. Use instant, or leave out grpc.");
 
-        return new Spec(new Names(app, entity, plural, prefix, protoPackage), parsed, points);
+        return new Spec(new Names(app, entity, plural, prefix), parsed, points);
     }
 
     public Spec CheckedIn(Repo repo)
@@ -307,9 +302,8 @@ internal sealed record Spec(Names Names, IReadOnlyList<Field> Fields, Entrypoint
             result |= part switch
             {
                 "http" => Entrypoints.Http,
-                "grpc" => Entrypoints.Grpc,
                 "mcp" => Entrypoints.Mcp,
-                _ => throw new FeatureException($"The entrypoint '{part}' is not known. Use http, grpc, mcp, or none."),
+                _ => throw new FeatureException($"The entrypoint '{part}' is not known. Use http, mcp, or none."),
             };
         }
         return result;
@@ -419,19 +413,6 @@ internal sealed record Plan(IReadOnlyList<FileWrite> Files, IReadOnlyList<Insert
             Add($"{features}/Update{n.Entity}/Update{n.Entity}.Mcp.cs", Templates.UpdateMcp(spec));
         }
 
-        if (spec.Has(Entrypoints.Grpc))
-        {
-            var grpc = $"{server}/Grpc/v1";
-            Add($"{grpc}/{n.SnakePlural}.proto", Templates.Proto(spec));
-            Add($"{grpc}/{n.Plural}GrpcService.cs", Templates.GrpcService(spec));
-            Add($"{grpc}/{n.Entity}GrpcMappings.cs", Templates.GrpcMappings(spec));
-            Add($"{features}/Add{n.Entity}/Add{n.Entity}.Grpc.cs", Templates.AddGrpc(spec));
-            Add($"{features}/Get{n.Entity}/Get{n.Entity}.Grpc.cs", Templates.GetGrpc(spec));
-            Add($"{features}/Get{n.Entity}List/Get{n.Entity}List.Grpc.cs", Templates.ListGrpc(spec));
-            Add($"{features}/Update{n.Entity}/Update{n.Entity}.Grpc.cs", Templates.UpdateGrpc(spec));
-            Add($"{features}/Delete{n.Entity}/Delete{n.Entity}.Grpc.cs", Templates.DeleteGrpc(spec));
-        }
-
         var helpers = $"tests/{n.App}.SharedTestHelpers";
         Add($"{helpers}/EntityGraphs/{n.Entity}Input.cs", Templates.GraphInput(spec));
         Add($"{helpers}/EntityGraphs/{n.Entity}Blueprints.cs", Templates.Blueprint(spec));
@@ -448,8 +429,6 @@ internal sealed record Plan(IReadOnlyList<FileWrite> Files, IReadOnlyList<Insert
             Add($"{functional}/{n.Entity}HttpTests.cs", Templates.HttpTests(spec));
         if (spec.Has(Entrypoints.Mcp))
             Add($"{functional}/{n.Entity}McpToolTests.cs", Templates.McpTests(spec));
-        if (spec.Has(Entrypoints.Grpc))
-            Add($"{functional}/{n.Entity}GrpcTests.cs", Templates.GrpcTests(spec));
 
         return new Plan(files, InsertionsFor(spec, repo));
     }
@@ -500,11 +479,6 @@ internal sealed record Plan(IReadOnlyList<FileWrite> Files, IReadOnlyList<Insert
             open.Add($"[\"Get{n.Entity}\"] = new(\"Each member reads the {n.WordsPlural} of the own tenant. The tenant filter hides each other tenant.\"),");
             open.Add($"[\"Get{n.Entity}List\"] = new(\"Each member lists the {n.WordsPlural} of the own tenant. The tenant filter hides each other tenant.\"),");
         }
-        if (spec.Has(Entrypoints.Grpc))
-        {
-            open.Add($"[\"/{n.GrpcPackage}.{n.GrpcService}/Get{n.Entity}\"] = new(\"The gRPC method of Get{n.Entity}.\"),");
-            open.Add($"[\"/{n.GrpcPackage}.{n.GrpcService}/List{n.Plural}\"] = new(\"The gRPC method of Get{n.Entity}List.\"),");
-        }
         if (spec.Has(Entrypoints.Mcp))
         {
             list.Add(new($"tests/{n.App}.FunctionalTests/FunctionalTests/Tenants/TenantMcpToolTests.cs", "mcp-tools",
@@ -514,34 +488,22 @@ internal sealed record Plan(IReadOnlyList<FileWrite> Files, IReadOnlyList<Insert
         }
         list.AddRange(open.Select(line => new Insertion(sweep, "open-to-each-member", line[..line.IndexOf('=')], [line])));
 
-        if (spec.Has(Entrypoints.Grpc))
-        {
-            var registration = $"{n.Server}/Resources/Entrypoints/EntrypointRegistration.cs";
-            list.Add(new(registration, "grpc-usings", $"using Domain.{n.Plural}.Grpc.V1;", [$"using Domain.{n.Plural}.Grpc.V1;"]));
-            list.Add(new(registration, "grpc-services", $"MapGrpcService<{n.Plural}GrpcService>",
-                [$"app.MapGrpcService<{n.Plural}GrpcService>();"]));
-        }
         return list;
     }
 }
 
 internal sealed record ApplyResult(IReadOnlyList<string> Written);
 
-internal sealed partial class Repo(string root, string app, string protoPackage)
+internal sealed partial class Repo(string root, string app)
 {
     public string App => app;
-    public string ProtoPackage => protoPackage;
 
     public static Repo Load(string root)
     {
         var app = Directory.GetFiles(root, "*.slnx") is [var solution]
             ? Path.GetFileNameWithoutExtension(solution)
             : throw new FeatureException($"The folder {root} must hold exactly one .slnx file.");
-        var tenants = Path.Combine(root, $"{app}.Server", "Domain", "Tenants", "Grpc", "v1", "tenants.proto");
-        var package = File.Exists(tenants) && TenantsPackage().Match(File.ReadAllText(tenants)) is { Success: true } match
-            ? match.Groups[1].Value
-            : app.ToLowerInvariant();
-        return new Repo(root, app, package);
+        return new Repo(root, app);
     }
 
     /// <summary>The file that declares the prefix, other than <paramref name="ownFile"/>, or null.</summary>
@@ -789,9 +751,6 @@ internal sealed partial class Repo(string root, string app, string protoPackage)
 
     [GeneratedRegex(@"^namespace\s+([\w.]+)\s*;", RegexOptions.Multiline)]
     private static partial Regex FileNamespace();
-
-    [GeneratedRegex(@"^package\s+([a-z0-9_]+)\.tenants\.v1\s*;", RegexOptions.Multiline)]
-    private static partial Regex TenantsPackage();
 
     [GeneratedRegex(@"PermissionEnum\s+(\w+)\s*=\s*\r?\n?\s*new\(Names\.\w+,\s*(\d+)\s*,")]
     private static partial Regex PermissionValue();
@@ -1783,290 +1742,6 @@ internal static class Templates
             """;
     }
 
-    private static string ProtoType(Field f) => f.Kind switch
-    {
-        Kind.Text => f.Optional ? "optional string" : "string",
-        Kind.ParentId => "string",
-        Kind.Int => "int32",
-        Kind.Bool => "bool",
-        Kind.Instant => "google.protobuf.Timestamp",
-        _ => throw new FeatureException("Protobuf has no date type."),
-    };
-
-    private static IEnumerable<string> ProtoFields(IEnumerable<Field> fields, int first)
-        => fields.Select((f, i) => $"{ProtoType(f)} {f.Snake} = {first + i};");
-
-    public static string Proto(Spec s)
-    {
-        var n = s.Names;
-        var import = s.Fields.Any(f => f.Kind == Kind.Instant) ? "\nimport \"google/protobuf/timestamp.proto\";\n" : "";
-        return $$"""
-            syntax = "proto3";
-
-            // The package and the C# namespace carry the version, the same as the /api/v1 segment of the HTTP API.
-            package {{n.GrpcPackage}};
-            {{import}}
-            option csharp_namespace = "{{n.Ns}}.Grpc.V1";
-
-            // The {{n.WordsPlural}} of the tenant of the caller. Each call needs a JWT bearer token in the authorization metadata,
-            // and it sees the same tenant scope as the HTTP API.
-            service {{n.GrpcService}} {
-              // Gets one {{n.Words}}. NOT_FOUND when the caller cannot see {{n.A}} {{n.Words}} with the ID.
-              rpc Get{{n.Entity}}(Get{{n.Entity}}Request) returns (Get{{n.Entity}}Response);
-
-              // Gets one page of {{n.WordsPlural}}. INVALID_ARGUMENT for a bad filter, sort order, or page.
-              rpc List{{n.Plural}}(List{{n.Plural}}Request) returns (List{{n.Plural}}Response);
-
-              // Adds {{n.A}} {{n.Words}}. PERMISSION_DENIED without the {{n.PermissionName}} permission.
-              rpc Add{{n.Entity}}(Add{{n.Entity}}Request) returns (Add{{n.Entity}}Response);
-
-              // Updates {{n.A}} {{n.Words}}. ABORTED when the version is stale.
-              rpc Update{{n.Entity}}(Update{{n.Entity}}Request) returns (Update{{n.Entity}}Response);
-
-              // Deletes {{n.A}} {{n.Words}}. NOT_FOUND when the caller cannot see {{n.A}} {{n.Words}} with the ID.
-              rpc Delete{{n.Entity}}(Delete{{n.Entity}}Request) returns (Delete{{n.Entity}}Response);
-            }
-
-            message {{n.Entity}} {
-              string id = 1;
-            {{Block(ProtoFields(s.Fields, 2), 2)}}
-              uint32 version = {{s.Fields.Count + 2}};
-            }
-
-            message Get{{n.Entity}}Request {
-              string id = 1;
-            }
-
-            message Get{{n.Entity}}Response {
-              {{n.Entity}} {{n.Snake}} = 1;
-            }
-
-            // Each field is optional. An unset field uses the default of the HTTP API.
-            message List{{n.Plural}}Request {
-              optional int32 page_number = 1;
-              optional int32 page_size = 2;
-              optional string filters = 3;
-              optional string sort_order = 4;
-            }
-
-            message List{{n.Plural}}Response {
-              repeated {{n.Entity}} {{n.SnakePlural}} = 1;
-              Pagination pagination = 2;
-            }
-
-            // The same data as the X-Pagination header of the HTTP API.
-            message Pagination {
-              int32 page_number = 1;
-              int32 page_size = 2;
-              int32 current_page_size = 3;
-              int32 total_count = 4;
-              int32 total_pages = 5;
-              bool has_previous = 6;
-              bool has_next = 7;
-            }
-
-            message Add{{n.Entity}}Request {
-            {{Block(ProtoFields(s.Fields, 1), 2)}}
-            }
-
-            message Add{{n.Entity}}Response {
-              {{n.Entity}} {{n.Snake}} = 1;
-            }
-
-            message Update{{n.Entity}}Request {
-              string id = 1;
-            {{Block(ProtoFields(s.Updatable, 2), 2)}}
-              uint32 version = {{s.Updatable.Count() + 2}};
-            }
-
-            message Update{{n.Entity}}Response {
-              {{n.Entity}} {{n.Snake}} = 1;
-            }
-
-            message Delete{{n.Entity}}Request {
-              string id = 1;
-            }
-
-            message Delete{{n.Entity}}Response {}
-            """;
-    }
-
-    public static string GrpcService(Spec s) => $$"""
-        namespace {{s.Names.Ns}}.Grpc.V1;
-
-        using MediatR;
-        using Microsoft.AspNetCore.Authorization;
-
-        /// <summary>
-        /// The gRPC v1 adapter of the {{s.Names.Words}} features. Each RPC is a partial method in the folder of its feature.
-        /// <c>DomainErrorInterceptor</c> maps the domain exceptions to gRPC status codes.
-        /// </summary>
-        [Authorize]
-        public sealed partial class {{s.Names.Plural}}GrpcService(IMediator mediator) : {{s.Names.GrpcService}}.{{s.Names.GrpcService}}Base;
-        """;
-
-    private static bool HasInstant(Spec s) => s.Fields.Any(f => f.Kind == Kind.Instant);
-
-    public static string GrpcMappings(Spec s)
-    {
-        var n = s.Names;
-        var values = s.Fields.Where(f => !f.Optional).Select(f => f.Kind == Kind.Instant
-            ? $"{f.Name} = Timestamp.FromDateTimeOffset(dto.{f.Name}),"
-            : $"{f.Name} = dto.{f.Name},");
-        var optional = s.Fields.Where(f => f.Optional).Select(f => $"if (dto.{f.Name} is not null)\n    message.{f.Name} = dto.{f.Name};");
-        var usings = HasInstant(s) ? "using Dtos;\nusing global::Google.Protobuf.WellKnownTypes;\nusing Resources;" : "using Dtos;\nusing Resources;";
-        return $$"""
-            namespace {{n.Ns}}.Grpc.V1;
-
-            {{usings}}
-
-            /// <summary>Maps the {{n.Words}} DTOs to the gRPC v1 messages. More than one RPC uses each map.</summary>
-            public static class {{n.Entity}}GrpcMappings
-            {
-                public static {{n.Entity}} ToMessage(this {{n.Entity}}Dto dto)
-                {
-                    var message = new {{n.Entity}}
-                    {
-                        Id = dto.Id,
-            {{Block(values, 12)}}
-                        Version = dto.Version,
-                    };
-            {{Block(optional, 8)}}
-                    return message;
-                }
-
-                public static Pagination ToPaginationMessage(this IPagedList pagedList) => new()
-                {
-                    PageNumber = pagedList.PageNumber,
-                    PageSize = pagedList.PageSize,
-                    CurrentPageSize = pagedList.CurrentPageSize,
-                    TotalCount = pagedList.TotalCount,
-                    TotalPages = pagedList.TotalPages,
-                    HasPrevious = pagedList.HasPrevious,
-                    HasNext = pagedList.HasNext,
-                };
-            }
-            """.Replace("\n\n        return message;", "\n        return message;");
-    }
-
-    private static IEnumerable<string> FromRequest(IEnumerable<Field> fields) => fields.Select(f => f.Kind switch
-    {
-        Kind.Text when f.Optional => $"{f.Name} = request.Has{f.Name} ? request.{f.Name} : null,",
-        Kind.Instant => $"{f.Name} = request.{f.Name}?.ToDateTimeOffset() ?? default,",
-        _ => $"{f.Name} = request.{f.Name},",
-    });
-
-    private static string GrpcHeader(Spec s, bool dtos) => $$"""
-        namespace {{s.Names.Ns}}.Grpc.V1;
-
-        // "Grpc" alone would bind to the Grpc segment of this namespace, so the gRPC library needs the global alias.
-        using global::Grpc.Core;
-        {{(dtos ? "using Dtos;\n" : "")}}using Features;
-        """;
-
-    public static string AddGrpc(Spec s)
-    {
-        var n = s.Names;
-        return $$"""
-            {{GrpcHeader(s, dtos: true)}}
-
-            public sealed partial class {{n.Plural}}GrpcService
-            {
-                public override async Task<Add{{n.Entity}}Response> Add{{n.Entity}}(Add{{n.Entity}}Request request, ServerCallContext context)
-                {
-                    var dto = new {{n.Entity}}ForCreationDto
-                    {
-            {{Block(FromRequest(s.Fields), 12)}}
-                    };
-                    var result = await mediator.Send(new Add{{n.Entity}}.Command(dto), context.CancellationToken);
-                    return new Add{{n.Entity}}Response { {{n.Entity}} = result.ToMessage() };
-                }
-            }
-            """;
-    }
-
-    public static string GetGrpc(Spec s)
-    {
-        var n = s.Names;
-        return $$"""
-            {{GrpcHeader(s, dtos: false)}}
-
-            public sealed partial class {{n.Plural}}GrpcService
-            {
-                public override async Task<Get{{n.Entity}}Response> Get{{n.Entity}}(Get{{n.Entity}}Request request, ServerCallContext context)
-                {
-                    var result = await mediator.Send(new Get{{n.Entity}}.Query(request.Id), context.CancellationToken);
-                    return new Get{{n.Entity}}Response { {{n.Entity}} = result.ToMessage() };
-                }
-            }
-            """;
-    }
-
-    public static string ListGrpc(Spec s)
-    {
-        var n = s.Names;
-        return $$"""
-            {{GrpcHeader(s, dtos: true)}}
-
-            public sealed partial class {{n.Plural}}GrpcService
-            {
-                public override async Task<List{{n.Plural}}Response> List{{n.Plural}}(List{{n.Plural}}Request request, ServerCallContext context)
-                {
-                    var parameters = {{n.Entity}}ParametersDto.From(
-                        request.HasPageNumber ? request.PageNumber : null,
-                        request.HasPageSize ? request.PageSize : null,
-                        request.HasFilters ? request.Filters : null,
-                        request.HasSortOrder ? request.SortOrder : null);
-
-                    var result = await mediator.Send(new Get{{n.Entity}}List.Query(parameters), context.CancellationToken);
-
-                    var response = new List{{n.Plural}}Response { Pagination = result.ToPaginationMessage() };
-                    response.{{n.Plural}}.AddRange(result.Select(x => x.ToMessage()));
-                    return response;
-                }
-            }
-            """;
-    }
-
-    public static string UpdateGrpc(Spec s)
-    {
-        var n = s.Names;
-        return $$"""
-            {{GrpcHeader(s, dtos: true)}}
-
-            public sealed partial class {{n.Plural}}GrpcService
-            {
-                public override async Task<Update{{n.Entity}}Response> Update{{n.Entity}}(Update{{n.Entity}}Request request, ServerCallContext context)
-                {
-                    var dto = new {{n.Entity}}ForUpdateDto
-                    {
-            {{Block(FromRequest(s.Updatable), 12)}}
-                        Version = request.Version,
-                    };
-                    var result = await mediator.Send(new Update{{n.Entity}}.Command(request.Id, dto), context.CancellationToken);
-                    return new Update{{n.Entity}}Response { {{n.Entity}} = result.ToMessage() };
-                }
-            }
-            """;
-    }
-
-    public static string DeleteGrpc(Spec s)
-    {
-        var n = s.Names;
-        return $$"""
-            {{GrpcHeader(s, dtos: false)}}
-
-            public sealed partial class {{n.Plural}}GrpcService
-            {
-                public override async Task<Delete{{n.Entity}}Response> Delete{{n.Entity}}(Delete{{n.Entity}}Request request, ServerCallContext context)
-                {
-                    await mediator.Send(new Delete{{n.Entity}}.Command(request.Id), context.CancellationToken);
-                    return new Delete{{n.Entity}}Response();
-                }
-            }
-            """;
-    }
-
     private static string InputType(Field f) => f.Kind switch
     {
         Kind.Text => "string?",
@@ -2808,22 +2483,22 @@ internal static class Templates
             """;
     }
 
-    private static string SampleValue(Spec s, Field f, bool forMcp, string entity) => f.Kind switch
+    private static string SampleValue(Spec s, Field f, string entity) => f.Kind switch
     {
         Kind.Text => $"\"Sample {f.Words}\"",
         Kind.Int => $"{entity}.{f.Name}Minimum",
         Kind.Bool => "true",
-        Kind.Date or Kind.ZonedDate => forMcp ? "\"2026-01-02\"" : "new DateOnly(2026, 1, 2)",
+        Kind.Date or Kind.ZonedDate => "\"2026-01-02\"",
         Kind.TimeZone => "\"America/Chicago\"",
         Kind.ParentId => f.Camel,
-        Kind.Instant => forMcp ? "\"2027-01-15T08:00:00Z\"" : "Timestamp.FromDateTimeOffset(DateTimeOffset.FromUnixTimeSeconds(1_800_000_000))",
+        Kind.Instant => "\"2027-01-15T08:00:00Z\"",
     };
 
     public static string McpTests(Spec s)
     {
         var n = s.Names;
         var (e, v, t) = (n.Entity, n.Var, s.Title.Name);
-        var arguments = s.Fields.Select(f => $"[\"{f.Json}\"] = {SampleValue(s, f, forMcp: true, e)},");
+        var arguments = s.Fields.Select(f => $"[\"{f.Json}\"] = {SampleValue(s, f, e)},");
         var (keep, parentId, parameter) = s.Ref is { } r ? ($"var {v} = ", $"{v}.{r.Name}", $"string {r.Camel}") : ("", "", "");
         var removes = s.Fields.Where(f => f.CreateOnly).Select(f => $"\nupdate.Remove(\"{f.Json}\");");
         return $$"""
@@ -2916,122 +2591,6 @@ internal static class Templates
             {{Block([FunctionalArrange(s)], 4)}}
 
                 private void SignInAs(string identifier) => FactoryClient.SignInAsAppUser(identifier);
-            }
-            """;
-    }
-
-    public static string GrpcTests(Spec s)
-    {
-        var n = s.Names;
-        var (e, v, t) = (n.Entity, n.Var, s.Title.Name);
-        var domain = $"Domain{e}";
-        var values = s.Fields.Select(f => $"{f.Name} = {SampleValue(s, f, forMcp: false, domain)},");
-        var updated = s.Updatable.ToList();
-        var (returns, keep, parentId, parameter, addParent, returnParent) = s.Parent is { } p && s.Ref is { } r
-            ? ("Task<string>", "var parentId = ", "parentId", $"string {r.Camel}", $"\n            .Under(tenant).Add{p.Entity}(out var {p.Var})",
-                $"\n        return {p.Var}.Id;")
-            : ("Task", "", "", "", "", "");
-        var usings = new List<string>
-        {
-            $"{n.Server}.Domain.{n.Plural}.Grpc.V1",
-            $"{n.App}.SharedTestHelpers.EntityGraphs",
-        };
-        if (s.Parent is { } graph && graph.BlueprintNamespace != usings[^1])
-            usings.Add(graph.BlueprintNamespace);
-        if (HasInstant(s))
-            usings.Add("global::Google.Protobuf.WellKnownTypes");
-        usings.AddRange(["global::Grpc.Core", "Shouldly", "TestUtilities"]);
-        var usesDomain = s.Fields.Any(f => f.Kind == Kind.Int);
-        return $$"""
-            namespace {{n.App}}.FunctionalTests.FunctionalTests.{{n.Plural}};
-
-            {{string.Join("\n", usings.Select(u => $"using {u};"))}}{{(usesDomain ? $"\nusing {domain} = {n.Ns}.{e};" : "")}}
-
-            public class {{e}}GrpcTests : TestBase
-            {
-                [Test]
-                public async Task an_admin_adds_reads_lists_updates_and_deletes_with_grpc()
-                {
-                    // Arrange
-                    {{keep}}await Add{{e}}AndSignInAsync("Admin");
-                    using var channel = CreateGrpcChannel();
-                    var client = new {{n.GrpcService}}.{{n.GrpcService}}Client(channel);
-                    var added = (await client.Add{{e}}Async(AddRequest({{parentId}}))).{{e}};
-
-                    // Act
-                    var read = await client.Get{{e}}Async(new Get{{e}}Request { Id = added.Id });
-                    var list = await client.List{{n.Plural}}Async(new List{{n.Plural}}Request { Filters = $"id == \"{added.Id}\"" });
-                    var updated = await client.Update{{e}}Async(UpdateRequest(added, "Changed"));
-                    await client.Delete{{e}}Async(new Delete{{e}}Request { Id = added.Id });
-
-                    // Assert
-                    read.{{e}}.ShouldBe(added);
-                    list.{{n.Plural}}.ShouldContain(added);
-                    updated.{{e}}.{{t}}.ShouldBe("Changed");
-                    var exception = await Should.ThrowAsync<RpcException>(
-                        async () => await client.Get{{e}}Async(new Get{{e}}Request { Id = added.Id }));
-                    exception.StatusCode.ShouldBe(StatusCode.NotFound);
-                }
-
-                [Test]
-                public async Task a_member_cannot_add_with_grpc()
-                {
-                    // Arrange
-                    {{keep}}await Add{{e}}AndSignInAsync("User");
-                    using var channel = CreateGrpcChannel();
-                    var client = new {{n.GrpcService}}.{{n.GrpcService}}Client(channel);
-
-                    // Act
-                    var exception = await Should.ThrowAsync<RpcException>(async () => await client.Add{{e}}Async(AddRequest({{parentId}})));
-
-                    // Assert
-                    exception.StatusCode.ShouldBe(StatusCode.PermissionDenied);
-                }
-
-                [Test]
-                public async Task an_update_with_an_old_version_is_aborted()
-                {
-                    // Arrange
-                    {{keep}}await Add{{e}}AndSignInAsync("Admin");
-                    using var channel = CreateGrpcChannel();
-                    var client = new {{n.GrpcService}}.{{n.GrpcService}}Client(channel);
-                    var added = (await client.Add{{e}}Async(AddRequest({{parentId}}))).{{e}};
-                    await client.Update{{e}}Async(UpdateRequest(added, "First"));
-
-                    // Act
-                    var exception = await Should.ThrowAsync<RpcException>(
-                        async () => await client.Update{{e}}Async(UpdateRequest(added, "Second")));
-
-                    // Assert
-                    exception.StatusCode.ShouldBe(StatusCode.Aborted);
-                }
-
-                private static Add{{e}}Request AddRequest({{parameter}}) => new()
-                {
-            {{Block(values, 8)}}
-                };
-
-                private static Update{{e}}Request UpdateRequest({{e}} {{v}}, string {{s.Title.Camel}})
-                {
-                    var request = new Update{{e}}Request
-                    {
-                        Id = {{v}}.Id,
-            {{Block(updated.Where(f => !f.Optional).Select(f => $"{f.Name} = {v}.{f.Name},"), 12)}}
-                        Version = {{v}}.Version,
-                    };
-            {{Block(updated.Where(f => f.Optional).Select(f => $"if ({v}.Has{f.Name})\n    request.{f.Name} = {v}.{f.Name};"), 8)}}
-                    request.{{t}} = {{s.Title.Camel}};
-                    return request;
-                }
-
-                private async {{returns}} Add{{e}}AndSignInAsync(string role)
-                {
-                    await StartGraph()
-                        .AddTenant(out {{(s.Parent is null ? "_" : "var tenant")}})
-                        .AddUser(out var user, u => u.Role = role){{addParent}}
-                        .BuildAsync();
-                    FactoryClient.SignInAsAppUser(user.Identifier);{{returnParent}}
-                }
             }
             """;
     }

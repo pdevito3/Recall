@@ -39,7 +39,7 @@ Read the doc for an area before you change code in that area.
 | Doc | Content |
 |-----|---------|
 | [docs/backend.md](docs/backend.md) | Domain structure, new features, DI, API versioning, error responses, database, file store, tests |
-| [docs/backend/](docs/backend/) | Rules for entities, features, DTOs and mappers, endpoints (HTTP, gRPC, MCP), concurrency (a version, a run again, or a lock), domain events, EF configurations, feature telemetry, and the audit log |
+| [docs/backend/](docs/backend/) | Rules for entities, features, DTOs and mappers, endpoints (HTTP, MCP), concurrency (a version, a run again, or a lock), domain events, EF configurations, feature telemetry, and the audit log |
 | [docs/backend/source-generators.md](docs/backend/source-generators.md) | When to use a source generator and when reflection is allowed |
 | [docs/telemetry.md](docs/telemetry.md) | Traces, metrics, logs, `Trace`, `AddEvent`, `Here()`, `TraceRoot`, `TraceContext`, named queries |
 | [docs/messages.md](docs/messages.md) | The text of error messages, alerts, toasts, and labels |
@@ -88,7 +88,7 @@ pnpm test:e2e
 
 ## Rules
 
-- Put each entrypoint (HTTP, gRPC, MCP) in the folder of its feature, not in a separate project. Each entrypoint is optional. Add only the entrypoints that the callers of the feature need. See [docs/backend/endpoints.md](docs/backend/endpoints.md).
+- Put each entrypoint (HTTP, MCP) in the folder of its feature, not in a separate project. Each entrypoint is optional. Add only the entrypoints that the callers of the feature need. See [docs/backend/endpoints.md](docs/backend/endpoints.md).
 - Use pnpm for the frontend. Do not use npm.
 - Do not run Prettier. This repo has no Prettier config, so Prettier rewrites whole files. `.claude/settings.json` refuses the command in a Claude Code session that starts at the repo root. Keep the style of the file that you edit, and run `pnpm lint`.
 - Put all NuGet versions in `Directory.Packages.props`.

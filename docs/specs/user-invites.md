@@ -51,13 +51,13 @@ None. The invite features use `manage_users`, which exists.
 
 ## 5. Endpoints and tools
 
-| Feature | HTTP | gRPC | MCP tool | Permission |
-|---|---|---|---|---|
-| `AddInvite` | `POST /api/v1/invites` | | | `manage_users` |
-| `GetInviteList` | `GET /api/v1/invites` | | | `manage_users` |
-| `RevokeInvite` | `POST /api/v1/invites/{id}/revoke` | | | `manage_users` |
-| `GetInvitePreview` | `POST /api/v1/invites/preview` | | | A signed-in user |
-| `ClaimInvite` | `POST /api/v1/invites/claim` | | | A signed-in user with no user record |
+| Feature | HTTP | MCP tool | Permission |
+|---|---|---|---|
+| `AddInvite` | `POST /api/v1/invites` | | `manage_users` |
+| `GetInviteList` | `GET /api/v1/invites` | | `manage_users` |
+| `RevokeInvite` | `POST /api/v1/invites/{id}/revoke` | | `manage_users` |
+| `GetInvitePreview` | `POST /api/v1/invites/preview` | | A signed-in user |
+| `ClaimInvite` | `POST /api/v1/invites/claim` | | A signed-in user with no user record |
 
 `GetInvitePreview` and `ClaimInvite` take the token in the body, not in the path or the query, so the token is not in a log. The preview gives the tenant name and the role, so the join page can show what the user joins before the claim.
 

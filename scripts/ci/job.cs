@@ -147,21 +147,6 @@ internal sealed class JobCopy(string root)
         return process.ExitCode;
     }
 
-    public void RequireTool(string tool, string argument, string help)
-    {
-        int exitCode;
-        try
-        {
-            exitCode = Capture(tool, argument).ExitCode;
-        }
-        catch (StepFailure)
-        {
-            exitCode = -1;
-        }
-        if (exitCode != 0)
-            throw new StepFailure($"'{tool} {argument}' did not work. {help}");
-    }
-
     public void CommitAll(string message)
     {
         Run("git", "add", "--all");
