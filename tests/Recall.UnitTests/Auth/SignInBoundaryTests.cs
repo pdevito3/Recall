@@ -245,6 +245,70 @@ public class SignInBoundaryTests
         enabled.ShouldBe(kept);
     }
 
+    private static OidcProviderOptions GoodProvider() => new()
+    {
+        Id = "mode",
+        Issuer = "https://idp.test",
+        ClientId = "client",
+        ClientSecret = "value",
+    };
+
+    [Test]
+    public void no_provider_and_a_good_provider_are_valid_settings()
+    {
+        // Arrange
+        var validator = new AuthOptionsValidator();
+
+        // Act
+        var none = validator.Validate(null, new AuthOptions());
+        var one = validator.Validate(null, new AuthOptions { Providers = [GoodProvider()] });
+
+        // Assert
+        none.Succeeded.ShouldBeTrue();
+        one.Succeeded.ShouldBeTrue();
+    }
+
+    [Test]
+    [Arguments("id", "no space", "Auth:Providers:0:Id")]
+    [Arguments("issuer", "not a url", "Auth:Providers:0:Issuer")]
+    [Arguments("issuer", "http://idp.test", "AllowHttp")]
+    [Arguments("clientId", "", "ClientId is missing")]
+    [Arguments("clientSecret", "", "ClientSecret is missing")]
+    [Arguments("ca", "/no/such/file", "CaCertificatePath")]
+    public void a_typo_in_a_provider_names_the_setting(string field, string value, string expected)
+    {
+        // Arrange
+        var provider = GoodProvider();
+        _ = field switch
+        {
+            "id" => provider.Id = value,
+            "issuer" => provider.Issuer = value,
+            "clientId" => provider.ClientId = value,
+            "clientSecret" => provider.ClientSecret = value,
+            _ => provider.CaCertificatePath = value,
+        };
+
+        // Act
+        var result = new AuthOptionsValidator().Validate(null, new AuthOptions { Providers = [provider] });
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+        result.FailureMessage!.ShouldContain(expected);
+    }
+
+    [Test]
+    public void two_providers_with_one_id_name_the_repeat()
+    {
+        // Arrange
+        var options = new AuthOptions { Providers = [GoodProvider(), GoodProvider()] };
+
+        // Act
+        var result = new AuthOptionsValidator().Validate(null, options);
+
+        // Assert
+        result.FailureMessage!.ShouldContain("repeats");
+    }
+
     [Test]
     public void to_string_of_each_sign_in_type_hides_its_secrets()
     {

@@ -22,9 +22,11 @@ public class AuthRefusalTests
         using var browser = NewBrowser();
         var authorize = await browser.StartWebAsync();
         var code = browser.Provider.Approve(authorize, new StubLogin(NewSubject()));
+        var state = Secrets.New();
+        browser.SetCookie($"recall_login_{TokenHash.Of(state).Hex[..8]}", Secrets.New(), "/auth/oidc");
 
         // Act
-        var response = await browser.CallbackAsync(Secrets.New(), code);
+        var response = await browser.CallbackAsync(state, code);
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
