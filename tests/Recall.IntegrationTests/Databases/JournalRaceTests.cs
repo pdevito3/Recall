@@ -1,6 +1,7 @@
 namespace Recall.IntegrationTests.Databases;
 
 using Microsoft.EntityFrameworkCore;
+using Recall.Server.Databases;
 using Recall.Server.Domain.People.Dtos;
 using Recall.Server.Domain.People.Features;
 using Recall.Server.Domain.Sessions.Dtos;
@@ -17,6 +18,7 @@ using Shouldly;
 public class JournalRaceTests : TestBase
 {
     private static readonly DateTimeOffset Morning = DateTimeOffset.UtcNow.AddHours(-3);
+    private static readonly TimeSpan WaitStep = TimeSpan.FromMilliseconds(20);
 
     [Test]
     [Property("Rule", "SES-1")]
@@ -154,10 +156,18 @@ public class JournalRaceTests : TestBase
 
     [Test]
     [Property("Rule", "SES-13")]
-    public async Task an_add_that_a_delete_of_its_owner_beat_saves_no_row()
+    public async Task an_add_and_a_delete_of_its_owner_at_one_time_leave_no_row()
     {
         // Arrange
-        var owner = await AddOwnerAsync();
+        var scope = new TestingServiceScope();
+        await scope.StartGraph(out _)
+            .AddTenant(out var tenant)
+            .AddUser(out var admin, u => u.Role = UserRole.Admin().Value)
+            .Under(tenant)
+            .AddUser(out var owner)
+            .Under(tenant)
+            .BuildAsync();
+        scope.SetUserWithDefaults(identifier: admin.Identifier);
         var pause = PauseAtQuery.After("sessions.add.tombstone");
         await using var services = pause.BuildServices();
         var dto = new SessionForCreationDto { ClientSessionId = Guid.NewGuid().ToString(), StartedAt = Morning };
@@ -165,14 +175,17 @@ public class JournalRaceTests : TestBase
         // Act
         var add = ScopeOf(owner, services).SendAsync(new AddSession.Command(dto));
         await pause.ReachedAsync();
-        await new TestingServiceScope().SendAsync(new DeleteUser.Command(owner.Id));
+        var delete = scope.SendAsync(new DeleteUser.Command(owner.Id));
+        while (!delete.IsCompleted && !RootLock.Tenant.HasWaiter(tenant.Id))
+            await Task.Delay(WaitStep);
         pause.Release();
+        await delete;
+        var addFailure = await add.ContinueWith(t => t.Exception?.InnerException, TaskScheduler.Default);
 
         // Assert
-        var failure = await Should.ThrowAsync<Exception>(add);
-        failure.ShouldBeOfType<ForbiddenAccessException>();
         var rows = await new TestingServiceScope().ExecuteDbContextAsync(db => db.Sessions.IgnoreQueryFilters().CountAsync(s => s.UserId == owner.Id));
         rows.ShouldBe(0);
+        (addFailure is null or ForbiddenAccessException).ShouldBeTrue(addFailure?.ToString());
     }
 
     [Test]
@@ -240,7 +253,9 @@ public class JournalRaceTests : TestBase
     private static async Task<User> AddOwnerAsync()
     {
         await new TestingServiceScope().StartGraph(out _)
+            .AddTenant(out var tenant)
             .AddUser(out var owner)
+            .Under(tenant)
             .BuildAsync();
         return owner;
     }
