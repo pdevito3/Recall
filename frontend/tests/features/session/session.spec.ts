@@ -17,6 +17,14 @@ test.describe('a visitor with no session', () => {
     expect(rendered, 'the app rendered a page before it went to the login').toBe(false)
   })
 
+  test('starts one navigation to the login, because a second one aborts the first', async ({ page, api }) => {
+    api.mock(bffApi.loginOpens())
+
+    const navigations = await sessionPage(page).openAndCountLoginNavigations('/about')
+
+    expect(navigations).toBe(1)
+  })
+
   test('replaces the deep link in the history, so Back from the login opens the page before it', async ({ page, api }) => {
     api.mock(bffApi.loginOpens())
     const session = sessionPage(page)
