@@ -47,7 +47,7 @@ public class FileStoreTests : IDisposable
 
         // Act
         var restarted = NewStore();
-        restarted.Prepare();
+        restarted.Prepare().NotWritableCause.ShouldBeNull();
         await using var stream = restarted.OpenRead(FileKey.Of("file"));
 
         // Assert
@@ -138,11 +138,11 @@ public class FileStoreTests : IDisposable
         Directory.CreateDirectory(Path.Combine(temporaryFolder, "left-by-a-killed-delete", "files"));
 
         // Act
-        var removed = _store.Prepare();
+        var preparation = _store.Prepare();
 
         // Assert
-        removed.ShouldBe(2);
-        Directory.Exists(temporaryFolder).ShouldBeFalse();
+        preparation.RemovedItems.ShouldBe(2);
+        TemporaryItems().ShouldBeEmpty();
         (await ReadAsync("kept")).ShouldBe([1]);
     }
 
@@ -150,11 +150,76 @@ public class FileStoreTests : IDisposable
     public void the_startup_makes_a_root_that_is_missing()
     {
         // Act
-        var removed = _store.Prepare();
+        var preparation = _store.Prepare();
 
         // Assert
-        removed.ShouldBe(0);
+        preparation.ShouldBe(new FileStorePreparation(0, null));
         Directory.Exists(_root.Path).ShouldBeTrue();
+    }
+
+    [Test]
+    public void the_proof_of_a_write_leaves_no_file()
+    {
+        // Act
+        _store.Prepare().NotWritableCause.ShouldBeNull();
+        _store.ProveWritable().ShouldBeNull();
+
+        // Assert
+        Directory.GetFiles(_root.Path).ShouldBeEmpty();
+        TemporaryItems().ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task the_proof_of_a_write_removes_the_proof_file_that_a_killed_process_left()
+    {
+        // Arrange
+        Directory.CreateDirectory(_root.Path);
+        await File.WriteAllBytesAsync(Path.Combine(_root.Path, FileKey.WriteProofFile), [1]);
+
+        // Act
+        var cause = _store.ProveWritable();
+
+        // Assert
+        cause.ShouldBeNull();
+        Directory.GetFiles(_root.Path).ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task a_root_that_refuses_a_new_file_is_not_writable_and_a_later_proof_sees_the_repair()
+    {
+        // Arrange
+        await WriteAsync("kept", [1]);
+        Directory.Delete(Path.Combine(_root.Path, FileKey.TemporaryFolder));
+        FileStorePreparation preparation;
+
+        // Act
+        using (new ReadOnlyFolder(_root.Path))
+            preparation = _store.Prepare();
+
+        // Assert
+        preparation.RemovedItems.ShouldBe(0);
+        preparation.NotWritableCause.ShouldNotBeNull().ShouldContain(_root.Path);
+        (await ReadAsync("kept")).ShouldBe([1]);
+        _store.ProveWritable().ShouldBeNull();
+    }
+
+    [Test]
+    public async Task a_leftover_that_cannot_be_removed_is_not_counted()
+    {
+        // Arrange
+        var temporaryFolder = Path.Combine(_root.Path, FileKey.TemporaryFolder);
+        Directory.CreateDirectory(temporaryFolder);
+        await File.WriteAllBytesAsync(Path.Combine(temporaryFolder, "left-by-a-killed-write"), [1]);
+        FileStorePreparation preparation;
+
+        // Act
+        using (new ReadOnlyFolder(temporaryFolder))
+            preparation = _store.Prepare();
+
+        // Assert
+        preparation.RemovedItems.ShouldBe(0);
+        preparation.NotWritableCause.ShouldNotBeNull();
+        TemporaryItems().Length.ShouldBe(1);
     }
 
     [Test]
@@ -319,9 +384,26 @@ public class FileStoreTests : IDisposable
 
         // Act & Assert
         await Should.ThrowAsync<IOException>(() => WriteAsync("file", [2]));
-        _store.Prepare();
+        var preparation = _store.Prepare();
+        preparation.RemovedItems.ShouldBe(1);
+        preparation.NotWritableCause.ShouldBeNull();
         (await File.ReadAllBytesAsync(outsideFile)).ShouldBe([1]);
-        Directory.Exists(Path.Combine(_root.Path, FileKey.TemporaryFolder)).ShouldBeFalse();
+        new FileInfo(Path.Combine(_root.Path, FileKey.TemporaryFolder)).LinkTarget.ShouldBeNull();
+        TemporaryItems().ShouldBeEmpty();
+    }
+
+    [Test]
+    public void a_temporary_folder_that_is_a_link_with_no_target_is_removed()
+    {
+        // Arrange
+        Directory.CreateDirectory(_root.Path);
+        Directory.CreateSymbolicLink(Path.Combine(_root.Path, FileKey.TemporaryFolder), Path.Combine(_outside, "missing"));
+
+        // Act
+        var preparation = _store.Prepare();
+
+        // Assert
+        preparation.ShouldBe(new FileStorePreparation(1, null));
     }
 
     [Test]

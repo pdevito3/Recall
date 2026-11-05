@@ -48,6 +48,33 @@ public class NetworkMountCheckTests
     }
 
     [Test]
+    public void a_file_root_on_a_network_mount_is_refused_with_a_message_about_the_file_store()
+    {
+        // Arrange
+        MountEntry[] mounts = [new("/data", "ext4", "/dev/sda1"), new("/data/files", "nfs4", "nas:/volume1/files")];
+
+        // Act
+        var refusal = NetworkMountCheck.FileRootRefusal("/data/files", mounts);
+
+        // Assert
+        refusal.ShouldNotBeNull();
+        refusal.ShouldContain("The file store root /data/files is on the mount /data/files (nfs4 from nas:/volume1/files)");
+        refusal.ShouldContain("Move the file store root to a local disk.");
+        refusal.ShouldNotContain("SQLite");
+        NetworkMountCheck.Refusal("/data/recall.db", mounts).ShouldBeNull();
+    }
+
+    [Test]
+    public void a_file_root_on_a_local_mount_passes()
+    {
+        // Arrange
+        MountEntry[] mounts = [new("/", "nfs4", "nas:/root"), new("/data", "ext4", "/dev/sda1")];
+
+        // Act & Assert
+        NetworkMountCheck.FileRootRefusal("/data/files", mounts).ShouldBeNull();
+    }
+
+    [Test]
     [Arguments("ext4")]
     [Arguments("btrfs")]
     [Arguments("xfs")]

@@ -2,39 +2,68 @@ namespace Recall.Server.Resources.Storage;
 
 using System.Runtime.InteropServices;
 using System.Text;
+using Databases.Sqlite;
 using Exceptions;
 using Microsoft.Extensions.Options;
 using Microsoft.Win32.SafeHandles;
+using Serilog;
+
+/// <summary>The result of <see cref="FileStore.Prepare"/>.</summary>
+/// <param name="RemovedItems">The number of temporary items that it removed.</param>
+/// <param name="NotWritableCause">The reason that the root cannot take a write, or null when it can.</param>
+public sealed record FileStorePreparation(int RemovedItems, string? NotWritableCause);
 
 /// <summary>
-/// Keeps files on the local disk, under one root folder. A reader of a key sees a whole file or no file. A write that
-/// returned stays after a power failure.
+/// Keeps files on the local disk, under one root folder, which must be one file system. A reader of a key sees a whole
+/// file or no file only when the rename is atomic, so a mount below the root, where a rename becomes a copy, can show a
+/// part of a file. A write that returned stays after a power failure.
 /// </summary>
 public sealed class FileStore(IOptions<FileStoreOptions> options)
 {
     private const FileShare ReadersDoNotBlockARename = FileShare.ReadWrite | FileShare.Delete;
 
+    private static ILogger Logger => Log.ForContext<FileStore>();
+
     private readonly string _root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(options.Value.Root));
+
+    private bool _lastProofFailed;
 
     private string TemporaryFolder => Path.Combine(_root, FileKey.TemporaryFolder);
 
-    /// <summary>
-    /// Makes the root and removes what an interrupted process left in the temporary folder. Call it only at startup,
-    /// because it also removes the temporary file of a write that runs.
-    /// </summary>
-    /// <returns>The number of temporary items that it removed.</returns>
-    public int Prepare()
-    {
-        var removed = 0;
-        if (Directory.Exists(TemporaryFolder))
-        {
-            removed = Directory.GetFileSystemEntries(TemporaryFolder).Length;
-            Directory.Delete(TemporaryFolder, recursive: true);
-        }
+    /// <summary>The refusal when the root is on a mount that the store must not use, or null.</summary>
+    public string? MountRefusal(IEnumerable<MountEntry> mounts)
+        => NetworkMountCheck.FileRootRefusal(NetworkMountCheck.RealPathOf(_root), mounts);
 
-        Directory.CreateDirectory(_root);
-        FlushFolder(Path.GetDirectoryName(_root)!);
-        return removed;
+    /// <summary>
+    /// Removes what an interrupted process left in the temporary folder, makes the root, and proves that it takes a
+    /// write. Call it only at startup, because it also removes the temporary file of a write that runs. A root that cannot
+    /// take a write does not throw, because the rest of the app can still serve reads.
+    /// </summary>
+    public FileStorePreparation Prepare()
+    {
+        var (removed, removeFailure) = TryRemoveLeftovers();
+        var notWritableCause = ProveWritable();
+        if (removeFailure is not null && notWritableCause is null)
+            Logger.Here().Warning(removeFailure, "Could not remove the temporary items of interrupted file store work in {Root}", _root);
+
+        return new(removed, notWritableCause);
+    }
+
+    /// <summary>
+    /// Writes a temporary file, renames it into the root, and deletes it, as a real write does. It can run at any time.
+    /// It logs one error when the root stops taking writes, and one message when it takes them again.
+    /// </summary>
+    /// <returns>The reason that the root cannot take a write, or null when it can.</returns>
+    public string? ProveWritable()
+    {
+        var cause = WriteProofFile();
+        var lastProofFailed = Interlocked.Exchange(ref _lastProofFailed, cause is not null);
+        if (cause is not null && !lastProofFailed)
+            Logger.Here().Error("The file store root {Root} cannot take a write, so a new file fails until this is corrected. The cause: {Cause}", _root, cause);
+        else if (cause is null && lastProofFailed)
+            Logger.Here().Information("The file store root {Root} takes writes again", _root);
+
+        return cause;
     }
 
     /// <summary>Writes all of the stream to the key, in place of a file that the key has.</summary>
@@ -115,6 +144,62 @@ public sealed class FileStore(IOptions<FileStoreOptions> options)
         Directory.Delete(moved, recursive: true);
     }
 
+    private (int Removed, Exception? Failure) TryRemoveLeftovers()
+    {
+        try
+        {
+            // Directory.Exists follows a link, and the entries of its target are not temporary items.
+            if (new FileInfo(TemporaryFolder).LinkTarget is not null)
+            {
+                File.Delete(TemporaryFolder);
+                return (1, null);
+            }
+
+            if (!Directory.Exists(TemporaryFolder))
+                return (0, null);
+
+            var entries = Directory.GetFileSystemEntries(TemporaryFolder).Length;
+            Directory.Delete(TemporaryFolder, recursive: true);
+            return (entries, null);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return (0, ex);
+        }
+    }
+
+    // The name is fixed, and FileKey refuses it, so a proof file that a killed process left goes at the next proof.
+    private string? WriteProofFile()
+    {
+        string? temporary = null;
+        try
+        {
+            var rootIsNew = !Directory.Exists(_root);
+            temporary = NewTemporaryPath();
+            if (rootIsNew)
+                FlushFolder(Path.GetDirectoryName(_root)!);
+
+            using (var file = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write))
+            {
+                file.WriteByte(0);
+                file.Flush(flushToDisk: true);
+            }
+
+            var proof = Path.Combine(_root, FileKey.WriteProofFile);
+            File.Move(temporary, proof, overwrite: true);
+            File.Delete(proof);
+            FlushFolder(_root);
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            if (temporary is not null)
+                TryDeleteTemporaryFile(temporary);
+
+            return ex.Message;
+        }
+    }
+
     private string ResolveWithNoSymlink(FileKey key)
     {
         var path = _root;
@@ -159,7 +244,7 @@ public sealed class FileStore(IOptions<FileStoreOptions> options)
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Serilog.Log.ForContext<FileStore>().Here().Warning(ex, "Could not delete the temporary file {Path}", path);
+            Logger.Here().Warning(ex, "Could not delete the temporary file {Path}", path);
         }
     }
 
