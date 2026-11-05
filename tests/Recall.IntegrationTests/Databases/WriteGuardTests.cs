@@ -63,6 +63,16 @@ public class WriteGuardTests : TestBase
                 SELECT * FROM tenants WHERE id IN (SELECT tenant_id FROM changed)
                 """)
             .IgnoreQueryFilters().AsNoTracking().ToListAsync());
+        yield return () => ("UPDATE of a string literal", "users", (db, userId) => db.Database.ExecuteSqlAsync(
+            $"UPDATE 'users' SET first_name = 'Changed' WHERE id = {userId}"));
+        yield return () => ("INSERT INTO a string literal", "user_permissions", (db, userId) => db.Database.ExecuteSqlAsync(
+            $"INSERT INTO 'user_permissions' (id, user_id, permission, is_deleted, version) VALUES ({Guid.NewGuid().ToString()}, {userId}, 'x', 0, 1)"));
+        yield return () => ("REPLACE INTO a string literal", "user_permissions", (db, userId) => db.Database.ExecuteSqlAsync(
+            $"REPLACE INTO 'user_permissions' (id, user_id, permission, is_deleted, version) VALUES ({Guid.NewGuid().ToString()}, {userId}, 'x', 0, 1)"));
+        yield return () => ("DELETE FROM a string literal", "user_permissions", (db, userId) => db.Database.ExecuteSqlAsync(
+            $"DELETE FROM 'user_permissions' WHERE user_id = {userId}"));
+        yield return () => ("SqlQuery with UPDATE of a string literal", "users", async (db, userId) => await db.Database.SqlQuery<int>(
+            $"UPDATE main.'users' SET first_name = 'Changed' WHERE id = {userId} RETURNING 1 AS \"Value\"").ToListAsync());
     }
 
     [Test]

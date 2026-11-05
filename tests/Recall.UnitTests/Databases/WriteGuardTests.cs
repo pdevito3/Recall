@@ -63,6 +63,13 @@ public class WriteGuardTests
     }
 
     [Test]
+    public void raw_query_that_drops_a_guarded_table_is_refused()
+    {
+        // Act & Assert
+        WriteGuard.Refusal(CommandSource.FromSqlQuery, "DROP TABLE users", false, GuardedTables).ShouldNotBeNull();
+    }
+
+    [Test]
     public void refusal_names_the_table_and_the_way_to_write_it()
     {
         // Act & Assert

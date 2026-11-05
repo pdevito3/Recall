@@ -5,7 +5,14 @@ namespace Recall.Server.Databases;
 /// </summary>
 internal static class SqlText
 {
-    private static readonly HashSet<string> WriteKeywords = ["insert", "replace", "update", "delete"];
+    private static readonly HashSet<string> WriteKeywords = ["insert", "replace", "update", "delete", "drop", "alter"];
+
+    /// <summary>
+    /// The words before a table name. SQLite also takes a string literal as a name, so <c>UPDATE 'users'</c> writes the
+    /// table. The last five words are the conflict actions of <c>UPDATE OR REPLACE</c>.
+    /// </summary>
+    private static readonly HashSet<string> WordsBeforeATable =
+        ["update", "into", "from", "table", "exists", "on", "rollback", "abort", "replace", "fail", "ignore"];
 
     internal enum TokenKind
     {
@@ -31,6 +38,7 @@ internal static class SqlText
     internal static IEnumerable<Token> Tokens(string sql)
     {
         var i = 0;
+        var tableCanFollow = false;
         while (i < sql.Length)
         {
             var c = sql[i];
@@ -38,14 +46,17 @@ internal static class SqlText
                 i = AfterLineComment(sql, i);
             else if (c == '/' && Next(sql, i) == '*')
                 i = AfterBlockComment(sql, i);
-            else if (c == '\'')
-                i = AfterQuoted(sql, i, '\'');
-            else if (c is '"' or '`' or '[')
+            else if (c is '\'' or '"' or '`' or '[')
             {
                 var close = c == '[' ? ']' : c;
                 var end = AfterQuoted(sql, i, close);
-                var name = sql[(i + 1)..Math.Max(i + 1, end - 1)].Replace($"{close}{close}", $"{close}", StringComparison.Ordinal);
-                yield return new Token(TokenKind.QuotedName, name.ToLowerInvariant());
+                if (c != '\'' || tableCanFollow)
+                {
+                    var name = sql[(i + 1)..Math.Max(i + 1, end - 1)].Replace($"{close}{close}", $"{close}", StringComparison.Ordinal);
+                    yield return new Token(TokenKind.QuotedName, name.ToLowerInvariant());
+                }
+
+                tableCanFollow = false;
                 i = end;
             }
             else if (char.IsLetterOrDigit(c) || c == '_')
@@ -54,12 +65,17 @@ internal static class SqlText
                 while (i < sql.Length && (char.IsLetterOrDigit(sql[i]) || sql[i] is '_' or '$'))
                     i++;
 
-                var word = sql[start..i];
+                var word = sql[start..i].ToLowerInvariant();
+                tableCanFollow = WordsBeforeATable.Contains(word);
                 if (!char.IsAsciiDigit(word[0]))
-                    yield return new Token(TokenKind.Word, word.ToLowerInvariant());
+                    yield return new Token(TokenKind.Word, word);
             }
             else
+            {
+                if (!char.IsWhiteSpace(c))
+                    tableCanFollow = c == '.';
                 i++;
+            }
         }
     }
 
