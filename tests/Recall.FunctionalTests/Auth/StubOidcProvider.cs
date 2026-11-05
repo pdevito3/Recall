@@ -18,6 +18,7 @@ public sealed record StubLogin(string Subject)
     public string? IdTokenIssuer { get; init; }
     public string? Nonce { get; init; }
     public string? UserinfoSubject { get; init; }
+    public string? TokenBody { get; init; }
 }
 
 /// <summary>The query that the Server sends to the authorize endpoint of the provider.</summary>
@@ -136,6 +137,9 @@ public sealed class StubOidcProvider : HttpMessageHandler
             return Refused("invalid_grant");
 
         var login = grant.Login;
+        if (login.TokenBody is { } tokenBody)
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(tokenBody, Encoding.UTF8, "application/json") };
+
         var accessToken = Secrets.New();
         _accessTokens[accessToken] = login;
         var idToken = SignJwt(

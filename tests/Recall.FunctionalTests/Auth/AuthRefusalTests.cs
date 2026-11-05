@@ -180,6 +180,25 @@ public class AuthRefusalTests
     }
 
     [Test]
+    [Arguments("[]")]
+    [Arguments("\"text\"")]
+    [Arguments("{}")]
+    [Arguments("not json")]
+    public async Task a_token_answer_with_no_id_token_in_an_object_is_refused(string tokenBody)
+    {
+        // Arrange
+        using var browser = NewBrowser();
+        var authorize = await browser.StartWebAsync();
+
+        // Act
+        var response = await browser.FinishAtProviderAsync(authorize, new StubLogin(NewSubject()) { TokenBody = tokenBody });
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        browser.SessionCookie.ShouldBeNull();
+    }
+
+    [Test]
     public async Task a_userinfo_with_another_subject_is_refused()
     {
         // Arrange

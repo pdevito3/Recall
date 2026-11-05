@@ -256,7 +256,8 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
             && (parsed.Scheme == Uri.UriSchemeHttps || (parsed.Scheme == Uri.UriSchemeHttp && _provider.AllowHttp));
 
     private static string? Text(JsonElement root, string name)
-        => root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String && value.GetString() is { Length: > 0 } text
+        => root.ValueKind == JsonValueKind.Object
+            && root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String && value.GetString() is { Length: > 0 } text
             ? text
             : null;
 
