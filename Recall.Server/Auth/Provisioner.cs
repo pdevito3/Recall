@@ -1,0 +1,206 @@
+namespace Recall.Server.Auth;
+
+using Databases;
+using Domain.Tenants;
+using Domain.Tenants.Models;
+using Domain.Users;
+using Entities;
+using Exceptions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Resources;
+using Serilog;
+
+public enum LoginFailure
+{
+    AccessDenied,
+    IdpUnreachable,
+    InvalidResponse,
+}
+
+public abstract record ProvisionOutcome
+{
+    public sealed record Provisioned(string UserId, string DisplayName) : ProvisionOutcome
+    {
+        public override string ToString() => $"[provisioned {UserId}]";
+    }
+
+    public sealed record SignupClosed : ProvisionOutcome;
+
+    public sealed record Failed(LoginFailure Failure) : ProvisionOutcome;
+}
+
+/// <summary>
+/// Turns a proved identity into a user: an existing link, then the owner claim, then the first owner, then open sign-up.
+/// The unique indexes decide each race. A loser drops its scope and decides again from what the winner wrote.
+/// </summary>
+public sealed class Provisioner(
+    IServiceScopeFactory scopeFactory,
+    IOptions<AuthOptions> options,
+    OwnerClaim ownerClaim,
+    TimeProvider timeProvider)
+{
+    private const int MaxRuns = 3;
+    private const string FirstTenantName = "Recall";
+
+    private static readonly string[] RaceConstraints = ["ix_tenants_name", "pk_auth_external_logins", "ix_users_identifier"];
+
+    private readonly ILogger _logger = Log.ForContext<Provisioner>();
+
+    public async Task<ProvisionOutcome> ResolveAsync(ExternalIdentity identity, CancellationToken cancellationToken)
+    {
+        var claim = new ClaimOfThisLogin(ownerClaim);
+        for (var run = 1; ; run++)
+        {
+            await using var scope = scopeFactory.CreateSystemScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            try
+            {
+                return await ResolveOnceAsync(dbContext, identity, claim, cancellationToken);
+            }
+            catch (Exception exception) when (IsLostRace(exception))
+            {
+                if (run == MaxRuns)
+                {
+                    _logger.Here().Warning("A login lost {Runs} races in a row and stopped", MaxRuns);
+                    return new ProvisionOutcome.Failed(LoginFailure.InvalidResponse);
+                }
+            }
+        }
+    }
+
+    private static bool IsLostRace(Exception exception)
+        => exception is StaleVersionException
+            || (exception is ConstraintConflictException conflict && RaceConstraints.Contains(conflict.Constraint));
+
+    private async Task<ProvisionOutcome> ResolveOnceAsync(
+        AppDbContext dbContext, ExternalIdentity identity, ClaimOfThisLogin claim, CancellationToken cancellationToken)
+    {
+        var link = await dbContext.Set<ExternalLogin>()
+            .TagWithOperationCallSite("auth.provision.find_link")
+            .FirstOrDefaultAsync(l => l.Issuer == identity.Issuer && l.Subject == identity.Subject, cancellationToken);
+        if (link is not null)
+            return await SignInLinkedAsync(dbContext, link, identity.Profile, cancellationToken);
+
+        var oldestTenantId = await dbContext.Tenants
+            .TagWithOperationCallSite("auth.provision.oldest_tenant")
+            .OrderBy(t => t.Id)
+            .Select(t => t.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (claim.Take())
+        {
+            if (oldestTenantId is not null)
+                return await ClaimOwnerAsync(dbContext, identity, oldestTenantId, cancellationToken);
+        }
+
+        // A deleted tenant counts, so that a person cannot become an Owner after the Owner deleted the journal.
+        var anyTenantEver = oldestTenantId is not null || await dbContext.Tenants
+            .TagWithOperationCallSite("auth.provision.any_tenant_ever")
+            .IgnoreQueryFilters()
+            .AnyAsync(cancellationToken);
+        if (!anyTenantEver)
+            return await AddFirstOwnerAsync(dbContext, identity, cancellationToken);
+
+        if (options.Value.OpenSignup && oldestTenantId is not null)
+            return await JoinAsync(dbContext, identity, oldestTenantId, UserRole.User(), cancellationToken);
+
+        return new ProvisionOutcome.SignupClosed();
+    }
+
+    private async Task<ProvisionOutcome> SignInLinkedAsync(
+        AppDbContext dbContext, ExternalLogin link, Profile profile, CancellationToken cancellationToken)
+    {
+        var user = await dbContext.Users
+            .TagWithOperationCallSite("auth.provision.linked_user")
+            .FirstOrDefaultAsync(u => u.Id == link.UserId, cancellationToken);
+        if (user is null)
+            return new ProvisionOutcome.SignupClosed();
+
+        link.LastLoginAt = timeProvider.GetUtcNow();
+
+        // An edit in Recall wins and an absent claim clears nothing, so only an empty value takes the claim.
+        var lastName = user.LastName ?? NewPerson.LastNameOf(profile);
+        var email = user.Email?.Value ?? NewPerson.EmailOf(profile);
+        if (lastName != user.LastName || email != user.Email?.Value)
+            user.UpdateFromIdp(user.FirstName, lastName, email, user.Username);
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return new ProvisionOutcome.Provisioned(user.Id, user.FullName);
+    }
+
+    private async Task<ProvisionOutcome> ClaimOwnerAsync(
+        AppDbContext dbContext, ExternalIdentity identity, string tenantId, CancellationToken cancellationToken)
+    {
+        var adminRole = UserRole.Admin().Value;
+        var admin = await dbContext.Users
+            .TagWithOperationCallSite("auth.provision.oldest_admin")
+            .Where(u => u.TenantId == tenantId && u.Role.Value == adminRole)
+            .OrderBy(u => u.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (admin is null)
+            return await JoinAsync(dbContext, identity, tenantId, UserRole.Admin(), cancellationToken);
+
+        dbContext.Set<ExternalLogin>().Add(LinkOf(identity, admin.Id));
+        await dbContext.SaveChangesAsync(cancellationToken);
+        _logger.Here().Warning("The owner claim file linked a login of issuer {Issuer} to user {UserId}", identity.Issuer, admin.Id);
+        return new ProvisionOutcome.Provisioned(admin.Id, admin.FullName);
+    }
+
+    private async Task<ProvisionOutcome> AddFirstOwnerAsync(
+        AppDbContext dbContext, ExternalIdentity identity, CancellationToken cancellationToken)
+    {
+        var tenant = Tenant.Create(new TenantForCreation { Name = FirstTenantName });
+        var user = User.CreateFromLogin(NewPerson.FromClaims(identity.Profile), tenant.Id, UserRole.Admin());
+        dbContext.Tenants.Add(tenant);
+        dbContext.Users.Add(user);
+        dbContext.Set<ExternalLogin>().Add(LinkOf(identity, user.Id));
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.Here().Information("The first login made tenant {TenantId} and its Owner {UserId}", tenant.Id, user.Id);
+        return new ProvisionOutcome.Provisioned(user.Id, user.FullName);
+    }
+
+    private async Task<ProvisionOutcome> JoinAsync(
+        AppDbContext dbContext, ExternalIdentity identity, string tenantId, UserRole role, CancellationToken cancellationToken)
+    {
+        // The shared lock keeps a tenant delete out until the save, so the user does not land in a deleted tenant.
+        return await RootLock.Tenant.RunSharedAsync<ProvisionOutcome>(dbContext, tenantId, async ct =>
+        {
+            var tenantIsLive = await dbContext.Tenants
+                .TagWithOperationCallSite("auth.provision.tenant_is_live")
+                .AnyAsync(t => t.Id == tenantId, ct);
+            if (!tenantIsLive)
+                return new ProvisionOutcome.SignupClosed();
+
+            var user = User.CreateFromLogin(NewPerson.FromClaims(identity.Profile), tenantId, role);
+            dbContext.Users.Add(user);
+            dbContext.Set<ExternalLogin>().Add(LinkOf(identity, user.Id));
+            await dbContext.SaveChangesAsync(ct);
+
+            _logger.Here().Information("A login added user {UserId} to tenant {TenantId} with role {Role}", user.Id, tenantId, role.Value);
+            return new ProvisionOutcome.Provisioned(user.Id, user.FullName);
+        }, cancellationToken);
+    }
+
+    private ExternalLogin LinkOf(ExternalIdentity identity, string userId)
+    {
+        var now = timeProvider.GetUtcNow();
+        return new ExternalLogin
+        {
+            Issuer = identity.Issuer,
+            Subject = identity.Subject,
+            UserId = userId,
+            CreatedAt = now,
+            LastLoginAt = now,
+        };
+    }
+
+    // A login that took the file and then lost a race on its save still holds the claim, because the file is gone.
+    private sealed class ClaimOfThisLogin(OwnerClaim ownerClaim)
+    {
+        private bool _won;
+
+        public bool Take() => _won = _won || ownerClaim.TryConsume();
+    }
+}
