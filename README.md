@@ -6,7 +6,7 @@ Recall started from [FullstackTemplate](https://github.com/pdevito3/FullstackTem
 
 The stack today has:
 - **React 19** frontend with TanStack Router and React Query
-- **Backend-For-Frontend (BFF)** pattern with YARP and OIDC, and server-side sessions in SQLite
+- **App-owned identity** - the Server runs the OIDC login and keeps its own sessions in SQLite
 - **Configurable authentication** - one setting selects the auth provider, and a new provider is one folder in the AppHost
 - **Multi-tenant architecture** with data isolation
 - **OpenTelemetry** observability built-in
@@ -18,7 +18,7 @@ The stack today has:
 Recall/
 ├── Recall.AppHost/     # Aspire orchestration (start here)
 ├── Recall.Server/      # Backend API (.NET 10, CQRS, MediatR)
-├── Recall.Bff/         # BFF proxy (YARP, OIDC)
+├── Recall.Bff/         # The old BFF. Nothing runs it, and a later change deletes it
 ├── frontend/           # React SPA (React 19, TanStack, Tailwind)
 ├── tests/              # Test projects
 ├── docs/               # Development guides (backend, telemetry, auth, ...)
@@ -32,7 +32,7 @@ Recall/
 - **Audit Log and Soft Delete** - An append-only log of each change, and soft delete built-in
 - **API Versioning** - URL segment versioning (`/api/v1/...`)
 - **OpenTelemetry** - Distributed tracing and metrics
-- **SQLite** - With EF Core and migrations. The app data is in `recall.db`, and the BFF sessions are in `bff.db`
+- **SQLite** - With EF Core and migrations. The app data and the sessions are in `recall.db`
 
 ### Frontend Features
 - **TanStack Router** - File-based routing with type safety
@@ -58,12 +58,11 @@ aspire run
 
 This starts:
 - **Aspire Dashboard** - View logs, traces, and metrics
-- **Backend API** - .NET API server
-- **BFF Proxy** - Handles auth and proxies to API
+- **Server** - .NET API server, which also runs the login
 - **React Dev Server** - Vite with hot reload
 - **Auth Provider** - the provider that the `AuthProvider` setting selects
 
-The UI starts after the BFF and the API are healthy, and the BFF starts after the auth provider is healthy. Until then, the dashboard shows the UI as `Waiting`.
+The UI starts after the Server is healthy, and the Server starts after the auth provider is healthy. Until then, the dashboard shows the UI as `Waiting`.
 
 ### Ports
 
@@ -78,8 +77,6 @@ A normal run uses the same ports at each start. All of them are in the block 247
 | 24704 | Aspire dashboard | MCP |
 | 24705 | `tests` (the Labcoat test UI) | http |
 | 24710 | `webfrontend` (the app URL) | http |
-| 24711 | `bff` | https |
-| 24712 | `bff` | http |
 | 24713 | `server` | https |
 | 24714 | `server` | http |
 | 24715 | `server` | grpc |
@@ -92,7 +89,7 @@ A normal run uses the same ports at each start. All of them are in the block 247
 | 24761 | `authentik-postgres` | tcp |
 | 24770 | `cognito` | http |
 
-The dashboard ports are in `Recall.AppHost/Properties/launchSettings.json`. The server ports are in `Kestrel:Endpoints` of `Recall.Server/appsettings.Development.json`, and the BFF ports are in `Recall.Bff/Properties/launchSettings.json`. The other ports are in `Recall.AppHost/AppHost.cs` and in the class of each auth provider. A new resource takes a port in the block. A new auth provider takes the next free group of ten. `PortTableTests` fails when an endpoint of the AppHost has no row in this table or has a different port.
+The dashboard ports are in `Recall.AppHost/Properties/launchSettings.json`. The server ports are in `Kestrel:Endpoints` of `Recall.Server/appsettings.Development.json`. The other ports are in `Recall.AppHost/AppHost.cs` and in the class of each auth provider. A new resource takes a port in the block. A new auth provider takes the next free group of ten. `PortTableTests` fails when an endpoint of the AppHost has no row in this table or has a different port.
 
 The provider seeds get the app URLs from the AppHost, so the redirect URIs agree with these ports. Keycloak and FusionAuth seed their database only when it is empty. If a provider database is from a run with other ports, delete its volume once (`docker volume ls`, then `docker volume rm <volume>`).
 
@@ -109,31 +106,35 @@ An isolated run gives each endpoint a random port and uses a copy of the user se
 
 ## Auth Provider
 
-To select the auth provider, add a provider, or find the test users, see [docs/authentication.md](docs/authentication.md).
+The stack needs no setting to start. To run a published Server with your own provider, set these three variables and register the callback URL that `/auth/status` gives:
+
+```bash
+Auth__Providers__0__Issuer=https://id.example.com
+Auth__Providers__0__ClientId=recall
+Auth__Providers__0__ClientSecret=...
+```
+
+The first person who signs in becomes the Owner. To select the auth provider of a local run, add a provider, keep a TLS proxy working, or find the test users, see [docs/authentication.md](docs/authentication.md).
 
 ## Authentication Flow
 
 ```
-┌──────────┐     ┌─────────┐     ┌───────────────────┐
-│  React   │────►│   BFF   │────►│   Auth Provider   │
-│   App    │◄────│ (OIDC)  │◄────│  (e.g. Keycloak)  │
-└──────────┘     └─────────┘     └───────────────────┘
-     │                │
-     │   Cookie       │  JWT Token
-     │                ▼
-     │          ┌─────────┐
-     └─────────►│  API    │
-       via BFF  │ Server  │
-                └─────────┘
+┌──────────┐         ┌──────────┐         ┌───────────────────┐
+│  React   │────────►│  Server  │────────►│   Auth Provider   │
+│   App    │◄────────│ (OIDC,   │◄────────│  (e.g. Keycloak)  │
+└──────────┘ Cookie  │ sessions)│         └───────────────────┘
+                     └──────────┘
 ```
 
 1. The React app has no session, so it navigates to `/bff/login`
-2. BFF redirects to identity provider
-3. User authenticates with provider
-4. Provider redirects back to `/signin-oidc`
-5. BFF creates secure `__Host-bff` cookie
-6. React app calls `/bff/user` to get claims
-7. API calls go through BFF at `/api/v1/*`
+2. The Server redirects to the identity provider
+3. The user authenticates with the provider
+4. The provider redirects back to `/auth/oidc/callback`
+5. The Server adds a session and sets the `recall` cookie, or `__Host-recall` on TLS
+6. The React app calls `/bff/user` to get the user
+7. API calls go to the Server at `/api/v1/*`
+
+A native app uses `/auth/status`, the system browser, and `/auth/token`. See [docs/authentication.md](docs/authentication.md).
 
 ## Development with Claude Code
 

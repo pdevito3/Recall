@@ -2,8 +2,8 @@ namespace Recall.Server.Domain.Users;
 
 /// <summary>
 /// The client IDs of the first-party apps: <see cref="AppClientId"/>, the client of each app session, and
-/// <c>Auth:ClientId</c> and <c>Swagger:ClientId</c> when they are set. A token from one of these clients acts as its
-/// user, with all of the user's permissions.
+/// <c>Auth:ClientId</c> and <c>Swagger:ClientId</c> when they are set. Swagger UI uses those two. A token from one of
+/// these clients acts as its user, with all of the user's permissions.
 /// </summary>
 public sealed class FirstPartyClientOptions
 {

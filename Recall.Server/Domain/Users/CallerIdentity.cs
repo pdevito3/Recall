@@ -2,8 +2,8 @@ namespace Recall.Server.Domain.Users;
 
 using Domain.Tenants;
 /// <summary>
-/// Who sent the current request, before permissions. The tenant scope, the permission guard, and the start-a-tenant
-/// check read this one answer. <see cref="ICallerIdentityResolver"/> makes it once for each DI scope.
+/// Who sent the current request, before permissions. The tenant scope, the permission guard, and the check on
+/// <c>/users/initiate</c> read this one answer. <see cref="ICallerIdentityResolver"/> makes it once for each DI scope.
 /// It holds IDs only. The permission guard reads the permissions as rows for each check (ADR 0009).
 /// </summary>
 public abstract record CallerIdentity

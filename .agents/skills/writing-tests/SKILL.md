@@ -13,8 +13,8 @@ Put a test in the lowest suite that can prove the behavior. A lower suite is fas
 |---|---|---|---|
 | A pure rule or a shape, with no React and no network | Frontend unit | `pnpm test` | `frontend/src/**/*.test.ts`, or `frontend/e2e/*.test.ts` for a rule of the stack runner |
 | One component in a real browser | Frontend component | `pnpm test` | `frontend/src/**/*.test.tsx` |
-| A page of the SPA: what the user sees and what the page sends to the BFF | Functional | `pnpm test:e2e` | `frontend/tests/features/**/*.spec.ts` |
-| Login, logout, the session cookie, a token refresh, DPoP, PAR, or the BFF against a real IdP | Stack | `pnpm test:e2e:stack` | `frontend/e2e/*.spec.ts` |
+| A page of the SPA: what the user sees and what the page sends to the Server | Functional | `pnpm test:e2e` | `frontend/tests/features/**/*.spec.ts` |
+| Login, logout, the session cookie, or the native token flow against a real IdP | Stack | `pnpm test:e2e:stack` | `frontend/e2e/*.spec.ts` |
 | Who can call a Server endpoint: the 403 for a caller with no permission, and the 404 for a record of another tenant | .NET functional sweep, no new test | `dotnet test --solution Recall.slnx` | `tests/Recall.FunctionalTests/FunctionalTests/Access/EndpointAccessSweepTests.cs`. See "Access of a Server endpoint" below. |
 | A domain rule, a handler, or a Server endpoint | .NET | `dotnet test --solution Recall.slnx` | `tests/`. See `docs/backend.md`, section "Tests". For test data, use the `test-entity-graph` skill. |
 | Two requests that race on the same rows | .NET integration test with `PauseAtQuery` | `dotnet test --solution Recall.slnx` | `tests/Recall.IntegrationTests/`. See `docs/backend.md#race-tests`. |
@@ -53,13 +53,13 @@ The sweep checks the permission of each endpoint, not of each DTO field. For a f
 
 - Run it after each change in `frontend/src`. It needs no stack. It runs each test in three zones, and it takes two to three minutes.
 - CI runs it on each pull request, in the `api-contract` job.
-- It mocks the BFF. Thus it cannot find a fault in the BFF, the Server, or the IdP.
+- It mocks the Server. Thus it cannot find a fault in the Server or the IdP.
 
 `pnpm test:e2e:stack` (stack):
 
-- Run it after a change to the BFF, the AppHost, an auth provider, the token check of the Server, `frontend/vite.config.ts`, or the login code of the SPA.
-- It needs a running stack. Start the stack and wait for `server`, `bff`, and `webfrontend` first. Use the `aspire-cli` skill.
-- It takes some minutes, and it tests the provider of the running stack only. CI runs it for each provider, but only when the `changes` job finds a change on the login path (the BFF, the AppHost, the SPA, or the stack suite). See the `bff` filter in `.github/workflows/ci.yml`.
+- Run it after a change to the login of the Server, the AppHost, an auth provider, the token check of the Server, `frontend/vite.config.ts`, or the login code of the SPA.
+- It needs a running stack. Start the stack and wait for `server` and `webfrontend` first. Use the `aspire-cli` skill.
+- It takes some minutes, and it tests the provider of the running stack only. CI runs it for each provider, but only when the `changes` job finds a change on the login path (the Server login, the AppHost, the SPA, or the stack suite). See the `bff` filter in `.github/workflows/ci.yml`.
 - For the full procedure and the variables, read the "E2E tests" section of `docs/authentication.md`.
 
 Examples:
@@ -68,7 +68,7 @@ Examples:
 |---|---|
 | A new column on a page, or a new filter | `pnpm test:e2e` |
 | A new query hook or an error toast | `pnpm test` and `pnpm test:e2e` |
-| A new auth provider, or a change to the cookie or the refresh of the BFF | `pnpm test:e2e:stack` against that provider |
+| A new auth provider, or a change to the cookie or the refresh of the Server | `pnpm test:e2e:stack` against that provider |
 | A change to the `/api` proxy of the Vite dev server | Both Playwright suites |
 | A new text field that a list filters with `@=*` | An integration test with `%`, `_`, `\`, and a quote at an end in the filter value, built with `QueryKitText.Quote`. See `docs/backend.md`, section "Tests" |
 
@@ -97,7 +97,7 @@ Obey these rules:
 ## Write a stack test
 
 1. Add the test to `frontend/e2e/auth-flows.spec.ts`.
-2. If the feature exists only at some providers, read it from `capabilities` or `sessionFeatures` in `frontend/e2e/idps/<name>.json`. Skip the test when the provider does not have the feature, and test the fallback.
+2. If the feature exists only at some providers, read it from `capabilities` in `frontend/e2e/idps/<name>.json`. Skip the test when the provider does not have the feature, and test the fallback.
 3. Start a stack with a provider that has the feature. Run `pnpm test:e2e:stack`.
 
 ## Write a component or unit test
@@ -119,7 +119,7 @@ pnpm test
 pnpm test:e2e
 ```
 
-If you changed the BFF, the AppHost, or the login code, also run `pnpm test:e2e:stack` against a running stack.
+If you changed the AppHost or the login code, also run `pnpm test:e2e:stack` against a running stack.
 
 For a .NET test, mark the parts with `// Arrange`, `// Act`, and `// Assert` (`docs/backend.md`, section "Tests"). `TestMarkerTests` fails on each test without them.
 

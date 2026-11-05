@@ -1,193 +1,301 @@
 # Authentication
 
-The app uses the Backend-For-Frontend (BFF) pattern. The browser never holds a token. `Recall.Bff` holds the tokens and sends API calls to the server with a JWT. The BFF uses the ASP.NET Core OpenID Connect handler for login, `Duende.AccessTokenManagement.OpenIdConnect` for the token refresh and the revocation, and YARP for the proxy.
+Recall owns its identity ([ADR 0014](adr/0014-app-owned-identity.md)). The Server is the OpenID Connect client of each provider. A provider proves who a person is one time. Then the Server issues its own auth session, and the rest of the app reads only that session. The browser holds an opaque cookie, and a native app holds an opaque bearer token. Neither one holds a provider token.
 
-The design is in [docs/specs/home-rolled-bff.md](specs/home-rolled-bff.md). The decisions are in [docs/adr/](adr/).
+The running stack has no BFF. The projects `Recall.Bff` and `tests/Recall.Bff.Tests` stay in the solution until a later change deletes them. The Server answers the three `/bff/*` paths that the SPA still calls.
+
+The Server code is in `Recall.Server/Auth/` and `Recall.Server/Resources/Entrypoints/Auth/`.
 
 ## Endpoints
 
-| Path | Method | `X-CSRF: 1` | Content |
+These routes are not in the OpenAPI document. This section is their contract.
+
+| Path | Method | Credential | Content |
 |---|---|---|---|
-| `/bff/login` | any | no | Starts a login |
-| `/bff/logout` | GET | no | Ends the BFF session and starts the logout at the provider |
-| `/bff/user` | GET | yes | The claims of the BFF session, or 204 when no one is signed in |
-| `/bff/backchannel` | POST | no | The back-channel logout receiver. Only the provider calls it. |
-| `/signin-oidc` | GET | no | The login callback |
-| `/signout-callback-oidc` | GET | no | The return from the logout at the provider |
-| `/api/{**catch-all}` | any | yes | The proxy to the server |
-| `/health`, `/alive` | GET | no | The health checks |
+| `/auth/status` | GET | none | The instance, its state, the callback URL, and each login method |
+| `/auth/login` | GET | none | The login page. With one ready provider and no `signedOut`, it redirects to the start of that provider. |
+| `/auth/oidc/{id}/start` | GET | none | Starts a login. The query has `client=web` or `client=app`. |
+| `/auth/oidc/callback` | GET | none | The return from the provider |
+| `/auth/oidc/confirm` | POST | none | The form of the native confirm page |
+| `/auth/token` | POST | none | Gives the tokens of a native session |
+| `/auth/logout` | POST | optional | Ends the session that the request names. It always answers 204. |
+| `/auth/sessions/revoke-others` | POST | app session | Ends each other session of the user. It answers 204. |
+| `/auth/me` | GET | app session | `sub`, `name`, `sid`, and `client_kind` |
+| `/bff/login` | GET | none | Redirects to `/auth/login` |
+| `/bff/user` | GET | cookie, with `X-CSRF: 1` | The claims of a web session, or 204 when no one is signed in |
+| `/bff/logout` | GET | cookie, with the `sid` query | Ends the web session and goes to the signed-out page |
 
-## Login flow
+Each other Server path, also `/api/*`, reads the credential in the same way. Send the cookie with `X-CSRF: 1`, or send `Authorization: Bearer <token>`.
 
-1. The React app calls `/bff/user` before it shows a page. Each page needs a session. If the answer is 204, the app shows no page and goes to the login.
-2. The frontend goes to `/bff/login`, with the path, the query, and the hash of the page as `returnUrl`. If they have more than 2048 characters, the `returnUrl` is the path alone, or `/` if the path is also too long. If the path starts with `//` or `/\`, the `returnUrl` is `/`. The frontend replaces the page in the history, so Back from the provider does not open a page that goes to the login again. A `returnUrl` must be a local URL, for example `/about`. The BFF rejects an absolute URL and a URL that starts with `//`. The BFF percent-encodes each non-ASCII character as UTF-8, so `/café` becomes `/caf%C3%A9`. The return URL travels in the `state` of the authorize URL. Thus, if the encoded `returnUrl` has more than 2048 characters, the BFF uses the default return URL (`PathBase`, or `/`), and the provider does not refuse the long URL with a 414.
-3. The BFF sends the browser to the provider with the authorization code flow, PKCE (`S256`), and `response_mode=query`. If the provider has PAR, the BFF first pushes the request, and the authorize URL has only `client_id` and `request_uri`.
-4. The provider sends the browser back to `/signin-oidc`. The BFF accepts only a GET there.
-5. The BFF checks the callback. The `iss` parameter must equal the issuer of the provider (RFC 9207). The ID token `aud` must hold only the client id. A failed check gives a 400, and the BFF creates no BFF session.
-6. The BFF redeems the code at the token endpoint and reads the user info.
-7. The BFF writes a BFF session row in `bffdb`, and sets the `__Host-bff` cookie. The cookie holds only the key of the row.
-8. The React app calls `/bff/user` with the `X-CSRF: 1` header to get the claims. The claims include `bff:logout_url`.
-9. API calls go through the BFF at `/api/v1/*` with the `X-CSRF: 1` header. The BFF adds the access token of the BFF session.
+## Web login
 
-In a local run, the Vite dev server serves the SPA on its own origin, and the provider sends the browser back to the BFF origin. Thus, at the end of a login or a logout, the BFF sends the browser to `returnUrl` on the Vite origin, for example `http://localhost:24710/about`. A published BFF serves the SPA itself, and it sends the browser to the local `returnUrl`.
+1. The SPA calls `/bff/user` before it shows a page. If the answer is 204, it goes to `/bff/login`, with the path, the query, and the hash of the page as `returnUrl`. Each page needs a session.
+2. `/auth/login` redirects to `/auth/oidc/{id}/start?client=web`. The return path must be local. Each other value becomes `/`.
+3. The start adds an attempt row and sets a binding cookie. It redirects to the provider with `state`, `nonce`, and a PKCE challenge (`S256`). The scope is `openid profile email`.
+4. The provider redirects to `/auth/oidc/callback`. The Server finds the attempt by `state`, checks the binding cookie, and consumes the attempt. An attempt can pass this check one time.
+5. The Server checks `iss` (RFC 9207), redeems the code, and validates the ID token. It reads the user info, and a user info `sub` that differs from the ID token fails the login. An error body of a provider never goes to a log.
+6. The Server finds or adds the user. See [First login and the Owner](#first-login-and-the-owner).
+7. The Server adds a session row, sets the session cookie, and redirects to the return path.
+8. The first HTML load has no session cookie, because the navigation comes from another site. The SPA calls `/bff/user` from the same site, with the cookie, and shows the page.
 
-The AppHost gives `services:webfrontend` to the BFF only in a local run. The BFF uses this value to find the Vite origin. A published BFF does not get the value, so it serves the SPA from `wwwroot`.
+## Native login
 
-In a local run, the BFF also sends each GET or HEAD that no endpoint matches to the same path and query on the Vite origin. For example, a deep link to `https://<bff>/about?tab=team` goes to `http://localhost:24710/about?tab=team`. An unknown path that starts with `/api`, `/bff`, `/signin-oidc`, or `/signout-callback-oidc` keeps its 404, because the Vite proxy sends these paths back to the BFF. The BFF matches them as a raw prefix, as Vite does, so `/api-docs` and `/bffx` also keep their 404. An unknown path under `/health` or `/alive` also keeps its 404, because the health probes stay on the BFF. A path that is not a local URL, for example `//host`, also keeps its 404. A published BFF serves `index.html` for a GET or HEAD of an unknown path. It keeps the same 404s as a local run for the paths that start with `/api`, `/bff`, or an OIDC callback path, and for the paths under `/health` or `/alive`. A path with a file extension, such as a missing bundle, also keeps its 404. Thus a client that calls an unknown BFF path gets a 404, not HTML. A wrong method on a known endpoint, for example `POST /bff/user`, gets a 405 with an `Allow` header, in a local run and when published.
+An app holds one setting, the base URL of the Server. It holds no provider setting and no client secret.
 
-The BFF has no CORS policy, and it allows no cross-origin request. The SPA calls the BFF only from the same origin. In a local run, the Vite proxy sends `/api`, `/bff`, and the OIDC callbacks to the BFF. A published BFF serves the SPA itself.
+### Sign in
 
-The BFF builds `redirect_uri` and `post_logout_redirect_uri` from `Bff:PublicOrigin`, never from the request. Register these URLs at the provider:
+1. Call `GET /auth/status`:
 
-| URL | Use |
+   ```json
+   {
+     "instance": "recall",
+     "state": "ready",
+     "callbackUrl": "https://recall.example.com/auth/oidc/callback",
+     "message": null,
+     "setupRequired": false,
+     "modes": [
+       {
+         "kind": "oidc",
+         "id": "keycloak",
+         "displayName": "Keycloak",
+         "state": "ready",
+         "detail": null,
+         "startUrl": "/auth/oidc/keycloak/start?client=app"
+       }
+     ]
+   }
+   ```
+
+   `state` is `ready`, `degraded` when each provider is down, or `no_login_method`. The state of a mode is `ready` or `unreachable`.
+2. Open `startUrl` in the system browser. Add these query values:
+
+   | Name | Value |
+   |---|---|
+   | `redirect_uri` | `recall://auth/callback`, or a loopback URL with a port, for example `http://127.0.0.1:{port}/callback` or `http://[::1]:{port}/callback` |
+   | `code_challenge` | The base64url SHA-256 of a verifier, 43 characters |
+   | `code_challenge_method` | `S256` |
+   | `state` | A value of the app |
+
+3. The person signs in at the provider. Then the Server shows the page `Sign in the Recall app?`, also when the provider signs the person in with no click (RFC 8252 section 8.6). The code reaches the app only after the person chooses `Continue`.
+4. The Server redirects to `redirect_uri` with `code` and `state`. A failed login redirects with `error` and `state`. The error is `signup_closed`, `access_denied`, `idp_unreachable`, or `invalid_response`.
+5. Compare `state`, then send the code in a form within 2 minutes:
+
+   ```http
+   POST /auth/token
+   Content-Type: application/x-www-form-urlencoded
+
+   grant_type=authorization_code&code=...&code_verifier=...&redirect_uri=...
+   ```
+
+   The answer has `Cache-Control: no-store`:
+
+   ```json
+   { "access_token": "rcl_at_...", "refresh_token": "rcl_rt_...", "token_type": "Bearer", "expires_in": 900 }
+   ```
+
+A code works one time. If the answer to this request is lost, the app signs in again. The session that the lost answer named stays until it expires, or until `revoke-others` ends it.
+
+### Refresh
+
+The access token lives 900 seconds. The refresh token lives 90 days from its last use, with no absolute limit, because a phone that captures a thought after a long gap must not need a sign-in at that moment. Each refresh gives a new pair, and the old access token stops at once.
+
+```http
+POST /auth/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=refresh_token&refresh_token=...&retry_key=...
+```
+
+An app must obey these rules:
+
+- **Refresh one time for each token.** Refresh when the access token expires, or on a 401 whose failed token is still the stored token. On a 401 for an older token, send the request again with the stored token. In one process, let one call refresh and let the other calls wait for its result.
+- **Make one `retry_key` for each refresh token.** The key has at least 43 base64url characters, for example 32 random bytes. Make it once, and store it with the refresh token before the first send. Keep both in storage that each process of the app shares.
+- **Repeat on a lost answer.** When the network fails, send the same refresh token and the same key again. The Server computes the same pair from these two values and writes nothing, so each copy gets the same answer, in any order. A second process that sends the same two values gets the same pair too.
+- **Store the new pair before you use it.** Then make a new key for the new refresh token.
+
+An older refresh token, sent with no key or with another key, is a replay. The Server ends the session and answers `invalid_grant`. So a thief who uses a stolen token first ends the session at the next refresh of the real app. One limit stays. A delayed copy of a request that lands after the next rotation also ends the session. It needs a delay of about 15 minutes.
+
+| Answer | Meaning | What the app does |
+|---|---|---|
+| 200 | The new pair | Stores it |
+| 400 `invalid_request` | A missing grant, or a `retry_key` that is too short | Corrects the request. The Server wrote nothing. |
+| 400 `invalid_grant` | The token is not valid, or the session ended | Shows the sign-in, and keeps each draft on disk |
+
+### Sign out
+
+`POST /auth/logout` with `Authorization: Bearer <access token>`, with the form value `refresh_token`, or with both. It always answers 204, so an app with an expired access token can still end its session. `POST /auth/sessions/revoke-others` ends each other session of the user, for example on a lost phone.
+
+Over plain http, a person on the same network can read the tokens and the key. The same person can already read the journal on that connection, so Recall allows it. Use TLS to close both.
+
+## Sessions
+
+One row of `auth_sessions` is one signed-in device. The row holds only hashes. A database reader gets no usable credential.
+
+| Credential | Lifetime |
 |---|---|
-| `{Bff:PublicOrigin}/signin-oidc` | The redirect URI |
-| `{Bff:PublicOrigin}/signout-callback-oidc` | The post logout redirect URI |
-| `{Bff:PublicOrigin}/bff/backchannel` | The back-channel logout URI, if the provider has back-channel logout |
+| Web cookie | 30 days with no use, 180 days from the login. Only `/bff/user` and `/auth/me` extend it, at most once a day. So an API call never writes. |
+| Native access token | 900 seconds |
+| Native refresh token | 90 days from its last use |
+| Login attempt | 10 minutes |
+| App code | 2 minutes |
+
+A session makes no call to the provider. So a web or native session keeps working when the provider is down, and it keeps working when the provider disables the person. To end the access of a person, end the session with `revoke-others` or delete the user. Recall has no back-channel logout.
 
 ### Cookies
 
-| Cookie | Settings | Content |
+| Cookie | Attributes | Content |
 |---|---|---|
-| `__Host-bff` | `HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/`, no `Domain` | The key of the BFF session row, encrypted with Data Protection |
-| The correlation and nonce cookies | `SameSite=Lax` | The login state. The browser sends them on the redirect back from the provider. |
+| `__Host-recall`, on TLS | `HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/` | An opaque session value |
+| `recall`, on http | `HttpOnly`, `SameSite=Strict`, `Path=/` | The same |
+| `__Host-recall_login_{8 hex}`, on TLS | `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, 10 minutes | The binding of one login attempt |
+| `recall_login_{8 hex}`, on http | `HttpOnly`, `SameSite=Lax`, `Path=/auth/oidc`, 10 minutes | The same |
 
-### Host trust
+The binding cookie is `Lax` because the provider redirects with a cross-site GET. On https, the Server reads only `__Host-recall`, so a `recall` cookie from a plain http neighbor has no effect.
 
-The BFF reads `X-Forwarded-For` and `X-Forwarded-Proto`. It does not read `X-Forwarded-Host`. The host filter accepts the host of `Bff:PublicOrigin` and the hosts in `Bff:AdditionalAllowedHosts`, and it gives a 400 for other hosts. In the local stack, the AppHost adds the container host of the BFF, `host.docker.internal`, and `localhost`.
+### CSRF
 
-The BFF accepts `X-Forwarded-For` and `X-Forwarded-Proto` from any source, because the address of the proxy in front of the BFF is not known. Thus a client can set its own client address. Today only the telemetry uses the client address: the request logs and the request spans. Before a deployment behind a proxy uses the client address for a decision, for example a rate limit or an IP allow list, set `KnownProxies` or `KnownIPNetworks` of `ForwardedHeadersOptions` in `Recall.Bff/HostTrust/HostTrustExtensions.cs` to the proxy.
+A cookie with no `X-CSRF: 1` header fails with 401 on each method. A cross-site page cannot set that header without a CORS grant, and the Server gives none. A bearer token needs no header. `/bff/logout` is a GET, so its `sid` query is its protection.
 
-## BFF sessions
+A cookie value works only as a cookie and only on a web session. A bearer value works only in the header and only on a native session. So a stolen cookie value cannot skip this rule.
 
-The BFF keeps each BFF session as one row in the `bffdb` database. The row holds the tokens, encrypted with Data Protection. The Data Protection keys and the replay cache of the logout tokens are also in `bffdb`. Thus a deploy does not log out the users.
+## Logout
 
-The BFF keeps `bffdb` in the SQLite file `bff.db`, next to `recall.db` in the data directory. The BFF applies its migrations at startup.
+The SPA goes to `/bff/logout` with the `sid` of the session. The Server ends the session, deletes the cookie, and shows `You are signed out` at `/auth/login?signedOut=1`.
 
-| Setting | Default | Content |
-|---|---|---|
-| `Bff:Session:SlidingExpiration` | 14 days | The BFF session ends after this time with no request. A request after half of this time renews it. |
-| `Bff:Session:AbsoluteLifetime` | 30 days | The BFF session ends after this time from the login. A renewal does not move this limit. |
-| `Bff:Session:CleanupInterval` | 10 minutes | The interval at which the BFF deletes the expired rows. |
-| `Bff:Refresh:TokenRequestTimeout` | 5 seconds | The longest refresh call to the token endpoint. |
+The session at the provider stays. So `Sign in with {provider}` can sign the same person in again with no click. On a shared computer, end the session at the provider too.
 
-### Token refresh
+## First login and the Owner
 
-When the access token expires, the BFF refreshes it before it sends the API call. One process owns the data file, so the refresh lock in the process makes sure that only one request refreshes the token. The other requests wait and then use the new token.
+The first login of a new database adds the tenant `Recall` and a user with the role Admin. This person is the Owner. Two first logins at the same time cannot both win, because the database admits one first tenant.
 
-- If the provider returns `invalid_grant`, or the refresh response has an ID token that fails the checks, the BFF ends the BFF session. The API call goes with no token.
-- If the refresh fails for another reason, the token endpoint does not answer in time, or the lock is not free in time, the BFF session stays. The call goes with the current token if it is still valid, or with no token. The next call tries the refresh again.
+Each later login finds the user through the pair of issuer and subject in `auth_external_logins`. An identity with no link gets the page `This server does not accept new people` with status 403, and it gets no session. To let new people in, set `Auth:OpenSignup` to `true`. Each new person then joins the oldest tenant with the role User.
 
-## Logout flow
+A user that an Admin adds through the API has no link, so that user cannot sign in today.
 
-1. The frontend goes to the `bff:logout_url` of `/bff/user`, with a local `returnUrl`. The URL holds the `sid` of the BFF session, and the BFF rejects another `sid`. The BFF applies the `returnUrl` rules of the login.
-2. The BFF deletes the BFF session row.
-3. If the provider has a revocation endpoint, the BFF revokes the refresh token (RFC 7009). An error from the provider does not stop the logout.
-4. The BFF deletes the `__Host-bff` cookie.
-5. If the provider has an `end_session_endpoint`, the BFF sends the browser there with `id_token_hint` and `post_logout_redirect_uri`. The provider ends its session and sends the browser to `/signout-callback-oidc`. The BFF then sends the browser to `returnUrl`.
-6. If the provider has no `end_session_endpoint`, the BFF sends the browser to `returnUrl`.
-7. The React app at `returnUrl` has no session, so it goes to the login again. If the provider ended its session, the provider shows its login page. If the provider session stays, the provider signs in the same user again with no prompt.
+A repeat login fills only a stored value that is empty. An edit in Recall stays.
 
-If no user is signed in, the BFF sends the browser to `returnUrl` at once. It does not go to the provider, because it has no ID token for `id_token_hint`, and a provider can refuse a logout without one.
+### Recover a lost Owner
 
-The BFF session can end before the provider session, for example at its absolute limit. The browser then still has the `__Host-bff` cookie, but the BFF has no ID token for it. If `Auth:EndSessionWithoutIdTokenHint` is `true`, a logout with this cookie goes to the `end_session_endpoint` with `client_id`, `post_logout_redirect_uri`, and `state`. The provider ends its session and sends the browser to `/signout-callback-oidc`. The BFF then sends the browser to `returnUrl`. Keycloak first asks the user to confirm the logout. A logout with no cookie still goes to `returnUrl` at once. Thus an anonymous visit or a link from another site does not show the logout page of the provider.
+A changed issuer, a new provider, a provider restored with a new `sub`, or a deleted Owner can leave a person with no way to sign in. Do not delete the data directory to fix this, because it holds the journal.
 
-This logout is possible only from a page that still shows the user as signed in. After a reload, `/bff/user` gives 204, and the SPA goes to the login. The live provider session then signs in the same user again with no prompt. If the setting is `false`, or if the user does not log out, the provider session stays. The next login then signs in the same user again with no prompt. On a shared computer, the next person can thus sign in as the previous user. Only Keycloak sets this setting in the local stack. ZeroFactor refuses a logout with no `id_token_hint`. The other providers are not tested.
+1. Stop other logins, because the next login with no link takes the claim.
+2. Create an empty file named `claim-owner` in the data directory.
+3. Sign in with the identity that you want.
 
-## Back-channel logout
+The Server links that identity to the oldest live Admin of the oldest live tenant, logs a warning with the user ID and the issuer, and removes the file. If the tenant has no live Admin, the Server adds a new Admin. A deleted tenant is the one case that the claim cannot recover.
 
-When a user session ends at the provider, the provider sends a logout token to `POST /bff/backchannel` (OpenID Connect Back-Channel Logout 1.0). This occurs, for example, when an admin ends the session.
+### Delete old development data
 
-1. The BFF validates the token: the signature, `iss`, `aud`, `iat`, `exp`, the `typ` if present, the `events` claim, no `nonce`, and a `sub` or a `sid`.
-2. The BFF rejects a `jti` that it has already seen.
-3. The BFF deletes the BFF sessions with the `sid` of the token. If the token has only a `sub`, the BFF deletes all the BFF sessions of that `sub`.
-4. The BFF returns 200. A token that fails a check gets a 400.
+Before this design, `User.Identifier` held the provider subject. These users have no link, so the first login on an old database gets `signup_closed`. No install needs to keep this data. Stop the stack and delete the data directory: `.data` of the checkout, or `RECALL_DATA_DIR`.
 
-The BFF does not revoke the refresh tokens of the deleted BFF sessions, because the provider already ended its session. With Keycloak, a revoke of one refresh token also ends the other sessions of the user for the client, and Keycloak sends no logout token for them.
+## Origins
 
-The endpoint is always mapped. The BFF has no front-channel logout endpoint, so `/signout-oidc` does not end a BFF session.
+One install can answer at two origins, for example `http://192.168.1.10:8080` and `https://recall.example.com`. No public origin setting exists. The Server computes the origin of each request:
 
-In the local stack, the Keycloak and Authentik seeds register the back-channel URL. The provider containers call the BFF through the Aspire container network.
+- The scheme comes from `X-Forwarded-Proto` or from the connection.
+- The host comes from `Host`, and never from `X-Forwarded-Host`.
 
-## Provider features
+The redirect URI is that origin plus `/auth/oidc/callback`. The Server stores it on the attempt and uses it again at the redemption, so one login never mixes two origins. A session is separate for each host name, so the same person has two sessions and one user.
 
-The BFF reads the discovery document of the provider one time at startup. It uses each optional feature from this snapshot. A change of the provider features needs a restart of the BFF. Each feature has a setting under `Auth:Features`:
+### Register the callback URLs
 
-| Setting | Discovery field | With `Auto`, if the field is missing |
-|---|---|---|
-| `Auth:Features:Revocation` | `revocation_endpoint` | The BFF does not revoke tokens. |
-| `Auth:Features:IssuerParameter` | `authorization_response_iss_parameter_supported` | The BFF accepts a callback with no `iss`. A present `iss` must still match. |
-| `Auth:Features:BackChannelLogout` | `backchannel_logout_supported` | The endpoint stays mapped, and it validates each token. |
-| `Auth:Features:EndSession` | `end_session_endpoint` | Logout sends the browser to `returnUrl` at once. The provider session stays, so the SPA there goes to the login, and the provider signs in the same user again with no prompt. |
-| `Auth:Features:PushedAuthorization` | `pushed_authorization_request_endpoint` | The BFF uses the plain authorize URL. |
-| `Auth:Features:DPoP` | `dpop_signing_alg_values_supported` | The BFF uses Bearer tokens. See [DPoP](#dpop). |
+Register the callback URL of each origin at the provider. `/auth/status` gives the URL of the origin that you call.
 
-The values are:
+Do not register a wildcard redirect. The Server holds the verifier and the client secret, so the Server can redeem a stolen code. A wildcard at the provider and a forged `Host` then give an attacker a session. An exact match at the provider stops that. To stop it also at the Server, set `AllowedHosts` to your host names. A request with another `Host` then gets a 400.
 
-- `Auto` (the default, except DPoP): the BFF uses the feature if discovery lists it. The BFF logs one warning for each missing feature.
-- `Require`: the BFF stops at startup if discovery does not list the feature.
-- `Disable`: the BFF never uses the feature.
+### Keep Host in a proxy
 
-These are the active features for each provider with `Auto`. The e2e tests have the same table, and one test makes sure that live discovery matches it.
+A TLS proxy must send the original `Host`, and it must set `X-Forwarded-Proto`. In nginx:
 
-| Feature | Keycloak | FusionAuth | Authentik | Duende Demo | Cognito | ZeroFactor |
-|---|---|---|---|---|---|---|
-| Revocation | yes | no | yes | yes | no | yes (a no-op) |
-| `iss` parameter | yes | yes | no | yes | no | yes |
-| Back-channel logout | yes | no | yes | yes (the demo cannot reach the local BFF, so no test calls the receiver) | no | no |
-| `end_session_endpoint` | yes | yes | yes | yes | no (the BFF uses `/cognito-idp/logout`) | yes |
-| PAR | yes | no | no | yes | no | no |
-| Refresh token rotation | yes | yes | yes | no | no | no (the old token stays valid) |
-| DPoP | yes (the stack starts it with `--features=dpop`) | listed, not tested | listed, not tested | yes | no | no |
+```nginx
+proxy_set_header Host $host;
+proxy_set_header X-Forwarded-Proto $scheme;
+```
+
+If a proxy changes `Host`, the provider refuses the login with a `redirect_uri` error, because the URL names the inner host.
+
+The Server accepts `X-Forwarded-Proto` from any source. A spoofed value on plain http gives only a `Secure` cookie that the browser refuses, so it harms only the sender.
+
+### Cookies and ports
+
+Browsers do not isolate cookies by port (RFC 6265 section 8.5). On `http://LAN-IP`, each other app on that IP gets the cookie, and two Recall instances on one host log each other out. Plain http on a shared host is already open to a neighbor. To isolate Recall, give each app its own host name with TLS.
+
+## Login providers
+
+Each provider is one entry under `Auth:Providers`. As environment variables, the keys are `Auth__Providers__0__Issuer` and so on.
+
+| Setting | Content |
+|---|---|
+| `Id` | The name in the URLs. It has letters, digits, dashes, or underscores. The default is `oidc{position}`. |
+| `DisplayName` | The name on the pages |
+| `Issuer` | The issuer URL |
+| `ClientId`, `ClientSecret` | The confidential client at the provider. Both are required. |
+| `AllowHttp` | Must be `true` for an http issuer |
+| `CaCertificatePath` | A file with the certificates of a private CA |
+
+A typo stops the boot with a message that names the setting: a repeated ID, a missing client, a missing CA file, or an http issuer with no `AllowHttp`.
 
 Other settings:
 
 | Setting | Default | Content |
 |---|---|---|
-| `Auth:ClientAuthentication` | `Auto` | `Auto`, `Basic`, or `Post`. `Auto` uses `client_secret_basic`, or `client_secret_post` if discovery lists only that method. |
-| `Auth:IdTokenSigningAlgorithm` | `RS256` | The signing algorithm of the ID tokens and the logout tokens, as the client registration sets it. |
-| `Auth:MetadataRefreshInterval` | The handler default | The shortest time between two reads of the discovery document and the signing keys. |
-| `Auth:UseAudienceAsScope` | `true` | Adds `Auth:Audience` to the scopes. FusionAuth needs `false`. |
-| `Auth:EndSessionWithoutIdTokenHint` | `false` | Set it to `true` if the `end_session_endpoint` accepts `client_id` with no `id_token_hint`. A logout with the cookie of an ended BFF session then also ends the provider session. See [Logout flow](#logout-flow). |
-| `Auth:DefaultAccessTokenLifetime` | none | The lifetime of an access token when the token response has no `expires_in`. With no value, such a token never expires, and the BFF never refreshes it. |
+| `Auth:OpenSignup` | `false` | See [First login and the Owner](#first-login-and-the-owner) |
+| `Auth:StartPermitsPerWindow` | 20 | How many login starts the Server takes in each 10 seconds, over all callers. Each other start gets 429. |
+| `AllowedHosts` | `*` | See [Register the callback URLs](#register-the-callback-urls) |
 
-## DPoP
+### Private CA
 
-DPoP (RFC 9449) binds the access token and the refresh token to a key of the BFF. A thief of a token cannot use it without the key. `Auth:Features:DPoP` is `Disable` by default, so the tokens are Bearer tokens.
+`CaCertificatePath` makes a trust store for the HTTP client of one provider. It changes nothing on the machine, and no other call trusts that CA. The Server has no mode that trusts each certificate.
 
-| Setting | Content |
-|---|---|
-| `Auth:Features:DPoP` | `Disable` (the default), `Auto`, or `Require`. `Auto` uses DPoP if the key is set and discovery lists its algorithm. Otherwise the BFF logs one warning and uses Bearer tokens. `Require` stops the BFF at startup if the key is missing, or if discovery does not list its algorithm. |
-| `Auth:DPoPJsonWebKey` | The one DPoP key of the BFF, as a private JSON Web Key with an `alg`, for example an EC P-256 key with `"alg": "ES256"`. The `alg` must be an EC or RSA signature algorithm that fits the key type and curve. The BFF checks this and signs a test value at startup. It is a secret. |
+### No provider
 
-How the BFF uses the key:
+With no entry under `Auth:Providers`, and no `Auth:Authority`, the Server boots and runs its migrations. `/auth/status` answers `no_login_method`, and the login page answers 503:
 
-- The authorize request has `dpop_jkt`, the thumbprint of the key. The code exchange and each refresh have a DPoP proof.
-- An API call has `Authorization: DPoP <token>` and a new `DPoP` proof for that request. The proof has the method, the URL of the API without the query, and the hash of the token.
-- If the API answers `401` with `use_dpop_nonce`, the BFF keeps the nonce and sends the request one more time with a new proof. A request body larger than 64 KiB gets no retry, but the next request has the nonce.
-- The BFF stores the key in the session ticket with the tokens, so the tokens of a session always match the key that bound them. A change of the key applies to new logins. A session from before the change has Bearer tokens, or the old key, until the user logs in again.
+> No sign-in method is configured. Set Auth__Providers__0__Issuer, ClientId, and ClientSecret, then restart.
 
-The server accepts both token types. A token with a `cnf.jkt` claim must come with `Authorization: DPoP` and a valid proof. The same token as a Bearer token gets `401`. The server checks each rule of RFC 9449 section 4.3 and section 7, and answers with `WWW-Authenticate: DPoP error="invalid_dpop_proof"` or `error="invalid_token"`. The proof of a request can pass one time: the server keeps the `jti` of each proof in the table `used_dpop_proofs` of `appdb` until the proof is too old to pass the `iat` check, and a background service deletes the expired rows. The server builds the URL of the proof from the scheme, host, path base, and path of the request. The server has no forwarded headers middleware. If a proxy between the BFF and the server ends TLS or changes the `Host` header, the URL of the proof does not match. Add `UseForwardedHeaders` to the server in that case.
+The page also gives the callback URL to register. An API call gets 401.
 
-| Server setting | Default | Content |
+### A provider that is down
+
+The Server asks a provider for its discovery document at most once in 2 seconds, with a 3 second limit. `/auth/status` then gives the mode the state `unreachable`, and `start` answers 503 with `idp_unreachable`. Each session keeps working.
+
+## File modes
+
+The Server sets the umask to `0077` as its first step, so a new database file or stored file is readable only by its owner. At startup it also checks the data root, the database files, and the file store root. It sets a directory to `0700` and a file to `0600`, and it skips a link.
+
+On a NAS, the user of the container and the owner of the volume can differ. SMB and some volume drivers ignore a mode change. In these cases, the Server logs one warning that names the path and the volume, and it goes on. It never changes an owner and it never refuses to boot because of a mode. To correct the warning, run the container as the user who owns the volume, or make the volume private to that user on the NAS.
+
+The umask covers the whole process. A backup job that reads through a group loses access to new files, and no warning tells it. Run that job as the owner, or grant the access on the NAS.
+
+## Provider tokens
+
+`Auth:Authority` and `Auth:Audience` turn on the JWT path, for Swagger UI, MCP, gRPC, and agents. With no `Auth:Authority`, the Server registers no JWT handler, no DPoP handler, and no MCP metadata. The AppHost sets both for a stack with a provider.
+
+The default scheme chooses by the credential. A `Bearer` or `DPoP` value with the prefix `rcl_` goes to the session handler. Another value goes to the JWT handler. With no such header, a session cookie goes to the session handler. Other Authorization schemes, such as Basic from a proxy, do not hide the cookie.
+
+The JWT handler refuses a token whose client is `recall`, or whose `sub` has the prefix of a user ID. So a provider token cannot name itself a session.
+
+A provider token has a provider `sub`, and no user has that identifier. This has these results:
+
+- Swagger UI still signs in. `GET /api/v1/users/me` answers with the identifier from the claims, and a read of tenant data gets a refusal.
+- A delegated agent gets `UnknownClient`, because its token names no user of the app.
+- A machine agent works as before.
+
+### DPoP
+
+DPoP (RFC 9449) binds a provider token to a key of its client. The Server has no use for it in a login, and an agent can use it. The Server accepts both token types. A token with a `cnf.jkt` claim must come with `Authorization: DPoP` and a valid proof. The same token as a Bearer token gets 401. The Server checks each rule of RFC 9449 sections 4.3 and 7, and it answers with `WWW-Authenticate: DPoP error="invalid_dpop_proof"` or `error="invalid_token"`. A proof can pass one time: the Server keeps its `jti` in the table `used_dpop_proofs` until the proof is too old, and a background service deletes the expired rows. The Server builds the URL of the proof from the scheme, the host, the path base, and the path of the request.
+
+| Setting | Default | Content |
 |---|---|---|
 | `Auth:DPoP:ProofLifetime` | 60 s | The oldest `iat` that a proof can have. |
 | `Auth:DPoP:ClockSkew` | 5 s | How far in the future an `iat` can be. |
-| `Auth:DPoP:CleanupInterval` | 5 min | How often the server deletes expired replay rows. |
+| `Auth:DPoP:CleanupInterval` | 5 min | How often the Server deletes expired replay rows. |
 
-The server tags the span of a DPoP request with `app.auth.scheme=DPoP` and `app.dpop.jkt_prefix`, the first 8 characters of the thumbprint. No log or tag has a token, a proof, or a key.
+The Server tags the span of a DPoP request with `app.auth.scheme=DPoP` and `app.dpop.jkt_prefix`, the first 8 characters of the thumbprint. No log or tag has a token, a proof, or a key.
 
-To run the local stack with DPoP, set `DPoP=true`. The AppHost then sets `Auth:Features:DPoP` to `Require` and gives the BFF a generated EC P-256 key as the secret parameter `bff-dpop-key`. Only a provider whose class sets `TestedWithDPoP` can run with DPoP: the Duende Demo and Keycloak. Keycloak always starts with `--features=dpop`. Keycloak 26.0.8 has DPoP as a preview feature. FusionAuth and Authentik list DPoP in discovery, but this stack does not test DPoP with them. Cognito and ZeroFactor have no DPoP support. For another provider, the AppHost stops.
+## Auth provider in the AppHost
 
-```bash
-AuthProvider=Keycloak DPoP=true dotnet aspire start --isolated --non-interactive --apphost Recall.AppHost
-```
-
-When the stack runs with DPoP, `run-against-stack.ts` sets `DPOP=true`, and the e2e test "should call the Server with a DPoP-bound token" reads the server span of the `GET /api/v1/users/me` call with `dotnet aspire otel spans`. Without DPoP, that test is skipped.
-
-## Auth provider
-
-The AppHost holds all provider config. The BFF and the server have no provider code. They read the `Auth:*` settings that the AppHost gives them, and the BFF reads the discovery document of the provider for the optional features ([ADR 0005](adr/0005-provider-features-by-discovery.md)). See [ADR 0007](adr/0007-regular-repo-instead-of-template.md).
+The AppHost holds all provider config for a local run. It gives the Server the `Auth:Providers:0` entry and `Auth:Authority`. The provider resource of the stack comes from the `AuthProvider` setting. See [ADR 0007](adr/0007-regular-repo-instead-of-template.md).
 
 ### Select a provider
 
@@ -206,24 +314,20 @@ The `AuthProvider` setting in `Recall.AppHost/appsettings.json` selects the prov
   dotnet aspire run -- --AuthProvider Keycloak
   ```
 
+The `None` provider adds no container. The AppHost then forwards `Auth:Providers:*` and `Auth:OpenSignup` from its own configuration, so with no such setting the Server boots with no login method.
+
 The `ZeroFactor` provider is [0factor](https://github.com/c4l3b/0factor), a mock OIDC provider with no passwords. Its login page lists the test users, and one click signs in. It is the default provider. It is for local development only, so select another provider before you publish or deploy.
 
 ### Change the provider of a database that has users
 
-The app finds a user by the `sub` claim, which it stores in `User.Identifier`. Each provider gives its own `sub`. If you change the provider of a normal run, the database volume keeps the users of the old provider. Then a login with the new provider does not find the old user.
-
-An isolated run starts with an empty database, so it does not have this problem.
-
-- The Keycloak seed and the ZeroFactor seed give the test users the same IDs. You can change between these two providers and keep your data.
-- To use the user of another provider with ZeroFactor, register a user on the ZeroFactor login page. Enter the `sub` of the old user as the User ID.
+A login finds a user by the issuer and the subject. A new provider has a new issuer, so its first login has no link and gets `signup_closed`. To keep the journal, use the steps in [Recover a lost Owner](#recover-a-lost-owner). An isolated run starts with an empty database, so it does not have this problem.
 
 ### Add a provider
 
 1. Add the folder `Recall.AppHost/AuthProviders/<Name>/`.
 2. In the folder, add the class `<Name>AuthProvider` that implements `IAuthProvider`. The AppHost finds the class by reflection, and `<Name>` from the class name is the value of the `AuthProvider` setting. `AddTo` adds the containers of the provider to the stack and returns an `AuthProviderConfig`.
-3. Put the seed files in `seed/`, and mount them with `WithSeedFiles`. Call `WithClientUrls` on the container, and read the app URLs from the `APP_*` variables in the seed files. An isolated run gives the apps random ports.
-4. Add `frontend/e2e/idps/<name>.json`, with `<name>` in lowercase. Give the login form and the test user. Set `resource` to the name of the Aspire resource of the provider. Set `capabilities` to what the discovery document of the provider lists, and `sessionFeatures` to what the provider does. The e2e tests skip a feature test if the provider does not have the feature.
-5. To run the provider with `DPoP=true`, make `TestedWithDPoP` of the class return true, and run the e2e tests with DPoP. See [DPoP](#dpop).
+3. Put the seed files in `seed/`, and mount them with `WithSeedFiles`. Call `WithClientUrls` on the container, and read the app URLs from the `APP_*` variables in the seed files. Register `/auth/oidc/callback` at each of them. An isolated run gives the apps random ports.
+4. Add `frontend/e2e/idps/<name>.json`, with `<name>` in lowercase. Give the login form and the test user. Set `resource` to the name of the Aspire resource of the provider. Set `capabilities` to what the discovery document of the provider lists.
 
 A unit test in `AuthProviderCatalogTests` makes sure that each provider has its folder and its e2e file.
 
@@ -251,7 +355,7 @@ The server reads the client ID of the token from `client_id`, then `azp`, then `
 | Another client, and the `sub` of a user of the app, with a delegated agent for the client in the tenant of the user | A delegated agent | Each permission that both the user and the grant of the agent have | The tenant of the user |
 | Any other token, also a token with no client ID | An unknown client | None | None |
 
-The server applies the rows in this order, and the first match wins. The first-party clients are `Auth:ClientId`, which the BFF and Swagger UI use, and `Swagger:ClientId` when it is set. The server stops at startup if `Auth:ClientId` is missing.
+The server applies the rows in this order, and the first match wins. The first-party clients are `recall`, the client of each app session, `Auth:ClientId`, which Swagger UI uses, and `Swagger:ClientId` when it is set. An app session has the client `recall` and the user ID as its `sub`. A provider token has a provider `sub`, so it matches no user. See [Provider tokens](#provider-tokens) for what that does to Swagger UI and to a delegated agent.
 
 An allow-list and a machine agent are facts about the client that the operator sets, so they match each token of the client, whatever its `sub`. Thus a client credentials token with a service-account `sub` matches them, and a tenant cannot take such a client over with a user record that has the same `sub`.
 
@@ -280,13 +384,13 @@ When you add an MCP tool:
 
 ### Audit
 
-Each audit entry of a save records the `sub` of the token, its client ID, and the IDs of the user and the agent of the caller (see [audit-log.md](backend/audit-log.md)). A change by the BFF records the first-party client ID. A change by an agent records the client ID of the agent. A change with no token, for example a background job, records null.
+Each audit entry of a save records the `sub` of the token, its client ID, and the IDs of the user and the agent of the caller (see [audit-log.md](backend/audit-log.md)). A change from an app session records the client ID `recall`. A change by an agent records the client ID of the agent. A change with no token, for example a background job, records null.
 
 ### Providers
 
 Agents need a provider that can give a client other than the first-party client a token with the API audience.
 
-- ZeroFactor: the seed has the delegated client `clinic-assistant` and the machine client `fleet-sync`. Both get the `aspire-app` audience. Send a token request to `{zerofactor}/realms/aspire/protocol/openid-connect/token`. For `clinic-assistant`, use `grant_type=password` with `username=admin@example.com` and any password. For `fleet-sync`, use `grant_type=client_credentials` with any client secret.
+- ZeroFactor: the seed has the delegated client `clinic-assistant` and the machine client `fleet-sync`. Both get the `aspire-app` audience. Send a token request to `{zerofactor}/realms/recall/protocol/openid-connect/token`. For `clinic-assistant`, use `grant_type=password` with `username=admin@example.com` and any password. For `fleet-sync`, use `grant_type=client_credentials` with any client secret.
 - Keycloak: give the client an `oidc-audience-mapper` that includes the client `aspire-app`, as the seed in `realm-export.json` does for `aspire-app`. For a machine client, set `serviceAccountsEnabled`.
 - Cognito: agents do not work. The server checks the audience in `client_id`, so it accepts only the first-party client.
 
@@ -300,26 +404,19 @@ The server publishes OAuth protected resource metadata (RFC 9728) for `/mcp`. Th
 
 `Mcp:PublicOrigin` is the origin at which MCP clients call the server, for example `https://api.example.com`. It must be an https URL with no path, query, fragment, or user info. Plain http is allowed only for a loopback host such as `localhost`. The server stops at startup if the value is missing or not valid. The AppHost sets it to the `https` endpoint of the server. In a deployment, set it to the public URL of the server.
 
-`authorization_servers` has `Auth:Authority`, the same value that the JWT bearer handler uses. The AppHost gives the BFF the same `Auth:Authority`, and the BFF checks at startup that the discovery document gives this value as the issuer. Thus each provider works with no other setting. `scopes_supported` has the scopes that Swagger UI asks for: `Auth:Scopes` if it is set, else `openid`, `profile`, and `Auth:Audience` when `Auth:UseAudienceAsScope` is `true`.
+`authorization_servers` has `Auth:Authority`, the same value that the JWT bearer handler uses. `scopes_supported` has the scopes that Swagger UI asks for: `Auth:Scopes` if it is set, else `openid`, `profile`, and `Auth:Audience` when `Auth:UseAudienceAsScope` is `true`.
 
 Other paths of the server do not get `resource_metadata`. A request that fails a DPoP check gets only the `DPoP` challenge. This includes a DPoP-bound token that the client sends with the `Bearer` scheme. The server does not support dynamic client registration, so a tenant must register each agent first (see [Register an agent](#register-an-agent)).
 
 ## E2E tests
 
-The Playwright tests in `frontend/e2e/auth-flows.spec.ts` log in through the React app and through Swagger UI. They run against the provider of the running stack. A test for a feature runs only for a provider that has the feature. For the other providers, a test proves the fallback.
+The Playwright tests in `frontend/e2e/auth-flows.spec.ts` log in through the React app, through a native flow with a loopback server, and through Swagger UI. They run against the provider of the running stack.
 
-1. Start the stack, as shown in [Select a provider](#select-a-provider). For the BFF refresh test and the refresh lock test, also set `BffRefreshBeforeExpirationSeconds`, as the CI e2e job does:
-
-   ```bash
-   AuthProvider=Keycloak BffRefreshBeforeExpirationSeconds=86400 dotnet aspire start --isolated --non-interactive --apphost Recall.AppHost
-   ```
-
-   The AppHost gives the value to the BFF as `Auth:RefreshBeforeExpirationSeconds`. It is longer than the access token lifetime of each provider, so each API call makes the BFF refresh. Do not set it for a normal run. Without it, the BFF refresh test and the refresh lock test are skipped.
-2. Wait until the server, the BFF, and the webfrontend are healthy:
+1. Start the stack, as shown in [Select a provider](#select-a-provider).
+2. Wait until the server and the webfrontend are healthy:
 
    ```bash
    dotnet aspire wait server --status healthy --apphost Recall.AppHost
-   dotnet aspire wait bff --status healthy --apphost Recall.AppHost
    dotnet aspire wait webfrontend --status healthy --apphost Recall.AppHost
    ```
 
@@ -329,81 +426,23 @@ The Playwright tests in `frontend/e2e/auth-flows.spec.ts` log in through the Rea
    pnpm test:e2e:stack
    ```
 
-The script `frontend/e2e/run-against-stack.ts` reads the stack from `dotnet aspire describe`. When no stack runs, or when the server, the BFF, or the webfrontend is missing or not healthy, the script stops and prints the command to fix it. Then it sets these variables and runs `playwright test --config playwright.stack.config.ts`:
+The script `frontend/e2e/run-against-stack.ts` reads the stack from `dotnet aspire describe`. When no stack runs, or when the server or the webfrontend is missing or not healthy, the script stops and prints the command to fix it. Then it sets these variables and runs `playwright test --config playwright.stack.config.ts`:
 
 | Variable | Value |
 |---|---|
 | `BASE_URL` | The `http` URL of `webfrontend` |
-| `SERVER_URL` | The `https` URL of `server` |
-| `AUTHORITY` | The `Auth__Authority` of the BFF. The live discovery test reads the discovery document from it, and skips when it is not set. |
+| `SERVER_URL` | The `https` URL of `server`. The Playwright setting `ignoreHTTPSErrors` accepts its certificate, and the machine trusts nothing. |
+| `AUTHORITY` | The `Auth__Authority` of the server. The live discovery test reads the discovery document from it. |
 | `IDP` | The name of a file in `frontend/e2e/idps/`. The default is the IdP whose `resource` is in the stack, or the IdP with no `resource` if the stack has none. Set it to override the IdP. |
 
 Extra arguments go to Playwright, for example `pnpm test:e2e:stack --repeat-each=5`.
 
-CI also sets an `EXPECT_*` variable for each feature that a leg must test, for example `EXPECT_REFRESH_MARGIN=true`. The script stops with an error when the variable and the stack disagree. Thus a leg cannot pass while its main test skips. An unset variable checks nothing.
-
-The script also gives the tests the client id and the client secret of the BFF, and the admin credentials of the provider. It never prints them.
-
-- The refresh rotation test uses the client of the BFF for its own code flow. It proves that the provider rejects the old refresh token after one refresh. It runs if `sessionFeatures.refreshRotation` is true in the IdP file: Keycloak, FusionAuth, and Authentik.
-- The BFF refresh test makes two API calls through the BFF, and each call refreshes. The second call succeeds only if the BFF stored the rotated refresh token of the first call. Then the test logs out, and the `id_token_hint` proves that the BFF stored the ID token of the second refresh. It runs if `sessionFeatures.refreshRotation` is true in the IdP file: Keycloak, FusionAuth, and Authentik. On a provider that does not reject a reused refresh token, the test cannot prove the rotation.
-- The refresh lock test makes two API calls through the BFF at the same time, and both need the same refresh. Both calls must succeed, and the BFF session must still work after them. With no refresh lock, both calls send the same refresh token, and the provider rejects the second one. It runs on the same providers as the BFF refresh test.
-- The back-channel logout test ends the session at the provider through its admin API, and expects a 204 from `/bff/user`. It runs if `sessionFeatures.backChannelLogoutReachesBff` is true in the IdP file: on Keycloak, with the bootstrap admin, and on Authentik, with the `authentik-bootstrap-token` parameter of the AppHost. Authentik creates this token only on the first start of its database.
-
 ## Conformance
 
-Recall dropped the conformance run, and R4 deletes the BFF. Recall has no `pnpm test:conformance` script, no `frontend/conformance` folder, no `Conformance` provider, and no `conformance` workflow. The rename of the template deleted them, and `scripts/init.cs`, which did the rename, is also gone. So no run in this repository proves the results below.
-
-The OpenID Foundation conformance suite tests the BFF as a relying party. The template runs these five test plans against a local stack, and it gave these results before the rename:
-
-| Plan | Result |
-|---|---|
-| `oidcc-client-basic-certification-test-plan` | Passes, with one accepted warning |
-| `oidcc-client-config-certification-test-plan` | Passes |
-| `oidcc-client-rp-initiated-logout-rp-basic` | Passes |
-| `oidcc-client-back-channel-logout-rp-basic` | Passes |
-| `oidcc-client-refreshtoken-test-plan` | Passes. It is not part of the certification program. The BFF does not call the user info endpoint after a refresh, but the server of the template does, because it checks the opaque access tokens of the suite there. |
-
-[`frontend/conformance/accepted-results.json`](https://github.com/pdevito3/FullstackTemplate/blob/main/frontend/conformance/accepted-results.json) lists each accepted warning with its reason. The header of [`frontend/conformance/run-conformance.ts`](https://github.com/pdevito3/FullstackTemplate/blob/main/frontend/conformance/run-conformance.ts) tells how to start the stack and the suite in the template.
-
-### Certify your own deployment
-
-The OpenID Foundation certifies a deployment, not a repository. To certify your deployment, use the same plans with the hosted suite:
-
-1. Deploy the app, so that the BFF has a public HTTPS URL.
-2. Log in to the hosted suite at <https://www.certification.openid.net/>.
-3. Create each plan of the table above, with these variants:
-   - Client registration: `static_client`
-   - Request type: `plain_http_request`
-   - Client authentication: `client_secret_basic`, for all plans except the basic plan
-   - Response mode: `default`, for all plans except the basic plan
-4. Give each plan this configuration. Use one alias for all plans:
-
-   ```json
-   {
-     "alias": "your-alias",
-     "client": {
-       "client_id": "your-client-id",
-       "client_secret": "your-client-secret",
-       "redirect_uri": "https://{bff}/signin-oidc",
-       "post_logout_redirect_uri": "https://{bff}/signout-callback-oidc",
-       "backchannel_logout_uri": "https://{bff}/bff/backchannel"
-     }
-   }
-   ```
-
-5. Set these BFF settings for the test run:
-   - `Auth__Authority`: `https://www.certification.openid.net/test/a/your-alias/`
-   - `Auth__ClientId` and `Auth__ClientSecret`: the values of step 4
-   - `Auth__UseAudienceAsScope`: `false`
-   - `Auth__MetadataRefreshInterval`: `00:00:01`, because each test module has new signing keys
-6. For each test module, start the module, then restart the BFF. The suite gives the discovery document only while a module runs, and the BFF reads it at startup.
-7. Do the login, or the login and the logout, in a browser. [`run-conformance.ts`](https://github.com/pdevito3/FullstackTemplate/blob/main/frontend/conformance/run-conformance.ts) of the pdevito3/FullstackTemplate repository shows the steps for each plan.
-8. Export the results of each plan. Follow the instructions at <https://openid.net/certification/> to submit them.
-
-Use a separate deployment for the test run. The suite is the identity provider of that deployment while the test runs.
+Recall dropped the OpenID Foundation conformance run. The results of the template were for the BFF, which no longer runs, so they say nothing about the login of the Server. No run in this repository tests the Server against that suite.
 
 ## Test users
 
 The seed files of each provider create its test users. The doc comment of each provider class in `Recall.AppHost/AuthProviders/` lists them. The file in `frontend/e2e/idps/` gives the user that the e2e tests log in with.
 
-The seed files create users in the provider only. A new database has no user records, so a test user who signs in has no tenant and no permissions. Each page of the SPA then shows a notice that links to `Start a tenant` (`/start-tenant`). That page sends `POST /api/v1/users/initiate`, and the user becomes the admin of a new tenant. See [multi-tenancy.md](multi-tenancy.md#add-a-user-to-a-tenant).
+The seed files create users in the provider only. The first test user who signs in on a new database becomes the Owner. Each other test user gets the page `This server does not accept new people`, unless `Auth:OpenSignup` is `true`.
