@@ -118,7 +118,7 @@ An older refresh token, sent with no key or with another key, is a replay. The S
 | Answer | Meaning | What the app does |
 |---|---|---|
 | 200 | The new pair | Stores it |
-| 400 `invalid_request` | A missing grant, or a `retry_key` that is too short | Corrects the request. The Server wrote nothing. |
+| 400 `invalid_request` | A missing grant or refresh token, a `retry_key` that is too short, or two `retry_key` values | Corrects the request. The Server wrote nothing. |
 | 400 `invalid_grant` | The token is not valid, or the session ended | Shows the sign-in, and keeps each draft on disk |
 
 ### Sign out
@@ -178,11 +178,11 @@ A repeat login fills only a stored value that is empty. A changed value stays. A
 
 A changed issuer, a new provider, a provider restored with a new `sub`, or a deleted Owner can leave a person with no way to sign in. Do not delete the data directory to fix this, because it holds the journal.
 
-1. Stop other logins, because the next login with no link takes the claim.
+1. Stop other logins, because the next login with no link takes the claim. A login with a link does not take the file, so the file stays until a login with no link comes.
 2. Create an empty file named `claim-owner` in the data directory.
 3. Sign in with the identity that you want.
 
-The Server links that identity to the oldest live Admin of the oldest live tenant whose identifier is its own ID, logs a warning with the user ID and the issuer, and removes the file. If the tenant has no such Admin, the Server adds a new Admin. A deleted tenant is the one case that the claim cannot recover.
+The Server links that identity to the oldest live Admin of the oldest live tenant whose identifier is its own ID, logs a warning with the user ID and the issuer, and removes the file. If the tenant has no such Admin, the Server adds a new Admin. A deleted tenant is the one case that the claim cannot recover. In that case, the login gets `signup_closed` and the Server still removes the file.
 
 ### Delete old development data
 

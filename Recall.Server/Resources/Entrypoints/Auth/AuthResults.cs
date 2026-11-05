@@ -1,6 +1,7 @@
 namespace Recall.Server.Resources.Entrypoints.Auth;
 
 using Microsoft.Net.Http.Headers;
+
 /// <summary>
 /// A redirect that writes the header itself. <c>Results.Redirect</c> logs its destination, and a destination here holds
 /// a state, a code, or a challenge.

@@ -234,8 +234,10 @@ jobs:
         with:
           persist-credentials: false
 
+      # A dispatch has no pull request to read, and this checkout holds no credential for the fetch that the filter would run.
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
+        if: github.event_name != 'workflow_dispatch'
         with:
           filters: |
             bff:
