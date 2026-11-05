@@ -211,9 +211,9 @@ _Avoid_: Token, ticket, witness
 ### Files
 
 **File store**:
-The folder on the local disk that keeps the bytes of files, such as audio. A write is atomic, so a reader sees a whole file or no file.
+The folder on the local disk that keeps the bytes of files, such as audio. A write ends with an atomic rename, so a reader sees a whole file or no file while the root is one file system.
 _Avoid_: Object storage, bucket, blob store
 
 **File key**:
-The relative path of one file or one folder in the file store. A value that can leave the root of the store cannot be a file key. All the files of a tenant are under the folder `tenants/{tenantId}`, and a tenant delete deletes that folder.
+The relative path of one file or one folder in the file store. A value with a segment that climbs out of the root of the store cannot be a file key. All the files of a tenant are under the folder `tenants/{tenantId}`, and a tenant delete deletes that folder.
 _Avoid_: Object key, storage key
