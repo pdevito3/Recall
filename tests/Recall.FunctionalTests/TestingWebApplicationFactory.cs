@@ -49,7 +49,7 @@ public sealed class TestingWebApplicationFactory : WebApplicationFactory<Program
     public const string TelemetryMachineClientId = "telemetry-machine";
 
     /// <summary>
-    /// The client ID of the app (the BFF). A user token from this client acts as its user.
+    /// The client ID of the app. A user token from this client acts as its user.
     /// </summary>
     public const string FirstPartyClientId = "test-app";
 

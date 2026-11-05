@@ -24,8 +24,7 @@ const problemAt = (method: MockRoute['method'], path: string, problem: Buildable
 export const usersApi = {
   currentOf(identity: Identity): MockRoute[] {
     if (!identity.signedIn) return []
-    const name = identity.claims.find((claim) => claim.type === 'name')?.value ?? null
-    return [usersApi.currentIs({ identifier: actorSubject, name })]
+    return [usersApi.currentIs({ identifier: actorSubject, name: identity.user.name })]
   },
 
   currentIs(user: CurrentUserDto): MockRoute {

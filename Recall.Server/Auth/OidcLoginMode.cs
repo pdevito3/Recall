@@ -24,7 +24,8 @@ public sealed record OidcDiscovery(
     string? UserinfoEndpoint,
     IReadOnlyList<string> TokenEndpointAuthMethods,
     bool AdvertisesIssParameter,
-    bool AcceptsPromptLogin);
+    bool AcceptsPromptLogin,
+    string? EndSessionEndpoint);
 
 public sealed record OidcCallback(string? Code, string? Iss, string? Error)
 {
@@ -116,6 +117,15 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
 
     public async Task<LoginModeState> ProbeAsync(CancellationToken cancellationToken)
         => await DiscoverAsync(cancellationToken) is null ? LoginModeState.Unreachable : LoginModeState.Ready;
+
+    public async Task<string?> ProviderLogoutUrlAsync(CancellationToken cancellationToken)
+    {
+        if ((await DiscoverAsync(cancellationToken))?.EndSessionEndpoint is not { } endpoint)
+            return null;
+
+        var separator = endpoint.Contains('?', StringComparison.Ordinal) ? '&' : '?';
+        return $"{endpoint}{separator}client_id={Uri.EscapeDataString(_provider.ClientId!)}";
+    }
 
     public Task<OidcDiscovery?> DiscoverAsync(CancellationToken cancellationToken)
     {
@@ -248,7 +258,9 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
         var acceptsPromptLogin = !root.TryGetProperty("prompt_values_supported", out var prompts)
             || prompts.ValueKind != JsonValueKind.Array
             || prompts.EnumerateArray().Any(p => p.ValueKind == JsonValueKind.String && p.GetString() == "login");
-        return new OidcDiscovery(issuer, authorization!, token!, jwks!, userinfo, methods, advertisesIss, acceptsPromptLogin);
+        // This endpoint is optional and no login uses it, so a bad value costs only the link on the signed-out page.
+        var endSession = Text(root, "end_session_endpoint");
+        return new OidcDiscovery(issuer, authorization!, token!, jwks!, userinfo, methods, advertisesIss, acceptsPromptLogin, IsAllowedUrl(endSession) ? endSession : null);
     }
 
     private bool IsAllowedUrl(string? url)

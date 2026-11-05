@@ -10,8 +10,8 @@ export default async ({ page, context, step, capture, expect, login, logout }) =
     return me.body
   })
 
-  await step('the home page shows no notice of a missing tenant', async () => {
-    await expect(page.getByRole('region', { name: 'No tenant' })).toHaveCount(0)
+  await step('the home page shows no failed check of the user record', async () => {
+    await expect(page.getByRole('region', { name: 'Membership check' })).toHaveCount(0)
   })
   await capture('home-of-owner')
 
@@ -42,6 +42,6 @@ export default async ({ page, context, step, capture, expect, login, logout }) =
   await capture('signup-closed')
 
   await step('the refused person has no session', async () => {
-    expect((await page.request.get('/bff/user', { headers: { 'X-CSRF': '1' } })).status()).toBe(204)
+    expect((await page.request.get('/auth/me', { headers: { 'X-CSRF': '1' } })).status()).toBe(204)
   })
 }

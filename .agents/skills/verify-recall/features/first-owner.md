@@ -1,6 +1,6 @@
-# Start a tenant
+# First owner
 
-A person does not start a tenant on a page anymore. The first login of a new database makes the tenant `Recall` and makes that person its Owner, an Admin of the tenant. When the database has a tenant and `Auth:OpenSignup` is off, each other person who signs in gets the refusal page of the Server, so a signed-in person with no user record does not exist. The SPA page `/start-tenant` stays until a later change removes it, and the Server refuses its call.
+A person does not start a tenant on a page anymore. The first login of a new database makes the tenant `Recall` and makes that person its Owner, an Admin of the tenant. When the database has a tenant and `Auth:OpenSignup` is off, each other person who signs in gets the refusal page of the Server, so a signed-in person with no user record does not exist.
 
 ## Sub-features
 
@@ -21,10 +21,10 @@ Preconditions:
 - The database has no tenant. This is true on a new stack, and `browse.mjs` restores it after each recipe.
 - The IdP is ZeroFactor, because the recipe clicks the second user on its page.
 
-- **First owner.** Run `login('admin@example.com')`. `fetch('/api/v1/users/me')` in the page gives 200 with the `name` of the login. `page.getByRole('region', { name: 'No tenant' })` has count 0.
+- **First owner.** Run `login('admin@example.com')`. `fetch('/api/v1/users/me')` in the page gives 200 with the `name` of the login. `page.getByRole('region', { name: 'Membership check' })` has count 0.
 - **Permissions.** `fetch('/api/v1/users')` in the page gives 200 with one row, role `Admin`, and the `identifier` of `/api/v1/users/me`.
-- **Second person.** Run `logout()` and `context.clearCookies()`, so that the session of the IdP ends too. Open `/`, then click `[data-testid="user-user@example.com"]`. The response of `/auth/oidc/callback` is 403. The heading is `This server does not accept new people`, and the title is `This server does not accept new people - Recall`. The link `Use another account` starts a new login with `prompt=login`. `/bff/user` gives 204.
-- **Proof.** Run `node $S/scripts/browse.mjs $S/recipes/start-tenant.mjs`. The captures `home-of-owner` and `signup-closed` show the two states.
+- **Second person.** Run `logout()` and `context.clearCookies()`, so that the session of the IdP ends too. Open `/`, then click `[data-testid="user-user@example.com"]`. The response of `/auth/oidc/callback` is 403. The heading is `This server does not accept new people`, and the title is `This server does not accept new people - Recall`. The link `Use another account` starts a new login with `prompt=login`. `/auth/me` gives 204.
+- **Proof.** Run `node $S/scripts/browse.mjs $S/recipes/first-owner.mjs`. The captures `home-of-owner` and `signup-closed` show the two states.
 
 ## Gotchas
 

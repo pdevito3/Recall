@@ -14,8 +14,8 @@ import {
 import { AppSidebar } from '@/components/app-sidebar'
 import { Button } from '@/components/ui/button'
 import { login, returnUrlOf } from '@/domain/auth/apis/auth-actions'
-import { authClaimsQuery } from '@/domain/auth/apis/get-user'
-import { NoTenantNotice } from '@/domain/membership/components/no-tenant-notice'
+import { authUserQuery } from '@/domain/auth/apis/get-user'
+import { MembershipNotice } from '@/domain/membership/components/membership-notice'
 import { HrefRouterProvider } from '@/components/ui/link'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -37,14 +37,14 @@ export const Route = createRootRoute({
 })
 
 function RootComponent() {
-  const claims = useQuery(authClaimsQuery)
+  const session = useQuery(authUserQuery)
 
   // A failed refetch keeps the data of the last answer, and that answer still decides.
-  if (claims.data === null) return <GoToLogin />
-  if (claims.data) return <Layout />
+  if (session.data === null) return <GoToLogin />
+  if (session.data) return <Layout />
   // A refetch with no data sets the query back to pending and clears the error, so the count of errors keeps the alert.
-  if (claims.errorUpdateCount > 0) {
-    return <SessionCheckFailed isRetrying={claims.isFetching} onRetry={() => void claims.refetch()} />
+  if (session.errorUpdateCount > 0) {
+    return <SessionCheckFailed isRetrying={session.isFetching} onRetry={() => void session.refetch()} />
   }
   return null
 }
@@ -99,7 +99,7 @@ function Layout() {
               </Breadcrumb>
             </div>
           </header>
-          <NoTenantNotice />
+          <MembershipNotice />
           <div ref={content} className="flex flex-1 flex-col gap-4 p-4 pt-0">
             <Outlet />
           </div>

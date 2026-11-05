@@ -5,7 +5,6 @@ export const users = (page: Page) => {
   const roleDialog = page.getByRole('dialog', { name: /^Change the role of / })
   const deleteDialog = page.getByRole('dialog', { name: /^Delete .+\?$/ })
   const details = page.getByRole('region', { name: 'Details' })
-  const startTenantFirst = page.getByText('Start a tenant to manage its users.', { exact: true })
 
   return {
     listHeading: page.getByRole('heading', { name: 'Users', exact: true }),
@@ -19,8 +18,6 @@ export const users = (page: Page) => {
     emptyPage: page.getByText(/^There are no users on page \d+\./),
     firstPageLink: page.getByRole('link', { name: 'Go to page 1' }),
     loadFailure: page.getByRole('alert').filter({ hasText: 'The users did not load.' }),
-    startTenantFirst,
-    startTenantLink: startTenantFirst.getByRole('link', { name: 'Start a tenant' }),
     detailHeading: (name: string) => page.getByRole('heading', { name, exact: true }),
     detail: (text: string) => details.getByRole('definition').and(details.getByText(text, { exact: true })),
     actions: (name: string) => page.getByRole('group', { name: `Actions for ${name}` }),

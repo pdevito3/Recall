@@ -153,7 +153,7 @@ describe('apiClient with a response that is not problem details', () => {
     expect(Notification.error).toHaveBeenCalledExactlyOnceWith(message)
   })
 
-  // The Server answers 401 with no body to a call that needs a user, and the BFF passes it on.
+  // The Server answers 401 with no body to a call that needs a user.
   it('checks the session for a 401, and shows no toast when the session ended', async () => {
     checkSession.mockResolvedValue(true)
     adapter.mockImplementation((config) => respond(config, 401, ''))
@@ -182,7 +182,7 @@ describe('apiClient with a response that is not problem details', () => {
   it('does not check the session for a 401 of the session check itself', async () => {
     adapter.mockImplementation((config) => respond(config, 401, ''))
 
-    const error = await apiClient.get('/bff/user', { suppressErrorToast: true }).catch((e: unknown) => e)
+    const error = await apiClient.get('/auth/me', { suppressErrorToast: true }).catch((e: unknown) => e)
 
     expect((error as Error).message).toBe('Request failed with status code 401')
     expect(checkSession).not.toHaveBeenCalled()

@@ -2,8 +2,8 @@ import { createServer } from 'node:net'
 import { defineConfig, devices } from '@playwright/test'
 
 /**
- * The functional suite: the real SPA in a real browser, with each call to the BFF mocked in the browser.
- * No BFF, Server, or IdP runs. Run it with `pnpm test:e2e`. See docs/frontend/testing.md.
+ * The functional suite: the real SPA in a real browser, with each call to the Server mocked in the browser.
+ * No Server or IdP runs. Run it with `pnpm test:e2e`. See docs/frontend/testing.md.
  *
  * The auth flows against a live stack and a real IdP are a different suite. See playwright.stack.config.ts.
  */

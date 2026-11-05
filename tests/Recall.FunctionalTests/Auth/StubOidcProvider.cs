@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Primitives;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
@@ -52,20 +53,27 @@ public sealed class StubOidcProvider : HttpMessageHandler
     public const string ClientId = "recall-test-client";
     public const string JwtAudience = "test-api";
 
-    private static readonly string[] AuthMethods = ["client_secret_basic"];
-
-    private readonly RsaSecurityKey _signingKey = new(RSA.Create(2048)) { KeyId = "stub-key" };
+    private RsaSecurityKey _signingKey = new(RSA.Create(2048)) { KeyId = "stub-key" };
     private readonly RsaSecurityKey _otherKey = new(RSA.Create(2048)) { KeyId = "stub-key" };
     private readonly SymmetricSecurityKey _hmacKey = new(RandomNumberGenerator.GetBytes(32)) { KeyId = "stub-hmac" };
     private readonly ConcurrentDictionary<string, (AuthorizeRequest Request, StubLogin Login)> _codes = new();
     private readonly ConcurrentDictionary<string, StubLogin> _accessTokens = new();
     private readonly ConcurrentQueue<string> _handedOut = new();
 
-    public string ClientSecret { get; } = Secrets.New();
+    // The characters that the Basic form must escape, so each login proves the escape.
+    public string ClientSecret { get; } = $"{Secrets.New()}:%&+";
 
     public bool Down { get; set; }
 
     public string[]? PromptValues { get; init; }
+
+    public string DiscoveryIssuer { get; init; } = Issuer;
+
+    public string[] AuthMethods { get; init; } = ["client_secret_basic"];
+
+    public bool ListsIssParameter { get; init; } = true;
+
+    public string? EndSessionEndpoint { get; init; } = $"{Issuer}/logout";
 
     public IReadOnlyCollection<string> HandedOut => _handedOut;
 
@@ -76,6 +84,8 @@ public sealed class StubOidcProvider : HttpMessageHandler
         _handedOut.Enqueue(code);
         return code;
     }
+
+    public void RollSigningKey() => _signingKey = new RsaSecurityKey(RSA.Create(2048)) { KeyId = $"stub-key-{Guid.NewGuid():N}" };
 
     public OpenIdConnectConfiguration JwtConfiguration()
     {
@@ -118,16 +128,18 @@ public sealed class StubOidcProvider : HttpMessageHandler
     {
         var body = new Dictionary<string, object>
         {
-            ["issuer"] = Issuer,
+            ["issuer"] = DiscoveryIssuer,
             ["authorization_endpoint"] = $"{Issuer}/authorize",
             ["token_endpoint"] = $"{Issuer}/token",
             ["jwks_uri"] = $"{Issuer}/jwks",
             ["userinfo_endpoint"] = $"{Issuer}/userinfo",
             ["token_endpoint_auth_methods_supported"] = AuthMethods,
-            ["authorization_response_iss_parameter_supported"] = true,
+            ["authorization_response_iss_parameter_supported"] = ListsIssParameter,
         };
         if (PromptValues is { } values)
             body["prompt_values_supported"] = values;
+        if (EndSessionEndpoint is { } endSession)
+            body["end_session_endpoint"] = endSession;
         return Json(body);
     }
 
@@ -186,11 +198,10 @@ public sealed class StubOidcProvider : HttpMessageHandler
 
     private async Task<HttpResponseMessage> TokenAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{Uri.EscapeDataString(ClientId)}:{Uri.EscapeDataString(ClientSecret)}"));
-        if (request.Headers.Authorization is not { Scheme: "Basic" } authorization || authorization.Parameter != basic)
+        var form = QueryHelpers.ParseQuery(await request.Content!.ReadAsStringAsync(cancellationToken));
+        if (!AuthenticatesTheClient(request, form))
             return Refused("invalid_client");
 
-        var form = QueryHelpers.ParseQuery(await request.Content!.ReadAsStringAsync(cancellationToken));
         if (!_codes.TryRemove(form["code"].ToString(), out var grant)
             || form["grant_type"] != "authorization_code"
             || form["redirect_uri"] != grant.Request.RedirectUri
@@ -212,6 +223,15 @@ public sealed class StubOidcProvider : HttpMessageHandler
             ["id_token"] = idToken,
             ["token_type"] = "Bearer",
         }));
+    }
+
+    private bool AuthenticatesTheClient(HttpRequestMessage request, Dictionary<string, StringValues> form)
+    {
+        if (AuthMethods.Contains("client_secret_post"))
+            return request.Headers.Authorization is null && form["client_id"] == ClientId && form["client_secret"] == ClientSecret;
+
+        var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{Uri.EscapeDataString(ClientId)}:{Uri.EscapeDataString(ClientSecret)}"));
+        return request.Headers.Authorization is { Scheme: "Basic" } authorization && authorization.Parameter == basic;
     }
 
     private HttpResponseMessage Userinfo(HttpRequestMessage request)

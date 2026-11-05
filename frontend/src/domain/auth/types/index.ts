@@ -2,17 +2,19 @@
  * Auth domain types
  */
 
-export interface BffClaim {
-  type: string
-  value: string
+/** The answer of `GET /auth/me`. */
+export interface AuthUser {
+  sub: string
+  name: string | null
+  sid: string
+  client_kind: string
 }
 
 /**
- * Parsed auth state from BFF claims
+ * The auth state that the page reads
  */
 export interface AuthState {
   isLoggedIn: boolean
   isLoading: boolean
   username: string | null
-  logoutUrl: string | null
 }

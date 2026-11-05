@@ -50,10 +50,7 @@ public class EndpointAccessSweepTests : TestBase
         [AuthRoutes.Token] = "The code and PKCE verifier, or the refresh token, prove this request. AuthRefusalTests covers each refusal.",
         [AuthRoutes.Logout] = "Tolerant. It ends only a session that the request proves, and it shows no tenant data.",
         [AuthRoutes.RevokeOthers] = "Each session ends only the other sessions of its own user. AppSessionTests covers it.",
-        [AuthRoutes.Me] = "Each session reads its own identity. It takes no ID. AppSessionTests covers it.",
-        [AuthRoutes.BffLogin] = "Public. A redirect to the sign-in page. R4 deletes it.",
-        [AuthRoutes.BffUser] = "Each web session reads its own claims. It takes no ID. R4 deletes it.",
-        [AuthRoutes.BffLogout] = "The sid of the session proves this GET. AppSessionTests covers it. R4 deletes it.",
+        [AuthRoutes.Me] = "Each session reads its own identity, and a visitor with no session gets 204. It takes no ID. AppSessionTests covers it.",
     };
 
     // The sample body of an update sends version 0, so the control call of an update gets the stale-version code

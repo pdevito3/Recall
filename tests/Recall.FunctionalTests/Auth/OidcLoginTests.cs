@@ -81,7 +81,7 @@ public class OidcLoginTests
         var response = await planted.GetAsync("/auth/me", csrf: true);
 
         // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
     }
 
     [Test]

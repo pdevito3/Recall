@@ -93,6 +93,30 @@ public partial class AuthPagesTests
     }
 
     [Test]
+    [Arguments(null, null)]
+    [Arguments("https://idp.test/logout", "https://idp.test/logout?client_id=recall-test-client")]
+    [Arguments("https://idp.test/logout?realm=a", "https://idp.test/logout?realm=a&client_id=recall-test-client")]
+    [Arguments("http://idp.test/logout", null)]
+    [Arguments("javascript:alert(1)", null)]
+    public async Task the_logout_url_of_a_provider_comes_only_from_an_allowed_end_session_endpoint(string? endpoint, string? expected)
+    {
+        // Arrange
+        using var provider = new StubOidcProvider { EndSessionEndpoint = endpoint };
+        using var mode = new OidcLoginMode(
+            "stub",
+            new OidcProviderOptions { Issuer = StubOidcProvider.Issuer, ClientId = StubOidcProvider.ClientId, ClientSecret = provider.ClientSecret },
+            provider,
+            TimeProvider.System);
+
+        // Act
+        var url = await mode.ProviderLogoutUrlAsync(CancellationToken.None);
+
+        // Assert
+        url.ShouldBe(expected);
+        (await mode.ProbeAsync(CancellationToken.None)).ShouldBe(LoginModeState.Ready);
+    }
+
+    [Test]
     public async Task a_start_with_a_bad_value_has_a_way_out()
     {
         // Arrange

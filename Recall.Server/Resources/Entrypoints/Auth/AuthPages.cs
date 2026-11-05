@@ -29,7 +29,7 @@ public static class AuthPages
 
     public const string PromptLogin = "login";
 
-    public sealed record ChooserMode(string Id, string DisplayName, LoginModeState State);
+    public sealed record ChooserMode(string Id, string DisplayName, LoginModeState State, string? ProviderLogoutUrl);
 
     public static IResult NoMethod(string callbackUrl) => Page(
         StatusCodes.Status503ServiceUnavailable,
@@ -42,6 +42,8 @@ public static class AuthPages
             ? $"<li><a class=\"button\" href=\"{E(StartUrl(mode.Id, returnPath))}\">Sign in with {E(mode.DisplayName)}</a></li>"
             : $"<li>{E(NotAvailable(mode.DisplayName))}</li>");
         var note = message is null ? "" : $"<p>{E(message)}</p>";
+        var providerLogouts = modes.Where(mode => mode.ProviderLogoutUrl is not null).Select(mode =>
+            $"<p>Your session at {E(mode.DisplayName)} did not end. <a href=\"{E(mode.ProviderLogoutUrl!)}\">Sign out of {E(mode.DisplayName)}</a></p>");
         var noneReady = modes.All(mode => mode.State != LoginModeState.Ready);
         var heading = signedOut ? "You are signed out" : noneReady ? "Sign-in is not available" : "Sign in to Recall";
         return noneReady
@@ -50,7 +52,7 @@ public static class AuthPages
                 heading,
                 $"{note}<ul>{string.Concat(items)}</ul><p>Wait a few minutes, then try again.</p>"
                     + Action("Try again", $"{AuthRoutes.Login}?returnUrl={Uri.EscapeDataString(returnPath)}"))
-            : Page(StatusCodes.Status200OK, heading, $"{note}<ul>{string.Concat(items)}</ul>");
+            : Page(StatusCodes.Status200OK, heading, $"{note}<ul>{string.Concat(items)}</ul>{string.Concat(providerLogouts)}");
     }
 
     public static IResult ProviderIsDown(string displayName) => Page(
@@ -91,16 +93,6 @@ public static class AuthPages
     public static IResult BadRequest() => Page(
         StatusCodes.Status400BadRequest, "This request is not valid", "<p>The sign-in request has a value that this server cannot accept.</p>" + TryAgain);
 
-    public static IResult WrongLogoutLink() => Page(
-        StatusCodes.Status400BadRequest,
-        "This sign-out link is not valid",
-        "<p>You are still signed in, because this link does not name your session. To sign out, go back to Recall and use Sign out there.</p>" + BackToRecall);
-
-    public static IResult LogoutFromElsewhere() => Page(
-        StatusCodes.Status403Forbidden,
-        "Sign-out did not finish",
-        "<p>This request ended no session, because it came from outside Recall. To sign out, go back to Recall and use Sign out there.</p>" + BackToRecall);
-
     public static IResult NotFound() => Page(
         StatusCodes.Status404NotFound, "This sign-in method does not exist", "<p>This server has no such sign-in method.</p>" + TryAgain);
 
@@ -118,8 +110,6 @@ public static class AuthPages
     private static string NotAvailable(string displayName) => $"{displayName} is not available.";
 
     private static readonly string TryAgain = Action("Try again", AuthRoutes.Login);
-
-    private static readonly string BackToRecall = Action("Back to Recall", AuthRoutes.Login);
 
     private static string Action(string label, string url) => $"<ul><li><a class=\"button\" href=\"{E(url)}\">{E(label)}</a></li></ul>";
 

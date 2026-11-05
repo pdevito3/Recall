@@ -1,5 +1,5 @@
 import { test as base, expect, type Request } from '@playwright/test'
-import { bffApi } from './api/bff-api'
+import { authApi } from './api/auth-api'
 import { membershipApi } from './api/membership-api'
 import { usersApi } from './api/users-api'
 import { isMockedPath, requestRecorder, type HttpMethod, type MockRoute, type ServedRequest } from './api/mock-route'
@@ -31,8 +31,8 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
   api: [
     async ({ page, actor, baseURL }, provide) => {
       const origin = new URL(baseURL!).origin
-      // The actor is the first mock, so a test can still answer /bff/user and the user record in another way.
-      const routes: MockRoute[] = [bffApi.userIs(actor), ...membershipApi.userIs(actor), ...usersApi.currentOf(actor)]
+      // The actor is the first mock, so a test can still answer /auth/me and the user record in another way.
+      const routes: MockRoute[] = [authApi.userIs(actor), ...membershipApi.userIs(actor), ...usersApi.currentOf(actor)]
       const served = requestRecorder()
       const missed: string[] = []
 

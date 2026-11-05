@@ -5,7 +5,7 @@ description: Launches the Recall stack (Aspire, Server, React SPA) in isolation,
 
 # Verify Recall
 
-The primary surface is the React SPA in a browser. All browser traffic goes through the Vite dev server to the Server (`/auth/*`, `/api/*`, `/bff/*`). With `--preview`, the browser talks to the Server directly, because the Server serves the build. See [Production build](#production-build). The Server runs the login with the provider and keeps the session in its own database. Login uses ZeroFactor by default. ZeroFactor is [0factor](https://github.com/c4l3b/0factor), a mock OIDC provider that runs in the stack. Its login page lists the users (`admin@example.com` and `user@example.com`), and one click signs in. To test an interaction with a real IdP, start the stack with `--auth-provider <Name>`. `login()` supports `ZeroFactor` and `DuendeDemo`. For another provider, drive its login form from `frontend/e2e/idps/<name>.json`.
+The primary surface is the React SPA in a browser. All browser traffic goes through the Vite dev server to the Server (`/auth/*`, `/api/*`). With `--preview`, the browser talks to the Server directly, because the Server serves the build. See [Production build](#production-build). The Server runs the login with the provider and keeps the session in its own database. Login uses ZeroFactor by default. ZeroFactor is [0factor](https://github.com/c4l3b/0factor), a mock OIDC provider that runs in the stack. Its login page lists the users (`admin@example.com` and `user@example.com`), and one click signs in. To test an interaction with a real IdP, start the stack with `--auth-provider <Name>`. `login()` supports `ZeroFactor` and `DuendeDemo`. For another provider, drive its login form from `frontend/e2e/idps/<name>.json`.
 
 Other surfaces, not in the feature map yet:
 
@@ -63,7 +63,7 @@ Each line starts with `ok` or `FAIL`. Exit code 0 means the stack is worth drivi
 - The current run and its `stack.json` exist.
 - The AppHost pid of this checkout is the pid that `launch.sh` recorded. Thus the stack is ours.
 - Each resource is `Running` and `Healthy`.
-- The web URL is unchanged, an anonymous `/api/v1/users/me` is 401, `/bff/user` is 204 or 200, and the server `/health` is 200.
+- The web URL is unchanged, an anonymous `/api/v1/users/me` is 401, `/auth/me` is 204 or 200, and the server `/health` is 200.
 - If the stack uses `DuendeDemo`, the Duende demo IdP is reachable. If it is not, no login recipe can pass. A local provider, such as ZeroFactor, is a resource of the stack, so the health check above examines it.
 - `HEAD` is the commit of the launch. If it moved, the doctor prints `warn`. Frontend code hot-reloads. For server code, run `dotnet aspire resource server rebuild --apphost Recall.AppHost`.
 

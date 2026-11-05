@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test'
-import { bffPaths } from '@tests/support/api/bff-api'
+import { authPaths } from '@tests/support/api/auth-api'
 import { session } from './session.locators'
 
 export const blankPage = 'data:text/html,blank'
@@ -25,7 +25,7 @@ export function sessionPage(page: Page) {
         }).observe(document, { childList: true, subtree: true })
       })
 
-      const login = answered(bffPaths.login)
+      const login = answered(authPaths.login)
       // The SPA leaves the page as it loads, so the wait is for the commit and not for the load.
       await page.goto(path, { waitUntil: 'commit' })
       await login
@@ -46,9 +46,9 @@ export function sessionPage(page: Page) {
           const { destination } = event as unknown as { destination: { url: string } }
           if (new URL(destination.url).pathname === loginPath) reportLoginNavigation()
         })
-      }, bffPaths.login)
+      }, authPaths.login)
 
-      const login = answered(bffPaths.login)
+      const login = answered(authPaths.login)
       await page.goto(path, { waitUntil: 'commit' })
       await login
       return navigations
@@ -60,7 +60,7 @@ export function sessionPage(page: Page) {
 
     async openDeepLinkAndWaitForLogin(path: string) {
       await page.goto(path, { waitUntil: 'commit' })
-      await expect.poll(() => new URL(page.url()).pathname).toBe(bffPaths.login)
+      await expect.poll(() => new URL(page.url()).pathname).toBe(authPaths.login)
       await page.waitForLoadState()
     },
 
@@ -82,7 +82,7 @@ export function sessionPage(page: Page) {
         }).observe(document.body, { childList: true, subtree: true })
       })
 
-      const login = answered(bffPaths.login)
+      const login = answered(authPaths.login)
       await link.click()
       await login
       return { toasted }
@@ -90,7 +90,7 @@ export function sessionPage(page: Page) {
 
     /** A 401 of the API makes the app check the session again. */
     async followAndWaitForTheSessionCheck(link: Locator) {
-      const checked = answered(bffPaths.user)
+      const checked = answered(authPaths.me)
       await link.click()
       await checked
     },
@@ -106,7 +106,7 @@ export function sessionPage(page: Page) {
     },
 
     async tryAgain() {
-      const settled = answered(bffPaths.user)
+      const settled = answered(authPaths.me)
       await at.tryAgain.click()
       await settled
     },

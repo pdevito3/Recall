@@ -12,7 +12,7 @@ describe('the return URL of the login', () => {
   it.each([
     ['//', '//evil.example/x'],
     ['/\\', '/\\evil.example/x'],
-  ])('is / for a path that starts with %s, which the BFF refuses', (_, pathname) => {
+  ])('is / for a path that starts with %s, which the Server refuses', (_, pathname) => {
     expect(returnUrlOf(at(pathname, '?a=1'))).toBe('/')
   })
 

@@ -204,21 +204,6 @@ test.describe('the users of a tenant, for a member who cannot see them', () => {
   })
 })
 
-test.describe('the users of a signed-in user with no tenant', () => {
-  test.use({ actor: as.userWithNoTenant('Ada Lovelace') })
-
-  test('shows the way to start a tenant in place of the list, and asks for no list', { tag: '@UM-1' }, async ({ page, api }) => {
-    api.mock(usersApi.listReturns([]))
-    const users = usersPage(page)
-
-    await page.goto('/users')
-
-    await expect(users.at.startTenantFirst).toBeVisible()
-    await expect(users.at.startTenantLink).toHaveAttribute('href', '/start-tenant')
-    expect(api.last('get', usersPaths.list)).toBeUndefined()
-  })
-})
-
 const longName = 'Maximilianbartholomewalexandervanderwesthuizenmontgomerysmythesinclairfitzgeraldworthingtonhughes'
 
 test.describe('the users pages on a 320 px phone', () => {

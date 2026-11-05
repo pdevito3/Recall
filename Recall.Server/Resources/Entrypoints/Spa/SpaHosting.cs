@@ -5,7 +5,7 @@ public static class SpaHosting
     private const string IndexFile = "index.html";
 
     private static readonly PathString[] ReservedPrefixes =
-        ["/api", "/auth", "/bff", "/mcp", "/swagger", "/openapi", "/health", "/alive", "/.well-known"];
+        ["/api", "/auth", "/mcp", "/swagger", "/openapi", "/health", "/alive", "/.well-known"];
 
     public static bool IsPresent(WebApplication app) => app.Environment.WebRootFileProvider.GetFileInfo(IndexFile).Exists;
 
