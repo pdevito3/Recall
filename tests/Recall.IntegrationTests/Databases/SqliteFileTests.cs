@@ -63,7 +63,7 @@ public sealed class SqliteFileTests
 
         // Act
         var options = new Dictionary<string, string?>();
-        foreach (var name in new[] { "busy_timeout", "synchronous", "foreign_keys", "journal_mode" })
+        foreach (var name in new[] { "busy_timeout", "synchronous", "foreign_keys", "journal_mode", "journal_size_limit" })
         {
             await using var command = connection.CreateCommand();
             command.CommandText = $"PRAGMA {name}";
@@ -75,6 +75,30 @@ public sealed class SqliteFileTests
         options["synchronous"].ShouldBe("2");
         options["foreign_keys"].ShouldBe("1");
         options["journal_mode"].ShouldBe("wal");
+        options["journal_size_limit"].ShouldBe("16777216");
+    }
+
+    [Test]
+    public async Task a_wal_that_a_burst_of_writes_grew_is_cut_back_at_its_next_reset()
+    {
+        // Arrange
+        const long limit = 16 * 1024 * 1024;
+        await using var database = new SqliteTestDatabase();
+        var options = new DbContextOptionsBuilder().UseSqlite(database.ConnectionString)
+            .AddInterceptors(SqliteConnectionSetup.Instance).Options;
+        await using var context = new DbContext(options);
+        await context.Database.OpenConnectionAsync();
+        await context.Database.ExecuteSqlRawAsync("CREATE TABLE burst (bytes BLOB)");
+        await context.Database.ExecuteSqlRawAsync("INSERT INTO burst VALUES (randomblob(33554432))");
+        var walPath = new SqliteConnectionStringBuilder(database.ConnectionString).DataSource + "-wal";
+        new FileInfo(walPath).Length.ShouldBeGreaterThan(limit);
+
+        // Act
+        await context.Database.ExecuteSqlRawAsync("PRAGMA wal_checkpoint(PASSIVE)");
+        await context.Database.ExecuteSqlRawAsync("INSERT INTO burst VALUES (x'00')");
+
+        // Assert
+        new FileInfo(walPath).Length.ShouldBeLessThanOrEqualTo(limit);
     }
 
     [Test]
