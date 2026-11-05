@@ -69,6 +69,12 @@ public sealed class TestingWebApplicationFactory : WebApplicationFactory<Program
     public ExportedTelemetry<Activity> ExportedActivities { get; } = new();
 
     /// <summary>
+    /// How many spans this host exported in its own startup. The apps of the sign-in tests start after it, and an
+    /// exporter sees the spans of each host in this process.
+    /// </summary>
+    public int SpansAtStartup { get; private set; }
+
+    /// <summary>
     /// Every metric snapshot the server exports. Call <c>MeterProvider.ForceFlush</c> to export now.
     /// </summary>
     public ExportedTelemetry<MetricSnapshot> ExportedMetrics { get; } = new();
@@ -146,6 +152,7 @@ public sealed class TestingWebApplicationFactory : WebApplicationFactory<Program
 
         // Start the host now, so startup work such as migrations is done before the first test
         _ = Services;
+        SpansAtStartup = ExportedActivities.Count;
         Instance = this;
     }
 

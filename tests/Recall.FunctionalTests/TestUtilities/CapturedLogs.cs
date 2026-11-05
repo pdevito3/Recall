@@ -12,6 +12,8 @@ public sealed class CapturedLogs : ILogEventSink
 
     public void Emit(LogEvent logEvent) => _events.Enqueue(logEvent);
 
+    public IReadOnlyList<LogEvent> All => _events.ToList();
+
     public IReadOnlyList<LogEvent> InTrace(ActivityTraceId traceId) =>
         _events.Where(e => e.TraceId == traceId).ToList();
 

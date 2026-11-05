@@ -81,6 +81,12 @@ public class TestBase : IDisposable
     protected static IReadOnlyList<Activity> AllExportedSpans()
         => Factory.ExportedActivities.Snapshot();
 
+    /// <summary>
+    /// The spans of the startup of this host.
+    /// </summary>
+    protected static IReadOnlyList<Activity> StartupSpans()
+        => Factory.ExportedActivities.Snapshot().Take(Factory.SpansAtStartup).ToList();
+
     // The helpers below arrange and check data for the test, outside any HTTP request. They are system
     // work, so each one opts in to all tenants with a system scope.
 

@@ -260,7 +260,10 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
             ? text
             : null;
 
-    private sealed record ProviderTokens(string? IdToken, string? AccessToken);
+    private sealed record ProviderTokens(string? IdToken, string? AccessToken)
+    {
+        public override string ToString() => "[provider tokens]";
+    }
 
     private async Task<ProviderTokens?> ExchangeCodeAsync(
         OidcDiscovery discovery, LoginAttempt attempt, string code, CancellationToken cancellationToken)
