@@ -2,8 +2,7 @@ import { Button } from '@/components/ui/button'
 
 import { useMembership } from '../apis/get-membership'
 
-/** Says that the check of the user record of the signed-in user failed. */
-export function MembershipNotice() {
+export function MembershipCheckFailedNotice() {
   const membership = useMembership()
 
   if (membership.status !== 'error') return null

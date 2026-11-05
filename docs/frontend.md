@@ -174,7 +174,7 @@ Each page needs a session. The root route (`routes/__root.tsx`) reads `authClaim
 | Error, and no earlier answer | An alert and Try Again. It does not go to the login. While the check runs again, Try Again is pending and takes no press. |
 | Claims | The layout and the page |
 
-The app does not poll the session. It finds an ended session at the next call to an endpoint that needs a user: the Server answers 401. A call to an endpoint that allows anonymous callers still answers 200. The Server also answers 401 while the auth session lives, for example when a proxy strips the `X-CSRF` header. So on a 401, `apiClient` checks the session again and waits for the answer (`onUnauthorized` in `main.tsx`):
+The app does not poll the session. It finds an ended session at the next call to an endpoint that needs a user: the Server answers 401. A call to an endpoint that allows anonymous callers still answers 200. The Server also answers 401 while the auth session lives, for example when a proxy strips the `X-CSRF` header. So on a 401, `apiClient` checks the session again and waits for the answer (`setSessionEndedCheck` in `main.tsx`):
 
 | The check gives | `apiClient` |
 |---|---|

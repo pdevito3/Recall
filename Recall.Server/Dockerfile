@@ -29,7 +29,6 @@ WORKDIR /app
 COPY --from=build /app/publish .
 COPY --from=frontend /app/dist ./wwwroot
 
-# Kestrel:Endpoints in appsettings.json binds 8080.
 # The base image sets ASPNETCORE_HTTP_PORTS=8080. Kestrel ignores it and logs a warning, so clear it.
 ENV ASPNETCORE_ENVIRONMENT=Production \
     ASPNETCORE_HTTP_PORTS=

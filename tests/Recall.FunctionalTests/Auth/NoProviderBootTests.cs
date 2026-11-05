@@ -4,9 +4,9 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
-using System.Net.Sockets;
 using System.Runtime.Versioning;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Recall.Server.Resources.Entrypoints.Auth;
 using Shouldly;
 
@@ -15,7 +15,7 @@ using Shouldly;
 /// the environment of the other tests, and the modes of the files come from the umask of a process.
 /// </summary>
 [UnsupportedOSPlatform("windows")]
-public class NoProviderBootTests
+public partial class NoProviderBootTests
 {
     private const UnixFileMode WideDirectoryMode =
         UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
@@ -24,7 +24,7 @@ public class NoProviderBootTests
 
     private static readonly string[] ClearedPrefixes = ["Auth__", "Mcp__", "Tenancy__", "OTEL_", "ConnectionStrings__", "FileStore__", "ASPNETCORE_", "DOTNET_ENVIRONMENT"];
 
-    private sealed class ServerProcess : IAsyncDisposable
+    private sealed partial class ServerProcess : IAsyncDisposable
     {
         private readonly Process _process;
         private readonly ConcurrentQueue<string> _output;
@@ -53,25 +53,18 @@ public class NoProviderBootTests
 
         public static async Task<ServerProcess> StartAsync(string? existingRoot = null)
         {
-            for (var attempt = 1; ; attempt++)
+            var server = await LaunchAsync(existingRoot, new Dictionary<string, string>());
+            try
             {
-                var server = await LaunchAsync(existingRoot, new Dictionary<string, string>());
-                try
-                {
-                    await server.WaitUntilUpAsync();
-                    return server;
-                }
-                // FreePort lets the port go before the Server binds it, so another process on this machine can take it.
-                catch (ShouldAssertException) when (attempt < 3 && server.Output.Contains("address already in use", StringComparison.OrdinalIgnoreCase))
-                {
-                    await server.StopAsync();
-                }
-                catch
-                {
-                    await server.DisposeAsync();
-                    throw;
-                }
+                await server.WaitUntilUpAsync();
             }
+            catch
+            {
+                await server.DisposeAsync();
+                throw;
+            }
+
+            return server;
         }
 
         public static async Task<ServerProcess> LaunchAsync(string? existingRoot, IReadOnlyDictionary<string, string> settings)
@@ -85,7 +78,6 @@ public class NoProviderBootTests
             Directory.CreateDirectory(web);
             await File.WriteAllTextAsync(Path.Combine(web, "index.html"), "<html>recall spa</html>");
 
-            var httpPort = FreePort();
             // The child would inherit the narrow umask of this process, and hide a Server that does not set its own
             var start = new ProcessStartInfo("/bin/sh", ["-c", "umask 022; exec dotnet \"$0\"", ServerDll()])
             {
@@ -101,7 +93,8 @@ public class NoProviderBootTests
             start.Environment["ASPNETCORE_WEBROOT"] = web;
             start.Environment["ConnectionStrings__appdb"] = $"Data Source={Path.Combine(data, "recall.db")}";
             start.Environment["FileStore__Root"] = Path.Combine(data, "files");
-            start.Environment["Kestrel__Endpoints__http__Url"] = $"http://127.0.0.1:{httpPort}";
+            start.Environment["Kestrel__Endpoints__http__Url"] = "http://127.0.0.1:0";
+            start.Environment["Serilog__MinimumLevel__Override__Microsoft"] = "Information";
             foreach (var (key, value) in settings)
                 start.Environment[key] = value;
 
@@ -112,11 +105,7 @@ public class NoProviderBootTests
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
-            var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
-            {
-                BaseAddress = new Uri($"http://127.0.0.1:{httpPort}"),
-                Timeout = TimeSpan.FromSeconds(10),
-            };
+            var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(10) };
             return new ServerProcess(process, output, root, client);
         }
 
@@ -136,6 +125,14 @@ public class NoProviderBootTests
             for (var attempt = 0; attempt < 300; attempt++)
             {
                 _process.HasExited.ShouldBeFalse($"The server stopped during its boot. Its output: {Output}");
+                if (Client.BaseAddress is null)
+                {
+                    if (ListeningAddress().Match(Output) is { Success: true } address)
+                        Client.BaseAddress = new Uri(address.Value);
+                    await Task.Delay(TimeSpan.FromMilliseconds(100));
+                    continue;
+                }
+
                 try
                 {
                     using var response = await Client.GetAsync(AuthRoutes.Status);
@@ -161,12 +158,8 @@ public class NoProviderBootTests
                 Directory.Delete(Root, recursive: true);
         }
 
-        private static int FreePort()
-        {
-            using var listener = new TcpListener(IPAddress.Loopback, 0);
-            listener.Start();
-            return ((IPEndPoint)listener.LocalEndpoint).Port;
-        }
+        [GeneratedRegex(@"http://127\.0\.0\.1:[1-9][0-9]*")]
+        private static partial Regex ListeningAddress();
 
         private static string ServerDll()
         {

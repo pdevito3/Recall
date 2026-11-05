@@ -245,10 +245,6 @@ public class EndpointAccessSweepTests : TestBase
         }
     }
 
-    /// <param name="IdsByKind">
-    /// One record ID for each kind. The kind is the first route segment, or the domain folder of a tool, for example
-    /// <c>users</c>.
-    /// </param>
     private sealed record RecordIds(IReadOnlyDictionary<string, string> IdsByKind, string Identifier)
     {
         private static readonly string PermissionName = Permission.ListNames()[0];

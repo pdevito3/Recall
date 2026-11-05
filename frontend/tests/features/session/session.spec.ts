@@ -56,7 +56,7 @@ test.describe('a call of the API that answers 401 while the session lives', () =
     const session = sessionPage(page)
     await session.open('/about')
 
-    api.mock(...authApi.apiRejectsTheToken(usersPaths.current))
+    api.mock(...authApi.apiAnswers401WhileTheSessionLives(usersPaths.current))
     await session.followAndWaitForTheSessionCheck(session.at.homeLink)
 
     await expect(session.at.rejectedSignInToast).toBeVisible()

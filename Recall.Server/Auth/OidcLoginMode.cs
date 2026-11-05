@@ -258,9 +258,13 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
         var acceptsPromptLogin = !root.TryGetProperty("prompt_values_supported", out var prompts)
             || prompts.ValueKind != JsonValueKind.Array
             || prompts.EnumerateArray().Any(p => p.ValueKind == JsonValueKind.String && p.GetString() == "login");
-        // This endpoint is optional and no login uses it, so a bad value costs only the link on the signed-out page.
+        return new OidcDiscovery(issuer, authorization!, token!, jwks!, userinfo, methods, advertisesIss, acceptsPromptLogin, EndSessionEndpointOrNoLink(root));
+    }
+
+    private string? EndSessionEndpointOrNoLink(JsonElement root)
+    {
         var endSession = Text(root, "end_session_endpoint");
-        return new OidcDiscovery(issuer, authorization!, token!, jwks!, userinfo, methods, advertisesIss, acceptsPromptLogin, IsAllowedUrl(endSession) ? endSession : null);
+        return IsAllowedUrl(endSession) ? endSession : null;
     }
 
     private bool IsAllowedUrl(string? url)

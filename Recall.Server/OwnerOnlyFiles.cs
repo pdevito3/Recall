@@ -59,7 +59,6 @@ public static partial class OwnerOnlyFiles
         }
     }
 
-    /// <summary>The Data Protection keys sit next to the database, so a backup of the data root holds what can read the data. In the image this is <c>/data/keys</c>.</summary>
     public static string? KeysDirectory(IConfiguration configuration)
         => DatabaseFile(configuration) is { } file ? Path.Combine(Path.GetDirectoryName(file)!, "keys") : null;
 

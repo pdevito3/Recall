@@ -15,7 +15,7 @@ import { AppSidebar } from '@/components/app-sidebar'
 import { Button } from '@/components/ui/button'
 import { login, returnUrlOf } from '@/domain/auth/apis/auth-actions'
 import { authUserQuery } from '@/domain/auth/apis/get-user'
-import { MembershipNotice } from '@/domain/membership/components/membership-notice'
+import { MembershipCheckFailedNotice } from '@/domain/membership/components/membership-notice'
 import { HrefRouterProvider } from '@/components/ui/link'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -99,7 +99,7 @@ function Layout() {
               </Breadcrumb>
             </div>
           </header>
-          <MembershipNotice />
+          <MembershipCheckFailedNotice />
           <div ref={content} className="flex flex-1 flex-col gap-4 p-4 pt-0">
             <Outlet />
           </div>

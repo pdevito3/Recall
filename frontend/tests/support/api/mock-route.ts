@@ -2,7 +2,6 @@ export type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete'
 
 export interface MockRoute {
   method: HttpMethod
-  /** The full path, for example `/api/v1/users/me` or `/auth/me`. */
   path: string
   status: number
   body?: unknown

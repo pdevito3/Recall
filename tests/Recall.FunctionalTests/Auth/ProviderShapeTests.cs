@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.WebUtilities;
 using Recall.Server.Auth;
 using Shouldly;
 
-/// <summary>The providers that differ from the stub on the shared hosts, in how they read a login.</summary>
 public class ProviderShapeTests
 {
     private static string NewSubject() => $"provider-shape-{Guid.NewGuid():N}";
@@ -38,7 +37,7 @@ public class ProviderShapeTests
     public async Task a_provider_that_does_not_list_iss_signs_in_with_no_iss()
     {
         // Arrange
-        using var browser = new AuthBrowser(AuthHosts.PlainProvider);
+        using var browser = new AuthBrowser(AuthHosts.SecretInFormProvider);
         var authorize = await browser.StartWebAsync();
 
         // Act
@@ -53,7 +52,7 @@ public class ProviderShapeTests
     public async Task a_provider_that_does_not_list_iss_still_has_a_wrong_iss_refused()
     {
         // Arrange
-        using var browser = new AuthBrowser(AuthHosts.PlainProvider);
+        using var browser = new AuthBrowser(AuthHosts.SecretInFormProvider);
         var authorize = await browser.StartWebAsync();
 
         // Act
@@ -85,7 +84,7 @@ public class ProviderShapeTests
     public async Task a_provider_that_lists_only_the_post_method_gets_the_secret_in_the_form()
     {
         // Arrange
-        using var browser = new AuthBrowser(AuthHosts.PlainProvider);
+        using var browser = new AuthBrowser(AuthHosts.SecretInFormProvider);
 
         // Act
         await browser.LoginWebAsync(NewSubject());
@@ -98,9 +97,9 @@ public class ProviderShapeTests
     public async Task the_first_login_after_the_provider_rolls_its_key_signs_in()
     {
         // Arrange
-        using var before = new AuthBrowser(AuthHosts.Rolling);
+        using var before = new AuthBrowser(AuthHosts.RollingKeyProvider);
         await before.LoginWebAsync(NewSubject());
-        using var after = new AuthBrowser(AuthHosts.Rolling);
+        using var after = new AuthBrowser(AuthHosts.RollingKeyProvider);
         after.Provider.RollSigningKey();
 
         // Act

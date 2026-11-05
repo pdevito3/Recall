@@ -27,9 +27,6 @@ public sealed class TestFixture : IAsyncDisposable
     /// </summary>
     public const string ReadOnlyMachineClientId = "read-only-machine";
 
-    /// <summary>
-    /// The client ID of the app. A user token from this client acts as its user.
-    /// </summary>
     public const string FirstPartyClientId = "test-app";
 
     public static IServiceScopeFactory BaseScopeFactory { get; private set; } = null!;

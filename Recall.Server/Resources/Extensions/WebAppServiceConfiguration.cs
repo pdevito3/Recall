@@ -14,7 +14,6 @@ public static class WebAppServiceConfiguration
 {
     /// <summary>
     /// Adds the core services: the database, the domain event handlers, MediatR, the caches, and the tenant scope. It adds no transport.
-    /// The integration tests call only this method. <c>AddEntrypoints</c> adds HTTP and MCP.
     /// </summary>
     public static void ConfigureServices(this WebApplicationBuilder builder)
     {

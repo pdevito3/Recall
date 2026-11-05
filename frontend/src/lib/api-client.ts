@@ -21,12 +21,9 @@ declare module 'axios' {
   }
 }
 
-/** The check of the session, which gives the user of the session. */
 export const sessionCheckPath = '/auth/me'
 
 /**
- * Axios instance configured for calls to the Server with CSRF protection and credentials.
- *
  * The generated clients use this instance. Call a generated client for an endpoint of the Server:
  *   import { getTenant } from '@/api/generated/tenants/clients/get-tenant'
  *   const tenant = await getTenant({ path: { id } })
@@ -43,7 +40,7 @@ export const sessionCheckPath = '/auth/me'
 export const apiClient = axios.create({
   withCredentials: true, // No effect on the same-origin calls. Only a cross-origin base URL needs it to send the cookie
   headers: {
-    'X-CSRF': '1', // The Server refuses a session cookie with no such header
+    'X-CSRF': '1',
   },
 })
 
@@ -92,11 +89,7 @@ const signInRejectedMessage =
 
 let isSessionEnded = () => Promise.resolve(false)
 
-/**
- * Sets the check that tells whether the auth session ended. The Server answers 401 to a call that needs a user. That
- * 401 can also come while the session lives, for example when a proxy strips the CSRF header. `main.tsx` checks the session again, so that the root route goes to the login when the session ended.
- */
-export function onUnauthorized(handler: () => Promise<boolean>) {
+export function setSessionEndedCheck(handler: () => Promise<boolean>) {
   isSessionEnded = handler
 }
 

@@ -184,16 +184,16 @@ public static class AuthEndpoints
         return Results.NoContent();
     }
 
+    private static bool IsPlainVisitor(HttpRequest request)
+        => AppSessionHandler.CredentialOf(request.Headers.Authorization.ToString()) is null
+            && (SessionCookie.Read(request) is null || AppSessionHandler.HasCsrfHeader(request));
+
     private static async Task<IResult> MeAsync(HttpContext http, ISender sender, SessionStore store, CancellationToken cancellationToken)
     {
         var session = await http.AuthenticateAsync(AppSessionHandler.SchemeName);
         if (!session.Succeeded)
         {
-            // A visitor with no session is the normal answer of a page that goes to the login. A credential that fails is not: a dead bearer token needs a new one, and a cookie with no header keeps its session.
-            var request = http.Request;
-            var failed = AppSessionHandler.CredentialOf(request.Headers.Authorization.ToString()) is not null
-                || (SessionCookie.Read(request) is not null && !AppSessionHandler.HasCsrfHeader(request));
-            return failed ? Results.Challenge(authenticationSchemes: [AppSessionHandler.SchemeName]) : Results.NoContent();
+            return IsPlainVisitor(http.Request) ? Results.NoContent() : Results.Challenge(authenticationSchemes: [AppSessionHandler.SchemeName]);
         }
 
         http.User = session.Principal;

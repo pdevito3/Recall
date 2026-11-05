@@ -13,7 +13,6 @@ using Mono.Cecil.Cil;
 /// body, an attribute argument, or a generic constraint, not only in a signature. A nested type, such as the state
 /// machine of an async method, belongs to its outermost type, so a result names only top-level types.
 /// <list type="bullet">
-/// <item>An adapter is an <see cref="IEndpoint"/> or an <see cref="McpServerToolTypeAttribute"/> class.</item>
 /// <item>The shared plumbing is the <c>Resources.Entrypoints</c> namespaces under the root namespace.</item>
 /// <item>The composition root wires the core to the entrypoints, so it sees both: <c>Program</c> in the global
 /// namespace, and the types that the scope names.</item>
@@ -63,7 +62,6 @@ public sealed class BoundaryScanner(
     public string[] CoreThatUsesATransport()
         => TypesWithDependencyOnAny(CoreTypes(), TransportNamespaces, _allowedTransportTypes);
 
-    /// <summary>Rule 2: the core types that use an adapter or the shared plumbing.</summary>
     public string[] CoreThatUsesAnEntrypoint()
     {
         var entrypoints = AdapterNames().Append(_sharedPlumbing).ToArray();
