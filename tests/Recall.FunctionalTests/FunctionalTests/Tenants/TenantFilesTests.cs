@@ -69,19 +69,107 @@ public class TenantFilesTests : TestBase
         }
     }
 
+    [Test]
+    public async Task a_delete_that_a_member_may_not_make_keeps_the_files()
+    {
+        // Arrange
+        var (tenant, member) = await AddTenantWithUserAsync(UserRole.User());
+        var files = FileKey.ForTenant(tenant.Id, "recordings", "rec_1", "00001");
+        await WriteAsync(files, [1]);
+        FactoryClient.SignInAsAppUser(member.Identifier);
+
+        // Act
+        var result = await FactoryClient.DeleteRequestAsync(ApiRoutes.Tenants.Delete(tenant.Id));
+
+        // Assert
+        result.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        await using var kept = Store.OpenRead(files);
+        kept.ReadByte().ShouldBe(1);
+    }
+
+    [Test]
+    public async Task a_delete_of_an_unknown_tenant_keeps_the_files_under_that_id()
+    {
+        // Arrange
+        var (_, admin) = await AddTenantWithAdminAsync();
+        var unknownTenantId = $"ten_{Guid.NewGuid():N}";
+        var files = FileKey.ForTenant(unknownTenantId, "recordings", "rec_1", "00001");
+        await WriteAsync(files, [1]);
+        FactoryClient.SignInAsAppUser(admin.Identifier);
+
+        // Act
+        var result = await FactoryClient.DeleteRequestAsync(ApiRoutes.Tenants.Delete(unknownTenantId));
+
+        // Assert
+        result.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        await using var kept = Store.OpenRead(files);
+        kept.ReadByte().ShouldBe(1);
+    }
+
+    [Test]
+    public async Task a_tenant_delete_whose_commit_fails_keeps_the_files_because_the_rows_commit_first()
+    {
+        // Arrange
+        var (tenant, admin) = await AddTenantWithAdminAsync();
+        var files = FileKey.ForTenant(tenant.Id, "recordings", "rec_1", "00001");
+        await WriteAsync(files, [1]);
+        FactoryClient.SignInAsAppUser(admin.Identifier);
+        var names = Guid.NewGuid().ToString("N");
+        // A deferred foreign key fails at the commit itself, after the save has sent each statement of the delete.
+        var failTheCommit = $"""
+            CREATE TABLE parent_{names} (id TEXT PRIMARY KEY);
+            CREATE TABLE child_{names} (parent_id TEXT REFERENCES parent_{names} (id) DEFERRABLE INITIALLY DEFERRED);
+            CREATE TRIGGER fail_commit_{names} AFTER UPDATE ON tenants WHEN NEW.id = '{tenant.Id}'
+            BEGIN INSERT INTO child_{names} VALUES ('missing'); END;
+            """;
+        var cleanUp = $"""
+            DROP TRIGGER fail_commit_{names};
+            DROP TABLE child_{names};
+            DROP TABLE parent_{names};
+            """;
+        await ExecuteSqlAsync(failTheCommit);
+
+        try
+        {
+            // Act
+            var result = await FactoryClient.DeleteRequestAsync(ApiRoutes.Tenants.Delete(tenant.Id));
+
+            // Assert
+            result.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+            (await ExecuteDbContextAsync(db => db.Tenants.AnyAsync(t => t.Id == tenant.Id))).ShouldBeTrue();
+            await using var kept = Store.OpenRead(files);
+            kept.ReadByte().ShouldBe(1);
+        }
+        finally
+        {
+            await ExecuteSqlAsync(cleanUp);
+        }
+    }
+
+    // The write guard of the context refuses SQL that names an audited table, so this goes past the context.
+    private static Task<int> ExecuteSqlAsync(string sql) => ExecuteDbContextAsync(async db =>
+    {
+        await db.Database.OpenConnectionAsync();
+        await using var command = db.Database.GetDbConnection().CreateCommand();
+        command.CommandText = sql;
+        return await command.ExecuteNonQueryAsync();
+    });
+
     private static async Task WriteAsync(FileKey key, byte[] bytes)
     {
         using var content = new MemoryStream(bytes);
         await Store.WriteAsync(key, content, CancellationToken.None);
     }
 
-    private static async Task<(Tenant Tenant, User Admin)> AddTenantWithAdminAsync()
+    private static Task<(Tenant Tenant, User User)> AddTenantWithAdminAsync() => AddTenantWithUserAsync(UserRole.Admin());
+
+    private static async Task<(Tenant Tenant, User User)> AddTenantWithUserAsync(UserRole role)
     {
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var admin, u => u.Role = UserRole.Admin().Value);
+            .AddUser(out var user, u => u.Role = role.Value);
         await InsertAsync(tenant);
-        await InsertAsync(admin);
-        return (tenant, admin);
+        await InsertAsync(user);
+        return (tenant, user);
     }
 }
