@@ -43,10 +43,6 @@ Endpoint gets UserForCreationDto
 11. When the SPA must know if the caller can do an action on a record, put the answer on the response DTO. Use `AllowedActions`, a list of names with `[NamesOf<TAction>]`, or a flag, for example `IsFinal`. Compute the answer in the entity, or in the action table when no rule reads the record, with the code that the command checks (see [domain-entities.md](domain-entities.md#allowed-actions)). The mapper takes the caller, for example `user.ToUserDto(caller)`. A list query projects to the DTO, so its handler adds the actions after the page loads, as `UserMapper.AddAllowedActions` does. The SPA reads the answer. It does not copy the rule.
 12. A field of a response DTO that holds data of another permission needs that permission. For example, if a `UserDto` that `read_users` shows gets the agents of the user, the field needs `read_agents`. Do one of these: require the permission in the handler, hide the value from a caller without the permission, or put the field on a separate DTO that a separate query returns. `GetAuditEntryPage` hides a value from a caller without `read_audit_log_sensitive`. Give each such field a test: a caller with the permission of the DTO, but without the permission of the field, does not get the data of the field. The example is `reader_without_the_sensitive_permission_gets_the_history_with_personal_values_hidden` in `GetAuditEntryPageTests`. `EndpointAccessSweepTests` checks the permission of each endpoint, not the permission of each field.
 
-<!-- example:start -->
-In the workshop example, `WorkshopDto` lists the names of the status and of the actions ([`WorkshopDto.Status`](../../Recall.Server/Examples/Workshops/Dtos/WorkshopDto.cs)), and `WorkshopForCreationDto` names the limits of the domain ([`WorkshopForCreationDto.Title`](../../Recall.Server/Examples/Workshops/Dtos/WorkshopForCreationDto.cs)).
-<!-- example:end -->
-
 <!-- code: Recall.Server/Domain/Users/Dtos/UserDto.cs -->
 ```csharp
 public sealed record UserDto

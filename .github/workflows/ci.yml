@@ -6,9 +6,6 @@ name: CI
 # The line-endings job fails when a tracked text file has a CR. .gitattributes stores each text file with LF.
 # The grpc-contract job lints the .proto files and fails on a breaking change against main. See buf.yaml.
 # The new-feature job runs scripts/ci/new-feature.cs, which runs scripts/new-feature.cs for two sample entities, then lints, builds, and tests the result.
-# example:start
-# The without-examples job runs scripts/ci/examples/without-examples.cs, which runs scripts/remove-examples.cs, then builds and tests the app that is left. See docs/examples.md.
-# example:end
 # A job that calls a script under scripts/ci/ keeps its steps there, so that an agent can run them locally. The script works on a throwaway copy of the checkout.
 # The BFF jobs (bff-tests, e2e) run only when the changes job finds a BFF change, and on workflow_dispatch.
 # There is no nightly run. See section 7 of docs/specs/home-rolled-bff.md.
@@ -110,59 +107,6 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  # example:start
-  without-examples:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
-        with:
-          dotnet-version: 10.0.4xx # One SDK band. A new band can add style errors, so move to it in its own PR.
-
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
-          restore-keys: nuget-${{ runner.os }}-
-
-      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          package_json_file: frontend/package.json
-
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
-
-      # The install-chromium action reads the Playwright version from the installed packages
-      - name: Install the frontend packages
-        working-directory: frontend
-        run: pnpm install --frozen-lockfile
-
-      - uses: ./.github/actions/install-chromium
-
-      - name: Run the steps of the job
-        run: dotnet run scripts/ci/examples/without-examples.cs
-
-      # .vitest/attachments/ has the failure screenshot and the Playwright trace of each failed component test
-      - name: Upload the test reports
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: without-examples-tests
-          path: |
-            ${{ runner.temp }}/without-examples/frontend/.vitest/attachments/
-            ${{ runner.temp }}/without-examples/frontend/playwright-report/
-            ${{ runner.temp }}/without-examples/frontend/test-results/
-          retention-days: 7
-          if-no-files-found: ignore
-  # example:end
-
   line-endings:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -239,9 +183,6 @@ jobs:
       matrix:
         examples:
           - keep
-          # example:start
-          - remove
-          # example:end
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -261,22 +202,6 @@ jobs:
         with:
           version: 1.74.0
           setup_only: true
-
-      # example:start
-      # scripts/remove-examples.cs builds the SPA again
-      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        if: matrix.examples == 'remove'
-        with:
-          package_json_file: frontend/package.json
-
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        if: matrix.examples == 'remove'
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
-
-      # example:end
 
       - name: Run the steps of the job
         run: dotnet run scripts/ci/new-feature.cs -- --examples ${{ matrix.examples }}

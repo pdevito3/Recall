@@ -14,10 +14,6 @@ public class NewFeatureRefusalTests
     [Arguments("Title:text, User:ref", "A ref to User is not possible")]
     [Arguments("Title:text, User:ref?", "A ref cannot be optional. Remove the '?' from User.")]
     [Arguments("Title:text, UserId:ref", "with no Id: User:ref.")]
-    // example:start
-    [Arguments("Title:text, Venue:ref", "Venue is an example")]
-    [Arguments("Title:text, Workshop:ref", "A ref can name only an entity that is right under the tenant. Workshop is under Venue.")]
-    // example:end
     public async Task a_ref_that_the_written_code_cannot_hold_is_refused_before_a_write(string fields, string message)
     {
         // Act

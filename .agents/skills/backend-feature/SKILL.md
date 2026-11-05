@@ -14,9 +14,6 @@ Four tasks:
 4. Files on an entity that exists: an attachment entity with its upload rules.
 
 The files that the script writes are the reference for each pattern of a CRUD feature.
-<!-- example:start -->
-The template also has a reference feature in `Recall.Server/Examples/Workshops` and `Examples/Venues`. It shows each core pattern: a decision shape, a run again, a version, allowed actions, and the three entrypoints. `CancelWorkshop` and `ScheduleWorkshop` show each step of a new operation.
-<!-- example:end -->
 
 Read the rule doc of each area in `docs/backend/` before you change it.
 
@@ -48,10 +45,6 @@ The script writes a tenant-owned root with add, get, list, update, and delete. I
 - Lines in the shared files, at each `// new-feature:<slot>` marker: the `DbSet`, the permission, the gRPC map, `PermissionTests`, `StringColumnLengthTests`, `TenantDeleteOwnedRowsTests`, and `EndpointAccessSweepTests`.
 
 A second run with the same input changes nothing. When a file that the script writes exists with other content, the script stops before it writes. CI runs the script for two samples on each pull request, and then builds and tests them (the `new-feature` job). To run the same steps before you push a change to `scripts/new-feature.cs` or to a marker, run [scripts/ci/new-feature.cs](../../../scripts/ci/new-feature.cs): `dotnet run scripts/ci/new-feature.cs`. It works on a throwaway copy of the checkout, so it does not change your files. It needs Docker and buf.
-
-<!-- example:start -->
-With examples in the template, a change to a feature can also fail the `without-examples` job. Run its steps with [scripts/ci/examples/without-examples.cs](../../../scripts/ci/examples/without-examples.cs) and the `new-feature` job with `--examples remove`. See [Run the CI jobs locally](../../../docs/examples.md#run-the-ci-jobs-locally).
-<!-- example:end -->
 
 ### Write the domain rules
 

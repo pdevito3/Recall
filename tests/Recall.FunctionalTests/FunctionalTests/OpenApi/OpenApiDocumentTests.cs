@@ -7,11 +7,6 @@ using Recall.Server.Domain.EmailAddresses;
 using Recall.Server.Domain.Tenants;
 using Recall.Server.Domain.Users;
 using Recall.Server.Resources;
-// example:start
-using Recall.Server.Domain.TimeZones;
-using Recall.Server.Examples.Venues;
-using Recall.Server.Examples.Workshops;
-// example:end
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi;
@@ -24,9 +19,6 @@ public class OpenApiDocumentTests
 
     public static readonly string[] AnonymousOperations =
     [
-        // example:start
-        "GET /api/v1/weather",
-        // example:end
     ];
 
     [Test]
@@ -253,12 +245,6 @@ public class OpenApiDocumentTests
             ("InitiateUserAndTenantDto.identifier", User.IdentifierMaxLength),
             ("InitiateUserAndTenantDto.email", EmailAddress.MaxLength),
             ("InitiateUserAndTenantDto.username", User.UsernameMaxLength),
-            // example:start
-            ("VenueForCreationDto.name", Venue.NameMaxLength),
-            ("VenueForCreationDto.timeZone", TimeZoneId.MaxLength),
-            ("WorkshopForCreationDto.title", Workshop.TitleMaxLength),
-            ("WorkshopForUpdateDto.title", Workshop.TitleMaxLength),
-            // example:end
         ];
 
         int? MaxLengthOf(string name)
@@ -281,10 +267,6 @@ public class OpenApiDocumentTests
 
         (string Name, int Minimum, int Maximum)[] expectations =
         [
-            // example:start
-            ("WorkshopForCreationDto.capacity", Workshop.CapacityMinimum, Workshop.CapacityMaximum),
-            ("WorkshopForUpdateDto.capacity", Workshop.CapacityMinimum, Workshop.CapacityMaximum),
-            // example:end
         ];
 
         string RangeOf(string name)
@@ -310,9 +292,6 @@ public class OpenApiDocumentTests
         [
             "AgentForCreationDto.tenantId",
             "UserForCreationDto.tenantId",
-            // example:start
-            "WorkshopForCreationDto.venueId",
-            // example:end
         ];
 
         static IEnumerable<string> RefsUnder(JsonNode node) =>
@@ -372,22 +351,6 @@ public class OpenApiDocumentTests
             schemaRef.ShouldBe(ValidationProblemRef, name);
         }
     }
-
-    // example:start
-    [Test]
-    public async Task venue_add_declares_not_found_for_a_tenant_that_a_delete_removed_during_the_add()
-    {
-        // Arrange
-        var root = await LoadDocumentAsync();
-
-        // Act
-        var notFound = root["paths"]?["/api/v1/venues"]?["post"]?["responses"]?["404"];
-
-        // Assert
-        notFound.ShouldNotBeNull();
-        notFound["content"]?["application/problem+json"].ShouldNotBeNull();
-    }
-    // example:end
 
     [Test]
     public async Task only_secured_operations_declare_unauthorized()

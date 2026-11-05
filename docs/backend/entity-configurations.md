@@ -68,10 +68,6 @@ builder.ComplexProperty(e => e.Email, email =>
 
 EF Core 10 cannot put an index on a column of a complex property. To index one, see [Index a column of a value object](#index-a-column-of-a-value-object).
 
-<!-- example:start -->
-`VenueConfiguration` maps a `TimeZoneId`: [`VenueConfiguration.Configure`](../../Recall.Server/Databases/EntityConfigurations/Examples/VenueConfiguration.cs). `WorkshopConfiguration` maps a status with fixed names: [WorkshopConfiguration.cs](../../Recall.Server/Databases/EntityConfigurations/Examples/WorkshopConfiguration.cs).
-<!-- example:end -->
-
 ## Private collections
 
 An entity keeps a child collection in a private field. Tell EF Core to use the field:

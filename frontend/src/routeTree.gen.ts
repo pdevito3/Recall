@@ -13,15 +13,7 @@ import { Route as StartTenantRouteImport } from './routes/start-tenant'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UsersIndexRouteImport } from './routes/users/index'
-import { Route as examplesWeatherRouteImport } from './routes/(examples)/weather'
-import { Route as examplesFilterDemoRouteImport } from './routes/(examples)/filter-demo'
-import { Route as examplesComponentsRouteImport } from './routes/(examples)/components'
 import { Route as UsersIdIndexRouteImport } from './routes/users/$id/index'
-import { Route as examplesWorkshopsIndexRouteImport } from './routes/(examples)/workshops/index'
-import { Route as examplesWorkshopsNewRouteImport } from './routes/(examples)/workshops/new'
-import { Route as examplesVenuesNewRouteImport } from './routes/(examples)/venues/new'
-import { Route as examplesWorkshopsIdIndexRouteImport } from './routes/(examples)/workshops/$id/index'
-import { Route as examplesWorkshopsIdEditRouteImport } from './routes/(examples)/workshops/$id/edit'
 
 const StartTenantRoute = StartTenantRouteImport.update({
   id: '/start-tenant',
@@ -43,50 +35,9 @@ const UsersIndexRoute = UsersIndexRouteImport.update({
   path: '/users/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const examplesWeatherRoute = examplesWeatherRouteImport.update({
-  id: '/(examples)/weather',
-  path: '/weather',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const examplesFilterDemoRoute = examplesFilterDemoRouteImport.update({
-  id: '/(examples)/filter-demo',
-  path: '/filter-demo',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const examplesComponentsRoute = examplesComponentsRouteImport.update({
-  id: '/(examples)/components',
-  path: '/components',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const UsersIdIndexRoute = UsersIdIndexRouteImport.update({
   id: '/users/$id/',
   path: '/users/$id/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const examplesWorkshopsIndexRoute = examplesWorkshopsIndexRouteImport.update({
-  id: '/(examples)/workshops/',
-  path: '/workshops/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const examplesWorkshopsNewRoute = examplesWorkshopsNewRouteImport.update({
-  id: '/(examples)/workshops/new',
-  path: '/workshops/new',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const examplesVenuesNewRoute = examplesVenuesNewRouteImport.update({
-  id: '/(examples)/venues/new',
-  path: '/venues/new',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const examplesWorkshopsIdIndexRoute =
-  examplesWorkshopsIdIndexRouteImport.update({
-    id: '/(examples)/workshops/$id/',
-    path: '/workshops/$id/',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const examplesWorkshopsIdEditRoute = examplesWorkshopsIdEditRouteImport.update({
-  id: '/(examples)/workshops/$id/edit',
-  path: '/workshops/$id/edit',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -94,110 +45,38 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/start-tenant': typeof StartTenantRoute
-  '/components': typeof examplesComponentsRoute
-  '/filter-demo': typeof examplesFilterDemoRoute
-  '/weather': typeof examplesWeatherRoute
   '/users': typeof UsersIndexRoute
-  '/venues/new': typeof examplesVenuesNewRoute
-  '/workshops/new': typeof examplesWorkshopsNewRoute
-  '/workshops': typeof examplesWorkshopsIndexRoute
   '/users/$id': typeof UsersIdIndexRoute
-  '/workshops/$id/edit': typeof examplesWorkshopsIdEditRoute
-  '/workshops/$id': typeof examplesWorkshopsIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/start-tenant': typeof StartTenantRoute
-  '/components': typeof examplesComponentsRoute
-  '/filter-demo': typeof examplesFilterDemoRoute
-  '/weather': typeof examplesWeatherRoute
   '/users': typeof UsersIndexRoute
-  '/venues/new': typeof examplesVenuesNewRoute
-  '/workshops/new': typeof examplesWorkshopsNewRoute
-  '/workshops': typeof examplesWorkshopsIndexRoute
   '/users/$id': typeof UsersIdIndexRoute
-  '/workshops/$id/edit': typeof examplesWorkshopsIdEditRoute
-  '/workshops/$id': typeof examplesWorkshopsIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/start-tenant': typeof StartTenantRoute
-  '/(examples)/components': typeof examplesComponentsRoute
-  '/(examples)/filter-demo': typeof examplesFilterDemoRoute
-  '/(examples)/weather': typeof examplesWeatherRoute
   '/users/': typeof UsersIndexRoute
-  '/(examples)/venues/new': typeof examplesVenuesNewRoute
-  '/(examples)/workshops/new': typeof examplesWorkshopsNewRoute
-  '/(examples)/workshops/': typeof examplesWorkshopsIndexRoute
   '/users/$id/': typeof UsersIdIndexRoute
-  '/(examples)/workshops/$id/edit': typeof examplesWorkshopsIdEditRoute
-  '/(examples)/workshops/$id/': typeof examplesWorkshopsIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/about'
-    | '/start-tenant'
-    | '/components'
-    | '/filter-demo'
-    | '/weather'
-    | '/users'
-    | '/venues/new'
-    | '/workshops/new'
-    | '/workshops'
-    | '/users/$id'
-    | '/workshops/$id/edit'
-    | '/workshops/$id'
+  fullPaths: '/' | '/about' | '/start-tenant' | '/users' | '/users/$id'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/about'
-    | '/start-tenant'
-    | '/components'
-    | '/filter-demo'
-    | '/weather'
-    | '/users'
-    | '/venues/new'
-    | '/workshops/new'
-    | '/workshops'
-    | '/users/$id'
-    | '/workshops/$id/edit'
-    | '/workshops/$id'
-  id:
-    | '__root__'
-    | '/'
-    | '/about'
-    | '/start-tenant'
-    | '/(examples)/components'
-    | '/(examples)/filter-demo'
-    | '/(examples)/weather'
-    | '/users/'
-    | '/(examples)/venues/new'
-    | '/(examples)/workshops/new'
-    | '/(examples)/workshops/'
-    | '/users/$id/'
-    | '/(examples)/workshops/$id/edit'
-    | '/(examples)/workshops/$id/'
+  to: '/' | '/about' | '/start-tenant' | '/users' | '/users/$id'
+  id: '__root__' | '/' | '/about' | '/start-tenant' | '/users/' | '/users/$id/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   StartTenantRoute: typeof StartTenantRoute
-  examplesComponentsRoute: typeof examplesComponentsRoute
-  examplesFilterDemoRoute: typeof examplesFilterDemoRoute
-  examplesWeatherRoute: typeof examplesWeatherRoute
   UsersIndexRoute: typeof UsersIndexRoute
-  examplesVenuesNewRoute: typeof examplesVenuesNewRoute
-  examplesWorkshopsNewRoute: typeof examplesWorkshopsNewRoute
-  examplesWorkshopsIndexRoute: typeof examplesWorkshopsIndexRoute
   UsersIdIndexRoute: typeof UsersIdIndexRoute
-  examplesWorkshopsIdEditRoute: typeof examplesWorkshopsIdEditRoute
-  examplesWorkshopsIdIndexRoute: typeof examplesWorkshopsIdIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -230,67 +109,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UsersIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/(examples)/weather': {
-      id: '/(examples)/weather'
-      path: '/weather'
-      fullPath: '/weather'
-      preLoaderRoute: typeof examplesWeatherRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(examples)/filter-demo': {
-      id: '/(examples)/filter-demo'
-      path: '/filter-demo'
-      fullPath: '/filter-demo'
-      preLoaderRoute: typeof examplesFilterDemoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(examples)/components': {
-      id: '/(examples)/components'
-      path: '/components'
-      fullPath: '/components'
-      preLoaderRoute: typeof examplesComponentsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/users/$id/': {
       id: '/users/$id/'
       path: '/users/$id'
       fullPath: '/users/$id'
       preLoaderRoute: typeof UsersIdIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(examples)/workshops/': {
-      id: '/(examples)/workshops/'
-      path: '/workshops'
-      fullPath: '/workshops'
-      preLoaderRoute: typeof examplesWorkshopsIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(examples)/workshops/new': {
-      id: '/(examples)/workshops/new'
-      path: '/workshops/new'
-      fullPath: '/workshops/new'
-      preLoaderRoute: typeof examplesWorkshopsNewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(examples)/venues/new': {
-      id: '/(examples)/venues/new'
-      path: '/venues/new'
-      fullPath: '/venues/new'
-      preLoaderRoute: typeof examplesVenuesNewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(examples)/workshops/$id/': {
-      id: '/(examples)/workshops/$id/'
-      path: '/workshops/$id'
-      fullPath: '/workshops/$id'
-      preLoaderRoute: typeof examplesWorkshopsIdIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(examples)/workshops/$id/edit': {
-      id: '/(examples)/workshops/$id/edit'
-      path: '/workshops/$id/edit'
-      fullPath: '/workshops/$id/edit'
-      preLoaderRoute: typeof examplesWorkshopsIdEditRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -300,16 +123,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   StartTenantRoute: StartTenantRoute,
-  examplesComponentsRoute: examplesComponentsRoute,
-  examplesFilterDemoRoute: examplesFilterDemoRoute,
-  examplesWeatherRoute: examplesWeatherRoute,
   UsersIndexRoute: UsersIndexRoute,
-  examplesVenuesNewRoute: examplesVenuesNewRoute,
-  examplesWorkshopsNewRoute: examplesWorkshopsNewRoute,
-  examplesWorkshopsIndexRoute: examplesWorkshopsIndexRoute,
   UsersIdIndexRoute: UsersIdIndexRoute,
-  examplesWorkshopsIdEditRoute: examplesWorkshopsIdEditRoute,
-  examplesWorkshopsIdIndexRoute: examplesWorkshopsIdIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

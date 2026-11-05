@@ -258,9 +258,3 @@ Give the save to `AddAsync` as a function, so that the put runs one time, also w
 
 - An object whose delete failed after its row delete stays. The Server logs it, and nothing tries the delete again until the tenant delete ([#422](https://github.com/pdevito3/FullstackTemplate/issues/422)). The objects of a tenant whose prefix delete failed stay ([#422](https://github.com/pdevito3/FullstackTemplate/issues/422)).
 - A URL stops before `urlsExpireAt` when the credentials that signed it expire. See [Presigned URLs](#presigned-urls).
-
-<!-- example:start -->
-## The example
-
-The workshop example stores the files of a workshop: [`WorkshopAttachment`](<../../Recall.Server/Examples/Workshops/WorkshopAttachment.cs>), [`AddWorkshopAttachment`](<../../Recall.Server/Examples/Workshops/Features/AddWorkshopAttachment/AddWorkshopAttachment.cs>), [`GetWorkshopAttachments`](<../../Recall.Server/Examples/Workshops/Features/GetWorkshopAttachments/GetWorkshopAttachments.cs>), and [`DeleteWorkshopAttachment`](<../../Recall.Server/Examples/Workshops/Features/DeleteWorkshopAttachment/DeleteWorkshopAttachment.cs>). Its page wires `AttachmentsSection` in [`workshop-attachments.tsx`](<../../frontend/src/examples/workshops/components/workshop-attachments.tsx>). Its tests are in [`WorkshopAttachmentTests`](<../../tests/Recall.FunctionalTests/Examples/Workshops/WorkshopAttachmentTests.cs>) and [`workshop-files.spec.ts`](<../../frontend/tests/features/examples/workshops/workshop-files.spec.ts>).
-<!-- example:end -->

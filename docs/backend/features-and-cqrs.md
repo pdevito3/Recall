@@ -105,10 +105,6 @@ public Visit Reschedule(VisitForReschedule forReschedule)
 
 `tests/Recall.UnitTests/Docs/CheckOrderExampleTests.cs` has this example. Its tests fail when a step moves. `UserCheckOrderTests` checks the steps 2, 3, 4, 6, and 9 on the user endpoints. `AgentCheckOrderTests` checks step 3 on `AddAgentPermission` and on the first grant of `AddAgent`. `AddAgentCommandTests` checks that the 403 for a machine agent comes before the tenant lock and the tenant query of `AddAgent`. If a feature must use a different order, write the order and the reason in its spec, and add a test that proves the order.
 
-<!-- example:start -->
-The workshop commands are a real sample of the steps 4 to 9. `UpdateWorkshop`, `ScheduleWorkshop`, `CancelWorkshop`, and `CompleteWorkshop` load the workshop (step 4), then call `Workshop.GuardChangeBy` (step 5). `ScheduleWorkshop` then loads the venue for its case. `Workshop.Update` checks the version, the status, and the no-op, then runs the validation (steps 6 to 9). `WorkshopScheduling.Decide` checks the version, the status, and the no-op of a scheduled workshop, then the rules of the start. Its `StaleVersion` refusal takes its field and its message from `StaleVersionException`. `WorkshopCheckOrderTests` sends one request that breaks two steps and asserts the response of the first: [WorkshopCheckOrderTests.cs](../../tests/Recall.FunctionalTests/Examples/Workshops/WorkshopCheckOrderTests.cs). `WorkshopSchedulingTests` checks the order of `Decide`: [WorkshopSchedulingTests.cs](../../tests/Recall.UnitTests/Examples/Workshops/WorkshopSchedulingTests.cs).
-<!-- example:end -->
-
 ## One rule set for two callers
 
 Rule 6 puts a rule in the entity. That holds for a rule that reads only its own entity. When one rule set has two callers, use the decision shape. An example is a list of the free days and the command that books one day. When a rule reads facts from more than one aggregate, use the shape also. After the permission check, the list handler does one load and one decision for each candidate. The command handler does one load, one decision, and one save.
@@ -225,10 +221,6 @@ Each use of the shape has four tests. `tests/Recall.UnitTests/Docs/DecisionShape
 - A test that ties the callers together. The command accepts each candidate that the list offers. In an app, make this an integration test, because it also tests the loader.
 - A test that each kind of the refusal type and of the decision type is nested in its base record. C# cannot close a record hierarchy, so this test does it.
 
-<!-- example:start -->
-The workshop example uses the shape for a rule that reads two aggregates, the workshop and the time zone of its venue. It has one caller, the command that schedules a workshop. The rules and the proof type are in [WorkshopScheduling.cs](../../Recall.Server/Examples/Workshops/WorkshopScheduling.cs), and the handler switches on the decision in [ScheduleWorkshop.cs](../../Recall.Server/Examples/Workshops/Features/ScheduleWorkshop/ScheduleWorkshop.cs).
-<!-- example:end -->
-
 ## List query
 
 A list query projects to the DTO first. Then it applies the QueryKit filter and sort to the DTO. As a result, a caller can filter and sort only on the fields that the contract shows, and not on a field such as `LastModifiedOn`.
@@ -285,10 +277,6 @@ A list has no `search` parameter. A caller finds text through `filters`, with th
 
 QueryKit has no escape in a quoted value. Text with a `"` goes in a raw string with one space of padding on each side, for example `title @=* """ say "hi" """`. The delimiter is one quote longer than the longest run of quotes in the text, and at least three quotes long. QueryKit removes the padding, so a quote at the start or the end of the text stays in the text. Give the MCP description of `filters` this rule, as the lists that `scripts/new-feature.cs` writes do. `QueryKitText.Quote` in the shared test helpers and `quoteText` in `frontend/src/lib/querykit-text.ts` write it.
 
-<!-- example:start -->
-The workshop list test finds titles with `%`, `_`, `\`, and quotes through a filter: [`WorkshopListQueryTests`](../../tests/Recall.IntegrationTests/Examples/Workshops/WorkshopListQueryTests.cs).
-<!-- example:end -->
-
 A raw `EF.Functions.ILike` outside QueryKit, such as a name check that ignores case or a prefix match, uses `LikePattern`: `LikePattern.Exactly` for a name check, `LikePattern.StartingWith` for a prefix, and `LikePattern.Containing` for a contains, each with `LikePattern.EscapeCharacter` as the third argument. `LikePattern` escapes `%`, `_`, and `\`. A name check gives a clear error, but only a unique index on the name stops two requests that save the same name at one time.
 
 `BannedSymbols.txt` bans the two-argument `ILike` and `Like` (RS0030). They send `ESCAPE ''`, so the backslash of an escaped pattern escapes nothing.
@@ -338,9 +326,5 @@ Obey these rules:
 3. A caller can give or take away only the permissions that it has. When a command changes the permissions of a user, also require each permission that it gives or takes away. `AddUser` gives the default permissions of the role. `AddUserPermission` and `RemoveUserPermission` give or take away one permission. `UpdateUserRole` takes away each permission of the user and gives the defaults of the new role. `DeleteUser` takes away each permission of the user.
 4. A query checks a read permission when it reads data that needs one, for example the other users (`read_users`), the agents (`read_agents`), or the audit log (`read_audit_log`). A query whose rows each member can see, such as the tenant of the caller, has no check. In both cases, the tenant filter still limits the rows that the query reads. A command that returns the record of another user or of an agent also checks the read permission, because its response shows the same data as the query. For example, `RemoveUserPermission` requires `read_users`, and `AddAgentPermission` requires `read_agents`. `AddUser` and `AddAgent` need no read permission, because their response has only values from the request, the caller, and the new record.
 5. Do not add a permission check to an adapter. The HTTP endpoint, the gRPC method, and the MCP tool send the same request, so the check in the handler applies to each of them.
-
-<!-- example:start -->
-`AddVenue` checks `manage_workshops` first: [`AddVenue.Handler.Handle`](../../Recall.Server/Examples/Venues/Features/AddVenue/AddVenue.cs).
-<!-- example:end -->
 
 For the permissions, the callers that pass, and how to add a permission, see [backend.md](../backend.md#permissions).

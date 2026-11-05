@@ -29,10 +29,6 @@ A component that takes a save function as a prop does not need answers. Give it 
 A click on an option of a combobox can scroll the page, and a scroll of the page closes the list. Pick an option with `userEvent.keyboard('{ArrowDown}{Enter}')`.
 
 When a component test fails in CI, open the `.vitest/attachments/` folder in the test report artifact of the job. It has the failure screenshot and the Playwright trace of each failed test. The screenshot is at `failure-screenshots/<path of the test file>/<full test name>.png`, with a `-` in place of each character that is not a letter, a digit, or `_`. Vitest 5.0.5 puts only the file name of the test file in that path. So when two files of one name in two folders had a failed test of the same name, one screenshot replaced the other. The patch of `@vitest/browser` in `frontend/patches/` puts the path of the file there. Open the trace at https://trace.playwright.dev. For a test that timed out, the last action with no end is the step that the test waited on. Only CI records the traces, because they make `pnpm test` about 50% slower. In CI that is 16 s more for each job: the median of 8 runs with traces and 8 runs without traces, on one commit, in each of the `api-contract` and `without-examples` jobs. To record them locally, run `CI=1 pnpm test`.
-<!-- example:start -->
-
-The workshop example has these component tests: the limits of the contract and the stale-version reload of the edit form ([`refuses a title and a capacity over the limits of the contract`](<../../frontend/src/examples/workshops/components/workshop-edit-form.test.tsx>), [`after a stale save, loads the latest`](<../../frontend/src/examples/workshops/components/workshop-edit-form.test.tsx>)), the venue picker with a pick that is not on the first page ([`shows a picked venue that is not on the first page`](<../../frontend/src/examples/venues/components/venue-picker.test.tsx>)), and the search and the page of the list in the URL ([`puts the page in the URL`](<../../frontend/src/examples/workshops/workshop-list.test.tsx>)). A unit test checks the filter that a search sends, with a quote at an end, `%`, and `_` ([`containsText`](../../frontend/src/lib/querykit-text.test.ts)).
-<!-- example:end -->
 
 ## The functional suite
 
@@ -102,10 +98,6 @@ All test data comes from the builders in `tests/support/builders/`:
 Set only the values that the scenario is about. If a scenario needs a value that no builder method sets, add the method to the builder.
 
 `aProblem().staleVersion()` and `aProblem().invalid(errors)` make the 409 of a stale save and the 422 of a validation problem, as the Server sends them.
-<!-- example:start -->
-
-The workshop builder gives each status the actions that a caller with `manage_workshops` gets, and `seenByReader()` takes them away: [`MANAGER_ACTIONS`](<../../frontend/tests/support/examples/workshop-builder.ts>). The spec of the workshops walks from the list to the detail and the edit form, and reloads after a stale save: [`opens a workshop from the list`](<../../frontend/tests/features/examples/workshops/workshops.spec.ts>). It reads and shows each start in the zone of the venue, at a fixed clock on which the day at the venue is not the UTC day: [`adds a workshop with the start that the user types`](<../../frontend/tests/features/examples/workshops/workshops.spec.ts>).
-<!-- example:end -->
 
 ### Locators, tasks, and specs
 
@@ -151,15 +143,9 @@ A page that shows a time in the zone of the browser, not of its place, shows ano
 Each functional test runs once in each project. To run one project, add `--project=kiritimati`.
 
 - A test of a page with no place sets its clock in the zone of the browser. Use `instantIn(wallClock, browserZone())` from `@tests/support/clock`. Then today is the same date in each project.
-<!-- example:start -->
-- `openOn` in `filter-demo.tasks.ts` sets the clock of a page with no place.
-<!-- example:end -->
 - A test of a time of a place gives the place a zone far from the browser, and sets the clock to an instant at which the date of the place is not the date of the browser or the UTC date. For example, at 07:00 UTC on August 16, it is August 15 in `Pacific/Pago_Pago` and August 16 in UTC and in `Pacific/Kiritimati`. Write the instant in UTC, such as `new Date('2026-08-16T07:00:00Z')`, so that it is the same instant in each project.
 - A test of a zone with a daylight saving time change, such as a time in a spring gap, sets the zone in its describe with `test.use({ timezoneId: 'America/New_York' })`, and runs only in the `utc` project, because the zone of each project is then the same. `browserZone()` gives the zone of the project, not the zone of `test.use`.
 - The tests that check this rule are `date-filter.test.tsx`, `date-picker.test.tsx`, `calendar: marks today and opens on today at the place of the date` in `calendar.test.tsx`, `querykit-converter.test.ts`, and `zoned-time.test.ts`.
-<!-- example:start -->
-- `a date filter of a place in another zone` in `filter-demo.spec.ts` also checks it. The forecast specs in `weather-forecast.spec.ts` fail in `pago-pago` when the page formats a `DateOnly` as midnight UTC.
-<!-- example:end -->
 
 ### Add a feature
 

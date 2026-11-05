@@ -3,32 +3,14 @@
 // result, on a throwaway copy of the checkout. See job.cs.
 //
 //   dotnet run scripts/ci/new-feature.cs
-// example:start
-//   dotnet run scripts/ci/new-feature.cs -- --examples remove
-// example:end
 //
 // The tools: git, the .NET SDK, Docker, and buf.
-// example:start
-// With --examples remove, also pnpm.
-// example:end
 
 #:include job.cs
 
 Dictionary<string, Step[]> examples = new()
 {
     ["keep"] = [],
-    // example:start
-    // scripts/remove-examples.cs builds the SPA again, so this choice needs pnpm
-    ["remove"] =
-    [
-        new("Remove the examples", copy =>
-        {
-            copy.RequireTool("pnpm", "--version", "Install pnpm: https://pnpm.io/installation");
-            copy.Run("dotnet", "run", "scripts/remove-examples.cs");
-            copy.CommitAll("Remove the examples");
-        }),
-    ],
-    // example:end
 };
 
 var choice = args switch

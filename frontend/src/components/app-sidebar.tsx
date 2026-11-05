@@ -21,10 +21,6 @@ import {
 import { useSidebar } from "@/components/ui/use-sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { useCurrentNavItem } from "@/components/current-nav-item"
-// example:start
-import { ExampleNav } from "@/examples/example-nav"
-import { exampleNavUrls } from "@/examples/example-nav-items"
-// example:end
 
 const appName = "Recall"
 const appInitials = appName
@@ -54,9 +50,6 @@ const navItems = [
 
 const navUrls = [
   ...navItems.map((item) => item.url),
-  // example:start
-  ...exampleNavUrls,
-  // example:end
 ]
 
 export function AppSidebar() {
@@ -104,10 +97,6 @@ export function AppSidebar() {
                     </SidebarMenuItem>
                   )
                 })}
-
-                {/* example:start */}
-                <ExampleNav current={current} onNavigate={closeMobile} />
-                {/* example:end */}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

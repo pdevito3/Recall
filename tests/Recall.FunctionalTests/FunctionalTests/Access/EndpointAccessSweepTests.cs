@@ -13,10 +13,6 @@ using Recall.Server.Resources.Entrypoints.Http;
 using Recall.Server.Resources.Entrypoints.Mcp;
 using Recall.SharedTestHelpers.EntityGraphs;
 using Recall.SharedTestHelpers.Fakes.Attachments;
-// example:start
-using Recall.Server.Examples.Workshops;
-using Recall.SharedTestHelpers.Examples.EntityGraphs;
-// example:end
 using global::Grpc.AspNetCore.Server;
 using global::Grpc.Core;
 using global::Google.Protobuf;
@@ -44,16 +40,6 @@ public class EndpointAccessSweepTests : TestBase
         ["GetCurrentUser"] = new("Each signed-in caller reads the own identity. It takes no ID and reads no tenant rows."),
         ["get_tenant"] = new("ToolAccessKind.Read. Each member reads the own tenant, and the tenant filter hides the others."),
         ["list_tenants"] = new("ToolAccessKind.Read. Each member lists the own tenant, and the tenant filter hides the others."),
-        // example:start
-        ["GetVenue"] = new("Each member reads the venues of the own tenant. The tenant filter hides each other tenant."),
-        ["GetVenueList"] = new("Each member lists the venues of the own tenant. The tenant filter hides each other tenant."),
-        ["GetWorkshop"] = new("Each member reads the workshops of the own tenant. The allowed actions show what the caller can do."),
-        ["GetWorkshopList"] = new("Each member lists the workshops of the own tenant. The tenant filter hides each other tenant."),
-        ["GetWorkshopAttachments"] = new("Each member reads the files of the workshops of the own tenant. The tenant filter on the workshop hides each other tenant."),
-        ["list_workshops"] = new("ToolAccessKind.Read. Each member lists the workshops of the own tenant, and the tenant filter hides the others."),
-        ["GetSecureWeatherForecast"] = new("Demo data with no tenant rows. Each signed-in caller gets the same forecast."),
-        ["GetWeatherForecast"] = new("Demo of a public endpoint. It has no tenant rows.", Anonymous: true),
-        // example:end
         // new-feature:open-to-each-member
     };
 
@@ -334,9 +320,6 @@ public class EndpointAccessSweepTests : TestBase
         // A route value that names a record under the record of {id}. Its value is under "<kind>/<name>" in IdsByKind.
         private static readonly HashSet<string> ChildRecordNames =
         [
-            // example:start
-            "attachmentId",
-            // example:end
         ];
 
         public static bool NamesARecord(string name) => name is "id" or "identifier" || ChildRecordNames.Contains(name);
@@ -363,31 +346,16 @@ public class EndpointAccessSweepTests : TestBase
             .AddTenant(out var tenant)
             .AddUsers(out var users, u => u.Role = "User", u => u.Role = "Admin", u => u.Role = "User")
             .Under(tenant)
-            // example:start
-            .AddVenue(out var venue)
-            .AddWorkshop(out var workshop)
-            .AddWorkshopAttachment(out var attachment)
-            .Under(tenant)
-            // example:end
             // new-feature:sweep-graph
             .AddAgent(out var agent);
         var (member, admin, otherUser) = (users[0], users[1], users[2]);
         foreach (var permission in member.UserPermissions.ToList())
             member.RemovePermission(permission);
         admin.AddPermissions(Permission.GetAll());
-        // example:start
-        var offered = (ScheduleDecision.Offered)WorkshopScheduling.Decide(new ScheduleCase(workshop, venue, DateTimeOffset.UtcNow, workshop.Version));
-        workshop.Schedule(offered.Start);
-        // example:end
 
         await InsertAsync(tenant);
         await InsertAsync(users);
         await InsertAsync(agent);
-        // example:start
-        await InsertAsync(venue);
-        await InsertAsync(workshop);
-        await InsertAsync(attachment);
-        // example:end
         // new-feature:sweep-inserts
 
         var idsByKind = new Dictionary<string, string>
@@ -395,11 +363,6 @@ public class EndpointAccessSweepTests : TestBase
             ["users"] = otherUser.Id,
             ["agents"] = agent.Id,
             ["tenants"] = tenant.Id,
-            // example:start
-            ["venues"] = venue.Id,
-            ["workshops"] = workshop.Id,
-            ["workshops/attachmentId"] = attachment.Id,
-            // example:end
             // new-feature:sweep-ids
         };
         return new TenantRecords(member, admin, new RecordIds(idsByKind, otherUser.Identifier));

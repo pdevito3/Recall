@@ -26,52 +26,31 @@ public class TenantMcpToolTests : TestBase
         yield return () => ("member",
         [
             "get_tenant", "list_tenants",
-            // example:start
-            "list_workshops",
-            // example:end
         ]);
         yield return () => ("admin",
         [
             "get_tenant", "list_tenants", "update_tenant",
-            // example:start
-            "cancel_workshop", "list_workshops",
-            // example:end
         ]);
         yield return () => ("manage-all client",
         [
             "add_tenant", "get_tenant", "list_tenants", "update_tenant",
-            // example:start
-            "cancel_workshop", "list_workshops",
-            // example:end
         ]);
         yield return () => ("read-only client",
         [
             "get_tenant", "list_tenants",
-            // example:start
-            "list_workshops",
-            // example:end
         ]);
         yield return () => ("unregistered client with a user sub", []);
         yield return () => ("admin through a delegated agent with no grant",
         [
             "get_tenant", "list_tenants",
-            // example:start
-            "list_workshops",
-            // example:end
         ]);
         yield return () => ("admin through a delegated agent granted manage_tenant",
         [
             "get_tenant", "list_tenants", "update_tenant",
-            // example:start
-            "list_workshops",
-            // example:end
         ]);
         yield return () => ("machine agent granted manage_tenant",
         [
             "get_tenant", "list_tenants", "update_tenant",
-            // example:start
-            "list_workshops",
-            // example:end
         ]);
     }
 

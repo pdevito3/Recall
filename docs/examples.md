@@ -19,23 +19,6 @@ The script does these steps:
 
 A marker with no partner stops the script before it changes a file. A change to the model of the Server with no migration also stops it, because the script deletes the migration that it adds to write the snapshot. Do not put a marker at the start of a line in a code block of a doc, because the script reads it as a marker.
 
-<!-- example:start -->
-## The examples
-
-| Example | Where it is |
-|---------|-------------|
-| The weather API and its page at `/weather` | `Recall.Server/Examples/Weather/`, `frontend/src/examples/weather/`, `frontend/src/routes/(examples)/weather.tsx` |
-| The component library at `/components` and the filter builder demo at `/filter-demo` | `frontend/src/routes/(examples)/` |
-| The `Examples` menu of the sidebar | `frontend/src/examples/example-nav.tsx`, `frontend/src/examples/example-nav-items.ts` |
-| The venues and workshops API, its `list_workshops` and `cancel_workshop` MCP tools, and the `manage_workshops` permission | `Recall.Server/Examples/Venues/`, `Recall.Server/Examples/Workshops/`, `Recall.Server/Databases/EntityConfigurations/Examples/`, `Recall.Server/Databases/Migrations/Examples/` |
-| The workshop pages at `/workshops` and `/venues/new`: the list, the detail, the edit and create forms, and the venue picker | `frontend/src/examples/workshops/`, `frontend/src/examples/venues/`, `frontend/src/routes/(examples)/workshops/`, `frontend/src/routes/(examples)/venues/` |
-| The files of a workshop: the `WorkshopAttachment` entity and its upload rules, its upload, list, and delete endpoints, its table, and the Files section of the workshop detail. The parts of attachments that it uses are not an example (see [attachments.md](backend/attachments.md)) | `Recall.Server/Examples/Workshops/`, `frontend/src/examples/workshops/components/workshop-attachments.tsx` |
-| The tests of the examples | the `Examples/` and `examples/` folders of the test projects, of `frontend/tests/`, and of `frontend/src/` |
-| The recipes of the example pages in the verify skill | `.agents/skills/verify-recall/features/examples/` and `recipes/examples/` |
-
-The script deletes the migrations of the example tables. A database that ran them still has the `venues`, `workshops`, and `workshop_attachments` tables and the `manage_workshops` permission. If the database of your app ran those migrations, add a migration that drops the three tables and calls `migrationBuilder.DeletePermission("manage_workshops")`. A row of a permission that `Permission` does not know stops each load of its user. The object storage of the app still has the files of the workshops under `tenants/<tenant>/workshops/`. Delete them. The script prints this paragraph when it deletes the examples.
-<!-- example:end -->
-
 ## Add example code
 
 Put example code where the script finds it:
@@ -54,21 +37,3 @@ dotnet run scripts/ci/new-feature.cs
 ```
 
 The script works on a throwaway copy of the checkout, with your uncommitted changes in the copy. It does not change the checkout. A pass deletes the copy. A failure names the step and keeps the copy, for its logs and test reports. The script needs the .NET SDK band of CI (10.0.4xx), Docker, and buf.
-
-<!-- example:start -->
-The `without-examples` job of CI runs the script, runs it again to prove that the second run changes nothing, and fails if an example name stays in a tracked file. Then it builds the app and runs all of the tests. The other CI jobs test the app with the examples.
-
-The steps of the job are in [scripts/ci/examples/without-examples.cs](../scripts/ci/examples/without-examples.cs). Run it before you push a change to example code, to a marker, or to a line in a doc that can name an example. It works on a throwaway copy, as `scripts/ci/new-feature.cs` does, and it also needs pnpm:
-
-```bash
-dotnet run scripts/ci/examples/without-examples.cs
-```
-
-To run the `new-feature` job on an app with no examples, as its second matrix entry does, run `dotnet run scripts/ci/new-feature.cs -- --examples remove`. This also needs pnpm.
-
-The name check skips the `.Designer.cs` file of each migration. EF Core writes the full model into that file when it adds the migration, so each migration that you add while the examples are in the app names the example entities. This is harmless. The file names each entity in a string, so the app builds with no example code. EF Core reads the file only for the model at its own migration, and a new migration compares the model with the snapshot, which the script writes again.
-
-When you add an example, add each name that only the example uses to `ExampleNames` in `scripts/ci/examples/without-examples.cs`. Use a word that the app does not use for its own code, for example the name of the entity or of the route. The check cannot find the names by itself: a marker gives no name, and the files of an example also use shared names, such as `Route` and `Tenants`.
-
-The `init` job of CI makes an app from the parent commit, deletes its examples, and merges the commit with `scripts/template-merge.cs`. It fails if the merge has a conflict or adds an example file again.
-<!-- example:end -->

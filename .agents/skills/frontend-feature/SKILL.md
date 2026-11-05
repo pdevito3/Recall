@@ -13,20 +13,6 @@ Before you start, read [frontend.md](../../../docs/frontend.md), [server-state.m
 
 Copy the shape of the reference feature, not its names.
 
-<!-- example:start -->
-The reference is the workshops and venues example. Open each file of a part before you write that part.
-
-| Part | Page and code | Tests |
-|---|---|---|
-| List | [`workshops/index.tsx`](<../../../frontend/src/routes/(examples)/workshops/index.tsx>), [`get-workshop-list.ts`](../../../frontend/src/examples/workshops/apis/get-workshop-list.ts), [`workshop.keys.ts`](../../../frontend/src/examples/workshops/apis/workshop.keys.ts) | [`workshop-list.test.tsx`](../../../frontend/src/examples/workshops/workshop-list.test.tsx) |
-| Detail | [`$id/index.tsx`](<../../../frontend/src/routes/(examples)/workshops/$id/index.tsx>), [`workshop-actions.tsx`](../../../frontend/src/examples/workshops/components/workshop-actions.tsx), [`send-workshop-action.ts`](../../../frontend/src/examples/workshops/apis/send-workshop-action.ts) | |
-| Edit form | [`$id/edit.tsx`](<../../../frontend/src/routes/(examples)/workshops/$id/edit.tsx>), [`workshop-edit-form.tsx`](../../../frontend/src/examples/workshops/components/workshop-edit-form.tsx), [`update-workshop.ts`](../../../frontend/src/examples/workshops/apis/update-workshop.ts), [`workshop-fields-schema.ts`](../../../frontend/src/examples/workshops/components/workshop-fields-schema.ts) | [`workshop-edit-form.test.tsx`](../../../frontend/src/examples/workshops/components/workshop-edit-form.test.tsx) |
-| Create form | [`workshops/new.tsx`](<../../../frontend/src/routes/(examples)/workshops/new.tsx>), [`workshop-create-form.tsx`](../../../frontend/src/examples/workshops/components/workshop-create-form.tsx), [`add-workshop.ts`](../../../frontend/src/examples/workshops/apis/add-workshop.ts) | |
-| Delete | The reference has no delete, because the Server has no delete for workshops or venues. Use `leaveDeletedRecord` (below) | |
-| Search picker | [`venue-picker.tsx`](../../../frontend/src/examples/venues/components/venue-picker.tsx), [`get-venue-list.ts`](../../../frontend/src/examples/venues/apis/get-venue-list.ts), [`get-venue.ts`](../../../frontend/src/examples/venues/apis/get-venue.ts) | [`venue-picker.test.tsx`](../../../frontend/src/examples/venues/components/venue-picker.test.tsx) |
-| Functional suite | | [`workshops.spec.ts`](../../../frontend/tests/features/examples/workshops/workshops.spec.ts), [`workshops.tasks.ts`](../../../frontend/tests/features/examples/workshops/workshops.tasks.ts), [`workshops.locators.ts`](../../../frontend/tests/features/examples/workshops/workshops.locators.ts), [`workshops-api.ts`](../../../frontend/tests/support/examples/workshops-api.ts), [`workshop-builder.ts`](../../../frontend/tests/support/examples/workshop-builder.ts) |
-<!-- example:end -->
-
 If `frontend/src/examples/` does not exist, `scripts/remove-examples.cs` deleted the reference feature from this app. Read it in the template repository, in [`frontend/src/examples/`](https://github.com/pdevito3/FullstackTemplate/tree/main/frontend/src/examples), [`frontend/src/routes/(examples)/`](<https://github.com/pdevito3/FullstackTemplate/tree/main/frontend/src/routes/(examples)>), the `examples` folders of [`frontend/tests/`](https://github.com/pdevito3/FullstackTemplate/tree/main/frontend/tests), and the `examples` folders of the [`verify-recall`](https://github.com/pdevito3/FullstackTemplate/tree/main/.agents/skills/verify-recall) skill. Copy no file from it into a folder named `examples`.
 
 The shared parts of a page below are in the app, also after the removal. Use them. Do not write a second copy. After the removal, the steps use these parts, the code samples of the rule docs, and the [patterns](#patterns) at the end of this skill:

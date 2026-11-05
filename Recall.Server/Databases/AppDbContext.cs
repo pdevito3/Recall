@@ -9,10 +9,6 @@ using Domain.Tenants;
 using Domain.Users;
 // new-feature:db-usings
 using EntityConfigurations;
-// example:start
-using Examples.Venues;
-using Examples.Workshops;
-// example:end
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -39,11 +35,6 @@ public class AppDbContext(
     public DbSet<Agent> Agents => Set<Agent>();
     public DbSet<AgentPermission> AgentPermissions => Set<AgentPermission>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
-    // example:start
-    public DbSet<Venue> Venues => Set<Venue>();
-    public DbSet<Workshop> Workshops => Set<Workshop>();
-    public DbSet<WorkshopAttachment> WorkshopAttachments => Set<WorkshopAttachment>();
-    // example:end
     // new-feature:db-sets
     #endregion
 

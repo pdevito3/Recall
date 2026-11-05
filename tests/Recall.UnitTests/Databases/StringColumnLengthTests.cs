@@ -7,10 +7,6 @@ using Recall.Server.Domain.AuditEntries;
 using Recall.Server.Domain.Users;
 using Recall.Server.Exceptions;
 using Recall.SharedTestHelpers.EntityGraphs;
-// example:start
-using Recall.Server.Examples.Workshops;
-using Recall.SharedTestHelpers.Examples.EntityGraphs;
-// example:end
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -37,13 +33,6 @@ public class StringColumnLengthTests
         ["tenants.name"] = new("name", Text, v => TestGraph.Start(out _).AddTenant(out _, t => t.Name = v)),
         ["agents.name"] = new("name", Text, v => TestGraph.Start(out _).AddTenant(out _).AddAgent(out _, a => a.Name = v)),
         ["agents.client_id"] = new("clientId", Text, v => TestGraph.Start(out _).AddTenant(out _).AddAgent(out _, a => a.ClientId = v)),
-        // example:start
-        ["venues.name"] = new("name", Text, v => TestGraph.Start(out _).AddVenue(out _, x => x.Name = v)),
-        ["workshops.title"] = new("title", Text, v => TestGraph.Start(out _).AddVenue(out _).AddWorkshop(out _, x => x.Title = v)),
-        // The name of the sample file must end in its extension
-        ["workshop_attachments.file_name"] = new("fileName", (c, length) => Text(c, length - ".pdf".Length) + ".pdf",
-            v => TestGraph.Start(out _).AddVenue(out _).AddWorkshop(out _).AddWorkshopAttachment(out _, x => x.FileName = v)),
-        // example:end
         // new-feature:caller-columns
     };
 
@@ -54,10 +43,6 @@ public class StringColumnLengthTests
         ["audit_entries.kind"] = Enum.GetNames<AuditEntryKind>(),
         ["user_permissions.permission"] = Permission.GetAll().Select(p => p.Value).ToList(),
         ["agent_permissions.permission"] = Permission.GetAll().Select(p => p.Value).ToList(),
-        // example:start
-        ["venues.time_zone"] = TimeZoneInfo.GetSystemTimeZones().Where(z => z.HasIanaId).Select(z => z.Id).ToList(),
-        ["workshops.status"] = WorkshopStatus.ListNames(),
-        // example:end
         // new-feature:fixed-option-columns
     };
 
@@ -73,12 +58,6 @@ public class StringColumnLengthTests
         "audit_entries.root_type",
         "audit_entries.tenant_id",
         "audit_entries.trace_id",
-        // example:start
-        "workshops.organizer_id",
-        // The type comes from the file type registry, and the entity builds the key
-        "workshop_attachments.media_type",
-        "workshop_attachments.storage_key",
-        // example:end
     ];
 
     [Test]

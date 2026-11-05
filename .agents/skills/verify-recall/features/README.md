@@ -7,10 +7,6 @@ This directory is the maintained source for the proof of user-facing behavior in
 - `scripts/launch.sh` started an isolated stack for this checkout, and `scripts/doctor.sh` exits with 0.
 - The browser is a new Chromium context from `scripts/browse.mjs`. Nobody is logged in. `localStorage` is empty, so the theme is `system`.
 - The database has the rows of a new stack. `browse.mjs` puts back each row that a recipe writes, so each recipe starts from the same rows. Only [Start a tenant](./start-tenant.md) and [Users](./users.md) write app data. A login writes a BFF session row, and the restore deletes it.
-<!-- example:start -->
-- The weather endpoints of the example page make random data at each request.
-- Only the workshops examples write app data, and only the workshop files example writes to object storage. Each of their recipes first makes the signed-in user an `Admin` of a new tenant, because the database has no user. See [Workshops](./examples/workshops.md).
-<!-- example:end -->
 - The IdP is ZeroFactor, unless `launch.sh` got `--auth-provider`. The ZeroFactor users are `admin@example.com` (name `Admin User`) and `user@example.com` (name `Test User`).
 - Never drive a stack that the current verification run did not start.
 
@@ -49,21 +45,6 @@ Keep implementation details out of the map. Name only user paths, stable handles
 - [Start a tenant](./start-tenant.md) covers the notice for a signed-in user with no user record, the form at `/start-tenant`, and the start of a tenant with the user as its admin.
 - [Users](./users.md) covers `/users` and `/users/<id>`: the list of the users of the tenant, the actions from `allowedActions`, the role change, the delete, and the refusal for a member.
 
-<!-- example:start -->
-The example pages have their feature files in `examples/`. `scripts/remove-examples.cs` deletes them with the pages.
-
-- [Weather forecast](./examples/weather-forecast.md) covers the public forecast cards at `/weather`, the °F/°C toggle, and Refresh.
-- [Secure weather](./examples/secure-weather.md) covers the Public API/Secure API toggle and the authenticated forecast.
-- [Filter builder](./examples/filter-builder.md) covers the demo at `/filter-demo`: add, edit, and remove filters, the number filter, multiselect filters with more than one value, grouping, presets, AND/OR, and Clear.
-- [Components showcase](./examples/components-showcase.md) covers the Component Library at `/components`: form controls and their layout, the focus on load, the active sidebar items, overlays, toasts, and the collapsible.
-- [Workshops](./examples/workshops.md) covers `/workshops` and `/venues/new`: a venue, a workshop in it, the edit form with the stale-version reload, the action buttons from `allowedActions`, and the search in the URL.
-- [Workshop files](./examples/workshop-files.md) covers the Files section of a workshop: an upload to object storage, the hint of the upload rules, the thumbnail and the full image, a download, a refused large file, a refused type, and a delete.
-<!-- example:end -->
-
 ## Not mapped yet
-
-<!-- example:start -->
-- The boolean filter dialog and the add path of the date filter dialog on the filter builder. The filter builder map covers only the date edit dialog.
-<!-- example:end -->
 - Swagger UI on the server (`/swagger`). The Playwright spec `frontend/e2e/auth-flows.spec.ts` covers it.
 - The Users and Tenants JSON API, other than the start of a tenant. It has no UI.

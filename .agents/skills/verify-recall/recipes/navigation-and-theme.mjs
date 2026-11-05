@@ -38,27 +38,6 @@ export default async ({ page, step, capture, settle, expect, login }) => {
   })
   await capture('about')
 
-  // example:start
-  await step('open Examples, choose Filter Builder', async () => {
-    await page.getByRole('button', { name: 'Examples' }).click()
-    await page.getByRole('link', { name: 'Filter Builder' }).click()
-    await expect(page).toHaveURL(/\/filter-demo$/)
-    await expect(breadcrumb).toHaveText('Filter Builder')
-    await expect(page.getByRole('heading', { name: 'Filter Builder Demo', level: 1 })).toBeVisible()
-  })
-
-  await step('choose Components', async () => {
-    await page.getByRole('link', { name: 'Components' }).click()
-    await expect(page).toHaveURL(/\/components$/)
-    await expect(breadcrumb).toHaveText('Components')
-    const active = page.locator('[data-slot="sidebar"] [data-active]')
-    await expect(active).toHaveCount(2)
-    await expect(active.nth(0)).toHaveAccessibleName('Examples')
-    await expect(active.nth(1)).toHaveAccessibleName('Components')
-  })
-  await capture('components')
-  // example:end
-
   await step('collapse the sidebar: the link labels hide', async () => {
     await toggleSidebar.click()
     await expect(page.locator('[data-slot="sidebar"][data-state="collapsed"]')).toHaveCount(1)

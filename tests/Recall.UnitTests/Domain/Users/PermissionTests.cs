@@ -10,9 +10,6 @@ public class PermissionTests
     [
         "manage_users", "manage_user_access", "manage_tenant", "manage_agents", "read_audit_log", "read_audit_log_sensitive",
         "read_users", "read_agents",
-        // example:start
-        "manage_workshops",
-        // example:end
         // new-feature:permission-names
     ];
 
