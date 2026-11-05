@@ -87,7 +87,7 @@ public sealed class FileStore(IOptions<FileStoreOptions> options)
             return new FileStream(path, FileMode.Open, FileAccess.Read, ReadersDoNotBlockARename,
                 bufferSize: 4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
         }
-        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or PathTooLongException)
         {
             throw NoFile(ex);
         }

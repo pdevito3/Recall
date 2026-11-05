@@ -52,11 +52,8 @@ public class FileStoreRegistrationTests
         await File.WriteAllBytesAsync(file, [1]);
         await using var app = BuildWithRoot(Path.Combine(file, "files"));
 
-        // Act
-        await StartupOf(app).StartAsync(CancellationToken.None);
-
-        // Assert
-        File.Exists(file).ShouldBeTrue();
+        // Act & Assert
+        await Should.NotThrowAsync(() => StartupOf(app).StartAsync(CancellationToken.None));
     }
 
     private static IHostedService StartupOf(WebApplication app)

@@ -200,6 +200,16 @@ public class FileStoreTests : IDisposable
     }
 
     [Test]
+    public void a_read_of_a_key_longer_than_the_system_allows_is_not_found()
+    {
+        // Arrange
+        var key = FileKey.Of(string.Join('/', Enumerable.Repeat(new string('a', 255), 20)));
+
+        // Act & Assert
+        Should.Throw<NotFoundException>(() => _store.OpenRead(key));
+    }
+
+    [Test]
     public async Task a_delete_removes_the_file_and_a_second_delete_is_a_no_op()
     {
         // Arrange

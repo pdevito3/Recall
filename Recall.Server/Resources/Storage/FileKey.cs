@@ -32,7 +32,7 @@ public sealed partial class FileKey : ValueObject
             if (segment.Length == 0)
                 throw new InvalidFileKeyException("A file key cannot have an empty segment.");
             if (Encoding.UTF8.GetByteCount(segment) > LongestSegmentInBytes)
-                throw new InvalidFileKeyException("A file key cannot have a segment that is longer than a file name can be.");
+                throw new InvalidFileKeyException($"A file key cannot have a segment over {LongestSegmentInBytes} bytes. Use a shorter name.");
             if (segment is "." or "..")
                 throw new InvalidFileKeyException("A file key cannot have a segment that points to a folder.");
             // A file system on a Mac or on Windows does not see the case of a name
