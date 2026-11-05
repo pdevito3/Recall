@@ -5,6 +5,7 @@ using Recall.Server.Auth.Entities;
 using Recall.Server.Databases;
 using Recall.Server.Domain.DPoPProofs;
 using Recall.Server.Resources;
+using Recall.Server.Domain.Sync;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -18,7 +19,7 @@ public class TenantQueryFilterTests
         [typeof(ExternalLogin), typeof(AuthSession), typeof(AppCode)];
 
     private static readonly Type[] EntitiesWithNoTenantData =
-        [typeof(UsedDPoPProof), typeof(LoginAttempt), .. AuthEntitiesReadBeforeACallerExists];
+        [typeof(UsedDPoPProof), typeof(LoginAttempt), typeof(SyncChange), .. AuthEntitiesReadBeforeACallerExists];
 
     [Test]
     public void every_entity_has_the_tenant_filter_unless_it_is_named_as_an_entity_with_no_tenant_filter()

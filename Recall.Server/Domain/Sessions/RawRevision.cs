@@ -1,0 +1,30 @@
+namespace Recall.Server.Domain.Sessions;
+
+[NotAudited("The words of a person. A Revision is written once and goes with its Session, whose row has the version and the audit.")]
+public class RawRevision
+{
+    public string SessionId { get; private set; } = default!;
+
+    public int Number { get; private set; }
+
+    [Sensitive] public DateTimeOffset SavedAt { get; private set; }
+
+    [Sensitive] public DateTimeOffset ClaimedSavedAt { get; private set; }
+
+    [Sensitive] public string Text { get; private set; } = default!;
+
+    public Session Session { get; private set; } = default!;
+
+    internal RawRevision(string sessionId, int number, DateTimeOffset savedAt, DateTimeOffset claimedSavedAt, string text)
+    {
+        SessionId = sessionId;
+        Number = number;
+        SavedAt = savedAt;
+        ClaimedSavedAt = claimedSavedAt;
+        Text = text;
+    }
+
+    private RawRevision()
+    {
+    }
+}

@@ -5,17 +5,27 @@ using Exceptions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Resources;
 
 public static class DatabaseConflict
 {
     private const int UniqueViolation = 2067;
     private const int PrimaryKeyViolation = 1555;
+    private const int ForeignKeyViolation = 787;
+    private const int ConstraintFailed = 19;
     private const string UniqueMessage = "UNIQUE constraint failed: ";
 
     /// <summary>Null when the failure is a server fault. The model gives the <see cref="ConstraintErrors"/>.</summary>
     public static Exception? From(DbUpdateException exception, IModel model)
     {
         if (exception is DbUpdateConcurrencyException)
+            return new StaleVersionException(exception);
+
+        if (exception.InnerException is SqliteException { SqliteErrorCode: ConstraintFailed } failed
+            && failed.Message.Contains(JournalTriggers.OwnerDeletedMessage, StringComparison.Ordinal))
+            return new ForbiddenAccessException(JournalTriggers.OwnerDeletedMessage);
+
+        if (LostToAHardDelete(exception))
             return new StaleVersionException(exception);
 
         if (exception.InnerException is not SqliteException
@@ -32,6 +42,12 @@ public static class DatabaseConflict
                 $"The constraint {constraint} has a {error.GetType().FullName}, which {nameof(DatabaseConflict)} does not map to a response."),
         };
     }
+
+    // A journal row is hard-deleted, and a Revision inserts before the version check of its Session. So a save that lost
+    // to a delete fails on the key of its parent, and the next run finds no row.
+    private static bool LostToAHardDelete(DbUpdateException exception)
+        => exception.InnerException is SqliteException { SqliteExtendedErrorCode: ForeignKeyViolation }
+            && exception.Entries.Any(entry => entry.Metadata.FindDeclaredQueryFilter(QueryFilterNames.JournalOwner) is not null);
 
     /// <summary>
     /// SQLite names the columns of the violated index, as <c>UNIQUE constraint failed: users.tenant_id, users.email</c>,

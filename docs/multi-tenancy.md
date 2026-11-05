@@ -130,6 +130,12 @@ The scope tells which rows a caller sees. It does not tell what a caller can do.
 
 `ManagesAllTenants` is true for a client in `ManageAllTenantsClientIds` and for system work in a system scope. It is false for all other callers, including a client in `ReadAllTenantsClientIds`.
 
+## The journal of a person
+
+A tenant is not the privacy boundary of a journal. A journal table also has the `JournalOwner` filter, so only its owner reads a row: an Admin of the tenant gets 404 for the Session of a member. To make a journal table, implement `IJournalOwned`, or call `ApplyJournalOwner` when the row has no owner column. The filter has no way to widen it, and `JournalRulesTests` fails on a call to `IgnoreQueryFilters` on a journal type.
+
+A machine agent, an all-tenants client, a delegated agent, and a system scope have no journal owner. They get 403 where a route has no ID, and 404 where it has one. A journal domain has no MCP tool and no gRPC service. See the [journal spec](specs/sessions.md).
+
 ## Add a user to a tenant
 
 These rules stop a caller from joining a tenant that is not theirs:
