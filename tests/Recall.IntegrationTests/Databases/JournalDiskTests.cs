@@ -2,6 +2,7 @@ namespace Recall.IntegrationTests.Databases;
 
 using System.Text;
 using Microsoft.Data.Sqlite;
+using Recall.Server.Databases.Sqlite;
 using Recall.Server.Domain.Sessions.Dtos;
 using Recall.Server.Domain.Sessions.Features;
 using Shouldly;
@@ -9,6 +10,7 @@ using Shouldly;
 public class JournalDiskTests : TestBase
 {
     private const int MaxCheckpoints = 200;
+    private static readonly TimeSpan CheckpointGap = TimeSpan.FromMilliseconds(250);
 
     [Test]
     [Property("Rule", "SES-27")]
@@ -42,17 +44,11 @@ public class JournalDiskTests : TestBase
 
     private static async Task CheckpointUntilFreeAsync()
     {
-        await using var connection = new SqliteConnection(TestFixture.UnpooledConnectionString);
-        await connection.OpenAsync();
         for (var i = 0; i < MaxCheckpoints; i++)
         {
-            await using var command = connection.CreateCommand();
-            command.CommandText = "PRAGMA wal_checkpoint(TRUNCATE)";
-            await using var reader = await command.ExecuteReaderAsync();
-            await reader.ReadAsync();
-            if (reader.GetInt32(0) == 0)
+            if (await WalScrub.TryTruncateAsync(TestFixture.UnpooledConnectionString, CancellationToken.None))
                 return;
-            await Task.Delay(50);
+            await Task.Delay(CheckpointGap);
         }
 
         throw new InvalidOperationException("The WAL stayed busy, so this run proves nothing.");
