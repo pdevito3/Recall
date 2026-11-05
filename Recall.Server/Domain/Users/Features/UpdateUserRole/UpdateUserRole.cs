@@ -28,40 +28,46 @@ public static class UpdateUserRole
             Activity.Current?.SetTag("app.user.role", newRole.Value);
             caller.Require(newRole.GetDefaultPermissions());
 
-            var user = await dbContext.Users
-                .TagWithOperationCallSite("users.update_role.load")
-                .Include(u => u.UserPermissions)
-                .GetById(request.Id, cancellationToken);
-            user.GuardAllows(UserAction.UpdateRole(), caller);
-
-            var existingPermissions = user.UserPermissions.ToList();
-            var existingPermissionIds = existingPermissions.Select(p => p.Id).ToHashSet();
-
-            var oldRole = user.Role;
-            user.UpdateRole(newRole);
-
-            // Handle permission changes: remove old, add new
-            var remainingIds = user.UserPermissions.Select(p => p.Id).ToHashSet();
-
-            // Remove permissions that were removed from the collection
-            foreach (var existingPermission in existingPermissions)
+            var (user, oldRole) = await LastAdmin.RunWithTenantLockAsync(dbContext, request.Id, async ct =>
             {
-                if (!remainingIds.Contains(existingPermission.Id))
-                {
-                    dbContext.UserPermissions.Remove(existingPermission);
-                }
-            }
+                var user = await dbContext.Users
+                    .TagWithOperationCallSite("users.update_role.load")
+                    .Include(u => u.UserPermissions)
+                    .GetById(request.Id, ct);
+                user.GuardAllows(UserAction.UpdateRole(), caller);
+                if (newRole != UserRole.Admin())
+                    await LastAdmin.GuardAsync(dbContext, user, ct);
 
-            // Add new permissions that weren't already tracked
-            foreach (var permission in user.UserPermissions)
-            {
-                if (!existingPermissionIds.Contains(permission.Id))
-                {
-                    dbContext.UserPermissions.Add(permission);
-                }
-            }
+                var existingPermissions = user.UserPermissions.ToList();
+                var existingPermissionIds = existingPermissions.Select(p => p.Id).ToHashSet();
 
-            await dbContext.SaveChangesAsync(cancellationToken);
+                var oldRole = user.Role;
+                user.UpdateRole(newRole);
+
+                // Handle permission changes: remove old, add new
+                var remainingIds = user.UserPermissions.Select(p => p.Id).ToHashSet();
+
+                // Remove permissions that were removed from the collection
+                foreach (var existingPermission in existingPermissions)
+                {
+                    if (!remainingIds.Contains(existingPermission.Id))
+                    {
+                        dbContext.UserPermissions.Remove(existingPermission);
+                    }
+                }
+
+                // Add new permissions that weren't already tracked
+                foreach (var permission in user.UserPermissions)
+                {
+                    if (!existingPermissionIds.Contains(permission.Id))
+                    {
+                        dbContext.UserPermissions.Add(permission);
+                    }
+                }
+
+                await dbContext.SaveChangesAsync(ct);
+                return (user, oldRole);
+            }, cancellationToken);
 
             if (newRole != oldRole)
             {

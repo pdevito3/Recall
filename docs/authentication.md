@@ -186,6 +186,8 @@ Each later login finds the user through the pair of issuer and subject in `auth_
 
 A user that an Admin adds through the API has no link, so that user cannot sign in today.
 
+A tenant keeps one Admin who can sign in. A delete or a demotion gets 409 when it would leave the tenant with no Admin, or would remove the last Admin with a link while Admins with no link remain. So a person cannot lock the install. To remove such an Admin, first give the role Admin to another person who has signed in.
+
 A repeat login fills only a stored value that is empty. A changed value stays. A value that a person clears comes back from the provider at the next login.
 
 ### Recover a lost Owner

@@ -4,6 +4,7 @@ using Recall.Server.Domain;
 using Recall.Server.Domain.Users;
 using Recall.Server.Domain.Users.Features;
 using Recall.Server.Exceptions;
+using Recall.Server.Resources;
 using Recall.SharedTestHelpers.EntityGraphs;
 using Microsoft.EntityFrameworkCore;
 using Shouldly;
@@ -179,5 +180,47 @@ public class UpdateUserRoleCommandTests : TestBase
         userReturned.Permissions.ShouldNotContain("manage_tenant");
         var saved = await testingServiceScope.SendAsync(new GetUser.Query(createdUser.Id));
         saved.Permissions.ShouldNotContain("manage_tenant");
+    }
+
+    [Test]
+    public async Task the_only_admin_who_can_sign_in_cannot_be_demoted()
+    {
+        // Arrange
+        var scope = new TestingServiceScope();
+        await scope.StartGraph(out _)
+            .AddTenant(out _)
+            .AddUser(out var owner, u => u.Role = "Admin")
+            .BuildAsync();
+        await scope.AddSignInLinkAsync(owner);
+        scope.SetUserWithDefaults(identifier: owner.Identifier);
+
+        // Act
+        var act = () => scope.SendAsync(new UpdateUserRole.Command(owner.Id, "User"));
+
+        // Assert
+        var refused = await act.ShouldThrowAsync<ConflictException>();
+        refused.Message.ShouldBe(LastAdmin.RefusedMessage);
+        var role = await scope.ExecuteDbContextAsync(db => db.Users
+            .IgnoreQueryFilters([QueryFilterNames.Tenant]).Where(u => u.Id == owner.Id).Select(u => u.Role.Value).SingleAsync());
+        role.ShouldBe("Admin");
+    }
+
+    [Test]
+    public async Task the_only_admin_who_can_sign_in_can_stay_an_admin()
+    {
+        // Arrange
+        var scope = new TestingServiceScope();
+        await scope.StartGraph(out _)
+            .AddTenant(out _)
+            .AddUser(out var owner, u => u.Role = "Admin")
+            .BuildAsync();
+        await scope.AddSignInLinkAsync(owner);
+        scope.SetUserWithDefaults(identifier: owner.Identifier);
+
+        // Act
+        var result = await scope.SendAsync(new UpdateUserRole.Command(owner.Id, "Admin"));
+
+        // Assert
+        result.Role.ShouldBe("Admin");
     }
 }
