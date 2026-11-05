@@ -1,0 +1,12 @@
+{
+  "type": "https://tools.ietf.org/html/rfc4918#section-11.2",
+  "title": "One or more validation errors occurred.",
+  "status": 422,
+  "detail": "The cursor is ahead of the server. Drop the synced rows and pull from the start.",
+  "traceId": "00000000000000000000000000000000",
+  "errors": {
+    "cursor": [
+      "The cursor is ahead of the server. Drop the synced rows and pull from the start."
+    ]
+  }
+}

@@ -7,6 +7,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/Recall.ArchitectureFixtures/Recall.ArchitectureFixtures.csproj" />
     <Project Path="tests/Recall.Bff.Tests/Recall.Bff.Tests.csproj" />
+    <Project Path="tests/Recall.ContractTests/Recall.ContractTests.csproj" />
     <Project Path="tests/Recall.EntityGraphs.Generators/Recall.EntityGraphs.Generators.csproj" />
     <Project Path="tests/Recall.FunctionalTests/Recall.FunctionalTests.csproj" />
     <Project Path="tests/Recall.IntegrationTests/Recall.IntegrationTests.csproj" />
