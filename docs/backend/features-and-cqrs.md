@@ -210,7 +210,7 @@ public static class BookingHandlers
 
 `FreeDays` and `Book` are the bodies of the two handlers after the load. Each handler calls the same loader, for example an extension method `LoadBookingCaseAsync(roomId, cancellationToken)` on `AppDbContext`. The command handler then adds the booking and calls `SaveChangesAsync` one time. C# cannot see that `Decision` is closed, so the switch needs the `_` arm. A new kind of refusal gets its own arm, and until it has one, the command throws `UnreachableException`. Write the refusal kind as a span tag or a metric tag. See [feature-telemetry.md](feature-telemetry.md).
 
-The case holds the facts at the time of the load. Two requests can pass `Free` at the same time and both save. Back a rule such as `Free` with a unique index, so that the second save gives 409 (see [backend.md](../backend.md#error-responses)). If a unique index cannot state the rule, as with an overlap of dates, take a `RootLock` around the load and the save (see [concurrency.md](concurrency.md#lock)).
+The case holds the facts at the time of the load. Two requests can pass `Free` at the same time and both save. Back a rule such as `Free` with a unique index, so that the second save gives 409 (see [backend.md](../backend.md#error-responses)). If a unique index cannot state the rule, as with an overlap of dates, take the exclusive `RootLock` of the room around the load and the save (see [concurrency.md](concurrency.md#lock)).
 
 A rule that reads only its own entity stays a guard in the entity. See [domain-entities.md](domain-entities.md#guards). Do not add an `IRule` interface, a rule registry, or DI for the rules. One list in one file shows the order.
 

@@ -70,7 +70,7 @@ var added = await RootLock.Tenant.RunSharedAsync(dbContext, tenantId, async ct =
 
 For a new rule, add a field such as `RootLock.Clinic` with the area name, and obey these rules:
 
-1. Take the shared lock (`RunSharedAsync`) in each write that can add to the set, such as a booking or an agent add. Take the exclusive lock (`RunExclusiveAsync`) in each write that needs the set to stay as it read it, such as a deactivation or a tenant delete. Bookings then do not wait on each other, and a deactivation waits for the bookings that started before it.
+1. Take the shared lock (`RunSharedAsync`) in each write that can add to the set, such as a booking or an agent add. Take the exclusive lock (`RunExclusiveAsync`) in each write that needs the set to stay as it read it, such as a deactivation or a tenant delete. Bookings then do not wait on each other, and a deactivation waits for the bookings that started before it. If the rule is between two adds, such as no overlap of two bookings, each add takes the exclusive lock, because two holders of the shared lock do not see the rows of each other.
 2. Do the first read of the rule in the work, and save in the work. The lock is free after the work. Check the root again in the work, also when the handler checked it before. For example, `AddAgent` checks that the tenant exists in the work, also for the tenant of the caller.
 3. Do not change an entity or record an action before the work. `RootLock` throws if the context has changes, because the reads of those changes had no lock.
 4. Take one `RootLock` in a command. `RootLock` throws when the request already holds a lock. A second lock would wait for itself behind the next waiter, and two locks in a different order can deadlock.
