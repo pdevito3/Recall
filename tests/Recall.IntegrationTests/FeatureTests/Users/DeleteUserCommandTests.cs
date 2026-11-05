@@ -192,7 +192,7 @@ public class DeleteUserCommandTests : TestBase
             .AddUser(out var owner, u => u.Role = "Admin")
             .BuildAsync();
         await scope.AddSignInLinkAsync(elsewhere);
-        scope.SetUserWithDefaults(identifier: owner.Identifier);
+        scope.SetMachineClient(TestFixture.TrustedMachineClientId);
 
         // Act
         var act = () => scope.SendAsync(new DeleteUser.Command(owner.Id));
@@ -216,7 +216,6 @@ public class DeleteUserCommandTests : TestBase
             .BuildAsync();
         await scope.AddSignInLinkAsync(first);
         await scope.AddSignInLinkAsync(second);
-        scope.SetUserWithDefaults(identifier: first.Identifier);
 
         // Act
         var firstScope = new TestingServiceScope(services);
