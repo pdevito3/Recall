@@ -36,7 +36,6 @@ public class ModelSnapshotTests
             "Add a migration to update the snapshot. See docs/backend.md#migrations.");
     }
 
-    // The EF Core version is not part of the model. The order of the usings changes when scripts/init.cs renames the app.
     private static string[] ModelLines(string snapshot)
         => snapshot.ReplaceLineEndings("\n")
             .Split('\n')

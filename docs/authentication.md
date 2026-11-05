@@ -194,7 +194,7 @@ The AppHost holds all provider config. The BFF and the server have no provider c
 
 The `AuthProvider` setting in `Recall.AppHost/appsettings.json` selects the provider at runtime. Its value is the name of a folder in `Recall.AppHost/AuthProviders/`, without case sensitivity. The setting has no fallback: if it is empty or not known, the AppHost stops and lists the known providers.
 
-- To change the default, run `dotnet run scripts/init.cs --auth-provider <Name>`, or edit the setting.
+- To change the default, edit the setting.
 - To use another provider for one run, set the environment variable. For example:
 
   ```bash
