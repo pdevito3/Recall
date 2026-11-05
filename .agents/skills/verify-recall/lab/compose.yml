@@ -1,0 +1,32 @@
+name: recall-r3-lab
+services:
+  keycloak-a:
+    image: quay.io/keycloak/keycloak:26.0.8
+    command: ["start-dev", "--import-realm"]
+    environment: { KC_BOOTSTRAP_ADMIN_USERNAME: admin, KC_BOOTSTRAP_ADMIN_PASSWORD: "${LAB_PASSWORD}" }
+    ports: ["28180:8080"]
+    volumes: ["${LAB_DIR}/keycloak/realm-a.json:/opt/keycloak/data/import/realm-a.json:ro"]
+  keycloak-b:
+    image: quay.io/keycloak/keycloak:26.0.8
+    command: ["start-dev", "--import-realm"]
+    environment: { KC_BOOTSTRAP_ADMIN_USERNAME: admin, KC_BOOTSTRAP_ADMIN_PASSWORD: "${LAB_PASSWORD}" }
+    ports: ["28181:8080"]
+    volumes: ["${LAB_DIR}/keycloak/realm-b.json:/opt/keycloak/data/import/realm-b.json:ro"]
+  authelia:
+    image: authelia/authelia:4.39
+    ports: ["29191:9091"]
+    volumes: ["${LAB_DIR}/authelia:/config"]
+    environment: { X_AUTHELIA_CONFIG_FILTERS: template }
+  pocket-id:
+    image: ghcr.io/pocket-id/pocket-id:v1
+    ports: ["29411:1411"]
+    environment:
+      APP_URL: "http://localhost:29411"
+      ENCRYPTION_KEY: "${LAB_ENCRYPTION_KEY}"
+      ANALYTICS_DISABLED: "true"
+    tmpfs: ["/app/data"]
+  caddy:
+    image: caddy:2-alpine
+    ports: ["24443:24443"]
+    volumes: ["${LAB_DIR}/Caddyfile:/etc/caddy/Caddyfile:ro"]
+    extra_hosts: ["host.docker.internal:host-gateway"]

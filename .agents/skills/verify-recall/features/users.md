@@ -22,7 +22,7 @@ A tenant admin sees the users of the tenant at `/users`, opens a user, changes t
 Preconditions:
 
 - `doctor.sh` exits with 0.
-- The user of `login()` has no user record. This is true on a new stack. The recipe starts a tenant, so the user is its admin.
+- The database has no tenant. This is true on a new stack. The first login makes the user of `login()` the Owner, an Admin of the tenant `Recall`.
 - The SPA has no page to add a user yet. The recipe adds a second user with `fetch('/api/v1/users')` in the page, with the `X-CSRF: 1` header and an identifier that no IdP has.
 
 - **List.** Choose `Users` in the sidebar after `waitForResponse` on `GET /api/v1/users`. Each row of the table has the name, the email, and the role of its row in the response.
@@ -33,6 +33,5 @@ Preconditions:
 
 ## Gotchas
 
-- The Server caches the tenant of each user. The recipe deletes its tenant through `DELETE /api/v1/tenants/{id}` at the end. If a run stops before that step, run `dotnet aspire resource server restart --apphost Recall.AppHost` before the next run. Otherwise `GET /api/v1/users/by-identifier/{sub}` gives 403 for the user of `login()`, and the start of a tenant fails.
 - The queries retry one time. For a refused list, the toast shows first, and `The users did not load.` shows about 1 s later. Wait for the text, not for the toast.
-- The success screen of `Start a tenant` has no `Logout` button. Open `/` before `logout()`.
+- A user that the API adds has no login. It exists only as a row, so the recipe does not sign in as the colleague.

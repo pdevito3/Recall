@@ -1,16 +1,16 @@
 ---
 name: verify-recall
-description: Launches the Recall stack (Aspire, server, BFF, React SPA) in isolation, drives the web UI in a real Chromium as a user does, and saves screenshots, ARIA snapshots, traces, and network logs as proof. Use to prove that a change works in the real app, to reproduce a bug end to end before a fix, or to check a feature in the feature map.
+description: Launches the Recall stack (Aspire, Server, React SPA) in isolation, drives the web UI in a real Chromium as a user does, and saves screenshots, ARIA snapshots, traces, and network logs as proof. Use to prove that a change works in the real app, to reproduce a bug end to end before a fix, or to check a feature in the feature map.
 ---
 
 # Verify Recall
 
-The primary surface is the React SPA in a browser. All browser traffic goes through the Vite dev server to the BFF (`/bff/*`, `/api/*`, `/signin-oidc`). With `--preview`, the browser talks to the BFF directly, because the BFF serves the build. See [Production build](#production-build). The BFF holds the tokens and calls the server with a JWT. Login uses ZeroFactor by default. ZeroFactor is [0factor](https://github.com/c4l3b/0factor), a mock OIDC provider that runs in the stack. Its login page lists the users (`admin@example.com` and `user@example.com`), and one click signs in. To test an interaction with a real IdP, start the stack with `--auth-provider <Name>`. `login()` supports `ZeroFactor` and `DuendeDemo`. For another provider, drive its login form from `frontend/e2e/idps/<name>.json`.
+The primary surface is the React SPA in a browser. All browser traffic goes through the Vite dev server to the Server (`/auth/*`, `/api/*`, `/bff/*`). With `--preview`, the browser talks to the Server directly, because the Server serves the build. See [Production build](#production-build). The Server runs the login with the provider and keeps the session in its own database. Login uses ZeroFactor by default. ZeroFactor is [0factor](https://github.com/c4l3b/0factor), a mock OIDC provider that runs in the stack. Its login page lists the users (`admin@example.com` and `user@example.com`), and one click signs in. To test an interaction with a real IdP, start the stack with `--auth-provider <Name>`. `login()` supports `ZeroFactor` and `DuendeDemo`. For another provider, drive its login form from `frontend/e2e/idps/<name>.json`.
 
 Other surfaces, not in the feature map yet:
 
 - Swagger UI on the server at `<server https URL>/swagger`. The Playwright spec `frontend/e2e/auth-flows.spec.ts` drives it. This spec runs against the provider of the stack, usually Keycloak. To run it, start a stack with `AuthProvider=Keycloak` (not `launch.sh`), and run `pnpm test:e2e:stack` in `frontend`. See the "E2E tests" section of `docs/authentication.md`.
-- The JSON API (`/api/v1/users`, `/api/v1/tenants`). It has no UI. Call it through the BFF from a logged-in page with `fetch` and the `X-CSRF: 1` header.
+- The JSON API (`/api/v1/users`, `/api/v1/tenants`). It has no UI. Call it from a logged-in page with `fetch` and the `X-CSRF: 1` header.
 
 All helpers are in `.agents/skills/verify-recall/scripts/`. Run them from the checkout root. Below, `$S` means that directory:
 
@@ -28,7 +28,7 @@ S=.agents/skills/verify-recall
 
 ## Launch
 
-1. Start the stack. The command blocks until `server`, `bff`, and `webfrontend` are healthy and an anonymous `GET /api/v1/users/me` gets the 401 of the Server at the `web` URL: through Vite, or through the BFF with `--preview`. A cold start takes about 1 to 3 minutes.
+1. Start the stack. The command blocks until `server` and `webfrontend` are healthy and an anonymous `GET /api/v1/users/me` gets the 401 of the Server at the `web` URL: through Vite, or directly with `--preview`. A cold start takes about 1 to 3 minutes.
 
    ```bash
    $S/scripts/launch.sh            # or: $S/scripts/launch.sh <RUN_ID>
@@ -65,7 +65,7 @@ Each line starts with `ok` or `FAIL`. Exit code 0 means the stack is worth drivi
 - Each resource is `Running` and `Healthy`.
 - The web URL is unchanged, an anonymous `/api/v1/users/me` is 401, `/bff/user` is 204 or 200, and the server `/health` is 200.
 - If the stack uses `DuendeDemo`, the Duende demo IdP is reachable. If it is not, no login recipe can pass. A local provider, such as ZeroFactor, is a resource of the stack, so the health check above examines it.
-- `HEAD` is the commit of the launch. If it moved, the doctor prints `warn`. Frontend code hot-reloads. For server or BFF code, run `dotnet aspire resource server rebuild --apphost Recall.AppHost` (or `bff`).
+- `HEAD` is the commit of the launch. If it moved, the doctor prints `warn`. Frontend code hot-reloads. For server code, run `dotnet aspire resource server rebuild --apphost Recall.AppHost`.
 
 ## Drive
 
@@ -109,8 +109,8 @@ A recipe is an ES module with a default export. `browse.mjs` gives it these valu
 | `step(name, fn)` | Runs `fn` and logs `ok` or `FAIL` with the name. Put each user action and its assertion in one step. If `fn` fails, the step captures the page as `failure` before the error leaves the step, so a `finally` block of the recipe (for example, a `logout()`) does not change the capture. This capture shows only the viewport, so that an open overlay stays open. A step error that the recipe catches also makes this capture. |
 | `capture(name, { fullPage })` | Waits for `settle()`, then saves a screenshot and an ARIA snapshot. The screenshot is full-page by default. For an open overlay, give `{ fullPage: false }`, because the resize for a full-page screenshot closes a Drawer. In a full-page screenshot of a scrolled page, the fixed sidebar shows at the scroll offset. This is normal. |
 | `settle()` | Waits two frames, then waits for all finite animations to end. Call it before a click in an animated overlay. Playwright retries a click on a moving element with a scroll, and React Aria closes a popover on scroll. |
-| `login(user)` | Logs in through the real BFF and the IdP of the stack. It returns `{ name }`, the `name` claim of the session. Compare the screen with this name. Without `user`, the first user of the IdP signs in: `admin@example.com` (`Admin User`) for ZeroFactor, `bob` (`Bob Smith`) for DuendeDemo. The other users are `user@example.com` and `alice`. |
-| `logout()` | Logs out. For DuendeDemo, it follows the return link of Duende. |
+| `login(user)` | Logs in through the Server and the IdP of the stack. It returns `{ name }`, the `name` claim of the session. Compare the screen with this name. Without `user`, the first user of the IdP signs in: `admin@example.com` (`Admin User`) for ZeroFactor, `bob` (`Bob Smith`) for DuendeDemo. The other users are `user@example.com` and `alice`. The first login of a new database makes that user the Owner, an Admin of the tenant `Recall`. With signup closed, each other person gets the refusal page of the Server, so `login()` fails for them. |
+| `logout()` | Logs out of the app. The page ends on the signed-out page of the Server, `/auth/login?signedOut=1`. The session of the IdP stays. |
 | `stack` | The content of `stack.json` (`stack.urls.web`, `stack.urls.server`, and more). |
 
 Minimal recipe:
@@ -141,7 +141,7 @@ For interactive exploration, the Playwright MCP server in `.mcp.json` also works
 
 `browse.mjs` keeps the database of the stack the same across recipe runs:
 
-1. Before the recipe, it copies each table of each data file (`recall.db`, `bff.db`) in `artifacts/verify/<RUN_ID>/data/` to `artifacts/verify/<RUN_ID>/db-snapshot.json`.
+1. Before the recipe, it copies each table of the data file (`recall.db`) in `artifacts/verify/<RUN_ID>/data/` to `artifacts/verify/<RUN_ID>/db-snapshot.json`.
 2. After the recipe, also after a failed step or a page error, it deletes and inserts only the rows that differ from the copy. Then it reads the tables again. If one still differs, the run fails with `the restore left these tables different`.
 3. `result.json` gives the rows that the run wrote in `data.changes`, for example `"appdb.tenants": { "added": 1, "changed": 0, "deleted": 0 }`. If the restore failed, `data.restored` is `false`, and `data.changes` gives the rows that the run wrote. Some of them can still be in the database. If the restore failed before it read the rows, `data.changes` is `null` and `run-twice.sh` prints `unknown`.
 
@@ -149,7 +149,7 @@ A row that the restore put back has its old values again, also its `version`. Th
 
 If a run stops before the restore (Ctrl-C, a killed process, a restore that failed), `db-snapshot.json` stays. The next `browse.mjs` run restores it first and prints `data: an earlier run did not restore the database`. The doctor prints a `warn` line while the file is there. If that restore also fails, for example after a migration changed a table, `browse.mjs` stops. Delete `db-snapshot.json` to keep the rows as they are, or launch a new stack.
 
-The restore changes only rows. The server keeps a cache of the tenant of each user for up to 30 minutes. A recipe that adds, deletes, or moves a user, or changes a tenant, can leave the old answer in that cache, so the next run can see it. Run `dotnet aspire resource server restart --apphost Recall.AppHost` after such a recipe.
+The restore changes only rows. The server keeps a cache of the tenant of each user for up to 30 minutes. A login on a restored database makes a new user ID, so the next run reads no old answer from that cache. A recipe that keeps the same user with `--keep-data` and changes its tenant can still read an old answer. Run `dotnet aspire resource server restart --apphost Recall.AppHost` after such a recipe.
 
 Only one recipe runs on a stack at a time. A restore would delete the rows of a second run. Do not drive the stack with the Playwright MCP server while a recipe runs, for the same reason. `browse.mjs` holds `recipe.lock` in the run directory, and a second run stops with `browse: the recipe run with pid <pid> drives this stack`.
 
@@ -163,7 +163,7 @@ The dev server compiles each module on request, and React runs in its developmen
 $S/scripts/launch.sh --preview
 ```
 
-`--preview` builds the SPA with `vite build` into `artifacts/verify/<RUN_ID>/spa/`. The BFF serves that build from its web root, as a published BFF serves `wwwroot`, so `web` is the BFF URL. Recipes, `login()`, and `run-twice.sh` work the same way. A frontend change needs a new launch, because the build does not reload. The BFF still runs in the `Development` environment.
+`--preview` builds the SPA with `vite build` into `artifacts/verify/<RUN_ID>/spa/`. The Server serves that build from its web root, as a published Server serves `wwwroot`, so `web` is the Server https URL and the session cookie is `__Host-recall`. Recipes, `login()`, and `run-twice.sh` work the same way. A frontend change needs a new launch, because the build does not reload. The Server still runs in the `Development` environment.
 
 Before a release, and after a change to a shared component in `frontend/src/components/ui/`, launch with `--preview` and run `run-twice.sh`.
 
@@ -189,12 +189,12 @@ Proof standards:
 
 - Drive the real user path: click the buttons and links that a user clicks. Do not set React state, call internal functions, or use test-only endpoints.
 - Capture the action and the result. A recipe needs a capture before and after the change of state, not only the last screen.
-- Prove side effects next to the visible result. Examples: the HTTP status and the JSON of the API response, the `__Host-bff` cookie, the `ui-theme` value in `localStorage`.
+- Prove side effects next to the visible result. Examples: the HTTP status and the JSON of the API response, the `recall` session cookie, the `ui-theme` value in `localStorage`.
 - Compare the screen with the data. For example, each row of a list must show the values of its API row, not only the right count of rows.
 - Read `console.log` and `network.log` after each run. These lines are normal: the 401 lines from the anonymous probes that a recipe makes on purpose, the 404 lines of `GET /api/v1/users/by-identifier/{sub}` for a user with no user record, and, with DuendeDemo, the iframe `sandbox` warning from the Duende pages. Report each other error, even if the recipe passed.
 - Run the sweep on each recipe that your change touches. Then look at the screenshots with [ui-review.md](ui-review.md). Report each fault, even if it is not part of your change.
 - Read each message on the screen: each alert, toast, field error, and dialog text. Report a message that breaks a rule of [docs/messages.md](../../../docs/messages.md), for example one that shows a code such as `manage_users`, an ID, or a 24-hour time next to a 12-hour field.
-- Do not mock the app. ZeroFactor is a mock IdP, but it gives real OIDC tokens. The BFF and the server validate them as they validate the tokens of any other provider. The Duende demo IdP is the only external system.
+- Do not mock the app. ZeroFactor is a mock IdP, but it gives real OIDC tokens. The Server validates them as it validates the tokens of any other provider. The Duende demo IdP is the only external system.
 - At the end of a slice of a spec in `docs/specs/`, run `SpecRuleTests` (see `docs/specs/TEMPLATE.md`, section "Rules"). Each rule of the slice needs a test that names its ID.
 
 ## Sweep
@@ -210,7 +210,7 @@ $S/scripts/sweep.sh $S/recipes/<recipe>.mjs  # one recipe
 
 With `--sweep`, `browse.mjs` does these things:
 
-- It gives long values to the text that the server sends. The fields are in `nameKeys` and `emailKeys` of `sweep.mjs`: `name`, `title`, `summary`, `description`, `label`, `firstName`, `lastName`, `fullName`, `tenantName`, `requestedBy`, `given_name`, `family_name`, `fileName`, and `email`, in an `/api/` answer and in the `/bff/user` claims. Each value becomes a 100-character name with no spaces, or a long email address with a hyphen. Each different value gets a different long value, and a value that came once gets the same long value each time, so that a recipe that compares the screen with the API still passes. An empty value stays empty. The long values are shorter than the maximum lengths of the server, so a form that saves them is valid. Add a key when a new field shows a name or a text that the user writes. This also changes each `/api/` answer that the recipe reads, with `page.waitForResponse` or with a `fetch`. A recipe that compares an API answer with a literal value that it sent, such as the name of a tenant that it made, fails under the sweep. In a recipe for the sweep, find a row by its ID and compare the screen with the API answer, not with the literal. A request with a body over 30 MB, the request limit of the BFF, is not changed: the browser sends it itself, because the BFF closes the connection after its 413, and Node, which sends a changed request, then often gets no answer.
+- It gives long values to the text that the server sends. The fields are in `nameKeys` and `emailKeys` of `sweep.mjs`: `name`, `title`, `summary`, `description`, `label`, `firstName`, `lastName`, `fullName`, `tenantName`, `requestedBy`, `given_name`, `family_name`, `fileName`, and `email`, in an `/api/` answer and in the `/bff/user` claims. Each value becomes a 100-character name with no spaces, or a long email address with a hyphen. Each different value gets a different long value, and a value that came once gets the same long value each time, so that a recipe that compares the screen with the API still passes. An empty value stays empty. The long values are shorter than the maximum lengths of the server, so a form that saves them is valid. Add a key when a new field shows a name or a text that the user writes. This also changes each `/api/` answer that the recipe reads, with `page.waitForResponse` or with a `fetch`. A recipe that compares an API answer with a literal value that it sent, such as the name of a tenant that it made, fails under the sweep. In a recipe for the sweep, find a row by its ID and compare the screen with the API answer, not with the literal. A request with a body over 30 MB, the request limit of the Server, is not changed: the browser sends it itself, because the Server closes the connection after its 413, and Node, which sends a changed request, then often gets no answer.
 - At each full-page `capture()`, it measures the page at 320, 390, and 1280 px wide, in the light and the dark theme, and with a 24 px default font at 320, 390, and 1280 px. Then it puts back the viewport size of the recipe, the light theme, the scroll position, and the focus. If a resize removed the focused element, the next focus check does not report it.
 - At each `capture()` with `{ fullPage: false }`, which holds an open dialog, sheet, drawer, popover, or menu, it measures the page at the window size of the recipe, in the light and the dark theme. A resize or a new font size can close an overlay, such as a submenu, so these captures get no other width and no 24 px font. Give the overlay capture the width that you want to check, for example 1280 px for a dialog, because at 320 px a dialog shows as a bottom sheet.
 - At the end of each `step()`, it checks the focus.
@@ -228,6 +228,19 @@ The checks:
 | Focus goes to the body | The focus is on the body, and the element that had it last was removed, disabled, hidden, or made inert. |
 
 The sweep checks the focus only at the end of each step. Make a step for each action that can move the focus.
+
+## Provider lab
+
+`lab/lab.sh` starts real OIDC providers in containers, for a change that needs more than the mock IdP of the stack: Keycloak in two realms (a and b, ports 28180 and 28181), Authelia on TLS with a private CA (port 29191), Pocket ID (port 29411), and a Caddy TLS proxy from `https://recall.localhost:24443` to port 24000. It runs on macOS, because it reads the LAN address with `route` and `ipconfig`. It makes each secret at run time under `LAB_DIR`, by default `/tmp/recall-r3-lab`, and it never changes the trust store of the machine.
+
+| Command | What it does |
+|---|---|
+| `$S/lab/lab.sh up` | Makes the secrets on the first run, starts the Compose project `recall-r3-lab`, waits for each provider, and prints the variables of the next command. |
+| `$S/lab/lab.sh env` | Prints `export` lines for a Server on port 24000, with the four providers as `Auth__Providers__0` to `3`, and `LAB_PASSWORD` and `LAB_LAN_IP`. The output holds secrets, so do not save it in the repository. |
+| `$S/lab/lab.sh pocket-login-url <username>` | Prints a one-time login URL of Pocket ID, which has no passwords. The user `alice` exists. |
+| `$S/lab/lab.sh down` | Deletes the containers, the volumes, and `LAB_DIR`. |
+
+Keycloak has `alice` and `bob`, and Authelia has `alice`. Their password is `LAB_PASSWORD`. Stop the lab with `down` before you finish. Authelia needs the name `auth.recall.localhost`, and `recall.localhost` is a loopback name in Chromium.
 
 ## Cleanup
 

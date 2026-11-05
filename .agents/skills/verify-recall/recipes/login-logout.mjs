@@ -1,7 +1,10 @@
-// Feature: login-logout. BFF login through the IdP of the stack. See features/login-logout.md.
+// Feature: login-logout. Server login through the IdP of the stack. See features/login-logout.md.
 // The page is on the IdP when the visitor has no session, so a check of the app sends its own request. The context
 // sends the cookies of the app with it.
 const appStatus = async (page, path) => (await page.request.get(path, { headers: { 'X-CSRF': '1' } })).status()
+
+// A session cookie on TLS has the __Host- prefix. Plain http cannot hold such a cookie.
+const sessionCookieName = (stack) => (new URL(stack.urls.web).protocol === 'https:' ? '__Host-recall' : 'recall')
 
 export default async ({ page, context, stack, step, capture, expect, login, logout }) => {
   await step('anonymous: /bff/user is 204, the SPA goes to the login at once with / as the return URL, and the Server answers 401', async () => {
@@ -17,7 +20,7 @@ export default async ({ page, context, stack, step, capture, expect, login, logo
 
   const { name } = await step('log in at the IdP', () => login())
 
-  await step('logged in: the page shows the name that the Server read from the token, and the BFF holds a session cookie', async () => {
+  await step('logged in: the page shows the name of the user, and the Server holds a session for the session cookie', async () => {
     await expect(page.getByText(`Signed in as ${name}`)).toBeVisible()
     const me = await page.evaluate(async () => {
       const response = await fetch('/api/v1/users/me', { headers: { 'X-CSRF': '1' } })
@@ -25,8 +28,8 @@ export default async ({ page, context, stack, step, capture, expect, login, logo
     })
     expect(me.status).toBe(200)
     expect(me.body.name).toBe(name)
-    const cookies = await context.cookies()
-    expect(cookies.some((c) => c.name === '__Host-bff')).toBe(true)
+    const cookie = (await context.cookies()).find((c) => c.name === sessionCookieName(stack))
+    expect(cookie).toMatchObject({ httpOnly: true, sameSite: 'Strict', path: '/' })
   })
   await capture('logged-in')
 
@@ -37,9 +40,16 @@ export default async ({ page, context, stack, step, capture, expect, login, logo
 
   await step('log out', () => logout())
 
-  await step('logged out: /bff/user is 204 again, and the page is the login of the IdP', async () => {
+  await step('logged out: /bff/user is 204 again, and the page is the signed-out page of the Server', async () => {
     expect(await appStatus(page, '/bff/user')).toBe(204)
+    await expect(page.getByRole('heading', { name: 'You are signed out' })).toBeVisible()
+    await expect(page).toHaveTitle('You are signed out - Recall')
     await expect(page.getByText(`Signed in as ${name}`)).toHaveCount(0)
   })
   await capture('logged-out')
+
+  await step('sign in again from the signed-out page: the session of the IdP gives the same user a session', async () => {
+    await page.getByRole('link', { name: /^Sign in with / }).click()
+    await expect(page.getByText(`Signed in as ${name}`)).toBeVisible({ timeout: 30_000 })
+  })
 }
