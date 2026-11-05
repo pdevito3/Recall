@@ -43,6 +43,75 @@ public class OidcLoginTests
     }
 
     [Test]
+    public async Task a_start_sends_the_code_flow_with_pkce_to_the_authorize_endpoint()
+    {
+        // Arrange
+        using var browser = NewBrowser();
+
+        // Act
+        var response = await browser.GetAsync($"/auth/oidc/{AuthFlowFactory.ModeId}/start?client=web");
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        var location = response.Headers.Location!;
+        location.GetLeftPart(UriPartial.Path).ShouldBe($"{StubOidcProvider.Issuer}/authorize");
+        var query = QueryHelpers.ParseQuery(location.Query);
+        query["response_type"].ToString().ShouldBe("code");
+        query["code_challenge_method"].ToString().ShouldBe("S256");
+        query["scope"].ToString().ShouldBe("openid profile email");
+        query["client_id"].ToString().ShouldBe(StubOidcProvider.ClientId);
+        query.ContainsKey("prompt").ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task a_forged_forwarded_host_does_not_reach_the_redirect_uri()
+    {
+        // Arrange
+        using var browser = NewBrowser();
+        var start = new HttpRequestMessage(HttpMethod.Get, $"/auth/oidc/{AuthFlowFactory.ModeId}/start?client=web");
+        start.Headers.Add("X-Forwarded-Host", "evil.example");
+        var status = new HttpRequestMessage(HttpMethod.Get, "/auth/status");
+        status.Headers.Add("X-Forwarded-Host", "evil.example");
+
+        // Act
+        var started = await browser.SendAsync(start);
+        var answered = await browser.SendAsync(status);
+
+        // Assert
+        AuthorizeRequest.Of(started.Headers.Location!).RedirectUri.ShouldBe("http://localhost/auth/oidc/callback");
+        (await answered.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("callbackUrl").GetString().ShouldBe("http://localhost/auth/oidc/callback");
+    }
+
+    [Test]
+    [Arguments("POST")]
+    [Arguments("PUT")]
+    [Arguments("HEAD")]
+    public async Task a_callback_that_is_not_a_get_is_refused_and_leaves_the_attempt_for_the_get(string method)
+    {
+        // Arrange
+        using var browser = NewBrowser();
+        var authorize = await browser.StartWebAsync();
+        var code = browser.Provider.Approve(authorize, new StubLogin(NewSubject()));
+        var url = QueryHelpers.AddQueryString("/auth/oidc/callback", new Dictionary<string, string?>
+        {
+            ["state"] = authorize.State,
+            ["code"] = code,
+            ["iss"] = StubOidcProvider.Issuer,
+        });
+
+        // Act
+        var refused = await browser.SendAsync(new HttpRequestMessage(new HttpMethod(method), url));
+        var sessionAfterRefusal = browser.SessionCookie;
+        var finished = await browser.GetAsync(url);
+
+        // Assert
+        refused.StatusCode.ShouldBe(HttpStatusCode.MethodNotAllowed);
+        sessionAfterRefusal.ShouldBeNull();
+        finished.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        browser.SessionCookie.ShouldNotBeNull();
+    }
+
+    [Test]
     public async Task with_x_forwarded_proto_https_the_cookies_have_the_host_prefix()
     {
         // Arrange

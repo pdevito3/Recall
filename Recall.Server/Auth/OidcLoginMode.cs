@@ -332,9 +332,9 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
         if (!validation.IsValid || validation.SecurityToken is not JsonWebToken token)
             return Refuse($"the ID token failed its check ({validation.Exception?.GetType().Name})");
 
-        var audiences = token.Audiences.ToList();
-        if (audiences.Count > 1 && !(token.TryGetPayloadValue<string>("azp", out var azp) && azp == _provider.ClientId))
-            return Refuse("the ID token has several audiences and no azp of this client");
+        var hasAzp = token.TryGetPayloadValue<string>("azp", out var azp);
+        if (hasAzp ? azp != _provider.ClientId : token.Audiences.Skip(1).Any())
+            return Refuse("the ID token has several audiences and no azp of this client, or the azp of another client");
 
         if (!token.TryGetPayloadValue<string>("nonce", out var nonce) || !SameText(nonce, attempt.Nonce))
             return Refuse("the nonce of the ID token does not match");

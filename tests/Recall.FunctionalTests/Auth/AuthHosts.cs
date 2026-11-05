@@ -16,12 +16,22 @@ public static class AuthHosts
 
     public static AuthFlowFactory Sweep { get; private set; } = null!;
 
+    /// <summary>A provider that takes the client secret in the form and does not list the iss parameter.</summary>
+    public static AuthFlowFactory PlainProvider { get; private set; } = null!;
+
+    /// <summary>A provider whose key a test can roll, which a host that other tests share cannot do.</summary>
+    public static AuthFlowFactory Rolling { get; private set; } = null!;
+
     public static void Start()
     {
         Open = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
         Closed = Start(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts });
         Limited = Start(new Dictionary<string, string?> { ["AllowedHosts"] = "localhost" });
         Failing = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
+        PlainProvider = Start(
+            new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts },
+            new StubOidcProvider { AuthMethods = ["client_secret_post"], ListsIssParameter = false });
+        Rolling = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
 
         var main = Log.Logger;
         Sweep = new AuthFlowFactory(new Dictionary<string, string?>
@@ -41,17 +51,17 @@ public static class AuthHosts
 
     public static async Task StopAsync()
     {
-        foreach (var host in new[] { Open, Closed, Limited, Failing, Sweep })
+        foreach (var host in new[] { Open, Closed, Limited, Failing, PlainProvider, Rolling, Sweep })
         {
             if (host is not null)
                 await host.DisposeAsync();
         }
     }
 
-    private static AuthFlowFactory Start(Dictionary<string, string?> settings)
+    private static AuthFlowFactory Start(Dictionary<string, string?> settings, StubOidcProvider? provider = null)
     {
         var main = Log.Logger;
-        var host = new AuthFlowFactory(settings);
+        var host = new AuthFlowFactory(settings, provider);
         _ = host.Services;
         Log.Logger = main;
         return host;
