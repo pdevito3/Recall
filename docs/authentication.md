@@ -247,8 +247,14 @@ Other settings:
 | Setting | Default | Content |
 |---|---|---|
 | `Auth:OpenSignup` | `false` | See [First login and the Owner](#first-login-and-the-owner) |
-| `Auth:StartPermitsPerWindow` | 20 | How many login starts the Server takes in each 10 seconds, over all callers. Each other start gets 429. |
+| `Auth:StartPermitsPerWindow` | 20 | How many login starts the Server takes from one connection address in each 10 seconds. See [Limit on login starts](#limit-on-login-starts). |
 | `AllowedHosts` | `*` | See [Register the callback URLs](#register-the-callback-urls) |
+
+### Limit on login starts
+
+`/auth/oidc/{id}/start` keeps one bucket for each connection address, and one for each IPv6 `/64`. So a stranger who floods the route blocks only that stranger. Another start gets 429 with a `Retry-After` header and the page `Too many sign-in attempts`.
+
+The Server reads only the address of the connection, and never `X-Forwarded-For`, because a client can write any value in that header. Behind a proxy, each connection comes from the proxy, so all clients share one bucket and one flood blocks each new login. Some Docker networks do the same to a published port. To limit each client behind a proxy, set the limit at the proxy. A session that exists keeps working in each case.
 
 ### Private CA
 

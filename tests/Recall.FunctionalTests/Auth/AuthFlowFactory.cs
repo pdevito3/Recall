@@ -1,6 +1,8 @@
 namespace Recall.FunctionalTests.Auth;
 
+using System.Net;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,6 +19,7 @@ using Serilog.Core;
 public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> settings) : WebApplicationFactory<Program>
 {
     public const string ModeId = "stub";
+    public const string ConnectionAddressHeader = "X-Test-Connection-Address";
 
     private readonly SqliteTestDatabase _database = new();
     private readonly Lock _clientLock = new();
@@ -60,6 +63,7 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
         {
             services.AddSingleton<OidcHandlerFactory>(_ => Provider);
             services.AddSingleton<ILogEventSink>(Logs);
+            services.AddSingleton<IStartupFilter, ConnectionAddressFilter>();
             services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
                 options.ConfigurationManager = new StaticConfigurationManager<OpenIdConnectConfiguration>(Provider.JwtConfiguration()));
         });
@@ -69,5 +73,20 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
     {
         await base.DisposeAsync();
         await _database.DisposeAsync();
+    }
+
+    /// <summary>The test server has no socket, so this is how a test stands at a connection address.</summary>
+    private sealed class ConnectionAddressFilter : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Use((context, nextStep) =>
+            {
+                if (IPAddress.TryParse(context.Request.Headers[ConnectionAddressHeader], out var address))
+                    context.Connection.RemoteIpAddress = address;
+                return nextStep(context);
+            });
+            next(app);
+        };
     }
 }

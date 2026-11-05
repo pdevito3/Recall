@@ -30,7 +30,8 @@ public static class AuthRegistration
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-            options.AddPolicy(StartLimiter, http => RateLimitPartition.GetFixedWindowLimiter("start", _ => new FixedWindowRateLimiterOptions
+            options.OnRejected = (context, _) => LoginStartLimit.RefuseAsync(context, StartWindow);
+            options.AddPolicy(StartLimiter, http => RateLimitPartition.GetFixedWindowLimiter(LoginStartLimit.BucketOf(http.Connection.RemoteIpAddress), _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = http.RequestServices.GetRequiredService<IOptions<AuthOptions>>().Value.StartPermitsPerWindow,
                 Window = StartWindow,

@@ -49,6 +49,12 @@ public static class AuthPages
         "This server does not accept new people",
         "<p>Your sign-in worked, but this Recall server has no account for you. Ask its owner to let you in.</p>");
 
+    public static IResult TooManyStarts(int seconds, string startUrl) => Page(
+        StatusCodes.Status429TooManyRequests,
+        "Too many sign-in attempts",
+        $"<p>This server got too many sign-in attempts from your network. Wait {seconds} seconds, then try again.</p>"
+            + $"<ul><li><a class=\"button\" href=\"{E(startUrl)}\">Try again</a></li></ul>");
+
     public static IResult AccessDenied() => Page(
         StatusCodes.Status403Forbidden, "Sign-in did not finish", "<p>The provider did not let this sign-in continue.</p>" + TryAgain);
 
