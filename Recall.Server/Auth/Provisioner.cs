@@ -95,11 +95,8 @@ public sealed class Provisioner(
             .Select(t => t.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (claim.Take())
-        {
-            if (oldestTenantId is not null)
-                return await ClaimOwnerAsync(dbContext, identity, oldestTenantId, cancellationToken);
-        }
+        if (claim.Take() && oldestTenantId is not null)
+            return await ClaimOwnerAsync(dbContext, identity, oldestTenantId, cancellationToken);
 
         if (!anyTenantEver)
             return await AddFirstOwnerAsync(dbContext, identity, cancellationToken);
