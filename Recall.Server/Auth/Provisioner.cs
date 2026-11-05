@@ -82,6 +82,13 @@ public sealed class Provisioner(
         if (link is not null)
             return await SignInLinkedAsync(dbContext, link, identity.Profile, cancellationToken);
 
+        // A deleted tenant counts, so that a person cannot become an Owner after the Owner deleted the journal.
+        var anyTenantEver = await dbContext.Tenants
+            .TagWithOperationCallSite("auth.provision.any_tenant_ever")
+            .IgnoreQueryFilters()
+            .AnyAsync(cancellationToken);
+
+        // This read comes second, so a rival's first tenant seen above is also seen here and never reads as a deleted one.
         var oldestTenantId = await dbContext.Tenants
             .TagWithOperationCallSite("auth.provision.oldest_tenant")
             .OrderBy(t => t.Id)
@@ -94,11 +101,6 @@ public sealed class Provisioner(
                 return await ClaimOwnerAsync(dbContext, identity, oldestTenantId, cancellationToken);
         }
 
-        // A deleted tenant counts, so that a person cannot become an Owner after the Owner deleted the journal.
-        var anyTenantEver = oldestTenantId is not null || await dbContext.Tenants
-            .TagWithOperationCallSite("auth.provision.any_tenant_ever")
-            .IgnoreQueryFilters()
-            .AnyAsync(cancellationToken);
         if (!anyTenantEver)
             return await AddFirstOwnerAsync(dbContext, identity, cancellationToken);
 

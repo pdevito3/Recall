@@ -161,6 +161,27 @@ public sealed class ProvisionerTests
     }
 
     [Test]
+    public async Task a_rival_first_owner_between_the_tenant_reads_does_not_close_an_open_signup()
+    {
+        // Arrange
+        await using var database = await AuthTestDatabase.CreateAsync();
+        var pause = PauseAtQuery.After("auth.provision.oldest_tenant");
+        var underTest = ProvisionerOf(database.BuildServices(openSignup: true, interceptor: pause));
+        var rival = ProvisionerOf(database.BuildServices(openSignup: true));
+
+        // Act
+        var held = underTest.ResolveAsync(Person("held"), CancellationToken.None);
+        await pause.ReachedAsync();
+        var ownerId = UserIdOf(await rival.ResolveAsync(Person("rival"), CancellationToken.None));
+        pause.Release();
+        var outcome = await held;
+
+        // Assert
+        UserIdOf(outcome).ShouldNotBe(ownerId);
+        (await database.ReadAsync(db => db.Tenants.CountAsync())).ShouldBe(1);
+    }
+
+    [Test]
     public async Task first_owner_race_with_one_subject_twice_gives_one_user_and_one_link()
     {
         // Arrange
