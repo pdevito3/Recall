@@ -149,10 +149,10 @@ These rules stop a caller from joining a tenant that is not theirs:
 
 The delete loads all the rows into memory and saves them in one transaction, while it holds the exclusive lock of the tenant. The cost grows with the number of rows. The test users had a random role, so some had permission rows too, and each deleted row writes an audit entry. In a Debug build on a busy machine, the delete of a tenant with 20,000 users took 17 s and 39 s in two runs, and the heap grew by about 1.8 GB. The delete of 50,000 users took 43 s, and the heap grew by about 4 GB in one run. That is 1 ms to 2 ms and about 80 KB of heap for each user. The heap growth is the peak managed heap of the test process during the delete, less the heap before the delete. The peak is a sample every 20 ms, so it can miss a short peak. The test process also runs the server, so the heap is that of the test and the server together. A Release build and another machine give other numbers.
 
-`TenantDeleteCostBenchmark` in `tests/FullstackTemplate.IntegrationTests` makes these numbers. It has `[Explicit]`, so it runs only when a filter names it, and CI does not run it. `TENANT_DELETE_BENCHMARK_USERS` sets the number of users, and the default is 1,000. To run it, use this command from the root of the repository. Docker must run, because the test starts a PostgreSQL container. Remove `-c Release` for a Debug build.
+`TenantDeleteCostBenchmark` in `tests/Recall.IntegrationTests` makes these numbers. It has `[Explicit]`, so it runs only when a filter names it, and CI does not run it. `TENANT_DELETE_BENCHMARK_USERS` sets the number of users, and the default is 1,000. To run it, use this command from the root of the repository. Docker must run, because the test starts a PostgreSQL container. Remove `-c Release` for a Debug build.
 
 ```bash
-TENANT_DELETE_BENCHMARK_USERS=20000 dotnet run --project tests/FullstackTemplate.IntegrationTests -c Release -- \
+TENANT_DELETE_BENCHMARK_USERS=20000 dotnet run --project tests/Recall.IntegrationTests -c Release -- \
   --treenode-filter '/*/*/TenantDeleteCostBenchmark/*' --output detailed | grep '^users='
 ```
 

@@ -1,0 +1,86 @@
+namespace Recall.FunctionalTests.FunctionalTests.Users;
+
+using System.Net;
+using Shouldly;
+using Recall.Server.Domain.Tenants;
+using Recall.Server.Domain.Users;
+using Recall.SharedTestHelpers.Fakes.Tenant;
+using Recall.SharedTestHelpers.Fakes.User;
+using TestUtilities;
+
+public class UserMalformedIdTests : TestBase
+{
+    private static readonly Dictionary<string, HttpStatusCode> SuccessCodes = new()
+    {
+        ["GET"] = HttpStatusCode.OK,
+        ["PUT"] = HttpStatusCode.OK,
+        ["DELETE"] = HttpStatusCode.NoContent,
+        ["role"] = HttpStatusCode.OK,
+        ["add-permission"] = HttpStatusCode.OK,
+        ["remove-permission"] = HttpStatusCode.OK,
+    };
+
+    public static IEnumerable<(string, string)> Cases => MalformedIds.Cases([.. SuccessCodes.Keys]);
+
+    public static IEnumerable<(string, HttpStatusCode)> Targets
+        => SuccessCodes.Select(target => (target.Key, target.Value));
+
+    [Test]
+    [MethodDataSource(nameof(Cases))]
+    public async Task malformed_user_id_returns_not_found_problem(string target, string kind)
+    {
+        // Arrange
+        var user = await AddUserAsync();
+        var id = MalformedIds.From(kind, user.Id, Tenant.IdPrefix);
+        SignInAsTrustedClient();
+
+        // Act
+        var result = await SendAsync(target, id, user.Version);
+
+        // Assert
+        await MalformedIds.ShouldBeNotFoundAsync(result, "User was not found.");
+    }
+
+    [Test]
+    [MethodDataSource(nameof(Targets))]
+    public async Task correct_user_id_finds_the_record(string target, HttpStatusCode expected)
+    {
+        // Arrange
+        var user = await AddUserAsync();
+        SignInAsTrustedClient();
+
+        // Act
+        var result = await SendAsync(target, user.Id, user.Version);
+
+        // Assert
+        result.StatusCode.ShouldBe(expected);
+    }
+
+    private Task<HttpResponseMessage> SendAsync(string target, string id, uint version) => target switch
+    {
+        "GET" => FactoryClient.GetRequestAsync(ApiRoutes.Users.GetRecord(id)),
+        "PUT" => FactoryClient.PutJsonRequestAsync(ApiRoutes.Users.Put(id), new FakeUserForUpdateDto().Generate() with { Version = version }),
+        "DELETE" => FactoryClient.DeleteRequestAsync(ApiRoutes.Users.Delete(id)),
+        "role" => FactoryClient.PutJsonRequestAsync(ApiRoutes.Users.UpdateRole(id), new { role = "Admin" }),
+        "add-permission" => FactoryClient.PostJsonRequestAsync(
+            ApiRoutes.Users.AddPermission(id), new { permission = "manage_tenant" }),
+        "remove-permission" => FactoryClient.DeleteRequestAsync(
+            ApiRoutes.Users.RemovePermission(id, "manage_tenant")),
+        _ => throw new ArgumentOutOfRangeException(nameof(target), target, null),
+    };
+
+    private void SignInAsTrustedClient()
+        => FactoryClient.SetFakeBearerToken(new Dictionary<string, object>
+        {
+            ["client_id"] = TestingWebApplicationFactory.TrustedMachineClientId
+        });
+
+    private static async Task<User> AddUserAsync()
+    {
+        var tenant = Tenant.Create(new FakeTenantForCreation().Generate());
+        var user = User.Create(new FakeUserForCreation().RuleFor(u => u.TenantId, tenant.Id).Generate());
+        await InsertAsync(tenant);
+        await InsertAsync(user);
+        return user;
+    }
+}

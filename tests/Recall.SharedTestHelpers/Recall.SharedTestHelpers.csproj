@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="AutoBogusLifesupport" />
+        <PackageReference Include="Bogus" />
+        <PackageReference Include="NSubstitute" />
+        <PackageReference Include="Testcontainers.PostgreSql" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\Recall.Server\Recall.Server.csproj" />
+        <ProjectReference Include="..\Recall.EntityGraphs.Generators\Recall.EntityGraphs.Generators.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false" />
+    </ItemGroup>
+
+    <!-- The Postgres image tag of the app. The tests run the same version. -->
+    <ItemGroup>
+        <Compile Include="..\..\Recall.AppHost\Config.cs" Link="AppHostConfig.cs" />
+    </ItemGroup>
+
+    <!-- BannedSymbols.txt bans a today that comes from the UTC date or the clock of the machine -->
+    <ItemGroup>
+        <AdditionalFiles Include="..\BannedSymbols.txt" />
+        <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+
+</Project>

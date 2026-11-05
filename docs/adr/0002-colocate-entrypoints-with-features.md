@@ -6,7 +6,7 @@ Each adapter is optional. A feature has only the adapters that its callers need,
 
 ## Considered options
 
-- **A separate host project.** `FullstackTemplate.Server` becomes a class library for the core, and a `FullstackTemplate.Host` project holds all of the entrypoints. The compiler then stops the core from using transport types. We did not choose this option. It puts the adapters of one feature in three folders, far from the handler, and it changes many paths in CI, Docker, Kubb, the docs, and the skills. A project boundary also cannot block `Microsoft.AspNetCore.Mvc`, because that is part of the shared framework, so it still needs a boundary test.
+- **A separate host project.** `Recall.Server` becomes a class library for the core, and a `Recall.Host` project holds all of the entrypoints. The compiler then stops the core from using transport types. We did not choose this option. It puts the adapters of one feature in three folders, far from the handler, and it changes many paths in CI, Docker, Kubb, the docs, and the skills. A project boundary also cannot block `Microsoft.AspNetCore.Mvc`, because that is part of the shared framework, so it still needs a boundary test.
 - **Adapters grouped by transport in each domain**, for example `Domain/Tenants/Entrypoints/Http/`. We did not choose this option, because one controller, one gRPC service, and one tool class for each domain are far from the handlers that they call.
 
 ## Consequences

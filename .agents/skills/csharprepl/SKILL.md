@@ -5,12 +5,12 @@ description: Runs C# inside the live development server with CSharpRepl. Use to 
 
 # CSharpRepl
 
-CSharpRepl connects to the running `FullstackTemplate.Server` process and runs C# in it. The code runs against the live DI container, database, and configuration. The AppHost loads the CSharpRepl hook only in the `Development` environment. [docs/csharp-repl.md](../../../docs/csharp-repl.md) tells how the hook is wired and guarded.
+CSharpRepl connects to the running `Recall.Server` process and runs C# in it. The code runs against the live DI container, database, and configuration. The AppHost loads the CSharpRepl hook only in the `Development` environment. [docs/csharp-repl.md](../../../docs/csharp-repl.md) tells how the hook is wired and guarded.
 
 ## Steps
 
 1. Start the app (see the `aspire-cli` skill). If `dotnet csharprepl` is not found, run `dotnet tool restore`.
-2. Get the process ID of the server. Use the `FullstackTemplate.Server` row. The `dotnet` row is the `dotnet run` wrapper.
+2. Get the process ID of the server. Use the `Recall.Server` row. The `dotnet` row is the `dotnet run` wrapper.
 
    ```bash
    dotnet csharprepl connect list
@@ -48,8 +48,8 @@ Always set `NO_COLOR=1`. The interactive prompt needs a real terminal, so use on
 NO_COLOR=1 dotnet csharprepl connect <pid> --eval 'await InScope<AppDbContext, int>(db => db.Tenants.CountAsync())'
 
 NO_COLOR=1 dotnet csharprepl connect <pid> --streamPipedInput <<'EOF'
-using FullstackTemplate.Server.Domain.Tenants.Features;
-using FullstackTemplate.Server.Domain.Tenants.Dtos;
+using Recall.Server.Domain.Tenants.Features;
+using Recall.Server.Domain.Tenants.Dtos;
 var tenants = await Send(new GetTenantList.Query(new TenantParametersDto()));
 tenants.Select(t => t.Name).ToList()
 EOF
@@ -61,7 +61,7 @@ Rules for submissions:
 - The first error stops the stream. The lines before it stay applied, and this includes patches.
 - An exception prints only its message, for example `Please provide a tenant name.`
 - `Console.WriteLine` writes to the server console log (the `server` resource in Aspire), not to the CLI.
-- Usings, variables, and helpers stay in the server process across connections, until the process restarts. Add a `using` for each feature namespace that you use, for example `using FullstackTemplate.Server.Domain.Tenants.Features;`.
+- Usings, variables, and helpers stay in the server process across connections, until the process restarts. Add a `using` for each feature namespace that you use, for example `using Recall.Server.Domain.Tenants.Features;`.
 
 ## Services and scopes
 
@@ -81,8 +81,8 @@ A scope with no user and no opt-in gets `TenantScope.NoTenant`, so it sees no ro
 
 ```bash
 NO_COLOR=1 dotnet csharprepl connect <pid> --streamPipedInput <<'EOF'
-using FullstackTemplate.Server.Domain.Users.Features;
-using FullstackTemplate.Server.Domain.Users.Dtos;
+using Recall.Server.Domain.Users.Features;
+using Recall.Server.Domain.Users.Dtos;
 (await SendAs("<user identifier>", new GetUserList.Query(new UserParametersDto()))).Select(u => u.Username).ToList()
 EOF
 ```
@@ -102,11 +102,11 @@ EOF
 
 ```bash
 NO_COLOR=1 dotnet csharprepl connect <pid> --streamPipedInput <<'EOF'
-using FullstackTemplate.Server.Domain.Tenants.Features;
-using FullstackTemplate.Server.Domain.Tenants.Dtos;
+using Recall.Server.Domain.Tenants.Features;
+using Recall.Server.Domain.Tenants.Dtos;
 #patches
-#wrap FullstackTemplate.Server.Domain.Tenants.Features.GetTenant+Handler.Handle with (Func<GetTenant.Handler, GetTenant.Query, CancellationToken, Task<TenantDto>> orig, GetTenant.Handler instance, GetTenant.Query request, CancellationToken ct) => { Console.WriteLine($"GetTenant {request.Id}"); return orig(instance, request, ct); }
-#replace FullstackTemplate.Server.Domain.Tenants.Features.GetTenantList+Handler.Handle with (GetTenantList.Handler instance, GetTenantList.Query request, CancellationToken ct) => throw new TimeoutException("Simulated database timeout")
+#wrap Recall.Server.Domain.Tenants.Features.GetTenant+Handler.Handle with (Func<GetTenant.Handler, GetTenant.Query, CancellationToken, Task<TenantDto>> orig, GetTenant.Handler instance, GetTenant.Query request, CancellationToken ct) => { Console.WriteLine($"GetTenant {request.Id}"); return orig(instance, request, ct); }
+#replace Recall.Server.Domain.Tenants.Features.GetTenantList+Handler.Handle with (GetTenantList.Handler instance, GetTenantList.Query request, CancellationToken ct) => throw new TimeoutException("Simulated database timeout")
 EOF
 ```
 

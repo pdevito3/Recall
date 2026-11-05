@@ -11,7 +11,7 @@ import { idpNames, loadIdp } from './idps.ts'
 import { checkStack } from './stack-description.ts'
 import { refreshesOnEachCall } from './stack-features.ts'
 
-const appHost = '../FullstackTemplate.AppHost'
+const appHost = '../Recall.AppHost'
 
 // Aspire writes its messages to stderr, so the user sees them above the message of the script
 const stack = checkStack({

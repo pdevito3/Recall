@@ -1,4 +1,4 @@
-# Fullstack Template
+# Recall
 
 A production-ready .NET Aspire template featuring:
 - **React 19** frontend with TanStack Router and React Query
@@ -7,33 +7,6 @@ A production-ready .NET Aspire template featuring:
 - **Multi-tenant architecture** with data isolation
 - **OpenTelemetry** observability built-in
 - **.NET 10** with Aspire 13.6
-
-<!-- init:start - scripts/init.cs deletes this section when it renames the app -->
-## Create a New App
-
-1. Clone the repo, or use the GitHub "Use this template" button.
-2. In the root of the clone, run the init script:
-
-   ```bash
-   dotnet run scripts/init.cs --name MyProject --auth-provider Keycloak
-   ```
-
-3. Commit the result.
-
-To bring later template commits into the app, see [docs/template-updates.md](docs/template-updates.md).
-
-The script works on all platforms. It changes only a clean git tree. A second run with the same arguments changes nothing. The rename also deletes the files that only this repo uses: the CI job of the init script, the template merge script, and the OpenID conformance suite with its provider and the userinfo check of the server.
-
-All auth providers stay in the app, and the `AuthProvider` setting selects one at runtime. To delete a provider that you do not use, see [docs/authentication.md](docs/authentication.md#delete-a-provider).
-
-| Option | Description |
-|--------|-------------|
-| `--name` | Renames `FullstackTemplate` to this name in file names, folder names, and file contents. Use a C# namespace, for example `Acme.Shop`. |
-| `--display-name` | Renames the display name `Fullstack Template`, such as the page title and the sidebar, to this name. The default is the `--name` value. Use with `--name`, for example `--display-name "Acme Shop"`. |
-| `--auth-provider` | Sets the default `AuthProvider` of the AppHost. The value is the name of a folder in `FullstackTemplate.AppHost/AuthProviders/`. |
-
-See [ADR 0007](docs/adr/0007-regular-repo-instead-of-template.md) for the reasons.
-<!-- init:end -->
 
 ## What You Get
 

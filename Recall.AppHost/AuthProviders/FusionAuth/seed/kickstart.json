@@ -1,0 +1,137 @@
+{
+  "variables": {
+    "apiKey": "super-secret-api-key-for-development-only",
+    "applicationId": "e9fdb985-9173-4e01-9d73-ac2d60d1dc8e",
+    "clientSecret": "super-secret-client-secret-change-in-production",
+    "adminEmail": "admin@example.com",
+    "adminPassword": "password123!",
+    "testUserEmail": "user@example.com",
+    "testUserPassword": "password123!"
+  },
+  "apiKeys": [
+    {
+      "key": "#{apiKey}",
+      "description": "Development API Key - Full Access"
+    }
+  ],
+  "requests": [
+    {
+      "method": "PATCH",
+      "url": "/api/tenant/#{FUSIONAUTH_TENANT_ID}",
+      "body": {
+        "tenant": {
+          "issuer": "#{ENV.APP_FUSIONAUTH_URL}"
+        }
+      }
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/system-configuration",
+      "body": {
+        "systemConfiguration": {
+          "corsConfiguration": {
+            "enabled": true,
+            "allowedMethods": ["GET", "POST", "OPTIONS"],
+            "allowedHeaders": ["Accept", "Authorization", "Content-Type", "X-Requested-With"],
+            "allowedOrigins": ["#{ENV.APP_SERVER_URL}", "#{ENV.APP_SERVER_HTTP_URL}"],
+            "preflightMaxAgeInSeconds": 1800
+          }
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/application/#{applicationId}",
+      "body": {
+        "application": {
+          "name": "Recall",
+          "oauthConfiguration": {
+            "authorizedRedirectURLs": [
+              "#{ENV.APP_FRONTEND_URL}/signin-oidc",
+              "#{ENV.APP_BFF_URL}/signin-oidc",
+              "#{ENV.APP_BFF_URL}/signout-callback-oidc",
+              "#{ENV.APP_SERVER_URL}/swagger/oauth2-redirect.html",
+              "#{ENV.APP_SERVER_HTTP_URL}/swagger/oauth2-redirect.html"
+            ],
+            "authorizedOriginURLs": [
+              "#{ENV.APP_FRONTEND_URL}",
+              "#{ENV.APP_SERVER_URL}",
+              "#{ENV.APP_SERVER_HTTP_URL}",
+              "#{ENV.APP_BFF_URL}"
+            ],
+            "clientAuthenticationPolicy": "NotRequiredWhenUsingPKCE",
+            "clientId": "#{applicationId}",
+            "clientSecret": "#{clientSecret}",
+            "enabledGrants": [
+              "authorization_code",
+              "refresh_token"
+            ],
+            "generateRefreshTokens": true,
+            "logoutURL": "#{ENV.APP_FRONTEND_URL}",
+            "logoutBehavior": "RedirectOnly",
+            "proofKeyForCodeExchangePolicy": "Required",
+            "requireClientAuthentication": false,
+            "requireRegistration": false
+          },
+          "jwtConfiguration": {
+            "enabled": true,
+            "timeToLiveInSeconds": 3600,
+            "refreshTokenUsagePolicy": "OneTimeUse"
+          },
+          "registrationConfiguration": {
+            "enabled": true,
+            "type": "basic"
+          },
+          "roles": [
+            {
+              "name": "admin",
+              "description": "Administrator role",
+              "isDefault": false,
+              "isSuperRole": true
+            },
+            {
+              "name": "user",
+              "description": "Standard user role",
+              "isDefault": true,
+              "isSuperRole": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/user/registration",
+      "body": {
+        "user": {
+          "email": "#{adminEmail}",
+          "password": "#{adminPassword}",
+          "data": {
+            "displayName": "Admin User"
+          }
+        },
+        "registration": {
+          "applicationId": "#{applicationId}",
+          "roles": ["admin", "user"]
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/user/registration",
+      "body": {
+        "user": {
+          "email": "#{testUserEmail}",
+          "password": "#{testUserPassword}",
+          "data": {
+            "displayName": "Test User"
+          }
+        },
+        "registration": {
+          "applicationId": "#{applicationId}",
+          "roles": ["user"]
+        }
+      }
+    }
+  ]
+}

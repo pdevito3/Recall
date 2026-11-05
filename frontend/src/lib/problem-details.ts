@@ -79,7 +79,7 @@ export function isProblemDetails(obj: unknown): obj is ProblemDetails {
   )
 }
 
-export const STALE_VERSION_PROBLEM_TYPE = 'urn:fullstacktemplate:problem:stale-version'
+export const STALE_VERSION_PROBLEM_TYPE = 'urn:recall:problem:stale-version'
 
 export function isStaleVersionError(error: unknown): boolean {
   return isProblemDetailsError(error) && error.problemDetails.type === STALE_VERSION_PROBLEM_TYPE

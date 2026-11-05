@@ -102,7 +102,7 @@ The tag and the operation names come from the endpoint names (`.WithName`) and t
 
 To change the contract after a change to the Server API:
 
-1. Build the Server in Debug with `dotnet build FullstackTemplate.Server --no-incremental`. The build writes `FullstackTemplate.Server/openapi/FullstackTemplate.Server.json`. Without `--no-incremental`, a build with nothing to compile does not write the document again.
+1. Build the Server in Debug with `dotnet build Recall.Server --no-incremental`. The build writes `Recall.Server/openapi/Recall.Server.json`. Without `--no-incremental`, a build with nothing to compile does not write the document again.
 2. Run `pnpm generate:api` in `frontend/`.
 3. Commit the OpenAPI document and the generated files together.
 
@@ -134,7 +134,7 @@ const pagination = parsePagination(result)
 
 ### A generated type is wrong
 
-Fix the cause on the Server: the DTO, an attribute such as `[NamesOf<T>]`, or a transformer in `FullstackTemplate.Server/Resources/Entrypoints/Http/OpenApi/`. Add a test in `OpenApiTransformerTests` or `OpenApiDocumentTests`, then regenerate. The rules of the transformers are in [backend.md](backend.md#openapi-document).
+Fix the cause on the Server: the DTO, an attribute such as `[NamesOf<T>]`, or a transformer in `Recall.Server/Resources/Entrypoints/Http/OpenApi/`. Add a test in `OpenApiTransformerTests` or `OpenApiDocumentTests`, then regenerate. The rules of the transformers are in [backend.md](backend.md#openapi-document).
 
 | The generated type | The cause on the Server |
 |---|---|

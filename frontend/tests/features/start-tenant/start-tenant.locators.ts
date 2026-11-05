@@ -16,7 +16,7 @@ export const startTenant = (page: Page) => {
     alreadyMember: page.getByText(/^You are already a member of a tenant\./),
     started: (tenantName: string) => page.getByText(`You started ${tenantName}. You are its admin`, { exact: false }),
     homeLink: page.getByRole('main').getByRole('link', { name: 'Go to the home page' }),
-    homeHeading: page.getByRole('heading', { name: 'Fullstack Template', level: 1 }),
+    homeHeading: page.getByRole('heading', { name: 'Recall', level: 1 }),
     main: page.getByRole('main'),
     lookupFailure: page.getByRole('main').getByRole('alert'),
     tryAgain: page.getByRole('button', { name: 'Try Again' }),

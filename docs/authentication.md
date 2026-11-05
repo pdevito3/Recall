@@ -1,6 +1,6 @@
 # Authentication
 
-The app uses the Backend-For-Frontend (BFF) pattern. The browser never holds a token. `FullstackTemplate.Bff` holds the tokens and sends API calls to the server with a JWT. The BFF uses the ASP.NET Core OpenID Connect handler for login, `Duende.AccessTokenManagement.OpenIdConnect` for the token refresh and the revocation, and YARP for the proxy.
+The app uses the Backend-For-Frontend (BFF) pattern. The browser never holds a token. `Recall.Bff` holds the tokens and sends API calls to the server with a JWT. The BFF uses the ASP.NET Core OpenID Connect handler for login, `Duende.AccessTokenManagement.OpenIdConnect` for the token refresh and the revocation, and YARP for the proxy.
 
 The design is in [docs/specs/home-rolled-bff.md](specs/home-rolled-bff.md). The decisions are in [docs/adr/](adr/).
 
@@ -56,7 +56,7 @@ The BFF builds `redirect_uri` and `post_logout_redirect_uri` from `Bff:PublicOri
 
 The BFF reads `X-Forwarded-For` and `X-Forwarded-Proto`. It does not read `X-Forwarded-Host`. The host filter accepts the host of `Bff:PublicOrigin` and the hosts in `Bff:AdditionalAllowedHosts`, and it gives a 400 for other hosts. In the local stack, the AppHost adds the container host of the BFF, `host.docker.internal`, and `localhost`.
 
-The BFF accepts `X-Forwarded-For` and `X-Forwarded-Proto` from any source, because the address of the proxy in front of the BFF is not known. Thus a client can set its own client address. Today only the telemetry uses the client address: the request logs and the request spans. Before a deployment behind a proxy uses the client address for a decision, for example a rate limit or an IP allow list, set `KnownProxies` or `KnownIPNetworks` of `ForwardedHeadersOptions` in `FullstackTemplate.Bff/HostTrust/HostTrustExtensions.cs` to the proxy.
+The BFF accepts `X-Forwarded-For` and `X-Forwarded-Proto` from any source, because the address of the proxy in front of the BFF is not known. Thus a client can set its own client address. Today only the telemetry uses the client address: the request logs and the request spans. Before a deployment behind a proxy uses the client address for a decision, for example a rate limit or an IP allow list, set `KnownProxies` or `KnownIPNetworks` of `ForwardedHeadersOptions` in `Recall.Bff/HostTrust/HostTrustExtensions.cs` to the proxy.
 
 ## BFF sessions
 
@@ -181,7 +181,7 @@ The server tags the span of a DPoP request with `app.auth.scheme=DPoP` and `app.
 To run the local stack with DPoP, set `DPoP=true`. The AppHost then sets `Auth:Features:DPoP` to `Require` and gives the BFF a generated EC P-256 key as the secret parameter `bff-dpop-key`. Only a provider whose class sets `TestedWithDPoP` can run with DPoP: the Duende Demo and Keycloak. Keycloak always starts with `--features=dpop`. Keycloak 26.0.8 has DPoP as a preview feature. FusionAuth and Authentik list DPoP in discovery, but this stack does not test DPoP with them. Cognito and ZeroFactor have no DPoP support. For another provider, the AppHost stops.
 
 ```bash
-AuthProvider=Keycloak DPoP=true dotnet aspire start --isolated --non-interactive --apphost FullstackTemplate.AppHost
+AuthProvider=Keycloak DPoP=true dotnet aspire start --isolated --non-interactive --apphost Recall.AppHost
 ```
 
 When the stack runs with DPoP, `run-against-stack.ts` sets `DPOP=true`, and the e2e test "should call the Server with a DPoP-bound token" reads the server span of the `GET /api/v1/users/me` call with `dotnet aspire otel spans`. Without DPoP, that test is skipped.
@@ -192,13 +192,13 @@ The AppHost holds all provider config. The BFF and the server have no provider c
 
 ### Select a provider
 
-The `AuthProvider` setting in `FullstackTemplate.AppHost/appsettings.json` selects the provider at runtime. Its value is the name of a folder in `FullstackTemplate.AppHost/AuthProviders/`, without case sensitivity. The setting has no fallback: if it is empty or not known, the AppHost stops and lists the known providers.
+The `AuthProvider` setting in `Recall.AppHost/appsettings.json` selects the provider at runtime. Its value is the name of a folder in `Recall.AppHost/AuthProviders/`, without case sensitivity. The setting has no fallback: if it is empty or not known, the AppHost stops and lists the known providers.
 
 - To change the default, run `dotnet run scripts/init.cs --auth-provider <Name>`, or edit the setting.
 - To use another provider for one run, set the environment variable. For example:
 
   ```bash
-  AuthProvider=Keycloak dotnet aspire start --isolated --non-interactive --apphost FullstackTemplate.AppHost
+  AuthProvider=Keycloak dotnet aspire start --isolated --non-interactive --apphost Recall.AppHost
   ```
 
 - To use another provider for one run, you can also give the setting as an AppHost argument after `--`:
@@ -220,7 +220,7 @@ An isolated run starts with an empty database, so it does not have this problem.
 
 ### Add a provider
 
-1. Add the folder `FullstackTemplate.AppHost/AuthProviders/<Name>/`.
+1. Add the folder `Recall.AppHost/AuthProviders/<Name>/`.
 2. In the folder, add the class `<Name>AuthProvider` that implements `IAuthProvider`. The AppHost finds the class by reflection, and `<Name>` from the class name is the value of the `AuthProvider` setting. `AddTo` adds the containers of the provider to the stack and returns an `AuthProviderConfig`.
 3. Put the seed files in `seed/`, and mount them with `WithSeedFiles`. Call `WithClientUrls` on the container, and read the app URLs from the `APP_*` variables in the seed files. An isolated run gives the apps random ports.
 4. Add `frontend/e2e/idps/<name>.json`, with `<name>` in lowercase. Give the login form and the test user. Set `resource` to the name of the Aspire resource of the provider. Set `capabilities` to what the discovery document of the provider lists, and `sessionFeatures` to what the provider does. The e2e tests skip a feature test if the provider does not have the feature.
@@ -230,7 +230,7 @@ A unit test in `AuthProviderCatalogTests` makes sure that each provider has its 
 
 ### Delete a provider
 
-1. Delete the folder `FullstackTemplate.AppHost/AuthProviders/<Name>/`.
+1. Delete the folder `Recall.AppHost/AuthProviders/<Name>/`.
 2. Delete `frontend/e2e/idps/<name>.json`.
 3. If the `AuthProvider` setting names the deleted provider, select another provider.
 
@@ -312,16 +312,16 @@ The Playwright tests in `frontend/e2e/auth-flows.spec.ts` log in through the Rea
 1. Start the stack, as shown in [Select a provider](#select-a-provider). For the BFF refresh test and the refresh lock test, also set `BffRefreshBeforeExpirationSeconds`, as the CI e2e job does:
 
    ```bash
-   AuthProvider=Keycloak BffRefreshBeforeExpirationSeconds=86400 dotnet aspire start --isolated --non-interactive --apphost FullstackTemplate.AppHost
+   AuthProvider=Keycloak BffRefreshBeforeExpirationSeconds=86400 dotnet aspire start --isolated --non-interactive --apphost Recall.AppHost
    ```
 
    The AppHost gives the value to the BFF as `Auth:RefreshBeforeExpirationSeconds`. It is longer than the access token lifetime of each provider, so each API call makes the BFF refresh. Do not set it for a normal run. Without it, the BFF refresh test and the refresh lock test are skipped.
 2. Wait until the server, the BFF, and the webfrontend are healthy:
 
    ```bash
-   dotnet aspire wait server --status healthy --apphost FullstackTemplate.AppHost
-   dotnet aspire wait bff --status healthy --apphost FullstackTemplate.AppHost
-   dotnet aspire wait webfrontend --status healthy --apphost FullstackTemplate.AppHost
+   dotnet aspire wait server --status healthy --apphost Recall.AppHost
+   dotnet aspire wait bff --status healthy --apphost Recall.AppHost
+   dotnet aspire wait webfrontend --status healthy --apphost Recall.AppHost
    ```
 
 3. In `frontend`, run the tests for the provider:
@@ -403,6 +403,6 @@ Use a separate deployment for the test run. The suite is the identity provider o
 
 ## Test users
 
-The seed files of each provider create its test users. The doc comment of each provider class in `FullstackTemplate.AppHost/AuthProviders/` lists them. The file in `frontend/e2e/idps/` gives the user that the e2e tests log in with.
+The seed files of each provider create its test users. The doc comment of each provider class in `Recall.AppHost/AuthProviders/` lists them. The file in `frontend/e2e/idps/` gives the user that the e2e tests log in with.
 
 The seed files create users in the provider only. A new database has no user records, so a test user who signs in has no tenant and no permissions. Each page of the SPA then shows a notice that links to `Start a tenant` (`/start-tenant`). That page sends `POST /api/v1/users/initiate`, and the user becomes the admin of a new tenant. See [multi-tenancy.md](multi-tenancy.md#add-a-user-to-a-tenant).

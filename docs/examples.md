@@ -4,7 +4,7 @@ The template has example code that shows the patterns of the app. An app that yo
 
 ```bash
 dotnet run scripts/remove-examples.cs
-dotnet build FullstackTemplate.slnx
+dotnet build Recall.slnx
 ```
 
 Then commit the result. The script changes only a clean git tree. A second run changes nothing. If the script stops before the end, it prints the command that undoes its changes. Correct the cause, undo the changes, and run it again.
@@ -24,14 +24,14 @@ A marker with no partner stops the script before it changes a file. A change to 
 
 | Example | Where it is |
 |---------|-------------|
-| The weather API and its page at `/weather` | `FullstackTemplate.Server/Examples/Weather/`, `frontend/src/examples/weather/`, `frontend/src/routes/(examples)/weather.tsx` |
+| The weather API and its page at `/weather` | `Recall.Server/Examples/Weather/`, `frontend/src/examples/weather/`, `frontend/src/routes/(examples)/weather.tsx` |
 | The component library at `/components` and the filter builder demo at `/filter-demo` | `frontend/src/routes/(examples)/` |
 | The `Examples` menu of the sidebar | `frontend/src/examples/example-nav.tsx`, `frontend/src/examples/example-nav-items.ts` |
-| The venues and workshops API, its `list_workshops` and `cancel_workshop` MCP tools, and the `manage_workshops` permission | `FullstackTemplate.Server/Examples/Venues/`, `FullstackTemplate.Server/Examples/Workshops/`, `FullstackTemplate.Server/Databases/EntityConfigurations/Examples/`, `FullstackTemplate.Server/Databases/Migrations/Examples/` |
+| The venues and workshops API, its `list_workshops` and `cancel_workshop` MCP tools, and the `manage_workshops` permission | `Recall.Server/Examples/Venues/`, `Recall.Server/Examples/Workshops/`, `Recall.Server/Databases/EntityConfigurations/Examples/`, `Recall.Server/Databases/Migrations/Examples/` |
 | The workshop pages at `/workshops` and `/venues/new`: the list, the detail, the edit and create forms, and the venue picker | `frontend/src/examples/workshops/`, `frontend/src/examples/venues/`, `frontend/src/routes/(examples)/workshops/`, `frontend/src/routes/(examples)/venues/` |
-| The files of a workshop: the `WorkshopAttachment` entity and its upload rules, its upload, list, and delete endpoints, its table, and the Files section of the workshop detail. The parts of attachments that it uses are not an example (see [attachments.md](backend/attachments.md)) | `FullstackTemplate.Server/Examples/Workshops/`, `frontend/src/examples/workshops/components/workshop-attachments.tsx` |
+| The files of a workshop: the `WorkshopAttachment` entity and its upload rules, its upload, list, and delete endpoints, its table, and the Files section of the workshop detail. The parts of attachments that it uses are not an example (see [attachments.md](backend/attachments.md)) | `Recall.Server/Examples/Workshops/`, `frontend/src/examples/workshops/components/workshop-attachments.tsx` |
 | The tests of the examples | the `Examples/` and `examples/` folders of the test projects, of `frontend/tests/`, and of `frontend/src/` |
-| The recipes of the example pages in the verify skill | `.agents/skills/verify-fullstack-template/features/examples/` and `recipes/examples/` |
+| The recipes of the example pages in the verify skill | `.agents/skills/verify-recall/features/examples/` and `recipes/examples/` |
 
 The script deletes the migrations of the example tables. A database that ran them still has the `venues`, `workshops`, and `workshop_attachments` tables and the `manage_workshops` permission. If the database of your app ran those migrations, add a migration that drops the three tables and calls `migrationBuilder.DeletePermission("manage_workshops")`. A row of a permission that `Permission` does not know stops each load of its user. The object storage of the app still has the files of the workshops under `tenants/<tenant>/workshops/`. Delete them. The script prints this paragraph when it deletes the examples.
 <!-- example:end -->

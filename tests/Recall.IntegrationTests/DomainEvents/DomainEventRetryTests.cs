@@ -1,0 +1,97 @@
+namespace Recall.IntegrationTests.DomainEvents;
+
+using Recall.Server.Databases;
+using Recall.Server.Domain.Tenants.DomainEvents;
+using Recall.Server.Domain.Tenants.Dtos;
+using Recall.Server.Domain.Tenants.Features;
+using Recall.Server.Domain.Tenants.Models;
+using Recall.SharedTestHelpers.EntityGraphs;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Shouldly;
+using static DomainEventTestServices;
+
+public class DomainEventRetryTests : TestBase
+{
+    [Test]
+    public async Task transient_failure_before_the_commit_is_retried_without_running_the_handlers_again()
+    {
+        // Arrange
+        var runs = 0;
+        var effectIdentifier = $"effect-{Guid.NewGuid()}";
+        var failFirstWrite = new FailFirstWrite();
+        await using var services = TestFixture.BuildServiceProvider(s => s
+            .AddTestHandler<TenantUpdated>((e, db, _) =>
+            {
+                runs++;
+                db.Users.Add(NewUser(e.Id, effectIdentifier));
+                return Task.CompletedTask;
+            })
+            .ConfigureDbContext<AppDbContext>((_, options) => options.AddInterceptors(failFirstWrite)));
+        var scope = new TestingServiceScope(services);
+        var scenario = await scope.StartTenantScenarioAsync();
+        var db = scope.GetService<AppDbContext>();
+        db.Database.CreateExecutionStrategy().RetriesOnFailure.ShouldBeTrue();
+        var tenant = await db.Tenants.SingleAsync(t => t.Id == scenario.Tenant.Id);
+        var newName = $"renamed-{Guid.NewGuid()}";
+        failFirstWrite.Arm();
+
+        // Act
+        tenant.Update(new TenantForUpdate { Name = newName, Version = tenant.Version });
+        await db.SaveChangesAsync();
+
+        // Assert
+        failFirstWrite.Failures.ShouldBe(1);
+        runs.ShouldBe(1);
+        (await ReadAsync(read => read.Users.CountAsync(u => u.Identifier == effectIdentifier))).ShouldBe(1);
+        (await ReadAsync(read => read.Tenants.Where(t => t.Id == tenant.Id).Select(t => t.Name).SingleAsync()))
+            .ShouldBe(newName);
+    }
+
+    [Test]
+    public async Task conflict_saves_nothing_and_a_resend_in_a_new_scope_runs_the_handlers_again()
+    {
+        // Arrange
+        var runs = 0;
+        var effectIdentifier = $"effect-{Guid.NewGuid()}";
+        await using var services = TestFixture.BuildServiceProvider(s => s.AddTestHandler<TenantUpdated>((e, db, _) =>
+        {
+            runs++;
+            db.Users.Add(NewUser(e.Id, effectIdentifier));
+            return Task.CompletedTask;
+        }));
+        var scope = new TestingServiceScope(services);
+        await scope.StartGraph(out _)
+            .AddTenant(out _)
+            .AddUser(out var blocker, u => u.Identifier = effectIdentifier)
+            .BuildAsync();
+        var scenario = await scope.StartTenantScenarioAsync();
+        var command = new UpdateTenant.Command(scenario.Tenant.Id, new TenantForUpdateDto { Name = $"renamed-{Guid.NewGuid()}", Version = scenario.Tenant.Version });
+
+        // Act
+        var send = () => scope.SendAsync(command);
+
+        // Assert
+        (await send.ShouldThrowAsync<ConstraintConflictException>()).Constraint.ShouldBe("ix_users_identifier");
+        runs.ShouldBe(1);
+        (await ReadAsync(read => read.Tenants.Where(t => t.Id == scenario.Tenant.Id).Select(t => t.Name).SingleAsync()))
+            .ShouldBe(scenario.Tenant.Name);
+        (await ReadAsync(read => read.Users.Where(u => u.Identifier == effectIdentifier).Select(u => u.Id).ToListAsync()))
+            .ShouldBe([blocker.Id]);
+
+        var saveAgain = () => scope.GetService<AppDbContext>().SaveChangesAsync();
+        (await saveAgain.ShouldThrowAsync<InvalidOperationException>()).Message.ShouldContain("Use a new DI scope");
+
+        await TestFixture.ExecuteOutOfBandAsync("UPDATE users SET identifier = @identifier WHERE id = @id",
+            ("identifier", $"moved-{Guid.NewGuid()}"), ("id", blocker.Id));
+        var resendScope = new TestingServiceScope(services);
+        resendScope.SetUserWithDefaults(identifier: scenario.Admin.Identifier);
+        await resendScope.SendAsync(command);
+
+        runs.ShouldBe(2);
+        (await ReadAsync(read => read.Tenants.Where(t => t.Id == scenario.Tenant.Id).Select(t => t.Name).SingleAsync()))
+            .ShouldBe(command.Dto.Name);
+        (await ReadAsync(read => read.Users.Where(u => u.Identifier == effectIdentifier).Select(u => u.TenantId).ToListAsync()))
+            .ShouldBe([scenario.Tenant.Id]);
+    }
+}

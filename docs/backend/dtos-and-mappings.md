@@ -44,10 +44,10 @@ Endpoint gets UserForCreationDto
 12. A field of a response DTO that holds data of another permission needs that permission. For example, if a `UserDto` that `read_users` shows gets the agents of the user, the field needs `read_agents`. Do one of these: require the permission in the handler, hide the value from a caller without the permission, or put the field on a separate DTO that a separate query returns. `GetAuditEntryPage` hides a value from a caller without `read_audit_log_sensitive`. Give each such field a test: a caller with the permission of the DTO, but without the permission of the field, does not get the data of the field. The example is `reader_without_the_sensitive_permission_gets_the_history_with_personal_values_hidden` in `GetAuditEntryPageTests`. `EndpointAccessSweepTests` checks the permission of each endpoint, not the permission of each field.
 
 <!-- example:start -->
-In the workshop example, `WorkshopDto` lists the names of the status and of the actions ([`WorkshopDto.Status`](../../FullstackTemplate.Server/Examples/Workshops/Dtos/WorkshopDto.cs)), and `WorkshopForCreationDto` names the limits of the domain ([`WorkshopForCreationDto.Title`](../../FullstackTemplate.Server/Examples/Workshops/Dtos/WorkshopForCreationDto.cs)).
+In the workshop example, `WorkshopDto` lists the names of the status and of the actions ([`WorkshopDto.Status`](../../Recall.Server/Examples/Workshops/Dtos/WorkshopDto.cs)), and `WorkshopForCreationDto` names the limits of the domain ([`WorkshopForCreationDto.Title`](../../Recall.Server/Examples/Workshops/Dtos/WorkshopForCreationDto.cs)).
 <!-- example:end -->
 
-<!-- code: FullstackTemplate.Server/Domain/Users/Dtos/UserDto.cs -->
+<!-- code: Recall.Server/Domain/Users/Dtos/UserDto.cs -->
 ```csharp
 public sealed record UserDto
 {
@@ -70,7 +70,7 @@ public sealed record UserDto
 
 The parameters DTO is a class that derives from `BasePaginationParameters`. It has no transport attributes. The HTTP endpoint binds each query value to a handler parameter with the camelCase name, and copies it to the DTO (see [endpoints.md](endpoints.md#http)). The gRPC and MCP adapters fill the DTO from their own inputs.
 
-<!-- code: FullstackTemplate.Server/Domain/Users/Dtos/UserParametersDto.cs -->
+<!-- code: Recall.Server/Domain/Users/Dtos/UserParametersDto.cs -->
 ```csharp
 public sealed class UserParametersDto : BasePaginationParameters
 {
@@ -87,7 +87,7 @@ A model is a `sealed record` with the same style as a DTO.
 
 The creation model has a nullable `Id`. The test entity graph uses it to give an entity a fixed ID. A `ForCreationDto` never has an `Id`, and the mapper ignores the `Id` target.
 
-<!-- code: FullstackTemplate.Server/Domain/Users/Models/UserForCreation.cs -->
+<!-- code: Recall.Server/Domain/Users/Models/UserForCreation.cs -->
 ```csharp
 public sealed record UserForCreation
 {
@@ -112,7 +112,7 @@ Mapperly makes the map at build time. Do not write a reflection mapper. See [sou
 5. Ignore `LastModifiedOn`, `IsDeleted`, and `DomainEvents` on the source of the DTO mapping.
 6. When the DTO has the allowed actions of the caller, write the public map by hand. It calls a private generated map that ignores `AllowedActions`, and adds the actions. The `IQueryable` projection takes the configuration of the private map.
 
-<!-- code: FullstackTemplate.Server/Domain/Users/Mappings/UserMapper.cs -->
+<!-- code: Recall.Server/Domain/Users/Mappings/UserMapper.cs -->
 ```csharp
 [Mapper]
 public static partial class UserMapper

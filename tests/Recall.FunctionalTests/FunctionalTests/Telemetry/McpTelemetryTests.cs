@@ -1,0 +1,174 @@
+namespace Recall.FunctionalTests.FunctionalTests.Telemetry;
+
+using System.Diagnostics;
+using System.Net;
+using Recall.Server.Domain.Agents;
+using Recall.SharedTestHelpers.EntityGraphs;
+using ModelContextProtocol;
+using Serilog.Events;
+using Shouldly;
+using TestUtilities;
+using Telemetry = Recall.Server.Resources.Telemetry;
+
+/// <summary>
+/// A tool call that fails before its feature runs has no feature span, so the span of its HTTP request must name the
+/// tool, the caller, and the error.
+/// </summary>
+public class McpTelemetryTests : TestBase
+{
+    [Test]
+    public async Task a_tool_call_that_the_access_filter_refuses_has_the_tool_and_the_caller_on_its_span()
+    {
+        // Arrange
+        var agent = await SignInThroughDelegatedAgentAsync();
+        await using var client = await CreateMcpClientAsync();
+
+        // Act
+        var result = await client.CallToolAsync("add_tenant", new Dictionary<string, object?> { ["name"] = "x" });
+
+        // Assert
+        result.ShouldBeToolError("permission_denied");
+        var span = await McpSpanOfAsync(agent);
+        span.GetTagItem("gen_ai.tool.name").ShouldBe("add_tenant");
+        span.GetTagItem("app.caller.kind").ShouldBe("delegated_agent");
+        span.GetTagItem("app.caller.client_id").ShouldBe(agent.ClientId);
+        span.GetTagItem("app.caller.tenant_id").ShouldBe(agent.TenantId);
+        span.GetTagItem("error.type").ShouldBe("permission_denied");
+    }
+
+    [Test]
+    public async Task an_unknown_tool_has_the_tool_and_the_caller_on_its_span_and_writes_no_error_log()
+    {
+        // Arrange
+        var agent = await SignInThroughDelegatedAgentAsync();
+        await using var client = await CreateMcpClientAsync();
+        using var parent = Telemetry.Source.StartActivity("test.parent").ShouldNotBeNull();
+
+        // Act
+        var call = () => client.CallToolAsync("no_such_tool", new Dictionary<string, object?>()).AsTask();
+
+        // Assert
+        (await call.ShouldThrowAsync<McpProtocolException>()).ErrorCode.ShouldBe(McpErrorCode.InvalidParams);
+        parent.Stop();
+        var span = await McpSpanOfAsync(agent);
+        span.GetTagItem("gen_ai.tool.name").ShouldBe("no_such_tool");
+        span.GetTagItem("app.caller.kind").ShouldBe("delegated_agent");
+        span.GetTagItem("error.type").ShouldBe(typeof(McpProtocolException).FullName);
+        ShouldHaveNoWarningOrErrorLog(parent.TraceId);
+    }
+
+    [Test]
+    public async Task a_long_unknown_tool_name_is_cut_on_its_span()
+    {
+        // Arrange
+        var agent = await SignInThroughDelegatedAgentAsync();
+        await using var client = await CreateMcpClientAsync();
+        var name = new string('x', 300);
+
+        // Act
+        var call = () => client.CallToolAsync(name, new Dictionary<string, object?>()).AsTask();
+
+        // Assert
+        await call.ShouldThrowAsync<McpProtocolException>();
+        var span = await McpSpanOfAsync(agent);
+        span.GetTagItem("gen_ai.tool.name").ShouldBe(name[..128]);
+    }
+
+    [Test]
+    [NotInParallel(nameof(TestingWebApplicationFactory.TelemetryMachineClientId))]
+    public async Task an_argument_of_the_wrong_type_has_the_tool_and_the_caller_on_its_span_and_writes_no_error_log()
+    {
+        // Arrange
+        SignInAsTelemetryClient();
+        await using var client = await CreateMcpClientAsync();
+        using var parent = Telemetry.Source.StartActivity("test.parent").ShouldNotBeNull();
+
+        // Act
+        var result = await client.CallToolAsync("add_tenant", new Dictionary<string, object?> { ["name"] = 5 });
+
+        // Assert
+        parent.Stop();
+        result.ShouldBeToolError("invalid_argument");
+        var span = await McpSpanOfTelemetryClientAsync();
+        span.GetTagItem("gen_ai.tool.name").ShouldBe("add_tenant");
+        span.GetTagItem("app.caller.client_id").ShouldBe(TestingWebApplicationFactory.TelemetryMachineClientId);
+        span.GetTagItem("error.type").ShouldBe("invalid_argument");
+        ShouldHaveNoWarningOrErrorLog(parent.TraceId);
+    }
+
+    [Test]
+    [NotInParallel(nameof(TestingWebApplicationFactory.TelemetryMachineClientId))]
+    public async Task a_tool_call_that_succeeds_has_the_tool_and_the_caller_on_its_span_and_no_error()
+    {
+        // Arrange
+        SignInAsTelemetryClient();
+        await using var client = await CreateMcpClientAsync();
+
+        // Act
+        var result = await client.CallToolAsync("add_tenant", new Dictionary<string, object?> { ["name"] = $"Tenant {Guid.NewGuid()}" });
+
+        // Assert
+        result.IsError.ShouldNotBe(true);
+        var span = await McpSpanOfTelemetryClientAsync();
+        span.GetTagItem("gen_ai.tool.name").ShouldBe("add_tenant");
+        span.GetTagItem("app.caller.client_id").ShouldBe(TestingWebApplicationFactory.TelemetryMachineClientId);
+        span.GetTagItem("error.type").ShouldBeNull();
+    }
+
+    private void SignInAsTelemetryClient()
+        => FactoryClient.SetFakeBearerToken(new Dictionary<string, object>
+        {
+            ["client_id"] = TestingWebApplicationFactory.TelemetryMachineClientId
+        });
+
+    private async Task<Agent> SignInThroughDelegatedAgentAsync()
+    {
+        TestGraph.Start(out _)
+            .AddTenant(out var tenant)
+            .AddUser(out var admin, u => u.Role = "Admin")
+            .Under(tenant)
+            .AddAgent(out var agent, a => a.Mode = "delegated");
+        await InsertAsync(tenant);
+        await InsertAsync(admin);
+        await InsertAsync(agent);
+        FactoryClient.SetFakeBearerToken(new Dictionary<string, object>
+        {
+            ["sub"] = admin.Identifier,
+            ["azp"] = agent.ClientId,
+        });
+        return agent;
+    }
+
+    // The server exports the span of the HTTP request when the request ends, which can be after the client has read
+    // the response.
+    private Task<Activity> McpSpanOfAsync(Agent agent)
+        => McpSpanAsync(a => a.GetTagItem("app.caller.agent_id") as string == agent.Id);
+
+    private Task<Activity> McpSpanOfTelemetryClientAsync()
+        => McpSpanAsync(a => a.GetTagItem("app.caller.client_id") as string == TestingWebApplicationFactory.TelemetryMachineClientId);
+
+    private async Task<Activity> McpSpanAsync(Func<Activity, bool> match)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (true)
+        {
+            var spans = ExportedSpans().Where(a => a.DisplayName == "POST /mcp/" && match(a)).ToList();
+            if (spans.Count > 0 || DateTime.UtcNow > deadline)
+                return spans.ShouldHaveSingleItem();
+            await Task.Delay(50);
+        }
+    }
+
+    // The test server runs the MCP handler in the context of the test, so the logs of the call are in the trace of the
+    // parent.
+    private static void ShouldHaveNoWarningOrErrorLog(ActivityTraceId traceId)
+    {
+        var logs = TestingWebApplicationFactory.Instance.CapturedLogs.InTrace(traceId);
+        logs.ShouldContain(e => e.Properties.ContainsKey("SourceContext")
+            && e.Properties["SourceContext"].ToString().Contains("ModelContextProtocol"),
+            "The trace has no logs of the MCP SDK, so the check for warnings proves nothing.");
+        logs.Where(e => e.Level >= LogEventLevel.Warning)
+            .Select(e => $"{e.Level}: {e.MessageTemplate.Text}")
+            .ShouldBeEmpty();
+    }
+}

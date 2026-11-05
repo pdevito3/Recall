@@ -12,9 +12,6 @@ name: CI
 # A job that calls a script under scripts/ci/ keeps its steps there, so that an agent can run them locally. The script works on a throwaway copy of the checkout.
 # The BFF jobs (bff-tests, e2e) run only when the changes job finds a BFF change, and on workflow_dispatch.
 # There is no nightly run. See section 7 of docs/specs/home-rolled-bff.md.
-# init:start - scripts/init.cs deletes these lines and conformance.yml when it renames the app
-# conformance.yml runs the OpenID conformance suite.
-# init:end
 
 on:
   pull_request:
@@ -58,10 +55,10 @@ jobs:
       # The build and the generate step write the files again for each supported version.
       # The files of a removed version then show in the diff as deleted files.
       - name: Delete the committed contract files
-        run: rm -rf FullstackTemplate.Server/openapi/*.json frontend/src/api/generated*
+        run: rm -rf Recall.Server/openapi/*.json frontend/src/api/generated*
 
       - name: Build the Server (writes the OpenAPI document)
-        run: dotnet build FullstackTemplate.Server/FullstackTemplate.Server.csproj --configuration Debug
+        run: dotnet build Recall.Server/Recall.Server.csproj --configuration Debug
 
       - name: Install the frontend packages
         working-directory: frontend
@@ -74,7 +71,7 @@ jobs:
       - name: Fail on a contract diff
         run: |
           git add --intent-to-add --all
-          git diff --exit-code --stat -- FullstackTemplate.Server/openapi ':(glob)frontend/src/api/generated*/**'
+          git diff --exit-code --stat -- Recall.Server/openapi ':(glob)frontend/src/api/generated*/**'
 
       - name: Build the frontend
         working-directory: frontend
@@ -204,7 +201,7 @@ jobs:
 
       - name: Fail on a breaking change to the gRPC contract
         run: |
-          if git ls-tree -r --name-only origin/main -- FullstackTemplate.Server/Domain | grep -q '\.proto$'; then
+          if git ls-tree -r --name-only origin/main -- Recall.Server/Domain | grep -q '\.proto$'; then
             buf breaking --against '.git#ref=refs/remotes/origin/main'
           else
             echo "main has no gRPC contract yet, so there is nothing to compare."
@@ -232,7 +229,7 @@ jobs:
       # The api-contract job checks the OpenAPI document, so this build does not write it again.
       # The bff-tests job runs the BFF tests, so this job skips them.
       - name: Run the tests
-        run: dotnet test --solution FullstackTemplate.slnx -p:OpenApiGenerateDocuments=false -p:SkipBffTests=true
+        run: dotnet test --solution Recall.slnx -p:OpenApiGenerateDocuments=false -p:SkipBffTests=true
 
   new-feature:
     runs-on: ubuntu-latest
@@ -303,15 +300,15 @@ jobs:
         with:
           filters: |
             bff:
-              - 'FullstackTemplate.Bff/**'
-              - 'tests/FullstackTemplate.Bff.Tests/**'
+              - 'Recall.Bff/**'
+              - 'tests/Recall.Bff.Tests/**'
               # The BFF tests compile this helper with a link
-              - 'tests/FullstackTemplate.SharedTestHelpers/Utilities/PauseAtQuery.cs'
+              - 'tests/Recall.SharedTestHelpers/Utilities/PauseAtQuery.cs'
               # The BFF compiles this health check wrapper with a link
-              - 'FullstackTemplate.Server/Resources/Extensions/CallerCancellationHealthCheck.cs'
-              - 'FullstackTemplate.AppHost/**'
+              - 'Recall.Server/Resources/Extensions/CallerCancellationHealthCheck.cs'
+              - 'Recall.AppHost/**'
               # The token check of the Server, which the e2e tests call through the BFF
-              - 'FullstackTemplate.Server/Resources/Entrypoints/**'
+              - 'Recall.Server/Resources/Entrypoints/**'
               - 'Directory.Packages.props'
               - 'Directory.Build.props'
               - 'global.json'
@@ -351,7 +348,7 @@ jobs:
       # Without --results-directory, Microsoft.Testing.Platform writes the reports under bin/ of the test project.
       - name: Run the BFF tests
         run: >-
-          dotnet test --project tests/FullstackTemplate.Bff.Tests/FullstackTemplate.Bff.Tests.csproj
+          dotnet test --project tests/Recall.Bff.Tests/Recall.Bff.Tests.csproj
           --report-trx --results-directory "$GITHUB_WORKSPACE/TestResults"
 
       - name: Upload the test report

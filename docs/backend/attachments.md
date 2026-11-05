@@ -1,6 +1,6 @@
 # Attachments
 
-An attachment is a file that a record keeps, such as the photo of a repair or the PDF of a contract. The bytes go to object storage. The row of the attachment keeps the name, the type, the size, and the key of the object. The parts that each use shares are in `FullstackTemplate.Server/Domain/Attachments/` and `frontend/src/components/attachments/`. Each entity that takes files adds its own attachment entity, its upload rules, its endpoints, and a Files section on its page.
+An attachment is a file that a record keeps, such as the photo of a repair or the PDF of a contract. The bytes go to object storage. The row of the attachment keeps the name, the type, the size, and the key of the object. The parts that each use shares are in `Recall.Server/Domain/Attachments/` and `frontend/src/components/attachments/`. Each entity that takes files adds its own attachment entity, its upload rules, its endpoints, and a Files section on its page.
 
 For the bucket in each environment, see [Object storage](../backend.md#object-storage).
 
@@ -15,26 +15,26 @@ For the bucket in each environment, see [Object storage](../backend.md#object-st
 
 | Part | What it does |
 |------|--------------|
-| [`FileType`](../../FullstackTemplate.Server/Domain/Attachments/FileType.cs) | The registry of the types that an upload can have: the name, the media type, the extensions, the first bytes, and whether the page can show it |
-| [`UploadRules`](../../FullstackTemplate.Server/Domain/Attachments/UploadRules.cs) | The allowed types and the largest size of one use. It checks an upload and writes the messages from its own limits |
-| [`FileUpload`](../../FullstackTemplate.Server/Domain/Attachments/FileUpload.cs) | What the client sent: the name, the claimed media type, the size, and the first bytes |
-| [`StoredFile`](../../FullstackTemplate.Server/Domain/Attachments/StoredFile.cs) | The value object of an attachment entity. `Accept` checks the upload. `DownloadAt` and `PreviewAt` give the presigned GETs |
-| [`IAttachment`](../../FullstackTemplate.Server/Domain/Attachments/IAttachment.cs) | The interface of each attachment entity |
-| [`AttachmentStorage`](../../FullstackTemplate.Server/Domain/Attachments/AttachmentStorage.cs) | The add and the delete, in the order of [The order of the writes](#the-order-of-the-writes) |
-| [`AttachmentMapper`](../../FullstackTemplate.Server/Domain/Attachments/Mappings/AttachmentMapper.cs) | The `AttachmentDto` with signed URLs, and the `AttachmentListDto` with the upload rules |
-| [`MapStoredFile`](../../FullstackTemplate.Server/Databases/EntityConfigurations/StoredFileMapping.cs) | The columns `file_name`, `media_type`, `size_bytes`, and `storage_key` |
+| [`FileType`](../../Recall.Server/Domain/Attachments/FileType.cs) | The registry of the types that an upload can have: the name, the media type, the extensions, the first bytes, and whether the page can show it |
+| [`UploadRules`](../../Recall.Server/Domain/Attachments/UploadRules.cs) | The allowed types and the largest size of one use. It checks an upload and writes the messages from its own limits |
+| [`FileUpload`](../../Recall.Server/Domain/Attachments/FileUpload.cs) | What the client sent: the name, the claimed media type, the size, and the first bytes |
+| [`StoredFile`](../../Recall.Server/Domain/Attachments/StoredFile.cs) | The value object of an attachment entity. `Accept` checks the upload. `DownloadAt` and `PreviewAt` give the presigned GETs |
+| [`IAttachment`](../../Recall.Server/Domain/Attachments/IAttachment.cs) | The interface of each attachment entity |
+| [`AttachmentStorage`](../../Recall.Server/Domain/Attachments/AttachmentStorage.cs) | The add and the delete, in the order of [The order of the writes](#the-order-of-the-writes) |
+| [`AttachmentMapper`](../../Recall.Server/Domain/Attachments/Mappings/AttachmentMapper.cs) | The `AttachmentDto` with signed URLs, and the `AttachmentListDto` with the upload rules |
+| [`MapStoredFile`](../../Recall.Server/Databases/EntityConfigurations/StoredFileMapping.cs) | The columns `file_name`, `media_type`, `size_bytes`, and `storage_key` |
 | [`AttachmentsSection`](../../frontend/src/components/attachments/attachments-section.tsx) | The Files section of a page: the heading, the hint, the upload button, the list, and the delete |
 | [`refreshBeforeUrlsExpire`](../../frontend/src/lib/attachment-list-refresh.ts) | The query options that load the list again before its URLs expire |
 
 ## Add attachments to an entity
 
-The steps use a `Repair` that keeps photos. The code is in [AttachmentExampleTests.cs](../../tests/FullstackTemplate.UnitTests/Docs/AttachmentExampleTests.cs). Change the names.
+The steps use a `Repair` that keeps photos. The code is in [AttachmentExampleTests.cs](../../tests/Recall.UnitTests/Docs/AttachmentExampleTests.cs). Change the names.
 
 ### On the Server
 
 1. **The entity.** Add `Domain/<Owner>s/<Owner><Noun>.cs`, such as `Domain/Repairs/RepairPhoto.cs`, as a tenant-owned root that implements `IAttachment`. Declare its upload rules, and make the key from IDs only. Done when a unit test shows the key and a refused type.
 
-   <!-- code: tests/FullstackTemplate.UnitTests/Docs/AttachmentExampleTests.cs -->
+   <!-- code: tests/Recall.UnitTests/Docs/AttachmentExampleTests.cs -->
    ```csharp
    public sealed class RepairPhoto : BaseEntity, ITenantable, IAttachment
    {
@@ -67,7 +67,7 @@ The steps use a `Repair` that keeps photos. The code is in [AttachmentExampleTes
 
 2. **The configuration and the migration.** Map the tenant and the owner as each tenant-owned root does ([entity-configurations.md](entity-configurations.md)). Map the file with `MapStoredFile`, and index the order of the list. Add the `DbSet` and a migration. Done when `ModelSnapshotTests` passes.
 
-   <!-- code: tests/FullstackTemplate.UnitTests/Docs/AttachmentExampleTests.cs -->
+   <!-- code: tests/Recall.UnitTests/Docs/AttachmentExampleTests.cs -->
    ```csharp
    // A photo is its own root, so an upload does not change the version of the repair
    builder.HasOne<Repair>()
@@ -82,7 +82,7 @@ The steps use a `Repair` that keeps photos. The code is in [AttachmentExampleTes
 
 3. **The action.** Add a `Manage<Noun>s` action, such as `ManagePhotos`, to the action type of the owner ([domain-entities.md](domain-entities.md#allowed-actions)). Make it apply in each status of the owner, because a file stays useful after the record closes. The table of actions fills `allowedActions` of the read DTO of the owner, so the SPA shows the upload and the delete only to a caller who can send them. Done when a unit test shows the action in the last status of the owner, and none for a caller with no permission.
 
-   <!-- code: tests/FullstackTemplate.UnitTests/Docs/AttachmentExampleTests.cs -->
+   <!-- code: tests/Recall.UnitTests/Docs/AttachmentExampleTests.cs -->
    ```csharp
    // The photos of a repair stay useful after it closes, so the action applies in each status
    public static readonly RepairActionEnum ManagePhotos = new AnyStatusType(nameof(ManagePhotos), 1);
@@ -95,7 +95,7 @@ The steps use a `Repair` that keeps photos. The code is in [AttachmentExampleTes
 
 4. **The add.** The command takes a stream, not an `IFormFile`. Call `GuardCaller` of the action before the load of the owner, and the access check of the owner, such as `GuardChangeBy`, after it. Then read the first bytes and make the entity. Give the save of the row to `AttachmentStorage.AddAsync`. The save takes the shared lock of the tenant, as each add of a tenant-owned root does ([concurrency.md](concurrency.md#lock)).
 
-   <!-- code: tests/FullstackTemplate.UnitTests/Docs/AttachmentExampleTests.cs -->
+   <!-- code: tests/Recall.UnitTests/Docs/AttachmentExampleTests.cs -->
    ```csharp
    var caller = await permissionGuard.GetCallerAsync(cancellationToken);
    RepairAction.ManagePhotos().GuardCaller(caller);
@@ -126,7 +126,7 @@ The steps use a `Repair` that keeps photos. The code is in [AttachmentExampleTes
 
 5. **The upload endpoint.** Only the endpoint knows `IFormFile` (`EntrypointBoundaryTests`). It opens the stream and owns it. Kubb then writes a client that takes `body: { file }`.
 
-   <!-- code: tests/FullstackTemplate.UnitTests/Docs/AttachmentExampleTests.cs -->
+   <!-- code: tests/Recall.UnitTests/Docs/AttachmentExampleTests.cs -->
    ```csharp
    // The API takes a bearer token, not a cookie, so a form post of another site cannot send it
    .DisableAntiforgery()
@@ -147,14 +147,14 @@ The steps use a `Repair` that keeps photos. The code is in [AttachmentExampleTes
 
 6. **The list.** Load the owner through the tenant filter, then its attachments. The list response gives the upload rules of the entity, so the SPA copies no limit.
 
-   <!-- code: tests/FullstackTemplate.UnitTests/Docs/AttachmentExampleTests.cs -->
+   <!-- code: tests/Recall.UnitTests/Docs/AttachmentExampleTests.cs -->
    ```csharp
    return await photos.ToAttachmentListDtoAsync(RepairPhoto.UploadRules, storage, timeProvider.GetUtcNow());
    ```
 
 7. **The delete.** Guard the action and the owner as the add does. Load the attachment under its owner, so that a route with another owner finds nothing. Then call `DeleteAsync`.
 
-   <!-- code: tests/FullstackTemplate.UnitTests/Docs/AttachmentExampleTests.cs -->
+   <!-- code: tests/Recall.UnitTests/Docs/AttachmentExampleTests.cs -->
    ```csharp
    RepairAction.ManagePhotos().GuardCaller(caller);
 
@@ -173,7 +173,7 @@ The steps use a `Repair` that keeps photos. The code is in [AttachmentExampleTes
    await attachments.DeleteAsync(photo, cancellationToken);
    ```
 
-8. **The tests.** Give the entity graph a blueprint that makes the upload with `SampleFiles` of `SharedTestHelpers/Fakes/Attachments/`. Add the entity to `TenantDeleteOwnedRowsTests`, each endpoint to `EndpointAccessSweepTests`, and the columns to `StringColumnLengthTests`: `file_name` goes in `CallerColumns`, and `media_type` and `storage_key` go in `ServerWrittenColumns`. The sweep sends a file of each type of the registry until the rules of the route take one, so it needs no copy of the rules. Write functional tests for an upload, a type that the rules refuse, a file whose bytes do not match its name, a file over the largest size, and the rules in the list. Done when `dotnet test --solution FullstackTemplate.slnx` passes.
+8. **The tests.** Give the entity graph a blueprint that makes the upload with `SampleFiles` of `SharedTestHelpers/Fakes/Attachments/`. Add the entity to `TenantDeleteOwnedRowsTests`, each endpoint to `EndpointAccessSweepTests`, and the columns to `StringColumnLengthTests`: `file_name` goes in `CallerColumns`, and `media_type` and `storage_key` go in `ServerWrittenColumns`. The sweep sends a file of each type of the registry until the rules of the route take one, so it needs no copy of the rules. Write functional tests for an upload, a type that the rules refuse, a file whose bytes do not match its name, a file over the largest size, and the rules in the list. Done when `dotnet test --solution Recall.slnx` passes.
 9. **The contract.** Regenerate it with the `api-contract` skill.
 
 ### In the SPA
@@ -262,5 +262,5 @@ Give the save to `AddAsync` as a function, so that the put runs one time, also w
 <!-- example:start -->
 ## The example
 
-The workshop example stores the files of a workshop: [`WorkshopAttachment`](<../../FullstackTemplate.Server/Examples/Workshops/WorkshopAttachment.cs>), [`AddWorkshopAttachment`](<../../FullstackTemplate.Server/Examples/Workshops/Features/AddWorkshopAttachment/AddWorkshopAttachment.cs>), [`GetWorkshopAttachments`](<../../FullstackTemplate.Server/Examples/Workshops/Features/GetWorkshopAttachments/GetWorkshopAttachments.cs>), and [`DeleteWorkshopAttachment`](<../../FullstackTemplate.Server/Examples/Workshops/Features/DeleteWorkshopAttachment/DeleteWorkshopAttachment.cs>). Its page wires `AttachmentsSection` in [`workshop-attachments.tsx`](<../../frontend/src/examples/workshops/components/workshop-attachments.tsx>). Its tests are in [`WorkshopAttachmentTests`](<../../tests/FullstackTemplate.FunctionalTests/Examples/Workshops/WorkshopAttachmentTests.cs>) and [`workshop-files.spec.ts`](<../../frontend/tests/features/examples/workshops/workshop-files.spec.ts>).
+The workshop example stores the files of a workshop: [`WorkshopAttachment`](<../../Recall.Server/Examples/Workshops/WorkshopAttachment.cs>), [`AddWorkshopAttachment`](<../../Recall.Server/Examples/Workshops/Features/AddWorkshopAttachment/AddWorkshopAttachment.cs>), [`GetWorkshopAttachments`](<../../Recall.Server/Examples/Workshops/Features/GetWorkshopAttachments/GetWorkshopAttachments.cs>), and [`DeleteWorkshopAttachment`](<../../Recall.Server/Examples/Workshops/Features/DeleteWorkshopAttachment/DeleteWorkshopAttachment.cs>). Its page wires `AttachmentsSection` in [`workshop-attachments.tsx`](<../../frontend/src/examples/workshops/components/workshop-attachments.tsx>). Its tests are in [`WorkshopAttachmentTests`](<../../tests/Recall.FunctionalTests/Examples/Workshops/WorkshopAttachmentTests.cs>) and [`workshop-files.spec.ts`](<../../frontend/tests/features/examples/workshops/workshop-files.spec.ts>).
 <!-- example:end -->

@@ -10,14 +10,14 @@ import { pluginZod } from '@kubb/plugin-zod'
 process.env.KUBB_DISABLE_TELEMETRY = '1'
 
 // A Debug build of the Server writes one OpenAPI document for each API version:
-// FullstackTemplate.Server.json for v1, FullstackTemplate.Server_v2.json for v2, and more.
-const openApiFolder = '../FullstackTemplate.Server/openapi'
+// Recall.Server.json for v1, Recall.Server_v2.json for v2, and more.
+const openApiFolder = '../Recall.Server/openapi'
 
 // Kubb empties each output folder before it generates, so each document needs its own folder, not a folder inside another folder.
 // lib/api-client.ts connects the client of each src/api/generated* folder to apiClient.
 function outputFor(file: string) {
-  if (file === 'FullstackTemplate.Server.json') return './src/api/generated'
-  const version = /^FullstackTemplate\.Server_v(\d+)\.json$/.exec(file)?.[1]
+  if (file === 'Recall.Server.json') return './src/api/generated'
+  const version = /^Recall\.Server_v(\d+)\.json$/.exec(file)?.[1]
   if (!version) throw new Error(`${openApiFolder}/${file} is not an OpenAPI document that kubb.config.ts knows.`)
   return `./src/api/generated-v${version}`
 }

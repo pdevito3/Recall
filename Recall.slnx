@@ -1,0 +1,23 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/tests/">
+    <Project Path="tests/Recall.ArchitectureFixtures/Recall.ArchitectureFixtures.csproj" />
+    <Project Path="tests/Recall.Bff.Tests/Recall.Bff.Tests.csproj" />
+    <Project Path="tests/Recall.EntityGraphs.Generators/Recall.EntityGraphs.Generators.csproj" />
+    <Project Path="tests/Recall.FunctionalTests/Recall.FunctionalTests.csproj" />
+    <Project Path="tests/Recall.IntegrationTests/Recall.IntegrationTests.csproj" />
+    <Project Path="tests/Recall.SharedTestHelpers/Recall.SharedTestHelpers.csproj" />
+    <Project Path="tests/Recall.UnitTests/Recall.UnitTests.csproj" />
+  </Folder>
+  <Project Path="frontend/frontend.esproj">
+    <Build Solution="*|Any CPU" />
+  </Project>
+  <Project Path="Recall.AppHost/Recall.AppHost.csproj" />
+  <Project Path="Recall.Bff/Recall.Bff.csproj" />
+  <Project Path="Recall.Server/Recall.Server.csproj" />
+  <Project Path="Recall.SourceGenerators/Recall.SourceGenerators.csproj" />
+</Solution>

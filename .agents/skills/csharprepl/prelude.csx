@@ -8,9 +8,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using FullstackTemplate.Server.Databases;
-using FullstackTemplate.Server.Domain.Tenants;
-using FullstackTemplate.Server.Domain.Users;
+using Recall.Server.Databases;
+using Recall.Server.Domain.Tenants;
+using Recall.Server.Domain.Users;
 
 // Sends a MediatR request in a new system scope. A system scope sees and manages all tenants.
 async Task<T> Send<T>(IRequest<T> request)

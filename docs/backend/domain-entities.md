@@ -23,7 +23,7 @@ The constructor for EF Core is `protected` and calls `base(IdPrefix)`.
 
 ## Example
 
-<!-- code: FullstackTemplate.Server/Domain/Users/User.cs -->
+<!-- code: Recall.Server/Domain/Users/User.cs -->
 ```csharp
 public class User : BaseEntity, ITenantable, IDeletedWithEvent
 {
@@ -101,7 +101,7 @@ The creation model has an `Id` only for tests. If the model has an `Id`, call `S
 
 `BaseEntity.Version` is the version of the row that the entity came from. A method that replaces fields from an edit form gets the version that the caller edited in its update model. It calls `GuardVersion` before it changes a value. When the versions are not the same, `GuardVersion` throws a `StaleVersionException`, which gives 409. Thus a stale form cannot overwrite the change of another user.
 
-<!-- code: FullstackTemplate.Server/Domain/Tenants/Tenant.cs -->
+<!-- code: Recall.Server/Domain/Tenants/Tenant.cs -->
 ```csharp
 public Tenant Update(TenantForUpdate tenantForUpdate)
 {
@@ -121,7 +121,7 @@ A method for one intent, such as `UpdateRole` or `AddPermission`, gets no versio
 
 When a rule blocks a change in some states, put the rule in a private guard method. Call the guard at the start of each method that it protects.
 
-<!-- code: tests/FullstackTemplate.UnitTests/Docs/CheckOrderExampleTests.cs -->
+<!-- code: tests/Recall.UnitTests/Docs/CheckOrderExampleTests.cs -->
 ```csharp
 public Visit Reschedule(VisitForReschedule forReschedule)
 {
@@ -140,7 +140,7 @@ private void GuardIfCancelled()
 When the rule needs facts from other aggregates, or a second caller needs the same answer, use the decision shape in [features-and-cqrs.md](features-and-cqrs.md#one-rule-set-for-two-callers).
 
 <!-- example:start -->
-In the workshop example, `Workshop.Update` checks the version first, then refuses a status that cannot change, then returns with no change when each value is the current value: [Workshop.cs](../../FullstackTemplate.Server/Examples/Workshops/Workshop.cs).
+In the workshop example, `Workshop.Update` checks the version first, then refuses a status that cannot change, then returns with no change when each value is the current value: [Workshop.cs](../../Recall.Server/Examples/Workshops/Workshop.cs).
 <!-- example:end -->
 
 ### Allowed actions
@@ -156,7 +156,7 @@ When no rule of an action reads the record, the table reads only the caller, and
 
 On their own record, a member holds the permissions of the user. `User` makes the caller again from the current permissions, so the response of a command that changes them lists the actions after the change. A delegated agent keeps the permissions that it loaded, so after it changes the permissions of its own user, the response can list an action that the next request refuses with 403.
 
-<!-- code: FullstackTemplate.Server/Domain/Users/User.cs -->
+<!-- code: Recall.Server/Domain/Users/User.cs -->
 ```csharp
 public IReadOnlyList<UserAction> AllowedActions(Caller caller)
 {
@@ -174,7 +174,7 @@ public void GuardAllows(UserAction action, Caller caller)
 
 The command checks the part of the rule that needs only the ID before the load, so a caller without the permission gets 403 for any ID. Then it checks the full rule after the load:
 
-<!-- code: FullstackTemplate.Server/Domain/Users/Features/DeleteUser/DeleteUser.cs -->
+<!-- code: Recall.Server/Domain/Users/Features/DeleteUser/DeleteUser.cs -->
 ```csharp
 var caller = await permissionGuard.GetCallerAsync(cancellationToken);
 UserAction.Delete().GuardBeforeLoad(caller, request.Id);
@@ -189,7 +189,7 @@ user.GuardAllows(UserAction.Delete(), caller);
 `UserActionTests` has the tests of the table. One test gives each action the refusal text of each case. Another checks, for each caller in a small table, that an action is in `AllowedActions` only when `GuardAllows` does not throw.
 
 <!-- example:start -->
-In the workshop example, the command calls `WorkshopAction.GuardCaller` before the load, so a caller without `manage_workshops` gets 403 for any ID ([WorkshopAction.cs](../../FullstackTemplate.Server/Examples/Workshops/WorkshopAction.cs)). After the load, `Workshop.GuardChangeBy` permits only the organizer of the workshop or a caller with `manage_tenant`, and then the entity refuses a status that does not permit the action ([Workshop.cs](../../FullstackTemplate.Server/Examples/Workshops/Workshop.cs)). `Workshop.AllowedActions` and `WorkshopMapper.AddAllowedActions` ([WorkshopMapper.cs](../../FullstackTemplate.Server/Examples/Workshops/Mappings/WorkshopMapper.cs)) call the same `WorkshopAction.AllowedFor` with the organizer and the status. `WorkshopActionTests` checks, for each caller in a small table, that an action is in `AllowedActions` only when the command does not refuse it.
+In the workshop example, the command calls `WorkshopAction.GuardCaller` before the load, so a caller without `manage_workshops` gets 403 for any ID ([WorkshopAction.cs](../../Recall.Server/Examples/Workshops/WorkshopAction.cs)). After the load, `Workshop.GuardChangeBy` permits only the organizer of the workshop or a caller with `manage_tenant`, and then the entity refuses a status that does not permit the action ([Workshop.cs](../../Recall.Server/Examples/Workshops/Workshop.cs)). `Workshop.AllowedActions` and `WorkshopMapper.AddAllowedActions` ([WorkshopMapper.cs](../../Recall.Server/Examples/Workshops/Mappings/WorkshopMapper.cs)) call the same `WorkshopAction.AllowedFor` with the organizer and the status. `WorkshopActionTests` checks, for each caller in a small table, that an action is in `AllowedActions` only when the command does not refuse it.
 <!-- example:end -->
 
 ## Value objects
@@ -198,7 +198,7 @@ A value object derives from `ValueObject`. It validates its value in the constru
 
 When a value has fixed options, back the value object with a private SmartEnum. Put the behavior for each option on the SmartEnum. Override `ToString` to give `Value`, so that a failed test assertion and a log show the option, not the type name. Do not give `ToString` to a value object that holds personal data, such as `EmailAddress`, because a log of the object then shows the data. Implement `IFixedNames`, so that a DTO field can list the names in the OpenAPI document (see rule 9 of [dtos-and-mappings.md](dtos-and-mappings.md)). `UserRole` is the example:
 
-<!-- code: FullstackTemplate.Server/Domain/Users/UserRole.cs -->
+<!-- code: Recall.Server/Domain/Users/UserRole.cs -->
 ```csharp
 public partial class UserRole : ValueObject, IFixedNames
 {
@@ -248,7 +248,7 @@ public partial class UserRole : ValueObject, IFixedNames
 A date that belongs to a place is a `ZonedDate`, for example a clinic day or the due date of a service at a yard. It holds the `DateOnly` and the `TimeZoneId` of the place. `TimeZoneId` accepts only an IANA ID that the server knows, such as `America/Chicago`. Linux refuses a wrong case of an ID. macOS refuses a wrong case only of a zone that it lists, not of an alias such as `Asia/Calcutta`. It refuses a Windows ID such as `Central Standard Time`. Do not store a `ZonedDate`. The entity stores the `DateOnly` and the `TimeZoneId` of its place, and makes the `ZonedDate` when it needs one. Map the `TimeZoneId` with `ComplexProperty`, and give its column `TimeZoneId.MaxLength`. List the column in `FixedOptionColumns` of `StringColumnLengthTests` with the IANA IDs of the server, because a caller can send only an ID that the server knows. Take today with `ZonedDate.TodayAt(zone, timeProvider.GetUtcNow())`, never from the UTC date. A rule that compares a date to today compares it to today at the place. `Start` is the first instant of the day. It is local midnight, or the end of a gap at midnight. `End` is the `Start` of the next day, and the day does not contain it. `TimeZoneId.ToInstant(date, time)` gives null for a time in a spring gap, and the first instant for a time in the repeated fall hour. The SPA shows and reads the times of a place in its zone with `frontend/src/lib/zoned-time.ts`. See "Dates and times" in [code-style.md](../frontend/code-style.md).
 
 <!-- example:start -->
-`WorkshopStatus` is a state machine. Each option of its SmartEnum lists the statuses that can come next, and `MoveTo` refuses each other move with a 422: [`WorkshopStatus.MoveTo`](../../FullstackTemplate.Server/Examples/Workshops/WorkshopStatus.cs). `Venue` stores a `TimeZoneId`: [`Venue.TimeZone`](../../FullstackTemplate.Server/Examples/Venues/Venue.cs).
+`WorkshopStatus` is a state machine. Each option of its SmartEnum lists the statuses that can come next, and `MoveTo` refuses each other move with a 422: [`WorkshopStatus.MoveTo`](../../Recall.Server/Examples/Workshops/WorkshopStatus.cs). `Venue` stores a `TimeZoneId`: [`Venue.TimeZone`](../../Recall.Server/Examples/Venues/Venue.cs).
 <!-- example:end -->
 
 To map a value object to a column, see [entity-configurations.md](entity-configurations.md#value-objects).

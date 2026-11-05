@@ -63,6 +63,6 @@ return Job.Run("without-examples",
     new("Install Chromium", copy => copy.RunIn("frontend", "pnpm", "exec", "playwright", "install", "chromium")),
     new("Test the frontend", copy => copy.RunIn("frontend", "pnpm", "test")),
     new("Run the functional tests", copy => copy.RunIn("frontend", "pnpm", "test:e2e")),
-    new("Build the solution", copy => copy.Run("dotnet", "build", "FullstackTemplate.slnx")),
-    new("Run the .NET tests", copy => copy.Run("dotnet", "test", "--solution", "FullstackTemplate.slnx", "--no-build")),
+    new("Build the solution", copy => copy.Run("dotnet", "build", "Recall.slnx")),
+    new("Run the .NET tests", copy => copy.Run("dotnet", "test", "--solution", "Recall.slnx", "--no-build")),
 ]);

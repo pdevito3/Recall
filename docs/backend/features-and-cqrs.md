@@ -4,7 +4,7 @@ Each feature is one folder in `Domain/[EntityName]s/Features/`, for example `Fea
 
 ## Rules
 
-1. Put the request and the handler of one feature in one core file, in a folder with the same name. Name the folder, the file, and the class for the action, for example `AddUser`, `GetUserList`, or `UpdateUserRole`. Use the namespace `FullstackTemplate.Server.Domain.[EntityName]s.Features` for each file in the folder. A namespace with the feature name would clash with the class name. The exception is `[FeatureName].Grpc.cs`: it uses the namespace of the gRPC service, for example `...Tenants.Grpc.V1`, so that it can extend the partial service class. See [endpoints.md](endpoints.md#grpc).
+1. Put the request and the handler of one feature in one core file, in a folder with the same name. Name the folder, the file, and the class for the action, for example `AddUser`, `GetUserList`, or `UpdateUserRole`. Use the namespace `Recall.Server.Domain.[EntityName]s.Features` for each file in the folder. A namespace with the feature name would clash with the class name. The exception is `[FeatureName].Grpc.cs`: it uses the namespace of the gRPC service, for example `...Tenants.Grpc.V1`, so that it can extend the partial service class. See [endpoints.md](endpoints.md#grpc).
 2. Make the request a `sealed record` named `Command` or `Query`.
 3. Make the handler a `sealed class` named `Handler`. Inject services with a primary constructor.
 4. Pass the `CancellationToken` to each async call.
@@ -24,7 +24,7 @@ No MediatR behavior runs FluentValidation validators. Do not add a `Validator` c
 
 ## Command
 
-<!-- code: FullstackTemplate.Server/Domain/Users/Features/UpdateUser/UpdateUser.cs -->
+<!-- code: Recall.Server/Domain/Users/Features/UpdateUser/UpdateUser.cs -->
 ```csharp
 public static class UpdateUser
 {
@@ -86,7 +86,7 @@ A command with no version skips step 6. A query makes steps 1 to 5. A caller wit
 
 The form that moves a visit shows the day and the status, so `Reschedule` applies a field of an edit form and takes the version:
 
-<!-- code: tests/FullstackTemplate.UnitTests/Docs/CheckOrderExampleTests.cs -->
+<!-- code: tests/Recall.UnitTests/Docs/CheckOrderExampleTests.cs -->
 ```csharp
 public Visit Reschedule(VisitForReschedule forReschedule)
 {
@@ -103,10 +103,10 @@ public Visit Reschedule(VisitForReschedule forReschedule)
 }
 ```
 
-`tests/FullstackTemplate.UnitTests/Docs/CheckOrderExampleTests.cs` has this example. Its tests fail when a step moves. `UserCheckOrderTests` checks the steps 2, 3, 4, 6, and 9 on the user endpoints. `AgentCheckOrderTests` checks step 3 on `AddAgentPermission` and on the first grant of `AddAgent`. `AddAgentCommandTests` checks that the 403 for a machine agent comes before the tenant lock and the tenant query of `AddAgent`. If a feature must use a different order, write the order and the reason in its spec, and add a test that proves the order.
+`tests/Recall.UnitTests/Docs/CheckOrderExampleTests.cs` has this example. Its tests fail when a step moves. `UserCheckOrderTests` checks the steps 2, 3, 4, 6, and 9 on the user endpoints. `AgentCheckOrderTests` checks step 3 on `AddAgentPermission` and on the first grant of `AddAgent`. `AddAgentCommandTests` checks that the 403 for a machine agent comes before the tenant lock and the tenant query of `AddAgent`. If a feature must use a different order, write the order and the reason in its spec, and add a test that proves the order.
 
 <!-- example:start -->
-The workshop commands are a real sample of the steps 4 to 9. `UpdateWorkshop`, `ScheduleWorkshop`, `CancelWorkshop`, and `CompleteWorkshop` load the workshop (step 4), then call `Workshop.GuardChangeBy` (step 5). `ScheduleWorkshop` then loads the venue for its case. `Workshop.Update` checks the version, the status, and the no-op, then runs the validation (steps 6 to 9). `WorkshopScheduling.Decide` checks the version, the status, and the no-op of a scheduled workshop, then the rules of the start. Its `StaleVersion` refusal takes its field and its message from `StaleVersionException`. `WorkshopCheckOrderTests` sends one request that breaks two steps and asserts the response of the first: [WorkshopCheckOrderTests.cs](../../tests/FullstackTemplate.FunctionalTests/Examples/Workshops/WorkshopCheckOrderTests.cs). `WorkshopSchedulingTests` checks the order of `Decide`: [WorkshopSchedulingTests.cs](../../tests/FullstackTemplate.UnitTests/Examples/Workshops/WorkshopSchedulingTests.cs).
+The workshop commands are a real sample of the steps 4 to 9. `UpdateWorkshop`, `ScheduleWorkshop`, `CancelWorkshop`, and `CompleteWorkshop` load the workshop (step 4), then call `Workshop.GuardChangeBy` (step 5). `ScheduleWorkshop` then loads the venue for its case. `Workshop.Update` checks the version, the status, and the no-op, then runs the validation (steps 6 to 9). `WorkshopScheduling.Decide` checks the version, the status, and the no-op of a scheduled workshop, then the rules of the start. Its `StaleVersion` refusal takes its field and its message from `StaleVersionException`. `WorkshopCheckOrderTests` sends one request that breaks two steps and asserts the response of the first: [WorkshopCheckOrderTests.cs](../../tests/Recall.FunctionalTests/Examples/Workshops/WorkshopCheckOrderTests.cs). `WorkshopSchedulingTests` checks the order of `Decide`: [WorkshopSchedulingTests.cs](../../tests/Recall.UnitTests/Examples/Workshops/WorkshopSchedulingTests.cs).
 <!-- example:end -->
 
 ## One rule set for two callers
@@ -121,7 +121,7 @@ The shape has five parts:
 4. **A proof type** that only `Decide` makes. Its constructor is `internal`, and in the Server only `Decide` calls it. For a private constructor, put `Decide` in the proof type. The write method takes the proof, so the write cannot run without the check.
 5. **Two callers, one decision.** The list calls `Decide` for each candidate and keeps the offered ones. The command calls `Decide` one time and throws the refusal.
 
-<!-- code: tests/FullstackTemplate.UnitTests/Docs/DecisionShapeExampleTests.cs -->
+<!-- code: tests/Recall.UnitTests/Docs/DecisionShapeExampleTests.cs -->
 ```csharp
 public sealed record Room(string Id, int DaysAhead);
 
@@ -218,7 +218,7 @@ The case holds the facts at the time of the load. Two requests can pass `Free` a
 
 A rule that reads only its own entity stays a guard in the entity. See [domain-entities.md](domain-entities.md#guards). Do not add an `IRule` interface, a rule registry, or DI for the rules. One list in one file shows the order.
 
-Each use of the shape has four tests. `tests/FullstackTemplate.UnitTests/Docs/DecisionShapeExampleTests.cs` has this example and its tests:
+Each use of the shape has four tests. `tests/Recall.UnitTests/Docs/DecisionShapeExampleTests.cs` has this example and its tests:
 
 - A table-driven unit test for each rule. Each row gives the case, the kind of refusal, the field, and the message.
 - An order test. A case that breaks each rule gets the refusal of the first rule. Make the case pass the rules one at a time, and the refusal of the next rule comes back.
@@ -226,7 +226,7 @@ Each use of the shape has four tests. `tests/FullstackTemplate.UnitTests/Docs/De
 - A test that each kind of the refusal type and of the decision type is nested in its base record. C# cannot close a record hierarchy, so this test does it.
 
 <!-- example:start -->
-The workshop example uses the shape for a rule that reads two aggregates, the workshop and the time zone of its venue. It has one caller, the command that schedules a workshop. The rules and the proof type are in [WorkshopScheduling.cs](../../FullstackTemplate.Server/Examples/Workshops/WorkshopScheduling.cs), and the handler switches on the decision in [ScheduleWorkshop.cs](../../FullstackTemplate.Server/Examples/Workshops/Features/ScheduleWorkshop/ScheduleWorkshop.cs).
+The workshop example uses the shape for a rule that reads two aggregates, the workshop and the time zone of its venue. It has one caller, the command that schedules a workshop. The rules and the proof type are in [WorkshopScheduling.cs](../../Recall.Server/Examples/Workshops/WorkshopScheduling.cs), and the handler switches on the decision in [ScheduleWorkshop.cs](../../Recall.Server/Examples/Workshops/Features/ScheduleWorkshop/ScheduleWorkshop.cs).
 <!-- example:end -->
 
 ## List query
@@ -237,7 +237,7 @@ Each DTO field must translate to SQL. If a DTO field comes from a computed entit
 
 `ApplyFilters` and `ApplySortOrder` wrap QueryKit. When the input is not valid, they throw a `QueryInputException` with the name of the parameter, which gives 400.
 
-<!-- code: FullstackTemplate.Server/Domain/Users/Features/GetUserList/GetUserList.cs -->
+<!-- code: Recall.Server/Domain/Users/Features/GetUserList/GetUserList.cs -->
 ```csharp
 public static class GetUserList
 {
@@ -286,7 +286,7 @@ A list has no `search` parameter. A caller finds text through `filters`, with th
 QueryKit has no escape in a quoted value. Text with a `"` goes in a raw string with one space of padding on each side, for example `title @=* """ say "hi" """`. The delimiter is one quote longer than the longest run of quotes in the text, and at least three quotes long. QueryKit removes the padding, so a quote at the start or the end of the text stays in the text. Give the MCP description of `filters` this rule, as the lists that `scripts/new-feature.cs` writes do. `QueryKitText.Quote` in the shared test helpers and `quoteText` in `frontend/src/lib/querykit-text.ts` write it.
 
 <!-- example:start -->
-The workshop list test finds titles with `%`, `_`, `\`, and quotes through a filter: [`WorkshopListQueryTests`](../../tests/FullstackTemplate.IntegrationTests/Examples/Workshops/WorkshopListQueryTests.cs).
+The workshop list test finds titles with `%`, `_`, `\`, and quotes through a filter: [`WorkshopListQueryTests`](../../tests/Recall.IntegrationTests/Examples/Workshops/WorkshopListQueryTests.cs).
 <!-- example:end -->
 
 A raw `EF.Functions.ILike` outside QueryKit, such as a name check that ignores case or a prefix match, uses `LikePattern`: `LikePattern.Exactly` for a name check, `LikePattern.StartingWith` for a prefix, and `LikePattern.Containing` for a contains, each with `LikePattern.EscapeCharacter` as the third argument. `LikePattern` escapes `%`, `_`, and `\`. A name check gives a clear error, but only a unique index on the name stops two requests that save the same name at one time.
@@ -297,7 +297,7 @@ A raw `EF.Functions.ILike` outside QueryKit, such as a name check that ignores c
 
 A handler checks the permission of the caller with one call to `IPermissionGuard`. The call is the first check of `Handle`, so a reader of the handler sees the rule. There is no marker interface and no pipeline behavior for access.
 
-<!-- code: FullstackTemplate.Server/Domain/Tenants/Features/UpdateTenant/UpdateTenant.cs -->
+<!-- code: Recall.Server/Domain/Tenants/Features/UpdateTenant/UpdateTenant.cs -->
 ```csharp
 public sealed class Handler(AppDbContext dbContext, IPermissionGuard permissionGuard) : IRequestHandler<Command, TenantDto>
 {
@@ -340,7 +340,7 @@ Obey these rules:
 5. Do not add a permission check to an adapter. The HTTP endpoint, the gRPC method, and the MCP tool send the same request, so the check in the handler applies to each of them.
 
 <!-- example:start -->
-`AddVenue` checks `manage_workshops` first: [`AddVenue.Handler.Handle`](../../FullstackTemplate.Server/Examples/Venues/Features/AddVenue/AddVenue.cs).
+`AddVenue` checks `manage_workshops` first: [`AddVenue.Handler.Handle`](../../Recall.Server/Examples/Venues/Features/AddVenue/AddVenue.cs).
 <!-- example:end -->
 
 For the permissions, the callers that pass, and how to add a permission, see [backend.md](../backend.md#permissions).

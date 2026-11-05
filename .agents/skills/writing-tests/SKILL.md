@@ -15,9 +15,9 @@ Put a test in the lowest suite that can prove the behavior. A lower suite is fas
 | One component in a real browser | Frontend component | `pnpm test` | `frontend/src/**/*.test.tsx` |
 | A page of the SPA: what the user sees and what the page sends to the BFF | Functional | `pnpm test:e2e` | `frontend/tests/features/**/*.spec.ts` |
 | Login, logout, the session cookie, a token refresh, DPoP, PAR, or the BFF against a real IdP | Stack | `pnpm test:e2e:stack` | `frontend/e2e/*.spec.ts` |
-| Who can call a Server endpoint: the 403 for a caller with no permission, and the 404 for a record of another tenant | .NET functional sweep, no new test | `dotnet test --solution FullstackTemplate.slnx` | `tests/FullstackTemplate.FunctionalTests/FunctionalTests/Access/EndpointAccessSweepTests.cs`. See "Access of a Server endpoint" below. |
-| A domain rule, a handler, or a Server endpoint | .NET | `dotnet test --solution FullstackTemplate.slnx` | `tests/`. See `docs/backend.md`, section "Tests". For test data, use the `test-entity-graph` skill. |
-| Two requests that race on the same rows | .NET integration test with `PauseAtQuery` | `dotnet test --solution FullstackTemplate.slnx` | `tests/FullstackTemplate.IntegrationTests/`. See `docs/backend.md#race-tests`. |
+| Who can call a Server endpoint: the 403 for a caller with no permission, and the 404 for a record of another tenant | .NET functional sweep, no new test | `dotnet test --solution Recall.slnx` | `tests/Recall.FunctionalTests/FunctionalTests/Access/EndpointAccessSweepTests.cs`. See "Access of a Server endpoint" below. |
+| A domain rule, a handler, or a Server endpoint | .NET | `dotnet test --solution Recall.slnx` | `tests/`. See `docs/backend.md`, section "Tests". For test data, use the `test-entity-graph` skill. |
+| Two requests that race on the same rows | .NET integration test with `PauseAtQuery` | `dotnet test --solution Recall.slnx` | `tests/Recall.IntegrationTests/`. See `docs/backend.md#race-tests`. |
 
 Run all frontend commands in `frontend/`.
 

@@ -1,13 +1,13 @@
 # Backend
 
-`FullstackTemplate.Server` is the backend API. It uses .NET 10, CQRS with MediatR, and EF Core on PostgreSQL. The rules for each pattern are in `docs/backend/`.
+`Recall.Server` is the backend API. It uses .NET 10, CQRS with MediatR, and EF Core on PostgreSQL. The rules for each pattern are in `docs/backend/`.
 
 ## Domain structure
 
 Each domain entity has this folder structure:
 
 ```
-FullstackTemplate.Server/Domain/
+Recall.Server/Domain/
 └── [EntityName]s/
     ├── [EntityName].cs              # Domain entity
     ├── Dtos/                        # DTOs (read/write)
@@ -57,7 +57,7 @@ For another change, do these steps in sequence. Each step has a doc in `docs/bac
 
 ## OpenAPI document
 
-`Microsoft.AspNetCore.OpenApi` makes the OpenAPI document. Swagger UI shows it at `/swagger`. The Server maps `/swagger` and `/openapi/v1.json` only in Development. A Debug build also writes the document to `openapi/FullstackTemplate.Server.json`. Other configurations do not write it, because the Server csproj sets `OpenApiGenerateDocuments` to false for them. The frontend generates its API contract from this file (see [frontend.md](frontend.md#api-contract)).
+`Microsoft.AspNetCore.OpenApi` makes the OpenAPI document. Swagger UI shows it at `/swagger`. The Server maps `/swagger` and `/openapi/v1.json` only in Development. A Debug build also writes the document to `openapi/Recall.Server.json`. Other configurations do not write it, because the Server csproj sets `OpenApiGenerateDocuments` to false for them. The frontend generates its API contract from this file (see [frontend.md](frontend.md#api-contract)).
 
 The build starts the host without an auth provider or a database. `Resources/Entrypoints/Http/OpenApi/OpenApiBuildTime.cs` gives the host placeholder auth values for this run. This run does no OIDC discovery, so the committed file has no OAuth2 security scheme, but the runtime document at `/openapi/v1.json` has it. If startup code needs an external system, skip it when `OpenApiBuildTime.IsActive` is true.
 
@@ -105,7 +105,7 @@ To add version 2:
 
 1. Add `V2 = new(2, 0)` to `ApiVersions` in `Resources/Entrypoints/Http/ApiVersions.cs`, and add `ApiVersions.V2` to `SupportedVersions`.
 2. Add a v2 endpoint class with `.MapToApiVersion(ApiVersions.V2)` in the feature folder. Keep the v1 endpoint for the clients that use v1. An endpoint that does not change can serve both versions with two `MapToApiVersion` calls.
-3. Build the Server. The Debug build writes the v2 document to `openapi/FullstackTemplate.Server_v2.json`.
+3. Build the Server. The Debug build writes the v2 document to `openapi/Recall.Server_v2.json`.
 4. Run `pnpm generate:api`. `frontend/kubb.config.ts` reads each document in `openapi/`, and writes the v2 contract to `src/api/generated-v2`. `frontend/src/lib/api-client.ts` connects the client of each generated folder to `apiClient`.
 
 To remove a version, remove it from `SupportedVersions`. Then delete its document in `openapi/` and its `src/api/generated-vN` folder. The build does not delete a document. If you keep the document, the `api-contract` job of the `CI` workflow fails.
@@ -120,8 +120,8 @@ All error responses use RFC 7807 problem details. The text of each message follo
 | `NotFoundException` | 404 |
 | `ForbiddenAccessException` | 403. `detail` has the message |
 | `ConflictException` from a duplicate check in a handler, and `ConstraintConflictException`, which `AppDbContext` throws when a unique index (Postgres `23505`) or an exclusion constraint (`23P01`) stops a save | 409 with the default `type`. `title` is "The request conflicts with a record that exists." `detail` has the message, and `errors` has it under the named field. A `ConstraintConflictException` has the field and the message of its constraint. It does not show the constraint or the values |
-| `StaleVersionException`, which `GuardVersion` throws for an old version in the request, and `AppDbContext` throws when another save changed the row after the load, or when a unique index with `ForStaleVersion` stops a save | 409 with `type` `urn:fullstacktemplate:problem:stale-version`. `title` is "The record changed after you loaded it." `detail` has the message, and `errors` has it under `version` |
-| `ConcurrentChangeException`, which `RaceRetryBehavior` throws when a command with no version lost the race on each run | 409 with `type` `urn:fullstacktemplate:problem:concurrent-change`. `title` is "Other users changed the record at the same time." `detail` has the message, and `errors` is empty |
+| `StaleVersionException`, which `GuardVersion` throws for an old version in the request, and `AppDbContext` throws when another save changed the row after the load, or when a unique index with `ForStaleVersion` stops a save | 409 with `type` `urn:recall:problem:stale-version`. `title` is "The record changed after you loaded it." `detail` has the message, and `errors` has it under `version` |
+| `ConcurrentChangeException`, which `RaceRetryBehavior` throws when a command with no version lost the race on each run | 409 with `type` `urn:recall:problem:concurrent-change`. `title` is "Other users changed the record at the same time." `detail` has the message, and `errors` is empty |
 | `RequestValidationException`, from a DataAnnotations rule in `RequestValidationBehavior` | 400. `errors` has the messages for each camelCase field |
 | `QueryInputException`, for a query value that the Server cannot apply: a `filters` or `sortOrder` value that QueryKit cannot apply, a value with a character that Postgres cannot take, or a malformed `cursor` | 400. `errors` has the message under the name of the parameter. For a `filters` or `sortOrder` value, `QueryKitInputExtensions` writes a message that tells the caller what to change: the character where the parse failed, the field that the list does not have with the fields that it has, the field that a value does not fit, the limit that the filter broke, the sounds-like operators that the list cannot run, the in operators with one value in place of a list, or a comparison with null that only `==` and `!=` can make. `QueryKitInputExtensions` refuses two forms of null that QueryKit parses and the query cannot run: a case-insensitive operator with null, such as `==* null`, and `== null` or `!= null` on a field that holds a list. A filter or a sort uses only the fields of the list. QueryKit reads a member of a field too, such as `startsAt.ticks`, and EF cannot translate most of them, so `QueryKitInputExtensions` refuses a part of a field. The message never holds the value of a comparison. The feature slice span gets the type of the exception, with the place of a parse fault or the limit that the filter broke. The span does not get the text of the filter or a field name, because a caller can type any text as a field name |
 | Any other exception | 500 |
@@ -130,7 +130,7 @@ If a request value does not bind, or a DataAnnotations rule fails, the Server re
 
 A 422 comes from a domain rule or a FluentValidation rule. Its body also has the `ValidationProblemDetails` shape. Declare `.ProducesValidationProblem(StatusCodes.Status422UnprocessableEntity)` on each write endpoint (POST, PUT, PATCH, and DELETE). Also declare it when the endpoint has no request body, because a domain rule can fail in any write.
 
-A 409 comes from a duplicate unique value, an overlap that an exclusion constraint stops, or a record that changed after the caller loaded it. Its body also has the `ValidationProblemDetails` shape. The `type` tells the cases apart. The type `urn:fullstacktemplate:problem:stale-version` (`DomainProblemDetails.StaleVersionType`) means that the caller must load the record again and repeat the change. The type `urn:fullstacktemplate:problem:concurrent-change` (`DomainProblemDetails.ConcurrentChangeType`) means that the caller can send the same request again. Any other type means that the caller must change the value of the field in `errors`.
+A 409 comes from a duplicate unique value, an overlap that an exclusion constraint stops, or a record that changed after the caller loaded it. Its body also has the `ValidationProblemDetails` shape. The `type` tells the cases apart. The type `urn:recall:problem:stale-version` (`DomainProblemDetails.StaleVersionType`) means that the caller must load the record again and repeat the change. The type `urn:recall:problem:concurrent-change` (`DomainProblemDetails.ConcurrentChangeType`) means that the caller can send the same request again. Any other type means that the caller must change the value of the field in `errors`.
 
 Each entrypoint shows the three kinds differently:
 
@@ -164,7 +164,7 @@ A command, or a query that reads data that needs a permission, checks a permissi
 | `read_agents` | `GetAgentList`, `GetAgent`. `AddAgentPermission` and `RemoveAgentPermission`, because they return the agent. |
 
 <!-- example:start -->
-The example permission `manage_workshops` is required by `AddVenue`, `AddWorkshop`, `UpdateWorkshop`, `ScheduleWorkshop`, `CancelWorkshop`, and `CompleteWorkshop`. Its migration gives it to the admins that exist: [20261029095936_AddWorkshopsExample.cs](../FullstackTemplate.Server/Databases/Migrations/Examples/20261029095936_AddWorkshopsExample.cs). After the load, the last four commands also check the row: the caller must be the organizer of the workshop, the member who added it, or have `manage_tenant`. A delegated agent is not a member, so it is never the organizer. It changes a workshop only with `manage_tenant`. Thus the example adds no second permission.
+The example permission `manage_workshops` is required by `AddVenue`, `AddWorkshop`, `UpdateWorkshop`, `ScheduleWorkshop`, `CancelWorkshop`, and `CompleteWorkshop`. Its migration gives it to the admins that exist: [20261029095936_AddWorkshopsExample.cs](../Recall.Server/Databases/Migrations/Examples/20261029095936_AddWorkshopsExample.cs). After the load, the last four commands also check the row: the caller must be the organizer of the workshop, the member who added it, or have `manage_tenant`. A delegated agent is not a member, so it is never the organizer. It changes a workshop only with `manage_tenant`. Thus the example adds no second permission.
 <!-- example:end -->
 
 The role of a user gives the default permissions. `UserRole.GetDefaultPermissions` gives each permission to `Admin` and no permission to `User`. `User.Create` and `UpdateRole` write the defaults as rows. After that, `AddUserPermission` and `RemoveUserPermission` change the rows, and the rows decide. The guard does not read the role.
@@ -229,8 +229,8 @@ Each command picks a version, a run again, or a lock for a race with another req
 ### Migrations
 
 ```bash
-dotnet ef migrations add MyMigration --project FullstackTemplate.Server --startup-project FullstackTemplate.Server --output-dir Databases/Migrations
-dotnet ef database update --project FullstackTemplate.Server --startup-project FullstackTemplate.Server
+dotnet ef migrations add MyMigration --project Recall.Server --startup-project Recall.Server --output-dir Databases/Migrations
+dotnet ef database update --project Recall.Server --startup-project Recall.Server
 ```
 
 The server applies migrations at startup, with a Postgres advisory lock.
@@ -243,8 +243,8 @@ The Server keeps the bytes of files in one S3 bucket. The database keeps the met
 
 | Where | Storage |
 |-------|---------|
-| `dotnet aspire start` | The `storage` resource of the AppHost. It is Floci, an S3 emulator, on port 24780. When Floci is ready, `FullstackTemplate.AppHost/Storage/seed/01-create-bucket.sh` makes the bucket `files`. The AppHost gives the Server `AWS_ENDPOINT_URL`, the region, test credentials, and `ObjectStorage__BucketName` |
-| The integration and functional tests | `FlociTestStorage` in `tests/FullstackTemplate.SharedTestHelpers/Utilities/` starts a Floci container with the same image, and makes a new bucket for each run |
+| `dotnet aspire start` | The `storage` resource of the AppHost. It is Floci, an S3 emulator, on port 24780. When Floci is ready, `Recall.AppHost/Storage/seed/01-create-bucket.sh` makes the bucket `files`. The AppHost gives the Server `AWS_ENDPOINT_URL`, the region, test credentials, and `ObjectStorage__BucketName` |
+| The integration and functional tests | `FlociTestStorage` in `tests/Recall.SharedTestHelpers/Utilities/` starts a Floci container with the same image, and makes a new bucket for each run |
 | Production | S3 of AWS, or a service with the S3 API. A publish of the AppHost has no `storage` resource. Set `ObjectStorage__BucketName`: the Server does not start without it. With no `AWS_ENDPOINT_URL`, the SDK reads the region and the credentials from its default chain. Give the credentials `s3:PutObject`, `s3:GetObject`, and `s3:DeleteObject` on the objects, and `s3:ListBucket` on the bucket for the delete of a tenant. Block all public access to the bucket |
 
 Floci checks the signature of a signed request (`FLOCI_AUTH_VALIDATE_SIGNATURES`). It does not refuse a request with no signature, so a local bucket is open to each caller that can get to its port. S3 of AWS refuses such a request when the bucket blocks public access.
@@ -255,10 +255,10 @@ To keep the files of an entity in storage, follow [attachments.md](backend/attac
 
 | Project | Scope |
 |---------|-------|
-| `tests/FullstackTemplate.UnitTests` | Domain logic and small units, with no database |
-| `tests/FullstackTemplate.IntegrationTests` | Feature handlers against a real PostgreSQL container |
-| `tests/FullstackTemplate.FunctionalTests` | HTTP, gRPC, and MCP endpoints against one shared app and database |
-| `tests/FullstackTemplate.SharedTestHelpers` | Fakes and builders for all test projects |
+| `tests/Recall.UnitTests` | Domain logic and small units, with no database |
+| `tests/Recall.IntegrationTests` | Feature handlers against a real PostgreSQL container |
+| `tests/Recall.FunctionalTests` | HTTP, gRPC, and MCP endpoints against one shared app and database |
+| `tests/Recall.SharedTestHelpers` | Fakes and builders for all test projects |
 
 The tests use [TUnit](https://tunit.dev) on Microsoft.Testing.Platform, with Shouldly for assertions. Write `[Test]` for each test, `[Arguments(...)]` for an inline case, and `[MethodDataSource(nameof(...))]` for cases from a method or property.
 
@@ -270,7 +270,7 @@ A test never takes today from the UTC date. Take it from the zone of the place i
 
 TUnit runs all tests in parallel, also the tests of one class. The integration and functional tests share one fixture for each assembly, which `AssemblyHooks.cs` starts and stops. Each test must create its own data and must not depend on rows from other tests. If a test reads state of the whole process, such as all exported spans, put `[NotInParallel]` on its class.
 
-A list has an integration test that filters its text field with `@=*` for `50%`, `a_b`, `c\d`, and text with a quote at an end, and finds only the row with that text. Build each filter value with `QueryKitText.Quote`. A raw `ILike` with `LikePattern` has the same test. See `tests/FullstackTemplate.IntegrationTests/Databases/LikePatternTests.cs`.
+A list has an integration test that filters its text field with `@=*` for `50%`, `a_b`, `c\d`, and text with a quote at an end, and finds only the row with that text. Build each filter value with `QueryKitText.Quote`. A raw `ILike` with `LikePattern` has the same test. See `tests/Recall.IntegrationTests/Databases/LikePatternTests.cs`.
 
 To run the tests in a web UI, open the **Labcoat UI** link of the `tests` resource in the Aspire dashboard. [Labcoat](https://github.com/eriklieben/labcoat) builds and runs the test projects, and shows each failure with its source.
 
@@ -287,7 +287,7 @@ A race test puts two requests in one fixed order. Write a race test for each of 
 - A rule that counts or checks other rows, such as open appointments, stock, or overlaps.
 - A unique value that two requests can add at the same time.
 
-Use `PauseAtQuery` from `tests/FullstackTemplate.SharedTestHelpers/Utilities/`. It holds the first command whose SQL has a query tag, the name that `TagWithOperationCallSite` gives the query. Find the tag in the `TagWithOperationCallSite` call of the handler. As a result, the test names a step of the handler, not a row.
+Use `PauseAtQuery` from `tests/Recall.SharedTestHelpers/Utilities/`. It holds the first command whose SQL has a query tag, the name that `TagWithOperationCallSite` gives the query. Find the tag in the `TagWithOperationCallSite` call of the handler. As a result, the test names a step of the handler, not a row.
 
 1. Pause the request under test after the tag of the load that the rival must follow. Use `PauseAtQuery.After(tag)`. `PauseAtQuery.Before(tag)` holds the command before it runs.
 2. Send the request under test through `pause.BuildServices()`, from `PauseAtQueryServices.cs` of the integration tests. Send the rival through a usual `TestingServiceScope`. Set the caller on each scope with `SetUserWithDefaults`.
@@ -315,4 +315,4 @@ Do not use `Task.WhenAll` alone for a race test. The order of two parallel reque
 
 Each wait of `PauseAtQuery` fails after 30 seconds with a message that names the tag. As a result, a test that does not get to the step fails, and the run does not hang.
 
-Make the fix fail one time on purpose. Remove the run again, the lock, or the version check, and make sure that the race test fails. Then put the fix back. See `ConcurrencyTests.cs` and `RunAgainWhenRacedTests.cs` in `tests/FullstackTemplate.IntegrationTests/Databases/` for examples.
+Make the fix fail one time on purpose. Remove the run again, the lock, or the version check, and make sure that the race test fails. Then put the fix back. See `ConcurrencyTests.cs` and `RunAgainWhenRacedTests.cs` in `tests/Recall.IntegrationTests/Databases/` for examples.

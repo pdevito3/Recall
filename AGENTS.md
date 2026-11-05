@@ -24,9 +24,9 @@ This is a .NET Aspire application with a React frontend. It uses the Backend-For
 
 | Project | Purpose |
 |---------|---------|
-| `FullstackTemplate.AppHost` | Aspire orchestration. Defines all resources in `AppHost.cs` |
-| `FullstackTemplate.Server` | Backend API (.NET 10, JWT auth, CQRS, multi-tenant) |
-| `FullstackTemplate.Bff` | BFF proxy (YARP and OIDC auth). Serves the SPA in production |
+| `Recall.AppHost` | Aspire orchestration. Defines all resources in `AppHost.cs` |
+| `Recall.Server` | Backend API (.NET 10, JWT auth, CQRS, multi-tenant) |
+| `Recall.Bff` | BFF proxy (YARP and OIDC auth). Serves the SPA in production |
 | `frontend` | React SPA (React 19, TanStack Router, TanStack Query, Tailwind v4) |
 | `tests/` | Unit, integration, and functional tests |
 
@@ -60,7 +60,7 @@ To add a Server feature, use the `backend-feature` skill. To add the SPA pages o
 The Aspire CLI is a local tool in `dotnet-tools.json`. Run `dotnet tool restore` once, then use `dotnet aspire`.
 
 ```bash
-dotnet aspire start --isolated --non-interactive --apphost FullstackTemplate.AppHost
+dotnet aspire start --isolated --non-interactive --apphost Recall.AppHost
 ```
 
 This command starts the Aspire dashboard, the server, the BFF, the Vite dev server, and the auth provider in the background. `--isolated` gives the stack random ports and its own empty database, so that each worktree can run a stack at the same time. The `aspire-cli` skill gives the commands to wait for, inspect, restart, and stop the stack.
@@ -74,8 +74,8 @@ This command starts the Aspire dashboard, the server, the BFF, the Vite dev serv
 
 ```bash
 dotnet tool restore
-dotnet build FullstackTemplate.slnx
-dotnet test --solution FullstackTemplate.slnx
+dotnet build Recall.slnx
+dotnet test --solution Recall.slnx
 
 cd frontend
 pnpm install
@@ -95,7 +95,7 @@ pnpm test:e2e
 - Use `docker compose` with a space. Do not use `docker-compose`.
 - Do not install the Aspire workload. It is obsolete.
 - Do not use persistent containers early in development. They keep state between restarts.
-- Do not edit generated files, such as `frontend/src/routeTree.gen.ts`, `frontend/src/api/generated*/`, `FullstackTemplate.Server/openapi/`, and the EF migration snapshots.
+- Do not edit generated files, such as `frontend/src/routeTree.gen.ts`, `frontend/src/api/generated*/`, `Recall.Server/openapi/`, and the EF migration snapshots.
 - If you change the Server API, use the `api-contract` skill.
 
 ## Aspire

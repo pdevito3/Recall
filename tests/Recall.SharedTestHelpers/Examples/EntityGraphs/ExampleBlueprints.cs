@@ -1,0 +1,61 @@
+namespace Recall.SharedTestHelpers.Examples.EntityGraphs;
+
+using Bogus;
+using Recall.Server.Domain.Tenants;
+using Recall.Server.Examples.Venues;
+using Recall.Server.Examples.Venues.Models;
+using Recall.Server.Examples.Workshops;
+using Recall.Server.Examples.Workshops.Models;
+using Recall.SharedTestHelpers.EntityGraphs;
+using Recall.SharedTestHelpers.EntityGraphs.Core;
+using Recall.SharedTestHelpers.Fakes.Attachments;
+using Fakes;
+
+[GraphGraft]
+public static class ExampleBlueprints
+{
+    private static readonly Faker Faker = new();
+
+    public static readonly ChildInputBlueprint<TestSeed, Tenant, VenueInput, Venue> Venue = Blueprint
+        .ChildFromInput<TestSeed, Tenant, VenueInput, Venue>(
+            () => new(),
+            (tenant, input, _) => Server.Examples.Venues.Venue.Create(new VenueForCreation
+            {
+                Id = input.Id,
+                TenantId = tenant.Id,
+                Name = input.Name!,
+                TimeZone = input.TimeZone!,
+            }))
+        .Derive(i => i.Name, (_, _) => VenueRules.Name(Faker))
+        .Derive(i => i.TimeZone, (_, _) => VenueRules.TimeZone(Faker));
+
+    public static readonly ChildInputBlueprint<TestSeed, Venue, WorkshopInput, Workshop> Workshop = Blueprint
+        .ChildFromInput<TestSeed, Venue, WorkshopInput, Workshop>(
+            () => new(),
+            (venue, input, _) => Server.Examples.Workshops.Workshop.Create(venue, new WorkshopForCreation
+            {
+                Id = input.Id,
+                Title = input.Title!,
+                StartsAt = input.StartsAt!.Value,
+                Capacity = input.Capacity!.Value,
+                OrganizerId = input.OrganizerId,
+            }))
+        .Derive(i => i.Title, (_, _) => WorkshopRules.Title(Faker))
+        .Derive(i => i.StartsAt, (_, ctx) => WorkshopRules.StartsAt(ctx.Parent.TimeZone, ctx.Now))
+        .Derive(i => i.Capacity, (_, _) => WorkshopRules.Capacity(Faker));
+
+    public static readonly ChildInputBlueprint<TestSeed, Workshop, WorkshopAttachmentInput, WorkshopAttachment> WorkshopAttachment = Blueprint
+        .ChildFromInput<TestSeed, Workshop, WorkshopAttachmentInput, WorkshopAttachment>(
+            () => new(),
+            (workshop, input, _) => Server.Examples.Workshops.WorkshopAttachment.Create(workshop, new WorkshopAttachmentForCreation
+            {
+                Id = input.Id,
+                File = SampleFiles.Upload(input.FileName!, input.Head!, input.ClaimedMediaType, input.SizeBytes!.Value),
+                UploadedAt = input.UploadedAt!.Value,
+            }))
+        .Derive(i => i.FileName, (_, _) => WorkshopAttachmentRules.FileName(Faker))
+        .Derive(i => i.ClaimedMediaType, (_, _) => WorkshopAttachmentRules.ClaimedMediaType())
+        .Derive(i => i.Head, (_, _) => WorkshopAttachmentRules.Head())
+        .Derive(i => i.SizeBytes, (_, _) => WorkshopAttachmentRules.SizeBytes(Faker))
+        .Derive(i => i.UploadedAt, (_, ctx) => ctx.Now);
+}

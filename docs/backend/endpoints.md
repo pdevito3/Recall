@@ -41,14 +41,14 @@ The shared plumbing is in `Resources/Entrypoints/`: the registration, the proble
 1. Send a MediatR request. Do not inject `AppDbContext` and do not use EF Core. `EntrypointBoundaryTests` fails if an adapter uses the database.
 2. Do not put transport types in the core. A request, a handler, an entity, a DTO, or a service must not use `Microsoft.AspNetCore.Http`, `Microsoft.AspNetCore.Mvc`, `Microsoft.AspNetCore.Routing`, gRPC, Protobuf, or MCP. `EntrypointBoundaryTests` fails if it does. When the core needs a value of the request, add an interface in the core and implement it in `Resources/Entrypoints/`. For example, `CurrentUserService` reads the caller from `ICurrentPrincipalAccessor`, and `HttpContextPrincipalAccessor` gives the principal of the HTTP request.
 
-`BoundaryScanner` in the unit tests applies these rules. It reads the compiled code, so it also sees a method body, an attribute argument, and a generic constraint. The tests also run it on `tests/FullstackTemplate.ArchitectureFixtures`, which has one violation for each rule. If the scan stops finding a violation, that test fails. `HostExtensions` wires the host, the same as `Program`, so the scan does not check it. Add a type to this list or to the allowed transport types only with a reason in `EntrypointBoundaryTests`.
+`BoundaryScanner` in the unit tests applies these rules. It reads the compiled code, so it also sees a method body, an attribute argument, and a generic constraint. The tests also run it on `tests/Recall.ArchitectureFixtures`, which has one violation for each rule. If the scan stops finding a violation, that test fails. `HostExtensions` wires the host, the same as `Program`, so the scan does not check it. Add a type to this list or to the allowed transport types only with a reason in `EntrypointBoundaryTests`.
 3. Do not catch exceptions. The shared plumbing of each transport maps the domain exceptions: problem details for HTTP, a status code for gRPC, and a tool error for MCP. See [backend.md](../backend.md#error-responses).
 
 ## HTTP
 
 An HTTP endpoint is a minimal API. The example is `Domain/Users/Features/AddUser/AddUser.Http.cs`.
 
-1. Add a `public sealed class [FeatureName]Endpoint : IEndpoint` in `[FeatureName].Http.cs`. Use the namespace of the feature, for example `FullstackTemplate.Server.Domain.Users.Features`.
+1. Add a `public sealed class [FeatureName]Endpoint : IEndpoint` in `[FeatureName].Http.cs`. Use the namespace of the feature, for example `Recall.Server.Domain.Users.Features`.
 2. `EndpointDiscovery` finds each `IEndpoint` with a reflection scan at startup. It calls `Map` with the group `api/v{version:apiVersion}`, so the route in `Map` has no version, for example `/users/{id}`. Do not register the endpoint by hand.
 3. Declare the version with `.MapToApiVersion(ApiVersions.V1)`. `ApiVersions` has one definition of each version. Do not write `new ApiVersion(1, 0)` in an endpoint.
 4. Give each endpoint `.RequireAuthorization()`, or `.AllowAnonymous()` when the endpoint is public.
@@ -64,7 +64,7 @@ An HTTP endpoint is a minimal API. The example is `Domain/Users/Features/AddUser
 
 ### Example
 
-<!-- code: FullstackTemplate.Server/Domain/Users/Features/GetUser/GetUser.Http.cs -->
+<!-- code: Recall.Server/Domain/Users/Features/GetUser/GetUser.Http.cs -->
 ```csharp
 public sealed class GetUserEndpoint : IEndpoint
 {
@@ -116,7 +116,7 @@ Add a new version when a change breaks callers: a removed or renamed DTO propert
 
 The gRPC service of a domain is a partial class. The example is `Domain/Tenants/Grpc/v1/`.
 
-1. Put the contract in `Domain/[EntityName]s/Grpc/v{n}/[entityname]s.proto`. Put the version in the package and in the C# namespace: `package fullstacktemplate.tenants.v1;` and `option csharp_namespace = "FullstackTemplate.Server.Domain.Tenants.Grpc.V1";`. The csproj compiles each `Domain/**/Grpc/v*/*.proto` with `GrpcServices="Server"`, so the Server has only the service base. A caller generates its own client from the proto. The functional tests do this with `GrpcServices="Client"`.
+1. Put the contract in `Domain/[EntityName]s/Grpc/v{n}/[entityname]s.proto`. Put the version in the package and in the C# namespace: `package recall.tenants.v1;` and `option csharp_namespace = "Recall.Server.Domain.Tenants.Grpc.V1";`. The csproj compiles each `Domain/**/Grpc/v*/*.proto` with `GrpcServices="Server"`, so the Server has only the service base. A caller generates its own client from the proto. The functional tests do this with `GrpcServices="Client"`.
 2. Give each RPC its own request and response message, for example `GetTenantRequest` and `GetTenantResponse`. `buf lint` fails if an RPC returns a shared message.
 3. Put the root of the service in `Grpc/v{n}/[EntityName]sGrpcService.cs`: a `sealed partial` class with `[Authorize]` and a primary constructor that takes `IMediator`.
 4. Put each RPC in the folder of its feature, in `[FeatureName].Grpc.cs`. Use the namespace of the service, not the namespace of the feature, so that the file can extend the partial class. Add `using global::Grpc.Core;`, because the name `Grpc` binds to the namespace segment.
@@ -134,7 +134,7 @@ CI runs `buf lint` and `buf breaking` against main (see `buf.yaml`). A change th
 
 To make a breaking change, add v2 next to v1:
 
-1. Copy `Grpc/v1/` to `Grpc/v2/`. Set the package to `fullstacktemplate.tenants.v2` and the namespace to `...Tenants.Grpc.V2`.
+1. Copy `Grpc/v1/` to `Grpc/v2/`. Set the package to `recall.tenants.v2` and the namespace to `...Tenants.Grpc.V2`.
 2. Make the change in the v2 proto.
 3. Add `[FeatureName].Grpc.V2.cs` in the folder of each feature that v2 serves, with the namespace `...Tenants.Grpc.V2`.
 4. Map the v2 service next to v1 in `MapEntrypoints`. Both versions send the same MediatR requests.
@@ -179,7 +179,7 @@ The attribute repeats the permission of the handler. If the two differ, the resu
 `McpCallTelemetry.Filter` is the first call filter. It puts the tool name (`gen_ai.tool.name`), the caller tags, and the `error.type` of a failed call on the span of the HTTP request. A call that fails before its feature runs has no feature span, so this span is the only one that names the tool and the caller. The `error.type` is the `code` of a tool error, or the type of the exception that the SDK answers. The name of an unknown tool comes from the caller, so the tag has its first 128 characters, with the control characters removed. A call to an unknown tool gets the JSON-RPC error `-32602` of the SDK. The SDK logs this error at `Error`, but it is a client error, so `McpProtocolErrorLogFilter` drops the log.
 
 <!-- example:start -->
-In the workshop example, `list_workshops` is a read tool ([`GetWorkshopListTool`](../../FullstackTemplate.Server/Examples/Workshops/Features/GetWorkshopList/GetWorkshopList.Mcp.cs)), and `cancel_workshop` names the permission of its handler ([`CancelWorkshopTool`](../../FullstackTemplate.Server/Examples/Workshops/Features/CancelWorkshop/CancelWorkshop.Mcp.cs)).
+In the workshop example, `list_workshops` is a read tool ([`GetWorkshopListTool`](../../Recall.Server/Examples/Workshops/Features/GetWorkshopList/GetWorkshopList.Mcp.cs)), and `cancel_workshop` names the permission of its handler ([`CancelWorkshopTool`](../../Recall.Server/Examples/Workshops/Features/CancelWorkshop/CancelWorkshop.Mcp.cs)).
 <!-- example:end -->
 
 ### MCP versions

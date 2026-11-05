@@ -1,4 +1,4 @@
-# FullstackTemplate
+# Recall
 
 A multi-tenant web app template. A browser talks only to the BFF, and the BFF signs the user in with an external identity provider and calls the server API for the user.
 
