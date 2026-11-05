@@ -25,6 +25,8 @@ public class FileKeyTests
     [Arguments(".tmp")]
     [Arguments(".TMP/file")]
     [Arguments("tenants/.tmp/file")]
+    [Arguments(".write-proof")]
+    [Arguments("tenants/.WRITE-PROOF")]
     public void a_value_that_can_leave_the_root_or_name_a_temporary_file_cannot_be_a_key(string value)
     {
         // Act & Assert
@@ -72,6 +74,27 @@ public class FileKeyTests
     }
 
     [Test]
+    [Arguments('\uD800')]
+    [Arguments('\uD801')]
+    [Arguments('\uDC00')]
+    public void a_lone_surrogate_cannot_be_in_a_key(char surrogate)
+    {
+        // Act & Assert
+        Should.Throw<InvalidFileKeyException>(() => FileKey.Of($"s{surrogate}"));
+        Should.Throw<InvalidFileKeyException>(() => FileKey.Of($"{surrogate}/s"));
+    }
+
+    [Test]
+    public void a_character_outside_the_basic_plane_can_be_in_a_key()
+    {
+        // Arrange
+        const string value = "tenants/\uD83D\uDE00";
+
+        // Act & Assert
+        FileKey.Of(value).Value.ShouldBe(value);
+    }
+
+    [Test]
     public void the_key_of_a_tenant_is_its_folder_and_a_path_goes_under_it()
     {
         // Act & Assert
@@ -82,10 +105,18 @@ public class FileKeyTests
     [Test]
     [Arguments("../ten_2")]
     [Arguments("")]
-    public void a_tenant_id_cannot_leave_the_folder_of_the_tenants(string tenantId)
+    [Arguments("..")]
+    [Arguments(".")]
+    [Arguments(".tmp")]
+    [Arguments("/")]
+    [Arguments("ten_1/")]
+    [Arguments("ten_1/recordings")]
+    [Arguments("ten\\1")]
+    public void a_tenant_id_must_be_one_segment_in_the_folder_of_the_tenants(string tenantId)
     {
         // Act & Assert
         Should.Throw<InvalidFileKeyException>(() => FileKey.ForTenant(tenantId));
+        Should.Throw<InvalidFileKeyException>(() => FileKey.ForTenant(tenantId, "file"));
     }
 
     [Test]

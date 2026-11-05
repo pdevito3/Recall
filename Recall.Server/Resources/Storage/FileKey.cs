@@ -6,15 +6,21 @@ using Exceptions;
 
 /// <summary>
 /// The relative path of one file or one folder in the <see cref="FileStore"/>, with <c>/</c> between its segments.
-/// A key cannot leave the root and cannot name a temporary file.
+/// A key has no segment that climbs out of the root and cannot name a file of the store itself. The check reads only the
+/// text of the key, so <see cref="FileStore"/> still refuses a symlink, and two keys that differ only in case name one
+/// file on a case-insensitive file system.
 /// </summary>
 public sealed partial class FileKey : ValueObject
 {
     internal const string TemporaryFolder = ".tmp";
 
+    internal const string WriteProofFile = ".write-proof";
+
     private const char Separator = '/';
 
     private const int LongestSegmentInBytes = 255;
+
+    private static readonly UTF8Encoding Utf8ThatThrows = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
     public string Value { get; }
 
@@ -26,6 +32,8 @@ public sealed partial class FileKey : ValueObject
             throw new InvalidFileKeyException("A file key cannot have a NUL character.");
         if (value[0] == Separator || value.Contains('\\') || Path.IsPathRooted(value))
             throw new InvalidFileKeyException("A file key must be a relative path that uses a forward slash.");
+        if (HasLoneSurrogate(value))
+            throw new InvalidFileKeyException("A file key must be valid Unicode text.");
 
         foreach (var segment in value.Split(Separator))
         {
@@ -36,8 +44,9 @@ public sealed partial class FileKey : ValueObject
             if (segment is "." or "..")
                 throw new InvalidFileKeyException("A file key cannot have a segment that points to a folder.");
             // A file system on a Mac or on Windows does not see the case of a name
-            if (segment.Equals(TemporaryFolder, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidFileKeyException("A file key cannot name the folder of the temporary files.");
+            if (segment.Equals(TemporaryFolder, StringComparison.OrdinalIgnoreCase)
+                || segment.Equals(WriteProofFile, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidFileKeyException("A file key cannot name a file or a folder of the store itself.");
         }
 
         Value = value;
@@ -50,9 +59,28 @@ public sealed partial class FileKey : ValueObject
     /// must have a key from this method, because a tenant delete deletes this folder.
     /// </summary>
     public static FileKey ForTenant(string tenantId, params ReadOnlySpan<string> path)
-        => new(string.Join(Separator, ["tenants", tenantId, .. path]));
+    {
+        if (tenantId.Contains(Separator))
+            throw new InvalidFileKeyException("A tenant ID in a file key must be one segment.");
+
+        return new(string.Join(Separator, ["tenants", tenantId, .. path]));
+    }
 
     internal string[] Segments => Value.Split(Separator);
 
     public override string ToString() => Value;
+
+    // The file system gets UTF-8, and UTF-8 has no lone surrogate. Each one becomes U+FFFD, so two such keys name one file.
+    private static bool HasLoneSurrogate(string value)
+    {
+        try
+        {
+            Utf8ThatThrows.GetByteCount(value);
+            return false;
+        }
+        catch (EncoderFallbackException)
+        {
+            return true;
+        }
+    }
 }
