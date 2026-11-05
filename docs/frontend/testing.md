@@ -13,7 +13,7 @@ CI runs the unit, component, and functional suites on each pull request. CI runs
 
 ## The component suite
 
-A component test renders one component, or one route with `createMemoryHistory`, in Chromium. A component that loads data gets its answers from `commands.answerRequests`. It answers each request to `/api/*` and `/bff/*` that matches the method, the path, and the query parameters of an answer. A later answer wins, so put the most specific answer last. The body is sent as JSON. To send another type, set `contentType` and give the body as a string. The setup file removes the answers before each test. For example:
+A component test renders one component, or one route with `createMemoryHistory`, in Chromium. A component that loads data gets its answers from `commands.answerRequests`. It answers each request to `/api/*` and `/auth/*` that matches the method, the path, and the query parameters of an answer. A later answer wins, so put the most specific answer last. The body is sent as JSON. To send another type, set `contentType` and give the body as a string. The setup file removes the answers before each test. For example:
 
 ```ts
 await commands.answerRequests([
@@ -22,7 +22,7 @@ await commands.answerRequests([
 ])
 ```
 
-A request to `/api/*` or `/bff/*` with no answer fails the test, and the error names the request. The check runs after the test. A request that starts as the test ends can count for the next test, or for no test. The dev server has no BFF, so it answers such a request with status 502. This is also true for `pnpm dev` when Aspire does not set `BFF_HTTPS` or `BFF_HTTP`.
+A request to `/api/*` or `/auth/*` with no answer fails the test, and the error names the request. The check runs after the test. A request that starts as the test ends can count for the next test, or for no test. With no Server, the dev server answers such a request with status 502. This is also true for `pnpm dev` when Aspire does not start the Server.
 
 A component that takes a save function as a prop does not need answers. Give it a `vi.fn()` that resolves, or that rejects with a `ProblemDetailsError`.
 
@@ -32,7 +32,7 @@ When a component test fails in CI, open the `.vitest/attachments/` folder in the
 
 ## The functional suite
 
-`pnpm test:e2e` starts the Vite dev server on a free port. Then it runs the specs in Chromium. No Server or IdP runs. The suite mocks each request to `/api/*` and `/bff/*` in the browser with `page.route`. The hooks, the components, the generated clients, and `apiClient` all run.
+`pnpm test:e2e` starts the Vite dev server on a free port. Then it runs the specs in Chromium. No Server or IdP runs. The suite mocks each request to `/api/*` and `/auth/*` in the browser with `page.route`. The hooks, the components, the generated clients, and `apiClient` all run.
 
 ```
 frontend/
@@ -47,7 +47,7 @@ frontend/
     support/
       api/
         mock-route.ts            # MockRoute and the request recorder
-        bff-api.ts               # /bff/user, /bff/login, /bff/logout
+        auth-api.ts              # /auth/me, /auth/login, /auth/logout
         users-api.ts             # one file for each area: the canned responses
       auth/
         actors.ts                # named identities: as.anonymous(), as.user(name)
@@ -76,15 +76,15 @@ An error body must have the shape that ASP.NET sends. Make it with `aProblem()`.
 
 ### Identity
 
-The SPA knows the user only from `GET /bff/user`. The `actor` fixture gives the claims of that answer, so a test never drives a login form. The fixture also answers the lookup of the user record of the actor and `GET /api/v1/users/me`. The default actor is `as.user()`, a signed-in user with a tenant. To act as another user, add this line to a `describe` block:
+The SPA knows the user only from `GET /auth/me`. The `actor` fixture gives that answer, so a test never drives a login form. The fixture also answers the lookup of the user record of the actor and `GET /api/v1/users/me`. The default actor is `as.user()`, a signed-in user with a tenant. To act as another user, add this line to a `describe` block:
 
 ```ts
-test.use({ actor: as.userWithNoTenant('Ada Lovelace') })
+test.use({ actor: as.user('Ada Lovelace') })
 ```
 
-For an anonymous visitor, use `as.anonymous()`. Then `/bff/user` answers 204, and the SPA goes to the login before it shows a page. Thus a spec of a page needs a signed-in actor. The session spec (`tests/features/session/session.spec.ts`) covers the anonymous visitor and a failed check of the session.
+For an anonymous visitor, use `as.anonymous()`. Then `/auth/me` answers 204, and the SPA goes to the login before it shows a page. Thus a spec of a page needs a signed-in actor. The session spec (`tests/features/session/session.spec.ts`) covers the anonymous visitor and a failed check of the session.
 
-Login and logout leave the SPA. The browser goes to `/bff/login` or `/bff/logout`. Mock these with `bffApi.loginOpens()` and `bffApi.logoutOpens()`, and read the query of the request back.
+Login leaves the SPA, because the browser goes to `/auth/login`. Mock it with `authApi.loginOpens()`, and read the query of the request back. Logout is a `POST /auth/logout`, then the browser goes to `/auth/login?signedOut=1`. Mock both with `authApi.logoutWorks()`, or mock a failed logout with `authApi.logoutFails()`.
 
 ### Builders
 
@@ -127,7 +127,7 @@ Check: `pnpm lint` fails on `nth`, `first()`, and `last()` in each `.ts` file of
 - The queue of toasts renders in a view transition. The suite sets `reducedMotion: 'reduce'`, so each toast renders at once.
 - An error toast closes after 6 seconds. `toHaveCount` retries for 5 seconds, so `toHaveCount(1)` can pass when an extra toast closes. To prove that only one toast shows, read `count()` once.
 - The queries retry once (`main.tsx`). A failed load sends two requests, and the page shows the error after the second.
-- The page shows after the answer of `/bff/user`, and TanStack Query reports that answer in a timer. If a spec stops the clock before the page opens, the page does not show until the clock moves. See `openWithTheClockStopped` in `tests/features/toasts/toasts.tasks.ts`.
+- The page shows after the answer of `/auth/me`, and TanStack Query reports that answer in a timer. If a spec stops the clock before the page opens, the page does not show until the clock moves. See `openWithTheClockStopped` in `tests/features/toasts/toasts.tasks.ts`.
 - The suite sets the locale `en-US`. For the zone, see [Time zones](#time-zones).
 
 ### Time zones

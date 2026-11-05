@@ -7,7 +7,7 @@ name: CI
 # The template-name job fails when code or config has the template name. See docs/adr/0017-template-fixes-by-cherry-pick.md.
 # The new-feature job runs scripts/ci/new-feature.cs, which runs scripts/new-feature.cs for two sample entities, then lints, builds, and tests the result.
 # A job that calls a script under scripts/ci/ keeps its steps there, so that an agent can run them locally. The script works on a throwaway copy of the checkout.
-# There is no nightly run. See section 7 of docs/specs/home-rolled-bff.md.
+# There is no nightly run.
 
 on:
   pull_request:

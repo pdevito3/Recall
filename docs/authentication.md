@@ -2,7 +2,7 @@
 
 Recall owns its identity ([ADR 0014](adr/0014-app-owned-identity.md)). The Server is the OpenID Connect client of each provider. A provider proves who a person is one time. Then the Server issues its own auth session, and the rest of the app reads only that session. The browser holds an opaque cookie, and a native app holds an opaque bearer token. Neither one holds a provider token.
 
-The running stack has no BFF. The projects `Recall.Bff` and `tests/Recall.Bff.Tests` stay in the solution until a later change deletes them. The Server answers the three `/bff/*` paths that the SPA still calls.
+One process, `Recall.Server`, serves the SPA, the API, and the login. The session stays in an `HttpOnly` cookie, so no token reaches the scripts of a page.
 
 The Server code is in `Recall.Server/Auth/` and `Recall.Server/Resources/Entrypoints/Auth/`.
 
@@ -20,23 +20,20 @@ These routes are not in the OpenAPI document. This section is their contract.
 | `/auth/token` | POST | none | Gives the tokens of a native session |
 | `/auth/logout` | POST | optional | Ends the session that the request names, and answers 204. A cookie with no `X-CSRF: 1` and no other credential gets 401. |
 | `/auth/sessions/revoke-others` | POST | app session | Ends each other session of the user. It answers 204. |
-| `/auth/me` | GET | app session | `sub`, `name`, `sid`, and `client_kind` |
-| `/bff/login` | GET | none | Redirects to `/auth/login` |
-| `/bff/user` | GET | cookie, with `X-CSRF: 1` | The claims of a web session, or 204 when no one is signed in |
-| `/bff/logout` | GET | cookie, with the `sid` query | Ends the web session and goes to the signed-out page. See [Logout](#logout). |
+| `/auth/me` | GET | optional | The user of the session. See [The user of a session](#the-user-of-a-session). |
 
 Each other Server path, also `/api/*`, reads the credential in the same way. Send the cookie with `X-CSRF: 1`, or send `Authorization: Bearer <token>`.
 
 ## Web login
 
-1. The SPA calls `/bff/user` before it shows a page. If the answer is 204, it goes to `/bff/login`, with the path, the query, and the hash of the page as `returnUrl`. Each page needs a session.
+1. The SPA calls `/auth/me` before it shows a page. If the answer is 204, it goes to `/auth/login`, with the path, the query, and the hash of the page as `returnUrl`. Each page needs a session.
 2. `/auth/login` redirects to `/auth/oidc/{id}/start?client=web`. The return path must be local. Each other value becomes `/`.
 3. The start adds an attempt row and sets a binding cookie. It redirects to the provider with `state`, `nonce`, and a PKCE challenge (`S256`). The scope is `openid profile email`.
 4. The provider redirects to `/auth/oidc/callback`. The Server finds the attempt by `state`, checks the binding cookie, and consumes the attempt. An attempt can pass this check one time.
 5. The Server checks `iss` (RFC 9207), redeems the code, and validates the ID token. It reads the user info, and a user info `sub` that differs from the ID token fails the login. An error body of a provider never goes to a log.
 6. The Server finds or adds the user. See [First login and the Owner](#first-login-and-the-owner).
 7. The Server adds a session row, sets the session cookie, and redirects to the return path.
-8. The first HTML load has no session cookie, because the navigation comes from another site. The SPA calls `/bff/user` from the same site, with the cookie, and shows the page.
+8. The first HTML load has no session cookie, because the navigation comes from another site. The SPA calls `/auth/me` from the same site, with the cookie, and shows the page.
 
 ## Native login
 
@@ -133,7 +130,7 @@ One row of `auth_sessions` is one signed-in device. The row holds only hashes. A
 
 | Credential | Lifetime |
 |---|---|
-| Web cookie | 30 days with no use, 180 days from the login. Only `/bff/user` and `/auth/me` extend it, at most once a day. So an API call never writes. |
+| Web cookie | 30 days with no use, 180 days from the login. Only `/auth/me` extends it, at most once a day. So an API call never writes. |
 | Native access token | 900 seconds |
 | Native refresh token | 90 days from its last use |
 | Login attempt | 10 minutes |
@@ -156,27 +153,47 @@ The binding cookie is `Lax` because the provider redirects with a cross-site GET
 
 ### CSRF
 
-A cookie with no `X-CSRF: 1` header fails with 401 on each method, also at `/auth/logout`. A cross-site page cannot set that header without a CORS grant, and the Server gives none. A bearer token needs no header. `/bff/logout` is a GET, so its `sid` query is its protection.
+A cookie with no `X-CSRF: 1` header fails with 401 on each method, also at `/auth/logout`. A cross-site page cannot set that header without a CORS grant, and the Server gives none. A bearer token needs no header.
 
 A cookie value works only as a cookie and only on a web session. A bearer value works only in the header and only on a native session. So a stolen cookie value cannot skip this rule.
 
 ## Logout
 
-The SPA goes to `/bff/logout` with the `sid` of the session. The Server ends the session, deletes the cookie, sets the signed-out mark, and shows `You are signed out` at `/auth/login?signedOut=1`.
+The SPA sends `POST /auth/logout` with `X-CSRF: 1`. The Server ends the session, deletes the cookie, sets the signed-out mark, and answers 204. Then the SPA goes to `/auth/login?signedOut=1`, which shows `You are signed out`. If the request fails, the SPA stays on the page and says that the person is still signed in.
 
 A response tells what happened:
 
 | Request | Answer |
 |---|---|
-| The cookie of a live session, with its `sid` | Ends the session. The next page says `You are signed out`. |
-| The cookie of a live session, with another `sid` | 400 `This sign-out link is not valid`. The session stays. |
-| A cookie with no live session | Deletes the cookie. The next page says `You are signed out`. |
-| No cookie, with the `sid` of a live web session | 403 `Sign-out did not finish`. The session stays. A navigation from another site gives this, because `SameSite=Strict` holds the cookie back. |
-| No cookie, with no such `sid` | The next page says `Sign in to Recall`. |
+| A cookie with `X-CSRF: 1` | Ends the session if it is live, deletes the cookie, and sets the mark. 204. |
+| A cookie with no `X-CSRF: 1`, and no other credential | 401. The session stays, and the cookie stays. |
+| No cookie | Ends what a bearer token or a refresh token names. 204, with no mark. A cross-site page gets this, because `SameSite=Strict` holds the cookie back. |
+| `GET /auth/logout` | 405. A link cannot end a session. |
 
 `/auth/login?signedOut=1` starts nothing with no click. It says `You are signed out` only with the mark, so a link from another site cannot make it say that. A live session at this URL goes to the return path.
 
-The session at the provider stays. So `Sign in with {provider}` can sign the same person in again with no click. On a shared computer, end the session at the provider too.
+The session at the provider stays. So `Sign in with {provider}` can sign the same person in again with no click. On a shared computer, end the session at the provider too. When the discovery document of the provider has an `end_session_endpoint`, the signed-out page links to it as `Sign out of {provider}`.
+
+## The user of a session
+
+`GET /auth/me` tells who is signed in. The SPA and a native app read this one route.
+
+```json
+{ "sub": "<identifier>", "name": "Ada Lovelace", "sid": "<session ID>", "client_kind": "web" }
+```
+
+`name` is the full name of the user. `client_kind` is `web` or `native`.
+
+| Request | Answer |
+|---|---|
+| A live session | 200 with the shape above. A web session also extends its lifetime. |
+| No credential, or a cookie with `X-CSRF: 1` that has no live session | 204. The SPA goes to the login. |
+| A bearer token that is not a live session | 401, so a native app knows to refresh. |
+| A cookie with no `X-CSRF: 1` | 401. The session stays, and the SPA shows an error in place of a redirect loop. |
+
+## Data Protection keys
+
+The Server keeps its ASP.NET Core Data Protection keys in the `keys` directory next to the database, which is `/data/keys` in the image. A backup of `/data` holds them. Nothing depends on them today: a session is an opaque value with a row in the database, and it survives the loss of the keys. A later change encrypts API keys with them, so they persist now. The directory and the files are owner-only. The Server does not encrypt the key files themselves, so at each new key the framework logs that it has no XML encryptor. This is expected.
 
 ## First login and the Owner
 
@@ -458,7 +475,7 @@ Extra arguments go to Playwright, for example `pnpm test:e2e:stack --repeat-each
 
 ## Conformance
 
-Recall dropped the OpenID Foundation conformance run. The results of the template were for the BFF, which no longer runs, so they say nothing about the login of the Server. No run in this repository tests the Server against that suite.
+Recall dropped the OpenID Foundation conformance run. The results of the template were for its BFF, which Recall deleted, so they say nothing about the login of the Server. No run in this repository tests the Server against that suite.
 
 ## Test users
 

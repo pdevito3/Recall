@@ -18,7 +18,6 @@ The stack today has:
 Recall/
 ├── Recall.AppHost/     # Aspire orchestration (start here)
 ├── Recall.Server/      # Backend API (.NET 10, CQRS, MediatR)
-├── Recall.Bff/         # The old BFF. Nothing runs it, and a later change deletes it
 ├── frontend/           # React SPA (React 19, TanStack, Tailwind)
 ├── tests/              # Test projects
 ├── docs/               # Development guides (backend, telemetry, auth, ...)
@@ -125,12 +124,12 @@ The first person who signs in becomes the Owner. To select the auth provider of 
                      └──────────┘
 ```
 
-1. The React app has no session, so it navigates to `/bff/login`
+1. The React app has no session, so it navigates to `/auth/login`
 2. The Server redirects to the identity provider
 3. The user authenticates with the provider
 4. The provider redirects back to `/auth/oidc/callback`
 5. The Server adds a session and sets the `recall` cookie, or `__Host-recall` on TLS
-6. The React app calls `/bff/user` to get the user
+6. The React app calls `/auth/me` to get the user
 7. API calls go to the Server at `/api/v1/*`
 
 A native app uses `/auth/status`, the system browser, and `/auth/token`. See [docs/authentication.md](docs/authentication.md).

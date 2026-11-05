@@ -8,7 +8,7 @@ A span carries names, identifiers, and counts. It never carries user-entered con
 
 `SqlSpanInterceptor` makes a span for each SQL command of the Server, and it copies the SQL text into `db.query.text`. Thus a value from the caller must go to the database as a parameter, never as a literal in the SQL text. `CustomQueryKitConfiguration` sets `ParameterizeFilterValues`, so the SQL text of a list query has a parameter name in place of each filter value. The value of a QueryKit `CustomOperation` still goes into the SQL text as a literal.
 
-The request spans of the server keep each query key in `url.query` and replace each value with `Redacted`, for example `?filters=Redacted&pageSize=Redacted`. The ASP.NET Core instrumentation does this by default, but Aspire turns it off in development. Thus `HostExtensions.cs` and the BFF `Extensions.cs` set `url.query` again.
+The request spans of the server keep each query key in `url.query` and replace each value with `Redacted`, for example `?filters=Redacted&pageSize=Redacted`. The ASP.NET Core instrumentation does this by default, but Aspire turns it off in development. Thus `HostExtensions.cs` sets `url.query` again.
 
 ## What a trace looks like
 

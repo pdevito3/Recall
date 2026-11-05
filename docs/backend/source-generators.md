@@ -71,7 +71,6 @@ These calls still use the reflection fallback:
 - The bodies of the minimal API endpoints. The endpoint DTOs are not in a context.
 - `AuditValues.WriteAction`. The app and the tests declare the action types, so the Server cannot list them.
 - `McpDomainErrors.Converts`. It reads the parameter type of a tool at run time, and it runs only after a tool call fails.
-- `Recall.Bff/User/UserEndpoint.cs`.
 
 Keep the fallback until the template aims at native AOT. At that time, add the DTOs to a context, and remove the fallback. Then ban the `JsonSerializer.Serialize` and `JsonSerializer.Deserialize` overloads that take no `JsonTypeInfo`.
 

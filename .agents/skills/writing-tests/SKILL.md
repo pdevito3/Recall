@@ -1,6 +1,6 @@
 ---
 name: writing-tests
-description: Picks the test suite for a change and writes the test there. Use when you add or change a test, when you ask which suite proves a behavior, or when you ask when to run `pnpm test:e2e` and when to run `pnpm test:e2e:stack`. Covers the Vitest unit and component tests, the Playwright functional suite against a mocked BFF, the Playwright stack suite against a real IdP, and points to the .NET tests.
+description: Picks the test suite for a change and writes the test there. Use when you add or change a test, when you ask which suite proves a behavior, or when you ask when to run `pnpm test:e2e` and when to run `pnpm test:e2e:stack`. Covers the Vitest unit and component tests, the Playwright functional suite against a mocked Server, the Playwright stack suite against a real IdP, and points to the .NET tests.
 ---
 
 # Writing tests
@@ -59,7 +59,7 @@ The sweep checks the permission of each endpoint, not of each DTO field. For a f
 
 - Run it after a change to the login of the Server, the AppHost, an auth provider, the token check of the Server, `frontend/vite.config.ts`, or the login code of the SPA.
 - It needs a running stack. Start the stack and wait for `server` and `webfrontend` first. Use the `aspire-cli` skill.
-- It takes some minutes, and it tests the provider of the running stack only. CI runs it for each provider, but only when the `changes` job finds a change on the login path (the Server login, the AppHost, the SPA, or the stack suite). See the `bff` filter in `.github/workflows/ci.yml`.
+- It takes some minutes, and it tests the provider of the running stack only. CI runs it for each provider, but only when the `changes` job finds a change on the login path (the Server login, the AppHost, the SPA, or the stack suite). See the `stack` filter in `.github/workflows/ci.yml`.
 - For the full procedure and the variables, read the "E2E tests" section of `docs/authentication.md`.
 
 Examples:

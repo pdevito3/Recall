@@ -28,7 +28,6 @@ Today this is a .NET Aspire application with a React frontend. The Server runs t
 |---------|---------|
 | `Recall.AppHost` | Aspire orchestration. Defines all resources in `AppHost.cs` |
 | `Recall.Server` | Backend API and login (.NET 10, app sessions, CQRS, multi-tenant). Serves the SPA in production |
-| `Recall.Bff` | The old BFF. Nothing runs it, and it stays in the solution until a later change deletes it. Do not add to it |
 | `frontend` | React SPA (React 19, TanStack Router, TanStack Query, Tailwind v4) |
 | `tests/` | Unit, integration, and functional tests |
 
