@@ -170,6 +170,7 @@ public class DeleteUserCommandTests : TestBase
             .BuildAsync();
         await scope.AddSignInLinkAsync(member);
         scope.SetUserWithDefaults(identifier: owner.Identifier);
+        await scope.SendAsync(new AddUserPermission.Command(member.Id, Permission.ManageUserAccess().Value));
 
         // Act
         var act = () => scope.SendAsync(new DeleteUser.Command(owner.Id));

@@ -18,7 +18,7 @@ public static class AuthPages
         + "@media (prefers-color-scheme:dark){:root{--background:oklch(0.1363 0.0364 259.2010);--foreground:oklch(0.9842 0.0034 247.8575);--primary:oklch(0.6231 0.1880 259.8145);--border:oklch(0.2795 0.0368 260.0310)}}"
         + "body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--background);color:var(--foreground);font:16px/1.5 system-ui,sans-serif}"
         + "main{box-sizing:border-box;width:100%;max-width:28rem;padding:2rem}h1{font-size:1.5rem;margin:0 0 1rem}p{margin:0 0 1rem}code{overflow-wrap:anywhere}"
-        + "ul{list-style:none;margin:1rem 0 0;padding:0}li{margin:.5rem 0}form{margin:1rem 0 0}"
+        + "ul{list-style:none;margin:1rem 0 0;padding:0}li{margin:.5rem 0}ul+p{margin-top:1rem}form{margin:1rem 0 0}"
         + "a.button,button{display:block;box-sizing:border-box;width:100%;padding:.75rem 1rem;border:0;border-radius:.5rem;background:var(--primary);color:var(--primary-foreground);font:inherit;text-align:center;text-decoration:none;cursor:pointer}";
 
     private static readonly string StyleHash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(Style)));
