@@ -53,6 +53,7 @@ public class LoginSweepTests
             authorizeNative.State, authorizeNative.Nonce, authorizeNative.CodeChallenge, bindingNative,
             app.Verifier, app.Challenge, app.ClientState, code,
             first.AccessToken, first.RefreshToken, second.AccessToken, second.RefreshToken, retryKey,
+            FamilyOf(first.RefreshToken), FamilyOf(second.RefreshToken),
         ]);
 
         // A span ends after its response goes out, so the last ones need a moment to reach the listener
@@ -71,6 +72,12 @@ public class LoginSweepTests
             logLines.ShouldNotContain(line => line.Contains(secret, StringComparison.Ordinal));
             spans.ShouldNotContain(span => span.Contains(secret, StringComparison.Ordinal));
         }
+    }
+
+    private static string FamilyOf(string refreshToken)
+    {
+        RefreshToken.TryParse(refreshToken, out var parsed).ShouldBeTrue();
+        return parsed!.Family;
     }
 
     private static string TextOf(LogEvent logEvent)
