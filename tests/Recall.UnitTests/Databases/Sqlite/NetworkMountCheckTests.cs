@@ -22,6 +22,13 @@ public class NetworkMountCheckTests
     [Arguments("fuse")]
     [Arguments("vboxsf")]
     [Arguments("virtiofs")]
+    [Arguments("macfuse")]
+    [Arguments("osxfuse")]
+    [Arguments("prl_fs")]
+    [Arguments("vmhgfs")]
+    [Arguments("gfs2")]
+    [Arguments("orangefs")]
+    [Arguments("pvfs2")]
     [Arguments("9p")]
     public void a_network_mount_is_refused_with_a_message_that_names_the_mount(string type)
     {
@@ -48,6 +55,7 @@ public class NetworkMountCheckTests
     [Arguments("overlay")]
     [Arguments("apfs")]
     [Arguments("fuseblk")]
+    [Arguments("fuseblk.ntfs-3g")]
     public void a_local_mount_passes(string type)
     {
         // Arrange

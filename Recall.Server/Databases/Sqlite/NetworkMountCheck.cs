@@ -4,15 +4,17 @@ public sealed record MountEntry(string MountPoint, string FileSystemType, string
 
 /// <summary>
 /// SQLite locks a WAL file through shared memory, which works only on one machine. So the data file must not be on a
-/// network file system, where two machines can open it and the file can corrupt. A FUSE file system, a union of disks
-/// such as Unraid <c>/mnt/user</c>, and a shared folder of a hypervisor are also refused, because WAL on them has no proof.
+/// network file system, where two machines can open it and the file can corrupt. Each <c>fuse.*</c> type, a union of
+/// disks such as Unraid <c>/mnt/user</c>, and a shared folder of a hypervisor are also refused, because WAL on them has
+/// no proof.
 /// </summary>
 public static class NetworkMountCheck
 {
     private static readonly HashSet<string> RefusedTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "9p", "afs", "afpfs", "beegfs", "ceph", "cifs", "coda", "davfs", "fuse", "glusterfs", "gpfs", "lustre", "ncpfs",
-        "nfs", "nfs3", "nfs4", "ocfs2", "shfs", "smb3", "smbfs", "vboxsf", "virtiofs", "webdav",
+        "9p", "afs", "afpfs", "beegfs", "ceph", "cifs", "coda", "davfs", "fuse", "gfs2", "glusterfs", "gpfs", "lustre",
+        "macfuse", "ncpfs", "nfs", "nfs3", "nfs4", "ocfs2", "orangefs", "osxfuse", "prl_fs", "pvfs2", "shfs", "smb3", "smbfs",
+        "vboxsf", "virtiofs", "vmhgfs", "webdav",
     };
 
     public static string? Refusal(string dataFilePath, IEnumerable<MountEntry> mounts)
@@ -29,7 +31,7 @@ public static class NetworkMountCheck
             : null;
     }
 
-    /// <summary><c>fuseblk</c> has no dot, so it passes: it is a local block device such as NTFS on a USB disk.</summary>
+    /// <summary>The prefix does not match <c>fuseblk</c>, which is a local block device such as NTFS on a USB disk.</summary>
     private static bool IsRefused(string fileSystemType)
         => RefusedTypes.Contains(fileSystemType) || fileSystemType.StartsWith("fuse.", StringComparison.OrdinalIgnoreCase);
 
