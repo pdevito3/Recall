@@ -174,7 +174,7 @@ public class FileStoreTests : IDisposable
     {
         // Arrange
         Directory.CreateDirectory(_root.Path);
-        await File.WriteAllBytesAsync(Path.Combine(_root.Path, FileKey.WriteProofFile), [1]);
+        await File.WriteAllBytesAsync(Path.Combine(_root.Path, FileKey.ReservedProofFileName), [1]);
 
         // Act
         var cause = _store.ProveWritable();

@@ -117,13 +117,15 @@ public class FileStoreRegistrationTests
         Directory.CreateDirectory(folder.Path);
         var blocker = Path.Combine(folder.Path, "a-file");
         await File.WriteAllBytesAsync(blocker, [1]);
-        await using var app = await StartServerAsync(Path.Combine(blocker, "files"));
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        await using var app = await StartServerAsync(Path.Combine(blocker, "files"), clock);
         using var client = app.GetTestClient();
 
         // Act
         var whenBroken = await client.GetAsync("/health");
         var aliveWhenBroken = await client.GetAsync("/alive");
         File.Delete(blocker);
+        clock.Advance(FileStoreHealthCheck.TimeBetweenProofs);
         var whenRepaired = await client.GetAsync("/health");
 
         // Assert
@@ -150,14 +152,12 @@ public class FileStoreRegistrationTests
         {
             // Act
             var inTheInterval = await health.CheckHealthAsync();
-            clock.Advance(TimeSpan.FromSeconds(30));
+            clock.Advance(FileStoreHealthCheck.TimeBetweenProofs);
             var afterTheInterval = await health.CheckHealthAsync();
-            var nextProbe = await health.CheckHealthAsync();
 
             // Assert
             inTheInterval.Status.ShouldBe(HealthStatus.Healthy);
             afterTheInterval.Status.ShouldBe(HealthStatus.Degraded);
-            nextProbe.Status.ShouldBe(HealthStatus.Degraded);
             afterTheInterval.Entries["file-store"].Description.ShouldNotBeNull().ShouldContain("cannot take a write");
         }
         finally
@@ -166,7 +166,49 @@ public class FileStoreRegistrationTests
         }
     }
 
-    private static async Task<WebApplication> StartServerAsync(string root)
+    [Test]
+    public async Task a_root_that_is_a_symlink_loop_starts_and_reports_a_root_that_cannot_take_a_write()
+    {
+        // Arrange
+        using var folder = new TemporaryFileRoot();
+        Directory.CreateDirectory(folder.Path);
+        var root = Path.Combine(folder.Path, "files");
+        Directory.CreateSymbolicLink(root, root);
+        await using var app = BuildWithRoot(root, [new("/", "ext4", "/dev/sda1")]);
+
+        // Act
+        await StartupOf(app).StartAsync(CancellationToken.None);
+        var report = await app.Services.GetRequiredService<HealthCheckService>().CheckHealthAsync();
+
+        // Assert
+        report.Status.ShouldBe(HealthStatus.Degraded);
+    }
+
+    [Test]
+    public async Task a_failed_proof_holds_for_its_interval_and_the_next_proof_sees_the_repair()
+    {
+        // Arrange
+        using var folder = new TemporaryFileRoot();
+        Directory.CreateDirectory(folder.Path);
+        var blocker = Path.Combine(folder.Path, "a-file");
+        await File.WriteAllBytesAsync(blocker, [1]);
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        await using var app = BuildWithRoot(Path.Combine(blocker, "files"), clock: clock);
+        var health = app.Services.GetRequiredService<HealthCheckService>();
+        (await health.CheckHealthAsync()).Status.ShouldBe(HealthStatus.Degraded);
+        File.Delete(blocker);
+
+        // Act
+        var inTheInterval = await health.CheckHealthAsync();
+        clock.Advance(FileStoreHealthCheck.TimeBetweenProofs);
+        var afterTheInterval = await health.CheckHealthAsync();
+
+        // Assert
+        inTheInterval.Status.ShouldBe(HealthStatus.Degraded);
+        afterTheInterval.Status.ShouldBe(HealthStatus.Healthy);
+    }
+
+    private static async Task<WebApplication> StartServerAsync(string root, TimeProvider clock)
     {
         var builder = WebApplication.CreateSlimBuilder();
         builder.WebHost.UseTestServer();
@@ -174,6 +216,7 @@ public class FileStoreRegistrationTests
         builder.Services.AddRouting();
         builder.Services.AddHealthChecks().AddCheck("self", () => HealthCheckResult.Healthy(), ["live"]);
         builder.AddFileStore();
+        builder.Services.AddSingleton(clock);
         var app = builder.Build();
         app.MapDefaultEndpoints();
         await app.StartAsync();

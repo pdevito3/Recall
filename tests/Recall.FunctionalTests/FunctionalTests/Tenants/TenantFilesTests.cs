@@ -127,7 +127,7 @@ public class TenantFilesTests : TestBase
             DROP TABLE child_{names};
             DROP TABLE parent_{names};
             """;
-        await ExecuteSqlAsync(failTheCommit);
+        await ExecuteSqlPastTheWriteGuardAsync(failTheCommit);
 
         try
         {
@@ -142,12 +142,11 @@ public class TenantFilesTests : TestBase
         }
         finally
         {
-            await ExecuteSqlAsync(cleanUp);
+            await ExecuteSqlPastTheWriteGuardAsync(cleanUp);
         }
     }
 
-    // The write guard of the context refuses SQL that names an audited table, so this goes past the context.
-    private static Task<int> ExecuteSqlAsync(string sql) => ExecuteDbContextAsync(async db =>
+    private static Task<int> ExecuteSqlPastTheWriteGuardAsync(string sql) => ExecuteDbContextAsync(async db =>
     {
         await db.Database.OpenConnectionAsync();
         await using var command = db.Database.GetDbConnection().CreateCommand();

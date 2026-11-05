@@ -12,8 +12,7 @@ public delegate Task<IReadOnlyList<MountEntry>?> ReadMounts(CancellationToken ca
 /// SQLite locks a WAL file through shared memory, which works only on one machine. So the data file must not be on a
 /// network file system, where two machines can open it and the file can corrupt. Each <c>fuse.*</c> type, a union of
 /// disks such as Unraid <c>/mnt/user</c>, and a shared folder of a hypervisor are also refused, because WAL on them has
-/// no proof. The root of the file store has the same rule, because a write there rests on an atomic rename and a flush
-/// that these file systems do not promise.
+/// no proof.
 /// </summary>
 public static class NetworkMountCheck
 {
@@ -36,7 +35,7 @@ public static class NetworkMountCheck
     public static string? FileRootRefusal(string fileRoot, IEnumerable<MountEntry> mounts)
         => RefusedMountOf(fileRoot, mounts) is { } mount
             ? $"The file store root {fileRoot} is on the mount {mount.MountPoint} ({mount.FileSystemType} from {mount.Source}). " +
-              "A file write needs the atomic rename and the flush of a local disk, and this type is a network, FUSE, or shared folder file system. " +
+              "A file write rests on an atomic rename and a flush, and these have no proof on a network, FUSE, or shared folder file system. " +
               "Move the file store root to a local disk. On Unraid, use a path such as /mnt/cache, not /mnt/user."
             : null;
 

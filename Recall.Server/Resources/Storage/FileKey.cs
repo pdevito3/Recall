@@ -14,7 +14,7 @@ public sealed partial class FileKey : ValueObject
 {
     internal const string TemporaryFolder = ".tmp";
 
-    internal const string WriteProofFile = ".write-proof";
+    internal const string ReservedProofFileName = ".write-proof";
 
     private const char Separator = '/';
 
@@ -45,7 +45,7 @@ public sealed partial class FileKey : ValueObject
                 throw new InvalidFileKeyException("A file key cannot have a segment that points to a folder.");
             // A file system on a Mac or on Windows does not see the case of a name
             if (segment.Equals(TemporaryFolder, StringComparison.OrdinalIgnoreCase)
-                || segment.Equals(WriteProofFile, StringComparison.OrdinalIgnoreCase))
+                || segment.Equals(ReservedProofFileName, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidFileKeyException("A file key cannot name a file or a folder of the store itself.");
         }
 

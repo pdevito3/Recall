@@ -8,9 +8,6 @@ using Microsoft.Extensions.Options;
 using Microsoft.Win32.SafeHandles;
 using Serilog;
 
-/// <summary>The result of <see cref="FileStore.Prepare"/>.</summary>
-/// <param name="RemovedItems">The number of temporary items that it removed.</param>
-/// <param name="NotWritableCause">The reason that the root cannot take a write, or null when it can.</param>
 public sealed record FileStorePreparation(int RemovedItems, string? NotWritableCause);
 
 /// <summary>
@@ -30,9 +27,17 @@ public sealed class FileStore(IOptions<FileStoreOptions> options)
 
     private string TemporaryFolder => Path.Combine(_root, FileKey.TemporaryFolder);
 
-    /// <summary>The refusal when the root is on a mount that the store must not use, or null.</summary>
     public string? MountRefusal(IEnumerable<MountEntry> mounts)
-        => NetworkMountCheck.FileRootRefusal(NetworkMountCheck.RealPathOf(_root), mounts);
+    {
+        try
+        {
+            return NetworkMountCheck.FileRootRefusal(NetworkMountCheck.RealPathOf(_root), mounts);
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     /// Removes what an interrupted process left in the temporary folder, makes the root, and proves that it takes a
@@ -168,7 +173,6 @@ public sealed class FileStore(IOptions<FileStoreOptions> options)
         }
     }
 
-    // The name is fixed, and FileKey refuses it, so a proof file that a killed process left goes at the next proof.
     private string? WriteProofFile()
     {
         string? temporary = null;
@@ -185,7 +189,7 @@ public sealed class FileStore(IOptions<FileStoreOptions> options)
                 file.Flush(flushToDisk: true);
             }
 
-            var proof = Path.Combine(_root, FileKey.WriteProofFile);
+            var proof = Path.Combine(_root, FileKey.ReservedProofFileName);
             File.Move(temporary, proof, overwrite: true);
             File.Delete(proof);
             FlushFolder(_root);

@@ -3,6 +3,7 @@ namespace Recall.Server.Resources.Storage;
 using Databases.Sqlite;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 using Serilog;
 
 public static class FileStoreRegistration
@@ -22,7 +23,10 @@ public static class FileStoreRegistration
         builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<ReadMounts>(NetworkMountCheck.ReadMountsAsync);
         builder.Services.AddHostedService<FileStoreStartup>();
-        builder.Services.AddSingleton<FileStoreHealthCheck>();
+        builder.Services.AddSingleton(services => new FileStoreHealthCheck(
+            services.GetRequiredService<FileStore>().ProveWritable,
+            services.GetRequiredService<IOptions<FileStoreOptions>>().Value.Root,
+            services.GetRequiredService<TimeProvider>()));
         builder.Services.AddHealthChecks().AddCheck<FileStoreHealthCheck>("file-store", HealthStatus.Degraded);
     }
 

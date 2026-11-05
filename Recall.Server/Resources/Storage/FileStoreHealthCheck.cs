@@ -1,32 +1,62 @@
 namespace Recall.Server.Resources.Storage;
 
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Serilog;
 
-/// <summary>
-/// Reports if the root of the <see cref="FileStore"/> takes a write now. A proof writes to the disk and <c>/health</c> has
-/// no login, so after a passed proof the next one waits for <see cref="TimeBetweenPassedProofs"/>. A failed proof writes
-/// nothing, so each probe tries again and sees a repaired volume at once.
-/// </summary>
-internal sealed class FileStoreHealthCheck(FileStore fileStore, TimeProvider timeProvider) : IHealthCheck
+public sealed class FileStoreHealthCheck(Func<string?> proveWritable, string root, TimeProvider timeProvider) : IHealthCheck
 {
-    internal static readonly TimeSpan TimeBetweenPassedProofs = TimeSpan.FromSeconds(30);
+    public static readonly TimeSpan TimeBetweenProofs = TimeSpan.FromSeconds(30);
+
+    public static readonly TimeSpan LongestWaitForAProof = TimeSpan.FromSeconds(5);
+
+    private static ILogger Logger => Log.ForContext<FileStoreHealthCheck>();
 
     private readonly Lock _gate = new();
-    private DateTimeOffset? _passedAt;
+    private Task<string?>? _proof;
+    private long _proofStartedAt;
+    private bool _proofHangLogged;
 
-    public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var cause = await CurrentProof().WaitAsync(LongestWaitForAProof, timeProvider, cancellationToken);
+            return cause is null
+                ? HealthCheckResult.Healthy()
+                : new(context.Registration.FailureStatus, $"The file store cannot take a write. The cause: {cause}");
+        }
+        catch (TimeoutException)
+        {
+            LogTheHangOnce();
+            return new(context.Registration.FailureStatus, "The file store did not finish a write in time.");
+        }
+    }
+
+    private Task<string?> CurrentProof()
     {
         lock (_gate)
         {
-            var now = timeProvider.GetUtcNow();
-            if (now - _passedAt < TimeBetweenPassedProofs)
-                return Task.FromResult(HealthCheckResult.Healthy());
+            if (_proof is null || (_proof.IsCompleted && timeProvider.GetElapsedTime(_proofStartedAt) >= TimeBetweenProofs))
+            {
+                _proof = Task.Run(proveWritable);
+                _proofStartedAt = timeProvider.GetTimestamp();
+                _proofHangLogged = false;
+            }
 
-            var cause = fileStore.ProveWritable();
-            _passedAt = cause is null ? now : null;
-            return Task.FromResult(cause is null
-                ? HealthCheckResult.Healthy()
-                : new HealthCheckResult(context.Registration.FailureStatus, $"The file store cannot take a write. The cause: {cause}"));
+            return _proof;
         }
+    }
+
+    private void LogTheHangOnce()
+    {
+        lock (_gate)
+        {
+            if (_proofHangLogged)
+                return;
+
+            _proofHangLogged = true;
+        }
+
+        Logger.Here().Error("The file store root {Root} did not finish a write in {Seconds} seconds, so its disk can be hanging", root, LongestWaitForAProof.TotalSeconds);
     }
 }
