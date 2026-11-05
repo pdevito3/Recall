@@ -80,7 +80,13 @@ public class HostLimitTests
     [Arguments("2001:db8:1:2:3:4:5:6", "2001:db8:1:2::")]
     [Arguments("2001:db8:1:2:ffff:ffff:ffff:ffff", "2001:db8:1:2::")]
     public void a_bucket_is_one_ipv4_address_or_one_ipv6_network(string address, string bucket)
-        => LoginStartLimit.BucketOf(IPAddress.Parse(address)).ShouldBe(bucket);
+    {
+        // Act
+        var actual = LoginStartLimit.BucketOf(IPAddress.Parse(address));
+
+        // Assert
+        actual.ShouldBe(bucket);
+    }
 
     [Test]
     public async Task a_refused_start_is_a_page_that_says_when_to_try_again()

@@ -175,11 +175,13 @@ The command checks the part of the rule that needs only the ID before the load, 
 var caller = await permissionGuard.GetCallerAsync(cancellationToken);
 UserAction.Delete().GuardBeforeLoad(caller, request.Id);
 
-var user = await dbContext.Users
-    .TagWithOperationCallSite("users.delete.load")
-    .Include(u => u.UserPermissions)
-    .GetById(request.Id, cancellationToken);
-user.GuardAllows(UserAction.Delete(), caller);
+var user = await LastAdmin.RunWithTenantLockAsync(dbContext, request.Id, async ct =>
+{
+    var user = await dbContext.Users
+        .TagWithOperationCallSite("users.delete.load")
+        .Include(u => u.UserPermissions)
+        .GetById(request.Id, ct);
+    user.GuardAllows(UserAction.Delete(), caller);
 ```
 
 `UserActionTests` has the tests of the table. One test gives each action the refusal text of each case. Another checks, for each caller in a small table, that an action is in `AllowedActions` only when `GuardAllows` does not throw.
