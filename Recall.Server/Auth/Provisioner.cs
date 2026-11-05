@@ -76,7 +76,15 @@ public sealed class Provisioner(
             .TagWithOperationCallSite("auth.provision.find_link")
             .FirstOrDefaultAsync(l => l.Issuer == identity.Issuer && l.Subject == identity.Subject, cancellationToken);
         if (link is not null)
+        {
+            // This closes the claim, so a file that the operator made and then used through an old link cannot wait for a stranger.
+            if (claim.Take())
+                _logger.Here().Warning(
+                    "A login with a link removed the owner claim file {ClaimFile}, and the claim changed nothing. To claim the Owner, create the file again and sign in with the new identity",
+                    ownerClaim.FilePath);
+
             return await SignInLinkedAsync(dbContext, link, identity.Profile, cancellationToken);
+        }
 
         var tenants = await dbContext.Tenants
             .TagWithOperationCallSite("auth.provision.tenants_ever")

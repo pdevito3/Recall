@@ -178,11 +178,18 @@ A repeat login fills only a stored value that is empty. A changed value stays. A
 
 A changed issuer, a new provider, a provider restored with a new `sub`, or a deleted Owner can leave a person with no way to sign in. Do not delete the data directory to fix this, because it holds the journal.
 
-1. Stop other logins, because the next login with no link takes the claim. A login with a link does not take the file, so the file stays until a login with no link comes.
-2. Create an empty file named `claim-owner` in the data directory.
+1. Prepare the sign-in, so that you can finish it quickly. The claim goes to the first login that comes after the file, and any login with no link can be that login. If people that you do not know can reach the provider, limit the client at the provider to your own account, or stop the public route to Recall, until you finish.
+2. Create an empty file named `claim-owner` in the data directory. It works for 15 minutes from its write time.
 3. Sign in with the identity that you want.
 
 The Server links that identity to the oldest live Admin of the oldest live tenant whose identifier is its own ID, logs a warning with the user ID and the issuer, and removes the file. If the tenant has no such Admin, the Server adds a new Admin. A deleted tenant is the one case that the claim cannot recover. In that case, the login gets `signup_closed` and the Server still removes the file.
+
+The first login after you create the file always removes it, also when the claim changes nothing:
+
+- A login with a link signs in as usual and logs a warning that names the file. Create the file again and sign in with the new identity.
+- A file with a write time more than 15 minutes from the current time, in either direction, does nothing. The Server logs a warning that names the file. The login goes on as if no file exists.
+
+The Server removes such a file and does not leave it, because a backup restore that does not keep the write time would make a file that stays new again.
 
 ### Delete old development data
 

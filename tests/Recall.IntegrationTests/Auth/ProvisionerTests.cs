@@ -366,19 +366,82 @@ public sealed class ProvisionerTests
     }
 
     [Test]
-    public async Task a_linked_identity_does_not_take_the_owner_claim()
+    public async Task a_login_with_a_link_ends_the_claim_so_the_next_stranger_cannot_take_the_owner()
     {
         // Arrange
         await using var database = await AuthTestDatabase.CreateAsync();
         var provisioner = ProvisionerOf(database.BuildServices());
-        await provisioner.ResolveAsync(Person("old-subject"), CancellationToken.None);
+        var owner = UserIdOf(await provisioner.ResolveAsync(Person("old-subject"), CancellationToken.None));
         await File.WriteAllTextAsync(database.ClaimFilePath, "");
 
         // Act
-        await provisioner.ResolveAsync(Person("old-subject"), CancellationToken.None);
+        var linked = await provisioner.ResolveAsync(Person("old-subject"), CancellationToken.None);
+        var stranger = await provisioner.ResolveAsync(Person("stranger", IssuerB), CancellationToken.None);
 
         // Assert
-        File.Exists(database.ClaimFilePath).ShouldBeTrue();
+        UserIdOf(linked).ShouldBe(owner);
+        stranger.ShouldBeOfType<ProvisionOutcome.SignupClosed>();
+        File.Exists(database.ClaimFilePath).ShouldBeFalse();
+        (await database.ReadAsync(db => db.Set<ExternalLogin>().CountAsync(l => l.UserId == owner))).ShouldBe(1);
+    }
+
+    [Test]
+    public async Task an_owner_claim_inside_the_age_limit_works()
+    {
+        // Arrange
+        await using var database = await AuthTestDatabase.CreateAsync();
+        var provisioner = ProvisionerOf(database.BuildServices());
+        var owner = UserIdOf(await provisioner.ResolveAsync(Person("old-subject"), CancellationToken.None));
+        await File.WriteAllTextAsync(database.ClaimFilePath, "");
+        File.SetLastWriteTimeUtc(database.ClaimFilePath, DateTime.UtcNow - OwnerClaim.MaxAge + TimeSpan.FromMinutes(1));
+
+        // Act
+        var claimed = await provisioner.ResolveAsync(Person("new-subject", IssuerB), CancellationToken.None);
+
+        // Assert
+        UserIdOf(claimed).ShouldBe(owner);
+        File.Exists(database.ClaimFilePath).ShouldBeFalse();
+    }
+
+    [Test]
+    [Arguments(16)]
+    [Arguments(60 * 24 * 40)]
+    [Arguments(-60)]
+    public async Task an_owner_claim_outside_the_age_limit_takes_nothing_and_goes_away(int minutesOld)
+    {
+        // Arrange
+        await using var database = await AuthTestDatabase.CreateAsync();
+        var provisioner = ProvisionerOf(database.BuildServices());
+        var owner = UserIdOf(await provisioner.ResolveAsync(Person("old-subject"), CancellationToken.None));
+        await File.WriteAllTextAsync(database.ClaimFilePath, "");
+        File.SetLastWriteTimeUtc(database.ClaimFilePath, DateTime.UtcNow - TimeSpan.FromMinutes(minutesOld));
+
+        // Act
+        var stranger = await provisioner.ResolveAsync(Person("stranger", IssuerB), CancellationToken.None);
+
+        // Assert
+        stranger.ShouldBeOfType<ProvisionOutcome.SignupClosed>();
+        File.Exists(database.ClaimFilePath).ShouldBeFalse();
+        Directory.GetFiles(Path.GetDirectoryName(database.ClaimFilePath)!, OwnerClaim.FileName + "*").ShouldBeEmpty();
+        (await database.ReadAsync(db => db.Set<ExternalLogin>().Where(l => l.UserId == owner).CountAsync())).ShouldBe(1);
+    }
+
+    [Test]
+    public async Task an_old_owner_claim_on_a_new_database_still_lets_the_first_login_make_the_owner()
+    {
+        // Arrange
+        await using var database = await AuthTestDatabase.CreateAsync();
+        var provisioner = ProvisionerOf(database.BuildServices());
+        await File.WriteAllTextAsync(database.ClaimFilePath, "");
+        File.SetLastWriteTimeUtc(database.ClaimFilePath, DateTime.UtcNow - TimeSpan.FromDays(1));
+
+        // Act
+        var first = await provisioner.ResolveAsync(Person("first"), CancellationToken.None);
+
+        // Assert
+        var user = await database.ReadAsync(db => db.Users.SingleAsync());
+        UserIdOf(first).ShouldBe(user.Id);
+        user.Role.Value.ShouldBe(UserRole.Admin().Value);
     }
 
     [Test]
