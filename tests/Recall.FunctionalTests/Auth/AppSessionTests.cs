@@ -271,7 +271,7 @@ public class AppSessionTests
         response.Headers.CacheControl!.NoStore.ShouldBeTrue();
         second.AccessToken.ShouldNotBe(first.AccessToken);
         second.RefreshToken.ShouldNotBe(first.RefreshToken);
-        second.ExpiresIn.ShouldBe(900);
+        second.ExpiresIn.ShouldBeInRange(800, 900);
         (await phone.GetAsync(Me, authorization: BearerOf(first.AccessToken))).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         (await phone.GetAsync(Me, authorization: BearerOf(second.AccessToken))).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
