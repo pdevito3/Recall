@@ -176,7 +176,11 @@ public class NoProviderBootTests
         status.GetProperty("callbackUrl").GetString().ShouldEndWith(AuthRoutes.Callback);
 
         login.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
-        (await login.Content.ReadAsStringAsync()).ShouldContain(AuthPages.NoMethodMessage);
+        var setupPage = WebUtility.HtmlDecode(await login.Content.ReadAsStringAsync());
+        setupPage.ShouldContain(AuthPages.NoMethodMessage);
+        setupPage.ShouldContain("Auth__Providers__0__ClientId");
+        setupPage.ShouldContain("Auth__Providers__0__ClientSecret");
+        setupPage.ShouldContain("docs/authentication.md");
 
         api.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         api.Headers.WwwAuthenticate.Select(challenge => challenge.Scheme).ShouldBe(["Bearer"]);
@@ -188,6 +192,39 @@ public class NoProviderBootTests
         (await spaRoute.Content.ReadAsStringAsync()).ShouldContain("recall spa");
         missingAsset.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         missingAuth.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Test]
+    public async Task a_person_who_opens_a_path_with_a_dot_gets_the_spa_and_a_missing_file_stays_a_404()
+    {
+        // Arrange
+        await using var server = await ServerProcess.StartAsync();
+
+        // Act
+        using var page = await GetAsync(server, "/a.b", "text/html,application/xhtml+xml");
+        using var doubleSlashPage = await GetAsync(server, "//evil.example", "text/html");
+        using var missingScript = await GetAsync(server, "/assets/none.js", "*/*");
+        using var noAccept = await GetAsync(server, "/users.csv", null);
+        using var reserved = await GetAsync(server, "/auth/a.b", "text/html");
+        using var reservedApi = await GetAsync(server, "/api/a.b", "text/html");
+
+        // Assert
+        page.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await page.Content.ReadAsStringAsync()).ShouldContain("recall spa");
+        doubleSlashPage.Headers.Location.ShouldBeNull();
+        missingScript.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await missingScript.Content.ReadAsStringAsync()).ShouldNotContain("recall spa");
+        noAccept.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        reserved.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        reservedApi.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+    }
+
+    private static Task<HttpResponseMessage> GetAsync(ServerProcess server, string path, string? accept)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"{server.Client.BaseAddress!.GetLeftPart(UriPartial.Authority)}{path}"));
+        if (accept is not null)
+            request.Headers.Accept.ParseAdd(accept);
+        return server.Client.SendAsync(request);
     }
 
     [Test]

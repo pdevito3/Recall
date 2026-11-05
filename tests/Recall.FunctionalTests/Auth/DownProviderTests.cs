@@ -24,7 +24,7 @@ public class DownProviderTests
         using var htmlRequest = new HttpRequestMessage(HttpMethod.Get, "/auth/oidc/stub/start?client=web");
         htmlRequest.Headers.Accept.ParseAdd("text/html");
         var startHtml = await browser.SendAsync(htmlRequest);
-        var login = await new AuthBrowser(host).GetAsync("/auth/login");
+        var login = await new AuthBrowser(host).GetAsync("/auth/login?returnUrl=%2Fentries");
         var webSession = await browser.GetAsync("/auth/me", csrf: true);
         var nativeSession = await phone.GetAsync("/auth/me", authorization: $"Bearer {tokens.AccessToken}");
         var refresh = await phone.RefreshAsync(tokens.RefreshToken);
@@ -34,7 +34,15 @@ public class DownProviderTests
         (await startJson.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString().ShouldBe("idp_unreachable");
         startHtml.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
         startHtml.Content.Headers.ContentType!.MediaType.ShouldBe("text/html");
-        login.StatusCode.ShouldBe(HttpStatusCode.OK);
+        login.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
+        var loginPage = await login.Content.ReadAsStringAsync();
+        loginPage.ShouldContain("<h1>Sign-in is not available</h1>");
+        loginPage.ShouldContain("Stub is not available.");
+        loginPage.ShouldNotContain("Existing sessions");
+        loginPage.ShouldContain("href=\"/auth/login?returnUrl=%2Fentries\">Try again</a>");
+        var startPage = await startHtml.Content.ReadAsStringAsync();
+        startPage.ShouldNotContain("Existing sessions");
+        startPage.ShouldContain(">Try again</a>");
         webSession.StatusCode.ShouldBe(HttpStatusCode.OK);
         nativeSession.StatusCode.ShouldBe(HttpStatusCode.OK);
         refresh.StatusCode.ShouldBe(HttpStatusCode.OK);

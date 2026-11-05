@@ -22,12 +22,12 @@ public sealed record StubLogin(string Subject)
     public string? TokenBody { get; init; }
 }
 
-public sealed record AuthorizeRequest(string State, string Nonce, string CodeChallenge, string RedirectUri, string ClientId)
+public sealed record AuthorizeRequest(string State, string Nonce, string CodeChallenge, string RedirectUri, string ClientId, string? Prompt = null)
 {
     public static AuthorizeRequest Of(Uri location)
     {
         var query = QueryHelpers.ParseQuery(location.Query);
-        return new AuthorizeRequest(query["state"]!, query["nonce"]!, query["code_challenge"]!, query["redirect_uri"]!, query["client_id"]!);
+        return new AuthorizeRequest(query["state"]!, query["nonce"]!, query["code_challenge"]!, query["redirect_uri"]!, query["client_id"]!, query.TryGetValue("prompt", out var prompt) ? prompt.ToString() : null);
     }
 }
 
@@ -47,6 +47,8 @@ public sealed class StubOidcProvider : HttpMessageHandler
     public string ClientSecret { get; } = Secrets.New();
 
     public bool Down { get; set; }
+
+    public string[]? PromptValues { get; init; }
 
     public IReadOnlyCollection<string> HandedOut => _handedOut;
 
@@ -87,21 +89,29 @@ public sealed class StubOidcProvider : HttpMessageHandler
 
         return request.RequestUri!.AbsolutePath switch
         {
-            "/.well-known/openid-configuration" => Json(new Dictionary<string, object>
-            {
-                ["issuer"] = Issuer,
-                ["authorization_endpoint"] = $"{Issuer}/authorize",
-                ["token_endpoint"] = $"{Issuer}/token",
-                ["jwks_uri"] = $"{Issuer}/jwks",
-                ["userinfo_endpoint"] = $"{Issuer}/userinfo",
-                ["token_endpoint_auth_methods_supported"] = AuthMethods,
-                ["authorization_response_iss_parameter_supported"] = true,
-            }),
+            "/.well-known/openid-configuration" => Discovery(),
             "/jwks" => Json(new Dictionary<string, object> { ["keys"] = new[] { Jwk() } }),
             "/token" => await TokenAsync(request, cancellationToken),
             "/userinfo" => Userinfo(request),
             _ => new HttpResponseMessage(HttpStatusCode.NotFound),
         };
+    }
+
+    private HttpResponseMessage Discovery()
+    {
+        var body = new Dictionary<string, object>
+        {
+            ["issuer"] = Issuer,
+            ["authorization_endpoint"] = $"{Issuer}/authorize",
+            ["token_endpoint"] = $"{Issuer}/token",
+            ["jwks_uri"] = $"{Issuer}/jwks",
+            ["userinfo_endpoint"] = $"{Issuer}/userinfo",
+            ["token_endpoint_auth_methods_supported"] = AuthMethods,
+            ["authorization_response_iss_parameter_supported"] = true,
+        };
+        if (PromptValues is { } values)
+            body["prompt_values_supported"] = values;
+        return Json(body);
     }
 
     private Dictionary<string, string> Jwk()

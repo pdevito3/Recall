@@ -42,7 +42,11 @@ public static class SpaHosting
         var request = context.Request;
         return (HttpMethods.IsGet(request.Method) || HttpMethods.IsHead(request.Method))
             && context.GetEndpoint() is null
-            && !Path.HasExtension(request.Path.Value)
+            && (!Path.HasExtension(request.Path.Value) || AsksForAPage(request))
             && !ReservedPrefixes.Any(prefix => request.Path.StartsWithSegments(prefix));
     }
+
+    // A path with a dot can be a missing file, and a script tag must then get a 404 and no HTML. A person who opens the path asks for a page.
+    private static bool AsksForAPage(HttpRequest request)
+        => request.GetTypedHeaders().Accept.Any(accept => accept.MediaType.Equals("text/html", StringComparison.OrdinalIgnoreCase));
 }

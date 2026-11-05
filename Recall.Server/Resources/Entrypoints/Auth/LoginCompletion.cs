@@ -11,7 +11,7 @@ public sealed class LoginCompletion(SessionStore store, LoginModes modes)
             (LoginClient.Native native, ProvisionOutcome.Provisioned user) => OfferNativeAsync(native, user, modeId, cancellationToken),
             (LoginClient.Native native, ProvisionOutcome.SignupClosed) => Task.FromResult<IResult>(NativeError(native, "signup_closed")),
             (LoginClient.Native native, ProvisionOutcome.Failed failed) => Task.FromResult<IResult>(NativeError(native, ErrorCodeOf(failed.Failure))),
-            (_, ProvisionOutcome.SignupClosed) => Task.FromResult(AuthPages.SignupClosed()),
+            (LoginClient.Web web, ProvisionOutcome.SignupClosed) => Task.FromResult(AuthPages.SignupClosed(modes.All, web.ReturnPath)),
             (_, ProvisionOutcome.Failed failed) => Task.FromResult(WebFailure(failed.Failure, modeId)),
             _ => throw new InvalidOperationException("A login outcome has no answer."),
         };

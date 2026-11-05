@@ -51,7 +51,8 @@ public static class OidcEndpoints
         }, cancellationToken);
 
         BindingCookie.Write(http.Response, http.Request, stateHash, binding, expiresAt);
-        return new AuthRedirect(mode.BuildAuthorizeUrl(discovery, state, nonce, verifier, redirectUri));
+        var promptLogin = OneValue(http.Request.Query, "prompt") == AuthPages.PromptLogin;
+        return new AuthRedirect(mode.BuildAuthorizeUrl(discovery, state, nonce, verifier, redirectUri, promptLogin));
     }
 
     private static async Task<IResult> CallbackAsync(

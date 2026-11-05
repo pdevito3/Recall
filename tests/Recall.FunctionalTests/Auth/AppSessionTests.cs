@@ -247,7 +247,7 @@ public class AppSessionTests
         var afterLogout = await forged.GetAsync(Me, csrf: true);
 
         // Assert
-        noHeader.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        noHeader.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         noHeader.Headers.Contains("Set-Cookie").ShouldBeFalse();
         forged.SessionCookie.ShouldBe(cookie);
         aliveAfterForgery.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -423,10 +423,101 @@ public class AppSessionTests
 
         // Assert
         wrong.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var wrongPage = await wrong.Content.ReadAsStringAsync();
+        wrongPage.ShouldContain("<h1>This sign-out link is not valid</h1>");
+        wrongPage.ShouldNotContain("sign-in request");
+        wrongPage.ShouldContain(">Back to Recall</a>");
         alive.StatusCode.ShouldBe(HttpStatusCode.OK);
         right.StatusCode.ShouldBe(HttpStatusCode.Redirect);
         right.Headers.Location!.OriginalString.ShouldBe("/auth/login?signedOut=1");
         browser.SessionCookie.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task a_real_sign_out_says_signed_out_and_the_next_page_shows_it()
+    {
+        // Arrange
+        using var browser = await SignedInBrowserAsync();
+        var sid = (await (await browser.GetAsync(Me, csrf: true)).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("sid").GetString()!;
+
+        // Act
+        var logout = await browser.GetAsync($"/bff/logout?sid={sid}");
+        var page = await browser.GetAsync(logout.Headers.Location!.OriginalString);
+
+        // Assert
+        browser.SetCookieLines.Last().ShouldContain("samesite=strict", Case.Insensitive);
+        page.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await page.Content.ReadAsStringAsync()).ShouldContain("<h1>You are signed out</h1>");
+    }
+
+    [Test]
+    public async Task a_sign_out_from_another_site_with_the_real_sid_says_that_the_session_stays()
+    {
+        // Arrange
+        using var browser = await SignedInBrowserAsync();
+        var sid = (await (await browser.GetAsync(Me, csrf: true)).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("sid").GetString()!;
+        using var crossSite = NewBrowser();
+
+        // Act
+        var response = await crossSite.GetAsync($"/bff/logout?sid={sid}");
+        var alive = await browser.GetAsync(Me, csrf: true);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        response.Headers.Contains("Set-Cookie").ShouldBeFalse();
+        var page = await response.Content.ReadAsStringAsync();
+        page.ShouldContain("<h1>Sign-out did not finish</h1>");
+        page.ShouldContain("You are still signed in");
+        page.ShouldContain(">Back to Recall</a>");
+        alive.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Test]
+    public async Task the_signed_out_page_says_signed_out_only_to_a_browser_that_signed_out()
+    {
+        // Arrange
+        using var stranger = NewBrowser();
+
+        // Act
+        var page = await stranger.GetAsync("/auth/login?signedOut=1");
+
+        // Assert
+        page.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var html = await page.Content.ReadAsStringAsync();
+        html.ShouldNotContain("You are signed out");
+        html.ShouldContain("<h1>Sign in to Recall</h1>");
+        html.ShouldContain("/auth/oidc/stub/start?client=web");
+    }
+
+    [Test]
+    public async Task a_live_session_at_the_signed_out_page_goes_back_to_the_app()
+    {
+        // Arrange
+        using var browser = await SignedInBrowserAsync();
+
+        // Act
+        var page = await browser.GetAsync("/auth/login?signedOut=1");
+
+        // Assert
+        page.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        page.Headers.Location!.OriginalString.ShouldBe("/");
+    }
+
+    [Test]
+    public async Task a_sign_out_from_another_site_for_a_session_that_ended_says_nothing_false()
+    {
+        // Arrange
+        using var browser = await SignedInBrowserAsync();
+        var sid = (await (await browser.GetAsync(Me, csrf: true)).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("sid").GetString()!;
+        await browser.GetAsync($"/bff/logout?sid={sid}");
+        using var crossSite = NewBrowser();
+
+        // Act
+        var response = await crossSite.GetAsync($"/bff/logout?sid={sid}");
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        response.Headers.Contains("Set-Cookie").ShouldBeFalse();
     }
 
     [Test]

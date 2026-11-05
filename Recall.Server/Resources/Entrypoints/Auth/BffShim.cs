@@ -12,6 +12,8 @@ public static class BffShim
     public const string LogoutUrlClaim = "bff:logout_url";
     public const string SessionExpiresInClaim = "bff:session_expires_in";
 
+    private const string SignedOutPage = $"{AuthRoutes.Login}?signedOut=1";
+
     public sealed record ClaimRecord(
         [property: JsonPropertyName("type")] string Type,
         [property: JsonPropertyName("value")] object Value);
@@ -61,19 +63,25 @@ public static class BffShim
 
     private static async Task<IResult> LogoutAsync(HttpContext http, SessionStore store, CancellationToken cancellationToken)
     {
-        if (SessionCookie.Read(http.Request) is { } cookie)
+        var sid = http.Request.Query["sid"].ToString();
+        if (SessionCookie.Read(http.Request) is not { } cookie)
         {
-            if (await store.FindByAccessAsync(TokenHash.Of(cookie), SessionKind.Web, cancellationToken) is { } session)
-            {
-                if (http.Request.Query["sid"] != session.SessionId)
-                    return AuthPages.BadRequest();
-
-                await store.RevokeAsync(session.SessionId, RevokeReason.Logout, cancellationToken);
-            }
-
-            SessionCookie.Clear(http.Response, http.Request);
+            // SameSite=Strict holds the cookie back on a navigation from another site, so this request cannot end the session that it names.
+            return sid.Length > 0 && await store.IsLiveWebSessionAsync(sid, cancellationToken)
+                ? AuthPages.LogoutFromElsewhere()
+                : new AuthRedirect(SignedOutPage);
         }
 
-        return new AuthRedirect($"{AuthRoutes.Login}?signedOut=1");
+        if (await store.FindByAccessAsync(TokenHash.Of(cookie), SessionKind.Web, cancellationToken) is { } session)
+        {
+            if (sid != session.SessionId)
+                return AuthPages.WrongLogoutLink();
+
+            await store.RevokeAsync(session.SessionId, RevokeReason.Logout, cancellationToken);
+        }
+
+        SessionCookie.Clear(http.Response, http.Request);
+        SessionCookie.MarkSignedOut(http.Response, http.Request);
+        return new AuthRedirect(SignedOutPage);
     }
 }

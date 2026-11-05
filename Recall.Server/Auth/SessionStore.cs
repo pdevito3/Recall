@@ -39,6 +39,14 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
         return row is null ? null : new SessionPrincipal(row.Id, row.UserId, kind, row.AccessExpiresAt);
     }
 
+    public async Task<bool> IsLiveWebSessionAsync(string sessionId, CancellationToken cancellationToken)
+    {
+        var now = timeProvider.GetUtcNow();
+        return await dbContext.Set<AuthSession>()
+            .TagWithOperationCallSite("auth.sessions.is_live_web")
+            .AnyAsync(s => s.Id == sessionId && s.ClientKind == SessionKind.Web && s.RevokedAt == null && s.AccessExpiresAt > now, cancellationToken);
+    }
+
     public async Task<WebSession> StartWebAsync(string userId, string loginMode, CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();

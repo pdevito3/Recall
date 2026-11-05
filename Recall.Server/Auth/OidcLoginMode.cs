@@ -23,7 +23,8 @@ public sealed record OidcDiscovery(
     string JwksUri,
     string? UserinfoEndpoint,
     IReadOnlyList<string> TokenEndpointAuthMethods,
-    bool AdvertisesIssParameter);
+    bool AdvertisesIssParameter,
+    bool AcceptsPromptLogin);
 
 public sealed record OidcCallback(string? Code, string? Iss, string? Error)
 {
@@ -134,7 +135,7 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
         return running.WaitAsync(cancellationToken);
     }
 
-    public string BuildAuthorizeUrl(OidcDiscovery discovery, string state, string nonce, string verifier, string redirectUri)
+    public string BuildAuthorizeUrl(OidcDiscovery discovery, string state, string nonce, string verifier, string redirectUri, bool promptLogin = false)
     {
         var separator = discovery.AuthorizationEndpoint.Contains('?', StringComparison.Ordinal) ? '&' : '?';
         return discovery.AuthorizationEndpoint + separator
@@ -145,7 +146,8 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
             + "&state=" + Uri.EscapeDataString(state)
             + "&nonce=" + Uri.EscapeDataString(nonce)
             + "&code_challenge=" + Pkce.ChallengeOf(verifier)
-            + "&code_challenge_method=S256";
+            + "&code_challenge_method=S256"
+            + (promptLogin && discovery.AcceptsPromptLogin ? "&prompt=login" : "");
     }
 
     public async Task<RedeemResult> RedeemAsync(LoginAttempt attempt, OidcCallback callback, CancellationToken cancellationToken)
@@ -241,7 +243,11 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
             ? listed.EnumerateArray().Where(m => m.ValueKind == JsonValueKind.String).Select(m => m.GetString()!).ToList()
             : [];
         var advertisesIss = root.TryGetProperty("authorization_response_iss_parameter_supported", out var iss) && iss.ValueKind == JsonValueKind.True;
-        return new OidcDiscovery(issuer, authorization!, token!, jwks!, userinfo, methods, advertisesIss);
+        // OpenID Connect defines prompt=login for each provider, and the list is optional. So only a list without login stops it.
+        var acceptsPromptLogin = !root.TryGetProperty("prompt_values_supported", out var prompts)
+            || prompts.ValueKind != JsonValueKind.Array
+            || prompts.EnumerateArray().Any(p => p.ValueKind == JsonValueKind.String && p.GetString() == "login");
+        return new OidcDiscovery(issuer, authorization!, token!, jwks!, userinfo, methods, advertisesIss, acceptsPromptLogin);
     }
 
     private bool IsAllowedUrl(string? url)

@@ -13,17 +13,17 @@ These routes are not in the OpenAPI document. This section is their contract.
 | Path | Method | Credential | Content |
 |---|---|---|---|
 | `/auth/status` | GET | none | The instance, its state, the callback URL, and each login method |
-| `/auth/login` | GET | none | The login page. With one ready provider and no `signedOut`, it redirects to the start of that provider. |
-| `/auth/oidc/{id}/start` | GET | none | Starts a login. The query has `client=web` or `client=app`. |
+| `/auth/login` | GET | none | The login page. A live session redirects to the return path. With one ready provider and no `signedOut`, it redirects to the start of that provider. With each provider down, it answers 503 with `Try again`. |
+| `/auth/oidc/{id}/start` | GET | none | Starts a login. The query has `client=web` or `client=app`. With `prompt=login`, the provider must ask who the person is, unless its discovery document lists `prompt_values_supported` without `login`. |
 | `/auth/oidc/callback` | GET | none | The return from the provider |
 | `/auth/oidc/confirm` | POST | none | The form of the native confirm page |
 | `/auth/token` | POST | none | Gives the tokens of a native session |
-| `/auth/logout` | POST | optional | Ends the session that the request names. It always answers 204. |
+| `/auth/logout` | POST | optional | Ends the session that the request names, and answers 204. A cookie with no `X-CSRF: 1` and no other credential gets 401. |
 | `/auth/sessions/revoke-others` | POST | app session | Ends each other session of the user. It answers 204. |
 | `/auth/me` | GET | app session | `sub`, `name`, `sid`, and `client_kind` |
 | `/bff/login` | GET | none | Redirects to `/auth/login` |
 | `/bff/user` | GET | cookie, with `X-CSRF: 1` | The claims of a web session, or 204 when no one is signed in |
-| `/bff/logout` | GET | cookie, with the `sid` query | Ends the web session and goes to the signed-out page |
+| `/bff/logout` | GET | cookie, with the `sid` query | Ends the web session and goes to the signed-out page. See [Logout](#logout). |
 
 Each other Server path, also `/api/*`, reads the credential in the same way. Send the cookie with `X-CSRF: 1`, or send `Authorization: Bearer <token>`.
 
@@ -123,7 +123,7 @@ An older refresh token, sent with no key or with another key, is a replay. The S
 
 ### Sign out
 
-`POST /auth/logout` with `Authorization: Bearer <access token>`, with the form value `refresh_token`, or with both. It always answers 204, so an app with an expired access token can still end its session. `POST /auth/sessions/revoke-others` ends each other session of the user, for example on a lost phone.
+`POST /auth/logout` with `Authorization: Bearer <access token>`, with the form value `refresh_token`, or with both. It answers 204 also for a token that is not valid, so an app with an expired access token can still end its session. Logout finds a native session by the family inside the refresh token and does not check the secret. The family exists only inside the token, and the tolerant answer is a deliberate decision. `POST /auth/sessions/revoke-others` ends each other session of the user, for example on a lost phone.
 
 Over plain http, a person on the same network can read the tokens and the key. The same person can already read the journal on that connection, so Recall allows it. Use TLS to close both.
 
@@ -149,18 +149,32 @@ A session makes no call to the provider. So a web or native session keeps workin
 | `recall`, on http | `HttpOnly`, `SameSite=Strict`, `Path=/` | The same |
 | `__Host-recall_login_{8 hex}`, on TLS | `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, 10 minutes | The binding of one login attempt |
 | `recall_login_{8 hex}`, on http | `HttpOnly`, `SameSite=Lax`, `Path=/auth/oidc`, 10 minutes | The same |
+| `__Host-recall_signed_out`, on TLS | `HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/`, 60 seconds | The mark of a sign-out that this browser finished |
+| `recall_signed_out`, on http | `HttpOnly`, `SameSite=Strict`, `Path=/`, 60 seconds | The same |
 
 The binding cookie is `Lax` because the provider redirects with a cross-site GET. On https, the Server reads only `__Host-recall`, so a `recall` cookie from a plain http neighbor has no effect.
 
 ### CSRF
 
-A cookie with no `X-CSRF: 1` header fails with 401 on each method. A cross-site page cannot set that header without a CORS grant, and the Server gives none. A bearer token needs no header. `/bff/logout` is a GET, so its `sid` query is its protection.
+A cookie with no `X-CSRF: 1` header fails with 401 on each method, also at `/auth/logout`. A cross-site page cannot set that header without a CORS grant, and the Server gives none. A bearer token needs no header. `/bff/logout` is a GET, so its `sid` query is its protection.
 
 A cookie value works only as a cookie and only on a web session. A bearer value works only in the header and only on a native session. So a stolen cookie value cannot skip this rule.
 
 ## Logout
 
-The SPA goes to `/bff/logout` with the `sid` of the session. The Server ends the session, deletes the cookie, and shows `You are signed out` at `/auth/login?signedOut=1`.
+The SPA goes to `/bff/logout` with the `sid` of the session. The Server ends the session, deletes the cookie, sets the signed-out mark, and shows `You are signed out` at `/auth/login?signedOut=1`.
+
+A response tells what happened:
+
+| Request | Answer |
+|---|---|
+| The cookie of a live session, with its `sid` | Ends the session. The next page says `You are signed out`. |
+| The cookie of a live session, with another `sid` | 400 `This sign-out link is not valid`. The session stays. |
+| A cookie with no live session | Deletes the cookie. The next page says `You are signed out`. |
+| No cookie, with the `sid` of a live web session | 403 `Sign-out did not finish`. The session stays. A navigation from another site gives this, because `SameSite=Strict` holds the cookie back. |
+| No cookie, with no such `sid` | The next page says `Sign in to Recall`. |
+
+`/auth/login?signedOut=1` starts nothing with no click. It says `You are signed out` only with the mark, so a link from another site cannot make it say that. A live session at this URL goes to the return path.
 
 The session at the provider stays. So `Sign in with {provider}` can sign the same person in again with no click. On a shared computer, end the session at the provider too.
 
@@ -168,7 +182,7 @@ The session at the provider stays. So `Sign in with {provider}` can sign the sam
 
 The first login of a new database adds the tenant `Recall` and a user with the role Admin. This person is the Owner. Two first logins at the same time cannot both win, because the database admits one first tenant.
 
-Each later login finds the user through the pair of issuer and subject in `auth_external_logins`. An identity with no link gets the page `This server does not accept new people` with status 403, and it gets no session. To let new people in, set `Auth:OpenSignup` to `true`. Each new person then joins the oldest tenant with the role User.
+Each later login finds the user through the pair of issuer and subject in `auth_external_logins`. An identity with no link gets the page `This server does not accept new people` with status 403, and it gets no session. The action `Use another account` starts a new login with `prompt=login`, so a person with a session at the provider under the wrong account can change it. In Keycloak, the form names the last account, and `Restart login` changes it. To let new people in, set `Auth:OpenSignup` to `true`. Each new person then joins the oldest tenant with the role User.
 
 A user that an Admin adds through the API has no link, so that user cannot sign in today.
 
@@ -264,13 +278,13 @@ The Server reads only the address of the connection, and never `X-Forwarded-For`
 
 With no entry under `Auth:Providers`, and no `Auth:Authority`, the Server boots and runs its migrations. `/auth/status` answers `no_login_method`, and the login page answers 503:
 
-> No sign-in method is configured. Set Auth__Providers__0__Issuer, ClientId, and ClientSecret, then restart.
+> No sign-in method is configured. Set Auth__Providers__0__Issuer, Auth__Providers__0__ClientId, and Auth__Providers__0__ClientSecret, then restart. See docs/authentication.md.
 
 The page also gives the callback URL to register. An API call gets 401.
 
 ### A provider that is down
 
-The Server asks a provider for its discovery document at most once in 2 seconds, with a 3 second limit. `/auth/status` then gives the mode the state `unreachable`, and `start` answers 503 with `idp_unreachable`. Each session keeps working.
+The Server asks a provider for its discovery document at most once in 2 seconds, with a 3 second limit. `/auth/status` then gives the mode the state `unreachable`, and `start` answers 503 with `idp_unreachable`. With each provider down, the login page answers 503 and offers `Try again`. Each session keeps working.
 
 ## File modes
 
