@@ -65,12 +65,6 @@ try
     var bffForContainers = bff.GetEndpoint("http", KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
     // The BFF builds its redirect URIs from its own URL, because the Vite proxy changes the origin.
     bff.WithEnvironment("Bff__PublicOrigin", bff.GetEndpoint("https"));
-    // In a local run, the host filter also lets in the identity provider containers, through the container endpoint
-    // above or host.docker.internal, and the health probes, which call localhost. A published BFF does not trust
-    // these hosts.
-    if (builder.ExecutionContext.IsRunMode)
-        bff.WithEnvironment("Bff__AdditionalAllowedHosts", ReferenceExpression.Create(
-            $"{bffForContainers.Property(EndpointProperty.Host)};host.docker.internal;localhost"));
 
     var authClientUrls = new AuthClientUrls(
         webfrontend.GetEndpoint("http"), server.GetEndpoint("https"), server.GetEndpoint("http"), bff.GetEndpoint("https"),
@@ -79,6 +73,13 @@ try
     // variable AuthProvider=Keycloak overrides it. The e2e tests find the provider from the running stack.
     var selectedProvider = AuthProviderCatalog.Select(builder.Configuration);
     var authProvider = selectedProvider.AddTo(builder, authClientUrls);
+    // In a local run, the host filter also lets in the identity provider containers, through the container endpoint
+    // above or host.docker.internal, and the health probes, which call localhost. A published BFF does not trust
+    // these hosts. Aspire refuses a container endpoint in an app with no container, which is a run with DuendeDemo.
+    if (builder.ExecutionContext.IsRunMode)
+        bff.WithEnvironment("Bff__AdditionalAllowedHosts", builder.Resources.OfType<ContainerResource>().Any()
+            ? ReferenceExpression.Create($"{bffForContainers.Property(EndpointProperty.Host)};host.docker.internal;localhost")
+            : ReferenceExpression.Create($"localhost"));
     // DPoP=true runs the stack with DPoP (RFC 9449): the BFF binds the tokens to its key. The setting is a flag like
     // AuthProvider, for example the environment variable DPoP=true.
     if (AuthProviderDPoP.IsOn(builder))
