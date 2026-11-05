@@ -2,7 +2,6 @@ namespace Recall.Server.Resources.Extensions;
 
 using Databases;
 using Databases.Sqlite;
-using Domain.Attachments;
 using Domain.Tenants;
 using Domain.Users;
 using Microsoft.EntityFrameworkCore;
@@ -31,9 +30,7 @@ public static class WebAppServiceConfiguration
         builder.Services.AddSingleton(Options.Create(FirstPartyClientOptions.FromConfiguration(builder.Configuration)));
         builder.Services.AddApplicationServices();
         builder.Services.AddScoped<SystemTenantAccess>();
-        builder.AddObjectStorage();
         builder.AddFileStore();
-        builder.Services.AddScoped<AttachmentStorage>();
         builder.Services.AddMediatR(cfg =>
         {
             cfg.RegisterServicesFromAssembly(typeof(Program).Assembly);

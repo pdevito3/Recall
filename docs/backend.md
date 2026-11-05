@@ -37,7 +37,6 @@ Keep each C# file at 1000 lines or less. This rule covers all C# files in the so
 - **Value objects** (`EmailAddress`, `UserRole`, and more) use SmartEnum when they have fixed options.
 - **Domain events** queue in the entity. `SaveChangesAsync` runs their handlers in the save transaction. See [domain-events.md](backend/domain-events.md).
 - **Audit log**: each save writes an audit entry for each data change and each recorded action, in the save transaction. See [audit-log.md](backend/audit-log.md).
-- **Attachments**: an entity keeps each file as a `StoredFile` in object storage, and declares the types and the size that it takes in its `UploadRules`. See [attachments.md](backend/attachments.md).
 - **Prefixed string IDs**: each entity has a `public const string IdPrefix`, for example `usr`. `EntityId.New` makes IDs like `usr_0199f0c1a2b37c4d8e9f0a1b2c3d4e5f` (the prefix and a UUIDv7). The build gives an error when an entity has no prefix, an invalid prefix, or a prefix that another entity uses. It also gives an error when a constructor does not call `base(IdPrefix)` with the prefix of its own type, or when an entity derives from another entity. A UUIDv7 ID shows the creation time to the millisecond, so the creation time of a record is not secret.
 
 ## Add a new feature
@@ -233,19 +232,21 @@ The server applies migrations at startup. Before them, `SqliteFile.PrepareAsync`
 
 `ModelSnapshotTests` fails when the committed model snapshot is not the snapshot that the next migration writes. This includes a model change with no DDL, such as a new navigation, which `dotnet ef migrations has-pending-model-changes` does not find. The test ignores the `using` lines and the `ProductVersion` annotation. To correct the failure, add a migration in the change that changed the model. For a change with no DDL, the `Up` and `Down` of the migration are empty. An update of EF Core that changes the generated code also fails the test. Correct it the same way.
 
-## Object storage
+## File store
 
-The Server keeps the bytes of files in one S3 bucket. The database keeps the metadata of each file and the key of its object. `Resources/Storage/ObjectStorage.cs` puts an object, deletes an object or each object under a prefix, and signs a URL that reads an object. `Resources/Storage/ObjectStorageRegistration.cs` adds the S3 client.
+`FileStore` in `Resources/Storage/` keeps the bytes of files on the local disk, under one root folder. It has four actions: `WriteAsync`, `OpenRead`, `Delete`, and `DeleteUnder`. `OpenRead` throws `NotFoundException` for a key with no file. The store has no download endpoint and no access check, so the feature that calls it does the permission check of the file.
 
-| Where | Storage |
-|-------|---------|
-| `dotnet aspire start` | The `storage` resource of the AppHost. It is Floci, an S3 emulator, on port 24780. When Floci is ready, `Recall.AppHost/Storage/seed/01-create-bucket.sh` makes the bucket `files`. The AppHost gives the Server `AWS_ENDPOINT_URL`, the region, test credentials, and `ObjectStorage__BucketName` |
-| The integration and functional tests | `FlociTestStorage` in `tests/Recall.SharedTestHelpers/Utilities/` starts a Floci container with the same image, and makes a new bucket for each run |
-| Production | S3 of AWS, or a service with the S3 API. A publish of the AppHost has no `storage` resource. Set `ObjectStorage__BucketName`: the Server does not start without it. With no `AWS_ENDPOINT_URL`, the SDK reads the region and the credentials from its default chain. Give the credentials `s3:PutObject`, `s3:GetObject`, and `s3:DeleteObject` on the objects, and `s3:ListBucket` on the bucket for the delete of a tenant. Block all public access to the bucket |
+| Where | Root |
+|-------|------|
+| A container | `/data/files`, from `FileStore:Root` in `appsettings.json` |
+| `dotnet aspire start` | `files` in the data directory of the AppHost: `RECALL_DATA_DIR`, or `.data` of the checkout, or a new temp directory in an isolated run. The AppHost sets `FileStore__Root` |
+| The integration and functional tests | A new temp directory for each run. See `TemporaryFileRoot` |
 
-Floci checks the signature of a signed request (`FLOCI_AUTH_VALIDATE_SIGNATURES`). It does not refuse a request with no signature, so a local bucket is open to each caller that can get to its port. S3 of AWS refuses such a request when the bucket blocks public access.
+A key is a `FileKey`. It is a relative path that refuses `..`, an absolute path, an empty segment, a NUL, and the temporary folder. A bad value throws `InvalidFileKeyException`, so a key that exists is safe to use. Make the key of a file of a tenant with `FileKey.ForTenant`, for example `FileKey.ForTenant(tenantId, "recordings", recordingId, "00001.webm")`. The result is under `tenants/{tenantId}`, and `DeleteTenant` deletes that folder after the delete of the tenant commits.
 
-To keep the files of an entity in storage, follow [attachments.md](backend/attachments.md). It gives the upload rules, the presigned URLs, the order of the writes, and the steps to add attachments to an entity.
+A write goes to a new file in `.tmp` under the root, flushes it to the disk, renames it to its key, and flushes each folder from the key up to the root. So a reader sees the old file or the new file, and a write that returned stays after a power failure. Two writes to one key do not conflict, and the last rename wins. `DeleteUnder` first renames the folder into `.tmp`, so all its keys go at one time. At each start, `FileStore.Prepare` removes `.tmp` with what an interrupted process left in it. A failure there writes an error to the log, and the host still starts, because the journal can still read its entries.
+
+The store refuses each symlink below the root, in the key and in `.tmp`, with an `IOException`. The store makes no links, so a link is a server fault and not a bad request. The root itself can be a link.
 
 ## Tests
 

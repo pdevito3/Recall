@@ -41,7 +41,6 @@ public partial class UnauthorizedResponseTests : TestBase
             request.Content = operation["requestBody"]?["content"]?.AsObject().Single().Key switch
             {
                 null => null,
-                "multipart/form-data" => new MultipartFormDataContent(),
                 var mediaType => new StringContent("{}", Encoding.UTF8, mediaType),
             };
 

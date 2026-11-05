@@ -24,8 +24,6 @@ public sealed class TestingWebApplicationFactory : WebApplicationFactory<Program
 {
     private readonly SqliteTestDatabase _database = new();
 
-    public FlociTestStorage Storage { get; } = new();
-
     private readonly TemporaryFileRoot _fileRoot = new();
 
     public string FileRoot => _fileRoot.Path;
@@ -121,10 +119,7 @@ public sealed class TestingWebApplicationFactory : WebApplicationFactory<Program
         // Tests never reload configuration. A file watcher on appsettings can hang on macOS when the system is busy.
         Environment.SetEnvironmentVariable("DOTNET_hostBuilder__reloadConfigOnChange", "false");
 
-        await Storage.StartAsync();
-        Storage.SetEnvironmentVariables();
         Environment.SetEnvironmentVariable("FileStore__Root", _fileRoot.Path);
-
         Environment.SetEnvironmentVariable(
             $"ConnectionStrings__{DatabaseConsts.DatabaseName}",
             _database.ConnectionString);
@@ -164,7 +159,6 @@ public sealed class TestingWebApplicationFactory : WebApplicationFactory<Program
     {
         await base.DisposeAsync();
         await _database.DisposeAsync();
-        await Storage.DisposeAsync();
         _fileRoot.Dispose();
     }
 }

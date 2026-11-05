@@ -6,13 +6,11 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Recall.Server.Domain;
-using Recall.Server.Domain.Attachments;
 using Recall.Server.Domain.Users;
 using Recall.Server.Resources.Entrypoints;
 using Recall.Server.Resources.Entrypoints.Http;
 using Recall.Server.Resources.Entrypoints.Mcp;
 using Recall.SharedTestHelpers.EntityGraphs;
-using Recall.SharedTestHelpers.Fakes.Attachments;
 using global::Grpc.AspNetCore.Server;
 using global::Grpc.Core;
 using global::Google.Protobuf;
@@ -387,25 +385,11 @@ public class EndpointAccessSweepTests : TestBase
 
     private async Task<Outcome> SendHttpAsync(HttpEntrypoint endpoint, RecordIds ids)
     {
-        // The upload rules of a route are in its handler, not in the OpenAPI document. So a route that takes a file
-        // gets a file of each type of the registry until its rules take the type.
-        var fileTypes = endpoint.TakesFile ? FileType.All : [FileType.All[0]];
-        Outcome? outcome = null;
-        foreach (var fileType in fileTypes)
-        {
-            using var request = endpoint.RequestFor(ids, fileType);
-            using var response = await FactoryClient.SendAsync(request);
-            var body = await response.Content.ReadAsStringAsync();
-            outcome = new Outcome(((int)response.StatusCode).ToString(CultureInfo.InvariantCulture), body.Length > 300 ? body[..300] : body);
-            if (!RefusesTheFileType(response, body))
-                break;
-        }
-        return outcome!;
+        using var request = endpoint.RequestFor(ids);
+        using var response = await FactoryClient.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+        return new Outcome(((int)response.StatusCode).ToString(CultureInfo.InvariantCulture), body.Length > 300 ? body[..300] : body);
     }
-
-    private static bool RefusesTheFileType(HttpResponseMessage response, string body)
-        => response.StatusCode == System.Net.HttpStatusCode.UnprocessableEntity
-            && JsonNode.Parse(body)?["errors"]?["mediaType"] is not null;
 
     private sealed record HttpParameter(string Name, string In, bool Required, JsonNode? Schema);
 
@@ -416,13 +400,9 @@ public class EndpointAccessSweepTests : TestBase
         string Kind,
         IReadOnlyList<HttpParameter> Parameters,
         JsonNode? Body,
-        JsonNode? FormBody,
         JsonNode Document)
     {
         public bool IsDelete => Method == HttpMethods.Delete;
-
-        public bool TakesFile => FormBody is not null && SchemaSample.RequiredOf(FormBody, Document)
-            .Any(name => SchemaSample.IsFile(FormBody["properties"]![name]!, Document));
 
         public static HttpEntrypoint From(RouteEndpoint endpoint, JsonNode document)
         {
@@ -437,7 +417,7 @@ public class EndpointAccessSweepTests : TestBase
                 .Select(o => (Path: o.Name[(o.Method.Length + 1)..], o.Operation))
                 .FirstOrDefault(o => o.Operation["operationId"]?.GetValue<string>() == name);
             if (operation.Operation is null)
-                return new HttpEntrypoint(target, method, "", kind, [], null, null, document);
+                return new HttpEntrypoint(target, method, "", kind, [], null, document);
 
             var parameters = (operation.Operation["parameters"]?.AsArray() ?? [])
                 .Select(p => new HttpParameter(
@@ -448,13 +428,11 @@ public class EndpointAccessSweepTests : TestBase
                 .ToList();
             var content = operation.Operation["requestBody"]?["content"];
             return new HttpEntrypoint(target with { Label = $"{method} {operation.Path}" },
-                method, operation.Path, kind, parameters, content?["application/json"]?["schema"],
-                content?["multipart/form-data"]?["schema"], document);
+                method, operation.Path, kind, parameters, content?["application/json"]?["schema"], document);
         }
 
         /// <param name="ids">The records that the route values name.</param>
-        /// <param name="fileType">The type of the file of a form. A route with no file does not read it.</param>
-        public HttpRequestMessage RequestFor(RecordIds ids, FileType fileType)
+        public HttpRequestMessage RequestFor(RecordIds ids)
         {
             if (Method.Contains(',', StringComparison.Ordinal))
                 throw new SweepSetupException($"It maps the methods {Method}, and the sweep sends one method. Map one method on each endpoint.");
@@ -481,30 +459,7 @@ public class EndpointAccessSweepTests : TestBase
             if (Body is not null)
                 request.Content = new StringContent(
                     SchemaSample.Of(Body, Document)?.ToJsonString() ?? "null", Encoding.UTF8, "application/json");
-            if (FormBody is not null)
-                request.Content = FormFor(FormBody, fileType);
             return request;
-        }
-
-        private MultipartFormDataContent FormFor(JsonNode schema, FileType fileType)
-        {
-            var form = new MultipartFormDataContent();
-            foreach (var name in SchemaSample.RequiredOf(schema, Document))
-            {
-                var property = schema["properties"]![name]!;
-                if (SchemaSample.IsFile(property, Document))
-                {
-                    // The upload rules check the first bytes, so the file starts as a real file of its type
-                    var file = new ByteArrayContent(SampleFiles.Of(fileType));
-                    file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(fileType.MediaType);
-                    form.Add(file, name, $"sweep{fileType.Extensions[0]}");
-                }
-                else
-                {
-                    form.Add(new StringContent(SchemaSample.Of(property, Document)?.ToString() ?? ""), name);
-                }
-            }
-            return form;
         }
 
         private string QueryValueOf(HttpParameter parameter)
