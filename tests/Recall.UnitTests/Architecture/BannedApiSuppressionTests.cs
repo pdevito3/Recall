@@ -6,6 +6,7 @@ public class BannedApiSuppressionTests
 {
     private static readonly string[] FilesThatSuppressTheBan =
     [
+        "Recall.Server/Auth/SessionStore.cs",
         "Recall.Server/Databases/Sqlite/SqliteFile.cs",
         "Recall.Server/Domain/DPoPProofs/Features/DeleteExpiredDPoPProofs/DeleteExpiredDPoPProofs.cs",
         "Recall.Server/Domain/DPoPProofs/Features/RegisterDPoPProof/RegisterDPoPProof.cs",
