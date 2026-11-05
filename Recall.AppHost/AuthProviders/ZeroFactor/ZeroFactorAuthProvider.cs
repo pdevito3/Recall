@@ -7,7 +7,7 @@ namespace Recall.AppHost.AuthProviders;
 /// Test users: admin@example.com (roles admin and user) and user@example.com (role user). The seed gives them the same
 /// IDs as the Keycloak seed, so the sub claim, and with it User.Identifier in the app database, stays the same when you
 /// change between Keycloak and ZeroFactor. To sign in as a user from another provider, register it on the login page
-/// and enter its sub as the User ID. Manage the users at /_0factor/realms/aspire on the zerofactor endpoint.
+/// and enter its sub as the User ID. Manage the users at /_0factor/realms/recall on the zerofactor endpoint.
 /// The realm is lenient: it accepts any redirect URI, so the seed needs no app URLs.
 /// Agent clients: fleet-sync gets a client_credentials token for its hidden service account, for a machine agent.
 /// clinic-assistant is a public client that gets a token for a test user with the password grant and any password, for
@@ -23,7 +23,7 @@ public sealed class ZeroFactorAuthProvider : IAuthProvider
             throw new InvalidOperationException(
                 $"{nameof(ZeroFactorAuthProvider)} is for local development only. Select another AuthProvider to publish or deploy.");
 
-        const string realmName = "aspire";
+        const string realmName = "recall";
         const string clientId = "aspire-app";
 
         var zeroFactor = builder.AddContainer("zerofactor", "c4l3b/0factor", "0.1.8")
