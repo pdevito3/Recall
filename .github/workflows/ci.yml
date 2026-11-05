@@ -4,6 +4,7 @@ name: CI
 # To correct a failure, build the Server, run `pnpm generate:api` in frontend/, and commit the result.
 # The job also builds, lints, and tests the frontend against the contract, and runs the functional suite of the frontend. The test job runs the .NET tests.
 # The line-endings job fails when a tracked text file has a CR. .gitattributes stores each text file with LF.
+# The template-name job fails when code or config has the template name. See docs/adr/0017-template-fixes-by-cherry-pick.md.
 # The grpc-contract job lints the .proto files and fails on a breaking change against main. See buf.yaml.
 # The new-feature job runs scripts/ci/new-feature.cs, which runs scripts/new-feature.cs for two sample entities, then lints, builds, and tests the result.
 # A job that calls a script under scripts/ci/ keeps its steps there, so that an agent can run them locally. The script works on a throwaway copy of the checkout.
@@ -123,6 +124,21 @@ jobs:
           elif [ $? -ne 1 ]; then
             echo "::error::git grep failed."
             exit 2
+          fi
+
+  template-name:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Fail on the template name in code or config
+        run: |
+          if git ls-files | grep -iE 'fullstack-?template' || git grep -ilE 'fullstack[- ]?template' -- ':!*.md' ':!docs/evidence/*'; then
+            echo "::error::The files above have the template name. Change it to Recall. See docs/adr/0017-template-fixes-by-cherry-pick.md."
+            exit 1
           fi
 
   grpc-contract:
