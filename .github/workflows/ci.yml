@@ -257,6 +257,8 @@ jobs:
             stack:
               - 'Recall.AppHost/**'
               - 'Recall.Server/Auth/**'
+              - 'Recall.Server/Databases/**'
+              - 'Recall.Server/Domain/**'
               - 'Recall.Server/Resources/Entrypoints/**'
               - 'Directory.Packages.props'
               - 'Directory.Build.props'
