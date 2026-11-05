@@ -22,42 +22,24 @@ export interface IdpConfig {
   twoStepLogin?: boolean
   // Second step submit selector for two-step login (if different from submitSelector)
   secondStepSubmitSelector?: string
-  // The provider features that the e2e tests expect (section 6 of docs/specs/home-rolled-bff.md)
+  // What the discovery document of the provider lists. Each value is a fact about the provider, and the Server uses
+  // none of them to log in, so a test fails when a provider upgrade adds or drops one.
   capabilities: IdpCapabilities
-  // The provider features that discovery does not show
-  sessionFeatures: IdpSessionFeatures
 }
 
-/**
- * A feature test runs only for a provider that has the feature. For the other providers, a test proves the fallback.
- */
 export interface IdpCapabilities {
-  // Discovery lists revocation_endpoint (RFC 7009)
+  // revocation_endpoint (RFC 7009)
   revocation: boolean
-  // Discovery lists authorization_response_iss_parameter_supported (RFC 9207)
+  // authorization_response_iss_parameter_supported (RFC 9207)
   issuerParameter: boolean
-  // Discovery lists backchannel_logout_supported. The Duende Demo lists it, but it cannot reach the BFF.
+  // backchannel_logout_supported
   backChannelLogout: boolean
-  // Discovery lists end_session_endpoint
+  // end_session_endpoint
   endSession: boolean
-  // Discovery lists pushed_authorization_request_endpoint, so the BFF pushes the authorize request (RFC 9126)
+  // pushed_authorization_request_endpoint (RFC 9126)
   pushedAuthorization: boolean
-  // Discovery lists dpop_signing_alg_values_supported, so the BFF can bind the tokens to its key (RFC 9449). Keycloak
-  // lists it because the AppHost starts it with --features=dpop. FusionAuth and Authentik list it too, but the AppHost
-  // runs DPoP only with a provider that sets TestedWithDPoP, so the DPoP tests do not run against them.
+  // dpop_signing_alg_values_supported (RFC 9449). Keycloak lists it because the AppHost starts it with --features=dpop.
   dpop: boolean
-}
-
-/**
- * The provider features that discovery does not show (section 6 of docs/specs/home-rolled-bff.md).
- */
-export interface IdpSessionFeatures {
-  // The provider sends the back-channel logout token to the BFF. The Duende Demo cannot reach the BFF. FusionAuth
-  // does not send it, and Cognito and ZeroFactor do not support it.
-  backChannelLogoutReachesBff: boolean
-  // Each refresh gives a new refresh token, and a reuse of the old one gets invalid_grant. Cognito gives no new
-  // refresh token. ZeroFactor gives a new one, but its refresh tokens are stateless, so the old one still works.
-  refreshRotation: boolean
 }
 
 const idpsDir = new URL('./idps/', import.meta.url)

@@ -9,8 +9,10 @@ function resource(displayName: string, overrides: Record<string, unknown> = {}) 
 }
 
 const healthyResources = [
-  resource('server', { urls: [{ name: 'https', url: 'https://localhost:7001' }] }),
-  resource('bff', { environment: { Auth__Authority: 'http://localhost:24730/realms/app' } }),
+  resource('server', {
+    urls: [{ name: 'https', url: 'https://localhost:7001' }],
+    environment: { Auth__Authority: 'http://localhost:24730/realms/app' },
+  }),
   resource('webfrontend', { urls: [{ name: 'http', url: 'http://localhost:24710' }] }),
   resource('webfrontend-installer', { state: 'Finished', healthStatus: null }),
 ]
@@ -67,30 +69,30 @@ describe('checkStack', () => {
   })
 
   it('names a resource that the stack tests need and the stack does not have', () => {
-    const message = messageOf(described(healthyResources.filter((r) => r.displayName !== 'bff')))
+    const message = messageOf(described(healthyResources.filter((r) => r.displayName !== 'webfrontend')))
 
-    expect(message).toContain('The stack has no bff resource.')
+    expect(message).toContain('The stack has no webfrontend resource.')
     expect(message).toContain(startCommand)
   })
 
   it('names each needed resource that the stack does not have', () => {
-    const message = messageOf(described([resource('server')]))
+    const message = messageOf(described([resource('webfrontend-installer')]))
 
-    expect(message).toContain('The stack has no bff or webfrontend resource.')
+    expect(message).toContain('The stack has no server or webfrontend resource.')
   })
 
   it('names each needed resource that is not healthy and gives the wait command', () => {
     const message = messageOf(
       described([
         resource('server', { healthStatus: 'Unhealthy' }),
-        resource('bff'),
         resource('webfrontend', { state: 'Starting', healthStatus: null }),
+        resource('webfrontend-installer', { state: 'Finished', healthStatus: null }),
       ]),
     )
 
     expect(message).toContain('server (state Running, health Unhealthy)')
     expect(message).toContain('webfrontend (state Starting, health unknown)')
-    expect(message).not.toContain('bff (')
+    expect(message).not.toContain('webfrontend-installer')
     expect(message).toContain(
       'for resource in server webfrontend; do dotnet aspire wait "$resource" --status healthy --timeout 900 --apphost ../Recall.AppHost; done',
     )

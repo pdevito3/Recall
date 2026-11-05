@@ -5,13 +5,13 @@ import { defineConfig, devices } from '@playwright/test'
  *
  * The tests run against the IdP of an isolated Aspire stack, usually Keycloak. From the checkout root:
  * 1. Start the stack: AuthProvider=Keycloak dotnet aspire start --isolated --non-interactive --apphost Recall.AppHost
- * 2. Wait until the server, the BFF, and the webfrontend are healthy: dotnet aspire wait <resource> --status healthy
+ * 2. Wait until the server and the webfrontend are healthy: dotnet aspire wait <resource> --status healthy
  * 3. In frontend, run the tests: pnpm test:e2e:stack
  *
  * The script e2e/run-against-stack.ts reads the URLs from `dotnet aspire describe` and sets BASE_URL, SERVER_URL,
  * and IDP from the resources of the stack. See docs/authentication.md.
  *
- * The functional suite, with the BFF mocked in the browser, is in playwright.config.ts.
+ * The functional suite, with the Server mocked in the browser, is in playwright.config.ts.
  */
 export default defineConfig({
   testDir: './e2e',
@@ -30,7 +30,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    ignoreHTTPSErrors: true, // For self-signed certs in development
+    ignoreHTTPSErrors: true, // The Swagger tests call the https endpoint of the Server, with no certificate trust on the machine
   },
 
   projects: [

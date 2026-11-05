@@ -1,15 +1,16 @@
-import { execFileSync } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { test, expect, type Locator, type Page, type Request } from '@playwright/test'
 import { loadIdp, type IdpCapabilities, type IdpConfig } from './idps.ts'
-import { refreshesOnEachCall, refreshMarginHint } from './stack-features.ts'
 
 /**
  * Authentication flow tests for all supported Identity Providers.
  *
  * These tests verify:
- * 1. Swagger OAuth authorization and secure API access
- * 2. React UI login, a signed-in API call through the BFF, and logout
+ * 1. React UI login through the Server, a signed-in API call, and logout
+ * 2. The login of a native app: /auth/status, the browser flow, the token grants, and replay
+ * 3. Swagger OAuth authorization and secure API access
  *
  * Test users (from docs/authentication.md):
  * - Keycloak/FusionAuth/Authentik/Cognito: admin@example.com / password123!
@@ -77,26 +78,6 @@ async function loginAtIdp(page: Page, idp: IdpConfig) {
   }
 }
 
-/**
- * The number of server spans of the current user call with a DPoP proof since `startedAt`. The server tags the span
- * of a request with `app.auth.scheme=DPoP` after it checked the proof and the binding of the token.
- */
-function dpopSpansOfCurrentUserSince(startedAt: number): number {
-  const output = execFileSync(
-    'dotnet',
-    ['aspire', 'otel', 'spans', '--search', 'app.auth.scheme', '--format', 'Json', '--apphost', '../Recall.AppHost'],
-    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
-  )
-  const json = output.split('\n').find((line) => line.startsWith('[{') || line === '[]')
-  const spans = JSON.parse(json ?? '[]') as { timestamp: string; attributes: Record<string, string> }[]
-  return spans.filter(
-    (span) =>
-      Date.parse(span.timestamp) >= startedAt &&
-      span.attributes['url.path'] === '/api/v1/users/me' &&
-      span.attributes['app.auth.scheme'] === 'DPoP',
-  ).length
-}
-
 test.describe(`Auth Flows - ${currentIdp.name}`, () => {
   test.describe('React UI Authentication', () => {
     test('should login, call the Server as the signed-in user, and logout', async ({ page }) => {
@@ -113,76 +94,21 @@ test.describe(`Auth Flows - ${currentIdp.name}`, () => {
       const logoutButton = page.getByRole('button', { name: /logout/i })
       await expect(logoutButton).toBeVisible({ timeout: 10000 })
 
-      // Step 6: The home page shows the name that the Server read from the access token, which the BFF sent
+      // Step 6: The home page shows the name of the session
       await expect(page.getByText(/^Signed in as /)).toBeVisible({ timeout: 10000 })
 
       // Step 7: Click Logout. The 200 before the logout proves that the 204 after it comes from the logout
       const appOrigin = new URL(page.url()).origin
       const bffUser = () => page.request.get(new URL('/bff/user', appOrigin).toString(), { headers: { 'X-CSRF': '1' } })
-      expect((await bffUser()).status(), 'the BFF session before the logout').toBe(200)
+      expect((await bffUser()).status(), 'the session before the logout').toBe(200)
       await logoutButton.click()
 
-      // Step 8: Wait for logout to complete
-      // Some IDPs (like Authentik) show a logout confirmation page instead of auto-redirecting
-      // Check if we're on an IDP logout confirmation page
-      // Authentik shows "Log back into [app]"
-      // Duende Demo shows "Click here to return to the [app] application"
-      const backToAppLink = page.getByRole('link', { name: /log back into/i })
-      const duendeReturnLink = page.locator('a[href*="signout-callback-oidc"]')
-
-      // An IDP that redirects to the app by itself goes through the app, and the app sends the browser with no session
-      // to the login form.
-      const returnLink = backToAppLink.or(duendeReturnLink).first()
-      const idpLoginForm = page.locator(currentIdp.usernameSelector)
-      await expect
-        .poll(async () => (await returnLink.isVisible()) || (await idpLoginForm.isVisible()), { timeout: 30000 })
-        .toBe(true)
-      if (await returnLink.isVisible()) {
-        await returnLink.click()
-      }
-
-      await expect(idpLoginForm).toBeVisible({ timeout: 30000 })
-      expect((await bffUser()).status(), 'the BFF session after the logout').toBe(204)
-    })
-
-    // The stack runs with DPoP when the BFF has Auth:Features:DPoP=Require (DPoP=true when the stack starts). The
-    // server tags the span of a request that came with a valid DPoP proof, so the test reads the span of the call.
-    test('should call the Server with a DPoP-bound token', async ({ page }) => {
-      test.skip(process.env.DPOP !== 'true', 'The stack does not use DPoP. Start it with DPoP=true.')
-      const startedAt = Date.now()
-
-      await page.goto('/')
-      await expect(page.locator(currentIdp.usernameSelector)).toBeVisible({ timeout: 30000 })
-      await loginAtIdp(page, currentIdp)
-      await page.waitForURL('/', { timeout: 30000 })
-      await expect(page.getByRole('button', { name: /logout/i })).toBeVisible({ timeout: 10000 })
-
-      await expect(page.getByText(/^Signed in as /)).toBeVisible({ timeout: 10000 })
-
-      await expect
-        .poll(() => dpopSpansOfCurrentUserSince(startedAt), { timeout: 30000, message: 'no server span with app.auth.scheme=DPoP' })
-        .toBeGreaterThan(0)
-    })
-
-    test('should use PAR when the provider offers it, and the plain authorize URL when not', async ({ page }) => {
-      const loginResponse = page.waitForResponse((response) => new URL(response.url()).pathname === '/bff/login')
-      await page.goto('/')
-
-      // The 302 of /bff/login holds the authorize URL
-      const location = (await loginResponse).headers()['location']
-      expect(location).toBeTruthy()
-      const authorizeParameters = [...new URL(location).searchParams.keys()].sort()
-      if (currentIdp.capabilities.pushedAuthorization) {
-        expect(authorizeParameters).toEqual(['client_id', 'request_uri'])
-      } else {
-        expect(authorizeParameters).toEqual(expect.arrayContaining(['client_id', 'code_challenge', 'redirect_uri', 'response_type', 'state']))
-        expect(authorizeParameters).not.toContain('request_uri')
-      }
-
-      // The login finishes with either form of the authorize request
-      await loginAtIdp(page, currentIdp)
-      await page.waitForURL('/', { timeout: 30000 })
-      await expect(page.getByRole('button', { name: /logout/i })).toBeVisible({ timeout: 10000 })
+      // Step 8: Logout ends the session of the app, and the Server shows its signed-out page. The session at the IdP stays.
+      await page.waitForURL((url) => url.pathname === '/auth/login' && url.searchParams.get('signedOut') === '1', { timeout: 30000 })
+      await expect(page.getByRole('heading', { name: 'You are signed out' })).toBeVisible()
+      await expect(page).toHaveTitle('You are signed out - Recall')
+      await expect(page.getByRole('link', { name: /^Sign in with / })).toBeVisible()
+      expect((await bffUser()).status(), 'the session after the logout').toBe(204)
     })
 
     test('should return to a deep link on the SPA origin, with its query, after a login from that link', async ({ page, baseURL }) => {
@@ -201,7 +127,7 @@ test.describe(`Auth Flows - ${currentIdp.name}`, () => {
   })
 })
 
-const sessionCookieName = '__Host-bff'
+const sessionCookieName = 'recall'
 
 /**
  * Logs in through the SPA and waits for the first load after the redirect to show the signed-in user.
@@ -233,22 +159,19 @@ async function sentSessionCookie(request: Request) {
   return cookie.split(';').some((pair) => pair.trim().startsWith(`${sessionCookieName}=`))
 }
 
-// Section 3.8 of docs/specs/home-rolled-bff.md: the session cookie is SameSite=Strict
+// The session cookie is SameSite=Strict
 test.describe(`Session cookie - ${currentIdp.name}`, () => {
-  test('should set the correlation and nonce cookies with Lax and the session cookie with Strict, and end signed in on the first load', async ({
+  test('should set the login binding cookie with Lax and the session cookie with Strict, and end signed in on the first load', async ({
     page,
     context,
   }) => {
     await page.goto('/')
     await page.locator(currentIdp.usernameSelector).waitFor({ state: 'visible', timeout: 30000 })
 
-    // The browser must send these two cookies on the cross-site GET from the identity provider to /signin-oidc
-    const loginCookies = await context.cookies()
-    for (const prefix of ['.AspNetCore.Correlation.', '.AspNetCore.OpenIdConnect.Nonce.']) {
-      const cookie = loginCookies.find((c) => c.name.startsWith(prefix))
-      expect(cookie, `${prefix} cookie`).toBeDefined()
-      expect(cookie).toMatchObject({ sameSite: 'Lax', secure: true, httpOnly: true })
-    }
+    // The browser must send this cookie on the cross-site GET from the identity provider to /auth/oidc/callback
+    const bindingCookie = (await context.cookies()).find((c) => c.name.startsWith('recall_login_'))
+    expect(bindingCookie, 'the login binding cookie').toBeDefined()
+    expect(bindingCookie).toMatchObject({ sameSite: 'Lax', secure: false, httpOnly: true, path: '/auth/oidc' })
 
     await loginAtIdp(page, currentIdp)
 
@@ -257,8 +180,10 @@ test.describe(`Session cookie - ${currentIdp.name}`, () => {
     await page.waitForURL('/', { timeout: 30000 })
     await expect(page.getByRole('button', { name: /logout/i })).toBeVisible({ timeout: 10000 })
 
-    const sessionCookie = (await context.cookies()).find((c) => c.name === sessionCookieName)
-    expect(sessionCookie).toMatchObject({ sameSite: 'Strict', secure: true, httpOnly: true, path: '/' })
+    // BASE_URL is plain http, so the Server sets the name with no __Host- prefix and no Secure attribute
+    const cookies = await context.cookies()
+    expect(cookies.find((c) => c.name === sessionCookieName)).toMatchObject({ sameSite: 'Strict', secure: false, httpOnly: true, path: '/' })
+    expect(cookies.some((c) => c.name.startsWith('recall_login_')), 'the callback deletes the binding cookie').toBe(false)
   })
 
   test('should show the signed-in user on a deep link from another site', async ({ page }) => {
@@ -331,6 +256,7 @@ test.describe(`Swagger - ${currentIdp.name}`, () => {
     await expect(page.getByText('/api/v1/users/me')).toBeVisible({ timeout: 5000 })
   })
 
+  // The Server reads a provider JWT from its claims, so this call works and tenant reads are refused (docs/authentication.md)
   test('should authorize and call the current user endpoint', async ({ page }) => {
     // Step 1: Navigate to Swagger UI
     await page.goto(`${serverUrl}/swagger`, {
@@ -456,263 +382,131 @@ test.describe(`Provider discovery - ${currentIdp.name}`, () => {
   })
 })
 
-function requiredEnv(name: string): string {
-  const value = process.env[name]
-  if (!value) {
-    throw new Error(`${name} is not set. pnpm test:e2e:stack sets it from the stack.`)
+// The contract is in docs/authentication.md. Node fetch, not the request fixture of Playwright, keeps the tokens out of the trace.
+test.describe(`Native app login - ${currentIdp.name}`, () => {
+  interface TokenPair {
+    access_token: string
+    refresh_token: string
+    token_type: string
+    expires_in: number
   }
-  return value
-}
 
-/**
- * Calls the identity provider with Node fetch, not the request fixture of Playwright, so that the tokens and the admin
- * credentials stay out of the trace. Returns the status and the JSON body.
- */
-async function callIdp(url: string, init: RequestInit = {}): Promise<{ status: number; body: Record<string, unknown> }> {
-  const response = await fetch(url, init)
-  const text = await response.text()
-  return { status: response.status, body: text ? (JSON.parse(text) as Record<string, unknown>) : {} }
-}
-
-async function readDiscovery(): Promise<Record<string, unknown>> {
-  const { status, body } = await callIdp(`${requiredEnv('AUTHORITY').replace(/\/$/, '')}/.well-known/openid-configuration`)
-  expect(status).toBe(200)
-  return body
-}
-
-// The status of /bff/user for the session cookie of the page
-async function bffUserStatus(page: Page): Promise<number> {
-  return page.evaluate(async () => (await fetch('/bff/user', { headers: { 'X-CSRF': '1' } })).status)
-}
-
-// The sid claim of the BFF session, the id of the session at the identity provider
-async function bffSessionId(page: Page): Promise<string> {
-  const claims = await page.evaluate(
-    async () => (await (await fetch('/bff/user', { headers: { 'X-CSRF': '1' } })).json()) as { type: string; value: string }[],
-  )
-  const sid = claims.find((claim) => claim.type === 'sid')?.value
-  expect(sid, 'the sid claim of the BFF session').toBeTruthy()
-  return sid!
-}
-
-/**
- * Ends one Keycloak session through the admin REST API: the user session and its offline session, because the BFF asks
- * for offline_access. Keycloak then sends a back-channel logout token to the clients of the session.
- *
- * The test ends only the session of its own login. When the BFF gets the logout token, it revokes the refresh token of
- * the session. Keycloak then also drops the other sessions of the user for the client, with no logout token, so a
- * second BFF session of the user would stay signed in until its next refresh.
- */
-async function endKeycloakSession(sessionId: string) {
-  const keycloakUrl = requiredEnv('IDP_URL').replace(/\/$/, '')
-  const realm = /\/realms\/([^/]+)/.exec(requiredEnv('AUTHORITY'))?.[1]
-  expect(realm, 'the Keycloak realm in AUTHORITY').toBeTruthy()
-
-  const adminToken = await callIdp(`${keycloakUrl}/realms/master/protocol/openid-connect/token`, {
-    method: 'POST',
-    body: new URLSearchParams({
-      grant_type: 'password',
-      client_id: 'admin-cli',
-      username: requiredEnv('IDP_ADMIN_USERNAME'),
-      password: requiredEnv('IDP_ADMIN_PASSWORD'),
-    }),
-  })
-  expect(adminToken.status, 'the Keycloak admin token request').toBe(200)
-  const headers = { Authorization: `Bearer ${adminToken.body.access_token as string}` }
-  const session = `${keycloakUrl}/admin/realms/${realm}/sessions/${encodeURIComponent(sessionId)}`
-
-  const online = await fetch(session, { method: 'DELETE', headers })
-  expect(online.status, 'delete the Keycloak user session').toBe(204)
-  // The delete of the user session can also end the offline session, so 404 is not an error here
-  const offline = await fetch(`${session}?isOffline=true`, { method: 'DELETE', headers })
-  expect([204, 404], 'delete the Keycloak offline session').toContain(offline.status)
-}
-
-/**
- * Ends each Authentik session of the user through the API, with the bootstrap token of akadmin. When a session ends,
- * the worker sends a back-channel logout token to each provider of the session.
- */
-async function endAuthentikSessions(email: string) {
-  const api = `${requiredEnv('IDP_URL').replace(/\/$/, '')}/api/v3`
-  const headers = { Authorization: `Bearer ${requiredEnv('IDP_ADMIN_TOKEN')}` }
-
-  const sessions = await callIdp(`${api}/core/authenticated_sessions/?user__username=${encodeURIComponent(email)}`, { headers })
-  expect(sessions.status, 'the Authentik session list').toBe(200)
-  const results = sessions.body.results as { uuid: string }[]
-  expect(results.length, 'the Authentik sessions of the user').toBeGreaterThan(0)
-
-  for (const session of results) {
-    const response = await fetch(`${api}/core/authenticated_sessions/${session.uuid}/`, { method: 'DELETE', headers })
-    expect(response.status, 'delete the Authentik session').toBe(204)
+  function appOrigin(baseURL: string | undefined): string {
+    expect(baseURL, 'BASE_URL').toBeTruthy()
+    return new URL(baseURL!).origin
   }
-}
 
-// Section 3.4 of docs/specs/home-rolled-bff.md: a back-channel logout token from the provider ends the BFF session
-test.describe(`Back-channel logout - ${currentIdp.name}`, () => {
-  test('an IdP session that ends at the provider ends the BFF session', async ({ page }) => {
-    test.skip(
-      !currentIdp.sessionFeatures.backChannelLogoutReachesBff,
-      `${currentIdp.name} cannot send a back-channel logout token to the BFF of the stack (section 6 of the spec).`,
-    )
+  async function postToken(origin: string, form: Record<string, string>): Promise<{ status: number; body: Record<string, unknown> }> {
+    const response = await fetch(`${origin}/auth/token`, { method: 'POST', body: new URLSearchParams(form) })
+    return { status: response.status, body: (await response.json()) as Record<string, unknown> }
+  }
 
-    await signInThroughSpa(page)
-    expect(await bffUserStatus(page)).toBe(200)
+  async function currentUserStatus(origin: string, accessToken: string): Promise<number> {
+    const response = await fetch(`${origin}/api/v1/users/me`, { headers: { Authorization: `Bearer ${accessToken}` } })
+    return response.status
+  }
 
-    if (process.env.IDP === 'authentik') {
-      await endAuthentikSessions(currentIdp.email!)
-    } else {
-      await endKeycloakSession(await bffSessionId(page))
-    }
+  async function readStartUrl(origin: string): Promise<string> {
+    const status = (await (await fetch(`${origin}/auth/status`)).json()) as { modes: { startUrl: string }[] }
+    return status.modes[0].startUrl
+  }
 
-    // The BFF deletes the session row when the logout token arrives. Authentik sends it from a worker task.
-    await expect.poll(() => bffUserStatus(page), { timeout: 30000 }).toBe(204)
-  })
-})
-
-function base64Url(bytes: Buffer): string {
-  return bytes.toString('base64url')
-}
-
-/**
- * The BFF never gives a token to the browser, so this test does its own authorization code flow with the client of the
- * BFF. It proves the provider side of rotation (OAuth 2.1 4.3.3): after one refresh, the old refresh token gets
- * invalid_grant. The BFF tests prove that the BFF stores the new refresh token after each refresh.
- */
-test.describe(`Refresh token rotation - ${currentIdp.name}`, () => {
-  test('the provider rejects the old refresh token after one refresh', async ({ page }) => {
-    test.skip(!currentIdp.sessionFeatures.refreshRotation, `${currentIdp.name} does not rotate refresh tokens (section 6 of the spec).`)
-
-    const discovery = await readDiscovery()
-    const clientId = requiredEnv('CLIENT_ID')
-    const authorization = `Basic ${Buffer.from(`${encodeURIComponent(clientId)}:${encodeURIComponent(requiredEnv('CLIENT_SECRET'))}`).toString('base64')}`
-    // A redirect URI that each seed registers
-    const redirectUri = new URL('/signin-oidc', process.env.BASE_URL ?? 'http://localhost:24710').toString()
-    const codeVerifier = base64Url(randomBytes(32))
-    const state = base64Url(randomBytes(16))
-
-    // Playwright cannot route the redirect of a navigation, so the callback reaches the BFF. The BFF did not start this
-    // login, so it answers 400 and does not redeem the code.
-    const callback = page.waitForRequest((request) => request.url().startsWith(`${redirectUri}?`), { timeout: 30000 })
-
-    const authorizeUrl = new URL(discovery.authorization_endpoint as string)
-    authorizeUrl.search = new URLSearchParams({
-      response_type: 'code',
-      client_id: clientId,
-      redirect_uri: redirectUri,
-      scope: 'openid profile email offline_access',
-      state,
-      code_challenge: base64Url(createHash('sha256').update(codeVerifier).digest()),
-      code_challenge_method: 'S256',
-    }).toString()
-    await page.goto(authorizeUrl.toString())
-    await loginAtIdp(page, currentIdp)
-    const callbackUrl = new URL((await callback).url())
-    expect(callbackUrl.searchParams.get('state')).toBe(state)
-    const code = callbackUrl.searchParams.get('code')
-    expect(code, 'the authorization code').toBeTruthy()
-
-    const tokenRequest = (form: Record<string, string>) =>
-      callIdp(discovery.token_endpoint as string, {
-        method: 'POST',
-        headers: { Authorization: authorization },
-        body: new URLSearchParams(form),
+  /** Runs the browser half of the flow against a loopback server, as an app does, and exchanges the code. */
+  async function signInAsApp(page: Page, origin: string): Promise<TokenPair> {
+    const loopback = createServer()
+    const callback = new Promise<URL>((resolve) => {
+      loopback.on('request', (request, response) => {
+        resolve(new URL(request.url ?? '/', 'http://127.0.0.1'))
+        response.end('You can close this page.')
+      })
+    })
+    await new Promise<void>((resolve) => loopback.listen(0, '127.0.0.1', resolve))
+    try {
+      const redirectUri = `http://127.0.0.1:${(loopback.address() as AddressInfo).port}/callback`
+      const codeVerifier = randomBytes(32).toString('base64url')
+      const state = randomBytes(16).toString('base64url')
+      const parameters = new URLSearchParams({
+        redirect_uri: redirectUri,
+        code_challenge: createHash('sha256').update(codeVerifier).digest('base64url'),
+        code_challenge_method: 'S256',
+        state,
       })
 
-    const issued = await tokenRequest({ grant_type: 'authorization_code', code: code!, redirect_uri: redirectUri, code_verifier: codeVerifier })
-    expect(issued.status, 'the code exchange').toBe(200)
-    const firstRefreshToken = issued.body.refresh_token as string | undefined
-    expect(typeof firstRefreshToken, 'the first refresh token').toBe('string')
+      await page.goto(`${origin}${await readStartUrl(origin)}&${parameters}`)
+      await loginAtIdp(page, currentIdp)
+      // A provider can sign the person in with no click, so the Server asks before the code reaches the app
+      await expect(page.getByRole('heading', { name: 'Sign in the Recall app?' })).toBeVisible({ timeout: 30000 })
+      await page.getByRole('button', { name: 'Continue' }).click()
 
-    const refreshed = await tokenRequest({ grant_type: 'refresh_token', refresh_token: firstRefreshToken! })
-    expect(refreshed.status, 'the first refresh').toBe(200)
-    const secondRefreshToken = refreshed.body.refresh_token as string | undefined
-    expect(typeof secondRefreshToken, 'the rotated refresh token').toBe('string')
-    // Compare without the values, so that a failure does not print a token
-    expect(secondRefreshToken !== firstRefreshToken, 'the refresh gives a new refresh token').toBe(true)
+      const callbackUrl = await callback
+      expect(callbackUrl.searchParams.get('state')).toBe(state)
+      const code = callbackUrl.searchParams.get('code')
+      expect(code, 'the app code').toBeTruthy()
 
-    const reused = await tokenRequest({ grant_type: 'refresh_token', refresh_token: firstRefreshToken! })
-    expect({ status: reused.status, error: reused.body.error }).toEqual({ status: 400, error: 'invalid_grant' })
-  })
-})
+      const exchange = await postToken(origin, { grant_type: 'authorization_code', code: code!, code_verifier: codeVerifier, redirect_uri: redirectUri })
+      expect(exchange.status, 'the code exchange').toBe(200)
+      expect(exchange.body).toMatchObject({ token_type: 'Bearer', expires_in: 900 })
+      return exchange.body as unknown as TokenPair
+    } finally {
+      loopback.close()
+    }
+  }
 
-// The payload of a JWT, read with no signature check. The caller reads only claims, never prints the token.
-function jwtPayload(token: string): Record<string, unknown> {
-  return JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8')) as Record<string, unknown>
-}
-
-// A GET through the BFF proxy with the session cookie of the page, as the SPA sends it
-async function bffApiStatus(page: Page, path: string): Promise<number> {
-  return page.evaluate(async (url) => (await fetch(url, { headers: { 'X-CSRF': '1' } })).status, path)
-}
-
-/**
- * The BFF side of rotation. The stack starts with BffRefreshBeforeExpirationSeconds longer than the access token
- * lifetime, so each API call makes the BFF refresh. The provider rotates the refresh token on each refresh and rejects
- * a reused one (the test above). So the second call succeeds only if the BFF stored the rotated refresh token of the
- * first call. A BFF that keeps the old one gets invalid_grant, ends the session, and forwards the call with no token.
- *
- * The stored ID token proves that the second call refreshed: the BFF sends it as id_token_hint at logout, and its iat
- * is after the start of the second call. A refresh response replaces the stored ID token, and the login ID token is
- * older.
- */
-test.describe(`BFF refresh - ${currentIdp.name}`, () => {
-  test('each API call refreshes, and the BFF stores the rotated tokens', async ({ page }) => {
-    test.skip(
-      !currentIdp.sessionFeatures.refreshRotation,
-      `${currentIdp.name} does not rotate refresh tokens, so a BFF that keeps the old refresh token also passes (section 6 of the spec).`,
-    )
-    test.skip(!refreshesOnEachCall(process.env.BFF_REFRESH_BEFORE_EXPIRATION_SECONDS), refreshMarginHint)
-
-    const discovery = await readDiscovery()
-    await signInThroughSpa(page)
-
-    expect(await bffApiStatus(page, '/api/v1/users/me'), 'the first API call').toBe(200)
-    // iat has a resolution of one second, so the second call starts in a later second than each earlier token
-    await page.waitForTimeout(2500)
-    const secondCallStart = Math.floor(Date.now() / 1000)
-    expect(await bffApiStatus(page, '/api/v1/users/me'), 'the second API call, with the rotated refresh token').toBe(200)
-    expect(await bffUserStatus(page), 'the BFF session after the refreshes').toBe(200)
-
-    const claims = await page.evaluate(
-      async () => (await (await fetch('/bff/user', { headers: { 'X-CSRF': '1' } })).json()) as { type: string; value: string }[],
-    )
-    const logoutUrl = claims.find((claim) => claim.type === 'bff:logout_url')?.value
-    expect(logoutUrl, 'the bff:logout_url claim').toBeTruthy()
-    const endSession = page.waitForRequest((request) => request.url().startsWith(discovery.end_session_endpoint as string), { timeout: 30000 })
-    await page.goto(logoutUrl!)
-    const idTokenHint = new URL((await endSession).url()).searchParams.get('id_token_hint')
-    expect(idTokenHint, 'the id_token_hint of the logout').toBeTruthy()
-
-    const iat = jwtPayload(idTokenHint!).iat as number
-    // One second of tolerance for the clock of the provider container
-    expect(iat, 'the iat of the stored ID token is from the refresh of the second call').toBeGreaterThanOrEqual(secondCallStart - 1)
-  })
-})
-
-/**
- * The refresh lock (section 3.7 of docs/specs/home-rolled-bff.md). The stack refreshes on each API call, and the
- * provider rejects a reused refresh token. So two API calls at the same time need the same refresh. With the lock, one
- * call refreshes, and the other gets the new tokens. With no lock, both calls send the same refresh token, the provider
- * rejects the second one with invalid_grant, and the BFF ends the session.
- */
-test.describe(`Refresh lock - ${currentIdp.name}`, () => {
-  test('two API calls at the same time both succeed, and the session still works after them', async ({ page }) => {
-    test.skip(
-      !currentIdp.sessionFeatures.refreshRotation,
-      `${currentIdp.name} does not rotate refresh tokens, so two refreshes with one refresh token also pass (section 6 of the spec).`,
-    )
-    test.skip(!refreshesOnEachCall(process.env.BFF_REFRESH_BEFORE_EXPIRATION_SECONDS), refreshMarginHint)
-
-    await signInThroughSpa(page)
-
-    const statuses = await page.evaluate(async () => {
-      // no-store, because Chrome holds a second GET of the same URL until the first one ends, for its cache
-      const call = async () =>
-        (await fetch('/api/v1/users/me', { headers: { 'X-CSRF': '1' }, cache: 'no-store' })).status
-      return Promise.all([call(), call()])
+  test('/auth/status gives an app the login method, with no provider settings in the app', async ({ baseURL }) => {
+    const origin = appOrigin(baseURL)
+    const response = await fetch(`${origin}/auth/status`)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      instance: 'recall',
+      state: 'ready',
+      callbackUrl: `${origin}/auth/oidc/callback`,
+      message: null,
+      setupRequired: false,
+      modes: [
+        {
+          kind: 'oidc',
+          id: process.env.IDP,
+          displayName: expect.any(String),
+          state: 'ready',
+          detail: null,
+          startUrl: `/auth/oidc/${process.env.IDP}/start?client=app`,
+        },
+      ],
     })
-    expect(statuses, 'the two API calls at the same time').toEqual([200, 200])
-    expect(await bffUserStatus(page), 'the BFF session after the two calls').toBe(200)
-    expect(await bffApiStatus(page, '/api/v1/users/me'), 'an API call after the two calls').toBe(200)
+  })
+
+  test('a refresh rotates the tokens, and a repeat of one refresh gives the same pair', async ({ page, baseURL }) => {
+    const origin = appOrigin(baseURL)
+    const first = await signInAsApp(page, origin)
+    expect(await currentUserStatus(origin, first.access_token), 'the first access token').toBe(200)
+
+    const retryKey = randomBytes(32).toString('base64url')
+    const refresh = { grant_type: 'refresh_token', refresh_token: first.refresh_token, retry_key: retryKey }
+    const second = await postToken(origin, refresh)
+    expect(second.status, 'the refresh').toBe(200)
+    // Compare without the values, so that a failure does not print a token
+    expect(second.body.refresh_token !== first.refresh_token, 'the refresh gives a new refresh token').toBe(true)
+
+    const repeat = await postToken(origin, refresh)
+    expect(repeat.status, 'the repeat of the refresh').toBe(200)
+    expect(repeat.body.access_token === second.body.access_token, 'the repeat gives the same access token').toBe(true)
+    expect(repeat.body.refresh_token === second.body.refresh_token, 'the repeat gives the same refresh token').toBe(true)
+
+    expect(await currentUserStatus(origin, first.access_token), 'the access token before the refresh').toBe(401)
+    expect(await currentUserStatus(origin, second.body.access_token as string), 'the access token after the refresh').toBe(200)
+  })
+
+  test('a replay of an old refresh token ends the session', async ({ page, baseURL }) => {
+    const origin = appOrigin(baseURL)
+    const first = await signInAsApp(page, origin)
+    const second = await postToken(origin, { grant_type: 'refresh_token', refresh_token: first.refresh_token })
+    expect(second.status, 'the refresh').toBe(200)
+
+    const replay = await postToken(origin, { grant_type: 'refresh_token', refresh_token: first.refresh_token })
+    expect({ status: replay.status, error: replay.body.error }).toEqual({ status: 400, error: 'invalid_grant' })
+
+    expect(await currentUserStatus(origin, second.body.access_token as string), 'the access token of the session').toBe(401)
+    const afterReplay = await postToken(origin, { grant_type: 'refresh_token', refresh_token: second.body.refresh_token as string })
+    expect({ status: afterReplay.status, error: afterReplay.body.error }).toEqual({ status: 400, error: 'invalid_grant' })
   })
 })
