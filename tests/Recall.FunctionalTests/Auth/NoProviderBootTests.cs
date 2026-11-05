@@ -16,6 +16,11 @@ using Shouldly;
 [UnsupportedOSPlatform("windows")]
 public class NoProviderBootTests
 {
+    private const UnixFileMode WideDirectoryMode =
+        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+        | UnixFileMode.GroupRead | UnixFileMode.GroupExecute
+        | UnixFileMode.OtherRead | UnixFileMode.OtherExecute;
+
     private static readonly string[] ClearedPrefixes = ["Auth__", "Mcp__", "Tenancy__", "OTEL_", "ConnectionStrings__", "FileStore__", "ASPNETCORE_", "DOTNET_ENVIRONMENT"];
 
     private sealed class ServerProcess : IAsyncDisposable
@@ -41,12 +46,15 @@ public class NoProviderBootTests
             var root = Path.Combine(Path.GetTempPath(), $"recall_boot_{Guid.NewGuid():N}");
             var data = Path.Combine(root, "data");
             var web = Path.Combine(root, "web");
-            Directory.CreateDirectory(data, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+            Directory.CreateDirectory(data);
+            // The hosts in this test process apply the umask of the Server, so a mode at create would be narrowed here
+            File.SetUnixFileMode(data, WideDirectoryMode);
             Directory.CreateDirectory(web);
             await File.WriteAllTextAsync(Path.Combine(web, "index.html"), "<html>recall spa</html>");
 
             var httpPort = FreePort();
-            var start = new ProcessStartInfo("dotnet", [ServerDll()])
+            // The child would inherit the narrow umask of this process, and hide a Server that does not set its own
+            var start = new ProcessStartInfo("/bin/sh", ["-c", "umask 022; exec dotnet \"$0\"", ServerDll()])
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -75,7 +83,16 @@ public class NoProviderBootTests
                 Timeout = TimeSpan.FromSeconds(10),
             };
             var server = new ServerProcess(process, root, client);
-            await server.WaitUntilUpAsync();
+            try
+            {
+                await server.WaitUntilUpAsync();
+            }
+            catch
+            {
+                await server.DisposeAsync();
+                throw;
+            }
+
             return server;
         }
 
@@ -90,7 +107,7 @@ public class NoProviderBootTests
                     if (response.StatusCode == HttpStatusCode.OK)
                         return;
                 }
-                catch (HttpRequestException)
+                catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
                 {
                     // The port does not answer until the boot ends
                 }
