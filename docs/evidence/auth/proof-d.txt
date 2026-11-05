@@ -1,0 +1,18 @@
+--- no IdP configured: up in 3.8s pid=70225
+status {"state":"no_login_method","message":"No sign-in method is configured. Set Auth__Providers__0__Issuer, ClientId, and ClientSecret, then restart.","setupRequired":true,"modes":[]}
+health 200 api 401 unknown provider start 404
+browser at / lands on http://localhost:24000/auth/login?returnUrl=%2F | Sign in to Recall No sign-in method is configured. Set Auth__Providers__0__Issuer, ClientId, and ClientSecret, then restart.
+--- IdP up, get sessions: up in 4.2s pid=71211
+before outage: bearer 200 cookie 200
+--- stop Keycloak A: Container recall-auth-proto-keycloak-a-1 Stopped
+status {"state":"ready","message":null,"setupRequired":false,"modes":[{"id":"kc-a","state":"unreachable","detail":"Keycloak A at http://localhost:28080/realms/a is not available: Connection refused (localhost:28080)"},{"id":"authelia","state":"ready"}]}
+login start 503 {"error":"idp_unreachable","message":"Keycloak A at http://localhost:28080/realms/a is not available. Existing sessions keep working.","detail":"Connection refused (localhost:28080)"}
+existing sessions: bearer 200 cookie 200
+--- restart app with the IdP still down: up in 13.5s pid=71625
+status {"state":"ready","message":null,"setupRequired":false,"modes":[{"id":"kc-a","state":"unreachable","detail":"Keycloak A at http://localhost:28080/realms/a is not available: Connection refused (localhost:28080)"},{"id":"authelia","state":"ready"}]}
+existing sessions after restart: bearer 200 cookie 200
+refresh while IdP down: new access 200
+other IdP still logs in rcl_74dd58c3dec94158b9f5760cc17c66dc User
+--- start Keycloak A again: Container recall-auth-proto-keycloak-a-1 Started
+status, no app restart {"state":"ready","message":null,"setupRequired":false,"modes":[{"id":"kc-a","state":"ready"},{"id":"authelia","state":"ready"}]}
+login recovers true

@@ -4,6 +4,8 @@ A self-hosted journal. A person opens the phone, dictates, and the entry is capt
 
 ## Language
 
+A rule that ends in _(agent default)_ is a choice of an agent, not a ruling of the operator. The operator can change it.
+
 ### Journal
 
 **Session**:
@@ -11,7 +13,7 @@ The root of the journal: one act of journaling by a User. A Session has no paren
 _Avoid_: Entry (the Session is the entry)
 
 **Journaling day**:
-The calendar day of a Session in the time zone of its User. It is a grouping that the app derives from the time of the Session, and it is not a record.
+The calendar day of a Session in the time zone of its User. A Session stores absolute UTC. The Journaling day is a grouping that the app derives from that time, and it is not a record.
 _Avoid_: Date, parent day
 
 **Raw**:
@@ -26,7 +28,7 @@ _Avoid_: Edited, final, processed
 The current, autosaved working text of Raw or of Cleaned. A Draft changes, and a Revision does not.
 
 **Revision**:
-An append-only snapshot of Raw or of Cleaned, made at a save point. Each change to the text makes one, and that includes the change that a Person rename makes. Revisions are history inside one Session, and search reads only the current state.
+An append-only snapshot of Raw or of Cleaned, made at a save point. Each change to the text makes one, and that includes the change that a Person rename makes _(agent default)_. Revisions are history inside one Session, and search reads only the current state.
 _Avoid_: Version (the concurrency token of a row), history entry
 
 **Last-write-wins**:
@@ -34,7 +36,7 @@ The rule for two saves of one Draft. The later save time holds the Draft, and th
 _Avoid_: Conflict, merge
 
 **Stale**:
-The state of a Session whose current Raw Draft is at a newer Revision than the Revision that the last successful Cleanup read. It has this one definition. An edit of Cleaned by hand and a save that lost Last-write-wins do not make a Session stale. A Person rename also does not. If the rename makes a Raw Revision on a Session that is not stale, the Revision that the last Cleanup read moves to the new Revision. A stale Session stays stale.
+The state of a Session whose current Raw Draft is at a newer Revision than the Revision that the last successful Cleanup read. It has this one definition. An edit of Cleaned by hand and a save that lost Last-write-wins do not make a Session stale. A Person rename also does not. If the rename makes a Raw Revision on a Session that is not stale, the Revision that the last Cleanup read moves to the new Revision. A stale Session stays stale. These three rules on a rename are one choice _(agent default)_.
 _Avoid_: Dirty, outdated
 
 ### AI
@@ -47,7 +49,7 @@ _Avoid_: Processing, evaluation
 Where a Session stands with Cleanup: `NotRun`, `Running`, `Clean`, `Stale`, or `Failed`. `Stale` comes from the definition of Stale and is never stored.
 
 **Cleanup engine**:
-Where the model of a Cleanup runs: `Server`, or `OnDevice` on the iPhone of the User. The engine does not change what a Cleanup is or what it makes.
+Where the model of a Cleanup runs: `Server`, or `OnDevice` on the iPhone of the User. The User picks a default engine and can override it for one run. The engine does not change what a Cleanup is or what it makes.
 _Avoid_: Runner, provider
 
 **Model provider**:
@@ -55,11 +57,11 @@ The AI service that an Admin connects for the app. The `Server` engine uses it.
 _Avoid_: Bare "provider", which can also mean an Identity provider
 
 **Transcription engine**:
-What turns audio into Raw: the server, a cloud model, or a speech model on the device. It is not a Cleanup engine.
+What turns audio into Raw: the server, a cloud model, or a speech model on the device. A cloud model is an engine only for a provider that accepts audio, and which providers accept audio is unconfirmed until R11. It is not a Cleanup engine.
 _Avoid_: Recognizer, bare "engine"
 
 **Synopsis**:
-The short AI recap of one Session. A Summary covers a period, and a Synopsis does not. A Person rename does not change a Synopsis, so it can keep the old name.
+The short AI recap of one Session. A Summary covers a period, and a Synopsis does not. A Person rename does not change a Synopsis, so it can keep the old name _(agent default)_.
 _Avoid_: Recap, abstract
 
 **Correction**:
@@ -79,11 +81,11 @@ _Avoid_: Source, origin
 How the User felt: a known mood or the free text of the User. A Session can have many Moods, and a Mood has no Provenance.
 
 **Activity**:
-What the User physically did while journaling. A Session has exactly one, and only the User sets it. The value `None` means that the User did not say, and there is no other unset state. Life areas are Topics, and feelings are Moods.
+What the User physically did while journaling: a known activity or the free text of the User. A Session has exactly one, and only the User sets it. The value `None` means that the User did not say, and there is no other unset state. Life areas are Topics, and feelings are Moods.
 _Avoid_: Unset, null activity
 
 **Person**:
-A record in the directory of one User. A mention in the text refers to the Person, and the People of a Session are the Persons that its Raw and its Cleaned mention. A rename changes the label of each mention and makes a Revision of each text that changes.
+A record in the directory of one User. A mention in the text refers to the Person, and the People of a Session are the Persons that its Raw and its Cleaned mention. A rename changes the label of each mention and makes a Revision of each text that changes _(agent default)_.
 _Avoid_: Contact, person tag
 
 **Suggestion**:
@@ -100,14 +102,14 @@ _Avoid_: Place, address
 ### Summaries
 
 **Summary**:
-An AI narrative of one User over one period: `Day`, `Week`, `Month`, `Quarter`, or `Year`. Summaries roll up as needed. A period with no sources has no Summary.
+An AI narrative of one User over one period: `Day`, `Week`, `Month`, `Quarter`, or `Year`. The User, the period, and the date are the key of a Summary. Summaries roll up as needed. A period with no sources has no Summary.
 _Avoid_: Report, digest
 
 **Roll-up**:
 The sources of a Summary. Day and Week read Sessions, and each reads Cleaned when it is present and Raw when it is not. Month reads Day Summaries, Quarter reads Months, and Year reads Quarters. A Week can cross two Months, so it is outside that chain.
 
 **Stale summary**:
-A Summary whose sources changed after it was made. A Person rename counts as a change, so that a Summary does not keep the old name. The change goes up the chain to each Summary that reads it. A missing or stale Summary generates when a person opens its period, and a nightly job handles the stale periods.
+A Summary whose sources changed after it was made. A Person rename counts as a change, so that a Summary does not keep the old name _(agent default)_. The change goes up the chain to each Summary that reads it. A missing or stale Summary generates when a person opens its period, and a nightly job handles the stale periods _(agent default)_.
 
 ### Identity
 

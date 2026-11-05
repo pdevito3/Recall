@@ -1,5 +1,7 @@
 # A regular repo instead of a dotnet new template
 
+> Status: `scripts/init.cs` is gone from Recall. Recall ran it one time, and [ADR 0017](0017-template-fixes-by-cherry-pick.md) now applies. This ADR is the history of the template.
+
 The repo is a regular repo, not a `dotnet new` template. A user clones it, or uses the GitHub template button, and then runs `dotnet run scripts/init.cs`. The init script replaces the template name with the name of the new app and sets the default auth provider. All five auth providers stay in the code, and the `AuthProvider` setting of the AppHost selects one at runtime. As a result, the code that a user gets is the code that the repo runs and tests.
 
 Each provider is one folder in `Recall.AppHost/AuthProviders/`. The folder holds the factory class and the seed files. The AppHost finds the providers by reflection, and the provider name comes from the class name. The e2e selectors of each provider are one file in `frontend/e2e/idps/`. To delete a provider, delete its folder and its e2e file. If the provider is the default in `appsettings.json`, select another default. No other code names a provider.
