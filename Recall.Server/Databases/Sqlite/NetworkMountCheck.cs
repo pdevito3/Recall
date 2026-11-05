@@ -4,15 +4,15 @@ public sealed record MountEntry(string MountPoint, string FileSystemType, string
 
 /// <summary>
 /// SQLite locks a WAL file through shared memory, which works only on one machine. So the data file must not be on a
-/// network file system, where two machines can open it and the file can corrupt.
+/// network file system, where two machines can open it and the file can corrupt. A FUSE file system, a union of disks
+/// such as Unraid <c>/mnt/user</c>, and a shared folder of a hypervisor are also refused, because WAL on them has no proof.
 /// </summary>
 public static class NetworkMountCheck
 {
-    private static readonly HashSet<string> NetworkTypes = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> RefusedTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "9p", "afs", "afpfs", "beegfs", "ceph", "cifs", "coda", "davfs", "fuse.ceph", "fuse.ceph-fuse", "fuse.davfs2",
-        "fuse.gcsfuse", "fuse.glusterfs", "fuse.juicefs", "fuse.mfs", "fuse.rclone", "fuse.s3fs", "fuse.sshfs",
-        "glusterfs", "gpfs", "lustre", "ncpfs", "nfs", "nfs3", "nfs4", "ocfs2", "smb3", "smbfs", "webdav",
+        "9p", "afs", "afpfs", "beegfs", "ceph", "cifs", "coda", "davfs", "fuse", "glusterfs", "gpfs", "lustre", "ncpfs",
+        "nfs", "nfs3", "nfs4", "ocfs2", "shfs", "smb3", "smbfs", "vboxsf", "virtiofs", "webdav",
     };
 
     public static string? Refusal(string dataFilePath, IEnumerable<MountEntry> mounts)
@@ -22,11 +22,16 @@ public static class NetworkMountCheck
             .OrderBy(m => m.MountPoint.TrimEnd('/').Length)
             .LastOrDefault();
 
-        return mount is not null && NetworkTypes.Contains(mount.FileSystemType)
-            ? $"The data file {dataFilePath} is on the network mount {mount.MountPoint} ({mount.FileSystemType} from {mount.Source}). " +
-              "SQLite needs a file system of this machine. Move the data directory to a local volume."
+        return mount is not null && IsRefused(mount.FileSystemType)
+            ? $"The data file {dataFilePath} is on the mount {mount.MountPoint} ({mount.FileSystemType} from {mount.Source}). " +
+              "SQLite WAL is safe only on a local disk, and this type is a network, FUSE, or shared folder file system. " +
+              "Move the data directory to a local disk. On Unraid, use a path such as /mnt/cache, not /mnt/user."
             : null;
     }
+
+    /// <summary><c>fuseblk</c> has no dot, so it passes: it is a local block device such as NTFS on a USB disk.</summary>
+    private static bool IsRefused(string fileSystemType)
+        => RefusedTypes.Contains(fileSystemType) || fileSystemType.StartsWith("fuse.", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Reads the text of <c>/proc/self/mountinfo</c> of Linux, whose lines are
@@ -42,8 +47,9 @@ public static class NetworkMountCheck
             if (separator < 5 || fields.Length < separator + 3)
                 continue;
 
+            var superOptions = fields.Length > separator + 3 ? fields[separator + 3] : "";
             entries.Add(new MountEntry(
-                Unescape(fields[4]), fields[separator + 1], Unescape(fields[separator + 2])));
+                Unescape(fields[4]), fields[separator + 1], WithServer(Unescape(fields[separator + 2]), superOptions)));
         }
 
         return entries;
@@ -68,6 +74,17 @@ public static class NetworkMountCheck
         }
 
         return entries;
+    }
+
+    /// <summary>
+    /// The Docker volume driver mounts NFS with a source such as <c>:/export</c>, and only <c>addr=</c> of the super
+    /// options names the server.
+    /// </summary>
+    private static string WithServer(string source, string superOptions)
+    {
+        const string key = "addr=";
+        var server = superOptions.Split(',').FirstOrDefault(option => option.StartsWith(key, StringComparison.Ordinal));
+        return source.StartsWith(':') && server is not null ? server[key.Length..] + source : source;
     }
 
     private static bool IsUnder(string path, string mountPoint)

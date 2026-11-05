@@ -12,6 +12,16 @@ public class NetworkMountCheckTests
     [Arguments("smbfs")]
     [Arguments("fuse.sshfs")]
     [Arguments("fuse.juicefs")]
+    [Arguments("fuse.shfs")]
+    [Arguments("shfs")]
+    [Arguments("fuse.mergerfs")]
+    [Arguments("fuse.nfs")]
+    [Arguments("fuse.cephfs")]
+    [Arguments("fuse.unknown-type")]
+    [Arguments("FUSE.SSHFS")]
+    [Arguments("fuse")]
+    [Arguments("vboxsf")]
+    [Arguments("virtiofs")]
     [Arguments("9p")]
     public void a_network_mount_is_refused_with_a_message_that_names_the_mount(string type)
     {
@@ -27,6 +37,7 @@ public class NetworkMountCheckTests
         refusal.ShouldContain("/data");
         refusal.ShouldContain(type);
         refusal.ShouldContain("nas:/volume1/recall");
+        refusal.ShouldContain("Move the data directory to a local disk.");
     }
 
     [Test]
@@ -36,7 +47,7 @@ public class NetworkMountCheckTests
     [Arguments("zfs")]
     [Arguments("overlay")]
     [Arguments("apfs")]
-    [Arguments("virtiofs")]
+    [Arguments("fuseblk")]
     public void a_local_mount_passes(string type)
     {
         // Arrange
@@ -104,6 +115,25 @@ public class NetworkMountCheckTests
             new MountEntry("/", "ext4", "/dev/sda1"),
             new MountEntry("/mnt/my data", "nfs4", "nas:/volume 1"),
         ]);
+    }
+
+    [Test]
+    [Arguments(":/", "rw,vers=4.2,clientaddr=172.27.0.1,local_lock=none,addr=172.27.0.2", "172.27.0.2:/")]
+    [Arguments(":/export", "rw,vers=3,mountaddr=172.27.0.9,addr=172.27.0.2", "172.27.0.2:/export")]
+    [Arguments(":/", "rw,vers=4.2,clientaddr=172.27.0.1", ":/")]
+    [Arguments("nas:/share", "rw,vers=4.2,addr=172.27.0.2", "nas:/share")]
+    [Arguments("//nas/share", "rw,vers=3.1.1,addr=172.27.0.2", "//nas/share")]
+    public void a_source_with_no_host_takes_the_server_from_the_super_options(string source, string superOptions, string expected)
+    {
+        // Arrange
+        var line = $"411 400 0:87 / /data rw,relatime master:11 - nfs4 {source} {superOptions}";
+
+        // Act
+        var entry = NetworkMountCheck.ParseMountInfo(line).ShouldHaveSingleItem();
+
+        // Assert
+        entry.Source.ShouldBe(expected);
+        NetworkMountCheck.Refusal("/data/recall.db", [entry]).ShouldNotBeNull().ShouldContain($"from {expected})");
     }
 
     [Test]
