@@ -1,5 +1,7 @@
 # Domain event handlers run in the save transaction
 
+> Changed by PR R1 of the plan, under [ADR 0015](0015-sqlite-storage.md): SQLite has a local file and no network reply, so a save no longer runs again after a lost acknowledgment of the commit, and the save has no retrying execution strategy. The text about that case and about `xmin` describes the state before R1.
+
 `AppDbContext.SaveChangesAsync` runs the handlers of the queued domain events before it sends any SQL. The change and the handler changes commit in one database transaction, or nothing commits. A handler changes entities only through the context of the save, and it cannot call another system. Each handler runs in the tenant of the entity that queued the event. MediatR does not dispatch domain events. The tenant lookup cache is not a handler. The context removes the stale lookups after the commit, before `SaveChangesAsync` returns. Before this decision, the handlers ran after the commit with no retry. Two apps built on this template lost a handler effect after a saved change. One could leave an unsafe vehicle in service, and one lost a no-show fee.
 
 ## Considered options

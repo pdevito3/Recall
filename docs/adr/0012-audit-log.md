@@ -1,5 +1,7 @@
 # The save writes an append-only audit log in its transaction
 
+> Changed by PR R1 of the plan, under [ADR 0015](0015-sqlite-storage.md): SQLite has no `TRUNCATE` and no `COPY`, so `BulkInsertAsync` is deleted and only the save writes the log. Triggers still refuse `UPDATE` and `DELETE`. `Data` is JSON text and not `jsonb`, and the text about Postgres, a lost acknowledgment, and role grants describes the state before R1.
+
 `AppDbContext` writes the audit log. Each save adds one row to `audit_entries` for each entity that it adds, changes, or deletes, and one row for each action that a handler records. The rows commit in the transaction of the save, or nothing commits. Triggers refuse `UPDATE`, `DELETE`, and `TRUNCATE` on the table.
 
 The capture is a stage of `SaveInStages`, after the domain event handlers. `PrepareWrite` calls `DetectChanges`, touches the owners of changed children, and stamps the entities. Then it compares the original and the current values of each changed entity, and it adds the audit entries to the change tracker. The entries are in the tracker before the execution strategy runs, so a retry sends the same rows.

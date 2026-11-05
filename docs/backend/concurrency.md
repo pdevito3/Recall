@@ -12,19 +12,19 @@ A create of a new aggregate root writes no row that another request can change, 
 
 ## Versions
 
-Each entity has `Version`, the Postgres `xmin` of its row. `MapVersionToXmin` maps it for each entity, so a new entity needs no configuration for it. EF Core adds `WHERE xmin = @loaded` to each update. When another save changed the row after the load, the save throws a `StaleVersionException`. The reasons for this design are in [ADR 0008](../adr/0008-optimistic-concurrency-with-xmin.md).
+Each entity has `Version`, an integer column of its row. `MapVersionToConcurrencyToken` maps it for each entity, so a new entity needs no configuration for it. The save sets it to 1 on an add and adds 1 on each update and soft delete. EF Core adds `WHERE version = @loaded` to each update. When another save changed the row after the load, the save throws a `StaleVersionException`. The reasons for this design are in [ADR 0008](../adr/0008-optimistic-concurrency-with-xmin.md).
 
 - A save that adds, changes, or removes an owned child also updates the owner row. Thus the version of the root guards the whole aggregate. An owned child is the dependent of a `Cascade` foreign key (see [entity-configurations.md](entity-configurations.md)). Change a child only through its loaded owner. The save throws when the owner of a changed child is not tracked. A child that moves to another owner, or to no owner, also updates the row of the owner that it leaves, so load that owner too.
 - The read DTO of a root shows `version`. A PUT body that replaces the fields of an edit form has a required `version`, and the entity method calls `GuardVersion` first (see [domain-entities.md](domain-entities.md#versions)).
-- `Version` is an opaque number. Compare it only for equality. A list cannot filter or sort on `version`, and `ApplyFilters` and `ApplySortOrder` return 400 for it. They also return 400 for `allowedActions`, because the handler adds it after the page loads. Postgres has no order for `xid`, so a range or a sort fails. An equality filter works in Postgres, but a list has no use for it, so it also gives 400.
+- `Version` is an opaque number. Compare it only for equality. A list cannot filter or sort on `version`, and `ApplyFilters` and `ApplySortOrder` return 400 for it. They also return 400 for `allowedActions`, because the handler adds it after the page loads. A list has no use for the order or the value of a version.
 
 Do not catch a `StaleVersionException` of a command that sends a version, and do not send the command again with the new version. The caller did not see the change of the other request, so a retry overwrites it.
 
-A unique index can also tell that another user changed the record, for example an index that permits one current revision for each document. Give such an index `ForStaleVersion` (see [entity-configurations.md](entity-configurations.md#unique-indexes)). When the index stops a save, `AppDbContext` throws a `StaleVersionException`. The caller gets the same 409 as for an old version, with the same `type`, `title`, `detail`, and `errors`. Thus the SPA handles the two in the same way. A command with `IRunsAgainWhenRaced` runs again after such a save, the same as after a failed `xmin` check.
+A unique index can also tell that another user changed the record, for example an index that permits one current revision for each document. Give such an index `ForStaleVersion` (see [entity-configurations.md](entity-configurations.md#unique-indexes)). When the index stops a save, `AppDbContext` throws a `StaleVersionException`. The caller gets the same 409 as for an old version, with the same `type`, `title`, `detail`, and `errors`. Thus the SPA handles the two in the same way. A command with `IRunsAgainWhenRaced` runs again after such a save, the same as after a failed version check.
 
 ## Run again
 
-A command for one intent, such as a new permission, a role change, or a delete, sends no version. The `xmin` check of the owner row still stops its race between the load and the save. But the caller decided nothing on the old rows, so a 409 that says "Reload it" does not help the caller. Mark the command with `IRunsAgainWhenRaced` instead:
+A command for one intent, such as a new permission, a role change, or a delete, sends no version. The version check of the owner row still stops its race between the load and the save. But the caller decided nothing on the old rows, so a 409 that says "Reload it" does not help the caller. Mark the command with `IRunsAgainWhenRaced` instead:
 
 <!-- code: Recall.Server/Domain/Users/Features/AddUserPermission/AddUserPermission.cs -->
 ```csharp
@@ -39,7 +39,7 @@ Obey these rules for a marked command. A test enforces the first two.
 2. Send the command only from an entrypoint (HTTP, gRPC, or MCP), not from a handler or a domain event handler. `DiscardLostRace` clears each tracked change of the DI scope, also the changes of the handler that sent the command. `EntrypointBoundaryTests` fails when core code creates a marked command.
 3. Do the work that leaves the process, such as a log of the change, a metric, or a call to another service, after the save. The handler runs again from the start, so the work before the save runs one time for each run.
 4. The handler saves one time. A second run after a lost second save would apply the first save again.
-5. The handler gives the same end state when it runs again after its own commit, such as an add of a permission that is already there. In the window of [Lost reply of a commit](#lost-reply-of-a-commit), a save that committed can fail its `xmin` check, and the command runs again. A delete then gets 404 for a delete that worked. Do not mark a command that adds to a value, such as an increment.
+5. Do not mark a command that adds to a value, such as an increment.
 
 The tests do not see these breaks of the rules. Check them in the review:
 
@@ -53,7 +53,7 @@ Each marked command has a race test (see [Race tests](../backend.md#race-tests))
 
 A version guards the rows that a command writes. A rule over a set of rows can break with no conflict on any one row. For example, "two open bookings of a room do not overlap", or "a clinic with an open appointment cannot be deactivated". A booking reads the clinic and writes an appointment. A deactivation counts the open appointments and writes the clinic. Each reads the rows that the other writes, so no version catches the race, and a run again does not help.
 
-`RootLock` in `Databases/` is a Postgres session advisory lock on one aggregate root. The template has one rule of this kind: `DeleteTenant` deletes each row that the tenant owns, and `AddAgent` and `AddUser` add an agent or a user to the tenant. The add of each new tenant-owned aggregate root takes the shared lock in the same way. `TenantLockTests` fails when a type adds a tenant-owned root, or saves after such an add, outside the work of `RunSharedAsync`. A child add changes the version of its owner instead, and the delete loads each owner before its children. Without the lock, an agent or a user that is saved during `DeleteTenant` stays live in the deleted tenant. A live user in a deleted tenant keeps its identifier, so that person cannot sign up again. Each one runs its reads, its checks, and its save in the work of the lock:
+`RootLock` in `Databases/` is a lock in the process on one aggregate root. It has no database state, because Recall runs one process per data file. The template has one rule of this kind: `DeleteTenant` deletes each row that the tenant owns, and `AddAgent` and `AddUser` add an agent or a user to the tenant. The add of each new tenant-owned aggregate root takes the shared lock in the same way. `TenantLockTests` fails when a type adds a tenant-owned root, or saves after such an add, outside the work of `RunSharedAsync`. A child add changes the version of its owner instead, and the delete loads each owner before its children. Without the lock, an agent or a user that is saved during `DeleteTenant` stays live in the deleted tenant. A live user in a deleted tenant keeps its identifier, so that person cannot sign up again. Each one runs its reads, its checks, and its save in the work of the lock:
 
 <!-- code: Recall.Server/Domain/Agents/Features/AddAgent/AddAgent.cs -->
 ```csharp
@@ -68,23 +68,18 @@ var added = await RootLock.Tenant.RunSharedAsync(dbContext, tenantId, async ct =
 }, cancellationToken);
 ```
 
-For a new rule, add a field such as `RootLock.Clinic` with a new number and the area name, and obey these rules:
+For a new rule, add a field such as `RootLock.Clinic` with the area name, and obey these rules:
 
 1. Take the shared lock (`RunSharedAsync`) in each write that can add to the set, such as a booking or an agent add. Take the exclusive lock (`RunExclusiveAsync`) in each write that needs the set to stay as it read it, such as a deactivation or a tenant delete. Bookings then do not wait on each other, and a deactivation waits for the bookings that started before it.
 2. Do the first read of the rule in the work, and save in the work. The lock is free after the work. Check the root again in the work, also when the handler checked it before. For example, `AddAgent` checks that the tenant exists in the work, also for the tenant of the caller.
-3. Do not change an entity or record an action before the work. `RootLock` throws if the context has changes. A run again after a transient failure clears the tracker, so it would save without them.
-4. Do the work that leaves the process after the work, such as a log or a metric. The work can run more than one time.
-5. Send a command that takes a lock only from an entrypoint (HTTP, gRPC, or MCP). A run again after a transient failure detaches each tracked entity of the DI scope, also the entities of a handler that sent the command.
-6. Take one `RootLock` in a command. A command that holds one lock and waits for a second lock can deadlock with a command that takes the two locks in the other order.
-7. Write a race test that waits with `PauseAtQuery.WaitUntilBlockedAsync` until the rival waits on the lock. See `TenantDeleteRaceTests.cs`.
+3. Do not change an entity or record an action before the work. `RootLock` throws if the context has changes, because the reads of those changes had no lock.
+4. Take one `RootLock` in a command. `RootLock` throws when the request already holds a lock. A second lock would wait for itself behind the next waiter, and two locks in a different order can deadlock.
+5. Write a race test that waits with `PauseAtQuery.WaitUntilBlockedAsync` until the rival waits on the lock, with `RootLock.HasWaiter`. See `TenantDeleteRaceTests.cs`.
 
 `RootLock` does these steps for you:
 
-- The lock has two keys: the number of the kind of the root, and the first 4 bytes of the SHA-256 hash of the ID of the root. The one-key locks of the EF migrations then do not share a key with it. The hash is in .NET, so an ID that Postgres text cannot hold, such as an ID with a NUL, still gets a lock.
-- A session lock ends when its connection drops. So the lock, the work, and the unlock run in one call of `Database.CreateExecutionStrategy().ExecuteAsync`, on one open connection. A transient failure then runs the whole work again on a new connection, not only the save. Each run again adds a `lock.run_again` event with `app.lock.run` to the request span. The request span also has the `app.lock.mode` tag, `shared` or `exclusive`.
-- If the unlock fails, it ends the session with `pg_terminate_backend(pg_backend_pid())` and writes a warning log. The pool frees the session locks of a connection only when the next request uses the connection, so the lock would stay on the idle connection until then.
-- The SQL spans of the lock are named for the root, such as `SQL: tenants.lock_exclusive`. The duration of that span is the wait for the lock.
-- EF runs a strategy inside a strategy one time, with no retry and no check. So a save in the work looks for its audit entries itself after a transient failure (see [Lost reply of a commit](#lost-reply-of-a-commit)). If they are there, the save returns success, and the work continues. Thus a delete does not get 404, and an add does not get 409, for a save that worked. If they are not there, the whole work runs again.
+- Requests get the lock in the order they ask, so a stream of shared holders cannot starve an exclusive request. A canceled wait leaves the queue, and the requests behind it continue.
+- The request span has the `app.lock.mode` tag, `shared` or `exclusive`. A wait adds a span named for the root, such as `tenants.lock_wait`. A lock with no wait adds no span.
 
 A command that is marked `IRunsAgainWhenRaced` can take a lock. A lost race throws out of the work, the lock is freed, and the command runs again and takes the lock again. `DeleteTenant` does this.
 
@@ -98,6 +93,3 @@ These options do not fit:
 - **`SELECT ... FOR SHARE` on the root row.** A row lock ends with its transaction, so it needs the same transaction around the checks and the save.
 - **A write to the shared root row in each write that adds to the set, so that its version catches the race.** Each booking of a clinic then conflicts with each other booking of that clinic, and the caller gets a 409 for a booking that had no problem.
 
-## Lost reply of a commit
-
-After a lost acknowledgment of a commit, the execution strategy of EF sends the save again. Before it does, the save looks for its audit entries. If they are there, the save committed, so it returns success and sets the `Version` of each saved entity. Thus the save does not run two times, and the caller does not get a 409 for a save that worked. A save that writes no audit entry, such as a save of only a `[NotAudited]` table, has nothing to look for, and it can still get a 409. A save in the work of a `RootLock` also looks (see [Lock](#lock)). See [ADR 0010](../adr/0010-domain-events-in-the-save-transaction.md).

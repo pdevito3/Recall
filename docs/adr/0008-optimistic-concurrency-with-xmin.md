@@ -1,5 +1,7 @@
 # Use the Postgres xmin column for optimistic concurrency
 
+> Changed by PR R1 of the plan, under [ADR 0015](0015-sqlite-storage.md): `Version` is now an explicit integer column, and the save adds 1 to it on each update. The rule of this ADR stays, and each `xmin` below now means this column.
+
 Each entity has a `Version` property that maps to the Postgres `xmin` system column. `xmin` is the ID of the transaction that wrote the current version of the row, so Postgres changes it on each write of the row. EF Core uses it as a concurrency token: each `UPDATE` has `WHERE xmin = @loaded`. When another save changed the row after the load, no row matches, and the API returns 409.
 
 The rule covers the aggregate, not only the root row. A save that adds, changes, or removes an owned child (the dependent of a `Cascade` foreign key) also updates the owner row, so the owner's `xmin` check guards the whole aggregate. For example, two requests that each reserve the last part of a stock item conflict, also when each reservation is a child row.

@@ -242,7 +242,7 @@ A presigned URL works only while the credentials that signed it are valid. When 
 
 A row with no object is a file that no one can download. An object with no row costs only its storage. So `AttachmentStorage` writes in this order:
 
-- **Add.** It puts the object, then runs the save of the row. If the save throws, it deletes the object only when no row with its ID exists, because a save can commit and still throw, for example after a lost reply of the commit. If that check fails, it keeps the object.
+- **Add.** It puts the object, then runs the save of the row. If the save throws, it deletes the object only when no row with its ID exists, because a save can commit and still throw. If that check fails, it keeps the object.
 - **Delete.** It saves the delete of the row, then deletes the object. A failure after the commit leaves an object that no row names, and it writes an error log for it.
 - **Tenant delete.** `DeleteTenant` saves the delete of the rows, then `DeleteFilesOfTenantAsync` deletes each object under `StoredFile.TenantPrefix` of the tenant. This also deletes an object that an earlier failed delete left. A failure after the commit leaves the objects, and it writes an error log for them.
 
