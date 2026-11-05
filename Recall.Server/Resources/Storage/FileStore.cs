@@ -35,7 +35,7 @@ public sealed class FileStore(IOptions<FileStoreOptions> options)
         }
         catch (IOException)
         {
-            return null;
+            return NetworkMountCheck.FileRootRefusal(_root, mounts);
         }
     }
 

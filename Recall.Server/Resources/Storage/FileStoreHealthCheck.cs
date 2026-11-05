@@ -14,25 +14,24 @@ public sealed class FileStoreHealthCheck(Func<string?> proveWritable, string roo
     private readonly Lock _gate = new();
     private Task<string?>? _proof;
     private long _proofStartedAt;
-    private bool _proofHangLogged;
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
+        var (proof, timeLeft) = CurrentProof();
         try
         {
-            var cause = await CurrentProof().WaitAsync(LongestWaitForAProof, timeProvider, cancellationToken);
+            var cause = await proof.WaitAsync(timeLeft, timeProvider, cancellationToken);
             return cause is null
                 ? HealthCheckResult.Healthy()
                 : new(context.Registration.FailureStatus, $"The file store cannot take a write. The cause: {cause}");
         }
         catch (TimeoutException)
         {
-            LogTheHangOnce();
             return new(context.Registration.FailureStatus, "The file store did not finish a write in time.");
         }
     }
 
-    private Task<string?> CurrentProof()
+    private (Task<string?> Proof, TimeSpan TimeLeft) CurrentProof()
     {
         lock (_gate)
         {
@@ -40,23 +39,18 @@ public sealed class FileStoreHealthCheck(Func<string?> proveWritable, string roo
             {
                 _proof = Task.Run(proveWritable);
                 _proofStartedAt = timeProvider.GetTimestamp();
-                _proofHangLogged = false;
+                _ = LogIfItHangsAsync(_proof);
             }
 
-            return _proof;
+            var timeLeft = LongestWaitForAProof - timeProvider.GetElapsedTime(_proofStartedAt);
+            return (_proof, timeLeft > TimeSpan.Zero ? timeLeft : TimeSpan.Zero);
         }
     }
 
-    private void LogTheHangOnce()
+    private async Task LogIfItHangsAsync(Task proof)
     {
-        lock (_gate)
-        {
-            if (_proofHangLogged)
-                return;
-
-            _proofHangLogged = true;
-        }
-
-        Logger.Here().Error("The file store root {Root} did not finish a write in {Seconds} seconds, so its disk can be hanging", root, LongestWaitForAProof.TotalSeconds);
+        await Task.WhenAny(proof, Task.Delay(LongestWaitForAProof, timeProvider));
+        if (!proof.IsCompleted)
+            Logger.Here().Error("The file store root {Root} did not finish a write in {Seconds} seconds, so its disk can be hanging", root, LongestWaitForAProof.TotalSeconds);
     }
 }

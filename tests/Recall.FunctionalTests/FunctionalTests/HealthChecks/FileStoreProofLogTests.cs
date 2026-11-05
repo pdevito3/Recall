@@ -1,5 +1,6 @@
 namespace Recall.FunctionalTests.FunctionalTests.HealthChecks;
 
+using System.Diagnostics;
 using System.Globalization;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
@@ -11,6 +12,8 @@ using Shouldly;
 
 public class FileStoreProofLogTests : TestBase
 {
+    private static readonly TimeSpan RegressionLimit = TimeSpan.FromSeconds(10);
+
     [Test]
     public async Task a_root_that_stays_broken_logs_one_error_that_names_the_root_and_the_cause_and_a_repair_logs_it()
     {
@@ -57,22 +60,96 @@ public class FileStoreProofLogTests : TestBase
             },
             root,
             clock);
-        var context = new HealthCheckContext { Registration = new("file-store", check, HealthStatus.Degraded, null) };
+        var context = ContextOf(check);
+
+        try
+        {
+            // Act
+            var firstProbe = check.CheckHealthAsync(context);
+            var secondProbe = check.CheckHealthAsync(context);
+            clock.Advance(FileStoreHealthCheck.LongestWaitForAProof);
+            var whileHung = await Task.WhenAll(firstProbe, secondProbe).WaitAsync(RegressionLimit);
+            var pastTheLimit = await check.CheckHealthAsync(context).WaitAsync(RegressionLimit);
+            clock.Advance(FileStoreHealthCheck.TimeBetweenProofs);
+            var pastTheInterval = await check.CheckHealthAsync(context).WaitAsync(RegressionLimit);
+            await EventuallyAsync(() => logs.Holding(root).Count > 0);
+
+            // Assert
+            whileHung.ShouldAllBe(result => result.Status == HealthStatus.Degraded);
+            pastTheLimit.Status.ShouldBe(HealthStatus.Degraded);
+            pastTheInterval.Status.ShouldBe(HealthStatus.Degraded);
+            proofs.ShouldBe(1);
+            logs.Holding(root).Count.ShouldBe(1);
+            logs.Holding(root)[0].Level.ShouldBe(LogEventLevel.Error);
+        }
+        finally
+        {
+            release.Set();
+        }
+    }
+
+    [Test]
+    public async Task a_proof_that_hangs_logs_its_error_when_the_prober_leaves_before_the_time_limit()
+    {
+        // Arrange
+        var logs = TestingWebApplicationFactory.Instance.CapturedLogs;
+        var root = $"/hanging-root-{Guid.NewGuid():N}";
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        using var release = new ManualResetEventSlim();
+        using var prober = new CancellationTokenSource();
+        var check = new FileStoreHealthCheck(
+            () =>
+            {
+                release.Wait();
+                return null;
+            },
+            root,
+            clock);
+
+        try
+        {
+            // Act
+            var probe = check.CheckHealthAsync(ContextOf(check), prober.Token);
+            await prober.CancelAsync();
+            await Should.ThrowAsync<OperationCanceledException>(() => probe);
+            clock.Advance(FileStoreHealthCheck.LongestWaitForAProof);
+            await EventuallyAsync(() => logs.Holding(root).Count > 0);
+
+            // Assert
+            logs.Holding(root).Count.ShouldBe(1);
+        }
+        finally
+        {
+            release.Set();
+        }
+    }
+
+    [Test]
+    public async Task a_proof_that_finishes_in_time_logs_nothing_and_a_probe_sees_its_result()
+    {
+        // Arrange
+        var logs = TestingWebApplicationFactory.Instance.CapturedLogs;
+        var root = $"/quick-root-{Guid.NewGuid():N}";
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var check = new FileStoreHealthCheck(() => null, root, clock);
 
         // Act
-        var firstProbe = check.CheckHealthAsync(context);
-        var secondProbe = check.CheckHealthAsync(context);
-        clock.Advance(FileStoreHealthCheck.TimeBetweenProofs);
-        var whileHung = await Task.WhenAll(firstProbe, secondProbe);
-        var pastTheInterval = check.CheckHealthAsync(context);
-        release.Set();
-        var whenFinished = await pastTheInterval;
+        var result = await check.CheckHealthAsync(ContextOf(check));
+        clock.Advance(FileStoreHealthCheck.LongestWaitForAProof);
+        await Task.Yield();
 
         // Assert
-        whileHung.ShouldAllBe(result => result.Status == HealthStatus.Degraded);
-        whenFinished.Status.ShouldBe(HealthStatus.Healthy);
-        proofs.ShouldBe(1);
-        logs.Holding(root).Count.ShouldBe(1);
-        logs.Holding(root)[0].Level.ShouldBe(LogEventLevel.Error);
+        result.Status.ShouldBe(HealthStatus.Healthy);
+        logs.Holding(root).ShouldBeEmpty();
+    }
+
+    private static HealthCheckContext ContextOf(IHealthCheck check)
+        => new() { Registration = new("file-store", check, HealthStatus.Degraded, null) };
+
+    private static async Task EventuallyAsync(Func<bool> condition)
+    {
+        var limit = Stopwatch.StartNew();
+        while (!condition() && limit.Elapsed < RegressionLimit)
+            await Task.Delay(10);
     }
 }

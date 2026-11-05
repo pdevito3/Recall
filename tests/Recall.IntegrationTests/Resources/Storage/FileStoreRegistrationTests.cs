@@ -185,6 +185,20 @@ public class FileStoreRegistrationTests
     }
 
     [Test]
+    public async Task a_root_that_is_a_symlink_loop_on_a_refused_mount_stops_the_startup()
+    {
+        // Arrange
+        using var folder = new TemporaryFileRoot();
+        Directory.CreateDirectory(folder.Path);
+        var root = Path.Combine(folder.Path, "files");
+        Directory.CreateSymbolicLink(root, root);
+        await using var app = BuildWithRoot(root, [new("/", "nfs4", "nas:/export")]);
+
+        // Act & Assert
+        await Should.ThrowAsync<InvalidOperationException>(() => StartupOf(app).StartAsync(CancellationToken.None));
+    }
+
+    [Test]
     public async Task a_failed_proof_holds_for_its_interval_and_the_next_proof_sees_the_repair()
     {
         // Arrange
