@@ -11,6 +11,14 @@ using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
 using Recall.Server.Auth;
 
+public enum IdTokenSigning
+{
+    ProviderKey,
+    OtherKeyWithTheSameId,
+    None,
+    Hs256,
+}
+
 public sealed record StubLogin(string Subject)
 {
     public string Name { get; init; } = "Ada Lovelace";
@@ -20,6 +28,13 @@ public sealed record StubLogin(string Subject)
     public bool UserinfoOmitsSubject { get; init; }
     public string? UserinfoName { get; init; }
     public string? TokenBody { get; init; }
+    public string? TokenCharset { get; init; }
+    public string? UserinfoCharset { get; init; }
+    public string[]? IdTokenAudiences { get; init; }
+    public string? IdTokenAzp { get; init; }
+    public TimeSpan IdTokenLifetime { get; init; } = TimeSpan.FromMinutes(5);
+    public bool IdTokenHasNoExpiry { get; init; }
+    public IdTokenSigning IdTokenSigning { get; init; }
 }
 
 public sealed record AuthorizeRequest(string State, string Nonce, string CodeChallenge, string RedirectUri, string ClientId, string? Prompt = null)
@@ -40,6 +55,8 @@ public sealed class StubOidcProvider : HttpMessageHandler
     private static readonly string[] AuthMethods = ["client_secret_basic"];
 
     private readonly RsaSecurityKey _signingKey = new(RSA.Create(2048)) { KeyId = "stub-key" };
+    private readonly RsaSecurityKey _otherKey = new(RSA.Create(2048)) { KeyId = "stub-key" };
+    private readonly SymmetricSecurityKey _hmacKey = new(RandomNumberGenerator.GetBytes(32)) { KeyId = "stub-hmac" };
     private readonly ConcurrentDictionary<string, (AuthorizeRequest Request, StubLogin Login)> _codes = new();
     private readonly ConcurrentDictionary<string, StubLogin> _accessTokens = new();
     private readonly ConcurrentQueue<string> _handedOut = new();
@@ -90,7 +107,7 @@ public sealed class StubOidcProvider : HttpMessageHandler
         return request.RequestUri!.AbsolutePath switch
         {
             "/.well-known/openid-configuration" => Discovery(),
-            "/jwks" => Json(new Dictionary<string, object> { ["keys"] = new[] { Jwk() } }),
+            "/jwks" => Json(new Dictionary<string, object> { ["keys"] = new[] { Jwk(), HmacJwk() } }),
             "/token" => await TokenAsync(request, cancellationToken),
             "/userinfo" => Userinfo(request),
             _ => new HttpResponseMessage(HttpStatusCode.NotFound),
@@ -128,6 +145,45 @@ public sealed class StubOidcProvider : HttpMessageHandler
         };
     }
 
+    // A real provider has no reason to publish this. Without it, no key can check an HS256 token, so only the allowed algorithms would stop one in a test that loosens them.
+    private Dictionary<string, string> HmacJwk() => new()
+    {
+        ["kty"] = "oct",
+        ["use"] = "sig",
+        ["alg"] = "HS256",
+        ["kid"] = _hmacKey.KeyId,
+        ["k"] = Base64UrlEncoder.Encode(_hmacKey.Key),
+    };
+
+    private string IdTokenOf(StubLogin login, string nonce)
+    {
+        var claims = new Dictionary<string, object> { ["sub"] = login.Subject, ["name"] = login.Name, ["nonce"] = nonce };
+        if (login.IdTokenAudiences is { } audiences)
+            claims["aud"] = audiences;
+        if (login.IdTokenAzp is { } azp)
+            claims["azp"] = azp;
+
+        var now = TimeProvider.System.GetUtcNow().UtcDateTime;
+        var expires = now + login.IdTokenLifetime;
+        var issuedAt = expires < now ? expires.AddMinutes(-5) : now;
+        return new JsonWebTokenHandler { SetDefaultTimesOnTokenCreation = false }.CreateToken(new SecurityTokenDescriptor
+        {
+            Issuer = login.IdTokenIssuer ?? Issuer,
+            Audience = login.IdTokenAudiences is null ? ClientId : null,
+            IssuedAt = issuedAt,
+            NotBefore = issuedAt,
+            Expires = login.IdTokenHasNoExpiry ? null : expires,
+            Claims = claims,
+            SigningCredentials = login.IdTokenSigning switch
+            {
+                IdTokenSigning.ProviderKey => new SigningCredentials(_signingKey, SecurityAlgorithms.RsaSha256),
+                IdTokenSigning.OtherKeyWithTheSameId => new SigningCredentials(_otherKey, SecurityAlgorithms.RsaSha256),
+                IdTokenSigning.Hs256 => new SigningCredentials(_hmacKey, SecurityAlgorithms.HmacSha256),
+                _ => null,
+            },
+        });
+    }
+
     private async Task<HttpResponseMessage> TokenAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{Uri.EscapeDataString(ClientId)}:{Uri.EscapeDataString(ClientSecret)}"));
@@ -147,23 +203,15 @@ public sealed class StubOidcProvider : HttpMessageHandler
 
         var accessToken = Secrets.New();
         _accessTokens[accessToken] = login;
-        var idToken = SignJwt(
-            new Dictionary<string, object>
-            {
-                ["sub"] = login.Subject,
-                ["name"] = login.Name,
-                ["nonce"] = login.Nonce ?? grant.Request.Nonce,
-            },
-            login.IdTokenIssuer ?? Issuer,
-            ClientId);
+        var idToken = IdTokenOf(login, login.Nonce ?? grant.Request.Nonce);
         _handedOut.Enqueue(accessToken);
         _handedOut.Enqueue(idToken);
-        return Json(new Dictionary<string, object>
+        return WithCharset(login.TokenCharset, Json(new Dictionary<string, object>
         {
             ["access_token"] = accessToken,
             ["id_token"] = idToken,
             ["token_type"] = "Bearer",
-        });
+        }));
     }
 
     private HttpResponseMessage Userinfo(HttpRequestMessage request)
@@ -175,7 +223,14 @@ public sealed class StubOidcProvider : HttpMessageHandler
         if (!login.UserinfoOmitsSubject)
             body["sub"] = login.UserinfoSubject ?? login.Subject;
 
-        return Json(body);
+        return WithCharset(login.UserinfoCharset, Json(body));
+    }
+
+    private static HttpResponseMessage WithCharset(string? charset, HttpResponseMessage response)
+    {
+        if (charset is not null)
+            response.Content.Headers.ContentType!.CharSet = charset;
+        return response;
     }
 
     private static HttpResponseMessage Refused(string error)

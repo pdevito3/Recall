@@ -184,7 +184,8 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
             _logger.Here().Warning("Provider {ModeId} stopped answering during a login", Id);
             return RedeemResult.Failed(LoginFailure.IdpUnreachable);
         }
-        catch (Exception exception) when (exception is JsonException or ArgumentException)
+        // A charset that .NET does not know fails the read with InvalidOperationException.
+        catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException)
         {
             return Refuse("the provider sent a body that is not valid");
         }
@@ -384,7 +385,7 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
 
             return UserinfoSubject.NotDifferent;
         }
-        catch (Exception exception) when (exception is HttpRequestException or JsonException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
+        catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidOperationException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
         {
             return UserinfoSubject.NotDifferent;
         }

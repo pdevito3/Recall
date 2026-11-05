@@ -179,6 +179,37 @@ public class AuthRefusalTests
     }
 
     [Test]
+    public async Task a_token_answer_with_a_charset_that_is_not_known_is_refused()
+    {
+        // Arrange
+        using var browser = NewBrowser();
+        var authorize = await browser.StartWebAsync();
+
+        // Act
+        var response = await browser.FinishAtProviderAsync(authorize, new StubLogin(NewSubject()) { TokenCharset = "bogus" });
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).ShouldContain("<h1>Sign-in failed</h1>");
+        browser.SessionCookie.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task a_userinfo_answer_with_a_charset_that_is_not_known_leaves_the_login_on_the_id_token()
+    {
+        // Arrange
+        using var browser = NewBrowser();
+        var authorize = await browser.StartWebAsync();
+
+        // Act
+        var response = await browser.FinishAtProviderAsync(authorize, new StubLogin(NewSubject()) { UserinfoCharset = "bogus" });
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        browser.SessionCookie.ShouldNotBeNull();
+    }
+
+    [Test]
     [Arguments("[]")]
     [Arguments("\"text\"")]
     [Arguments("{}")]
