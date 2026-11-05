@@ -135,15 +135,19 @@ public sealed class Provisioner(
         {
             var admin = await dbContext.Users
                 .TagWithOperationCallSite("auth.provision.oldest_admin")
+                .Include(u => u.UserPermissions)
                 .Where(u => u.TenantId == tenantId && u.Role.Value == adminRole && u.Identifier == u.Id)
                 .OrderBy(u => u.Id)
                 .FirstOrDefaultAsync(ct);
             if (admin is null)
                 return null;
 
+            var held = admin.UserPermissions.ToList();
+            admin.AddPermissions(admin.Role.GetDefaultPermissions());
+            dbContext.UserPermissions.AddRange(admin.UserPermissions.Except(held));
             dbContext.Set<ExternalLogin>().Add(LinkOf(identity, admin.Id));
             await dbContext.SaveChangesAsync(ct);
-            _logger.Here().Warning("The owner claim file linked a login of issuer {Issuer} to user {UserId}", identity.Issuer, admin.Id);
+            _logger.Here().Warning("The owner claim file linked a login of issuer {Issuer} to user {UserId} and gave back each Admin permission", identity.Issuer, admin.Id);
             return new ProvisionOutcome.Provisioned(admin.Id, admin.FullName);
         }, cancellationToken);
 

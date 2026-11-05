@@ -186,7 +186,7 @@ Each later login finds the user through the pair of issuer and subject in `auth_
 
 A user that an Admin adds through the API has no link, so that user cannot sign in today.
 
-A tenant keeps an Admin who can sign in and manage access. A delete, a demotion, or the removal of `manage_user_access` gets 409 when it would leave the tenant with no Admin who holds that permission, or would remove the last such Admin with a link. So a person cannot lock the install. To remove such an Admin, first give the role Admin to another person who has signed in. With closed signup, set `Auth:OpenSignup` to `true` while that person signs in, then set it back.
+A tenant keeps an Admin who can sign in and manage access. Such an Admin holds each Admin permission, because a caller can give only what the caller holds. A delete, a demotion, or the removal of a permission from an Admin gets 409 when it would leave the tenant with no Admin who holds each permission, or would remove the last such Admin with a link. To remove such an Admin, first give another person who has signed in the role Admin and each Admin permission. With closed signup, set `Auth:OpenSignup` to `true` and restart the Server while that person signs in, then set it back and restart. The rule does not check the provider of a link, so a link to a provider that you removed still counts. The owner claim recovers that case: it gives the oldest Admin the new link and each Admin permission.
 
 A repeat login fills only a stored value that is empty. A changed value stays. A value that a person clears comes back from the provider at the next login.
 
@@ -198,7 +198,7 @@ A changed issuer, a new provider, a provider restored with a new `sub`, or a del
 2. Create an empty file named `claim-owner` in the data directory. It works for 15 minutes from its write time.
 3. Sign in with the identity that you want.
 
-The Server links that identity to the oldest live Admin of the oldest live tenant whose identifier is its own ID, logs a warning with the user ID and the issuer, and removes the file. If the tenant has no such Admin, the Server adds a new Admin. A deleted tenant is the one case that the claim cannot recover. In that case, the login gets `signup_closed` and the Server still removes the file.
+The Server links that identity to the oldest live Admin of the oldest live tenant whose identifier is its own ID, gives that Admin each Admin permission back, logs a warning with the user ID and the issuer, and removes the file. If the tenant has no such Admin, the Server adds a new Admin. A deleted tenant is the one case that the claim cannot recover. In that case, the login gets `signup_closed` and the Server still removes the file.
 
 The first login after you create the file always removes it, also when the claim changes nothing:
 

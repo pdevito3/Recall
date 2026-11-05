@@ -34,8 +34,7 @@ public static class RemoveUserPermission
                     .Include(u => u.UserPermissions)
                     .GetById(request.Id, ct);
                 user.GuardAllows(UserAction.RemovePermission(), caller);
-                if (permission == Permission.ManageUserAccess())
-                    await LastAdmin.GuardAsync(dbContext, user, ct);
+                await LastAdmin.GuardAsync(dbContext, user, ct);
 
                 var existingPermissions = user.UserPermissions.ToList();
 

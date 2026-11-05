@@ -65,6 +65,22 @@ public class LastAdminTests
         (await DetailOf(response)).ShouldBe(LastAdmin.RefusedMessage);
     }
 
+    [Test]
+    public async Task an_owner_who_removes_their_own_permission_to_read_people_gets_a_conflict()
+    {
+        // Arrange
+        using var browser = new AuthBrowser(AuthHosts.Closed);
+        await browser.LoginWebAsync("owner");
+        var ownerId = await OwnerIdAsync();
+
+        // Act
+        var response = await browser.SendAsync(WithCsrf(HttpMethod.Delete, $"/{ApiRoutes.Users.RemovePermission(ownerId, "read_users")}"));
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await DetailOf(response)).ShouldBe(LastAdmin.RefusedMessage);
+    }
+
     private static Task<string> OwnerIdAsync()
         => AuthHosts.Closed.WithDatabaseAsync(db => db.Set<ExternalLogin>()
             .IgnoreQueryFilters()

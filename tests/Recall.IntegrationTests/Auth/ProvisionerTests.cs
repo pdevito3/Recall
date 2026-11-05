@@ -409,6 +409,32 @@ public sealed class ProvisionerTests
         (await linksSeenByTheDelete).ShouldBe(2);
     }
 
+    [Test]
+    public async Task an_owner_claim_gives_back_each_permission_of_the_admin()
+    {
+        // Arrange
+        await using var database = await AuthTestDatabase.CreateAsync();
+        var underTest = ProvisionerOf(database.BuildServices());
+        var owner = UserIdOf(await underTest.ResolveAsync(Person("old-subject"), CancellationToken.None));
+        await database.ReadAsync(async db =>
+        {
+            var user = await db.Users.Include(u => u.UserPermissions).SingleAsync(u => u.Id == owner);
+            var lost = user.UserPermissions.Take(2).ToList();
+            lost.ForEach(permission => user.RemovePermission(permission));
+            db.UserPermissions.RemoveRange(lost);
+            return await db.SaveChangesAsync();
+        });
+        await File.WriteAllTextAsync(database.ClaimFilePath, "");
+
+        // Act
+        var outcome = await underTest.ResolveAsync(Person("new-subject", IssuerB), CancellationToken.None);
+
+        // Assert
+        UserIdOf(outcome).ShouldBe(owner);
+        var held = await database.ReadAsync(db => db.UserPermissions.Where(p => p.UserId == owner).Select(p => p.Permission).ToListAsync());
+        held.ShouldBe(Permission.GetAll(), ignoreOrder: true);
+    }
+
     private static async Task<int> ExclusiveCountOfLinksAsync(IServiceProvider services, string tenantId)
     {
         await using var scope = services.GetRequiredService<IServiceScopeFactory>().CreateSystemScope();
