@@ -106,8 +106,8 @@ public class UniqueCheckRaceTests : TestBase
         var dto = new FakeInitiateUserAndTenantDto().Generate();
         var underTest = new TestingServiceScope(services);
         var rival = new TestingServiceScope();
-        underTest.SetUserWithDefaults(identifier: dto.Identifier);
-        rival.SetUserWithDefaults(identifier: dto.Identifier);
+        underTest.SetMachineClient(TestFixture.TrustedMachineClientId);
+        rival.SetMachineClient(TestFixture.TrustedMachineClientId);
 
         // Act
         var initiate = underTest.SendAsync(new InitiateUserAndTenant.Command(dto));
@@ -132,8 +132,8 @@ public class UniqueCheckRaceTests : TestBase
         var rivalDto = new FakeInitiateUserAndTenantDto().Generate() with { TenantName = dto.TenantName };
         var underTest = new TestingServiceScope(services);
         var rival = new TestingServiceScope();
-        underTest.SetUserWithDefaults(identifier: dto.Identifier);
-        rival.SetUserWithDefaults(identifier: rivalDto.Identifier);
+        underTest.SetMachineClient(TestFixture.TrustedMachineClientId);
+        rival.SetMachineClient(TestFixture.TrustedMachineClientId);
 
         // Act
         var initiate = underTest.SendAsync(new InitiateUserAndTenant.Command(dto));

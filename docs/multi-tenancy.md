@@ -137,8 +137,8 @@ These rules stop a caller from joining a tenant that is not theirs:
 - `POST /api/v1/users` needs the `manage_users` permission, and each default permission of the new role (see [backend.md](backend.md#permissions)). The server puts the new user in the tenant of the caller. The request body does not need a tenant. A `tenantId` that is empty or has only spaces is the same as no `tenantId`.
 - A caller with `TenantScope.AllTenants` has no tenant of its own, so it must send `tenantId` in the body. If the tenant does not exist, the request gets 422.
 - If a user sends `tenantId`, it must be their own tenant. Other requests get 403.
-- `POST /api/v1/users/initiate` creates a tenant and its first user. A user of a first-party client can do this only for their own `sub`. Any other caller, an agent included, must be able to manage all tenants. Other requests get 403.
-- The SPA page `Start a tenant` (`/start-tenant`) sends `initiate` for the signed-in user, with the role `Admin`. Each page of the SPA shows a notice that links to it when `GET /api/v1/users/by-identifier/{sub}` gives 404 for the signed-in user. A new database has no user records, so this is the way in for the first user.
+- `POST /api/v1/users/initiate` creates a tenant and its first user. The caller must be able to manage all tenants. Other requests get 403, including a user of a first-party client. The first login of a person creates their user and tenant, as `docs/authentication.md` says.
+- The SPA page `Start a tenant` (`/start-tenant`) stays until a later change removes it. The server refuses the call that it sends.
 - If a user that is not deleted already has the identifier, in any tenant, `POST /api/v1/users` and `initiate` return 409. A user belongs to one tenant only. A deleted user frees its identifier, so the same person can sign up again.
 
 ## Delete a tenant
@@ -160,7 +160,7 @@ The line gives the users of the tenant (with the admin), the time of the delete,
 
 During the delete, each add that takes the shared lock of the tenant waits. If a tenant of your app can own more than about 10,000 users or other aggregate roots, change the delete to save in batches.
 
-For a user of a deleted tenant, the server finds no user record on the next request. A deleted user frees its identifier, so the same person can send `POST /api/v1/users/initiate` to start a new tenant and a new user. The new user has a new ID. The old user and its history stay in the deleted tenant. The unique index on the tenant name also covers the deleted tenants, so the new tenant needs a new name.
+For a user of a deleted tenant, the server finds no user record on the next request. A deleted user frees its identifier, so a trusted tenant management client can send `POST /api/v1/users/initiate` to start a new tenant and a new user for the same person. The new user has a new ID. The old user and its history stay in the deleted tenant. The unique index on the tenant name also covers the deleted tenants, so the new tenant needs a new name.
 
 An agent add and a user add take the shared lock of the tenant, and a tenant delete takes the exclusive lock. Thus an add that runs during the delete cannot leave a live agent or a live user in the deleted tenant (see [concurrency.md](backend/concurrency.md#lock)). The add of a new tenant-owned aggregate root must take the shared lock too. If it does not, a row that it saves during the delete stays live in the deleted tenant. A child add, such as a permission add, takes no lock. It changes the version of its owner, and the delete loads each owner before its children, so the save of the delete fails its version check and runs again. A child has a required Cascade key to its owner. An entity with another kind of key to its owner is an aggregate root, so it needs `ITenantable`, and its add must take the shared lock.
 
@@ -170,7 +170,7 @@ The tenant filter also applies to `Tenant`, so the `/api/v1/tenants` endpoints o
 
 - A user can get only their own tenant. A user with the `manage_tenant` permission can update and delete only their own tenant. For other tenants, the endpoints return 404. A user without `manage_tenant` gets 403 for an update or a delete.
 - The list shows only the tenant of the caller. A caller with `TenantScope.NoTenant` gets an empty list.
-- Only a caller that can manage all tenants can add a tenant with `POST /api/v1/tenants`. Other requests get 403. A user starts their own tenant with `POST /api/v1/users/initiate`.
+- Only a caller that can manage all tenants can add a tenant with `POST /api/v1/tenants`. Other requests get 403. Only the same callers can start a tenant with `POST /api/v1/users/initiate`. The first login of a person creates their tenant.
 
 ## Clients for all tenants
 
