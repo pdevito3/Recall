@@ -1,0 +1,268 @@
+namespace Recall.IntegrationTests.Databases;
+
+using Microsoft.EntityFrameworkCore;
+using Recall.Server.Domain.People.Dtos;
+using Recall.Server.Domain.People.Features;
+using Recall.Server.Domain.Sessions.Dtos;
+using Recall.Server.Domain.Sessions.Features;
+using Recall.Server.Domain.Users;
+using Recall.Server.Domain.Users.Features;
+using Recall.Server.Domain.UserSettings.Dtos;
+using Recall.Server.Domain.UserSettings.Features;
+using Recall.Server.Exceptions;
+using Recall.SharedTestHelpers.EntityGraphs;
+using Recall.SharedTestHelpers.Utilities;
+using Shouldly;
+
+public class JournalRaceTests : TestBase
+{
+    private static readonly DateTimeOffset Morning = DateTimeOffset.UtcNow.AddHours(-3);
+
+    [Test]
+    [Property("Rule", "SES-1")]
+    public async Task two_creates_with_one_client_session_id_make_one_session()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var pause = PauseAtQuery.After("sessions.add.tombstone");
+        await using var services = pause.BuildServices();
+        var dto = new SessionForCreationDto { ClientSessionId = Guid.NewGuid().ToString(), StartedAt = Morning };
+
+        // Act
+        var add = ScopeOf(owner, services).SendAsync(new AddSession.Command(dto));
+        await pause.ReachedAsync();
+        var rival = await ScopeOf(owner).SendAsync(new AddSession.Command(dto));
+        pause.Release();
+
+        // Assert
+        var replay = await add;
+        rival.IsNew.ShouldBeTrue();
+        replay.IsNew.ShouldBeFalse();
+        replay.Session.Id.ShouldBe(rival.Session.Id);
+    }
+
+    [Test]
+    [Property("Rule", "SES-5")]
+    public async Task a_raw_save_that_a_rival_beat_after_the_load_runs_again_and_keeps_both()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var session = await AddSessionAsync(owner);
+        var pause = PauseAtQuery.After("sessions.save_raw.load");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var save = ScopeOf(owner, services).SendAsync(new SaveRawDraft.Command(session.Id, Save("newer", Morning.AddMinutes(2))));
+        await pause.ReachedAsync();
+        await ScopeOf(owner).SendAsync(new SaveRawDraft.Command(session.Id, Save("older", Morning.AddMinutes(1))));
+        pause.Release();
+
+        // Assert
+        (await save).DraftRevision.ShouldBe(2);
+        var stored = await ScopeOf(owner).SendAsync(new GetSession.Query(session.Id));
+        stored.RawText.ShouldBe("newer");
+        (await RawTextsAsync(owner, session.Id)).ShouldBe(["older", "newer"]);
+    }
+
+    [Test]
+    [Property("Rule", "SES-5")]
+    public async Task a_cleaned_save_that_a_rival_beat_after_the_load_runs_again_and_keeps_both()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var session = await AddSessionAsync(owner);
+        var pause = PauseAtQuery.After("sessions.save_cleaned.load");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var save = ScopeOf(owner, services).SendAsync(new SaveCleanedDraft.Command(session.Id, Save("newer", Morning.AddMinutes(2))));
+        await pause.ReachedAsync();
+        await ScopeOf(owner).SendAsync(new SaveCleanedDraft.Command(session.Id, Save("older", Morning.AddMinutes(1))));
+        pause.Release();
+
+        // Assert
+        (await save).DraftRevision.ShouldBe(2);
+        var stored = await ScopeOf(owner).SendAsync(new GetSession.Query(session.Id));
+        stored.CleanedText.ShouldBe("newer");
+        stored.CleanedLatestRevision.ShouldBe(2);
+    }
+
+    [Test]
+    public async Task a_metadata_change_that_a_rival_beat_after_the_load_runs_again_and_saves()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var session = await AddSessionAsync(owner);
+        var pause = PauseAtQuery.After("sessions.set_metadata.load");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var change = ScopeOf(owner, services).SendAsync(new SetSessionMetadata.Command(session.Id, new SessionMetadataChangeDto { Moods = ["calm"], SavedAt = Morning }));
+        await pause.ReachedAsync();
+        await ScopeOf(owner).SendAsync(new SaveRawDraft.Command(session.Id, Save("words", Morning)));
+        pause.Release();
+
+        // Assert
+        (await change).Moods.ShouldBe(["Calm"]);
+        var stored = await ScopeOf(owner).SendAsync(new GetSession.Query(session.Id));
+        stored.Moods.ShouldBe(["Calm"]);
+        stored.RawText.ShouldBe("words");
+    }
+
+    [Test]
+    [Property("Rule", "SES-12")]
+    public async Task a_delete_that_a_save_beat_after_the_load_runs_again_and_removes_the_session()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var session = await AddSessionAsync(owner);
+        var pause = PauseAtQuery.After("sessions.delete.load");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var delete = ScopeOf(owner, services).SendAsync(new DeleteSession.Command(session.Id));
+        await pause.ReachedAsync();
+        await ScopeOf(owner).SendAsync(new SaveRawDraft.Command(session.Id, Save("words", Morning)));
+        pause.Release();
+        await delete;
+
+        // Assert
+        var read = () => ScopeOf(owner).SendAsync(new GetSession.Query(session.Id));
+        await Should.ThrowAsync<NotFoundException>(read);
+    }
+
+    [Test]
+    [Property("Rule", "SES-12")]
+    public async Task a_save_that_a_delete_beat_after_the_load_gives_404_and_no_row_returns()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var session = await AddSessionAsync(owner);
+        var pause = PauseAtQuery.After("sessions.save_raw.load");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var save = ScopeOf(owner, services).SendAsync(new SaveRawDraft.Command(session.Id, Save("words", Morning)));
+        await pause.ReachedAsync();
+        await ScopeOf(owner).SendAsync(new DeleteSession.Command(session.Id));
+        pause.Release();
+
+        // Assert
+        await Should.ThrowAsync<NotFoundException>(save);
+        (await RawTextsAsync(owner, session.Id)).ShouldBeEmpty();
+    }
+
+    [Test]
+    [Property("Rule", "SES-13")]
+    public async Task an_add_that_a_delete_of_its_owner_beat_saves_no_row()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var pause = PauseAtQuery.After("sessions.add.tombstone");
+        await using var services = pause.BuildServices();
+        var dto = new SessionForCreationDto { ClientSessionId = Guid.NewGuid().ToString(), StartedAt = Morning };
+
+        // Act
+        var add = ScopeOf(owner, services).SendAsync(new AddSession.Command(dto));
+        await pause.ReachedAsync();
+        await new TestingServiceScope().SendAsync(new DeleteUser.Command(owner.Id));
+        pause.Release();
+
+        // Assert
+        var failure = await Should.ThrowAsync<Exception>(add);
+        failure.ShouldBeOfType<ForbiddenAccessException>();
+        var rows = await new TestingServiceScope().ExecuteDbContextAsync(db => db.Sessions.IgnoreQueryFilters().CountAsync(s => s.UserId == owner.Id));
+        rows.ShouldBe(0);
+    }
+
+    [Test]
+    [Property("Rule", "SES-9")]
+    public async Task a_rename_that_a_save_beat_after_the_load_runs_again_and_relabels_the_new_words()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var person = await ScopeOf(owner).SendAsync(new AddPerson.Command(new PersonLabelDto { Label = "Sam" }));
+        var session = await AddSessionAsync(owner);
+        await ScopeOf(owner).SendAsync(new SaveRawDraft.Command(session.Id, Save(Mention(person.Id, "Sam", "First"), Morning)));
+        var pause = PauseAtQuery.After("people.rename.sessions");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var rename = ScopeOf(owner, services).SendAsync(new RenamePerson.Command(person.Id, new PersonLabelDto { Label = "Samuel" }));
+        await pause.ReachedAsync();
+        await ScopeOf(owner).SendAsync(new SaveRawDraft.Command(session.Id, new DraftSaveDto
+        {
+            Text = Mention(person.Id, "Sam", "Second"),
+            BaseRevision = 1,
+            SavedAt = Morning.AddMinutes(1),
+        }));
+        pause.Release();
+        await rename;
+
+        // Assert
+        var stored = await ScopeOf(owner).SendAsync(new GetSession.Query(session.Id));
+        stored.RawText.ShouldContain("Second");
+        stored.RawText.ShouldContain("Samuel");
+        stored.RawDraftRevision.ShouldBe(3);
+    }
+
+    [Test]
+    [Property("Rule", "SES-26")]
+    public async Task two_first_settings_changes_make_one_row()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var pause = PauseAtQuery.After("user_settings.change.load");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var change = ScopeOf(owner, services).SendAsync(new ChangeUserSetting.Command(Setting("Europe/Tallinn", Morning.AddMinutes(2))));
+        await pause.ReachedAsync();
+        await ScopeOf(owner).SendAsync(new ChangeUserSetting.Command(Setting("Europe/Paris", Morning.AddMinutes(1))));
+        pause.Release();
+
+        // Assert
+        (await change).TimeZone.ShouldBe("Europe/Tallinn");
+        var rows = await ScopeOf(owner).ExecuteDbContextAsync(db => db.UserSettings.CountAsync());
+        rows.ShouldBe(1);
+    }
+
+    private static string Mention(string personId, string label, string words)
+        => "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"" + words + " \"},"
+            + "{\"type\":\"mention\",\"attrs\":{\"personId\":\"" + personId + "\",\"label\":\"" + label + "\"}}]}]}";
+
+    private static DraftSaveDto Save(string text, DateTimeOffset savedAt)
+        => new() { Text = text, BaseRevision = 0, SavedAt = savedAt };
+
+    private static UserSettingChangeDto Setting(string zone, DateTimeOffset savedAt)
+        => new() { TimeZone = zone, LocationCaptureEnabled = false, RequirePeopleTagApproval = true, SavedAt = savedAt };
+
+    private static async Task<User> AddOwnerAsync()
+    {
+        await new TestingServiceScope().StartGraph(out _)
+            .AddUser(out var owner)
+            .BuildAsync();
+        return owner;
+    }
+
+    private static TestingServiceScope ScopeOf(User owner, IServiceProvider? services = null)
+    {
+        var scope = services is null ? new TestingServiceScope() : new TestingServiceScope(services);
+        scope.SetUserWithDefaults(identifier: owner.Identifier);
+        return scope;
+    }
+
+    private static async Task<SessionDto> AddSessionAsync(User owner)
+        => (await ScopeOf(owner).SendAsync(new AddSession.Command(new SessionForCreationDto
+        {
+            ClientSessionId = Guid.NewGuid().ToString(),
+            StartedAt = Morning,
+        }))).Session;
+
+    private static Task<List<string>> RawTextsAsync(User owner, string sessionId)
+        => ScopeOf(owner).ExecuteDbContextAsync(db => db.RawRevisions
+            .Where(r => r.SessionId == sessionId)
+            .OrderBy(r => r.Number)
+            .Select(r => r.Text)
+            .ToListAsync());
+}

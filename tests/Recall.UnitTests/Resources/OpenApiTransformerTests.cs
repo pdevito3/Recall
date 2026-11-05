@@ -239,6 +239,35 @@ public class OpenApiTransformerTests
     }
 
     [Test]
+    public async Task limits_transformer_writes_the_max_length_of_a_list_of_strings_on_its_items()
+    {
+        // Arrange
+        await using var app = await AppWithLimitsTransformerAsync((LimitedListDto dto) => dto);
+
+        // Act
+        var document = await app.Services.GetRequiredKeyedService<IOpenApiDocumentProvider>("v1").GetOpenApiDocumentAsync();
+
+        // Assert
+        var names = document.Components.ShouldNotBeNull().Schemas.ShouldNotBeNull()[nameof(LimitedListDto)].Properties.ShouldNotBeNull()["names"];
+        names.MaxLength.ShouldBeNull();
+        names.Items.ShouldNotBeNull().MaxLength.ShouldBe(Limits.NameMaxLength);
+    }
+
+    [Test]
+    public async Task limits_transformer_rejects_a_max_length_on_a_list_of_numbers()
+    {
+        // Arrange
+        await using var app = await AppWithLimitsTransformerAsync((MaxLengthOnNumberListDto dto) => dto);
+
+        // Act
+        var act = () => app.Services.GetRequiredKeyedService<IOpenApiDocumentProvider>("v1").GetOpenApiDocumentAsync();
+
+        // Assert
+        var exception = await act.ShouldThrowAsync<InvalidOperationException>();
+        exception.Message.ShouldContain($"{nameof(MaxLengthOnNumberListDto)}.quantities has [SchemaMaxLength]");
+    }
+
+    [Test]
     public async Task limits_transformer_rejects_a_max_length_on_a_number()
     {
         // Arrange
@@ -508,6 +537,18 @@ public class OpenApiTransformerTests
         public uint Version { get; init; }
         [SchemaMinimum(typeof(Limits), nameof(Limits.SeatsMin))]
         public uint Seats { get; init; }
+    }
+
+    private sealed record LimitedListDto
+    {
+        [SchemaMaxLength(typeof(Limits), nameof(Limits.NameMaxLength))]
+        public IReadOnlyList<string> Names { get; init; } = [];
+    }
+
+    private sealed record MaxLengthOnNumberListDto
+    {
+        [SchemaMaxLength(typeof(Limits), nameof(Limits.NameMaxLength))]
+        public IReadOnlyList<int> Quantities { get; init; } = [];
     }
 
     private sealed record MaxLengthOnNumberDto

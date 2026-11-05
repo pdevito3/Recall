@@ -14,7 +14,7 @@ public enum SweepCall
 public sealed record SweepTarget(string Key, string Label, bool NamesARecord);
 
 /// <param name="Anonymous">A call with no user does not get the code of a missing token.</param>
-public sealed record Open(string Reason, bool Anonymous = false);
+public sealed record Open(string Reason, bool Anonymous = false, bool OwnerOnly = false);
 
 public sealed record Outcome(string Code, string Detail);
 
@@ -77,6 +77,8 @@ public static class AccessRules
             SweepCall.NoUser
                 => (code => code == codes.Unauthenticated,
                     $"{codes.Unauthenticated}, because no allow-list entry marks it anonymous"),
+            SweepCall.MemberWithOwnTenantIds when entry is { OwnerOnly: true } && target.NamesARecord
+                => (code => code == codes.NotFound, $"{codes.NotFound}, because the record has another owner"),
             SweepCall.MemberWithOwnTenantIds when entry is not null
                 => (codes.IsSuccess, "a success, because it is on the allow list"),
             SweepCall.MemberWithUnknownIds when entry is not null

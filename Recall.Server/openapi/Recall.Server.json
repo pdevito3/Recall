@@ -510,6 +510,1438 @@
         }
       }
     },
+    "/api/v1/corrections": {
+      "post": {
+        "tags": [
+          "Corrections"
+        ],
+        "summary": "Adds a Correction of the caller.",
+        "operationId": "AddCorrection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorrectionForCreationDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CorrectionDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Corrections"
+        ],
+        "summary": "Gets a paginated list of the Corrections of the caller, by term.",
+        "operationId": "GetCorrectionList",
+        "parameters": [
+          {
+            "name": "pageNumber",
+            "in": "query",
+            "schema": {
+              "maximum": 4294967,
+              "minimum": 1,
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "X-Pagination": {
+                "description": "The pagination data for the returned page, as JSON.",
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/PaginationMetadata"
+                    }
+                  }
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CorrectionDto"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/corrections/{id}": {
+      "delete": {
+        "tags": [
+          "Corrections"
+        ],
+        "summary": "Deletes a Correction of the caller.",
+        "operationId": "DeleteCorrection",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Corrections"
+        ],
+        "summary": "Gets a Correction of the caller.",
+        "operationId": "GetCorrection",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CorrectionDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Corrections"
+        ],
+        "summary": "Updates a Correction of the caller.",
+        "operationId": "UpdateCorrection",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorrectionForUpdateDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CorrectionDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/people": {
+      "post": {
+        "tags": [
+          "People"
+        ],
+        "summary": "Adds a Person to the directory of the caller.",
+        "operationId": "AddPerson",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonLabelDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "People"
+        ],
+        "summary": "Gets a paginated list of the directory of the caller, by name.",
+        "operationId": "GetPersonList",
+        "parameters": [
+          {
+            "name": "pageNumber",
+            "in": "query",
+            "schema": {
+              "maximum": 4294967,
+              "minimum": 1,
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "X-Pagination": {
+                "description": "The pagination data for the returned page, as JSON.",
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/PaginationMetadata"
+                    }
+                  }
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PersonDto"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/people/{id}": {
+      "get": {
+        "tags": [
+          "People"
+        ],
+        "summary": "Gets a Person of the caller.",
+        "operationId": "GetPerson",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "People"
+        ],
+        "summary": "Renames a Person. Each mention in each Session changes its label, and each text that changes makes a Revision.",
+        "operationId": "RenamePerson",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonLabelDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/sessions": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Adds a Session, or returns the Session that already has this client session ID. The first create gives 201 and a\nreplay gives 200, so a device can send it again after a lost response. A replay of a deleted Session gives 409.",
+        "operationId": "AddSession",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionForCreationDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDto"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Gets one page of the timeline of the caller, newest first. To get the next page, send the nextCursor of this page\nas the cursor. The last page has no nextCursor.",
+        "operationId": "GetSessionPage",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionPageDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{id}": {
+      "delete": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Deletes a Session and each of its Revisions. The sync feed gives each device a tombstone.",
+        "operationId": "DeleteSession",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Gets a Session of the caller, with its Raw and its Cleaned. The Session of another person gives 404.",
+        "operationId": "GetSession",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{id}/cleaned-revisions/{number}": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Gets one Cleaned Revision of a Session, with its text.",
+        "operationId": "GetCleanedRevision",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{id}/cleaned-revisions": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Gets one page of the Cleaned Revisions of a Session, newest first, with no text. To get the next page, send the\nnextCursor of this page as the cursor.",
+        "operationId": "GetCleanedRevisionPage",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionPageDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{id}/raw-revisions/{number}": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Gets one Raw Revision of a Session, with its text.",
+        "operationId": "GetRawRevision",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{id}/raw-revisions": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Gets one page of the Raw Revisions of a Session, newest first, with no text. To get the next page, send the\nnextCursor of this page as the cursor.",
+        "operationId": "GetRawRevisionPage",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionPageDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{id}/cleaned": {
+      "put": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Saves the Cleaned Draft with Last-write-wins on the save time. A save that loses keeps its words as a Revision.",
+        "operationId": "SaveCleanedDraft",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftSaveDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftSaveResultDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{id}/draft": {
+      "put": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Saves the Raw Draft with Last-write-wins on the save time. A save that loses keeps its words as a Revision.",
+        "operationId": "SaveRawDraft",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftSaveDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftSaveResultDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{id}/metadata": {
+      "put": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Replaces the activity, the moods, and the Topics that the caller chose for a Session.",
+        "operationId": "SetSessionMetadata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionMetadataChangeDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/sync/changes": {
+      "get": {
+        "tags": [
+          "Sync"
+        ],
+        "summary": "Gets the journal rows of the caller that changed after the cursor, and a tombstone for each row that is gone. Send\nno cursor for the first pull. A 422 means that the cursor came from before a restore of a backup: keep the saves\nthat did not reach the server, drop the rows that came from the feed, and pull from the start.",
+        "operationId": "GetSyncChangePage",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncChangePageDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
     "/api/v1/tenants": {
       "post": {
         "tags": [
@@ -860,6 +2292,112 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/me/settings": {
+      "put": {
+        "tags": [
+          "UserSettings"
+        ],
+        "summary": "Changes the settings of the caller, with Last-write-wins on the save time. A change with an older save time than\nthe stored settings does nothing, and the response has the stored settings.",
+        "operationId": "ChangeUserSetting",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserSettingChangeDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSettingDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "UserSettings"
+        ],
+        "summary": "Gets the settings of the caller. A caller with no change yet gets the defaults.",
+        "operationId": "GetUserSetting",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSettingDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -1986,6 +3524,92 @@
           }
         }
       },
+      "CorrectionDto": {
+        "required": [
+          "id",
+          "canonicalTerm",
+          "mishearings",
+          "hardReplace",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "canonicalTerm": {
+            "type": "string"
+          },
+          "mishearings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "hardReplace": {
+            "type": "boolean"
+          },
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      },
+      "CorrectionForCreationDto": {
+        "required": [
+          "canonicalTerm",
+          "mishearings",
+          "hardReplace"
+        ],
+        "type": "object",
+        "properties": {
+          "canonicalTerm": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "mishearings": {
+            "type": "array",
+            "items": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          "hardReplace": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CorrectionForUpdateDto": {
+        "required": [
+          "canonicalTerm",
+          "version",
+          "mishearings",
+          "hardReplace"
+        ],
+        "type": "object",
+        "properties": {
+          "canonicalTerm": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "mishearings": {
+            "type": "array",
+            "items": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          "hardReplace": {
+            "type": "boolean"
+          },
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      },
       "CurrentUserDto": {
         "required": [
           "identifier"
@@ -2005,6 +3629,82 @@
           }
         },
         "description": "The signed-in caller as the Server sees it in the access token."
+      },
+      "DraftSaveDto": {
+        "required": [
+          "text",
+          "baseRevision",
+          "savedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "text": {
+            "maxLength": 1000000,
+            "type": "string"
+          },
+          "baseRevision": {
+            "minimum": 0,
+            "type": "integer",
+            "description": "The Revision that the person edited. It is `0` for a Draft with no Revision.",
+            "format": "int32"
+          },
+          "savedAt": {
+            "type": "string",
+            "description": "When the person saved. A time in the future becomes the time of the server.",
+            "format": "date-time"
+          }
+        }
+      },
+      "DraftSaveResultDto": {
+        "required": [
+          "outcome",
+          "draftRevision",
+          "latestRevision",
+          "cleanupStatus",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "enum": [
+              "Unchanged",
+              "Won",
+              "Lost"
+            ],
+            "type": "string",
+            "description": "A save with the outcome `Lost` did not change the Draft, and its words stay as the newest Revision."
+          },
+          "draftRevision": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "latestRevision": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "savedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "cleanupStatus": {
+            "enum": [
+              "NotRun",
+              "Running",
+              "Clean",
+              "Stale",
+              "Failed"
+            ],
+            "type": "string"
+          },
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
       },
       "InitiateUserAndTenantDto": {
         "required": [
@@ -2117,6 +3817,39 @@
         },
         "description": "The pagination data that a list endpoint sends in the X-Pagination response header."
       },
+      "PersonDto": {
+        "required": [
+          "id",
+          "label",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      },
+      "PersonLabelDto": {
+        "required": [
+          "label"
+        ],
+        "type": "object",
+        "properties": {
+          "label": {
+            "maxLength": 200,
+            "type": "string"
+          }
+        }
+      },
       "ProblemDetails": {
         "type": "object",
         "properties": {
@@ -2152,6 +3885,487 @@
             ]
           }
         }
+      },
+      "RevisionDto": {
+        "required": [
+          "number",
+          "savedAt",
+          "text"
+        ],
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "savedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "RevisionPageDto": {
+        "required": [
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RevisionSummaryDto"
+            },
+            "description": "The Revisions of the page, newest first."
+          },
+          "nextCursor": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Send it as the cursor of the next request to get the next page. Null on the last page."
+          }
+        }
+      },
+      "RevisionSummaryDto": {
+        "required": [
+          "number",
+          "savedAt",
+          "length"
+        ],
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "savedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "length": {
+            "type": "integer",
+            "description": "The number of characters of the Revision.",
+            "format": "int32"
+          }
+        }
+      },
+      "SessionDto": {
+        "required": [
+          "id",
+          "clientSessionId",
+          "startedAt",
+          "journalingDay",
+          "rawText",
+          "rawDraftRevision",
+          "rawLatestRevision",
+          "cleanedText",
+          "cleanedDraftRevision",
+          "cleanedLatestRevision",
+          "cleanedHasHandEdits",
+          "cleanupStatus",
+          "activity",
+          "moods",
+          "topics",
+          "personIds",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "clientSessionId": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "journalingDay": {
+            "type": "string",
+            "description": "The date of DateTimeOffset SessionDto.StartedAt in the time zone of the User. It changes when the time zone changes.",
+            "format": "date"
+          },
+          "rawText": {
+            "type": "string"
+          },
+          "rawDraftRevision": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rawLatestRevision": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rawSavedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "cleanedText": {
+            "type": "string"
+          },
+          "cleanedDraftRevision": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cleanedLatestRevision": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cleanedSavedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "cleanedHasHandEdits": {
+            "type": "boolean"
+          },
+          "synopsis": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "cleanupStatus": {
+            "enum": [
+              "NotRun",
+              "Running",
+              "Clean",
+              "Stale",
+              "Failed"
+            ],
+            "type": "string"
+          },
+          "lastCleanupRawRevision": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "activity": {
+            "type": "string"
+          },
+          "moods": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionTopicDto"
+            }
+          },
+          "personIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "latitude": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "longitude": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      },
+      "SessionForCreationDto": {
+        "required": [
+          "clientSessionId",
+          "startedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "clientSessionId": {
+            "maxLength": 100,
+            "type": "string",
+            "description": "The ID that the device made for this Session. A second create with this ID returns the same Session."
+          },
+          "startedAt": {
+            "type": "string",
+            "description": "A time in the future becomes the time of the server.",
+            "format": "date-time"
+          },
+          "latitude": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "description": "The server does not store a location when capture is off in the settings of the User.",
+            "format": "double"
+          },
+          "longitude": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "SessionMetadataChangeDto": {
+        "required": [
+          "savedAt",
+          "moods",
+          "userTopics"
+        ],
+        "type": "object",
+        "properties": {
+          "activity": {
+            "maxLength": 100,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "moods": {
+            "type": "array",
+            "items": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          "userTopics": {
+            "type": "array",
+            "items": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          "savedAt": {
+            "type": "string",
+            "description": "The time of the edit on the client. A change with an older time than the stored change does nothing.",
+            "format": "date-time"
+          }
+        }
+      },
+      "SessionPageDto": {
+        "required": [
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionSummaryDto"
+            },
+            "description": "The Sessions of the page, newest first."
+          },
+          "nextCursor": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Send it as the cursor of the next request to get the next page. Null on the last page."
+          }
+        }
+      },
+      "SessionSummaryDto": {
+        "required": [
+          "id",
+          "clientSessionId",
+          "startedAt",
+          "journalingDay",
+          "preview",
+          "cleanupStatus",
+          "activity",
+          "moods",
+          "topics",
+          "personIds",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "clientSessionId": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "journalingDay": {
+            "type": "string",
+            "format": "date"
+          },
+          "preview": {
+            "type": "string"
+          },
+          "synopsis": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "cleanupStatus": {
+            "enum": [
+              "NotRun",
+              "Running",
+              "Clean",
+              "Stale",
+              "Failed"
+            ],
+            "type": "string"
+          },
+          "activity": {
+            "type": "string"
+          },
+          "moods": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionTopicDto"
+            }
+          },
+          "personIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "description": "One row of the timeline. It has no Draft, so a page costs the same whatever the length of the text."
+      },
+      "SessionTopicDto": {
+        "required": [
+          "name",
+          "provenance"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "provenance": {
+            "enum": [
+              "UserSet",
+              "AiSuggested"
+            ],
+            "type": "string",
+            "description": "Who chose the Topic."
+          }
+        }
+      },
+      "SyncChangePageDto": {
+        "required": [
+          "cursor",
+          "hasMore",
+          "sessions",
+          "people",
+          "corrections",
+          "tombstones"
+        ],
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "description": "Send it as the cursor of the next pull."
+          },
+          "hasMore": {
+            "type": "boolean",
+            "description": "True when a next page already exists, so pull again with no wait."
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionDto"
+            }
+          },
+          "people": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PersonDto"
+            }
+          },
+          "corrections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CorrectionDto"
+            }
+          },
+          "settings": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserSettingDto"
+              }
+            ]
+          },
+          "tombstones": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SyncTombstoneDto"
+            }
+          }
+        },
+        "description": "Each changed row of one page, in its newest state."
+      },
+      "SyncTombstoneDto": {
+        "required": [
+          "entityType",
+          "id"
+        ],
+        "type": "object",
+        "properties": {
+          "entityType": {
+            "enum": [
+              "Session",
+              "Person",
+              "Correction",
+              "UserSettings"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "clientSessionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "A row that is gone. A device removes its copy, and any local Session with this client session ID."
       },
       "TenantDto": {
         "required": [
@@ -2419,6 +4633,69 @@
           }
         }
       },
+      "UserSettingChangeDto": {
+        "required": [
+          "locationCaptureEnabled",
+          "requirePeopleTagApproval",
+          "savedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "timeZone": {
+            "maxLength": 100,
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The IANA time zone that gives the Journaling day. Null means UTC."
+          },
+          "locationCaptureEnabled": {
+            "type": "boolean"
+          },
+          "requirePeopleTagApproval": {
+            "type": "boolean"
+          },
+          "savedAt": {
+            "type": "string",
+            "description": "When the person made the change. A change with an older save time than the stored settings does nothing.",
+            "format": "date-time"
+          }
+        }
+      },
+      "UserSettingDto": {
+        "required": [
+          "locationCaptureEnabled",
+          "requirePeopleTagApproval",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "timeZone": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "locationCaptureEnabled": {
+            "type": "boolean"
+          },
+          "requirePeopleTagApproval": {
+            "type": "boolean"
+          },
+          "savedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      },
       "ValidationProblemDetails": {
         "required": [
           "errors"
@@ -2477,7 +4754,22 @@
       "name": "AuditEntries"
     },
     {
+      "name": "Corrections"
+    },
+    {
+      "name": "People"
+    },
+    {
+      "name": "Sessions"
+    },
+    {
+      "name": "Sync"
+    },
+    {
       "name": "Tenants"
+    },
+    {
+      "name": "UserSettings"
     },
     {
       "name": "Users"
