@@ -71,6 +71,8 @@ export default async ({ page, step, capture, settle, expect, login }) => {
   // The last step. No later step needs the desktop viewport.
   const mobileSidebar = page.locator('[data-slot="sidebar"][data-mobile="true"]')
   await step('mobile: the header toggle opens the sidebar sheet, 18rem wide, with no close button', async () => {
+    await page.goto('/')
+    await expect(breadcrumb).toHaveText('Home')
     await page.setViewportSize({ width: 390, height: 844 })
     await expect(mobileSidebar).toHaveCount(0)
     await toggleSidebar.click()
