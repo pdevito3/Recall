@@ -48,7 +48,6 @@ Read the doc for an area before you change code in that area.
 | [docs/authentication.md](docs/authentication.md) | BFF login flow, auth providers, test users |
 | [docs/frontend.md](docs/frontend.md) | Frontend structure, API client, query hooks, routes, forms |
 | [docs/frontend/](docs/frontend/) | Rules for server state, client state, code style, and tests |
-| [docs/examples.md](docs/examples.md) | The example code, its markers, and the script that deletes it |
 | [docs/specs/](docs/specs/) | The specs of a domain or an effort. Start a new spec from [TEMPLATE.md](docs/specs/TEMPLATE.md): each rule has an ID, and a test names the ID |
 | [docs/csharp-repl.md](docs/csharp-repl.md) | CSharpRepl in the running server: the hook wiring and the Development-only guards |
 | [docs/adr/0017-template-fixes-by-cherry-pick.md](docs/adr/0017-template-fixes-by-cherry-pick.md) | How Recall takes template fixes, and the template commit that Recall started from |

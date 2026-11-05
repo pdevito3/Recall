@@ -13,7 +13,7 @@ Before you start, read [frontend.md](../../../docs/frontend.md), [server-state.m
 
 Copy the shape of the reference feature, not its names.
 
-If `frontend/src/examples/` does not exist, `scripts/remove-examples.cs` deleted the reference feature from this app. Read it in the template repository, in [`frontend/src/examples/`](https://github.com/pdevito3/FullstackTemplate/tree/main/frontend/src/examples), [`frontend/src/routes/(examples)/`](<https://github.com/pdevito3/FullstackTemplate/tree/main/frontend/src/routes/(examples)>), the `examples` folders of [`frontend/tests/`](https://github.com/pdevito3/FullstackTemplate/tree/main/frontend/tests), and the `examples` folders of the [`verify-recall`](https://github.com/pdevito3/FullstackTemplate/tree/main/.agents/skills/verify-recall) skill. Copy no file from it into a folder named `examples`.
+Recall deleted the reference feature, so `frontend/src/examples/` does not exist. Read it in the template repository, in [`frontend/src/examples/`](https://github.com/pdevito3/FullstackTemplate/tree/main/frontend/src/examples), [`frontend/src/routes/(examples)/`](<https://github.com/pdevito3/FullstackTemplate/tree/main/frontend/src/routes/(examples)>), and the `examples` folders of [`frontend/tests/`](https://github.com/pdevito3/FullstackTemplate/tree/main/frontend/tests). Copy no file from it into a folder named `examples`. For the proof of a page, use the local [`verify-recall`](../verify-recall/SKILL.md) skill.
 
 The shared parts of a page below are in the app, also after the removal. Use them. Do not write a second copy. After the removal, the steps use these parts, the code samples of the rule docs, and the [patterns](#patterns) at the end of this skill:
 

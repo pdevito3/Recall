@@ -89,9 +89,9 @@ To stop the merge, run `git merge --abort`. The script writes the merge state be
 
 ## An app that deleted the examples
 
-`scripts/remove-examples.cs` writes `scripts/examples-removed.txt` when it deletes the example code (see [examples.md](examples.md)). When the app has this file, the script runs the `scripts/remove-examples.cs` of each renamed copy on that copy, after `init.cs`. Then neither side of the merge has example code. Thus the merge adds no example file again, and a change of the template to an example gives no conflict. A change of the template to the other code merges as usual.
+`scripts/examples-removed.txt` marks an app that deleted the example code. The template has an example removal script, and Recall does not. When the app has this file, the script runs that script of each renamed copy on that copy, after `init.cs`. Then neither side of the merge has example code. Thus the merge adds no example file again, and a change of the template to an example gives no conflict. A change of the template to the other code merges as usual.
 
-Each run builds the Server and the SPA of the copy, so the script takes a few minutes longer. It needs Node.js, pnpm, and network access for the packages of the copy. If the base commit has no `scripts/remove-examples.cs`, the script stops, because the app has changes of a newer template commit. Run the script with `--find-base` to find the last template commit that the app has all changes of.
+Each run builds the Server and the SPA of the copy, so the script takes a few minutes longer. It needs Node.js, pnpm, and network access for the packages of the copy. If the base commit has no example removal script, the script stops, because the app has changes of a newer template commit. Run the script with `--find-base` to find the last template commit that the app has all changes of.
 
 ## Resolve the conflicts
 

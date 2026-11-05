@@ -223,9 +223,6 @@ internal sealed record Spec(Names Names, IReadOnlyList<Field> Fields, Entrypoint
         if (parent.Entity == "User")
             throw new FeatureException("A ref to User is not possible: the delete of a user must handle each record that "
                 + "links to it (docs/backend/domain-events.md). Add the UserId property by hand after the run.");
-        if (parent.Namespace.Contains(".Examples.", StringComparison.Ordinal))
-            throw new FeatureException($"{parent.Entity} is an example, and scripts/remove-examples.cs deletes it. "
-                + "Give a ref to an entity of the app.");
         if (LocalNames.Contains(parent.Var))
             throw new FeatureException($"The code that the script writes has a variable '{parent.Var}', so a ref to "
                 + $"{parent.Entity} would not build. Add the {reference.Name} property by hand after the run.");
@@ -375,8 +372,7 @@ internal sealed record FileWrite(string Path, string Text);
 /// Lines for a file that many features share, such as AppDbContext. The script puts them above the line
 /// <c>// new-feature:{Slot}</c>, with its indent. When the file holds <see cref="Probe"/>, the lines are in already.
 /// </summary>
-/// <param name="WhenFileExists">The file is an example that scripts/remove-examples.cs can delete.</param>
-internal sealed record Insertion(string Path, string Slot, string Probe, IReadOnlyList<string> Lines, bool WhenFileExists = false);
+internal sealed record Insertion(string Path, string Slot, string Probe, IReadOnlyList<string> Lines);
 
 internal sealed record Plan(IReadOnlyList<FileWrite> Files, IReadOnlyList<Insertion> Insertions)
 {
@@ -633,8 +629,6 @@ internal sealed partial class Repo(string root, string app, string protoPackage)
         foreach (var insertion in plan.Insertions)
         {
             var path = Path.Combine(root, insertion.Path);
-            if (insertion.WhenFileExists && !File.Exists(path))
-                continue;
             if (!edits.TryGetValue(insertion.Path, out var text))
                 text = File.Exists(path)
                     ? File.ReadAllText(path)
@@ -720,7 +714,7 @@ internal sealed partial class Repo(string root, string app, string protoPackage)
 
     private const string MigrationFailure =
         "The script wrote the feature files but no migration, because the Server does not build. A run again refuses a "
-        + "changed file, so undo the run with git restore and git clean, and file the build error as an issue of the template.";
+        + "changed file, so undo the run with git restore and git clean, and file the build error as an issue of the Recall repository (pdevito3/Recall).";
 
     private List<string> MigrationFiles(Spec spec)
         => Directory.EnumerateFiles(Path.Combine(root, Server, "Databases", "Migrations"),
