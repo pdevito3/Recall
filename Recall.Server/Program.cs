@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Recall.Server;
 using Recall.Server.Databases;
@@ -29,6 +30,8 @@ try
     builder.AddServiceDefaults(); // OpenTelemetry, Serilog, health checks, resilience, service discovery
     builder.Services.AddHostedService<MigrationHostedService<AppDbContext>>();
     builder.ConfigureServices();
+    if (OwnerOnlyFiles.KeysDirectory(builder.Configuration) is { } keys)
+        builder.Services.AddDataProtection().SetApplicationName("Recall").PersistKeysToFileSystem(new DirectoryInfo(keys));
     builder.AddEntrypoints();
     OpenApiBuildTime.RemoveHostedServices(builder.Services);
 

@@ -1,5 +1,6 @@
 namespace Recall.FunctionalTests.Auth;
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
@@ -26,24 +27,56 @@ public class NoProviderBootTests
     private sealed class ServerProcess : IAsyncDisposable
     {
         private readonly Process _process;
-        private readonly string _root;
+        private readonly ConcurrentQueue<string> _output;
 
-        private ServerProcess(Process process, string root, HttpClient client)
+        private ServerProcess(Process process, ConcurrentQueue<string> output, string root, HttpClient client)
         {
             _process = process;
-            _root = root;
+            _output = output;
+            Root = root;
             Client = client;
         }
 
         public HttpClient Client { get; }
 
-        public string DataDirectory => Path.Combine(_root, "data");
+        public string Root { get; }
+
+        public string DataDirectory => Path.Combine(Root, "data");
 
         public string Database => Path.Combine(DataDirectory, "recall.db");
 
-        public static async Task<ServerProcess> StartAsync()
+        public string KeysDirectory => Path.Combine(DataDirectory, "keys");
+
+        public int ExitCode => _process.ExitCode;
+
+        public string Output => string.Join('\n', _output);
+
+        public static async Task<ServerProcess> StartAsync(string? existingRoot = null)
         {
-            var root = Path.Combine(Path.GetTempPath(), $"recall_boot_{Guid.NewGuid():N}");
+            for (var attempt = 1; ; attempt++)
+            {
+                var server = await LaunchAsync(existingRoot, new Dictionary<string, string>());
+                try
+                {
+                    await server.WaitUntilUpAsync();
+                    return server;
+                }
+                // FreePort lets the port go before the Server binds it, so another process on this machine can take it.
+                catch (ShouldAssertException) when (attempt < 3 && server.Output.Contains("address already in use", StringComparison.OrdinalIgnoreCase))
+                {
+                    await server.StopAsync();
+                }
+                catch
+                {
+                    await server.DisposeAsync();
+                    throw;
+                }
+            }
+        }
+
+        public static async Task<ServerProcess> LaunchAsync(string? existingRoot, IReadOnlyDictionary<string, string> settings)
+        {
+            var root = existingRoot ?? Path.Combine(Path.GetTempPath(), $"recall_boot_{Guid.NewGuid():N}");
             var data = Path.Combine(root, "data");
             var web = Path.Combine(root, "web");
             Directory.CreateDirectory(data);
@@ -69,10 +102,13 @@ public class NoProviderBootTests
             start.Environment["ConnectionStrings__appdb"] = $"Data Source={Path.Combine(data, "recall.db")}";
             start.Environment["FileStore__Root"] = Path.Combine(data, "files");
             start.Environment["Kestrel__Endpoints__http__Url"] = $"http://127.0.0.1:{httpPort}";
+            foreach (var (key, value) in settings)
+                start.Environment[key] = value;
 
             var process = Process.Start(start)!;
-            process.OutputDataReceived += (_, _) => { };
-            process.ErrorDataReceived += (_, _) => { };
+            var output = new ConcurrentQueue<string>();
+            process.OutputDataReceived += (_, line) => { if (line.Data is { } text) output.Enqueue(text); };
+            process.ErrorDataReceived += (_, line) => { if (line.Data is { } text) output.Enqueue(text); };
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
@@ -81,25 +117,25 @@ public class NoProviderBootTests
                 BaseAddress = new Uri($"http://127.0.0.1:{httpPort}"),
                 Timeout = TimeSpan.FromSeconds(10),
             };
-            var server = new ServerProcess(process, root, client);
-            try
-            {
-                await server.WaitUntilUpAsync();
-            }
-            catch
-            {
-                await server.DisposeAsync();
-                throw;
-            }
+            return new ServerProcess(process, output, root, client);
+        }
 
-            return server;
+        public Task WaitForExitAsync(CancellationToken cancellationToken) => _process.WaitForExitAsync(cancellationToken);
+
+        public string[] KeyFiles() => [.. Directory.GetFiles(KeysDirectory).Order(StringComparer.Ordinal)];
+
+        public async Task StopAsync()
+        {
+            if (!_process.HasExited)
+                _process.Kill(entireProcessTree: true);
+            await _process.WaitForExitAsync();
         }
 
         private async Task WaitUntilUpAsync()
         {
             for (var attempt = 0; attempt < 300; attempt++)
             {
-                _process.HasExited.ShouldBeFalse("The server stopped during its boot.");
+                _process.HasExited.ShouldBeFalse($"The server stopped during its boot. Its output: {Output}");
                 try
                 {
                     using var response = await Client.GetAsync(AuthRoutes.Status);
@@ -119,10 +155,10 @@ public class NoProviderBootTests
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
-            _process.Kill(entireProcessTree: true);
-            await _process.WaitForExitAsync();
+            await StopAsync();
             _process.Dispose();
-            Directory.Delete(_root, recursive: true);
+            if (Directory.Exists(Root))
+                Directory.Delete(Root, recursive: true);
         }
 
         private static int FreePort()
@@ -218,6 +254,58 @@ public class NoProviderBootTests
         reservedApi.StatusCode.ShouldNotBe(HttpStatusCode.OK);
     }
 
+    [Test]
+    public async Task the_spa_answers_a_head_and_no_other_verb()
+    {
+        // Arrange
+        await using var server = await ServerProcess.StartAsync();
+
+        // Act
+        using var head = await server.Client.SendAsync(new HttpRequestMessage(HttpMethod.Head, "/about"));
+        using var post = await server.Client.PostAsync("/about", new StringContent(""));
+        using var delete = await server.Client.DeleteAsync("/");
+
+        // Assert
+        head.StatusCode.ShouldBe(HttpStatusCode.OK);
+        head.Content.Headers.ContentType!.MediaType.ShouldBe("text/html");
+        head.Content.Headers.ContentLength.ShouldBe("<html>recall spa</html>".Length);
+        post.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        delete.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Test]
+    public async Task a_path_of_the_server_never_gets_the_spa()
+    {
+        // Arrange
+        await using var server = await ServerProcess.StartAsync();
+
+        foreach (var path in new[] { "/health/nope", "/alive/nope", "/mcp/nope", "/swagger", "/openapi", "/API/nope", "/.well-known/nope" })
+        {
+            // Act
+            using var response = await GetAsync(server, path, "text/html");
+
+            // Assert
+            (await response.Content.ReadAsStringAsync()).ShouldNotContain("recall spa", customMessage: path);
+        }
+    }
+
+    [Test]
+    public async Task an_unknown_api_route_gets_a_json_404_and_a_known_route_keeps_its_405()
+    {
+        // Arrange
+        await using var server = await ServerProcess.StartAsync();
+
+        // Act
+        using var unknown = await GetAsync(server, "/api/v1/nope", "text/html");
+        using var wrongVerb = await server.Client.DeleteAsync("/api/v1/tenants");
+
+        // Assert
+        unknown.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        unknown.Content.Headers.ContentType!.MediaType.ShouldBe("application/problem+json");
+        (await unknown.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetInt32().ShouldBe(404);
+        wrongVerb.StatusCode.ShouldBe(HttpStatusCode.MethodNotAllowed);
+    }
+
     private static Task<HttpResponseMessage> GetAsync(ServerProcess server, string path, string? accept)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"{server.Client.BaseAddress!.GetLeftPart(UriPartial.Authority)}{path}"));
@@ -241,5 +329,48 @@ public class NoProviderBootTests
         directoryMode.ShouldBe(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         databaseMode.ShouldBe(UnixFileMode.UserRead | UnixFileMode.UserWrite);
         walMode.ShouldBe(UnixFileMode.UserRead | UnixFileMode.UserWrite);
+    }
+
+    [Test]
+    public async Task a_failed_startup_exits_with_a_nonzero_code_and_says_why()
+    {
+        // Arrange
+        Dictionary<string, string> badProvider = new()
+        {
+            ["Auth__Providers__0__Id"] = "stub",
+            ["Auth__Providers__0__Issuer"] = "http://provider.test",
+            ["Auth__Providers__0__ClientId"] = "recall",
+            ["Auth__Providers__0__ClientSecret"] = "secret",
+        };
+        await using var server = await ServerProcess.LaunchAsync(null, badProvider);
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+        // Act
+        await server.WaitForExitAsync(limit.Token);
+
+        // Assert
+        server.ExitCode.ShouldNotBe(0);
+        server.Output.ShouldContain("AllowHttp");
+    }
+
+    [Test]
+    public async Task the_data_protection_keys_are_for_the_owner_only_and_survive_a_restart()
+    {
+        // Arrange
+        await using var first = await ServerProcess.StartAsync();
+        var keys = first.KeyFiles();
+        var directoryMode = File.GetUnixFileMode(first.KeysDirectory);
+        var keyMode = File.GetUnixFileMode(keys.ShouldHaveSingleItem());
+        var key = await File.ReadAllTextAsync(keys[0]);
+        await first.StopAsync();
+
+        // Act
+        await using var second = await ServerProcess.StartAsync(first.Root);
+
+        // Assert
+        directoryMode.ShouldBe(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        keyMode.ShouldBe(UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        second.KeyFiles().ShouldBe(keys);
+        (await File.ReadAllTextAsync(keys[0])).ShouldBe(key);
     }
 }

@@ -35,12 +35,16 @@ public static partial class OwnerOnlyFiles
 
         var directories = new List<string>();
         var files = new List<string>();
-        var dataFile = new SqliteConnectionStringBuilder(configuration.GetConnectionString(DatabaseConsts.DatabaseName)).DataSource;
-        if (!string.IsNullOrWhiteSpace(dataFile) && dataFile != ":memory:")
+        if (DatabaseFile(configuration) is { } fullPath)
         {
-            var fullPath = Path.GetFullPath(dataFile);
             directories.Add(Path.GetDirectoryName(fullPath)!);
             files.AddRange(DatabaseFileSuffixes.Select(suffix => fullPath + suffix));
+        }
+
+        if (KeysDirectory(configuration) is { } keys && Directory.Exists(keys))
+        {
+            directories.Add(keys);
+            files.AddRange(Directory.GetFiles(keys));
         }
 
         if (configuration[$"{FileStoreOptions.SectionName}:{nameof(FileStoreOptions.Root)}"] is { Length: > 0 } fileRoot && Path.IsPathFullyQualified(fileRoot))
@@ -53,6 +57,16 @@ public static partial class OwnerOnlyFiles
                 "The volume that holds {Paths} does not take owner-only modes, so other accounts on this machine may read these files. Set the owner of the volume, or use a volume that keeps modes",
                 refused);
         }
+    }
+
+    /// <summary>The Data Protection keys sit next to the database, so a backup of the data root holds what can read the data. In the image this is <c>/data/keys</c>.</summary>
+    public static string? KeysDirectory(IConfiguration configuration)
+        => DatabaseFile(configuration) is { } file ? Path.Combine(Path.GetDirectoryName(file)!, "keys") : null;
+
+    private static string? DatabaseFile(IConfiguration configuration)
+    {
+        var dataFile = new SqliteConnectionStringBuilder(configuration.GetConnectionString(DatabaseConsts.DatabaseName)).DataSource;
+        return string.IsNullOrWhiteSpace(dataFile) || dataFile == ":memory:" ? null : Path.GetFullPath(dataFile);
     }
 
     public static IReadOnlyList<string> Tighten(IEnumerable<string> directories, IEnumerable<string> files, ModeAccess modes)

@@ -67,6 +67,7 @@ public static class EntrypointRegistration
         }
 
         app.UseSpaFallback();
+        app.UseApiNotFound();
         app.UseRateLimiter();
         app.UseAuthentication();
         app.UseAuthorization();

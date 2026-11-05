@@ -37,6 +37,17 @@ public static class SpaHosting
         });
     }
 
+    public static void UseApiNotFound(this WebApplication app) => app.Use(async (context, next) =>
+    {
+        if (context.GetEndpoint() is null && context.Request.Path.StartsWithSegments("/api"))
+        {
+            await Results.Problem(statusCode: StatusCodes.Status404NotFound).ExecuteAsync(context);
+            return;
+        }
+
+        await next(context);
+    });
+
     public static bool ServesIndex(HttpContext context)
     {
         var request = context.Request;
