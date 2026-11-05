@@ -1,15 +1,24 @@
 namespace Recall.Server.Databases.Sqlite;
 
+using System.Diagnostics;
+using Serilog;
+
 public sealed record MountEntry(string MountPoint, string FileSystemType, string Source);
+
+/// <summary>Gives the mount table of this machine, or null when it cannot read the table.</summary>
+public delegate Task<IReadOnlyList<MountEntry>?> ReadMounts(CancellationToken cancellationToken);
 
 /// <summary>
 /// SQLite locks a WAL file through shared memory, which works only on one machine. So the data file must not be on a
 /// network file system, where two machines can open it and the file can corrupt. Each <c>fuse.*</c> type, a union of
 /// disks such as Unraid <c>/mnt/user</c>, and a shared folder of a hypervisor are also refused, because WAL on them has
-/// no proof.
+/// no proof. The root of the file store has the same rule, because a write there rests on an atomic rename and a flush
+/// that these file systems do not promise.
 /// </summary>
 public static class NetworkMountCheck
 {
+    private static readonly ILogger Logger = Log.ForContext(typeof(NetworkMountCheck));
+
     private static readonly HashSet<string> RefusedTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "9p", "afs", "afpfs", "beegfs", "ceph", "cifs", "coda", "davfs", "fuse", "gfs2", "glusterfs", "gpfs", "lustre",
@@ -18,17 +27,65 @@ public static class NetworkMountCheck
     };
 
     public static string? Refusal(string dataFilePath, IEnumerable<MountEntry> mounts)
-    {
-        var mount = mounts
-            .Where(m => IsUnder(dataFilePath, m.MountPoint))
-            .OrderBy(m => m.MountPoint.TrimEnd('/').Length)
-            .LastOrDefault();
-
-        return mount is not null && IsRefused(mount.FileSystemType)
+        => RefusedMountOf(dataFilePath, mounts) is { } mount
             ? $"The data file {dataFilePath} is on the mount {mount.MountPoint} ({mount.FileSystemType} from {mount.Source}). " +
               "SQLite WAL is safe only on a local disk, and this type is a network, FUSE, or shared folder file system. " +
               "Move the data directory to a local disk. On Unraid, use a path such as /mnt/cache, not /mnt/user."
             : null;
+
+    public static string? FileRootRefusal(string fileRoot, IEnumerable<MountEntry> mounts)
+        => RefusedMountOf(fileRoot, mounts) is { } mount
+            ? $"The file store root {fileRoot} is on the mount {mount.MountPoint} ({mount.FileSystemType} from {mount.Source}). " +
+              "A file write needs the atomic rename and the flush of a local disk, and this type is a network, FUSE, or shared folder file system. " +
+              "Move the file store root to a local disk. On Unraid, use a path such as /mnt/cache, not /mnt/user."
+            : null;
+
+    /// <summary>Follows each symlink in the path. A part of the path that does not exist yet stays as it is.</summary>
+    public static string RealPathOf(string path)
+    {
+        var real = Path.GetPathRoot(path)!;
+        foreach (var part in path[real.Length..].Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var next = Path.Combine(real, part);
+            real = Path.Exists(next) && new FileInfo(next).ResolveLinkTarget(returnFinalTarget: true) is { } target
+                ? RealPathOf(target.FullName)
+                : next;
+        }
+
+        return real;
+    }
+
+    public static async Task<IReadOnlyList<MountEntry>?> ReadMountsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (OperatingSystem.IsLinux())
+                return ParseMountInfo(await File.ReadAllTextAsync("/proc/self/mountinfo", cancellationToken));
+
+            if (OperatingSystem.IsMacOS())
+            {
+                using var mount = Process.Start(new ProcessStartInfo("/sbin/mount") { RedirectStandardOutput = true })!;
+                var output = await mount.StandardOutput.ReadToEndAsync(cancellationToken);
+                await mount.WaitForExitAsync(cancellationToken);
+                return ParseMountOutput(output);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        {
+            Logger.Warning(exception, "Could not read the mount table, so the network mount check did not run");
+        }
+
+        return null;
+    }
+
+    private static MountEntry? RefusedMountOf(string path, IEnumerable<MountEntry> mounts)
+    {
+        var mount = mounts
+            .Where(m => IsUnder(path, m.MountPoint))
+            .OrderBy(m => m.MountPoint.TrimEnd('/').Length)
+            .LastOrDefault();
+
+        return mount is not null && IsRefused(mount.FileSystemType) ? mount : null;
     }
 
     /// <summary>The prefix does not match <c>fuseblk</c>, which is a local block device such as NTFS on a USB disk.</summary>
