@@ -53,6 +53,8 @@ public class SqlTextTests
     [Arguments("UPDATE OR REPLACE 'users' SET first_name = 'x'")]
     [Arguments("UPDATE OR IGNORE 'users' SET first_name = 'x'")]
     [Arguments("UPDATE main.'users' SET first_name = 'x'")]
+    [Arguments("UPDATE \uFEFF'users' SET first_name = 'x'")]
+    [Arguments("DELETE FROM main.\uFEFF'users'")]
     [Arguments("UPDATE 'main'.'users' SET first_name = 'x'")]
     [Arguments("INSERT INTO 'users' (first_name) VALUES ('x')")]
     [Arguments("INSERT OR REPLACE INTO 'users' (first_name) VALUES ('x')")]
@@ -81,6 +83,7 @@ public class SqlTextTests
     [Arguments("DROP TABLE IF EXISTS 'users'")]
     [Arguments("ALTER TABLE 'users' RENAME TO old_users")]
     [Arguments("CREATE INDEX i ON 'users' (first_name)")]
+    [Arguments("CREATE TEMP VIEW 'users' AS SELECT 1")]
     [Arguments("CREATE TRIGGER t AFTER INSERT ON 'users' BEGIN SELECT 1; END")]
     public void a_string_literal_that_sqlite_changes_the_schema_of_is_a_name(string sql)
     {
@@ -113,6 +116,7 @@ public class SqlTextTests
     [Arguments("replace into t values (1)", true)]
     [Arguments("DROP TABLE t", true)]
     [Arguments("ALTER TABLE t RENAME TO u", true)]
+    [Arguments("CREATE UNIQUE INDEX i ON t (a)", true)]
     [Arguments("SELECT id FROM t", false)]
     [Arguments("SELECT 'UPDATE' FROM t -- DELETE", false)]
     [Arguments("SELECT \"update\" FROM t", false)]

@@ -5,14 +5,16 @@ namespace Recall.Server.Databases;
 /// </summary>
 internal static class SqlText
 {
-    private static readonly HashSet<string> WriteKeywords = ["insert", "replace", "update", "delete", "drop", "alter"];
+    private static readonly HashSet<string> WriteKeywords = ["insert", "replace", "update", "delete", "create", "drop", "alter"];
+
+    private static readonly string[] ConflictActions = ["rollback", "abort", "replace", "fail", "ignore"];
 
     /// <summary>
-    /// The words before a table name. SQLite also takes a string literal as a name, so <c>UPDATE 'users'</c> writes the
-    /// table. The last five words are the conflict actions of <c>UPDATE OR REPLACE</c>.
+    /// SQLite also takes a string literal as a name, so <c>UPDATE 'users'</c> writes the table. After these words, a
+    /// literal can name a table that the statement writes.
     /// </summary>
-    private static readonly HashSet<string> WordsBeforeATable =
-        ["update", "into", "from", "table", "exists", "on", "rollback", "abort", "replace", "fail", "ignore"];
+    private static readonly HashSet<string> WordsBeforeAWrittenTable =
+        ["update", "into", "from", "table", "view", "exists", "on", .. ConflictActions];
 
     internal enum TokenKind
     {
@@ -66,13 +68,14 @@ internal static class SqlText
                     i++;
 
                 var word = sql[start..i].ToLowerInvariant();
-                tableCanFollow = WordsBeforeATable.Contains(word);
+                tableCanFollow = WordsBeforeAWrittenTable.Contains(word);
                 if (!char.IsAsciiDigit(word[0]))
                     yield return new Token(TokenKind.Word, word);
             }
             else
             {
-                if (!char.IsWhiteSpace(c))
+                // SQLite reads a byte order mark as a space.
+                if (!char.IsWhiteSpace(c) && c != '\uFEFF')
                     tableCanFollow = c == '.';
                 i++;
             }
