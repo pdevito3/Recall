@@ -379,6 +379,7 @@ public class FileStoreTests : IDisposable
         // Arrange
         var outsideFile = Path.Combine(_outside, "kept");
         await File.WriteAllBytesAsync(outsideFile, [1]);
+        await File.WriteAllBytesAsync(Path.Combine(_outside, "also-kept"), [3]);
         Directory.CreateDirectory(_root.Path);
         Directory.CreateSymbolicLink(Path.Combine(_root.Path, FileKey.TemporaryFolder), _outside);
 

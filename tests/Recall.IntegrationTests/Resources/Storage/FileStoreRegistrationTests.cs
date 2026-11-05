@@ -119,7 +119,6 @@ public class FileStoreRegistrationTests
         await File.WriteAllBytesAsync(blocker, [1]);
         await using var app = await StartServerAsync(Path.Combine(blocker, "files"));
         using var client = app.GetTestClient();
-        await StartupOf(app).StartAsync(CancellationToken.None);
 
         // Act
         var whenBroken = await client.GetAsync("/health");
@@ -153,10 +152,12 @@ public class FileStoreRegistrationTests
             var inTheInterval = await health.CheckHealthAsync();
             clock.Advance(TimeSpan.FromSeconds(30));
             var afterTheInterval = await health.CheckHealthAsync();
+            var nextProbe = await health.CheckHealthAsync();
 
             // Assert
             inTheInterval.Status.ShouldBe(HealthStatus.Healthy);
             afterTheInterval.Status.ShouldBe(HealthStatus.Degraded);
+            nextProbe.Status.ShouldBe(HealthStatus.Degraded);
             afterTheInterval.Entries["file-store"].Description.ShouldNotBeNull().ShouldContain("cannot take a write");
         }
         finally
