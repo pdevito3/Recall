@@ -1,6 +1,6 @@
 name: e2e
 
-# ci.yml calls this workflow when its changes job finds a BFF change, and on workflow_dispatch.
+# ci.yml calls this workflow when its changes job finds a change to the stack, and on workflow_dispatch.
 # GitHub does not expand the matrix of a job that its if skips. So a skipped matrix job in ci.yml showed its raw name
 # template, e2e (${{ matrix.provider }}), as its check name. The caller job has no matrix, so a skipped run shows as e2e.
 
@@ -20,53 +20,28 @@ jobs:
         include:
           - idp: keycloak
             provider: Keycloak
-            refresh-margin: '86400'
-          # The same stack with DPoP: the BFF binds the tokens to its key (RFC 9449)
-          - idp: keycloak
-            provider: Keycloak
-            dpop: true
-            refresh-margin: '86400'
           - idp: fusionauth
             provider: FusionAuth
-            refresh-margin: '86400'
           - idp: authentik
             provider: Authentik
-            refresh-margin: '86400'
           - idp: cognito
             provider: Cognito
-            refresh-margin: '86400'
           - idp: zerofactor
             provider: ZeroFactor
-            refresh-margin: '86400'
           # A public service, so its failure does not fail the workflow
           - idp: duendedemo
             provider: DuendeDemo
             public: true
-          # The public service with DPoP. It gets no refresh margin, as the leg above.
-          - idp: duendedemo
-            provider: DuendeDemo
-            dpop: true
-            public: true
     continue-on-error: ${{ matrix.public == true }}
-    name: ${{ matrix.provider }}${{ matrix.dpop && ' DPoP' || '' }}
+    name: ${{ matrix.provider }}
     env:
       AuthProvider: ${{ matrix.provider }}
       IDP: ${{ matrix.idp }}
-      DPoP: ${{ matrix.dpop == true }}
-      # run-against-stack.ts fails when the stack does not have the DPoP of the matrix
-      EXPECT_DPOP: ${{ matrix.dpop == true }}
-      # Longer than the access token lifetime of each provider, so that each API call refreshes. The BFF refresh test
-      # in auth-flows.spec.ts needs it. The public Duende service gets no margin, so that the job does not refresh on
-      # each call to it, and the test skips there.
-      BffRefreshBeforeExpirationSeconds: ${{ matrix.refresh-margin }}
-      # run-against-stack.ts fails the leg when the stack does not match an EXPECT_* variable. Thus a leg with a margin
-      # cannot pass while the BFF refresh tests skip.
-      EXPECT_REFRESH_MARGIN: ${{ matrix.refresh-margin && 'true' || 'false' }}
       # The DCP log shows the container runtime that DCP uses and each container command that it runs
       DCP_DIAGNOSTICS_LOG_FOLDER: ${{ github.workspace }}/stack-logs/dcp
       DCP_DIAGNOSTICS_LOG_LEVEL: debug
       # The runner has Docker and Podman. With no setting, Aspire probes both and can pick Podman when the Docker probe
-      # is slow (#281). Under Podman, a provider container that gets the BFF container endpoint never starts (#285).
+      # is slow (#281). Under Podman, a provider container that gets a container endpoint of the stack never starts (#285).
       ASPIRE_CONTAINER_RUNTIME: docker
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -96,14 +71,10 @@ jobs:
       - name: Restore the .NET tools
         run: dotnet tool restore
 
-      # The BFF calls the Server over https with the development certificate. On Linux, OpenSSL trusts it through
-      # SSL_CERT_DIR.
-      - name: Trust the development certificate
-        run: |
-          # Without SSL_CERT_DIR in this process, the command adds the OpenSSL trust but exits with 4
-          export SSL_CERT_DIR="$HOME/.aspnet/dev-certs/trust:/usr/lib/ssl/certs"
-          dotnet dev-certs https --trust
-          echo "SSL_CERT_DIR=$SSL_CERT_DIR" >> "$GITHUB_ENV"
+      # Kestrel and the Aspire dashboard load this certificate for their https endpoints. Nothing calls them with a trust
+      # check: the browser and the Server use the http endpoints, and the Swagger tests set ignoreHTTPSErrors.
+      - name: Create the development certificate
+        run: dotnet dev-certs https
 
       - name: Install the frontend packages
         working-directory: frontend
@@ -116,16 +87,16 @@ jobs:
           echo "STACK_START=$(date -u +%s)" >> "$GITHUB_ENV"
           dotnet aspire start --isolated --non-interactive --apphost Recall.AppHost
 
-      # The BFF waits for the identity provider and reads its discovery document at startup
+      # The Server waits for the identity provider
       - name: Wait for healthy resources
         run: |
-          # The server and the BFF wait for the provider container with no log line. So wait for the provider first,
+          # The server waits for the provider container with no log line. So wait for the provider first,
           # with a short timeout, to fail fast with its name. The slowest provider, Authentik, starts in about 80 s.
           # DuendeDemo is a public service and has no container.
           if [ "$IDP" != duendedemo ]; then
             dotnet aspire wait "$IDP" --status up --timeout 300 --non-interactive --apphost Recall.AppHost
           fi
-          for resource in server bff webfrontend; do
+          for resource in server webfrontend; do
             dotnet aspire wait "$resource" --status healthy --timeout 900 --non-interactive --apphost Recall.AppHost
           done
 
@@ -154,7 +125,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: e2e-${{ matrix.idp }}${{ matrix.dpop && '-dpop' || '' }}
+          name: e2e-${{ matrix.idp }}
           path: |
             frontend/playwright-report/
             frontend/test-results/
