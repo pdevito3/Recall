@@ -207,6 +207,7 @@ export default async ({ page, context, step, capture, expect, login }) => {
 
     await tabTo(page.getByRole('button', { name: 'Done', exact: true }))
     await page.keyboard.press('Enter')
+    await expect(composer).toBeFocused()
     const row = page.getByRole('link').filter({ hasText: 'An entry from the keyboard.' })
     await expect(row).toBeVisible()
     await tabTo(row)
