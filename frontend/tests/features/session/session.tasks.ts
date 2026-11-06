@@ -140,7 +140,7 @@ export function sessionPage(page: Page) {
     async leavePrivatePageForAnotherDocument() {
       await page.addInitScript(() => {
         window.addEventListener('pageshow', (event) => {
-          ;(window as unknown as { wasRestored: boolean }).wasRestored = event.persisted
+          if (event.persisted) sessionStorage.setItem('wasRestored', 'true')
         })
       })
       await page.goto('/')
@@ -152,10 +152,18 @@ export function sessionPage(page: Page) {
       await expect(at.navigation).toBeVisible()
     },
 
-    /** A Back with no restore proves nothing here, so this fails when the browser loads the page again. */
+    /**
+     * A Back with no restore proves nothing here, so this fails when the browser loads the page again. The restored page can
+     * load again during a read, and that read then never answers, so each read has a limit, and the mark outlives the load.
+     */
     async goBackToTheCachedPage() {
       await page.goBack({ waitUntil: 'commit' })
-      expect(await page.evaluate(() => (window as unknown as { wasRestored?: boolean }).wasRestored), 'the back-forward cache restored the page').toBe(true)
+      const readMark = () =>
+        Promise.race([
+          page.evaluate(() => sessionStorage.getItem('wasRestored')).catch(() => null),
+          new Promise<null>((settle) => setTimeout(() => settle(null), 1000)),
+        ])
+      await expect.poll(readMark, { message: 'the back-forward cache restored the page', timeout: 15000 }).toBe('true')
     },
 
     /** A poll can read during the new load, and that read fails. The next read decides. */
