@@ -7,12 +7,21 @@ public static class SpaHosting
     private static readonly PathString[] ReservedPrefixes =
         ["/api", "/auth", "/mcp", "/swagger", "/openapi", "/health", "/alive", "/.well-known"];
 
+    public const string ContentSecurityPolicy =
+        "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; " +
+        "base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+
     public static bool IsPresent(WebApplication app) => app.Environment.WebRootFileProvider.GetFileInfo(IndexFile).Exists;
 
     public static void UseSpaStaticFiles(this WebApplication app)
     {
         if (IsPresent(app))
-            app.UseStaticFiles();
+        {
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                OnPrepareResponse = file => file.Context.Response.Headers.ContentSecurityPolicy = ContentSecurityPolicy,
+            });
+        }
     }
 
     public static void UseSpaFallback(this WebApplication app)
@@ -32,6 +41,7 @@ public static class SpaHosting
             context.Response.ContentType = "text/html; charset=utf-8";
             context.Response.ContentLength = index.Length;
             context.Response.Headers.CacheControl = "no-cache";
+            context.Response.Headers.ContentSecurityPolicy = ContentSecurityPolicy;
             if (HttpMethods.IsGet(context.Request.Method))
                 await context.Response.SendFileAsync(index, context.RequestAborted);
         });
