@@ -26,9 +26,10 @@ public static class JobHosting
 
     public static void AddJobs(this WebApplicationBuilder builder)
     {
-        var options = builder.Configuration.GetSection(JobOptions.SectionName).Get<JobOptions>() ?? new JobOptions();
+        var section = builder.Configuration.GetSection(JobOptions.SectionName);
+        var pollSeconds = section.Get<JobOptions>()?.PollSeconds ?? new JobOptions().PollSeconds;
 
-        builder.Services.AddSingleton(options);
+        builder.Services.Configure<JobOptions>(section);
         builder.Services.Configure<HostOptions>(host => host.ShutdownTimeout = HostShutdownTimeout);
         builder.Services.AddAntiforgery();
         builder.Services.AddBackWave(backwave =>
@@ -45,7 +46,7 @@ public static class JobHosting
             {
                 Name = "system",
                 Policy = new DispatchPolicy.Strict([SystemQueue]),
-                PollInterval = TimeSpan.FromSeconds(options.PollSeconds),
+                PollInterval = TimeSpan.FromSeconds(pollSeconds),
                 ShutdownBudget = JobShutdownBudget,
                 Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
             });

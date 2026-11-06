@@ -27,6 +27,10 @@ public static class AuthHosts
 
     public static AuthFlowFactory Bundle { get; private set; } = null!;
 
+    public static AuthFlowFactory Jobs { get; private set; } = null!;
+
+    public static AuthFlowFactory FailingJobs { get; private set; } = null!;
+
     public static void Start()
     {
         Open = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
@@ -39,6 +43,13 @@ public static class AuthHosts
         RollingKeyProvider = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
         TwoTenants = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
         Bundle = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
+        Jobs = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
+        FailingJobs = Start(new Dictionary<string, string?>
+        {
+            ["Auth:OpenSignup"] = "true",
+            ["Auth:StartPermitsPerWindow"] = ManyStarts,
+            ["Jobs:HealthJob:FailOnPurpose"] = "true",
+        });
         TwoProviders = Start(new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts })
         {
             OtherProvider = new StubOidcProvider(AuthFlowFactory.OtherIssuer),
@@ -66,7 +77,7 @@ public static class AuthHosts
 
     public static async Task StopAsync()
     {
-        foreach (var host in new[] { Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, Bundle, Sweep })
+        foreach (var host in new[] { Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, Bundle, Sweep, Jobs, FailingJobs })
         {
             if (host is not null)
                 await host.DisposeAsync();

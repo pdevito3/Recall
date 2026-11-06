@@ -5,9 +5,10 @@ using BackWave.Jobs;
 using Databases;
 using Domain.Tenants;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Serilog;
 
-public sealed class SystemHealthJobs(IServiceScopeFactory scopeFactory, JobOptions options)
+public sealed class SystemHealthJobs(IServiceScopeFactory scopeFactory, IOptions<JobOptions> options)
 {
     private readonly ILogger _logger = Log.ForContext<SystemHealthJobs>();
 
@@ -15,17 +16,23 @@ public sealed class SystemHealthJobs(IServiceScopeFactory scopeFactory, JobOptio
     [Retry(3, 2, 2)]
     public async Task SystemHealthAsync(CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateSystemScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var tenantCount = await dbContext.Tenants
-            .TagWithOperationCallSite("jobs.system_health.tenants")
-            .CountAsync(cancellationToken);
+        var tenantCount = await TenantCountAsync(cancellationToken);
 
-        await Task.Delay(TimeSpan.FromSeconds(options.HealthJob.HoldSeconds), cancellationToken);
-        if (options.HealthJob.FailOnPurpose)
+        var settings = options.Value.HealthJob;
+        await Task.Delay(TimeSpan.FromSeconds(settings.HoldSeconds), cancellationToken);
+        if (settings.FailOnPurpose)
             throw new InvalidOperationException("The health job fails on purpose, because Jobs:HealthJob:FailOnPurpose is true.");
 
         _logger.Here().Information("The health job can see {TenantCount} tenants", tenantCount);
+    }
+
+    public async Task<int> TenantCountAsync(CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateSystemScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await dbContext.Tenants
+            .TagWithOperationCallSite("jobs.system_health.tenants")
+            .CountAsync(cancellationToken);
     }
 }
 
