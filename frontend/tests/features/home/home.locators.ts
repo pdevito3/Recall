@@ -10,5 +10,5 @@ export const home = (page: Page) => ({
   userMenuLogout: page.getByRole('menuitem', { name: 'Logout', exact: true }),
   micMessage: page.getByRole('region', { name: 'Mic' }).getByText('The mic needs HTTPS. This page opened on plain HTTP, so the mic stays off.'),
   httpsGuide: page.getByRole('link', { name: 'Turn on HTTPS', exact: true }),
-  logoutFailed: page.getByText('You are still signed in, because the sign-out did not finish. Try again.', { exact: true }),
+  logoutFailed: page.getByText(/^You are still signed in, because .+ did not finish\. Try again\.$/),
 })

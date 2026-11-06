@@ -27,5 +27,20 @@ export function homePage(page: Page) {
       await at.userMenuLogout.click()
       await page.waitForURL('**/auth/login?signedOut=1')
     },
+
+    /** Each word of the message that the browser breaks over two lines. */
+    wordsBrokenInTheLogoutMessage() {
+      return at.logoutFailed.evaluate((element) => {
+        const text = element.firstChild as Text
+        return [...text.data.matchAll(/\S+/g)]
+          .filter((word) => {
+            const range = document.createRange()
+            range.setStart(text, word.index)
+            range.setEnd(text, word.index + word[0].length)
+            return new Set([...range.getClientRects()].map(({ top }) => top)).size > 1
+          })
+          .map(([word]) => word)
+      })
+    },
   }
 }
