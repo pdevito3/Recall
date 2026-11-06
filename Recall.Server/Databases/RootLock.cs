@@ -8,6 +8,12 @@ public sealed class RootLock
 {
     public static readonly RootLock Tenant = new("tenants");
 
+    /// <summary>
+    /// The one lock that a request can take while it holds another, and only inside <see cref="Tenant"/>. No holder of it
+    /// takes a lock, so this order cannot deadlock. See <c>docs/backend/concurrency.md</c>, section "Lock".
+    /// </summary>
+    public static readonly RootLock Install = new("install");
+
     private readonly string _area;
     private readonly Lock _gate = new();
     private readonly Dictionary<string, RootState> _roots = new(StringComparer.Ordinal);
@@ -34,21 +40,22 @@ public sealed class RootLock
         if (dbContext.ChangeTracker.HasChanges() || dbContext.HasUnsavedActions)
             throw new InvalidOperationException(
                 "Take the lock before the first change. A change made before the lock rests on reads that the lock did not protect.");
-        if (dbContext.HoldsRootLock)
+        var outer = dbContext.HeldRootLock;
+        if (outer is not null && !(outer == Tenant && this == Install))
             throw new InvalidOperationException(
                 "This request already holds a root lock. A second lock would wait for itself behind the next waiter.");
 
         var modeName = mode == Mode.Shared ? "shared" : "exclusive";
         Activity.Current?.SetTag("app.lock.mode", modeName);
         await EnterAsync(rootId, mode, modeName, cancellationToken);
-        dbContext.HoldsRootLock = true;
+        dbContext.HeldRootLock = this;
         try
         {
             return await work(cancellationToken);
         }
         finally
         {
-            dbContext.HoldsRootLock = false;
+            dbContext.HeldRootLock = outer;
             Exit(rootId, mode);
         }
     }

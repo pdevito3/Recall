@@ -156,12 +156,12 @@ test('a plain href on a React Aria component goes to its route with no page load
   expect(router.state.location.pathname).toBe('/users/u_1')
 })
 
-test('a plain href with no route, such as /bff/login, loads the page from the server', () => {
+test('a plain href with no route, such as /auth/login, loads the page from the server', () => {
   const router = createTestRouter()
 
   expect(hrefNavigateOptions(router, '/users/u_1')).toEqual({ href: '/users/u_1' })
-  expect(hrefNavigateOptions(router, '/bff/login?returnUrl=%2F')).toEqual({
-    href: `${window.location.origin}/bff/login?returnUrl=%2F`,
+  expect(hrefNavigateOptions(router, '/auth/login?returnUrl=%2F')).toEqual({
+    href: `${window.location.origin}/auth/login?returnUrl=%2F`,
     reloadDocument: true,
   })
 })

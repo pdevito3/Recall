@@ -12,7 +12,7 @@ async function currentAt(path: string, urls: readonly string[] = navUrls) {
   }
   const rootRoute = createRootRoute({ component: CurrentItem, notFoundComponent: () => null })
   const routeTree = rootRoute.addChildren(
-    ['/', '/about', '/start-tenant', '/projects', '/projects/new', '/projects/$id', '/projects/$id/edit'].map((routePath) =>
+    ['/', '/about', '/settings', '/projects', '/projects/new', '/projects/$id', '/projects/$id/edit'].map((routePath) =>
       createRoute({ getParentRoute: () => rootRoute, path: routePath }),
     ),
   )
@@ -46,7 +46,7 @@ describe('useCurrentNavItem', () => {
 
   it('gives the / item only on the home page', async () => {
     expect(await currentAt('/')).toEqual({ url: '/', current: 'page' })
-    expect(await currentAt('/start-tenant')).toBeNull()
+    expect(await currentAt('/settings')).toBeNull()
     expect(await currentAt('/no-such-page')).toBeNull()
     expect(await currentAt('/about')).toEqual({ url: '/about', current: 'page' })
   })

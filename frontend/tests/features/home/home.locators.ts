@@ -5,4 +5,10 @@ export const home = (page: Page) => ({
   signedInAs: (name: string) => page.getByText(`Signed in as ${name}`, { exact: true }),
   userFailed: page.getByText('The Server could not load your user.', { exact: true }),
   logout: page.getByRole('button', { name: 'Logout', exact: true }),
+  userMenu: (name: string) => page.getByRole('button', { name: `User menu for ${name}`, exact: true }),
+  userMenuName: (name: string) => page.getByRole('menu', { name: 'User menu' }).getByText(name, { exact: true }),
+  userMenuLogout: page.getByRole('menuitem', { name: 'Logout', exact: true }),
+  micMessage: page.getByRole('region', { name: 'Mic' }).getByText('The mic needs HTTPS. This page opened on plain HTTP, so the mic stays off.'),
+  httpsGuide: page.getByRole('link', { name: 'Turn on HTTPS', exact: true }),
+  logoutFailed: page.getByText('You are still signed in, because the sign-out did not finish. Try again.', { exact: true }),
 })

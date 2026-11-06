@@ -9,8 +9,6 @@ public class BannedApiSuppressionTests
         "Recall.Server/Auth/SessionStore.cs",
         "Recall.Server/Databases/Sqlite/SqliteFile.cs",
         "Recall.Server/Databases/Sqlite/WalScrub.cs",
-        "Recall.Server/Domain/DPoPProofs/Features/DeleteExpiredDPoPProofs/DeleteExpiredDPoPProofs.cs",
-        "Recall.Server/Domain/DPoPProofs/Features/RegisterDPoPProof/RegisterDPoPProof.cs",
         "Recall.Server/Databases/Auditing/AuditVocabulary.cs",
         "Recall.Server/Resources/Entrypoints/Http/EndpointDiscovery.cs",
         "Recall.Server/Resources/RequestValidationBehavior.cs",

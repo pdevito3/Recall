@@ -4,7 +4,7 @@ Each command handler that changes the data of a tenant calls `IPermissionGuard` 
 
 > A later change: `GetUser` now loads the `Caller` and calls `Caller.RequireSelfOr`. `IPermissionGuard.RequireSelfOrAsync` is deleted.
 
-A handler is shared by HTTP, gRPC, and MCP. A check in the handler thus applies to each transport, and each transport maps the exception: 403 with problem details, `PermissionDenied`, or a `permission_denied` tool error.
+A handler is shared by HTTP and MCP. A check in the handler thus applies to each transport, and each transport maps the exception: 403 with problem details or a `permission_denied` tool error.
 
 ## Considered options
 

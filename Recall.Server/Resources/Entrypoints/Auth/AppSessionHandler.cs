@@ -26,13 +26,11 @@ public sealed class AppSessionHandler(
 
     public static string? CredentialOf(string authorization)
     {
-        foreach (var scheme in (ReadOnlySpan<string>)["Bearer ", "DPoP "])
-        {
-            if (authorization.StartsWith(scheme, StringComparison.OrdinalIgnoreCase))
-                return authorization[scheme.Length..].Trim() is { Length: > 0 } token ? token : null;
-        }
+        const string scheme = "Bearer ";
+        if (!authorization.StartsWith(scheme, StringComparison.OrdinalIgnoreCase))
+            return null;
 
-        return null;
+        return authorization[scheme.Length..].Trim() is { Length: > 0 } token ? token : null;
     }
 
     public static ClaimsPrincipal PrincipalOf(SessionPrincipal session)

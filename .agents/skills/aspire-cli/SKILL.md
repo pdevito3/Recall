@@ -35,7 +35,7 @@ For a Playwright run against an isolated stack, set `BASE_URL` to the `webfronte
    dotnet aspire start --isolated --non-interactive --apphost Recall.AppHost
    ```
 
-3. Wait for the server and the BFF. The BFF can be healthy before the server is.
+3. Wait for the server.
 
    ```bash
    dotnet aspire wait server --apphost Recall.AppHost

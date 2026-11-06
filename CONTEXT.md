@@ -182,7 +182,7 @@ A client of this app: an auth session, or Swagger UI. A user who signs in throug
 _Avoid_: App client, main client
 
 **Agent**:
-An OAuth client other than the first-party client that a tenant lets act in the tenant. It is either a delegated agent or a machine agent.
+An OAuth client other than the first-party client that a tenant lets act in the tenant, with a JWT from the provider at `Auth:Authority`. It is either a delegated agent or a machine agent. The API and `/mcp` take its token as a bearer token.
 _Avoid_: Bot, integration, app
 
 **Delegated agent**:
@@ -198,7 +198,7 @@ The permissions that a tenant gives an agent. It is the most that the agent can 
 _Avoid_: Scope, consent
 
 **All-tenants client**:
-An OAuth client that the operator trusts to read, or to manage, the data of all tenants. It acts for itself, with no user.
+An OAuth client that the operator trusts to read, or to manage, the data of all tenants, with a JWT from the provider at `Auth:Authority`. It acts for itself, with no user. It is the one caller of `POST /api/v1/users/initiate`.
 _Avoid_: Admin client, super client
 
 **Unknown client**:

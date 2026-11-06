@@ -41,8 +41,8 @@ build="$(jq -r '.build // "dev"' "$stack")"
 
 server_rejects_anonymous "$web" && ok "GET $web/api/v1/users/me -> the 401 of the Server" \
   || fail "GET $web/api/v1/users/me did not get the 401 of the Server"
-code="$(curl -sk -o /dev/null -w '%{http_code}' -H 'X-CSRF: 1' "$web/bff/user")"
-[[ "$code" == "204" || "$code" == "200" ]] && ok "GET /bff/user -> $code" || fail "GET /bff/user -> $code"
+code="$(curl -sk -o /dev/null -w '%{http_code}' -H 'X-CSRF: 1' "$web/auth/me")"
+[[ "$code" == "204" || "$code" == "200" ]] && ok "GET /auth/me -> $code" || fail "GET /auth/me -> $code"
 code="$(curl -sk -o /dev/null -w '%{http_code}' "$server/health")"
 [[ "$code" == "200" ]] && ok "GET $server/health -> 200" || fail "GET $server/health -> $code"
 

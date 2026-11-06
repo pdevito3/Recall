@@ -31,8 +31,8 @@ try
     var server = builder.AddProject<Projects.Recall_Server>("server")
         .WithHttpHealthCheck("/health", endpointName: "http")
         .WithExternalHttpEndpoints()
-        // The endpoints come from Kestrel:Endpoints in the appsettings of the Server, with the HTTP/2-only "grpc"
-        // endpoint. Aspire makes one endpoint for each name and sets its Url.
+        // The endpoints come from Kestrel:Endpoints in the appsettings of the Server. Aspire makes one endpoint for each
+        // name and sets its Url.
         .WithCSharpRepl();
 
     // MCP clients call the server directly, so the resource of its protected resource metadata is the URL they call.

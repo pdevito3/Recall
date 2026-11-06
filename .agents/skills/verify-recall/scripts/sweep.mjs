@@ -53,7 +53,7 @@ const SERVER_BODY_LIMIT_BYTES = 30_000_000
 
 export async function routeLongValues(context, webUrl) {
   const rewrite = longValues()
-  await context.route((url) => url.origin === new URL(webUrl).origin && (url.pathname.startsWith('/api/') || url.pathname === '/bff/user'),
+  await context.route((url) => url.origin === new URL(webUrl).origin && (url.pathname.startsWith('/api/') || url.pathname === '/auth/me'),
     async (route) => {
       if ((route.request().postDataBuffer()?.length ?? 0) > SERVER_BODY_LIMIT_BYTES) return route.continue()
       const response = await route.fetch().catch(() => null)

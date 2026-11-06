@@ -58,7 +58,7 @@ public class WriteGuardTests
     {
         // Act & Assert
         Sources
-            .Where(source => WriteGuard.Refusal(source, "DELETE FROM used_dpop_proofs", false, GuardedTables) is not null)
+            .Where(source => WriteGuard.Refusal(source, "DELETE FROM auth_login_attempts", false, GuardedTables) is not null)
             .ShouldBeEmpty();
     }
 

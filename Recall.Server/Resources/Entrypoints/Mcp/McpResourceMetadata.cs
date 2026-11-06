@@ -2,7 +2,6 @@ namespace Recall.Server.Resources.Entrypoints.Mcp;
 
 using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.Extensions.Primitives;
 using Microsoft.Net.Http.Headers;
 using ModelContextProtocol;
 using ModelContextProtocol.Authentication;
@@ -92,11 +91,8 @@ public static class McpResourceMetadata
 
             context.HandleResponse();
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            // Some MCP clients, such as the TypeScript SDK, read only the first challenge, so it goes before the DPoP one
-            var headers = context.Response.Headers;
-            headers[HeaderNames.WWWAuthenticate] = StringValues.Concat(
-                Challenge(metadataUrl, context.Error, context.ErrorDescription, context.ErrorUri),
-                headers[HeaderNames.WWWAuthenticate]);
+            context.Response.Headers[HeaderNames.WWWAuthenticate] =
+                Challenge(metadataUrl, context.Error, context.ErrorDescription, context.ErrorUri);
         };
     }
 }

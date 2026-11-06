@@ -21,6 +21,20 @@
     <OpenApiGenerateDocuments Condition="'$(Configuration)' != 'Debug'">false</OpenApiGenerateDocuments>
   </PropertyGroup>
 
+  <!-- A published server reads none of these files. A stack trace keeps its line numbers, because the symbols go into the assembly. -->
+  <PropertyGroup Condition="'$(Configuration)' != 'Debug'">
+    <DebugType>embedded</DebugType>
+    <UseAppHost>false</UseAppHost>
+    <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
+    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+  </PropertyGroup>
+  <PropertyGroup>
+    <PublishDocumentationFile>false</PublishDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Update="appsettings.Development.json;openapi/**" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
   <ItemGroup>
     <InternalsVisibleTo Include="Recall.UnitTests" />
     <InternalsVisibleTo Include="Recall.IntegrationTests" />
@@ -31,11 +45,6 @@
     <AdditionalFiles Include="BannedSymbols.txt" />
   </ItemGroup>
 
-  <!-- The gRPC contract of each domain and version lives in its Grpc/v{n} folder. The functional tests generate the client. -->
-  <ItemGroup>
-    <Protobuf Include="Domain/**/Grpc/v*/*.proto" GrpcServices="Server" />
-  </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\Recall.SourceGenerators\Recall.SourceGenerators.csproj"
                       OutputItemType="Analyzer"
@@ -44,8 +53,6 @@
 
   <ItemGroup>
     <PackageReference Include="Asp.Versioning.Http" />
-    <PackageReference Include="Grpc.AspNetCore" />
-    <PackageReference Include="Grpc.StatusProto" />
     <PackageReference Include="ModelContextProtocol.AspNetCore" />
     <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" />
     <PackageReference Include="EFCore.NamingConventions" />

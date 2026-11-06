@@ -6,7 +6,6 @@ using Recall.Server.Resources.Entrypoints;
 using Recall.Server.Domain.Tenants;
 using Recall.SharedTestHelpers.EntityGraphs;
 using Recall.SharedTestHelpers.EntityGraphs.Core;
-using Grpc.Net.Client;
 using MediatR;
 using ModelContextProtocol.Client;
 using Microsoft.Extensions.DependencyInjection;
@@ -36,12 +35,6 @@ public class TestBase : IDisposable
         FactoryClient.Dispose();
         GC.SuppressFinalize(this);
     }
-
-    /// <summary>
-    /// A gRPC channel on <see cref="FactoryClient"/>, so it sends the bearer token that the test set.
-    /// </summary>
-    protected GrpcChannel CreateGrpcChannel()
-        => GrpcChannel.ForAddress(FactoryClient.BaseAddress!, new GrpcChannelOptions { HttpClient = FactoryClient });
 
     /// <summary>
     /// An MCP client on <see cref="FactoryClient"/>, so it sends the bearer token that the test set.

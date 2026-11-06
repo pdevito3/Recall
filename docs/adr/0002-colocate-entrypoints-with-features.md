@@ -1,3 +1,5 @@
+> Changed by PR R4 of the plan: the gRPC entrypoint is gone, because it had no caller. HTTP and MCP stay.
+
 # Colocate the entrypoints with their features
 
 The Server has three transports: the HTTP API, gRPC, and MCP. Each adapter of a transport is a file in the folder of its feature, next to the MediatR request and its handler, for example `Features/AddTenant/AddTenant.Http.cs`. We do not put the adapters in a separate host project, and we do not group them by transport. As a result, a developer or a coding agent finds the request, the handler, and every way that the feature is exposed in one folder.

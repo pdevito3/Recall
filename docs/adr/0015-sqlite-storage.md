@@ -1,6 +1,6 @@
 # Recall stores its data in one SQLite file
 
-> Changed by PR R1 of the plan: until R4 deletes the BFF, its sessions and its Data Protection keys are in a second file, `bff.db`, next to `recall.db`. A backup needs both files until then.
+> Changed by PR R4 of the plan: the BFF and `bff.db` are gone. The Data Protection keys are files in `/data/keys`, next to `recall.db`, so a backup of `/data` holds them.
 
 The operator ruled on 2026-11-05: "agree sqlite". One container is the agent reading of that ruling, as [ADR 0013](0013-one-container-hosting.md) says. One file gives a simple backup, a smaller image, and no database upgrade across major versions. The audience is a person with a NAS. The POC also ran this way. The plan's R1 builds it.
 

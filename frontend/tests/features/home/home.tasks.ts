@@ -12,9 +12,20 @@ export function homePage(page: Page) {
       await expect(at.heading).toBeVisible()
     },
 
+    /** The functional suite runs on localhost, which is a secure context, so a test sets the value of a LAN address. */
+    async openOnPlainHttp() {
+      await page.addInitScript(() => Object.defineProperty(window, 'isSecureContext', { value: false }))
+      await this.open()
+    },
+
     async logOut() {
       await at.logout.click()
-      await page.waitForURL('**/bff/logout**')
+      await page.waitForURL('**/auth/login?signedOut=1')
+    },
+
+    async logOutFromTheUserMenu() {
+      await at.userMenuLogout.click()
+      await page.waitForURL('**/auth/login?signedOut=1')
     },
   }
 }

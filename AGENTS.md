@@ -28,7 +28,6 @@ Today this is a .NET Aspire application with a React frontend. The Server runs t
 |---------|---------|
 | `Recall.AppHost` | Aspire orchestration. Defines all resources in `AppHost.cs` |
 | `Recall.Server` | Backend API and login (.NET 10, app sessions, CQRS, multi-tenant). Serves the SPA in production |
-| `Recall.Bff` | The old BFF. Nothing runs it, and it stays in the solution until a later change deletes it. Do not add to it |
 | `frontend` | React SPA (React 19, TanStack Router, TanStack Query, Tailwind v4) |
 | `tests/` | Unit, integration, and functional tests |
 
@@ -39,12 +38,13 @@ Read the doc for an area before you change code in that area.
 | Doc | Content |
 |-----|---------|
 | [docs/backend.md](docs/backend.md) | Domain structure, new features, DI, API versioning, error responses, database, file store, tests |
-| [docs/backend/](docs/backend/) | Rules for entities, features, DTOs and mappers, endpoints (HTTP, gRPC, MCP), concurrency (a version, a run again, or a lock), domain events, EF configurations, feature telemetry, and the audit log |
+| [docs/backend/](docs/backend/) | Rules for entities, features, DTOs and mappers, endpoints (HTTP, MCP), concurrency (a version, a run again, or a lock), domain events, EF configurations, feature telemetry, and the audit log |
 | [docs/backend/source-generators.md](docs/backend/source-generators.md) | When to use a source generator and when reflection is allowed |
 | [docs/telemetry.md](docs/telemetry.md) | Traces, metrics, logs, `Trace`, `AddEvent`, `Here()`, `TraceRoot`, `TraceContext`, named queries |
 | [docs/messages.md](docs/messages.md) | The text of error messages, alerts, toasts, and labels |
 | [docs/multi-tenancy.md](docs/multi-tenancy.md) | Tenant isolation |
 | [docs/authentication.md](docs/authentication.md) | Web and native login, sessions, origins, auth providers, test users |
+| [docs/install.md](docs/install.md) | The container, the compose files, `/data`, HTTPS, the health probe, backup, and upgrade |
 | [docs/frontend.md](docs/frontend.md) | Frontend structure, API client, query hooks, routes, forms |
 | [docs/frontend/](docs/frontend/) | Rules for server state, client state, code style, and tests |
 | [docs/specs/](docs/specs/) | The specs of a domain or an effort. Start a new spec from [TEMPLATE.md](docs/specs/TEMPLATE.md): each rule has an ID, and a test names the ID |
@@ -89,7 +89,7 @@ pnpm test:e2e
 
 ## Rules
 
-- Put each entrypoint (HTTP, gRPC, MCP) in the folder of its feature, not in a separate project. Each entrypoint is optional. Add only the entrypoints that the callers of the feature need. See [docs/backend/endpoints.md](docs/backend/endpoints.md).
+- Put each entrypoint (HTTP, MCP) in the folder of its feature, not in a separate project. Each entrypoint is optional. Add only the entrypoints that the callers of the feature need. See [docs/backend/endpoints.md](docs/backend/endpoints.md).
 - Use pnpm for the frontend. Do not use npm.
 - Do not run Prettier. This repo has no Prettier config, so Prettier rewrites whole files. `.claude/settings.json` refuses the command in a Claude Code session that starts at the repo root. Keep the style of the file that you edit, and run `pnpm lint`.
 - Put all NuGet versions in `Directory.Packages.props`.

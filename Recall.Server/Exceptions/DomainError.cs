@@ -2,7 +2,7 @@ namespace Recall.Server.Exceptions;
 
 /// <summary>
 /// The kind of a failure, with no transport in it. Each entrypoint maps a kind to its own error:
-/// an HTTP status, a gRPC status code, or an MCP tool error.
+/// an HTTP status or an MCP tool error.
 /// </summary>
 public enum DomainErrorKind
 {

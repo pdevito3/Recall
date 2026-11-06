@@ -6,7 +6,7 @@ This directory is the maintained source for the proof of user-facing behavior in
 
 - `scripts/launch.sh` started an isolated stack for this checkout, and `scripts/doctor.sh` exits with 0.
 - The browser is a new Chromium context from `scripts/browse.mjs`. Nobody is logged in. `localStorage` is empty, so the theme is `system`.
-- The database has the rows of a new stack. `browse.mjs` puts back each row that a recipe writes, so each recipe starts from the same rows. Each recipe that logs in writes rows, because the first login makes the Owner. A login writes a BFF session row, and the restore deletes it.
+- The database has the rows of a new stack. `browse.mjs` puts back each row that a recipe writes, so each recipe starts from the same rows. Each recipe that logs in writes rows, because the first login makes the Owner. A login writes an auth session row, and the restore deletes it.
 - The IdP is ZeroFactor, unless `launch.sh` got `--auth-provider`. The ZeroFactor users are `admin@example.com` (name `Admin User`) and `user@example.com` (name `Test User`).
 - Never drive a stack that the current verification run did not start.
 
@@ -42,7 +42,7 @@ Keep implementation details out of the map. Name only user paths, stable handles
 
 - [Login and logout](./login-logout.md) covers the Server login through the IdP of the stack, the session, the name of the user, and logout.
 - [Navigation and theme](./navigation-and-theme.md) covers the sidebar links, the breadcrumb, sidebar collapse, and the light/dark/system theme.
-- [Start a tenant](./start-tenant.md) covers the first login, which makes the Owner and its tenant, and the refusal of a second person when signup is closed.
+- [First owner](./first-owner.md) covers the first login, which makes the Owner and its tenant, and the refusal of a second person when signup is closed.
 - [Users](./users.md) covers `/users` and `/users/<id>`: the list of the users of the tenant, the actions from `allowedActions`, the role change, the delete, and the refusal for a member.
 
 ## Not mapped yet
