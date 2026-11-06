@@ -48,7 +48,8 @@ public static partial class RedactedSettings
         |Auth:OpenSignup
         |Auth:Providers:\d+:(Id|DisplayName|Issuer|ClientId|AllowHttp)
         |FileStore:Root
-        |FileTelemetry:.+
+        |FileTelemetry:(Logs|Traces|Metrics):(FileSizeBytes|FilesKept|DaysKept)
+        |FileTelemetry:MetricExportSeconds
         |Kestrel:Endpoints:[^:]+:Url
         |Serilog:MinimumLevel(:.+)?
         )$

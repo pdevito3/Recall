@@ -75,4 +75,30 @@ public class RedactedSettingsTests
         // Assert
         shown.ShouldBeEmpty();
     }
+
+    [Test]
+    public void a_file_telemetry_setting_that_recall_does_not_read_hides_its_value()
+    {
+        // Arrange
+        KeyValuePair<string, string?>[] settings =
+        [
+            Setting("FileTelemetry:Logs:FilesKept", "20"),
+            Setting("FileTelemetry:Traces:DaysKept", "14"),
+            Setting("FileTelemetry:Metrics:FileSizeBytes", "1024"),
+            Setting("FileTelemetry:MetricExportSeconds", "3600"),
+            Setting("FileTelemetry:Logs:Token", "the-secret"),
+            Setting("FileTelemetry:Password", "the-secret"),
+        ];
+
+        // Act
+        var shown = RedactedSettings.Of(settings);
+
+        // Assert
+        shown["FileTelemetry:Logs:FilesKept"].ShouldBe("20");
+        shown["FileTelemetry:Traces:DaysKept"].ShouldBe("14");
+        shown["FileTelemetry:Metrics:FileSizeBytes"].ShouldBe("1024");
+        shown["FileTelemetry:MetricExportSeconds"].ShouldBe("3600");
+        shown["FileTelemetry:Logs:Token"].ShouldBe(RedactedSettings.Hidden);
+        shown["FileTelemetry:Password"].ShouldBe(RedactedSettings.Hidden);
+    }
 }
