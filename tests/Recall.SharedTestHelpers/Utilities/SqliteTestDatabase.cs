@@ -4,6 +4,8 @@ using Microsoft.Data.Sqlite;
 
 public sealed class SqliteTestDatabase : IAsyncDisposable
 {
+    private const int DeleteAttempts = 10;
+
     private readonly string _directory = Path.Combine(Path.GetTempPath(), $"recall_test_{Guid.NewGuid():N}");
 
     public SqliteTestDatabase()
@@ -25,8 +27,11 @@ public sealed class SqliteTestDatabase : IAsyncDisposable
         using (var connection = new SqliteConnection(ConnectionString))
             SqliteConnection.ClearPool(connection);
 
-        // Program.Main of a test host ends on its own thread, so the last metric export can add a file beside the database during this delete
-        const int lastTry = 5;
+        await DeleteAfterTheLastMetricExportAsync();
+    }
+
+    private async Task DeleteAfterTheLastMetricExportAsync()
+    {
         for (var attempt = 1; ; attempt++)
         {
             try
@@ -34,7 +39,7 @@ public sealed class SqliteTestDatabase : IAsyncDisposable
                 Directory.Delete(_directory, recursive: true);
                 return;
             }
-            catch (IOException) when (attempt < lastTry)
+            catch (IOException) when (attempt < DeleteAttempts)
             {
                 await Task.Delay(TimeSpan.FromMilliseconds(200));
             }

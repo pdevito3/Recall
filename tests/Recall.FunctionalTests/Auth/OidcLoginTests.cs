@@ -322,7 +322,20 @@ public class OidcLoginTests
         html.ShouldContain("Ada Lovelace");
         confirmed.StatusCode.ShouldBe(HttpStatusCode.Redirect);
         confirmed.Headers.Location!.OriginalString.ShouldBe($"{app.Redirect}?code={Uri.EscapeDataString(code)}&state={Uri.EscapeDataString(app.ClientState)}");
-        (await AuthBrowser.TokensOf(await browser.ExchangeAsync(code, app.Verifier, app.Redirect))).ExpiresIn.ShouldBe(900);
+        (await AuthBrowser.TokensOf(await browser.ExchangeAsync(code, app.Verifier, app.Redirect))).AccessToken.ShouldNotBeNullOrEmpty();
+    }
+
+    [Test]
+    public async Task a_native_exchange_tells_the_app_the_whole_life_of_the_bearer_token()
+    {
+        // Arrange
+        using var browser = new AuthBrowser(AuthHosts.FrozenClock);
+
+        // Act
+        var tokens = await browser.LoginNativeAsync(NewSubject());
+
+        // Assert
+        tokens.ExpiresIn.ShouldBe(900);
     }
 
     [Test]

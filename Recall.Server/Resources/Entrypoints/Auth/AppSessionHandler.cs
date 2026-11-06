@@ -7,8 +7,12 @@ using Microsoft.Extensions.Options;
 using Recall.Server.Auth;
 using Recall.Server.Auth.Entities;
 using Recall.Server.Domain.Users;
+using Recall.Server.Resources.Entrypoints.Jobs;
 
-/// <summary>A cookie needs <c>X-CSRF: 1</c>, and a cross-site page cannot send that header.</summary>
+/// <summary>
+/// A cookie needs <c>X-CSRF: 1</c>, and a cross-site page cannot send that header. A browser that opens
+/// <see cref="JobDashboard.Path"/> cannot send it either, so <see cref="JobDashboard"/> guards its own writes.
+/// </summary>
 public sealed class AppSessionHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
@@ -58,7 +62,7 @@ public sealed class AppSessionHandler(
         if (SessionCookie.Read(Request) is not { } cookie)
             return AuthenticateResult.NoResult();
 
-        return HasCsrfHeader(Request)
+        return HasCsrfHeader(Request) || JobDashboard.Serves(Request.Path)
             ? await ResultOfAsync(cookie, SessionKind.Web)
             : AuthenticateResult.Fail("A session cookie needs the X-CSRF header.");
     }

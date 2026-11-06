@@ -1,5 +1,6 @@
 namespace Recall.Server.Domain.Users;
 
+using System.Data.Common;
 using System.Runtime.CompilerServices;
 using Databases;
 using Microsoft.EntityFrameworkCore;
@@ -7,7 +8,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Resources;
 using Serilog;
 
-public sealed class TenantLookupInterceptor(ITenantIdProvider tenantIdProvider) : SaveChangesInterceptor
+public sealed class TenantLookupInterceptor(ITenantIdProvider tenantIdProvider) : SaveChangesInterceptor, IDbTransactionInterceptor
 {
     private static readonly ILogger Logger = Log.ForContext<TenantLookupInterceptor>();
 
@@ -24,9 +25,15 @@ public sealed class TenantLookupInterceptor(ITenantIdProvider tenantIdProvider) 
     public override async ValueTask<int> SavedChangesAsync(
         SaveChangesCompletedEventData eventData, int result, CancellationToken cancellationToken = default)
     {
-        await ApplyAsync(eventData.Context);
+        // Before the commit of an open transaction, a lookup still reads the old row and would cache it again.
+        if (eventData.Context?.Database.CurrentTransaction is null)
+            await ApplyAsync(eventData.Context);
         return result;
     }
+
+    public Task TransactionCommittedAsync(
+        DbTransaction transaction, TransactionEndEventData eventData, CancellationToken cancellationToken = default)
+        => ApplyAsync(eventData.Context);
 
     public override Task SaveChangesFailedAsync(
         DbContextErrorEventData eventData, CancellationToken cancellationToken = default)

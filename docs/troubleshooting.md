@@ -57,6 +57,30 @@ The server keeps its logs and its telemetry to about 460 MiB, and a full disk do
 
 1. Run `df -h /data` and `du -sh /data/*` to find what holds the space.
 2. Make room on the volume. You can delete old files in `/data/logs` and `/data/telemetry` while the server runs. Do not delete `recall.db`, its `-wal` file, or the `keys` folder.
+3. If `/health` answers 503 and says `The background jobs stopped`, restart the server. The journal does not need a restart, but no background job runs until then. See [The background jobs stopped](#the-background-jobs-stopped).
+
+## The background jobs stopped
+
+A store fault that is not transient, such as a full disk, stops the background jobs and leaves the journal up. `/health` answers 503, and its body starts with `Unhealthy` and says `The background jobs stopped`. The log has one line at the level `Fatal` with the same text. The job pages at `/backwave` can show `The job pages cannot open`. A person can still read and write in the journal. Text that waits for a job, such as a transcript, waits until the jobs run again.
+
+The server cannot restart the jobs by itself. Do these steps:
+
+1. Fix the cause. For a full disk, see [The disk is full](#the-disk-is-full).
+2. Restart the server with `docker compose restart`. A job that was running runs again.
+3. Open `/health`. It answers 200 when the jobs run.
+4. If `/health` answers 503 again and names `SqliteException` or `InvalidOperationException`, the cause can be a disk that is still full, a damaged file, or a lost job table. Check the first two first. If the disk has room and `docker compose logs` does not show `database disk image is malformed`, do these steps. The image has no `sqlite3`, so the steps use a small container that opens the `/data` volume.
+   1. Stop the server with `docker compose stop`.
+   2. Find the name of the volume with `docker volume ls`. If `/data` is a folder of the host, use the path of this folder in place of the name.
+   3. Run this command with the name of your volume. It copies `recall.db` and its side files to the folder `before-repair` in the volume, and then clears the version of the job tables.
+
+      ```
+      docker run --rm -v <volume>:/data alpine sh -c 'apk add --no-cache sqlite && mkdir /data/before-repair && cp /data/recall.db* /data/before-repair/ && sqlite3 /data/recall.db "DELETE FROM backwave_schema_version"'
+      ```
+
+   4. Start the server with `docker compose start`. BackWave makes each missing job table again and keeps the rows of the journal.
+   5. If `/health` still answers 503, these steps cannot fix the cause, because BackWave does not change a job table that exists. The journal still runs. Keep the folder `before-repair`, and report the fault with a support bundle.
+
+A restart during a long job costs one attempt of that job. A job that a stop or a crash interrupts goes to the dead letters at attempt 10. The Owner requeues it at `/backwave/failures`.
 
 Do not delete the current file of a signal, which is the newest file of that signal, while the server runs. The server keeps it open, so its room stays in use. Each next line of that signal goes to the deleted file and is lost, with no warning, until the file rolls or the server starts again. To remove a current file, stop the server first.
 
@@ -73,7 +97,7 @@ To get the files back at once, start the server again. The server keeps each fil
 
 ## Send a support bundle
 
-The support bundle is one zip with the log and telemetry files, the version, and the settings with the secrets hidden. It holds no journal text. Only the Owner can download it. The Owner is the oldest linked Admin of the oldest live tenant. When that Admin loses the role, the next oldest linked Admin becomes the Owner.
+The support bundle is one zip with the log and telemetry files, the version, and the settings with the secrets hidden. It holds no journal text: a job records the type and the stack frames of a thrown exception and no message, unless the type states that its text is safe. Only the Owner can download it. The Owner is the oldest linked Admin of the oldest live tenant. When that Admin loses the role, the next oldest linked Admin becomes the Owner.
 
 1. Sign in as the Owner.
 2. Open the **About** page.
