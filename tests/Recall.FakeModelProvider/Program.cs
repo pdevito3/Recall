@@ -14,6 +14,6 @@ internal static class FakeModelProviderHost
 
         await using var fake = await FakeModelProvider.StartAsync(key, url);
         await Console.Out.WriteLineAsync($"Fake model provider at {url}. Anthropic base: /, compatible base: /compat/v1. Control: /control");
-        await Task.Delay(Timeout.Infinite);
+        await fake.WaitForStopAsync();
     }
 }

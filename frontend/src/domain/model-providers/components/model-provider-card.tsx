@@ -111,6 +111,7 @@ export function ModelProviderCard({ provider }: { provider: ModelProviderDto }) 
               {test.data.models.length === 1 ? 'model' : 'models'}.
             </p>
             <Select
+              placeholder="Pick a model"
               value={provider.model ?? null}
               onChange={(model) => {
                 if (typeof model === 'string') update.mutate({ ...savedChange(provider), model })

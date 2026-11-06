@@ -3,6 +3,7 @@ namespace Recall.FakeModelProvider;
 using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -62,7 +63,7 @@ public sealed class FakeModelProvider : IAsyncDisposable
     public const string SecondModelId = "fake-model-2";
     public const long ModelMaxTokens = 64_000;
 
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
 
     private readonly WebApplication _app;
     private readonly string _apiKey;
@@ -110,6 +111,9 @@ public sealed class FakeModelProvider : IAsyncDisposable
         await app.StartAsync();
         return fake;
     }
+
+    /// <summary>Ends when the process gets a stop signal.</summary>
+    public Task WaitForStopAsync() => _app.WaitForShutdownAsync();
 
     public async ValueTask DisposeAsync()
     {
