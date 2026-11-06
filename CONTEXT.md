@@ -32,7 +32,7 @@ An append-only snapshot of Raw or of Cleaned, made at a save point. Each change 
 _Avoid_: Version (the concurrency token of a row), history entry
 
 **Last-write-wins**:
-The rule for two saves of one Draft. The later save time holds the Draft, and the earlier save stays as a Revision, so no words go away.
+The rule for two saves of one Draft. The later save time holds the Draft, and the earlier save stays as a Revision, so no words go away. A transcript chunk is not a save, so a save from a base older than the last chunk loses at any save time.
 _Avoid_: Conflict, merge
 
 **Stale**:
@@ -68,8 +68,12 @@ The AI service that an Admin connects for the app. The `Server` engine uses it.
 _Avoid_: Bare "provider", which can also mean an Identity provider
 
 **Transcription engine**:
-What turns audio into Raw: the server, a cloud model, or a speech model on the device. A cloud model is an engine only for a provider that accepts audio, and which providers accept audio is unconfirmed until R11. It is not a Cleanup engine.
+What turns audio into Raw: the server, a cloud model, or a speech model on the device. A cloud model is an engine only for a provider that accepts audio. On 2026-11-06, the OpenAI and Gemini APIs accept audio, and the Anthropic Messages API does not. It is not a Cleanup engine.
 _Avoid_: Recognizer, bare "engine"
+
+**Recording**:
+The audio of one upload to a Session, with its slices, its status, and the point up to which its text is in Raw. Audio that did not become text stays stored, and the Recording says why.
+_Avoid_: Clip, upload, audio file
 
 **Synopsis**:
 The short AI recap of one Session. A Summary covers a period, and a Synopsis does not. A Person rename does not change a Synopsis, so it can keep the old name _(agent default)_.

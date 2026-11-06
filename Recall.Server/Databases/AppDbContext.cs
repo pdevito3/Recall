@@ -8,6 +8,7 @@ using Domain.Agents;
 using Domain.AuditEntries;
 using Domain.Corrections;
 using Domain.People;
+using Domain.Recordings;
 using Domain.Sessions;
 using Domain.Sync;
 using Domain.Tenants;
@@ -47,6 +48,8 @@ public class AppDbContext(
     public DbSet<Correction> Corrections => Set<Correction>();
     public DbSet<UserSetting> UserSettings => Set<UserSetting>();
     public DbSet<SyncChange> SyncChanges => Set<SyncChange>();
+    public DbSet<Recording> Recordings => Set<Recording>();
+    public DbSet<RecordingSlice> RecordingSlices => Set<RecordingSlice>();
     // new-feature:db-sets
     #endregion
 

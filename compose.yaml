@@ -21,6 +21,7 @@ services:
       - Auth__Providers__0__AllowHttp
       - Auth__OpenSignup
       - AllowedHosts
+      - Transcription__Threads
     volumes:
       - ${RECALL_DATA:-recall-data}:/data
     healthcheck:

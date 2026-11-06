@@ -86,6 +86,23 @@ Do not delete the current file of a signal, which is the newest file of that sig
 
 A stop on a full disk exits with 0. If a file cannot write the lines that it still holds, the console shows `The file <path> did not close at the stop`, and those lines are lost. The console keeps each log. The database is not part of these files.
 
+## A Recording has no text
+
+Read `GET /api/v1/recordings/{id}`. The audio stays stored for each of these values of `problem`. The field `problemText` says the same thing in words.
+
+| `problem` | Cause | What to do |
+|-----------|-------|------------|
+| `WaitingForModel` | The speech model is not on the server, and the download has not finished | Give the server a network, or copy the model into `/data/models`. See [Install](install.md#transcribe-audio) |
+| `EngineNotInstalled` | The image has no ffmpeg or no worker | Use the release image, then send `POST /api/v1/recordings/{id}/retry` |
+| `OutOfMemory` | The system stopped the worker because it needed more memory than the container has | Give the container at least 2 GB, then retry |
+| `EngineCrashed`, `EngineStalled` | The worker stopped, or it gave no text for 10 minutes | Retry. If it fails again, send a support bundle |
+| `TooManyAttempts` | The server restarted during each try | Find why the server restarts, then retry |
+| `AudioUnreadable` | ffmpeg cannot read the audio | Download the audio, and check that it plays |
+| `AudioMissing` | The audio file is not in `/data/files` | Restore the file from a backup, then retry |
+| `TooLong` | The audio is longer than 4 hours | Split the audio, and upload each part |
+| `TextTooLong` | The text does not fit in the Session. The text so far is saved | Download the audio to keep a copy |
+| `NoWordsFound` | The worker heard no words | Listen to the audio to check, then retry |
+
 ## The log files stop
 
 When a log or telemetry file cannot take a line, the console shows a warning with the text `A file sink failed`, and with the fields `File` and `Cause`. It shows one warning for each file in each 30 minutes. The console keeps each log during the fault, so `docker compose logs` stays complete, if Docker keeps its own logs on a volume with room. The file loses the lines of the fault.

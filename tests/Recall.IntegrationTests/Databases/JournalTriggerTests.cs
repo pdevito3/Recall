@@ -4,6 +4,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Recall.Server.Databases;
 using Recall.Server.Domain;
+using Recall.Server.Domain.Recordings;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Features;
 using Recall.Server.Domain.Sessions.Dtos;
@@ -132,6 +133,8 @@ public class JournalTriggerTests : TestBase
         left.Lines.ShouldBe(0);
     }
 
+    private static readonly Type[] JournalTablesOutsideTheFeed = [typeof(SyncChange), typeof(Recording)];
+
     [Test]
     public async Task each_journal_table_of_the_model_has_its_triggers()
     {
@@ -149,7 +152,7 @@ public class JournalTriggerTests : TestBase
 
         var model = new TestingServiceScope().GetService<AppDbContext>().Model;
         var journalRoots = model.GetEntityTypes().Where(e => e.ClrType.IsAssignableTo(typeof(IJournalOwned))).ToList();
-        var fed = journalRoots.Where(e => e.ClrType != typeof(SyncChange)).Select(e => e.GetTableName()!).ToList();
+        var fed = journalRoots.Where(e => !JournalTablesOutsideTheFeed.Contains(e.ClrType)).Select(e => e.GetTableName()!).ToList();
         var revisions = new[] { model.FindEntityType(typeof(RawRevision))!.GetTableName()!, model.FindEntityType(typeof(CleanedRevision))!.GetTableName()! };
 
         // Act

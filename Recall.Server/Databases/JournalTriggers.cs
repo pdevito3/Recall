@@ -55,6 +55,30 @@ public static class JournalTriggers
             """);
     }
 
+    public static void AddOwnerGuard(this MigrationBuilder migrationBuilder, string table) => migrationBuilder.Sql($"""
+        CREATE TRIGGER {table}_refuse_deleted_owner BEFORE INSERT ON {table}
+        BEGIN
+            SELECT RAISE(ABORT, '{OwnerDeletedMessage}') WHERE (SELECT is_deleted FROM users WHERE id = new.user_id) = 1;
+        END;
+        """);
+
+    public static void AddOwnerPurgeWithRecordings(this MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.Sql("DROP TRIGGER users_purge_journal;");
+        migrationBuilder.Sql("""
+            CREATE TRIGGER users_purge_journal BEFORE UPDATE OF is_deleted ON users
+            WHEN new.is_deleted = 1 AND old.is_deleted = 0
+            BEGIN
+                DELETE FROM recordings WHERE user_id = new.id;
+                DELETE FROM sessions WHERE user_id = new.id;
+                DELETE FROM people WHERE user_id = new.id;
+                DELETE FROM corrections WHERE user_id = new.id;
+                DELETE FROM user_settings WHERE user_id = new.id;
+                DELETE FROM sync_changes WHERE user_id = new.id;
+            END;
+            """);
+    }
+
     public static void AddOwnerPurge(this MigrationBuilder migrationBuilder) => migrationBuilder.Sql("""
         CREATE TRIGGER users_purge_journal BEFORE UPDATE OF is_deleted ON users
         WHEN new.is_deleted = 1 AND old.is_deleted = 0

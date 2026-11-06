@@ -4,15 +4,18 @@ using System.Diagnostics;
 using Databases;
 using Databases.Sqlite;
 using MediatR;
+using Recordings;
+using Recordings.Features;
 using Microsoft.EntityFrameworkCore;
 using Resources;
+using Resources.Storage;
 using Serilog;
 
 public static class DeleteUser
 {
     public sealed record Command(string Id) : IRequest, IRunsAgainWhenRaced;
 
-    public sealed class Handler(AppDbContext dbContext, IPermissionGuard permissionGuard) : IRequestHandler<Command>
+    public sealed class Handler(AppDbContext dbContext, IPermissionGuard permissionGuard, FileStore fileStore) : IRequestHandler<Command>
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
 
@@ -42,6 +45,8 @@ public static class DeleteUser
                 await dbContext.SaveChangesAsync(ct);
                 return user;
             }, cancellationToken);
+
+            RecordingWork.TryDeleteFolder(fileStore, RecordingFiles.OwnerFolder(user.TenantId, user.Id), user.Id, _logger);
 
             var scrubbed = await WalScrub.TryTruncateAsync(dbContext.Database.GetConnectionString()!);
             Activity.Current?.SetTag("app.user.wal_scrubbed", scrubbed);

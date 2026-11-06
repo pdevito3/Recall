@@ -33,6 +33,7 @@ public static partial class SessionMapper
     [MapperIgnoreTarget(nameof(SessionDto.JournalingDay))]
     [MapperIgnoreTarget(nameof(SessionDto.Topics))]
     [MapperIgnoreSource(nameof(Session.TenantId))]
+    [MapperIgnoreSource(nameof(Session.LastTranscriptRevision))]
     [MapperIgnoreSource(nameof(Session.UserId))]
     [MapperIgnoreSource(nameof(Session.Preview))]
     [MapperIgnoreSource(nameof(Session.CleanupRun))]
