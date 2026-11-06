@@ -175,12 +175,11 @@ public class JournalRaceTests : TestBase
         await pause.ReachedAsync();
         await ScopeOf(owner).SendAsync(new SetSessionMetadata.Command(session.Id, new SessionMetadataChangeDto { UserTopics = ["Food"], MetadataVersion = 0 }));
         pause.Release();
-        await retry;
+        var reply = await retry;
 
         // Assert
-        var stored = await ScopeOf(owner).SendAsync(new GetSession.Query(session.Id));
-        stored.Topics.ShouldHaveSingleItem().Name.ShouldBe("Food");
-        stored.MetadataVersion.ShouldBe(1u);
+        reply.Topics.ShouldHaveSingleItem().Name.ShouldBe("Food");
+        reply.MetadataVersion.ShouldBe(1u);
     }
 
     [Test]

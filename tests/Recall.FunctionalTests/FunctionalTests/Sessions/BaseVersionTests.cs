@@ -345,6 +345,53 @@ public class BaseVersionTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-31")]
+    public async Task a_save_of_the_defaults_from_version_0_makes_the_row()
+    {
+        // Arrange
+        await SignInAsync();
+        var defaults = await SettingsAsync();
+
+        // Act
+        var saved = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new
+        {
+            timeZone = defaults.GetProperty("timeZone").GetString(),
+            locationCaptureEnabled = defaults.GetProperty("locationCaptureEnabled").GetBoolean(),
+            requirePeopleProposalApproval = defaults.GetProperty("requirePeopleProposalApproval").GetBoolean(),
+            version = 0,
+        });
+        var stored = await SettingsAsync();
+
+        // Assert
+        saved.StatusCode.ShouldBe(HttpStatusCode.OK);
+        stored.GetProperty("version").GetUInt32().ShouldBe(1u);
+    }
+
+    [Test]
+    [Property("Rule", "SES-31")]
+    public async Task a_stale_save_with_other_values_for_a_user_with_no_row_is_refused_and_makes_no_row()
+    {
+        // Arrange
+        await SignInAsync();
+        var defaults = await SettingsAsync();
+
+        // Act
+        var refused = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new
+        {
+            timeZone = "UTC",
+            locationCaptureEnabled = true,
+            requirePeopleProposalApproval = true,
+            version = 5,
+        });
+        var stored = await SettingsAsync();
+
+        // Assert
+        refused.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        stored.GetProperty("version").GetUInt32().ShouldBe(0u);
+        stored.GetProperty("locationCaptureEnabled").GetBoolean().ShouldBe(defaults.GetProperty("locationCaptureEnabled").GetBoolean());
+    }
+
+    [Test]
     [Property("Rule", "SES-34")]
     public async Task a_save_of_the_defaults_from_another_version_makes_no_row_for_a_user_with_no_row()
     {
