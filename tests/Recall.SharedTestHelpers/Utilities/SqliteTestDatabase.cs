@@ -20,12 +20,24 @@ public sealed class SqliteTestDatabase : IAsyncDisposable
 
     public string ConnectionString { get; }
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         using (var connection = new SqliteConnection(ConnectionString))
             SqliteConnection.ClearPool(connection);
 
-        Directory.Delete(_directory, recursive: true);
-        return ValueTask.CompletedTask;
+        // Program.Main of a test host ends on its own thread, so the last metric export can add a file beside the database during this delete
+        const int lastTry = 5;
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                Directory.Delete(_directory, recursive: true);
+                return;
+            }
+            catch (IOException) when (attempt < lastTry)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(200));
+            }
+        }
     }
 }
