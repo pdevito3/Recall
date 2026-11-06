@@ -211,6 +211,25 @@ public class FastClockRetryTests
 
     [Test]
     [Property("Rule", "SES-26")]
+    public void a_change_ahead_of_a_server_whose_clock_went_back_does_nothing_until_the_server_passes_the_stored_save_time()
+    {
+        // Arrange
+        var setting = NewSetting();
+        setting.Change(null, true, false, Noon, Noon);
+        var aMinuteLater = Noon.AddMinutes(1);
+
+        // Act
+        setting.Change(null, false, false, aMinuteLater, Noon.AddHours(-1));
+        var whileBehind = setting.LocationCaptureEnabled;
+        setting.Change(null, false, false, aMinuteLater, aMinuteLater);
+
+        // Assert
+        whileBehind.ShouldBeTrue();
+        setting.LocationCaptureEnabled.ShouldBeFalse();
+    }
+
+    [Test]
+    [Property("Rule", "SES-26")]
     [Arguments(6)]
     [Arguments(60)]
     [Arguments(3600)]

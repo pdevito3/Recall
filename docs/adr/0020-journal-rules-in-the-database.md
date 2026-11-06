@@ -14,7 +14,7 @@ A delete of a Session removes its row, and the foreign key removes its Revisions
 
 Each connection has `PRAGMA secure_delete = ON`, so SQLite overwrites the freed space. After a delete of a Session, a Correction, a User, or a tenant, the handler tries a `wal_checkpoint(TRUNCATE)`, which cuts the WAL to zero bytes and removes its old pages. A reader that holds on for more than the wait of 250 ms stops the truncate, and the handler does not retry. The old pages then stay in the database file or in the WAL until a later checkpoint passes the delete, the journal size limit of 16 MiB cuts the file, or the last connection closes.
 
-A kill between the commit of a delete and the truncate leaves the words in the WAL. A boot does not clear them by itself, because a boot writes too little to reach a checkpoint. So each start of the server runs the same truncate after its migrations and before Kestrel binds. It goes through the locks of SQLite and has the same wait. If another process holds the WAL, the start goes on and logs that it did not scrub, and the words stay until a later checkpoint passes them.
+A kill between the commit of a delete and the truncate leaves the words in the WAL. A boot alone does not clear them. So each start of the server runs the same truncate after its migrations and before Kestrel binds. It goes through the locks of SQLite and has the same wait. If another process holds the WAL, the start goes on and logs that it did not scrub, and the words stay until a later checkpoint passes them.
 
 What stays:
 
@@ -33,3 +33,4 @@ Tombstones stay until their owner goes. So no cursor is ever too old, and the se
 - The sequence is one counter across all Users, so a cursor shows how many changes the server made. It shows no words and no IDs.
 - An EF table rebuild of `sync_changes` sets the counter to the newest line that stays, so it can go back after the purge of a User. No client skips a change, because a cursor of a live User is never above that User's newest line, and a line leaves only with its owner.
 - A tombstone stays for each deleted Session, and it holds two IDs.
+- Each start pays for one checkpoint, which writes at most the size of the WAL.
