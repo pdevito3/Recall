@@ -47,7 +47,7 @@ Check the disk. When the write finishes, the server logs `takes writes again`, a
 
 ## The disk is full
 
-The server keeps its logs and its telemetry under 450 MiB, and a full disk does not stop a request by itself. The database and the file store still need room, so a save fails with an error at the caller. Do these steps:
+The server keeps its logs and its telemetry to about 450 MiB, and a full disk does not stop a request by itself. The database and the file store still need room, so a save fails with an error at the caller. Do these steps:
 
 1. Run `df -h /data` and `du -sh /data/*` to find what holds the space.
 2. Make room on the volume. You can delete old files in `/data/logs` and `/data/telemetry` while the server runs. Do not delete `recall.db`, its `-wal` file, or the `keys` folder.
@@ -66,7 +66,7 @@ The zip has these entries:
 |---|---|
 | `logs/` | Each log file |
 | `telemetry/` | Each trace file and metric file |
-| `version.json` | The version, the runtime, the operating system, the environment, and each file that the server could not open |
+| `version.json` | The version, the runtime, the operating system, the environment, and each file or folder that the server could not read |
 | `settings.json` | The name of each setting. Only a value that cannot be a secret is shown, and each other value is `[redacted]` |
 
 Another Admin gets the message `Only the Owner of this install can download the support bundle.`
