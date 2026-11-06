@@ -110,7 +110,7 @@ A recipe is an ES module with a default export. `browse.mjs` gives it these valu
 | `capture(name, { fullPage })` | Waits for `settle()`, then saves a screenshot and an ARIA snapshot. The screenshot is full-page by default. For an open overlay, give `{ fullPage: false }`, because the resize for a full-page screenshot closes a Drawer. In a full-page screenshot of a scrolled page, the fixed sidebar shows at the scroll offset. This is normal. |
 | `settle()` | Waits two frames, then waits for all finite animations to end. Call it before a click in an animated overlay. Playwright retries a click on a moving element with a scroll, and React Aria closes a popover on scroll. |
 | `login(user)` | Logs in through the Server and the IdP of the stack. It returns `{ name }`, the `name` claim of the session. Compare the screen with this name. Without `user`, the first user of the IdP signs in: `admin@example.com` (`Admin User`) for ZeroFactor, `bob` (`Bob Smith`) for DuendeDemo. The other users are `user@example.com` and `alice`. The first login of a new database makes that user the Owner, an Admin of the tenant `Recall`. With signup closed, each other person gets the refusal page of the Server, so `login()` fails for them. |
-| `logout()` | Logs out of the app. The page ends on the signed-out page of the Server, `/auth/login?signedOut=1`. The session of the IdP stays. |
+| `logout()` | Logs out of the app and the IdP. The page ends on the signed-out page of the Server, `/auth/login?signedOut=1`. |
 | `stack` | The content of `stack.json` (`stack.urls.web`, `stack.urls.server`, and more). |
 
 Minimal recipe:

@@ -70,7 +70,7 @@
       "frontchannelLogout": false,
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "+",
+        "post.logout.redirect.uris": "${APP_FRONTEND_URL}/auth/signed-out##${APP_SERVER_URL}/auth/signed-out##${APP_SERVER_HTTP_URL}/auth/signed-out",
         "oauth2.device.authorization.grant.enabled": "false",
         "oidc.ciba.grant.enabled": "false",
         "require.pushed.authorization.requests": "false"

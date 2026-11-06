@@ -91,17 +91,64 @@ test.describe(`Auth Flows - ${currentIdp.name}`, () => {
 
       await expect(page.getByText(/^Signed in as /)).toBeVisible({ timeout: 10000 })
 
+      // Step 6: Keep another tab open, and put a private page in the history for Back
+      const privateNavigation = (of: Page) => of.getByRole('navigation', { name: 'Main' })
+      const otherTab = await page.context().newPage()
+      await otherTab.goto('/about')
+      await expect(privateNavigation(otherTab)).toBeVisible({ timeout: 10000 })
+      await page.goto('/about')
+      await expect(privateNavigation(page)).toBeVisible({ timeout: 10000 })
+      await page.goto('/')
+
       // Step 7: Click Logout. The 200 before the logout proves that the 204 after it comes from the logout
       const appOrigin = new URL(page.url()).origin
       const sessionUser = () => page.request.get(new URL('/auth/me', appOrigin).toString(), { headers: { 'X-CSRF': '1' } })
       expect((await sessionUser()).status(), 'the session before the logout').toBe(200)
       await logoutButton.click()
 
+      if (currentIdp.logoutConfirmSelector) await page.locator(currentIdp.logoutConfirmSelector).click({ timeout: 30000 })
+      if (currentIdp.logoutStaysAtProvider) {
+        await page.waitForURL((url) => url.origin !== appOrigin, { timeout: 30000, waitUntil: 'commit' })
+        // A visit too soon would stop the logout that the confirm started
+        if (currentIdp.logoutConfirmSelector) await expect(page.locator(currentIdp.logoutConfirmSelector)).toHaveCount(0)
+        await page.goto(new URL('/auth/login?signedOut=1', appOrigin).toString())
+      }
       await page.waitForURL((url) => url.pathname === '/auth/login' && url.searchParams.get('signedOut') === '1', { timeout: 30000 })
       await expect(page.getByRole('heading', { name: 'You are signed out' })).toBeVisible()
       await expect(page).toHaveTitle('You are signed out - Recall')
       await expect(page.getByRole('link', { name: /^Sign in with / })).toBeVisible()
       expect((await sessionUser()).status(), 'the session after the logout').toBe(204)
+
+      // Step 8: The other tab left its private page with no action in it
+      await otherTab.waitForURL((url) => url.searchParams.get('signedOut') === '1')
+      await expect(privateNavigation(otherTab)).toHaveCount(0)
+
+      // A provider with no logout endpoint keeps its session, as the signed-out page says, so a plain visit signs in again
+      if (!currentIdp.capabilities.endSession) {
+        await expect(page.getByText(`Your session at ${currentIdp.name} stays open`)).toBeVisible()
+        return
+      }
+
+      // Step 9: A plain visit does not sign the person in again, so the provider has no session left
+      await otherTab.goto(new URL('/', appOrigin).toString())
+      if (currentIdp.logoutStaysAtProvider) {
+        await expect(otherTab.getByRole('heading', { name: 'You are signed out' })).toBeVisible()
+        await otherTab.getByRole('link', { name: /^Sign in with / }).click()
+      }
+      await expect(otherTab.locator(currentIdp.usernameSelector)).toBeVisible({ timeout: 30000 })
+      expect((await sessionUser()).status(), 'the session after a plain visit').toBe(204)
+
+      // Step 10: Back does not show the private page. Keycloak keeps its confirm page in the history, and that page has no session behind it
+      await page.goBack({ waitUntil: 'commit' })
+      if (currentIdp.logoutStaysAtProvider) {
+        await page.waitForURL((url) => url.origin !== appOrigin, { waitUntil: 'commit' })
+      } else if (currentIdp.logoutConfirmSelector) {
+        await expect(page.locator(currentIdp.logoutConfirmSelector)).toBeVisible({ timeout: 30000 })
+      } else {
+        await expect(page.locator(currentIdp.usernameSelector)).toBeVisible({ timeout: 30000 })
+      }
+      await expect(privateNavigation(page)).toHaveCount(0)
+      expect((await sessionUser()).status(), 'the session after Back').toBe(204)
     })
 
     test('should return to a deep link on the SPA origin, with its query, after a login from that link', async ({ page, baseURL }) => {
