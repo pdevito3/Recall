@@ -9,7 +9,7 @@ A rule that ends in _(agent default)_ is a choice of an agent, not a ruling of t
 ### Journal
 
 **Session**:
-The root of the journal: one act of journaling by a User. A Session has no parent, and a Journaling day holds any number of Sessions. A bare "Session" always means this. An auth session always has a qualifier, such as BFF session.
+The root of the journal: one act of journaling by a User. A Session has no parent, and a Journaling day holds any number of Sessions. A bare "Session" always means this. The record of a login is always an Auth session.
 _Avoid_: Entry (the Session is the entry)
 
 **Journaling day**:
@@ -124,22 +124,26 @@ _Avoid_: Superuser
 **Member**:
 A User with full use of their own journal and no admin pages. The code names this role `User`.
 
+**Owner**:
+The person whose first login on a new install created its tenant. An Owner is an Admin. Control of the data directory can move this place to another identity.
+_Avoid_: Root, superadmin, first user
+
 **Privacy invariant**:
 No User, an Admin included, can read the journal data of another User.
 
 ### Authentication
 
-**BFF session**:
-The server-side record of one signed-in browser at the BFF. It holds the user's tokens, and the browser holds only a cookie that points to it.
-_Avoid_: Cookie session, user session, login
+**Auth session**:
+The record at the Server of one signed-in device, a browser or a native app. A person can have several. It keeps working when the identity provider is down.
+_Avoid_: Cookie session, user session, login, BFF session
 
 **IdP session**:
-The user's signed-in state at the identity provider. One IdP session can back many BFF sessions, and it can end without the browser present.
+The user's signed-in state at the identity provider. It proves who a person is at login. Then it has no link to an auth session, so one can end and the other stays.
 _Avoid_: SSO session, provider session
 
 **Identity provider**:
-The external OpenID Connect server that authenticates the user, for example Keycloak.
-The `AuthProvider` setting selects it.
+The external OpenID Connect server that proves who a person is at login, for example Keycloak.
+An install has any number of them, or none yet.
 _Avoid_: OP, IdP server
 
 ### Concurrency
@@ -163,7 +167,7 @@ _Avoid_: Stale version, timeout
 ### Agents
 
 **First-party client**:
-The OAuth client of this app, which the BFF and Swagger UI use. A user who signs in through it acts with all of their own permissions.
+A client of this app: an auth session, or Swagger UI. A user who signs in through it acts with all of their own permissions.
 _Avoid_: App client, main client
 
 **Agent**:

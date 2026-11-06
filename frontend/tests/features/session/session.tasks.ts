@@ -32,6 +32,28 @@ export function sessionPage(page: Page) {
       return { rendered }
     },
 
+    async openAndCountLoginNavigations(path: string) {
+      let navigations = 0
+      await page.exposeFunction('reportLoginNavigation', () => {
+        navigations += 1
+      })
+      await page.addInitScript((loginPath) => {
+        const { navigation, reportLoginNavigation } = window as unknown as {
+          navigation: EventTarget
+          reportLoginNavigation: () => void
+        }
+        navigation.addEventListener('navigate', (event) => {
+          const { destination } = event as unknown as { destination: { url: string } }
+          if (new URL(destination.url).pathname === loginPath) reportLoginNavigation()
+        })
+      }, bffPaths.login)
+
+      const login = answered(bffPaths.login)
+      await page.goto(path, { waitUntil: 'commit' })
+      await login
+      return navigations
+    },
+
     async openBlankPage() {
       await page.goto(blankPage)
     },

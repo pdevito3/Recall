@@ -47,17 +47,16 @@
           "name": "Recall",
           "oauthConfiguration": {
             "authorizedRedirectURLs": [
-              "#{ENV.APP_FRONTEND_URL}/signin-oidc",
-              "#{ENV.APP_BFF_URL}/signin-oidc",
-              "#{ENV.APP_BFF_URL}/signout-callback-oidc",
+              "#{ENV.APP_FRONTEND_URL}/auth/oidc/callback",
+              "#{ENV.APP_SERVER_URL}/auth/oidc/callback",
+              "#{ENV.APP_SERVER_HTTP_URL}/auth/oidc/callback",
               "#{ENV.APP_SERVER_URL}/swagger/oauth2-redirect.html",
               "#{ENV.APP_SERVER_HTTP_URL}/swagger/oauth2-redirect.html"
             ],
             "authorizedOriginURLs": [
               "#{ENV.APP_FRONTEND_URL}",
               "#{ENV.APP_SERVER_URL}",
-              "#{ENV.APP_SERVER_HTTP_URL}",
-              "#{ENV.APP_BFF_URL}"
+              "#{ENV.APP_SERVER_HTTP_URL}"
             ],
             "clientAuthenticationPolicy": "NotRequiredWhenUsingPKCE",
             "clientId": "#{applicationId}",

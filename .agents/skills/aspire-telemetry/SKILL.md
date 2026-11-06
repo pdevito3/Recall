@@ -5,7 +5,7 @@ description: Queries and writes the app's OpenTelemetry logs, spans, traces, and
 
 # Aspire Telemetry
 
-The server and the BFF send logs, traces, and metrics to the Aspire dashboard. Each log written with `Here()`, and each span from the telemetry helpers, has a call site. Use the call site to go from the telemetry to the code.
+The server sends logs, traces, and metrics to the Aspire dashboard. Each log written with `Here()`, and each span from the telemetry helpers, has a call site. Use the call site to go from the telemetry to the code.
 
 The design is in `docs/telemetry.md`. Read it before you change a helper or the registration.
 
@@ -23,7 +23,7 @@ The stack must be running. The `aspire-cli` skill tells how to start it. Run eac
 | Fields for a script | Add `--format Json` |
 | Console output (stdout) of a resource | `dotnet aspire logs server` |
 
-Resource names are the AppHost names, for example `server` and `bff`. Run `dotnet aspire otel logs --help` for the full flag list.
+Resource names are the AppHost names, for example `server` and `webfrontend`. Run `dotnet aspire otel logs --help` for the full flag list.
 
 The Aspire MCP tools give the same data: `list_structured_logs`, `list_traces`, `list_trace_structured_logs`, and `list_console_logs`.
 

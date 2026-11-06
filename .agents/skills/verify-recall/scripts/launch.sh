@@ -3,8 +3,8 @@
 # Usage: launch.sh [--auth-provider <Name>] [--preview] [RUN_ID]
 # The auth provider is ZeroFactor by default: a local mock IdP that signs in with one click. To test an
 # interaction with a real IdP, give its name, for example --auth-provider DuendeDemo.
-# --preview builds the SPA for production, and the BFF serves the build as a published BFF does. Then `web` is the
-# BFF URL. The Vite dev server still runs, but no recipe goes through it.
+# --preview builds the SPA for production, and the Server serves the build as a published Server does. Then `web` is
+# the Server URL. The Vite dev server still runs, but no recipe goes through it.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
@@ -53,7 +53,7 @@ echo "$RUN_ID" > "$CURRENT_FILE"
 # Poll the states instead of `aspire wait`. A resource that cannot start never gets healthy, and `aspire wait` then
 # waits its full timeout. A resource that failed to start or stopped stops the launch at once, with its logs.
 # webfrontend-installer is the only resource that stops when its work is done.
-echo "launch: waiting for server, bff, and webfrontend..."
+echo "launch: waiting for server and webfrontend..."
 deadline=$((SECONDS + 600))
 while :; do
   table="$(resource_table)"
@@ -67,10 +67,10 @@ while :; do
     echo "launch: run cleanup.sh before you launch again." >&2
     exit 1
   fi
-  healthy="$(awk -F'\t' '($1 == "server" || $1 == "bff" || $1 == "webfrontend") && $2 == "Running" && $3 == "Healthy"' <<<"$table" | wc -l)"
-  (( healthy == 3 )) && break
+  healthy="$(awk -F'\t' '($1 == "server" || $1 == "webfrontend") && $2 == "Running" && $3 == "Healthy"' <<<"$table" | wc -l)"
+  (( healthy == 2 )) && break
   if (( SECONDS >= deadline )); then
-    echo "launch: server, bff, and webfrontend are not all healthy after 600 s. The states:" >&2
+    echo "launch: server and webfrontend are not both healthy after 600 s. The states:" >&2
     echo "$table" >&2
     echo "launch: run cleanup.sh before you launch again." >&2
     exit 1
@@ -79,8 +79,6 @@ while :; do
 done
 
 web="$(web_url "$BUILD")"
-# The SPA can serve HTML before the Vite proxy reaches the BFF. Wait until the Server answers through it, so that the
-# SPA, the BFF, and the Server are all up.
 server_answered=false
 for _ in $(seq 1 60); do
   server_rejects_anonymous "$web" && { server_answered=true; break; }
@@ -97,11 +95,10 @@ jq -n \
   --arg dirty "$(git -C "$ROOT" status --porcelain | wc -l | tr -d ' ')" \
   --argjson start "$start_json" \
   --arg web "$web" \
-  --arg bff "$(url_of bff https)" \
   --arg server "$(url_of server https)" \
   '{runId: $runId, authProvider: $authProvider, build: $build, dataDirectory: $dataDirectory, gitRev: $gitRev, dirtyFiles: ($dirty | tonumber), appHostPath: $start.appHostPath,
     appHostPid: $start.appHostPid, dashboardUrl: $start.dashboardUrl,
-    urls: {web: $web, bff: $bff, server: $server}}' > "$RUN_DIR/stack.json"
+    urls: {web: $web, server: $server}}' > "$RUN_DIR/stack.json"
 
 echo "launch: ready."
 echo "RUN_DIR=$RUN_DIR"

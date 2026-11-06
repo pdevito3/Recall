@@ -7,8 +7,6 @@ namespace Recall.AppHost.AuthProviders;
 /// </summary>
 public sealed class DuendeDemoAuthProvider : IAuthProvider
 {
-    public bool TestedWithDPoP => true;
-
     public AuthProviderConfig AddTo(IDistributedApplicationBuilder builder, AuthClientUrls clientUrls) => new()
     {
         Authority = "https://demo.duendesoftware.com",

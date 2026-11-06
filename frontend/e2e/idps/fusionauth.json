@@ -13,9 +13,5 @@
     "endSession": true,
     "pushedAuthorization": false,
     "dpop": true
-  },
-  "sessionFeatures": {
-    "backChannelLogoutReachesBff": false,
-    "refreshRotation": true
   }
 }

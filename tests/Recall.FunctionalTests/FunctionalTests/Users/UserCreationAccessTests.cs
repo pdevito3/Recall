@@ -82,7 +82,7 @@ public class UserCreationAccessTests : TestBase
         var result = await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.Initiate, dto);
 
         // Assert
-        await ShouldBeForbiddenAsync(result, "You can start a tenant only for yourself.");
+        await ShouldBeForbiddenAsync(result, InitiateForbiddenDetail);
     }
 
     [Test]
@@ -96,12 +96,11 @@ public class UserCreationAccessTests : TestBase
         var result = await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.Initiate, dto);
 
         // Assert
-        await ShouldBeForbiddenAsync(result,
-            "Only a user who signs in through this app, or a trusted tenant management client, can start a tenant.");
+        await ShouldBeForbiddenAsync(result, InitiateForbiddenDetail);
     }
 
     [Test]
-    public async Task user_with_no_user_record_can_start_a_tenant_for_themselves()
+    public async Task first_party_token_cannot_start_a_tenant_for_its_own_subject()
     {
         // Arrange
         var dto = new FakeInitiateUserAndTenantDto().Generate();
@@ -111,7 +110,7 @@ public class UserCreationAccessTests : TestBase
         var result = await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.Initiate, dto);
 
         // Assert
-        result.StatusCode.ShouldBe(HttpStatusCode.Created);
+        await ShouldBeForbiddenAsync(result, InitiateForbiddenDetail);
     }
 
     [Test]
@@ -235,6 +234,8 @@ public class UserCreationAccessTests : TestBase
         // Assert
         result.StatusCode.ShouldBe(HttpStatusCode.Created);
     }
+
+    private const string InitiateForbiddenDetail = "Only a trusted tenant management client can start a tenant.";
 
     private static async Task ShouldBeForbiddenAsync(HttpResponseMessage result, string detail)
     {

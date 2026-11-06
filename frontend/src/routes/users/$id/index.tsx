@@ -66,7 +66,7 @@ function UserPage() {
       <section aria-label="Details">
         <dl className="grid max-w-md grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm wrap-anywhere">
           <dt className="text-muted-foreground">Email</dt>
-          <dd>{email}</dd>
+          <dd>{email ?? 'Not set'}</dd>
           <dt className="text-muted-foreground">Username</dt>
           <dd>{username}</dd>
           <dt className="text-muted-foreground">Role</dt>

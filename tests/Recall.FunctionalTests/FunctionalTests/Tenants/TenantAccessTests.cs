@@ -290,7 +290,7 @@ public class TenantAccessTests : TestBase
         "This client has no permissions. It can read only the data that needs no permission.";
 
     private const string AddTenantForbiddenDetail =
-        "Only a trusted tenant management client can add a tenant. A user starts their own tenant with POST /api/v1/users/initiate.";
+        "Only a trusted tenant management client can add a tenant.";
 
     private void SignInAsReadOnlyMachineClient()
         => FactoryClient.SetFakeBearerToken(new Dictionary<string, object>

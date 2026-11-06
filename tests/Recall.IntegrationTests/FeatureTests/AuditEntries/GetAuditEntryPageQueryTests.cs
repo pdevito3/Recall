@@ -166,7 +166,7 @@ public class GetAuditEntryPageQueryTests : TestBase
             await scope.ExecuteDbContextAsync(async db =>
             {
                 var user = await db.Users.SingleAsync(u => u.Id == userId);
-                user.UpdateFromIdp(firstName, user.LastName, user.Email, user.Username);
+                user.UpdateFromIdp(firstName, user.LastName, user.Email?.Value, user.Username);
                 return await db.SaveChangesAsync();
             });
         }

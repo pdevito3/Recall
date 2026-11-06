@@ -190,10 +190,15 @@ public async Task<UserDto> Handle(Command request, CancellationToken cancellatio
     var newRole = UserRole.Of(request.Role);
     Activity.Current?.SetTag("app.user.role", newRole.Value);
     // ...
-    var oldRole = user.Role;
-    user.UpdateRole(newRole);
-    // ...
-    await dbContext.SaveChangesAsync(cancellationToken);
+    var (user, oldRole) = await LastAdmin.RunWithTenantLockAsync(dbContext, request.Id, async ct =>
+    {
+        // ...
+        var oldRole = user.Role;
+        user.UpdateRole(newRole);
+        // ...
+        await dbContext.SaveChangesAsync(ct);
+        return (user, oldRole);
+    }, cancellationToken);
 
     if (newRole != oldRole)
     {

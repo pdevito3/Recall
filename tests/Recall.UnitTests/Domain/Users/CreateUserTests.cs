@@ -22,7 +22,7 @@ public class CreateUserTests
         user.FirstName.ShouldBe(userForCreation.FirstName);
         user.LastName.ShouldBe(userForCreation.LastName);
         user.Identifier.ShouldBe(userForCreation.Identifier);
-        user.Email.Value.ShouldBe(userForCreation.Email);
+        user.Email!.Value.ShouldBe(userForCreation.Email);
         user.Username.ShouldBe(userForCreation.Username);
     }
 
@@ -41,6 +41,21 @@ public class CreateUserTests
 
         // Assert
         act.ShouldThrow<ValidationException>().Message.ShouldBe("Please provide a valid email.");
+    }
+
+    [Test]
+    public void can_create_user_with_no_email_and_no_last_name()
+    {
+        // Arrange
+        var userForCreation = new FakeUserForCreation().Generate() with { Email = null, LastName = null, FirstName = "Mina" };
+
+        // Act
+        var user = User.Create(userForCreation);
+
+        // Assert
+        user.Email.ShouldBeNull();
+        user.LastName.ShouldBeNull();
+        user.FullName.ShouldBe("Mina");
     }
 
     public static IEnumerable<(string?, string)> InvalidTenantIds =>

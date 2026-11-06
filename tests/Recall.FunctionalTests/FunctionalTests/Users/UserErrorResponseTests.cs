@@ -101,7 +101,7 @@ public class UserErrorResponseTests : TestBase
     {
         // Arrange
         var dto = new FakeInitiateUserAndTenantDto().RuleFor(x => x.TenantName, _ => "").Generate();
-        FactoryClient.SignInAsAppUser(dto.Identifier);
+        FactoryClient.SignInAsTrustedMachineClient();
 
         // Act
         var result = await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.Initiate, dto);
@@ -119,7 +119,7 @@ public class UserErrorResponseTests : TestBase
         TestGraph.Start(out _).AddTenant(out var tenant);
         await InsertAsync(tenant);
         var dto = new FakeInitiateUserAndTenantDto().RuleFor(x => x.TenantName, _ => tenant.Name).Generate();
-        FactoryClient.SignInAsAppUser(dto.Identifier);
+        FactoryClient.SignInAsTrustedMachineClient();
 
         // Act
         var result = await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.Initiate, dto);

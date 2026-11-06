@@ -29,7 +29,7 @@ public static class InitiateUserAndTenant
 
         public async Task<InitiateUserAndTenantResponseDto> Handle(Command request, CancellationToken cancellationToken)
         {
-            var managesAllTenants = await GuardCallerCanInitiateForAsync(request.Dto.Identifier, cancellationToken);
+            await GuardCallerManagesAllTenantsAsync(cancellationToken);
 
             // Create tenant first
             var tenantForCreation = new TenantForCreation { Name = request.Dto.TenantName };
@@ -93,32 +93,18 @@ public static class InitiateUserAndTenant
             // Ids only: the names and the email in the request are personal data.
             _logger.Here().Information("Created tenant {TenantId} for new user {UserId}", tenant.Id, user.Id);
 
-            // The caller is a client that manages all tenants, or the new user, who has a user record only now
-            Caller caller = managesAllTenants
-                ? Caller.AllTenantsManager.Instance
-                : new Caller.Member(user.Id, user.UserPermissions.Select(p => p.Permission));
             return new InitiateUserAndTenantResponseDto
             {
                 Tenant = tenant.ToTenantDto(),
-                User = user.ToUserDto(caller)
+                User = user.ToUserDto(Caller.AllTenantsManager.Instance)
             };
         }
 
-        /// <returns>True when the caller manages all tenants. False when the caller starts a tenant for itself.</returns>
-        private async Task<bool> GuardCallerCanInitiateForAsync(string identifier, CancellationToken cancellationToken)
+        private async Task GuardCallerManagesAllTenantsAsync(CancellationToken cancellationToken)
         {
             var caller = await callerIdentityResolver.GetAsync(cancellationToken);
-            if (caller.CanManageAllTenants)
-                return true;
-
-            if (caller is not CallerIdentity.User user)
-                throw new ForbiddenAccessException(
-                    "Only a user who signs in through this app, or a trusted tenant management client, can start a tenant.");
-
-            if (user.Subject != identifier)
-                throw new ForbiddenAccessException("You can start a tenant only for yourself.");
-
-            return false;
+            if (!caller.CanManageAllTenants)
+                throw new ForbiddenAccessException("Only a trusted tenant management client can start a tenant.");
         }
     }
 }

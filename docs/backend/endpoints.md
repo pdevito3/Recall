@@ -27,7 +27,7 @@ The reason for this layout is in [ADR 0002](../adr/0002-colocate-entrypoints-wit
 
 Do these steps for each new feature:
 
-1. Find the callers of the feature. The SPA uses HTTP through the BFF. A service client can use HTTP or gRPC. An AI agent uses MCP.
+1. Find the callers of the feature. The SPA uses HTTP. A service client can use HTTP or gRPC. An AI agent uses MCP.
 2. If you do not know the callers, ask. Do not add an adapter because other features have one.
 3. Add one file for each transport that a caller needs: [HTTP](#http), [gRPC](#grpc), or [MCP](#mcp).
 4. If no caller is outside the Server, add no adapter.

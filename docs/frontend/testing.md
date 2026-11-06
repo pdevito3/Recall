@@ -6,10 +6,10 @@ The frontend has four test suites. Put a test in the lowest suite that can prove
 |-------|---------|--------|-------|----------------|
 | unit | `pnpm test` | Vitest in Node | `src/**/*.test.ts`, `e2e/*.test.ts` | Pure rules and shapes. No React, no network. |
 | component | `pnpm test` | Vitest browser mode in Chromium | `src/**/*.test.tsx` | One component in a real browser. |
-| functional | `pnpm test:e2e` | Playwright | `tests/features/**/*.spec.ts` | A real page of the SPA against a mocked BFF. |
+| functional | `pnpm test:e2e` | Playwright | `tests/features/**/*.spec.ts` | A real page of the SPA against a mocked Server. |
 | stack | `pnpm test:e2e:stack` | Playwright | `e2e/*.spec.ts` | The login flows against a live Aspire stack and a real IdP. See [authentication.md](../authentication.md). |
 
-CI runs the unit, component, and functional suites on each pull request. CI runs the stack suite when the `changes` job finds a change on the login path: the BFF, the AppHost, the SPA, or the stack suite. See the `bff` filter in `.github/workflows/ci.yml`.
+CI runs the unit, component, and functional suites on each pull request. CI runs the stack suite when the `changes` job finds a change on the login path: the Server login, the AppHost, the SPA, or the stack suite. See the `stack` filter in `.github/workflows/ci.yml`.
 
 ## The component suite
 
@@ -32,7 +32,7 @@ When a component test fails in CI, open the `.vitest/attachments/` folder in the
 
 ## The functional suite
 
-`pnpm test:e2e` starts the Vite dev server on a free port. Then it runs the specs in Chromium. No BFF, Server, or IdP runs. The suite mocks each request to `/api/*` and `/bff/*` in the browser with `page.route`. The hooks, the components, the generated clients, and `apiClient` all run.
+`pnpm test:e2e` starts the Vite dev server on a free port. Then it runs the specs in Chromium. No Server or IdP runs. The suite mocks each request to `/api/*` and `/bff/*` in the browser with `page.route`. The hooks, the components, the generated clients, and `apiClient` all run.
 
 ```
 frontend/

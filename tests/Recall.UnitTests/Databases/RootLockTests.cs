@@ -120,6 +120,39 @@ public class RootLockTests
     }
 
     [Test]
+    public async Task the_install_lock_can_run_inside_the_lock_of_a_tenant_and_each_lock_is_free_after()
+    {
+        // Arrange
+        await using var dbContext = new AppDbContextFactory().CreateDbContext([]);
+        var (tenant, install) = (NewRoot(), NewRoot());
+
+        // Act
+        await RootLock.Tenant.RunExclusiveAsync(dbContext, tenant,
+            _ => RootLock.Install.RunExclusiveAsync(dbContext, install, _ => Task.FromResult(true), CancellationToken.None),
+            CancellationToken.None);
+        var again = await RootLock.Install.RunExclusiveAsync(dbContext, install, _ => Task.FromResult(true), CancellationToken.None);
+
+        // Assert
+        again.ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task the_lock_of_a_tenant_inside_the_install_lock_is_refused()
+    {
+        // Arrange
+        await using var dbContext = new AppDbContextFactory().CreateDbContext([]);
+        var (tenant, install) = (NewRoot(), NewRoot());
+
+        // Act
+        var act = () => RootLock.Install.RunExclusiveAsync(dbContext, install,
+            _ => RootLock.Tenant.RunExclusiveAsync(dbContext, tenant, _ => Task.FromResult(true), CancellationToken.None),
+            CancellationToken.None);
+
+        // Assert
+        (await Should.ThrowAsync<InvalidOperationException>(act)).Message.ShouldContain("already holds a root lock");
+    }
+
+    [Test]
     public async Task a_second_lock_in_one_request_is_refused()
     {
         // Arrange

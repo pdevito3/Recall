@@ -11,12 +11,27 @@ using Shouldly;
 public class InitiateUserAndTenantCommandTests : TestBase
 {
     [Test]
-    public async Task user_with_no_user_record_can_start_a_tenant_for_themselves()
+    public async Task user_with_no_user_record_cannot_start_a_tenant_for_themselves()
     {
         // Arrange
         var testingServiceScope = new TestingServiceScope();
         var dto = new FakeInitiateUserAndTenantDto().Generate();
         testingServiceScope.SetUserWithDefaults(identifier: dto.Identifier);
+
+        // Act
+        var act = () => testingServiceScope.SendAsync(new InitiateUserAndTenant.Command(dto));
+
+        // Assert
+        await act.ShouldThrowAsync<ForbiddenAccessException>();
+    }
+
+    [Test]
+    public async Task trusted_client_can_start_a_tenant_for_a_new_identifier()
+    {
+        // Arrange
+        var testingServiceScope = new TestingServiceScope();
+        var dto = new FakeInitiateUserAndTenantDto().Generate();
+        testingServiceScope.SetMachineClient(TestFixture.TrustedMachineClientId);
 
         // Act
         var result = await testingServiceScope.SendAsync(new InitiateUserAndTenant.Command(dto));
@@ -35,7 +50,7 @@ public class InitiateUserAndTenantCommandTests : TestBase
         // Arrange
         var testingServiceScope = new TestingServiceScope();
         var dto = new FakeInitiateUserAndTenantDto().Generate() with { Role = "Admin" };
-        testingServiceScope.SetUserWithDefaults(identifier: dto.Identifier);
+        testingServiceScope.SetMachineClient(TestFixture.TrustedMachineClientId);
 
         // Act
         var result = await testingServiceScope.SendAsync(new InitiateUserAndTenant.Command(dto));
@@ -60,10 +75,11 @@ public class InitiateUserAndTenantCommandTests : TestBase
     }
 
     [Test]
-    public async Task user_with_a_user_record_cannot_start_another_tenant()
+    public async Task identifier_with_a_user_record_cannot_start_another_tenant()
     {
         // Arrange
         var testingServiceScope = new TestingServiceScope();
+        testingServiceScope.SetMachineClient(TestFixture.TrustedMachineClientId);
         var dto = new FakeInitiateUserAndTenantDto()
             .RuleFor(x => x.Identifier, _ => TestFixture.DefaultUser.Identifier)
             .Generate();
@@ -87,7 +103,6 @@ public class InitiateUserAndTenantCommandTests : TestBase
             .AddUser(out var user)
             .BuildAsync();
         await testingServiceScope.SendAsync(new DeleteTenant.Command(tenant.Id));
-        testingServiceScope.SetUserWithDefaults(identifier: user.Identifier);
         var dto = new FakeInitiateUserAndTenantDto()
             .RuleFor(x => x.Identifier, _ => user.Identifier)
             .Generate();

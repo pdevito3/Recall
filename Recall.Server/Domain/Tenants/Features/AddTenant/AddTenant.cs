@@ -24,11 +24,10 @@ public static class AddTenant
         {
             // A new tenant is outside the scope of each user, so only a caller that can manage all tenants
             // can add one: a trusted tenant management client, or system work in a system scope.
-            // A user starts their own tenant with InitiateUserAndTenant.
             var caller = await permissionGuard.GetCallerAsync(cancellationToken);
             if (!caller.ManagesAllTenants)
                 throw new ForbiddenAccessException(
-                    "Only a trusted tenant management client can add a tenant. A user starts their own tenant with POST /api/v1/users/initiate.");
+                    "Only a trusted tenant management client can add a tenant.");
 
             var forCreation = request.Dto.ToTenantForCreation();
             var tenant = Tenant.Create(forCreation);

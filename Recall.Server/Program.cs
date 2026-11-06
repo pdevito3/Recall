@@ -1,4 +1,6 @@
 using System.Globalization;
+using Microsoft.AspNetCore.HttpOverrides;
+using Recall.Server;
 using Recall.Server.Databases;
 using Recall.Server.Resources;
 using Recall.Server.Resources.Entrypoints;
@@ -6,6 +8,8 @@ using Recall.Server.Resources.Entrypoints.Http.OpenApi;
 using Recall.Server.Resources.Extensions;
 using Serilog;
 using Serilog.Events;
+
+OwnerOnlyFiles.ApplyUmask();
 
 // Bootstrap logger to catch startup errors before host is built
 Log.Logger = new LoggerConfiguration()
@@ -29,6 +33,12 @@ try
     OpenApiBuildTime.RemoveHostedServices(builder.Services);
 
     var app = builder.Build();
+    OwnerOnlyFiles.TightenAtStartup(app.Configuration);
+
+    var forwardedHeaders = new ForwardedHeadersOptions { ForwardedHeaders = ForwardedHeaders.XForwardedProto };
+    forwardedHeaders.KnownIPNetworks.Clear();
+    forwardedHeaders.KnownProxies.Clear();
+    app.UseForwardedHeaders(forwardedHeaders);
 
     app.UseSerilogRequestLogging(options =>
     {

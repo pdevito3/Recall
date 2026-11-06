@@ -58,47 +58,43 @@ const failOverFirstPageBudget: Plugin = {
   },
 }
 
-// Aspire sets it. The Vitest server has no BFF, so it proxies nothing.
-const bffTarget = process.env.BFF_HTTPS || process.env.BFF_HTTP
-const bffTimeoutMs = 30_000
+const serverTarget = process.env.SERVER_HTTP
+const serverTimeoutMs = 30_000
 
-class BffTimeoutError extends Error {}
+class ServerTimeoutError extends Error {}
 
-const failStalledBffRequests: ProxyOptions['configure'] = (proxy) => {
-  // Use a plain timer. Node fires a socket timeout late while a TLS
-  // handshake stalls, and the BFF runs on HTTPS.
+const failStalledServerRequests: ProxyOptions['configure'] = (proxy) => {
   proxy.on('proxyReq', (proxyReq, req) => {
     const timer = setTimeout(() => {
       proxyReq.destroy(
-        new BffTimeoutError(
-          `The BFF did not answer ${req.method} ${req.url} in ${bffTimeoutMs / 1000} s.`,
+        new ServerTimeoutError(
+          `The Server did not answer ${req.method} ${req.url} in ${serverTimeoutMs / 1000} s.`,
         ),
       )
-    }, bffTimeoutMs)
+    }, serverTimeoutMs)
     proxyReq.on('response', () => clearTimeout(timer))
     proxyReq.on('close', () => clearTimeout(timer))
   })
   proxy.on('error', (err, _req, res) => {
-    if (err instanceof BffTimeoutError && 'req' in res && !res.headersSent) {
+    if (err instanceof ServerTimeoutError && 'req' in res && !res.headersSent) {
       res.writeHead(504, { 'Content-Type': 'text/plain' }).end(err.message)
     }
   })
 }
 
-// The paths that the dev server sends to the BFF: the BFF endpoints (login, logout, user), the API, and the OIDC callbacks.
-const bffPaths = ['/bff', '/api', '/signin-oidc', '/signout-callback-oidc']
+const serverPaths = ['/auth/', '/api', '/bff']
 
-// With no BFF, Vite answers each path with its index.html, so a request of the app gets HTML and no error.
+// With no Server, Vite answers each path with its index.html, so a request of the app gets HTML and no error.
 
-const failBffRequestsWithNoBff: Plugin = {
-  name: 'fail-bff-requests-with-no-bff',
-  apply: (_, { command }) => command === 'serve' && !bffTarget,
+const failServerRequestsWithNoServer: Plugin = {
+  name: 'fail-server-requests-with-no-server',
+  apply: (_, { command }) => command === 'serve' && !serverTarget,
   configureServer(server) {
     server.middlewares.use((req, res, next) => {
-      if (!bffPaths.some((path) => req.url?.startsWith(path))) return next()
+      if (!serverPaths.some((path) => req.url?.startsWith(path))) return next()
       res.writeHead(502, { 'Content-Type': 'text/plain' }).end(
-        `The dev server has no BFF, so nothing answers ${req.method} ${req.url}. ` +
-          'Start the app with Aspire, or set BFF_HTTPS or BFF_HTTP. In a test, answer the request.',
+        `The dev server has no Server, so nothing answers ${req.method} ${req.url}. ` +
+          'Start the app with Aspire, or set SERVER_HTTP. In a test, answer the request.',
       )
     })
   },
@@ -117,7 +113,7 @@ export default defineConfig({
       },
     }),
     failOverFirstPageBudget,
-    failBffRequestsWithNoBff,
+    failServerRequestsWithNoServer,
   ],
   build: {
     rollupOptions: {
@@ -191,9 +187,9 @@ export default defineConfig({
     ],
   },
   server: {
-    proxy: bffTarget
+    proxy: serverTarget
       ? Object.fromEntries(
-          bffPaths.map((path) => [path, { target: bffTarget, changeOrigin: true, secure: false, configure: failStalledBffRequests }]),
+          serverPaths.map((path) => [path, { target: serverTarget, changeOrigin: false, configure: failStalledServerRequests }]),
         )
       : undefined,
   },

@@ -4,10 +4,6 @@ namespace Recall.AppHost.AuthProviders;
 /// Creates a configuration for 0factor running locally in Docker. 0factor is a mock OIDC provider with no passwords:
 /// the login page lists the users, and a click signs in as that user. It reads Keycloak realm exports and gives
 /// Keycloak URLs and token shapes. See https://github.com/c4l3b/0factor.
-/// Test users: admin@example.com (roles admin and user) and user@example.com (role user). The seed gives them the same
-/// IDs as the Keycloak seed, so the sub claim, and with it User.Identifier in the app database, stays the same when you
-/// change between Keycloak and ZeroFactor. To sign in as a user from another provider, register it on the login page
-/// and enter its sub as the User ID. Manage the users at /_0factor/realms/aspire on the zerofactor endpoint.
 /// The realm is lenient: it accepts any redirect URI, so the seed needs no app URLs.
 /// Agent clients: fleet-sync gets a client_credentials token for its hidden service account, for a machine agent.
 /// clinic-assistant is a public client that gets a token for a test user with the password grant and any password, for
@@ -23,7 +19,7 @@ public sealed class ZeroFactorAuthProvider : IAuthProvider
             throw new InvalidOperationException(
                 $"{nameof(ZeroFactorAuthProvider)} is for local development only. Select another AuthProvider to publish or deploy.");
 
-        const string realmName = "aspire";
+        const string realmName = "recall";
         const string clientId = "aspire-app";
 
         var zeroFactor = builder.AddContainer("zerofactor", "c4l3b/0factor", "0.1.8")

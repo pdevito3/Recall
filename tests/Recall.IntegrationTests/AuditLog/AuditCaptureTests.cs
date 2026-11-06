@@ -76,7 +76,7 @@ public class AuditCaptureTests : TestBase
         var updated = (await EntriesOfRootAsync(user.Id)).Single(e => e.Kind == AuditEntryKind.Updated);
         Paths(updated).ShouldBe(["FirstName", "Email"], ignoreOrder: true);
         ChangeOf(updated, "FirstName").ShouldBe(new Change(HasOld: true, Old: user.FirstName, New: $"{user.FirstName}x"));
-        ChangeOf(updated, "Email").ShouldBe(new Change(HasOld: true, Old: user.Email.Value, New: newEmail));
+        ChangeOf(updated, "Email").ShouldBe(new Change(HasOld: true, Old: user.Email!.Value, New: newEmail));
         updated.RequestName.ShouldBe("UpdateUser.Command");
         updated.TraceId.ShouldBe(trace.TraceId.ToHexString());
     }
@@ -304,7 +304,7 @@ public class AuditCaptureTests : TestBase
         var user = await db.Users.SingleAsync(u => u.Id == admin.Id);
 
         // Act
-        user.UpdateFromIdp($"{user.FirstName}x", user.LastName, user.Email, user.Username);
+        user.UpdateFromIdp($"{user.FirstName}x", user.LastName, user.Email?.Value, user.Username);
         await db.SaveChangesAsync();
 
         // Assert

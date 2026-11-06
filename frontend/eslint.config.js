@@ -469,6 +469,19 @@ export default tseslint.config(
     },
   },
   {
+    files: ['src/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-properties': [
+        'error',
+        {
+          object: 'crypto',
+          property: 'randomUUID',
+          message: 'This is undefined on http://LAN-IP, which is not a secure context. Use crypto.getRandomValues.',
+        },
+      ],
+    },
+  },
+  {
     files: ['src/**/*.keys.ts'],
     rules: { 'server-state/key-has-each-param': 'error' },
   },
