@@ -38,6 +38,8 @@ export async function logout(): Promise<void> {
 export function useLogout() {
   return useMutation({
     mutationFn: logout,
+    // By default a mutation waits with no sign while the browser has no network, and the logout must ask about unsent words now.
+    networkMode: 'always',
     onError: () => Notification.error('You are still signed in, because the sign-out did not finish. Try again.'),
   })
 }

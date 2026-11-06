@@ -117,7 +117,9 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
           onSubmit={() => saver.flush()}
           toolbar={(editor) => <EditorToolbar editor={editor} />}
         />
-        <SaveStatusLine status={shownStatusOf(snapshot)} zone={zone} />
+        <div className="sticky bottom-0 z-10 bg-background py-2">
+          <SaveStatusLine status={shownStatusOf(snapshot)} zone={zone} />
+        </div>
       </section>
       <SessionHistory
         sessionId={session.id}

@@ -134,6 +134,29 @@ test.describe('words that the Server refused', () => {
     expect(api.all('put', sessionsPaths.rawDraft(session.id))).toHaveLength(1)
   })
 
+  test('on an entry longer than the screen, the reason stays in view', async ({ page, api }) => {
+    const session = aSession().saying(...Array.from({ length: 120 }, (_, line) => `Line ${line}`)).build()
+    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveIsRefused(session, aProblem().refusing('This text is too long.')))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+
+    await entry.edit(session.id, ' more')
+
+    await expect(entry.at.status('Not saved. This text is too long.')).toBeInViewport()
+  })
+
+  test('in a composer longer than the screen, the reason and Done stay in view', async ({ page, api }) => {
+    const session = aSession().build()
+    api.mock(sessionsApi.creates(session), sessionsApi.draftSaveIsRefused(session, aProblem().refusing('This text is too long.')))
+    const journal = journalPage(page)
+    await journal.open()
+
+    await journal.typeWithoutWaiting('A line\n'.repeat(60))
+
+    await expect(journal.at.status('Not saved. This text is too long.')).toBeInViewport()
+    await expect(journal.at.done).toBeInViewport()
+  })
+
   test('with no page open, a notice gives the reason, the words, and a copy, and the discard removes them', async ({ page, context }) => {
     const unsent = unsentWords(page)
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])
@@ -314,6 +337,24 @@ test.describe('a logout', () => {
     expect(wordsOf(api.last('put', sessionsPaths.rawDraft(session.id)))).toContain('Words at the last moment')
     expect(await unsent.keys()).toEqual([])
     expect(await unsent.composerPointer()).toBeNull()
+  })
+
+  test('with the browser offline asks at once, and goes on when the network returns', async ({ page, api }) => {
+    const unsent = unsentWords(page)
+    const session = aSession().build()
+    api.mock(signInPage, logoutWorks, sessionsApi.creates(session), sessionsApi.draftSaveHasNoReply(session))
+    const journal = journalPage(page)
+    await journal.open()
+
+    await page.context().setOffline(true)
+    await journal.typeWithoutWaiting('Words with no network')
+    await unsent.logOut()
+
+    await expect(unsent.at.logoutDialog).toBeVisible()
+    await page.context().setOffline(false)
+    await unsent.answerTheLogoutDialog('Keep words and sign out')
+    await unsent.reachTheSignedOutPage()
+    expect(await unsent.keys()).toHaveLength(1)
   })
 
   for (const { choice, stays } of [{ choice: 'Keep words and sign out', stays: true }, { choice: 'Discard words and sign out', stays: false }]) {
