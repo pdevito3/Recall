@@ -33,10 +33,17 @@ In a process run, the folders are beside the database that `ConnectionStrings__a
 
 ## The server stops at startup
 
+The server writes the cause to its console, and not to a file, because the data folder may not take a file. Run `docker compose logs` to read the console of the image.
+
 | The line | The cause | What to do |
 |---|---|---|
-| `The folder <path> does not take a write...` | The account of the server cannot write to the data folder, or the volume is read-only. | Mount the volume for writing, and give its owner to the account of the server. Then start the server again. |
-| The file store logs `did not finish` | A write to the file store hung. The disk or the network share is the likely cause. | Check the disk. When a write finishes, the server logs `takes writes again`, and you do not need to restart it. |
+| `The data directory <path> is not writable...` | The account of the server cannot write to the data folder, or the volume is read-only. | Mount the volume for writing, and give its owner to the account of the server. Then start the server again. |
+
+## The file store hangs
+
+The server keeps running when a write to the file store hangs. It logs `did not finish` at the level `Error`. The disk or the network share is the likely cause.
+
+Check the disk. When the write finishes, the server logs `takes writes again`, and you do not need to restart it.
 
 ## The disk is full
 
