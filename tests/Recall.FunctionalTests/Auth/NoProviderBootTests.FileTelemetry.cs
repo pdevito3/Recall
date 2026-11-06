@@ -51,6 +51,29 @@ public partial class NoProviderBootTests
     }
 
     [Test]
+    public async Task the_default_limits_keep_a_metric_file_for_each_of_14_days()
+    {
+        // Arrange
+        var root = Path.Combine(Path.GetTempPath(), $"recall_boot_{Guid.NewGuid():N}");
+        var telemetry = Path.Combine(root, "data", "telemetry");
+        Directory.CreateDirectory(telemetry);
+        var today = TimeProvider.System.GetLocalNow().Date;
+        string FileOf(int daysAgo) => $"metrics-{today.AddDays(-daysAgo):yyyyMMdd}.jsonl";
+        for (var daysAgo = 1; daysAgo <= 20; daysAgo++)
+            await File.WriteAllTextAsync(Path.Combine(telemetry, FileOf(daysAgo)), "{}\n");
+
+        // Act
+        await using var server = await ServerProcess.StartAsync(root, new Dictionary<string, string>
+        {
+            ["FileTelemetry__MetricExportSeconds"] = "1",
+        });
+        await FirstLineAsync(telemetry, FileOf(0), _ => true);
+
+        // Assert
+        Directory.GetFiles(telemetry, "metrics-*").Select(Path.GetFileName).Order().ShouldBe(Enumerable.Range(0, 14).Select(FileOf).Order());
+    }
+
+    [Test]
     public async Task a_file_that_cannot_roll_gives_one_warning_for_each_file_on_the_console_and_the_console_keeps_each_log()
     {
         // Arrange

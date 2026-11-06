@@ -48,17 +48,17 @@ Check the disk. When the write finishes, the server logs `takes writes again`, a
 
 ## The disk is full
 
-The server keeps its logs and its telemetry to about 450 MiB, and a full disk does not stop a request by itself. The database and the file store still need room, so a save fails with an error at the caller. Do these steps:
+The server keeps its logs and its telemetry to about 460 MiB, and a full disk does not stop a request by itself. The database and the file store still need room, so a save fails with an error at the caller. Do these steps:
 
 1. Run `df -h /data` and `du -sh /data/*` to find what holds the space.
 2. Make room on the volume. You can delete old files in `/data/logs` and `/data/telemetry` while the server runs. Do not delete `recall.db`, its `-wal` file, or the `keys` folder.
 
 ## The log files stop
 
-When a log or telemetry file cannot take a line, the console shows the warning `A file sink failed for <file>`, with the cause. It shows one warning for each file in each 30 minutes. The console keeps each log during the fault, so `docker compose logs` stays complete, if Docker keeps its own logs on a volume with room. The file loses the lines of the fault.
+When a log or telemetry file cannot take a line, the console shows a warning with the text `A file sink failed`, and with the fields `File` and `Cause`. It shows one warning for each file in each 30 minutes. The console keeps each log during the fault, so `docker compose logs` stays complete, if Docker keeps its own logs on a volume with room. The file loses the lines of the fault.
 
 - A write that fails on a full disk stops when the disk has room again. The next line goes to the file.
-- A file that cannot open, for example at a roll or at the first line of a day, stays silent for 30 minutes from that failure. This is also true when the disk has room again before that time.
+- A file that cannot open, for example at a roll or at the first line of a day, stays silent for up to 30 minutes from that failure. This is also true when the disk has room again before that time.
 
 To get the files back at once, start the server again. The server keeps each file that it wrote before the fault.
 
@@ -74,8 +74,8 @@ The zip has these entries:
 
 | Entry | Content |
 |---|---|
-| `logs/` | Each log file |
-| `telemetry/` | Each trace file and metric file |
+| `logs/` | Each log file that holds a line |
+| `telemetry/` | Each trace file and metric file that holds a line |
 | `version.json` | The version, the runtime, the operating system, the environment, and each file or folder that the server could not read |
 | `settings.json` | The name of each setting that Recall reads. Only a value that cannot be a secret is shown, and each other value is `[redacted]` |
 
