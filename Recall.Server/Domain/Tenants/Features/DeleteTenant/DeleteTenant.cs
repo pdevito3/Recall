@@ -2,7 +2,9 @@ namespace Recall.Server.Domain.Tenants.Features;
 
 using System.Diagnostics;
 using Databases;
+using Databases.Sqlite;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using Resources;
 using Resources.Storage;
 using Serilog;
@@ -40,7 +42,9 @@ public static class DeleteTenant
                 return rows.CountBy(row => row.GetType().Name).ToDictionary();
             }, cancellationToken);
 
-            _logger.Here().Information("Deleted tenant {TenantId} and its rows {@DeletedCounts}", request.Id, deletedCounts);
+            var scrubbed = await WalScrub.TryTruncateAsync(dbContext.Database.GetConnectionString()!, cancellationToken);
+            Activity.Current?.SetTag("app.tenant.wal_scrubbed", scrubbed);
+            _logger.Here().Information("Deleted tenant {TenantId} and its rows {@DeletedCounts}, WAL scrubbed {WalScrubbed}", request.Id, deletedCounts, scrubbed);
 
             TryDeleteFilesOfTenant(request.Id);
         }

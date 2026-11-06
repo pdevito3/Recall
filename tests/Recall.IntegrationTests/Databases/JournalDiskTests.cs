@@ -2,73 +2,188 @@ namespace Recall.IntegrationTests.Databases;
 
 using System.Text;
 using Microsoft.Data.Sqlite;
-using Recall.Server.Databases.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Recall.Server.Databases;
+using Recall.Server.Domain.Corrections.Dtos;
+using Recall.Server.Domain.Corrections.Features;
 using Recall.Server.Domain.Sessions.Dtos;
 using Recall.Server.Domain.Sessions.Features;
+using Recall.Server.Domain.Tenants;
+using Recall.Server.Domain.Tenants.Features;
+using Recall.Server.Domain.Users;
+using Recall.Server.Domain.Users.Features;
+using Recall.SharedTestHelpers.EntityGraphs;
+using Recall.SharedTestHelpers.Utilities;
 using Shouldly;
 
-public class JournalDiskTests : TestBase
+// Each test has a database of its own and a quiet server, and it runs no checkpoint. So the handler alone takes the
+// words out of the WAL, and a test that shares a database with other tests could not tell.
+public class JournalDiskTests
 {
-    private const int MaxCheckpoints = 200;
-    private static readonly TimeSpan CheckpointGap = TimeSpan.FromMilliseconds(250);
+    private static readonly string Words = string.Concat(Enumerable.Repeat("spoken words ", 500));
 
     [Test]
     [Property("Rule", "SES-27")]
-    public async Task after_a_delete_the_words_are_not_in_the_database_file_or_the_wal()
+    public async Task after_a_delete_of_a_session_the_words_are_not_in_the_database_file_or_the_wal()
     {
         // Arrange
+        await using var server = await QuietServer.StartAsync();
         var marker = $"DISKMARKER{Guid.NewGuid():N}";
-        var words = string.Concat(Enumerable.Repeat(marker + " ", 500));
-        var scope = new TestingServiceScope();
-        var created = await scope.SendAsync(new AddSession.Command(new SessionForCreationDto
-        {
-            ClientSessionId = Guid.NewGuid().ToString(),
-            StartedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
-        }));
-        await scope.SendAsync(new SaveRawDraft.Command(created.Session.Id, new DraftSaveDto
-        {
-            Text = words,
-            BaseRevision = 0,
-            SavedAt = DateTimeOffset.UtcNow.AddMinutes(-1),
-        }));
-        var path = new SqliteConnectionStringBuilder(TestFixture.UnpooledConnectionString).DataSource;
-        (await FilesHoldAsync(path, marker)).ShouldBeTrue();
+        var session = await server.SaveWordsAsync(marker);
+        server.FilesHold(marker).ShouldBeTrue();
 
         // Act
-        await new TestingServiceScope().SendAsync(new DeleteSession.Command(created.Session.Id));
-        await CheckpointUntilFreeAsync();
+        await server.AsOwner().SendAsync(new DeleteSession.Command(session));
 
         // Assert
-        (await FilesHoldAsync(path, marker)).ShouldBeFalse();
+        server.FilesHold(marker).ShouldBeFalse();
     }
 
-    private static async Task CheckpointUntilFreeAsync()
+    [Test]
+    [Property("Rule", "SES-27")]
+    public async Task after_a_delete_of_a_correction_the_words_are_not_in_the_database_file_or_the_wal()
     {
-        for (var i = 0; i < MaxCheckpoints; i++)
+        // Arrange
+        await using var server = await QuietServer.StartAsync();
+        var marker = $"DISKMARKER{Guid.NewGuid():N}";
+        var scope = server.AsOwner();
+        var correction = await scope.SendAsync(new AddCorrection.Command(new CorrectionForCreationDto { CanonicalTerm = marker, Mishearings = [$"heard {marker}"] }));
+        server.FilesHold(marker).ShouldBeTrue();
+
+        // Act
+        await server.AsOwner().SendAsync(new DeleteCorrection.Command(correction.Id));
+
+        // Assert
+        server.FilesHold(marker).ShouldBeFalse();
+    }
+
+    [Test]
+    [Property("Rule", "SES-27")]
+    public async Task after_a_delete_of_a_user_the_words_are_not_in_the_database_file_or_the_wal()
+    {
+        // Arrange
+        await using var server = await QuietServer.StartAsync();
+        var marker = $"DISKMARKER{Guid.NewGuid():N}";
+        await server.SaveWordsAsync(marker);
+        server.FilesHold(marker).ShouldBeTrue();
+
+        // Act
+        await server.AsAdmin().SendAsync(new DeleteUser.Command(server.Owner.Id));
+
+        // Assert
+        server.FilesHold(marker).ShouldBeFalse();
+    }
+
+    [Test]
+    [Property("Rule", "SES-27")]
+    public async Task after_a_delete_of_a_tenant_the_words_are_not_in_the_database_file_or_the_wal()
+    {
+        // Arrange
+        await using var server = await QuietServer.StartAsync();
+        var marker = $"DISKMARKER{Guid.NewGuid():N}";
+        await server.SaveWordsAsync(marker);
+        server.FilesHold(marker).ShouldBeTrue();
+
+        // Act
+        await server.AsAdmin().SendAsync(new DeleteTenant.Command(server.Tenant.Id));
+
+        // Assert
+        server.FilesHold(marker).ShouldBeFalse();
+    }
+
+    private sealed class QuietServer : IAsyncDisposable
+    {
+        private readonly SqliteTestDatabase _database;
+        private readonly ServiceProvider _services;
+
+        private QuietServer(SqliteTestDatabase database, ServiceProvider services, Tenant tenant, User admin, User owner)
         {
-            if (await WalScrub.TryTruncateAsync(TestFixture.UnpooledConnectionString, CancellationToken.None))
-                return;
-            await Task.Delay(CheckpointGap);
+            _database = database;
+            _services = services;
+            Tenant = tenant;
+            Admin = admin;
+            Owner = owner;
         }
 
-        throw new InvalidOperationException("The WAL stayed busy, so this run proves nothing.");
-    }
+        public Tenant Tenant { get; }
 
-    private static async Task<bool> FilesHoldAsync(string path, string marker)
-    {
-        var needle = Encoding.UTF8.GetBytes(marker);
-        foreach (var file in new[] { path, $"{path}-wal" })
+        public User Admin { get; }
+
+        public User Owner { get; }
+
+        private string Path => new SqliteConnectionStringBuilder(_database.ConnectionString).DataSource;
+
+        public static async Task<QuietServer> StartAsync()
+        {
+            var database = new SqliteTestDatabase();
+            var services = TestFixture.BuildServiceProvider(_ => { }, database.ConnectionString);
+            await using (var system = services.GetRequiredService<IServiceScopeFactory>().CreateSystemScope())
+                await system.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
+
+            TestGraph.Start(out _)
+                .AddTenant(out var tenant)
+                .AddUsers(out var users, u => u.Role = UserRole.Admin().Value, u => u.Role = UserRole.User().Value);
+            await using (var system = services.GetRequiredService<IServiceScopeFactory>().CreateSystemScope())
+            {
+                var dbContext = system.ServiceProvider.GetRequiredService<AppDbContext>();
+                dbContext.Tenants.Add(tenant);
+                dbContext.Users.AddRange(users);
+                await dbContext.SaveChangesAsync();
+            }
+
+            return new QuietServer(database, services, tenant, users[0], users[1]);
+        }
+
+        public TestingServiceScope AsOwner() => ScopeOf(Owner);
+
+        public TestingServiceScope AsAdmin() => ScopeOf(Admin);
+
+        public async Task<string> SaveWordsAsync(string marker)
+        {
+            var scope = AsOwner();
+            var created = await scope.SendAsync(new AddSession.Command(new SessionForCreationDto
+            {
+                ClientSessionId = Guid.NewGuid().ToString(),
+                StartedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
+            }));
+            await scope.SendAsync(new SaveRawDraft.Command(created.Session.Id, new DraftSaveDto
+            {
+                Text = $"{marker} {Words}",
+                BaseRevision = 0,
+                SavedAt = DateTimeOffset.UtcNow.AddMinutes(-1),
+            }));
+            return created.Session.Id;
+        }
+
+        public bool FilesHold(string marker)
+        {
+            var needle = Encoding.UTF8.GetBytes(marker);
+            return new[] { Path, $"{Path}-wal" }.Any(file => Holds(file, needle));
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await _services.DisposeAsync();
+            await _database.DisposeAsync();
+        }
+
+        private TestingServiceScope ScopeOf(User user)
+        {
+            var scope = new TestingServiceScope(_services);
+            scope.SetUserWithDefaults(identifier: user.Identifier);
+            return scope;
+        }
+
+        private static bool Holds(string file, byte[] needle)
         {
             if (!File.Exists(file))
-                continue;
+                return false;
 
-            await using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             using var buffer = new MemoryStream();
-            await stream.CopyToAsync(buffer);
-            if (buffer.GetBuffer().AsSpan(0, (int)buffer.Length).IndexOf(needle) >= 0)
-                return true;
+            stream.CopyTo(buffer);
+            return buffer.GetBuffer().AsSpan(0, (int)buffer.Length).IndexOf(needle) >= 0;
         }
-
-        return false;
     }
 }

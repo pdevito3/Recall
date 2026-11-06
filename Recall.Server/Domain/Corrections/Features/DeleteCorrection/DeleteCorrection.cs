@@ -2,7 +2,9 @@ namespace Recall.Server.Domain.Corrections.Features;
 
 using System.Diagnostics;
 using Databases;
+using Databases.Sqlite;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using Resources;
 using Serilog;
 
@@ -24,7 +26,9 @@ public static class DeleteCorrection
             dbContext.Corrections.Remove(correction);
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            _logger.Here().Information("Deleted correction {CorrectionId}", correction.Id);
+            var scrubbed = await WalScrub.TryTruncateAsync(dbContext.Database.GetConnectionString()!, cancellationToken);
+            Activity.Current?.SetTag("app.correction.wal_scrubbed", scrubbed);
+            _logger.Here().Information("Deleted correction {CorrectionId}, WAL scrubbed {WalScrubbed}", correction.Id, scrubbed);
         }
     }
 }

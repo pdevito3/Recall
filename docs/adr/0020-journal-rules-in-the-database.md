@@ -12,13 +12,12 @@ So these rules are triggers in the database. [`JournalTriggers`](../../Recall.Se
 
 A delete of a Session removes its row, and the foreign key removes its Revisions. The feed keeps a tombstone with the session ID and the client session ID, and no words. A replay of the create of that Session then gives 409, so a queued phone cannot bring it back.
 
-Each connection has `PRAGMA secure_delete = ON`, so SQLite overwrites the freed space. After the delete, the handler tries a `wal_checkpoint(TRUNCATE)`, which cuts the WAL to zero bytes and removes its old pages. A reader that holds on for more than the wait of 250 ms stops the truncate, and the handler does not retry. The old pages then stay in the database file or in the WAL until a later checkpoint passes the delete, the journal size limit of 16 MiB cuts the file, or the last connection closes.
+Each connection has `PRAGMA secure_delete = ON`, so SQLite overwrites the freed space. After a delete of a Session, a Correction, a User, or a tenant, the handler tries a `wal_checkpoint(TRUNCATE)`, which cuts the WAL to zero bytes and removes its old pages. A reader that holds on for more than the wait of 250 ms stops the truncate, and the handler does not retry. The old pages then stay in the database file or in the WAL until a later checkpoint passes the delete, the journal size limit of 16 MiB cuts the file, or the last connection closes.
 
 What stays:
 
 - The audit log has the IDs of the row and no words. `AuditModel` records only `TenantId` and `UserId` of a journal row.
 - A backup keeps the words until the backup rotates out. A restore brings them back.
-- A delete of a User does not truncate the WAL, because its handler is not in the journal domain. The old pages stay until the same events remove them.
 - The server does not run `VACUUM`. `secure_delete` makes this safe, and the file does not get smaller.
 
 ## Sync retention
