@@ -120,7 +120,7 @@ public partial class NoProviderBootTests
             await _process.WaitForExitAsync();
         }
 
-        private async Task WaitUntilUpAsync()
+        public async Task WaitUntilUpAsync()
         {
             for (var attempt = 0; attempt < 300; attempt++)
             {
