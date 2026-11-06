@@ -425,6 +425,7 @@ public class AppSessionTests
         wrong.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         var wrongPage = await wrong.Content.ReadAsStringAsync();
         wrongPage.ShouldContain("<h1>This sign-out link is not valid</h1>");
+        wrongPage.ShouldContain("choose Logout there");
         wrongPage.ShouldNotContain("sign-in request");
         wrongPage.ShouldContain(">Back to Recall</a>");
         alive.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -467,6 +468,7 @@ public class AppSessionTests
         response.Headers.Contains("Set-Cookie").ShouldBeFalse();
         var page = await response.Content.ReadAsStringAsync();
         page.ShouldContain("<h1>Sign-out did not finish</h1>");
+        page.ShouldContain("choose Logout there");
         page.ShouldContain("This request ended no session");
         page.ShouldContain(">Back to Recall</a>");
         alive.StatusCode.ShouldBe(HttpStatusCode.OK);

@@ -82,7 +82,7 @@ public static class AuthEndpoints
             return new AuthRedirect(returnPath);
 
         if (modes.All.Count == 0)
-            return AuthPages.NoMethod(AuthRoutes.OriginOf(http.Request) + AuthRoutes.Callback);
+            return AuthPages.NoMethod(AuthRoutes.OriginOf(http.Request) + AuthRoutes.Callback, returnPath);
 
         var states = await Task.WhenAll(modes.All.Select(mode => mode.ProbeAsync(cancellationToken)));
         if (modes.All.Count == 1 && states[0] == LoginModeState.Ready && !signedOut && !hasError)

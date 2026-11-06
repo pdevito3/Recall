@@ -76,7 +76,7 @@ An app holds one setting, the base URL of the Server. It holds no provider setti
    | `code_challenge_method` | `S256` |
    | `state` | A value of the app |
 
-3. The person signs in at the provider. Then the Server shows the page `Sign in the Recall app?`, also when the provider signs the person in with no click (RFC 8252 section 8.6). The code reaches the app only after the person chooses `Continue`.
+3. The person signs in at the provider. Then the Server shows the page `Sign in to the Recall app?`, also when the provider signs the person in with no click (RFC 8252 section 8.6). The code reaches the app only after the person chooses `Continue`.
 4. The Server redirects to `redirect_uri` with `code` and `state`. A failed login redirects with `error` and `state`. The error is `signup_closed`, `access_denied`, `idp_unreachable`, or `invalid_response`.
 5. Compare `state`, then send the code in a form within 2 minutes:
 

@@ -248,6 +248,7 @@ public class OidcLoginTests
         page.StatusCode.ShouldBe(HttpStatusCode.OK);
         page.Headers.Location.ShouldBeNull();
         html.ShouldNotContain(NativeApp.AppCallback);
+        html.ShouldContain("<h1>Sign in to the Recall app?</h1>");
         html.ShouldContain("Ada Lovelace");
         confirmed.StatusCode.ShouldBe(HttpStatusCode.Redirect);
         confirmed.Headers.Location!.OriginalString.ShouldBe($"{app.Redirect}?code={Uri.EscapeDataString(code)}&state={Uri.EscapeDataString(app.ClientState)}");

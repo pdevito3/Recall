@@ -27,14 +27,19 @@ public static class AuthPages
     private static readonly string BasePolicy = $"default-src 'none'; style-src 'sha256-{StyleHash}'; base-uri 'none'; frame-ancestors 'none'";
     private static readonly string StrictPolicy = BasePolicy + "; form-action 'self'";
 
+    private static readonly string[] NoMethodNames =
+        ["Auth__Providers__0__Issuer", "Auth__Providers__0__ClientId", "Auth__Providers__0__ClientSecret", "docs/authentication.md"];
+
     public const string PromptLogin = "login";
 
     public sealed record ChooserMode(string Id, string DisplayName, LoginModeState State);
 
-    public static IResult NoMethod(string callbackUrl) => Page(
+    public static IResult NoMethod(string callbackUrl, string returnPath) => Page(
         StatusCodes.Status503ServiceUnavailable,
         "Sign-in is not set up",
-        $"<p>{E(NoMethodMessage)}</p><p>Register this callback URL at the provider: <code>{E(callbackUrl)}</code></p>");
+        $"<p>{NoMethodNames.Aggregate(E(NoMethodMessage), (html, name) => html.Replace(name, $"<code>{name}</code>", StringComparison.Ordinal))}</p>"
+            + $"<p>Register this callback URL at the provider:</p><p><code>{BreakableUrl(callbackUrl)}</code></p>"
+            + TryAgainTo(returnPath));
 
     public static IResult Chooser(IReadOnlyList<ChooserMode> modes, string returnPath, bool signedOut, string? message)
     {
@@ -48,8 +53,7 @@ public static class AuthPages
             ? Page(
                 StatusCodes.Status503ServiceUnavailable,
                 heading,
-                $"{note}<ul>{string.Concat(items)}</ul><p>Wait a few minutes, then try again.</p>"
-                    + Action("Try again", $"{AuthRoutes.Login}?returnUrl={Uri.EscapeDataString(returnPath)}"))
+                $"{note}<ul>{string.Concat(items)}</ul><p>Wait a few minutes, then try again.</p>" + TryAgainTo(returnPath))
             : Page(StatusCodes.Status200OK, heading, $"{note}<ul>{string.Concat(items)}</ul>");
     }
 
@@ -94,12 +98,12 @@ public static class AuthPages
     public static IResult WrongLogoutLink() => Page(
         StatusCodes.Status400BadRequest,
         "This sign-out link is not valid",
-        "<p>You are still signed in, because this link does not name your session. To sign out, go back to Recall and use Sign out there.</p>" + BackToRecall);
+        "<p>You are still signed in, because this link does not name your session. To sign out, go back to Recall and choose Logout there.</p>" + BackToRecall);
 
     public static IResult LogoutFromElsewhere() => Page(
         StatusCodes.Status403Forbidden,
         "Sign-out did not finish",
-        "<p>This request ended no session, because it came from outside Recall. To sign out, go back to Recall and use Sign out there.</p>" + BackToRecall);
+        "<p>This request ended no session, because it came from outside Recall. To sign out, go back to Recall and choose Logout there.</p>" + BackToRecall);
 
     public static IResult NotFound() => Page(
         StatusCodes.Status404NotFound, "This sign-in method does not exist", "<p>This server has no such sign-in method.</p>" + TryAgain);
@@ -107,8 +111,8 @@ public static class AuthPages
     /// <summary>The step of RFC 8252 section 8.6. An app that starts this flow on a silent provider session gets nothing until the person taps Continue.</summary>
     public static IResult ConfirmNative(string displayName, string code) => Page(
         StatusCodes.Status200OK,
-        "Sign in the Recall app?",
-        $"<p>Sign in the Recall app on this device as {E(displayName)}?</p>"
+        "Sign in to the Recall app?",
+        $"<p>Sign in to the Recall app on this device as {E(displayName)}?</p>"
             + "<p>If you did not start this from the app, close this page.</p>"
             + $"<form method=\"post\" action=\"{AuthRoutes.Confirm}\"><input type=\"hidden\" name=\"code\" value=\"{E(code)}\"><button type=\"submit\">Continue</button></form>",
         BasePolicy);
@@ -121,12 +125,21 @@ public static class AuthPages
 
     private static readonly string BackToRecall = Action("Back to Recall", AuthRoutes.Login);
 
+    private static string TryAgainTo(string returnPath) => Action("Try again", $"{AuthRoutes.Login}?returnUrl={Uri.EscapeDataString(returnPath)}");
+
     private static string Action(string label, string url) => $"<ul><li><a class=\"button\" href=\"{E(url)}\">{E(label)}</a></li></ul>";
 
     private static string StartUrl(string id, string returnPath)
         => $"/auth/oidc/{Uri.EscapeDataString(id)}/start?client=web&returnUrl={Uri.EscapeDataString(returnPath)}";
 
     private static string E(string text) => WebUtility.HtmlEncode(text);
+
+    /// <summary>A person copies this URL, so it wraps after a slash of its path. It breaks inside a word only when one part is wider than the page.</summary>
+    private static string BreakableUrl(string url)
+    {
+        var path = url.IndexOf('/', url.IndexOf("://", StringComparison.Ordinal) + 3);
+        return E(url[..path]) + E(url[path..]).Replace("/", "<wbr>/", StringComparison.Ordinal);
+    }
 
     private static PageResult Page(int status, string heading, string body, string? policy = null)
         => new(status, policy ?? StrictPolicy,

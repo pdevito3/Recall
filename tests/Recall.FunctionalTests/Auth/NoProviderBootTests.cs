@@ -6,6 +6,7 @@ using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Runtime.Versioning;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Recall.Server.Resources.Entrypoints.Auth;
 using Shouldly;
 
@@ -176,11 +177,14 @@ public class NoProviderBootTests
         status.GetProperty("callbackUrl").GetString().ShouldEndWith(AuthRoutes.Callback);
 
         login.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
-        var setupPage = WebUtility.HtmlDecode(await login.Content.ReadAsStringAsync());
-        setupPage.ShouldContain(AuthPages.NoMethodMessage);
-        setupPage.ShouldContain("Auth__Providers__0__ClientId");
-        setupPage.ShouldContain("Auth__Providers__0__ClientSecret");
-        setupPage.ShouldContain("docs/authentication.md");
+        var setupPage = await login.Content.ReadAsStringAsync();
+        Regex.Replace(setupPage, "</?code>", "").ShouldContain(AuthPages.NoMethodMessage);
+        setupPage.ShouldContain("<code>Auth__Providers__0__Issuer</code>");
+        setupPage.ShouldContain("<code>Auth__Providers__0__ClientId</code>");
+        setupPage.ShouldContain("<code>Auth__Providers__0__ClientSecret</code>");
+        setupPage.ShouldContain("<code>docs/authentication.md</code>");
+        setupPage.ShouldContain("<wbr>/auth<wbr>/oidc<wbr>/callback</code>");
+        setupPage.ShouldContain("href=\"/auth/login?returnUrl=%2F\">Try again</a>");
 
         api.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         api.Headers.WwwAuthenticate.Select(challenge => challenge.Scheme).ShouldBe(["Bearer"]);
