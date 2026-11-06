@@ -51,6 +51,7 @@ try
         new("Start one container and one volume", StartOnNamedVolume),
         new("Serve the first page, and say what to set with no provider", CheckFirstPage),
         new("Run as the user of the image, with dotnet as PID 1", CheckUserAndPid1),
+        new("Ship no file that a published server does not read", CheckNoUnreadFiles),
         new("Keep the data in /data across a stop and a new container", CheckDataStays),
         new("Fail the probe when the file store cannot write", CheckProbeReadsBody),
         new("Exit with a nonzero code as PID 1 after a failed start", CheckFailedStartExits),
@@ -103,6 +104,12 @@ void CheckUserAndPid1(JobCopy copy)
     Require(user == "1654", $"The user of the container is {user}.");
     var pid1 = InContainer(copy, "cat", "/proc/1/cmdline");
     Require(pid1.StartsWith("dotnet\0", StringComparison.Ordinal), $"PID 1 is {pid1}.");
+}
+
+void CheckNoUnreadFiles(JobCopy copy)
+{
+    var unread = InContainer(copy, "sh", "-c", "cd /app && ls -d appsettings.Development.json openapi web.config Recall.Server Recall.Server.staticwebassets.endpoints.json *.pdb *.xml 2>/dev/null || true").Trim();
+    Require(unread.Length == 0, $"The image ships these files: {unread}");
 }
 
 void CheckDataStays(JobCopy copy)
