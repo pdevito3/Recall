@@ -35,6 +35,10 @@ This document compares each of the 22 routes that the POC iOS client calls (`Jou
 | 21 | `GET api/sessions/{id}/revisions` and `.../cleaned-revisions` | `GET /api/v1/sessions/{id}/raw-revisions` and `.../cleaned-revisions` | The body is `{ items, nextCursor }`, newest first. An item has `number` and `savedAt`, not `revisionNumber` and `createdAt`, and adds `length`. Fixtures: `raw-revision-page`, `cleaned-revision-page`. |
 | 22 | `GET api/sessions/{id}/{revisions path}/{number}` | `GET /api/v1/sessions/{id}/raw-revisions/{number}` and `.../cleaned-revisions/{number}` | `text`, not `content`. Fixtures: `raw-revision`, `cleaned-revision`. |
 
+## Fields that this unit does not add
+
+`SessionDto` has no `suggestions` and no `peopleProposals`. R9 owns rows 14, 15, and 19, and it adds these fields and their routes. Until then, the client must read them as absent.
+
 ## Journaling day
 
 A change of the time zone moves a Session to a new day, but the sync feed does not send the Session again. The feed sends the settings row. Derive the day from `startedAt` and the zone of the settings row, or from UTC when `timeZoneIsKnown` is false. Do not keep `journalingDay` from an older response.

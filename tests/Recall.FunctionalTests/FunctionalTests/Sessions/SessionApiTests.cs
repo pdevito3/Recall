@@ -61,6 +61,23 @@ public class SessionApiTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-26")]
+    public async Task a_settings_change_with_only_the_zone_and_the_save_time_gives_400()
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+
+        // Act
+        var partial = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = "UTC", savedAt = JournalScenario.Morning });
+        var noZone = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { locationCaptureEnabled = false, requirePeopleProposalApproval = true, savedAt = JournalScenario.Morning });
+
+        // Assert
+        partial.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        noZone.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Test]
     [Property("Rule", "SES-29")]
     public async Task a_rename_reaches_each_session_also_with_words_that_it_cannot_write_again_in_another()
     {
