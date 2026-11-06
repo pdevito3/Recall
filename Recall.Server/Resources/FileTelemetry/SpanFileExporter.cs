@@ -8,10 +8,21 @@ public sealed class SpanFileExporter(JsonLinesFile file) : BaseExporter<Activity
 {
     public override ExportResult Export(in Batch<Activity> batch)
     {
+        var result = ExportResult.Success;
         foreach (var span in batch)
-            file.Write(LineOf(span));
+        {
+            try
+            {
+                file.Write(LineOf(span));
+            }
+            catch (Exception exception)
+            {
+                file.ReportLostLine(exception);
+                result = ExportResult.Failure;
+            }
+        }
 
-        return ExportResult.Success;
+        return result;
     }
 
     protected override bool OnShutdown(int timeoutMilliseconds)

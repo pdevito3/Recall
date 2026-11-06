@@ -34,13 +34,21 @@ public sealed class FileSinkFailureNotice(string file, TimeProvider clock, TextW
             _nextLineAt = now + Interval;
         }
 
-        console.WriteLine(JsonLine.Of(json =>
-        {
-            json.WriteString("@t", now.UtcDateTime);
-            json.WriteString("@mt", Text + " for {File}. The console keeps each log, and the file can lose lines. The cause: {Cause}");
-            json.WriteString("@l", nameof(LogEventLevel.Warning));
-            json.WriteString("File", file);
-            json.WriteString("Cause", exception?.Message ?? message);
-        }));
+        WriteLine(now, Text + " for {File}. The console keeps each log, and the file can lose lines. The cause: {Cause}", exception?.Message ?? message);
     }
+
+    /// <summary>Each file closes once, so this line has no interval.</summary>
+    public void OnCloseFailed(Exception exception) => WriteLine(
+        clock.GetUtcNow(),
+        "The file {File} did not close at the stop. The lines that it still held are lost, and the console keeps each log. The cause: {Cause}",
+        exception.Message);
+
+    private void WriteLine(DateTimeOffset now, string template, string cause) => console.WriteLine(JsonLine.Of(json =>
+    {
+        json.WriteString("@t", now.UtcDateTime);
+        json.WriteString("@mt", template);
+        json.WriteString("@l", nameof(LogEventLevel.Warning));
+        json.WriteString("File", file);
+        json.WriteString("Cause", TelemetryText.Cap(cause));
+    }));
 }

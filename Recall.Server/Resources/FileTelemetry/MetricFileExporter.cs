@@ -9,13 +9,24 @@ public sealed class MetricFileExporter(JsonLinesFile file) : BaseExporter<Metric
 {
     public override ExportResult Export(in Batch<Metric> batch)
     {
+        var result = ExportResult.Success;
         foreach (var metric in batch)
         {
             foreach (ref readonly var point in metric.GetMetricPoints())
-                file.Write(LineOf(metric, point));
+            {
+                try
+                {
+                    file.Write(LineOf(metric, point));
+                }
+                catch (Exception exception)
+                {
+                    file.ReportLostLine(exception);
+                    result = ExportResult.Failure;
+                }
+            }
         }
 
-        return ExportResult.Success;
+        return result;
     }
 
     protected override bool OnShutdown(int timeoutMilliseconds)

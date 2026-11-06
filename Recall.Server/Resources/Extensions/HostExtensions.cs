@@ -72,6 +72,7 @@ public static class HostExtensions
             .WithTracing(tracing =>
             {
                 tracing
+                    .AddProcessor(new SpanTextCapProcessor())
                     .AddSource(Telemetry.Source.Name)
                     .AddSource(serviceName)
                     .AddAspNetCoreInstrumentation(opts =>
@@ -111,16 +112,19 @@ public static class HostExtensions
                 .Enrich.WithThreadId()
                 .Enrich.WithProperty("Application", builder.Environment.ApplicationName);
 
-            if (FilesOutsideTheOpenApiBuild(services) is { } files)
-                lc.WriteTo.RollingFiles(new CompactJsonFormatter(), files.LogFilePath, files.Options.Logs);
+            lc.WriteTo.CappedText(to =>
+            {
+                if (FilesOutsideTheOpenApiBuild(services) is { } files)
+                    to.RollingFiles(new CompactJsonFormatter(), files.LogFilePath, files.Options.Logs);
 
-            if (!string.IsNullOrWhiteSpace(otlpEndpoint))
-                lc.WriteTo.OpenTelemetry(options =>
-                {
-                    options.Endpoint = otlpEndpoint;
-                    options.Protocol = OtlpProtocol.Grpc;
-                    options.ResourceAttributes = ResourceAttributes(builder);
-                });
+                if (!string.IsNullOrWhiteSpace(otlpEndpoint))
+                    to.OpenTelemetry(options =>
+                    {
+                        options.Endpoint = otlpEndpoint;
+                        options.Protocol = OtlpProtocol.Grpc;
+                        options.ResourceAttributes = ResourceAttributes(builder);
+                    });
+            });
         });
 
         return builder;

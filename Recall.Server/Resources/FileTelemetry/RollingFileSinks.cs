@@ -20,8 +20,8 @@ public static class RollingFileSinks
             fileNotice);
     }
 
-    public static LoggerConfiguration RollingFilesWithNoQueue(this LoggerSinkConfiguration writeTo, ITextFormatter formatter, string path, RollingFileLimits limits)
-        => writeTo.OneRollingFile(formatter, path, limits, FileSinkFailureNotice.OnTheConsole(path));
+    public static LoggerConfiguration RollingFilesWithNoQueue(this LoggerSinkConfiguration writeTo, ITextFormatter formatter, string path, RollingFileLimits limits, FileSinkFailureNotice notice)
+        => writeTo.OneRollingFile(formatter, path, limits, notice);
 
     /// <summary>
     /// The age limit acts when a file opens, so at each start and at each roll. The roll of each day thus removes an old

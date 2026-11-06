@@ -6,6 +6,7 @@ using System.Text.Json;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
+using Recall.Server.Resources;
 using Recall.Server.Resources.FileTelemetry;
 using Shouldly;
 
@@ -191,4 +192,149 @@ public class FileExporterTests
             Directory.Delete(folder, recursive: true);
         }
     }
+
+    [Test]
+    public void a_tag_that_throws_loses_its_line_and_keeps_the_process_the_batch_and_gives_one_warning()
+    {
+        // Arrange
+        using var console = new StringWriter();
+        var folder = Directory.CreateTempSubdirectory("recall_spans_").FullName;
+        var path = Path.Combine(folder, "traces-.jsonl");
+        var sourceName = $"recall.test.{Guid.NewGuid():N}";
+        using var source = new ActivitySource(sourceName);
+        var exporter = new CountingFailures(new SpanFileExporter(new JsonLinesFile(path, Limits, new FileSinkFailureNotice(path, TimeProvider.System, console))));
+        // TUnit reads each tag when a span ends, so a tag throws only on the thread of the export
+        var broken = new ArmedTag(() => throw new InvalidOperationException("broken ToString")) { Armed = false };
+        var tooLarge = new ArmedTag(() => new string('x', int.MaxValue)) { Armed = false };
+
+        try
+        {
+            // Act
+            using (var provider = Sdk.CreateTracerProviderBuilder()
+                       .AddSource(sourceName)
+                       .AddProcessor(new BatchActivityExportProcessor(exporter))
+                       .Build())
+            {
+                foreach (var tag in new[] { broken, tooLarge })
+                {
+                    using var bad = source.StartActivity("bad")!;
+                    bad.SetTag("app.bad", tag);
+                }
+
+                using (source.StartActivity("next")!)
+                {
+                }
+
+                broken.Armed = true;
+                tooLarge.Armed = true;
+                provider.ForceFlush();
+                broken.Armed = false;
+                tooLarge.Armed = false;
+            }
+
+            // Assert
+            exporter.Failures.ShouldBe(1);
+            LinesIn(folder).ShouldHaveSingleItem().GetProperty("name").GetString().ShouldBe("next");
+            var warning = JsonDocument.Parse(console.ToString().Trim()).RootElement;
+            warning.GetProperty("@l").GetString().ShouldBe("Warning");
+            warning.GetProperty("Cause").GetString().ShouldBe("broken ToString");
+        }
+        finally
+        {
+            broken.Armed = false;
+            tooLarge.Armed = false;
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Test]
+    public void a_metric_tag_that_throws_loses_its_line_and_keeps_the_other_metrics()
+    {
+        // Arrange
+        using var console = new StringWriter();
+        var folder = Directory.CreateTempSubdirectory("recall_metrics_").FullName;
+        var path = Path.Combine(folder, "metrics-.jsonl");
+        var meterName = $"recall.test.{Guid.NewGuid():N}";
+        using var meter = new Meter(meterName);
+        var counter = meter.CreateCounter<long>("recall.count");
+        var exporter = new MetricFileExporter(new JsonLinesFile(path, Limits, new FileSinkFailureNotice(path, TimeProvider.System, console)));
+
+        try
+        {
+            // Act
+            using (var provider = Sdk.CreateMeterProviderBuilder()
+                       .AddMeter(meterName)
+                       .AddReader(new PeriodicExportingMetricReader(exporter, 3_600_000))
+                       .Build())
+            {
+                counter.Add(1, new KeyValuePair<string, object?>("app.bad", new ArmedTag(() => throw new InvalidOperationException("broken ToString"))));
+                counter.Add(2, new KeyValuePair<string, object?>("app.good", "kept"));
+                provider.ForceFlush().ShouldBeFalse();
+            }
+
+            // Assert
+            var lines = LinesIn(folder);
+            lines.ShouldNotBeEmpty();
+            lines.ShouldAllBe(line => line.GetProperty("sum").GetInt64() == 2);
+            console.ToString().ShouldContain("broken ToString");
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Test]
+    public void a_tag_with_a_long_text_of_any_type_is_cut_in_the_line()
+    {
+        // Arrange
+        var folder = Directory.CreateTempSubdirectory("recall_spans_").FullName;
+        var sourceName = $"recall.test.{Guid.NewGuid():N}";
+        using var source = new ActivitySource(sourceName);
+
+        try
+        {
+            // Act
+            using (Sdk.CreateTracerProviderBuilder()
+                       .AddSource(sourceName)
+                       .AddProcessor(new SimpleActivityExportProcessor(new SpanFileExporter(new JsonLinesFile(Path.Combine(folder, "traces-.jsonl"), Limits))))
+                       .Build())
+            {
+                using var span = source.StartActivity("span")!;
+                span.SetTag("app.long", new Uri($"http://example.test/{new string('x', 60_000)}"));
+                span.AddEvent(new ActivityEvent("loaded", tags: new ActivityTagsCollection { ["app.long"] = new string('<', 20_000) }));
+            }
+
+            // Assert
+            var line = LinesIn(folder).ShouldHaveSingleItem();
+            line.GetProperty("tags").GetProperty("app.long").GetString().ShouldNotBeNull().ShouldContain(TelemetryText.CutMarker);
+            line.GetProperty("events")[0].GetProperty("tags").GetProperty("app.long").GetString().ShouldNotBeNull().ShouldContain(TelemetryText.CutMarker);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+}
+
+internal sealed class ArmedTag(Func<string> text)
+{
+    public bool Armed { get; set; } = true;
+
+    public override string ToString() => Armed ? text() : "not armed";
+}
+
+internal sealed class CountingFailures(BaseExporter<Activity> inner) : BaseExporter<Activity>
+{
+    public int Failures { get; private set; }
+
+    public override ExportResult Export(in Batch<Activity> batch)
+    {
+        var result = inner.Export(batch);
+        if (result == ExportResult.Failure)
+            Failures++;
+        return result;
+    }
+
+    protected override bool OnShutdown(int timeoutMilliseconds) => inner.Shutdown(timeoutMilliseconds);
 }
