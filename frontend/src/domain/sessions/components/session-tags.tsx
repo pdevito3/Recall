@@ -1,3 +1,5 @@
+import { Cancel01Icon } from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react'
 import { ToggleButton } from 'react-aria-components'
@@ -152,7 +154,7 @@ function TagEditor({ values, onChange }: TagEditorProps) {
                   aria-label={`Remove topic ${name}`}
                   onPress={() => removeTopic(name)}
                 >
-                  x
+                  <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
                 </Button>
               </li>
             ))}
