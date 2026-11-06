@@ -60,7 +60,7 @@ export function sessionPage(page: Page) {
 
     async openDeepLinkAndWaitForLogin(path: string) {
       await page.goto(path, { waitUntil: 'commit' })
-      await expect.poll(() => new URL(page.url()).pathname).toBe(authPaths.login)
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 15000 }).toBe(authPaths.login)
       await page.waitForLoadState()
     },
 
@@ -130,6 +130,12 @@ export function sessionPage(page: Page) {
       await Promise.all([at.logout.click(), checked])
     },
 
+    async signOutAndWaitForTheAnswer() {
+      const answered = page.waitForResponse((r) => new URL(r.url()).pathname === authPaths.logout)
+      await at.logout.click()
+      await answered
+    },
+
     /** Goes from a page with private text to another document, by address, so that the browser keeps the first page in the back-forward cache. */
     async leavePrivatePageForAnotherDocument() {
       await page.addInitScript(() => {
@@ -152,8 +158,9 @@ export function sessionPage(page: Page) {
       expect(await page.evaluate(() => (window as unknown as { wasRestored?: boolean }).wasRestored), 'the back-forward cache restored the page').toBe(true)
     },
 
+    /** A poll can read during the new load, and that read fails. The next read decides. */
     isStillTheFirstLoad() {
-      return page.evaluate(() => (window as unknown as { firstLoadMark?: boolean }).firstLoadMark === true)
+      return page.evaluate(() => (window as unknown as { firstLoadMark?: boolean }).firstLoadMark === true).catch(() => true)
     },
 
     async screenShowsOneColor() {

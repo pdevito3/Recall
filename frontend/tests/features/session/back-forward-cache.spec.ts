@@ -31,6 +31,17 @@ test.describe('a page that Back restores from the back-forward cache', () => {
     expect(api.all('get', authPaths.me)).toHaveLength(checksBefore + 1)
   })
 
+  test('loads again when another session lives now, so the next person does not see the words of the first', async ({ page, api }) => {
+    const session = sessionPage(page)
+    await session.leavePrivatePageForAnotherDocument()
+
+    const nextPerson = { sub: '2', name: 'Next Person', sid: 'session-of-next-person', client_kind: 'web' }
+    api.mock({ method: 'get', path: authPaths.me, status: 200, body: nextPerson, delayMs: 500 })
+    await session.goBackToTheCachedPage()
+
+    await expect.poll(() => session.isStillTheFirstLoad()).toBe(false)
+  })
+
   test('loads again and shows the alert when the check fails, with no private text', async ({ page, api }) => {
     const session = sessionPage(page)
     await session.leavePrivatePageForAnotherDocument()

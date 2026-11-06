@@ -75,9 +75,7 @@ test.describe('a sign-out in another tab', () => {
     await otherTab.open('/about')
 
     api.mock(authApi.logoutFails())
-    const answered = page.waitForResponse((r) => new URL(r.url()).pathname === authPaths.logout)
-    await session.at.logout.click()
-    await answered
+    await session.signOutAndWaitForTheAnswer()
 
     await expect(otherTab.at.navigation).toBeVisible()
     expect(await otherTab.screenShowsOneColor()).toBe(false)
