@@ -121,6 +121,24 @@ test.describe('the Cleanup card on a 320 px phone', () => {
     expect((await at.text('Calm').boundingBox())?.height).toBeLessThan(24)
     expect(await at.pageOverflow()).toBe(0)
   })
+
+  test('the two choices of a row stay on one line', async ({ page, api }) => {
+    const session = aSession({
+      cleanupStatus: 'Clean',
+      cleanedText: 'Done.',
+      suggestions: [{ kind: 'Mood', value: 'Calm' }],
+      peopleProposals: [{ label: 'Sam', isNew: true }],
+    })
+    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(session))
+    const at = modelProviders(page)
+
+    await page.goto(`/model-providers?session=${session.id}`)
+    await expect(at.rejectSuggestion('Calm')).toBeVisible()
+
+    expect((await at.rejectSuggestion('Calm').boundingBox())?.y).toBe((await at.acceptSuggestion('Calm').boundingBox())?.y)
+    expect((await at.doNotTagPerson('Sam').boundingBox())?.y).toBe((await at.tagPerson('Sam').boundingBox())?.y)
+    expect(await at.pageOverflow()).toBe(0)
+  })
 })
 
 test.describe('the Cleanup card', () => {

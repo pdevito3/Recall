@@ -47,12 +47,14 @@ function Suggestions({ session }: { session: SessionDto }) {
           <li key={`${kind}-${value}`} className="flex flex-wrap items-center gap-2 text-sm">
             <Badge variant="outline">{kind}</Badge>
             <span className="min-w-24 flex-1 wrap-anywhere">{value}</span>
-            <Button size="sm" variant="outline" aria-label={`Accept ${value}`} onPress={() => respond.mutate({ accept: true, kind, value })}>
-              Accept
-            </Button>
-            <Button size="sm" variant="ghost" aria-label={`Reject ${value}`} onPress={() => respond.mutate({ accept: false, kind, value })}>
-              Reject
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" aria-label={`Accept ${value}`} onPress={() => respond.mutate({ accept: true, kind, value })}>
+                Accept
+              </Button>
+              <Button size="sm" variant="ghost" aria-label={`Reject ${value}`} onPress={() => respond.mutate({ accept: false, kind, value })}>
+                Reject
+              </Button>
+            </div>
           </li>
         ))}
       </ul>
@@ -75,12 +77,14 @@ function PeopleProposals({ session }: { session: SessionDto }) {
               </div>
             )}
             <span className="min-w-24 flex-1 wrap-anywhere">{label}</span>
-            <Button size="sm" variant="outline" aria-label={`Tag ${label}`} onPress={() => respond.mutate({ label, approve: true, createNew: false })}>
-              Tag
-            </Button>
-            <Button size="sm" variant="ghost" aria-label={`Do not tag ${label}`} onPress={() => respond.mutate({ label, approve: false, createNew: false })}>
-              Do not tag
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" aria-label={`Tag ${label}`} onPress={() => respond.mutate({ label, approve: true, createNew: false })}>
+                Tag
+              </Button>
+              <Button size="sm" variant="ghost" aria-label={`Do not tag ${label}`} onPress={() => respond.mutate({ label, approve: false, createNew: false })}>
+                Do not tag
+              </Button>
+            </div>
           </li>
         ))}
       </ul>
