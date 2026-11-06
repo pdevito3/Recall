@@ -127,7 +127,7 @@ test.describe('the Cleanup card on a 320 px phone', () => {
       cleanupStatus: 'Clean',
       cleanedText: 'Done.',
       suggestions: [{ kind: 'Mood', value: 'Calm' }],
-      peopleProposals: [{ label: 'Sam', isNew: true }],
+      peopleProposals: [{ label: 'Sam', isNew: true, contexts: [] }],
     })
     api.mock(signedInAs('User'), modelProvidersApi.sessionIs(session))
     const at = modelProviders(page)
