@@ -49,7 +49,7 @@ If the job store has a fault, `SaveAndEnqueueAsync` throws before it saves, and 
 
 The host enqueues one `system-health` job at each start. A recurring schedule would write to the disk at each run and wake the disk of a NAS. `Jobs__HealthJob__HoldSeconds` keeps the job in its run, and `Jobs__HealthJob__FailOnPurpose` makes it fail, so a check of the host can kill a process during a job or fill the dead-letter list. These two settings work only in `Development` and in the test environments. `Jobs__RunWorkers=false` gives a test host no worker. It also works only in these environments.
 
-BackWave starts a span for each poll. `EmptyClaimSpanFilter` drops the span of a poll that claimed no job, so an idle server writes no span to `telemetry/`. The BackWave metrics add about 2 KB to each metric export, which runs each 60 s with or without BackWave.
+BackWave starts a span for each poll. `EmptyClaimSpanFilter` drops the span of a poll that claimed no job, so an idle server writes no span to `telemetry/`. The BackWave metrics add about 2 KB to each metric export, which runs each hour with or without BackWave.
 
 ## The dashboard
 
