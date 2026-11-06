@@ -125,7 +125,7 @@ _Avoid_: Superuser
 A User with full use of their own journal and no admin pages. The code names this role `User`.
 
 **Owner**:
-The person whose first login on a new install created its tenant. An Owner is an Admin. Control of the data directory can move this place to another identity.
+The person whose first login on a new install created its tenant. An Owner is an Admin. No row marks this place, so the server takes the oldest linked Admin of the oldest live tenant. When that Admin loses the role, the next oldest linked Admin becomes the Owner, and the former Owner gets a refusal. Control of the data directory can move this place to another identity.
 _Avoid_: Root, superadmin, first user
 
 **Privacy invariant**:
