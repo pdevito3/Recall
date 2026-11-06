@@ -198,7 +198,9 @@ A changed issuer, a new provider, a provider restored with a new `sub`, or a del
 2. Create an empty file named `claim-owner` in the data directory. It works for 15 minutes from its write time.
 3. Sign in with the identity that you want.
 
-The Server links that identity to the oldest live Admin of the oldest live tenant whose identifier is its own ID, gives that Admin each Admin permission back, logs a warning with the user ID and the issuer, and removes the file. If the tenant has no such Admin, the Server adds a new Admin. A deleted tenant is the one case that the claim cannot recover. In that case, the login gets `signup_closed` and the Server still removes the file.
+The Server links that identity to the oldest live Admin of the oldest live tenant whose identifier is its own ID, gives that Admin each Admin permission back, logs a warning with the user ID and the issuer, and removes the file. If the tenant has no such Admin, the Server adds a new Admin.
+
+The claim cannot bring back a deleted tenant, so `DELETE /tenants/{id}` gives 409 for the last live tenant. Only a change outside the API can leave an install with no live tenant. In that state, each login gets `signup_closed` and the Server still removes the file. Restore the data directory from a backup.
 
 The first login after you create the file always removes it, also when the claim changes nothing:
 
