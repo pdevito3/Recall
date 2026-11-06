@@ -153,7 +153,7 @@ The binding cookie is `Lax` because the provider redirects with a cross-site GET
 
 ### CSRF
 
-A cookie with no `X-CSRF: 1` header fails with 401 on each method, also at `/auth/logout`. The one exception is the job dashboard at `/backwave`, because a browser that opens a page cannot send the header. The `SameSite=Strict` cookie and the antiforgery token of each BackWave write guard that path. A cross-site page cannot set that header without a CORS grant, and the Server gives none. A bearer token needs no header.
+A cookie with no `X-CSRF: 1` header fails with 401 on each method, also at `/auth/logout`. The one exception is the job dashboard at `/backwave`, because a browser that opens a page cannot send the header. The antiforgery token of each BackWave write guards that path. A refused GET from another site reloads once with the `SameSite=Strict` cookie, so a link from another site can open a dashboard page of the Owner. BackWave does no write on a GET. Check this again at each upgrade of BackWave. A cross-site page cannot set that header without a CORS grant, and the Server gives none. A bearer token needs no header.
 
 A cookie value works only as a cookie and only on a web session. A bearer value works only in the header and only on a native session. So a stolen cookie value cannot skip this rule.
 

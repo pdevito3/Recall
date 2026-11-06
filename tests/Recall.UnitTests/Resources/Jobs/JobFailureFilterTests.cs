@@ -84,6 +84,20 @@ public class JobFailureFilterTests
     }
 
     [Test]
+    public async Task a_span_after_a_job_in_the_same_flow_keeps_the_message()
+    {
+        // Arrange
+        var span = new Activity("a-span");
+        await RunAsync(() => Task.CompletedTask);
+
+        // Act
+        Telemetry.MarkFailed(span, new InvalidOperationException(Marker));
+
+        // Assert
+        TextOf(span).ShouldContain(Marker);
+    }
+
+    [Test]
     public void a_span_outside_a_job_keeps_the_message()
     {
         // Arrange

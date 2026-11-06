@@ -53,7 +53,7 @@ BackWave starts a span for each poll. `EmptyClaimSpanFilter` drops the span of a
 
 ## The dashboard
 
-The dashboard is at `/backwave`. `JobDashboard` lets only the Owner see it or act in it. It reads the Owner through `IOwnerGuard`, the rule that the support bundle uses. A page that is refused is a 403 with a short page that has a link to sign in, so a person whose cookie ended can get back. The session cookie is SameSite=Strict, so the redirect after a click at a provider on another site comes with no cookie. That refusal reloads once after 1 s, and the reload sends the cookie. A refused write action or live request is a 403 with an empty body.
+The dashboard is at `/backwave`. `JobDashboard` lets only the Owner see it or act in it. It reads the Owner through `IOwnerGuard`, the rule that the support bundle uses. A page that is refused is a 403 with a short page that has a link to sign in, so a person whose cookie ended can get back. The session cookie is SameSite=Strict, so the redirect after a click at a provider on another site comes with no cookie. That refusal reloads once after 1 s, and the reload sends the cookie. A browser sends `Sec-Fetch-Site` only on https or on localhost, so on plain http a person reloads the page by hand. A refused write action or live request is a 403 with an empty body.
 
 BackWave checks the permission only at the start of a request, and a live page holds one request open. `JobDashboard.LiveStreamLimit` ends this request after 30 s, and at once when the host stops. The browser then opens a new request, and this checks the Owner again. So a person who lost the role or signed out sees job data for at most 30 s more. A stop of the host does not wait for a live page.
 

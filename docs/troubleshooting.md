@@ -63,11 +63,17 @@ The server cannot restart the jobs by itself. Do these steps:
 1. Fix the cause. For a full disk, see [The disk is full](#the-disk-is-full).
 2. Restart the server with `docker compose restart`. A job that was running runs again.
 3. Open `/health`. It answers 200 when the jobs run.
-4. If `/health` answers 503 again and names `SqliteException` or `InvalidOperationException`, the cause can be a disk that is still full, a damaged file, or damaged job tables. Check the first two first. If the disk has room and `docker compose logs` does not show `database disk image is malformed`, do these steps on the host. The image has no `sqlite3`, so the host needs it, and the steps need the folder of the `/data` volume. Find this folder with `docker volume inspect`.
+4. If `/health` answers 503 again and names `SqliteException` or `InvalidOperationException`, the cause can be a disk that is still full, a damaged file, or a lost job table. Check the first two first. If the disk has room and `docker compose logs` does not show `database disk image is malformed`, do these steps. The image has no `sqlite3`, so the steps use a small container that opens the `/data` volume.
    1. Stop the server with `docker compose stop`.
-   2. Copy `recall.db`, `recall.db-wal`, and `recall.db-shm` to a safe place.
-   3. In the folder of the volume, run `sqlite3 recall.db "DELETE FROM backwave_schema_version"`.
+   2. Find the name of the volume with `docker volume ls`. If `/data` is a folder of the host, use the path of this folder in place of the name.
+   3. Run this command with the name of your volume. It copies `recall.db` and its side files to the folder `before-repair` in the volume, and then clears the version of the job tables.
+
+      ```
+      docker run --rm -v <volume>:/data alpine sh -c 'apk add --no-cache sqlite && mkdir /data/before-repair && cp /data/recall.db* /data/before-repair/ && sqlite3 /data/recall.db "DELETE FROM backwave_schema_version"'
+      ```
+
    4. Start the server with `docker compose start`. BackWave makes each missing job table again and keeps the rows of the journal.
+   5. If `/health` still answers 503, these steps cannot fix the cause, because BackWave does not change a job table that exists. The journal still runs. Keep the folder `before-repair`, and report the fault with a support bundle.
 
 A restart during a long job costs one attempt of that job. A job at its last attempt goes to the dead letters. The Owner requeues it at `/backwave/failures`.
 

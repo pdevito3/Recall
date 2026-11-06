@@ -48,15 +48,23 @@ public class JobHostWatchTests
         // The watch takes the static logger when it is made.
         var main = Log.Logger;
         Log.Logger = new LoggerConfiguration().WriteTo.Sink(lines).CreateLogger();
-        var watch = new JobHostWatch(new BackWaveClient(store, registry, clock), store, new JobHostStatus(new BackWaveHealth()), clock);
-        Log.Logger = main;
-        return watch;
+        try
+        {
+            return new JobHostWatch(new BackWaveClient(store, registry, clock), store, new JobHostStatus(new BackWaveHealth()), clock);
+        }
+        finally
+        {
+            Log.Logger = main;
+        }
     }
+
+    private static int EnqueuesOf(IJobStore store) =>
+        store.ReceivedCalls().Count(call => call.GetMethodInfo().Name == nameof(IJobStore.EnqueueAsync));
 
     private static async Task TicksAsync(IJobStore store, FakeTimeProvider clock, int enqueues)
     {
         var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
-        while (store.ReceivedCalls().Count(call => call.GetMethodInfo().Name == nameof(IJobStore.EnqueueAsync)) < enqueues && DateTimeOffset.UtcNow < deadline)
+        while (EnqueuesOf(store) < enqueues && DateTimeOffset.UtcNow < deadline)
         {
             clock.Advance(TimeSpan.FromSeconds(5));
             await Task.Delay(10);
@@ -81,7 +89,11 @@ public class JobHostWatchTests
         await watch.StopAsync(CancellationToken.None);
 
         // Assert
-        var warning = lines.All.Where(line => line.Level == LogEventLevel.Warning).ShouldHaveSingleItem().RenderMessage(CultureInfo.InvariantCulture);
+        EnqueuesOf(store).ShouldBeGreaterThanOrEqualTo(3);
+        var warning = lines.All
+            .Where(line => line.Level == LogEventLevel.Warning && line.Properties["SourceContext"].ToString().Contains(nameof(JobHostWatch)))
+            .ShouldHaveSingleItem()
+            .RenderMessage(CultureInfo.InvariantCulture);
         warning.ShouldContain(typeof(TimeoutException).FullName!);
         warning.ShouldNotContain(Marker);
     }
