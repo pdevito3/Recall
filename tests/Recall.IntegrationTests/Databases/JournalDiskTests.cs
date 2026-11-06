@@ -1,6 +1,7 @@
 namespace Recall.IntegrationTests.Databases;
 
 using System.Text;
+using MediatR;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -92,6 +93,70 @@ public class JournalDiskTests
         server.FilesHold(marker).ShouldBeFalse();
     }
 
+    [Test]
+    [Property("Rule", "SES-27")]
+    public async Task a_client_abort_after_the_commit_of_a_delete_of_a_session_still_takes_the_words_out_of_the_wal()
+    {
+        // Arrange
+        await using var server = await QuietServer.StartAsync();
+        var marker = $"DISKMARKER{Guid.NewGuid():N}";
+        var session = await server.SaveWordsAsync(marker);
+
+        // Act
+        await QuietServer.SendAndAbortAfterTheCommitAsync(server.AsOwner(), new DeleteSession.Command(session));
+
+        // Assert
+        server.FilesHold(marker).ShouldBeFalse();
+    }
+
+    [Test]
+    [Property("Rule", "SES-27")]
+    public async Task a_client_abort_after_the_commit_of_a_delete_of_a_correction_still_takes_the_words_out_of_the_wal()
+    {
+        // Arrange
+        await using var server = await QuietServer.StartAsync();
+        var marker = $"DISKMARKER{Guid.NewGuid():N}";
+        var correction = await server.AsOwner().SendAsync(new AddCorrection.Command(new CorrectionForCreationDto { CanonicalTerm = marker, Mishearings = [$"heard {marker}"] }));
+
+        // Act
+        await QuietServer.SendAndAbortAfterTheCommitAsync(server.AsOwner(), new DeleteCorrection.Command(correction.Id));
+
+        // Assert
+        server.FilesHold(marker).ShouldBeFalse();
+    }
+
+    [Test]
+    [Property("Rule", "SES-27")]
+    public async Task a_client_abort_after_the_commit_of_a_delete_of_a_user_still_takes_the_words_out_of_the_wal()
+    {
+        // Arrange
+        await using var server = await QuietServer.StartAsync();
+        var marker = $"DISKMARKER{Guid.NewGuid():N}";
+        await server.SaveWordsAsync(marker);
+
+        // Act
+        await QuietServer.SendAndAbortAfterTheCommitAsync(server.AsAdmin(), new DeleteUser.Command(server.Owner.Id));
+
+        // Assert
+        server.FilesHold(marker).ShouldBeFalse();
+    }
+
+    [Test]
+    [Property("Rule", "SES-27")]
+    public async Task a_client_abort_after_the_commit_of_a_delete_of_a_tenant_still_takes_the_words_out_of_the_wal()
+    {
+        // Arrange
+        await using var server = await QuietServer.StartAsync();
+        var marker = $"DISKMARKER{Guid.NewGuid():N}";
+        await server.SaveWordsAsync(marker);
+
+        // Act
+        await QuietServer.SendAndAbortAfterTheCommitAsync(server.AsAdmin(), new DeleteTenant.Command(server.Tenant.Id));
+
+        // Assert
+        server.FilesHold(marker).ShouldBeFalse();
+    }
+
     private sealed class QuietServer : IAsyncDisposable
     {
         private readonly SqliteTestDatabase _database;
@@ -136,6 +201,13 @@ public class JournalDiskTests
             }
 
             return new QuietServer(database, services, tenant, users[0], users[1]);
+        }
+
+        public static async Task SendAndAbortAfterTheCommitAsync(TestingServiceScope scope, IRequest command)
+        {
+            using var abort = new CancellationTokenSource();
+            scope.GetService<AppDbContext>().SavedChanges += (_, _) => abort.Cancel();
+            await scope.GetService<ISender>().Send(command, abort.Token);
         }
 
         public TestingServiceScope AsOwner() => ScopeOf(Owner);

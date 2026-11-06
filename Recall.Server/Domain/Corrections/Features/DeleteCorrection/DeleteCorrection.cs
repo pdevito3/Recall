@@ -26,7 +26,7 @@ public static class DeleteCorrection
             dbContext.Corrections.Remove(correction);
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            var scrubbed = await WalScrub.TryTruncateAsync(dbContext.Database.GetConnectionString()!, cancellationToken);
+            var scrubbed = await WalScrub.TryTruncateAsync(dbContext.Database.GetConnectionString()!);
             Activity.Current?.SetTag("app.correction.wal_scrubbed", scrubbed);
             _logger.Here().Information("Deleted correction {CorrectionId}, WAL scrubbed {WalScrubbed}", correction.Id, scrubbed);
         }

@@ -30,7 +30,7 @@ public class WalScrubTests
         new FileInfo(WalPath).Length.ShouldBeGreaterThan(0);
 
         // Act
-        var scrubbed = await WalScrub.TryTruncateAsync(ConnectionString, CancellationToken.None);
+        var scrubbed = await WalScrub.TryTruncateAsync(ConnectionString);
 
         // Assert
         scrubbed.ShouldBeTrue();
@@ -49,7 +49,7 @@ public class WalScrubTests
         await RunAsync(writer, "INSERT INTO words VALUES ('more words');");
 
         // Act
-        var scrubbed = await WalScrub.TryTruncateAsync(ConnectionString, CancellationToken.None);
+        var scrubbed = await WalScrub.TryTruncateAsync(ConnectionString);
 
         // Assert
         scrubbed.ShouldBeFalse();

@@ -38,7 +38,7 @@ public static class DeleteUser
             dbContext.Users.Remove(user.Delete());
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            var scrubbed = await WalScrub.TryTruncateAsync(dbContext.Database.GetConnectionString()!, cancellationToken);
+            var scrubbed = await WalScrub.TryTruncateAsync(dbContext.Database.GetConnectionString()!);
             Activity.Current?.SetTag("app.user.wal_scrubbed", scrubbed);
             _logger.Here().Information("Deleted user {UserId}, WAL scrubbed {WalScrubbed}", user.Id, scrubbed);
         }

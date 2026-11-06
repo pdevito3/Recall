@@ -26,7 +26,7 @@ public static class DeleteSession
             dbContext.Sessions.Remove(session);
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            var scrubbed = await WalScrub.TryTruncateAsync(dbContext.Database.GetConnectionString()!, cancellationToken);
+            var scrubbed = await WalScrub.TryTruncateAsync(dbContext.Database.GetConnectionString()!);
             Activity.Current?.SetTag("app.session.wal_scrubbed", scrubbed);
             _logger.Here().Information("Deleted session {SessionId}, WAL scrubbed {WalScrubbed}", session.Id, scrubbed);
         }

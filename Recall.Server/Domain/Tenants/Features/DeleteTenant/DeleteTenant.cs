@@ -42,7 +42,7 @@ public static class DeleteTenant
                 return rows.CountBy(row => row.GetType().Name).ToDictionary();
             }, cancellationToken);
 
-            var scrubbed = await WalScrub.TryTruncateAsync(dbContext.Database.GetConnectionString()!, cancellationToken);
+            var scrubbed = await WalScrub.TryTruncateAsync(dbContext.Database.GetConnectionString()!);
             Activity.Current?.SetTag("app.tenant.wal_scrubbed", scrubbed);
             _logger.Here().Information("Deleted tenant {TenantId} and its rows {@DeletedCounts}, WAL scrubbed {WalScrubbed}", request.Id, deletedCounts, scrubbed);
 
