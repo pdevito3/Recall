@@ -48,6 +48,8 @@ public sealed class LoginModes(IOptions<AuthOptions> options, OidcHandlerFactory
 
     public OidcLoginMode? FindOidc(string? id) => _modes.FirstOrDefault(mode => mode.Id == id);
 
+    public OidcLoginMode? OnlyOidc => _modes.Count == 1 ? _modes[0] : null;
+
     public void Dispose()
     {
         foreach (var mode in _modes)
@@ -123,13 +125,13 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
     public async Task<LoginModeState> ProbeAsync(CancellationToken cancellationToken)
         => await DiscoverAsync(cancellationToken) is null ? LoginModeState.Unreachable : LoginModeState.Ready;
 
-    public async Task<string?> ProviderLogoutUrlAsync(CancellationToken cancellationToken)
+    public async Task<string?> ProviderLogoutUrlAsync(string returnUrl, string state, CancellationToken cancellationToken)
     {
         if ((await DiscoverAsync(cancellationToken))?.EndSessionEndpoint is not { } endpoint)
             return null;
 
         var separator = endpoint.Contains('?', StringComparison.Ordinal) ? '&' : '?';
-        return $"{endpoint}{separator}client_id={Uri.EscapeDataString(_provider.ClientId!)}";
+        return $"{endpoint}{separator}client_id={Uri.EscapeDataString(_provider.ClientId!)}&post_logout_redirect_uri={Uri.EscapeDataString(returnUrl)}&state={Uri.EscapeDataString(state)}";
     }
 
     public Task<OidcDiscovery?> DiscoverAsync(CancellationToken cancellationToken)

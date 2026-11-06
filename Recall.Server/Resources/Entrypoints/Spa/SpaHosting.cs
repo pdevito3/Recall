@@ -19,7 +19,12 @@ public static class SpaHosting
         {
             app.UseStaticFiles(new StaticFileOptions
             {
-                OnPrepareResponse = file => file.Context.Response.Headers.ContentSecurityPolicy = ContentSecurityPolicy,
+                OnPrepareResponse = file =>
+                {
+                    file.Context.Response.Headers.ContentSecurityPolicy = ContentSecurityPolicy;
+                    if (file.File.Name == IndexFile)
+                        file.Context.Response.Headers.CacheControl = "no-store";
+                },
             });
         }
     }
@@ -40,7 +45,6 @@ public static class SpaHosting
 
             context.Response.ContentType = "text/html; charset=utf-8";
             context.Response.ContentLength = index.Length;
-            context.Response.Headers.CacheControl = "no-cache";
             context.Response.Headers.ContentSecurityPolicy = ContentSecurityPolicy;
             if (HttpMethods.IsGet(context.Request.Method))
                 await context.Response.SendFileAsync(index, context.RequestAborted);

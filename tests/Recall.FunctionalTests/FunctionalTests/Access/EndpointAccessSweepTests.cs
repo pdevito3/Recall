@@ -23,6 +23,7 @@ using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using OpenApi;
+using Shouldly;
 using TestUtilities;
 using TestUtilities.AccessSweep;
 
@@ -77,6 +78,7 @@ public class EndpointAccessSweepTests : TestBase
         [AuthRoutes.Confirm] = "The one-time code in the form proves this request. It writes nothing and shows no tenant data.",
         [AuthRoutes.Token] = "The code and PKCE verifier, or the refresh token, prove this request. AuthRefusalTests covers each refusal.",
         [AuthRoutes.Logout] = "Tolerant. It ends only a session that the request proves, and it shows no tenant data.",
+        [AuthRoutes.SignedOut] = "Public. It redirects to the signed-out page, and shows no tenant data. It only compares its one value with the cookie of the browser.",
         [AuthRoutes.RevokeOthers] = "Each session ends only the other sessions of its own user. AppSessionTests covers it.",
         [AuthRoutes.Me] = "Each session reads its own identity, and a visitor with no session gets 204. It takes no ID. AppSessionTests covers it.",
     };
@@ -365,6 +367,8 @@ public class EndpointAccessSweepTests : TestBase
     {
         using var request = endpoint.RequestFor(ids);
         using var response = await FactoryClient.SendAsync(request);
+        // Each caller, with records that exist and with records that do not. The HTTP cache of a browser would keep a private answer after a logout.
+        (response.Headers.CacheControl?.NoStore == true).ShouldBeTrue($"{request.Method} {request.RequestUri}: {(int)response.StatusCode}");
         var body = await response.Content.ReadAsStringAsync();
         return new Outcome(((int)response.StatusCode).ToString(CultureInfo.InvariantCulture), body.Length > 300 ? body[..300] : body);
     }

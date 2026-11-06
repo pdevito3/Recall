@@ -51,6 +51,38 @@ test.describe('a session that ends while the page is open', () => {
   })
 })
 
+test.describe('a sign-out in another tab', () => {
+  test('takes this tab to the signed-out page, with no action in this tab', async ({ page, context, api }) => {
+    const session = sessionPage(page)
+    await session.open('/')
+    const otherPage = await context.newPage()
+    const otherTab = sessionPage(otherPage)
+    await otherTab.open('/about')
+
+    api.mock(...authApi.logoutWorks(), { method: 'get', path: authPaths.me, status: 204 })
+    await session.at.logout.click()
+
+    await expect.poll(() => page.url()).toContain('signedOut=1')
+    await expect.poll(() => otherPage.url()).toContain('signedOut=1')
+    await expect(otherTab.at.navigation).toHaveCount(0)
+  })
+
+  test('leaves this tab as it is when the sign-out fails', async ({ page, context, api }) => {
+    const session = sessionPage(page)
+    await session.open('/')
+    const otherPage = await context.newPage()
+    const otherTab = sessionPage(otherPage)
+    await otherTab.open('/about')
+
+    api.mock(authApi.logoutFails())
+    await session.signOutAndWaitForTheAnswer()
+
+    await expect(otherTab.at.navigation).toBeVisible()
+    expect(await otherTab.screenShowsOneColor()).toBe(false)
+    expect(new URL(otherPage.url()).pathname).toBe('/about')
+  })
+})
+
 test.describe('a sign-out with a call of the API that answers 401 after it', () => {
   test('opens the signed-out page, and starts no login with a return URL', async ({ page, api }) => {
     const session = sessionPage(page)
@@ -65,6 +97,42 @@ test.describe('a sign-out with a call of the API that answers 401 after it', () 
 
     await expect.poll(() => page.url(), { timeout: 10000 }).toContain('signedOut=1')
     expect(api.all('get', authPaths.login).filter((request) => request.query.has('returnUrl'))).toHaveLength(0)
+  })
+
+  test('goes to the logout of the provider when the provider has one, and starts no login', async ({ page, api }) => {
+    const providerLogout = 'https://provider.test/logout'
+    await page.route(`${providerLogout}*`, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: 'provider' }))
+    const session = sessionPage(page)
+    await session.open('/about')
+
+    api.mock(
+      authApi.loginOpens(),
+      { method: 'post', path: authPaths.logout, status: 200, body: { provider_logout_url: `${providerLogout}?client_id=recall` } },
+      { method: 'get', path: authPaths.me, status: 204 },
+    )
+    await session.followAndSignOutBeforeA401(session.at.homeLink, usersPaths.current, '/logout')
+
+    await expect.poll(() => page.url(), { timeout: 10000 }).toBe(`${providerLogout}?client_id=recall`)
+    expect(api.all('get', authPaths.login)).toHaveLength(0)
+  })
+})
+
+test.describe('a sign-out with a call of the API that answers 401 before its answer', () => {
+  test('still goes to the logout of the provider, and starts no login', async ({ page, api }) => {
+    const providerLogout = 'https://provider.test/logout'
+    await page.route(`${providerLogout}*`, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: 'provider' }))
+    const session = sessionPage(page)
+    await session.open('/about')
+
+    api.mock(
+      authApi.loginOpens(),
+      { method: 'post', path: authPaths.logout, status: 200, body: { provider_logout_url: `${providerLogout}?client_id=recall` }, delayMs: 1500 },
+      { method: 'get', path: authPaths.me, status: 204 },
+    )
+    await session.followAndSignOutWithA401BeforeItsAnswer(session.at.homeLink, usersPaths.current)
+
+    await expect.poll(() => page.url(), { timeout: 10000 }).toBe(`${providerLogout}?client_id=recall`)
+    expect(api.all('get', authPaths.login)).toHaveLength(0)
   })
 })
 

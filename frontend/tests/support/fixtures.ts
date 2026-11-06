@@ -29,13 +29,14 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
 
   // `provide`, not `use`: a bare `use(...)` reads as a React hook to the lint rule.
   api: [
-    async ({ page, actor, baseURL }, provide) => {
+    async ({ page, context, actor, baseURL }, provide) => {
       const origin = new URL(baseURL!).origin
       const routes: MockRoute[] = [authApi.userIs(actor), ...membershipApi.userIs(actor), ...usersApi.currentOf(actor)]
       const served = requestRecorder()
       const missed: string[] = []
 
-      await page.route(
+      // On the context, so that a second tab of the test gets the same answers.
+      await context.route(
         (url) => url.origin === origin && isMockedPath(url.pathname),
         async (route, request) => {
           const url = new URL(request.url())
@@ -70,6 +71,7 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
 
       // Let an in-flight handler finish, so that a late call is still recorded.
       await page.unrouteAll({ behavior: 'wait' })
+      await context.unrouteAll({ behavior: 'wait' })
       expect(missed, 'the page called an API route that no test mocked').toEqual([])
     },
     { auto: true },

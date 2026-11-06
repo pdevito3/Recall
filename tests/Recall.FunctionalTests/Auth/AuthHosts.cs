@@ -31,6 +31,10 @@ public static class AuthHosts
 
     public static OtlpCollector BundleExport { get; private set; } = null!;
 
+    public static AuthFlowFactory NoProviderLogout { get; private set; } = null!;
+
+    public static AuthFlowFactory DownAtLogout { get; private set; } = null!;
+
     public static void Start()
     {
         var main = Log.Logger;
@@ -65,6 +69,10 @@ public static class AuthHosts
         var bundleLogger = Log.Logger;
         Log.Logger = main;
         OwnerDemotion = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
+        NoProviderLogout = Start(
+            new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts },
+            new StubOidcProvider { EndSessionEndpoint = null });
+        DownAtLogout = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
         TwoProviders = Start(new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts })
         {
             OtherProvider = new StubOidcProvider(AuthFlowFactory.OtherIssuer),
@@ -98,7 +106,7 @@ public static class AuthHosts
 
     public static async Task StopAsync()
     {
-        foreach (var host in new[] { Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, Bundle, OwnerDemotion, Sweep })
+        foreach (var host in new[] { Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, Bundle, OwnerDemotion, Sweep, NoProviderLogout, DownAtLogout })
         {
             if (host is not null)
                 await host.DisposeAsync();

@@ -80,6 +80,7 @@ public partial class NoProviderBootTests
             File.SetUnixFileMode(data, WideDirectoryMode);
             Directory.CreateDirectory(web);
             await File.WriteAllTextAsync(Path.Combine(web, "index.html"), "<html>recall spa</html>");
+            await File.WriteAllTextAsync(Path.Combine(web, "app.js"), "// recall spa");
 
             // The child would inherit the narrow umask of this process, and hide a Server that does not set its own
             var start = new ProcessStartInfo("/bin/sh", ["-c", "umask 022; exec dotnet \"$0\"", ServerDll()])
@@ -347,6 +348,39 @@ public partial class NoProviderBootTests
         head.Content.Headers.ContentLength.ShouldBe("<html>recall spa</html>".Length);
         post.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         delete.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Test]
+    public async Task the_html_of_the_app_tells_the_browser_to_store_nothing()
+    {
+        // Arrange
+        await using var server = await ServerProcess.StartAsync();
+
+        // Act
+        using var index = await server.Client.GetAsync("/");
+        using var route = await server.Client.GetAsync("/users");
+        using var fileName = await server.Client.GetAsync("/index.html");
+
+        // Assert
+        // With this header, Chromium did not restore a page after its cookies were removed. docs/authentication.md has the runs.
+        index.Headers.CacheControl!.NoStore.ShouldBeTrue();
+        route.Headers.CacheControl!.NoStore.ShouldBeTrue();
+        fileName.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (fileName.Headers.CacheControl?.NoStore == true).ShouldBeTrue("/index.html is the same page as /");
+    }
+
+    [Test]
+    public async Task a_static_file_of_the_app_has_no_private_data_so_the_browser_can_keep_it()
+    {
+        // Arrange
+        await using var server = await ServerProcess.StartAsync();
+
+        // Act
+        using var file = await server.Client.GetAsync("/app.js");
+
+        // Assert
+        file.StatusCode.ShouldBe(HttpStatusCode.OK);
+        file.Headers.CacheControl?.NoStore.ShouldNotBe(true);
     }
 
     [Test]
