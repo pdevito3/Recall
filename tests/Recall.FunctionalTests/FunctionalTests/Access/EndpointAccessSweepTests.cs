@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Recall.FunctionalTests.FunctionalTests.Recordings;
 using Recall.Server.Domain;
 using Recall.Server.Domain.Corrections;
 using Recall.Server.Domain.People;
@@ -468,8 +469,7 @@ public class EndpointAccessSweepTests : TestBase
                     SchemaSample.Of(Body, Document)?.ToJsonString() ?? "null", Encoding.UTF8, "application/json");
             if (HasBinaryBody)
             {
-                // The first bytes of a WebM file, so that a body check of the control call passes.
-                request.Content = new ByteArrayContent([0x1A, 0x45, 0xDF, 0xA3]);
+                request.Content = new ByteArrayContent(RecordingScenario.WebmStart);
                 request.Content.Headers.ContentType = new("application/octet-stream");
             }
 

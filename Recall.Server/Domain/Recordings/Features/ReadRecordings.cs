@@ -150,7 +150,6 @@ public static class GetRecordingFile
                 .AsNoTracking()
                 .GetById(request.Id, cancellationToken);
 
-            // The name is compared and never used as a path, so a name with a climb in it finds nothing.
             if (request.Name != recording.AudioFileName || recording.Status == RecordingStatus.Receiving || recording.AudioDeletedAt is not null)
                 throw new Exceptions.NotFoundException("The file was not found.");
 

@@ -7,15 +7,9 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 
-/// <summary>
-/// Runs ffmpeg and then the worker as subprocesses, one at a time, because the worker needs more than 1 GB. A kill of a
-/// subprocess by the out-of-memory killer leaves the server up. The audio stays on this machine: neither subprocess
-/// opens a socket, and neither gets the environment of the server, which holds its secrets.
-/// </summary>
 public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<TranscriptionOptions> options) : ITranscriptionEngine
 {
     private const string WorkAudioName = "work.wav";
-    private const int WavHeaderBytes = 44;
     private const int BytesPerSample = 2;
     private const int SigkillExitCode = 137;
 
@@ -33,7 +27,7 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
 
         using var process = Start(WorkerCommand(settings, wav, input.StartSample), settings.Threads);
         using var killOnCancel = cancellationToken.Register(() => KillQuietly(process));
-        _ = DrainAsync(process.StandardError);
+        var discardErrors = DiscardAsync(process.StandardError);
         try
         {
             while (true)
@@ -52,6 +46,7 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
         finally
         {
             KillQuietly(process);
+            await discardErrors;
         }
     }
 
@@ -64,14 +59,13 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
         if (!File.Exists(wav))
             await DecodeAsync(input.AudioPath, wav, cancellationToken);
 
-        var samples = (new FileInfo(wav).Length - WavHeaderBytes) / BytesPerSample;
+        var samples = new FileInfo(wav).Length / BytesPerSample;
         if (samples > Recording.MaxDuration.TotalSeconds * Recording.SamplesPerSecond)
             throw new TranscriptionEngineException(RecordingProblem.TooLong);
 
         return wav;
     }
 
-    // The rename means that a later attempt sees a whole file or none.
     private async Task DecodeAsync(string audio, string wav, CancellationToken cancellationToken)
     {
         var partial = wav + ".part";
@@ -86,9 +80,9 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
         using var process = Start(command, threads: 1);
         using var killOnCancel = cancellationToken.Register(() => KillQuietly(process));
         process.StandardInput.Close();
-        var drainOutput = DrainAsync(process.StandardOutput);
-        await DrainAsync(process.StandardError);
-        await drainOutput;
+        var discardOutput = DiscardAsync(process.StandardOutput);
+        await DiscardAsync(process.StandardError);
+        await discardOutput;
         await process.WaitForExitAsync(cancellationToken);
         if (process.ExitCode != 0)
         {
@@ -108,10 +102,12 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
             wav, modelStore.Folder, settings.Threads.ToString(CultureInfo.InvariantCulture),
             startSample.ToString(CultureInfo.InvariantCulture),
         ];
-        return settings.WorkerPath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)
+        return RunsUnderDotnet(settings.WorkerPath)
             ? [Environment.ProcessPath!, settings.WorkerPath, .. arguments]
             : [settings.WorkerPath, .. arguments];
     }
+
+    private static bool RunsUnderDotnet(string workerPath) => workerPath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase);
 
     private static Process Start(string[] command, int threads)
     {
@@ -125,11 +121,7 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
         foreach (var argument in command.Skip(1))
             start.ArgumentList.Add(argument);
 
-        start.Environment.Clear();
-        start.Environment["PATH"] = "/usr/local/bin:/usr/bin:/bin";
-        start.Environment["DOTNET_PROCESSOR_COUNT"] = threads.ToString(CultureInfo.InvariantCulture);
-        start.Environment["DOTNET_gcServer"] = "0";
-        start.Environment["DOTNET_gcConcurrent"] = "0";
+        GiveNoSecretOfTheServer(start, threads);
 
         try
         {
@@ -139,6 +131,15 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
         {
             throw new TranscriptionEngineException(RecordingProblem.EngineNotInstalled);
         }
+    }
+
+    private static void GiveNoSecretOfTheServer(ProcessStartInfo start, int threads)
+    {
+        start.Environment.Clear();
+        start.Environment["PATH"] = "/usr/local/bin:/usr/bin:/bin";
+        start.Environment["DOTNET_PROCESSOR_COUNT"] = threads.ToString(CultureInfo.InvariantCulture);
+        start.Environment["DOTNET_gcServer"] = "0";
+        start.Environment["DOTNET_gcConcurrent"] = "0";
     }
 
     private static async Task<string?> ReadLineBeforeStallAsync(
@@ -169,8 +170,7 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
         }
     }
 
-    // A worker can say something about the words on stderr, so this text goes to no log.
-    private static async Task DrainAsync(StreamReader output)
+    private static async Task DiscardAsync(StreamReader output)
     {
         var buffer = new char[4096];
         try
@@ -179,9 +179,8 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
             {
             }
         }
-        catch (Exception exception) when (exception is IOException or ObjectDisposedException or InvalidOperationException)
+        catch (IOException)
         {
-            // The process is gone, so its output ended.
         }
     }
 
@@ -192,9 +191,8 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
             if (!process.HasExited)
                 process.Kill(entireProcessTree: true);
         }
-        catch (Exception exception) when (exception is InvalidOperationException or Win32Exception or NotSupportedException)
+        catch (Exception exception) when (exception is InvalidOperationException or Win32Exception or AggregateException)
         {
-            // The process ended on its own.
         }
     }
 }

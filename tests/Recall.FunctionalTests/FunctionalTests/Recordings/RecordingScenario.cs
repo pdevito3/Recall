@@ -37,7 +37,6 @@ internal static class RecordingScenario
     public static async Task<RecordingDto> GetRecordingAsync(this HttpClient client, string id)
         => (await client.GetFromJsonAsync<RecordingDto>(ApiRoutes.Recordings.GetRecord(id))).ShouldNotBeNull();
 
-    /// <summary>Uploads two slices and finishes, so the Recording waits for its text.</summary>
     public static async Task<RecordingDto> AddFinishedRecordingAsync(this HttpClient client, string sessionId)
     {
         var recording = await client.AddRecordingAsync(sessionId);

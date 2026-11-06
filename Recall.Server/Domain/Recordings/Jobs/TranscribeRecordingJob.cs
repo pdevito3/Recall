@@ -37,15 +37,16 @@ public sealed class TranscribeRecordingJob(
         }
         catch (NotFoundException)
         {
-            // The Recording went while the job ran, and this attempt can have written its work file after that delete.
-            RecordingWork.TryDeleteFolder(fileStore, RecordingFiles.Folder(tenantId, userId, recordingId), recordingId, _logger);
+            RemoveWorkFileLeftAfterTheDelete(recordingId, userId, tenantId);
             _logger.Here().Information("Recording {RecordingId} is gone, so its job ends", recordingId);
         }
     }
 
+    private void RemoveWorkFileLeftAfterTheDelete(string recordingId, string userId, string tenantId)
+        => RecordingWork.TryDeleteFolder(fileStore, RecordingFiles.Folder(tenantId, userId, recordingId), recordingId, _logger);
+
     private async Task RunAsync(string recordingId, JournalOwner owner, CancellationToken cancellationToken)
     {
-        // This engine lookup is the one that a Recording with another engine would also take. Today each one is Local.
         var engine = engines.First(e => e.Kind == TranscriptionEngineKind.Local);
         var start = await SendAsync(owner, new BeginTranscription.Command(recordingId, engine.IsReady), cancellationToken);
         if (start is null)

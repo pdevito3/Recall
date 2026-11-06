@@ -19,10 +19,6 @@ public partial class NoProviderBootTests
 {
     private sealed record Seeded(string Cookie, string DeletedTenantId, string KeptTenantId);
 
-    /// <summary>
-    /// A server process makes the schema, and the rows go in with SQL. A second in-process host would take the static
-    /// logger from each test that runs now, and close it at the end.
-    /// </summary>
     private static async Task<Seeded> SeedTwoTenantsWithFilesAsync(string root)
     {
         var migrating = await ServerProcess.StartAsync(root);

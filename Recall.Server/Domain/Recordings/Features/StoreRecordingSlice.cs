@@ -73,8 +73,6 @@ public static class StoreRecordingSlice
             };
         }
 
-        // A delete of the Recording, its Session, its owner, or its tenant can run while the file goes to disk. That delete
-        // removed its folder first, so this write is the one that can leave a file with no row.
         private async Task SaveOrRemoveLateFilesAsync(Recording recording, CancellationToken cancellationToken)
         {
             try

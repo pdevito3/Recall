@@ -36,10 +36,6 @@ public static class SystemScopeExtensions
         return scope;
     }
 
-    /// <summary>
-    /// Creates a DI scope for a job that acts in the journal of one person. A system scope sees no journal (SES-15), and
-    /// this scope sees that one journal, in that one tenant, through the same query filters as a request of that person.
-    /// </summary>
     public static AsyncServiceScope CreateJournalScope(this IServiceScopeFactory scopeFactory, JournalOwner owner)
     {
         var scope = scopeFactory.CreateAsyncScope();

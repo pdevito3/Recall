@@ -55,7 +55,6 @@ public static class JournalTriggers
             """);
     }
 
-    /// <summary>The sync feed has this check in its insert trigger. A table outside the feed needs it alone.</summary>
     public static void AddOwnerGuard(this MigrationBuilder migrationBuilder, string table) => migrationBuilder.Sql($"""
         CREATE TRIGGER {table}_refuse_deleted_owner BEFORE INSERT ON {table}
         BEGIN

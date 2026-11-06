@@ -8,11 +8,6 @@ using Resources.Storage;
 using Serilog;
 using Tenants;
 
-/// <summary>
-/// Puts the files and the jobs back in line with the rows. It runs after each start, and it is the safety net of each
-/// path that can end early: a crash between a commit and a folder delete, a failed delete, a job in the dead letters, or a
-/// start with the jobs off. A system scope sees no journal, so it reads each journal in a scope of its owner.
-/// </summary>
 public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore fileStore, TimeProvider timeProvider)
 {
     private readonly ILogger _logger = Log.ForContext<RecordingSweep>();
@@ -40,7 +35,6 @@ public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore 
         _logger.Here().Information("Swept the audio of {OwnerCount} owners and {DeletedTenantCount} deleted tenants", owners.Count, deletedTenants.Count);
     }
 
-    /// <summary>Queues each Recording that waits for text. A job for a Recording that has its text ends at once.</summary>
     public async Task QueueWaitingRecordingsAsync(CancellationToken cancellationToken)
     {
         var (owners, _, _) = await ReadOwnersAsync(cancellationToken);
@@ -121,7 +115,6 @@ public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore 
     }
 }
 
-/// <summary>Runs the sweep behind the start, so a large folder cannot hold the boot. It runs only on a host with workers.</summary>
 public sealed class RecordingSweepService(RecordingSweep sweep) : BackgroundService
 {
     private readonly ILogger _logger = Log.ForContext<RecordingSweepService>();

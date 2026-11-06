@@ -284,7 +284,7 @@ public class TranscribeJobTests : TestBase
         var job = JobWith(Saying("words"));
         await RunAsync(job, recording, admin);
 
-        // Act: the audio is kept, so a job that comes early does nothing.
+        // Act
         await job.DeleteRecordingAudioAsync(recording.Id, admin.Id, admin.TenantId, CancellationToken.None);
 
         // Assert

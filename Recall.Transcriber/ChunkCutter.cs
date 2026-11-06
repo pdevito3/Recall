@@ -1,9 +1,5 @@
 namespace Recall.Transcriber;
 
-/// <summary>
-/// Picks where a chunk ends, so a cut falls in a pause and no word splits. It looks in the last half of the window for
-/// the longest quiet run and cuts in the middle of it. A window with no quiet run ends at its full length.
-/// </summary>
 public static class ChunkCutter
 {
     public const int FrameSamples = 320;

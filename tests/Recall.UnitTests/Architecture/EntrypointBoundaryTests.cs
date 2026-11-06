@@ -28,10 +28,6 @@ public class EntrypointBoundaryTests
     /// </summary>
     private static readonly string[] ServerAllowedTransportTypes = [];
 
-    /// <summary>
-    /// A job method is an entrypoint with no IEndpoint to mark it. This one opens a new scope for each command, so a run
-    /// again discards only the changes of that command.
-    /// </summary>
     private static readonly string[] JobsWithAScopeForEachCommand =
     [
         "Recall.Server.Domain.Recordings.Jobs.TranscribeRecordingJob",

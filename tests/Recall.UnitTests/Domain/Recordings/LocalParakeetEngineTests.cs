@@ -6,7 +6,6 @@ using Recall.Server.Domain.Recordings;
 using Recall.Server.Domain.Recordings.Transcription;
 using Shouldly;
 
-/// <summary>The subprocess rules, with shell scripts in the place of ffmpeg and the worker, so each run is real and fast.</summary>
 [UnsupportedOSPlatform("windows")]
 public class LocalParakeetEngineTests
 {

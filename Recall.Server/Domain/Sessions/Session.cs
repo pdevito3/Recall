@@ -124,11 +124,6 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         return decision.Outcome;
     }
 
-    /// <summary>
-    /// Adds words that the server heard to the end of Raw, as a new Revision. A person edits the same text, so the words
-    /// go on top of the current draft, whatever the draft is.
-    /// </summary>
-    /// <returns>False when the words do not fit in a Draft. Raw stays as it was.</returns>
     public bool TryAppendTranscript(string words, DateTimeOffset now)
     {
         var text = RawTranscript.Append(Raw.Text, words);

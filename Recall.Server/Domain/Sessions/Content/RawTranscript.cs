@@ -2,7 +2,6 @@ namespace Recall.Server.Domain.Sessions.Content;
 
 using System.Text.Json.Nodes;
 
-/// <summary>Adds transcribed words to the end of Raw, which is a ProseMirror document or plain text.</summary>
 public static class RawTranscript
 {
     public static string Append(string raw, string words)

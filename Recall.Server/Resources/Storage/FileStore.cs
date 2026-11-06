@@ -75,7 +75,6 @@ public sealed class FileStore(IOptions<FileStoreOptions> options)
     public Task WriteAsync(FileKey key, Stream content, CancellationToken cancellationToken)
         => WriteAsync(key, content.CopyToAsync, cancellationToken);
 
-    /// <summary>Writes what <paramref name="write"/> gives to the key, in place of a file that the key has.</summary>
     public async Task WriteAsync(FileKey key, Func<Stream, CancellationToken, Task> write, CancellationToken cancellationToken)
     {
         var path = ResolveWithNoSymlink(key);
@@ -133,7 +132,6 @@ public sealed class FileStore(IOptions<FileStoreOptions> options)
 
     public bool Exists(FileKey key) => File.Exists(ResolveWithNoSymlink(key));
 
-    /// <summary>The path of a key for a subprocess, which takes no stream. The folder of the path exists after this call.</summary>
     public string LocalPathOf(FileKey key)
     {
         var path = ResolveWithNoSymlink(key);
@@ -143,7 +141,6 @@ public sealed class FileStore(IOptions<FileStoreOptions> options)
         return path;
     }
 
-    /// <summary>The names of the folders directly in the folder of the prefix. A prefix with no folder has none.</summary>
     public IReadOnlyList<string> FolderNamesUnder(FileKey prefix)
     {
         var path = ResolveWithNoSymlink(prefix);

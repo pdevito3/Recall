@@ -15,7 +15,11 @@ public static class AssemblyHooks
         await _factory.InitializeAsync();
         AuthHosts.Start();
 
-        // Each test of the closed host signs in as "owner". Two first logins at once race: the loser reads no link, then the new tenant, and gets the refusal.
+        await SeatTheOwnerSoThatNoTwoFirstLoginsRaceAsync();
+    }
+
+    private static async Task SeatTheOwnerSoThatNoTwoFirstLoginsRaceAsync()
+    {
         using var owner = new AuthBrowser(AuthHosts.Closed);
         await owner.LoginWebAsync("owner");
     }

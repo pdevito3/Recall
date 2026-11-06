@@ -4,7 +4,6 @@ using Microsoft.Extensions.Options;
 
 public sealed record ModelFile(string Name, long ByteLength, string Sha256);
 
-/// <summary>The one speech model that this release runs, pinned by commit and by the hash of each file.</summary>
 public static class ModelManifest
 {
     public const string FolderName = "parakeet-tdt-0.6b-v2-int8";
@@ -30,14 +29,9 @@ public enum ModelStatus
     HashRejected,
 }
 
-/// <summary>
-/// The model on the disk, and what the last download did. The marker file appears only after each file passed its
-/// hash, so a crash in a download leaves a model that is not ready. The last fault lives in memory, so a restart says
-/// <see cref="ModelStatus.Missing"/> until the next try.
-/// </summary>
 public sealed class ModelStore(IOptions<TranscriptionOptions> options)
 {
-    private const string ReadyMarker = ".verified";
+    private const string AllHashesPassedMarker = ".verified";
 
     private readonly Lock _gate = new();
     private ModelStatus _lastFault = ModelStatus.Missing;
@@ -74,7 +68,6 @@ public sealed class ModelStore(IOptions<TranscriptionOptions> options)
             _lastFault = ModelStatus.Missing;
     }
 
-    /// <summary>True for the one caller that must queue a download. Many Recordings wait for one model.</summary>
     public bool TryReserveDownload()
     {
         lock (_gate)
@@ -87,7 +80,6 @@ public sealed class ModelStore(IOptions<TranscriptionOptions> options)
         }
     }
 
-    /// <summary>A retry that finds a newer try in this process drops out, so a restart cannot grow a second retry chain.</summary>
     public bool TryBeginDownload(DateTimeOffset now, TimeSpan retryGap)
     {
         lock (_gate)
@@ -111,5 +103,5 @@ public sealed class ModelStore(IOptions<TranscriptionOptions> options)
         }
     }
 
-    private string MarkerPath => Path.Combine(Folder, ReadyMarker);
+    private string MarkerPath => Path.Combine(Folder, AllHashesPassedMarker);
 }

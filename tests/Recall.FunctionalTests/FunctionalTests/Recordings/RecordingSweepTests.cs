@@ -18,10 +18,6 @@ public class RecordingSweepTests : TestBase
 {
     private static IServiceProvider Services => TestingWebApplicationFactory.Instance.Services;
 
-    /// <summary>
-    /// The sweep reads every row of the shared database, so on the shared folder it would remove the files of each other
-    /// test that runs now. It gets a folder of its own, where only the files of this test can be.
-    /// </summary>
     private sealed class SweptFolder : IDisposable
     {
         private readonly string _root = Directory.CreateTempSubdirectory("recall_sweep_").FullName;

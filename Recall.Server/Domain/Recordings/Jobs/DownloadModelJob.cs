@@ -13,7 +13,6 @@ using Serilog;
 using Tenants;
 using Transcription;
 
-/// <summary>Queues the one download that many waiting Recordings need.</summary>
 public sealed class ModelDownloads(IServiceScopeFactory scopeFactory, ModelStore modelStore, TimeProvider timeProvider)
 {
     public async Task RequestAsync(CancellationToken cancellationToken)
@@ -30,11 +29,6 @@ public sealed class ModelDownloads(IServiceScopeFactory scopeFactory, ModelStore
     }
 }
 
-/// <summary>
-/// Gets the model on first use, with the pinned hash of each file as the only test of what it got. It sends nothing of a
-/// person: each request is a GET for a file of the manifest. The job shares the one transcription worker, because no
-/// transcription can run without the model.
-/// </summary>
 public sealed class DownloadModelJob(
     IHttpClientFactory httpClientFactory,
     ModelStore modelStore,
@@ -104,7 +98,7 @@ public sealed class DownloadModelJob(
             return;
 
         var partial = target + ".part";
-        await FetchAsync(client, file, partial, cancellationToken);
+        await ResumeFetchAsync(client, file, partial, cancellationToken);
         if (!await HasPinnedHashAsync(partial, file, cancellationToken))
         {
             File.Delete(partial);
@@ -114,8 +108,7 @@ public sealed class DownloadModelJob(
         File.Move(partial, target, overwrite: true);
     }
 
-    // A file that a stop cut goes on from its last byte, because the largest file takes minutes on a slow line.
-    private async Task FetchAsync(HttpClient client, ModelFile file, string partial, CancellationToken cancellationToken)
+    private async Task ResumeFetchAsync(HttpClient client, ModelFile file, string partial, CancellationToken cancellationToken)
     {
         var have = File.Exists(partial) ? new FileInfo(partial).Length : 0;
         if (have >= file.ByteLength)

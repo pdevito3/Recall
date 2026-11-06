@@ -8,10 +8,9 @@ using Resources;
 using Resources.Storage;
 using Serilog;
 
-/// <summary>Starts one attempt of the job. Null means that the job has nothing to do on this Recording now.</summary>
 public static class BeginTranscription
 {
-    public sealed record Start(TranscriptionEngineKind Engine, string AudioPath, string WorkFolder, long StartSample);
+    public sealed record Start(string AudioPath, string WorkFolder, long StartSample);
 
     public sealed record Command(string Id, bool EngineIsReady) : IRequest<Start?>, IRunsAgainWhenRaced;
 
@@ -42,7 +41,6 @@ public static class BeginTranscription
             else if (recording.BeginAttempt())
             {
                 start = new Start(
-                    recording.Engine,
                     fileStore.LocalPathOf(RecordingFiles.Audio(recording)),
                     fileStore.LocalPathOf(RecordingFiles.Folder(recording)),
                     recording.TranscribedSamples);
@@ -55,7 +53,6 @@ public static class BeginTranscription
     }
 }
 
-/// <summary>Saves one chunk: the words, the Revision, and the progress pointer go in one transaction.</summary>
 public static class SaveTranscriptChunk
 {
     public sealed record Command(string Id, long EndSample, long TotalSamples, string Words) : IRequest<bool>, IRunsAgainWhenRaced;
@@ -64,7 +61,6 @@ public static class SaveTranscriptChunk
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
 
-        /// <returns>False when the words do not fit in the Session, so the Recording failed and the job must stop.</returns>
         public async Task<bool> Handle(Command request, CancellationToken cancellationToken)
         {
             Activity.Current?.SetTag("app.recording_id", request.Id);
@@ -174,7 +170,6 @@ public static class FailTranscription
     }
 }
 
-/// <summary>Ends the wait of seven days after the text is saved. The audio of a Recording that failed never comes here.</summary>
 public static class RemoveKeptAudio
 {
     public sealed record Command(string Id) : IRequest, IRunsAgainWhenRaced;

@@ -39,9 +39,9 @@ using var wav = new FileStream(wavPath, FileMode.Open, FileAccess.Read, FileShar
 var (dataStart, totalSamples) = FindSamples(wav);
 
 var maxSamples = MaxChunkSeconds * SamplesPerSecond;
-// One sample more than a chunk holds tells the cutter that the audio goes on past this window.
-var bytes = new byte[(maxSamples + 1) * BytesPerSample];
-var samples = new float[maxSamples + 1];
+var windowSamples = maxSamples + 1;
+var bytes = new byte[windowSamples * BytesPerSample];
+var samples = new float[windowSamples];
 using var output = Console.OpenStandardOutput();
 using var lines = new StreamWriter(output) { AutoFlush = true };
 
@@ -77,7 +77,6 @@ static string Recognize(OfflineRecognizer recognizer, float[] chunk)
     return stream.Result.Text.Trim();
 }
 
-// Reads the chunks of the file, because a WAV header can hold more than the 44 bytes of the plain form.
 static (long DataStart, long TotalSamples) FindSamples(FileStream wav)
 {
     Span<byte> header = stackalloc byte[12];

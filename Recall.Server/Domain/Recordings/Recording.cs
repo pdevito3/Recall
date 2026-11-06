@@ -2,12 +2,6 @@ namespace Recall.Server.Domain.Recordings;
 
 using Exceptions;
 
-/// <summary>
-/// Audio of one Session. Its words reach Raw through the status machine
-/// <c>Receiving -finish-> Received -attempt-> Transcribing -complete-> Transcribed</c>. A Recording that is
-/// <c>Received</c> or <c>Transcribing</c> can go to <c>Failed</c>, and a person can send <c>Failed</c> back to
-/// <c>Received</c>. Only <c>Transcribed</c> audio ever goes away by itself.
-/// </summary>
 public class Recording : BaseEntity, ITenantable, IJournalOwned
 {
     public const string IdPrefix = "rec";
@@ -62,7 +56,6 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
 
     public string AudioContentType => Format == RecordingFormat.Webm ? "audio/webm" : "audio/mp4";
 
-    /// <summary>True while a job has work on this Recording, so a start of the server must queue that work.</summary>
     public bool WaitsForTranscription => Status is RecordingStatus.Received or RecordingStatus.Transcribing;
 
     public static Recording Create(string tenantId, string userId, string sessionId, string clientRecordingId, RecordingFormat format)
@@ -101,14 +94,12 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
         HighestStoredSlice = Math.Max(HighestStoredSlice ?? -1, index);
     }
 
-    /// <summary>The slice indexes below <paramref name="sliceCount"/> that are not stored.</summary>
     public static IReadOnlyList<int> MissingSlices(IEnumerable<int> stored, int sliceCount)
     {
         var present = stored.ToHashSet();
         return Enumerable.Range(0, sliceCount).Where(index => !present.Contains(index)).ToList();
     }
 
-    /// <summary>Ends the upload. It throws when the slices do not add up, so a person can send what is missing.</summary>
     public void Finish(IReadOnlyCollection<int> stored, int sliceCount, long byteLength)
     {
         if (Status != RecordingStatus.Receiving)
@@ -125,7 +116,6 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
         Status = RecordingStatus.Received;
     }
 
-    /// <summary>Starts one attempt of a job. It returns false when the attempts ran out, so the status is now Failed.</summary>
     public bool BeginAttempt()
     {
         RequireWaitingForTranscription();
@@ -147,10 +137,6 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
         AttemptsWithoutProgress = 0;
     }
 
-    /// <summary>
-    /// Moves the progress pointer past one chunk. The caller saves it in one transaction with the words of the chunk, so a
-    /// later attempt starts after these words. False when the pointer is already past the chunk.
-    /// </summary>
     public bool AdvanceTo(long endSample, long totalSamples, bool hasWords)
     {
         DurationMs = totalSamples * 1000 / SamplesPerSecond;
@@ -163,7 +149,6 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
         return true;
     }
 
-    /// <summary>Ends the work. With no words at all the audio is all that the person has, so it stays with a reason.</summary>
     public void Complete(DateTimeOffset now)
     {
         RequireWaitingForTranscription();
@@ -224,13 +209,11 @@ public enum RecordingFormat
     Mp4,
 }
 
-/// <summary>Which engine makes the text. <see cref="Transcription.ITranscriptionEngine"/> is the seam that a cloud engine implements.</summary>
 public enum TranscriptionEngineKind
 {
     Local,
 }
 
-/// <summary>Why a Recording has no text yet. It is a closed list, so it can hold no text of a person or of an exception.</summary>
 public enum RecordingProblem
 {
     None,

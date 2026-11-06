@@ -8,7 +8,6 @@ using Resources.Jobs;
 using Resources.Storage;
 using Serilog;
 
-/// <summary>Retries the folder delete of a tenant delete that could not remove it. It throws to use the default retry.</summary>
 public sealed class DeleteTenantFilesJob(IServiceScopeFactory scopeFactory, FileStore fileStore)
 {
     private readonly ILogger _logger = Log.ForContext<DeleteTenantFilesJob>();

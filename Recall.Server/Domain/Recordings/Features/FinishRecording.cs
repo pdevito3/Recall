@@ -50,7 +50,6 @@ public static class FinishRecording
                 }
             }, cancellationToken);
 
-            // The audio is safe with this save. A job store that is down must not cost the person the upload.
             await dbContext.SaveChangesAsync(cancellationToken);
             await RecordingWork.TryQueueTranscriptionAsync(dbContext, recording, timeProvider, _logger, cancellationToken);
             RecordingWork.TryDeleteSlices(fileStore, recording, _logger);
@@ -84,13 +83,8 @@ public sealed class FinishRecordingEndpoint : IEndpoint
         => TypedResults.Ok(await mediator.Send(new FinishRecording.Command(id, dto), cancellationToken));
 }
 
-/// <summary>The steps that a route and a job share. Each one takes a context that belongs to the journal of the owner.</summary>
 public static class RecordingWork
 {
-    /// <summary>
-    /// Queues the job in a second save. The text of a person stays when the jobs are off, and each start of the server
-    /// queues the work again, so this failure costs a wait and no audio.
-    /// </summary>
     public static async Task TryQueueTranscriptionAsync(
         AppDbContext dbContext, Recording recording, TimeProvider timeProvider, ILogger logger, CancellationToken cancellationToken)
     {

@@ -72,7 +72,6 @@ public static class DeleteTenant
             }
         }
 
-        // The tenant is already gone, so a fault here only moves the retry to the sweep at the next start.
         private async Task TryQueueDeleteAsync(string tenantId, CancellationToken cancellationToken)
         {
             try

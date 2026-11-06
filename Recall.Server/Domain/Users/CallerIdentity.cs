@@ -8,10 +8,6 @@ public abstract record CallerIdentity
     /// <summary>System work in a scope from <see cref="SystemScopeExtensions.CreateSystemScope"/>.</summary>
     public sealed record System : CallerIdentity;
 
-    /// <summary>
-    /// A job that acts in the journal of one person, in a scope from
-    /// <see cref="SystemScopeExtensions.CreateJournalScope"/>. It sees that journal and no other (SES-15).
-    /// </summary>
     public sealed record JournalWork(string UserId, string TenantId) : CallerIdentity;
 
     /// <summary>

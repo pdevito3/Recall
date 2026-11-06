@@ -29,11 +29,12 @@ public static class JobHosting
 
     private static readonly string[] DevelopmentAndTestEnvironments = [Environments.Development, "FunctionalTesting", "IntegrationTesting"];
 
-    /// <summary>One at a time, because a transcription needs more than 1 GB. It keeps the default retry policy (rule 8).</summary>
+    private const int TranscriptionsThatFitInMemory = 1;
+
     public static WorkerGroupOptions TranscriptionWorkers(JobOptions settings) => new()
     {
         Name = TranscriptionQueue,
-        PoolSize = 1,
+        PoolSize = TranscriptionsThatFitInMemory,
         Policy = new DispatchPolicy.Strict([TranscriptionQueue]),
         PollInterval = TimeSpan.FromSeconds(settings.PollSeconds),
         ShutdownBudget = JobShutdownBudget,
