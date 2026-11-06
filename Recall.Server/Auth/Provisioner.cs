@@ -78,10 +78,15 @@ public sealed class Provisioner(
         if (link is not null)
         {
             // This closes the claim, so a file that the operator made and then used through an old link cannot wait for a stranger.
-            if (claim.Take() && !await GiveBackToLinkedAdminAsync(dbContext, link.UserId, cancellationToken))
-                _logger.Here().Warning(
-                    "A login with a link removed the owner claim file {ClaimFile}, and the claim changed nothing. To claim the Owner, create the file again and sign in with the new identity",
-                    ownerClaim.FilePath);
+            if (claim.Take())
+            {
+                // A rerun after a lost race finds nothing left to give, and that is not a claim that changed nothing.
+                claim.GaveBack |= await GiveBackToLinkedAdminAsync(dbContext, link.UserId, cancellationToken);
+                if (!claim.GaveBack)
+                    _logger.Here().Warning(
+                        "A login with a link removed the owner claim file {ClaimFile}, and the claim changed nothing. To claim the Owner, create the file again and sign in with the new identity",
+                        ownerClaim.FilePath);
+            }
 
             return await SignInLinkedAsync(dbContext, link, identity.Profile, cancellationToken);
         }
@@ -239,6 +244,8 @@ public sealed class Provisioner(
     private sealed class ClaimOfThisLogin(OwnerClaim ownerClaim)
     {
         private bool _won;
+
+        public bool GaveBack { get; set; }
 
         public bool Take() => _won = _won || ownerClaim.TryConsume();
     }
