@@ -256,11 +256,7 @@ jobs:
               - 'global.json'
             stack:
               - 'Recall.AppHost/**'
-              - 'Recall.Server/Auth/**'
-              - 'Recall.Server/Databases/**'
-              - 'Recall.Server/Domain/**'
-              - 'Recall.Server/Program.cs'
-              - 'Recall.Server/Resources/**'
+              - 'Recall.Server/**'
               - 'Directory.Packages.props'
               - 'Directory.Build.props'
               - 'global.json'
