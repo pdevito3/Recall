@@ -36,7 +36,6 @@ public sealed class SystemHealthJobs(IServiceScopeFactory scopeFactory, IOptions
     }
 }
 
-/// <summary>Enqueues one health job at each start, so an idle install keeps no schedule that writes to the disk.</summary>
 public sealed class HealthJobOnStart(BackWaveClient client, TimeProvider timeProvider) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken) =>

@@ -4,10 +4,7 @@ public sealed class JobOptions
 {
     public const string SectionName = "Jobs";
 
-    /// <summary>
-    /// How long a committed job can wait for a worker, because a transactional enqueue wakes no worker. BackWave reads it
-    /// when the host starts. An environment variable sets it, because a test host adds its settings after that time.
-    /// </summary>
+    /// <summary>How long a committed job can wait for a worker, because a transactional enqueue wakes no worker.</summary>
     public int PollSeconds { get; init; } = 5;
 
     public HealthJobOptions HealthJob { get; init; } = new();

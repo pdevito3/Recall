@@ -152,8 +152,8 @@ public class AppDbContext(
 
     /// <summary>
     /// Saves the changes and runs <paramref name="enqueue"/> in one transaction, so neither the rows nor the jobs stay
-    /// if the save or the enqueue fails. Give the transaction to <c>BackWaveClient.EnqueueAsync</c>. It is the only
-    /// save inside a transaction. The worker sees the job at its next poll, not at once.
+    /// if the save or the enqueue fails. Give the transaction to <c>BackWaveClient.EnqueueAsync</c>. The worker sees the
+    /// job at its next poll, not at once.
     /// </summary>
     public Task<int> SaveAndEnqueueAsync(Func<DbTransaction, CancellationToken, Task> enqueue,
         CancellationToken cancellationToken = default)

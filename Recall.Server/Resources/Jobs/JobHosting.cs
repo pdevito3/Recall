@@ -10,11 +10,12 @@ public static class JobHosting
 {
     public const string SystemQueue = "system";
 
-    /// <summary>The time that <c>docker stop</c> waits before it kills the process. The compose file sets no other value.</summary>
+    /// <summary>The time that <c>docker stop</c> waits before it kills the process.</summary>
     public static readonly TimeSpan DockerStopGrace = TimeSpan.FromSeconds(10);
 
-    /// <summary>The host must stop inside <see cref="DockerStopGrace"/>, and it flushes the telemetry files after it stops.</summary>
-    public static readonly TimeSpan HostShutdownTimeout = TimeSpan.FromSeconds(8);
+    private static readonly TimeSpan TelemetryFlushMargin = TimeSpan.FromSeconds(2);
+
+    public static readonly TimeSpan HostShutdownTimeout = DockerStopGrace - TelemetryFlushMargin;
 
     /// <summary>A job that does not stop in this time gets a lease that ends, so a later start runs it again.</summary>
     public static readonly TimeSpan JobShutdownBudget = TimeSpan.FromSeconds(6);
@@ -27,7 +28,7 @@ public static class JobHosting
     public static void AddJobs(this WebApplicationBuilder builder)
     {
         var section = builder.Configuration.GetSection(JobOptions.SectionName);
-        var pollSeconds = section.Get<JobOptions>()?.PollSeconds ?? new JobOptions().PollSeconds;
+        var pollSecondsAtRegistration = section.Get<JobOptions>()?.PollSeconds ?? new JobOptions().PollSeconds;
 
         builder.Services.Configure<JobOptions>(section);
         builder.Services.Configure<HostOptions>(host => host.ShutdownTimeout = HostShutdownTimeout);
@@ -45,7 +46,7 @@ public static class JobHosting
             {
                 Name = "system",
                 Policy = new DispatchPolicy.Strict([SystemQueue]),
-                PollInterval = TimeSpan.FromSeconds(pollSeconds),
+                PollInterval = TimeSpan.FromSeconds(pollSecondsAtRegistration),
                 ShutdownBudget = JobShutdownBudget,
                 Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
             });

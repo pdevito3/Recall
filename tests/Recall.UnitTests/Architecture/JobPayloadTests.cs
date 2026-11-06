@@ -6,7 +6,7 @@ using Recall.Server.Resources;
 using Shouldly;
 
 /// <summary>
-/// The free tier of BackWave stores a payload as plain text. A job gets the IDs of its rows and reads the text from
+/// BackWave stores a payload as plain text. A job gets the IDs of its rows and reads the text from
 /// the database, so a job row holds no journal text.
 /// </summary>
 public class JobPayloadTests

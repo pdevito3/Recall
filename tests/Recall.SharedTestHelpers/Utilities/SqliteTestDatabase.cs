@@ -27,6 +27,11 @@ public sealed class SqliteTestDatabase : IAsyncDisposable
         using (var connection = new SqliteConnection(ConnectionString))
             SqliteConnection.ClearPool(connection);
 
+        await DeleteAfterTheLastMetricExportAsync();
+    }
+
+    private async Task DeleteAfterTheLastMetricExportAsync()
+    {
         for (var attempt = 1; ; attempt++)
         {
             try
@@ -34,7 +39,6 @@ public sealed class SqliteTestDatabase : IAsyncDisposable
                 Directory.Delete(_directory, recursive: true);
                 return;
             }
-            // The last metric export of a stopped host can make a file while the delete walks the folder.
             catch (IOException) when (attempt < DeleteAttempts)
             {
                 await Task.Delay(TimeSpan.FromMilliseconds(200));
