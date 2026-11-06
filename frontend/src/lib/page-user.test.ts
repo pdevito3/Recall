@@ -1,8 +1,26 @@
-import { beforeEach, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 beforeEach(() => {
   vi.resetModules()
+  const stored = new Map<string, string>()
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => stored.get(key) ?? null,
+    setItem: (key: string, value: string) => stored.set(key, value),
+  })
 })
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
+function countTheMessages() {
+  const postMessage = vi.fn()
+  vi.stubGlobal('BroadcastChannel', function (this: { postMessage: typeof postMessage; close: () => void }) {
+    this.postMessage = postMessage
+    this.close = () => undefined
+  })
+  return postMessage
+}
 
 async function freshPage() {
   const pageUser = await import('./page-user')
@@ -30,4 +48,38 @@ test('an answer with another person leaves the page, and the page keeps its firs
 
   expect(onMismatch).toHaveBeenCalledOnce()
   expect(pageUserOf()).toBe('person-a')
+})
+
+test('a next page of the same person sends no message, so a page in the back-forward cache stays', async () => {
+  const messages = countTheMessages()
+
+  ;(await freshPage()).notePageUser('person-a')
+  vi.resetModules()
+  ;(await freshPage()).notePageUser('person-a')
+
+  expect(messages).toHaveBeenCalledOnce()
+})
+
+test('the first page of another person tells the other tabs', async () => {
+  const messages = countTheMessages()
+
+  ;(await freshPage()).notePageUser('person-a')
+  vi.resetModules()
+  ;(await freshPage()).notePageUser('person-b')
+
+  expect(messages).toHaveBeenLastCalledWith({ signedInAs: 'person-b' })
+})
+
+test('the first page of another person tells the other tabs with no room in storage', async () => {
+  const messages = countTheMessages()
+  vi.stubGlobal('localStorage', {
+    getItem: () => null,
+    setItem: () => {
+      throw new DOMException('Full', 'QuotaExceededError')
+    },
+  })
+
+  ;(await freshPage()).notePageUser('person-b')
+
+  expect(messages).toHaveBeenCalledWith({ signedInAs: 'person-b' })
 })

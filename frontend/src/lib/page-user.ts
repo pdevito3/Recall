@@ -2,6 +2,8 @@ export const pageUserHeader = 'X-Recall-User'
 
 export const sessionChannelName = 'recall.session'
 
+const lastPersonKey = 'recall.lastPerson'
+
 let pageUser: string | null = null
 let leaveThePage = () => undefined as void
 
@@ -16,14 +18,21 @@ export function refuseThePage() {
   leaveThePage()
 }
 
-function announceThePerson(sub: string) {
+/** A message evicts a page from the back-forward cache, so a next page of the same person sends none. */
+function announceAChangeOfPerson(sub: string) {
+  try {
+    if (localStorage.getItem(lastPersonKey) === sub) return
+    localStorage.setItem(lastPersonKey, sub)
+  } catch {
+    // With no room to store the person, the message still goes.
+  }
   const otherTabs = new BroadcastChannel(sessionChannelName)
   otherTabs.postMessage({ signedInAs: sub })
   otherTabs.close()
 }
 
 export function notePageUser(sub: string) {
-  if (pageUser === null) announceThePerson(sub)
+  if (pageUser === null) announceAChangeOfPerson(sub)
   pageUser ??= sub
   if (pageUser !== sub) refuseThePage()
 }
