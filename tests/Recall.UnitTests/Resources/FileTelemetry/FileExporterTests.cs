@@ -76,6 +76,82 @@ public class FileExporterTests
     }
 
     [Test]
+    public void a_tag_that_is_not_a_finite_number_becomes_a_string_and_the_batch_keeps_its_other_spans()
+    {
+        // Arrange
+        var folder = Directory.CreateTempSubdirectory("recall_spans_").FullName;
+        var sourceName = $"recall.test.{Guid.NewGuid():N}";
+        using var source = new ActivitySource(sourceName);
+
+        try
+        {
+            // Act
+            using (var provider = Sdk.CreateTracerProviderBuilder()
+                       .AddSource(sourceName)
+                       .AddProcessor(new BatchActivityExportProcessor(new SpanFileExporter(new JsonLinesFile(Path.Combine(folder, "traces-.jsonl"), Limits))))
+                       .Build())
+            {
+                using (var broken = source.StartActivity("broken")!)
+                {
+                    broken.SetTag("not.a.number", double.NaN);
+                    broken.SetTag("too.large", float.PositiveInfinity);
+                    broken.SetTag("finite", 1.5);
+                }
+
+                using (source.StartActivity("next")!)
+                {
+                }
+
+                provider.ForceFlush();
+            }
+
+            // Assert
+            var lines = LinesIn(folder);
+            lines.Select(line => line.GetProperty("name").GetString()).ShouldBe(["broken", "next"], ignoreOrder: true);
+            var tags = lines.Single(line => line.GetProperty("name").GetString() == "broken").GetProperty("tags");
+            tags.GetProperty("not.a.number").GetString().ShouldBe("NaN");
+            tags.GetProperty("too.large").GetString().ShouldBe("Infinity");
+            tags.GetProperty("finite").GetDouble().ShouldBe(1.5);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Test]
+    public void a_gauge_that_is_not_a_finite_number_becomes_a_string_and_the_batch_keeps_its_other_metrics()
+    {
+        // Arrange
+        var folder = Directory.CreateTempSubdirectory("recall_metrics_").FullName;
+        var meterName = $"recall.test.{Guid.NewGuid():N}";
+        using var meter = new Meter(meterName);
+        meter.CreateObservableGauge("recall.broken", () => double.NaN);
+        meter.CreateObservableGauge("recall.finite", () => 2.5);
+
+        try
+        {
+            // Act
+            using (var provider = Sdk.CreateMeterProviderBuilder()
+                       .AddMeter(meterName)
+                       .AddReader(new PeriodicExportingMetricReader(new MetricFileExporter(new JsonLinesFile(Path.Combine(folder, "metrics-.jsonl"), Limits)), 3_600_000))
+                       .Build())
+            {
+                provider.ForceFlush();
+            }
+
+            // Assert
+            var lines = LinesIn(folder);
+            lines.First(line => line.GetProperty("name").GetString() == "recall.broken").GetProperty("value").GetString().ShouldBe("NaN");
+            lines.First(line => line.GetProperty("name").GetString() == "recall.finite").GetProperty("value").GetDouble().ShouldBe(2.5);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Test]
     public void a_counter_and_a_histogram_write_their_values_in_lines_of_json()
     {
         // Arrange
