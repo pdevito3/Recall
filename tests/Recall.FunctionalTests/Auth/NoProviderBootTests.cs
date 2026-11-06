@@ -5,7 +5,9 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Runtime.Versioning;
+using System.Text;
 using System.Text.Json;
+using Microsoft.Data.Sqlite;
 using Recall.Server.Resources.Entrypoints.Auth;
 using Shouldly;
 
@@ -27,6 +29,7 @@ public class NoProviderBootTests
     {
         private readonly Process _process;
         private readonly string _root;
+        private bool _killed;
 
         private ServerProcess(Process process, string root, HttpClient client)
         {
@@ -37,13 +40,15 @@ public class NoProviderBootTests
 
         public HttpClient Client { get; }
 
+        public string Root => _root;
+
         public string DataDirectory => Path.Combine(_root, "data");
 
         public string Database => Path.Combine(DataDirectory, "recall.db");
 
-        public static async Task<ServerProcess> StartAsync()
+        public static async Task<ServerProcess> StartAsync(string? existingRoot = null)
         {
-            var root = Path.Combine(Path.GetTempPath(), $"recall_boot_{Guid.NewGuid():N}");
+            var root = existingRoot ?? Path.Combine(Path.GetTempPath(), $"recall_boot_{Guid.NewGuid():N}");
             var data = Path.Combine(root, "data");
             var web = Path.Combine(root, "web");
             Directory.CreateDirectory(data);
@@ -117,13 +122,24 @@ public class NoProviderBootTests
             throw new InvalidOperationException("The server did not answer in 30 seconds.");
         }
 
-        public async ValueTask DisposeAsync()
+        /// <summary>A SIGKILL, so the last connection runs no checkpoint on its close, and the files stay as a crash leaves them.</summary>
+        public async Task KillAsync()
         {
+            if (_killed)
+                return;
+
+            _killed = true;
             Client.Dispose();
             _process.Kill(entireProcessTree: true);
             await _process.WaitForExitAsync();
             _process.Dispose();
-            Directory.Delete(_root, recursive: true);
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await KillAsync();
+            if (Directory.Exists(_root))
+                Directory.Delete(_root, recursive: true);
         }
 
         private static int FreePort()
@@ -150,6 +166,40 @@ public class NoProviderBootTests
 #else
         public const string Configuration = "Release";
 #endif
+    }
+
+    [Test]
+    [Property("Rule", "SES-27")]
+    public async Task a_restart_after_a_kill_clears_committed_deletes_from_the_wal_before_the_first_request()
+    {
+        // Arrange
+        var words = $"deleted{Guid.NewGuid():N}";
+        await using var first = await ServerProcess.StartAsync();
+        await CommitAWriteAndADeleteAsync(first.Database, words);
+        await first.KillAsync();
+        Holds($"{first.Database}-wal", words).ShouldBeTrue("The kill must leave the words in the WAL.");
+
+        // Act
+        await using var second = await ServerProcess.StartAsync(first.Root);
+        await second.KillAsync();
+
+        // Assert
+        Holds($"{second.Database}-wal", words).ShouldBeFalse();
+        Holds(second.Database, words).ShouldBeFalse();
+    }
+
+    private static bool Holds(string file, string words)
+        => File.ReadAllBytes(file).AsSpan().IndexOf(Encoding.UTF8.GetBytes(words)) >= 0;
+
+    private static async Task CommitAWriteAndADeleteAsync(string database, string words)
+    {
+        var connectionString = new SqliteConnectionStringBuilder { DataSource = database, Pooling = false }.ToString();
+        await using var connection = new SqliteConnection(connectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA secure_delete = ON; CREATE TABLE kill_test (words TEXT NOT NULL); INSERT INTO kill_test VALUES (@words); DELETE FROM kill_test;";
+        command.Parameters.AddWithValue("@words", words);
+        await command.ExecuteNonQueryAsync();
     }
 
     [Test]
