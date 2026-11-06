@@ -96,6 +96,7 @@ namespace Recall.Server.Databases.Migrations
                 table: "recordings",
                 columns: new[] { "user_id", "status" });
 
+            migrationBuilder.AddOwnerGuard("recordings");
             migrationBuilder.AddOwnerPurgeWithRecordings();
         }
 

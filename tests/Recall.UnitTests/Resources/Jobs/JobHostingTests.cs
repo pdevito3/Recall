@@ -1,6 +1,7 @@
 namespace Recall.UnitTests.Resources.Jobs;
 
 using System.Diagnostics;
+using BackWave.Core;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -79,6 +80,18 @@ public class JobHostingTests
         // Assert
         text.ShouldContain("PolyForm Shield License 1.0.0");
         text.ShouldContain("Required Notice: Copyright © DeVito Digital Solutions LLC (https://backwave.app)");
+    }
+
+    [Test]
+    [Property("Rule", "REC-13")]
+    public void the_transcription_group_runs_one_job_at_a_time_on_its_own_queue()
+    {
+        // Act
+        var group = JobHosting.TranscriptionWorkers(new JobOptions());
+
+        // Assert
+        group.PoolSize.ShouldBe(1);
+        group.Policy.ShouldBeOfType<DispatchPolicy.Strict>().Queues.ShouldBe([JobHosting.TranscriptionQueue]);
     }
 
     [Test]

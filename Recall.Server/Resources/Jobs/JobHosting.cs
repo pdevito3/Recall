@@ -29,6 +29,17 @@ public static class JobHosting
 
     private static readonly string[] DevelopmentAndTestEnvironments = [Environments.Development, "FunctionalTesting", "IntegrationTesting"];
 
+    /// <summary>One at a time, because a transcription needs more than 1 GB. It keeps the default retry policy (rule 8).</summary>
+    public static WorkerGroupOptions TranscriptionWorkers(JobOptions settings) => new()
+    {
+        Name = TranscriptionQueue,
+        PoolSize = 1,
+        Policy = new DispatchPolicy.Strict([TranscriptionQueue]),
+        PollInterval = TimeSpan.FromSeconds(settings.PollSeconds),
+        ShutdownBudget = JobShutdownBudget,
+        Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
+    };
+
     public static void AddJobs(this WebApplicationBuilder builder)
     {
         var section = builder.Configuration.GetSection(JobOptions.SectionName);
@@ -69,16 +80,7 @@ public static class JobHosting
                     ShutdownBudget = JobShutdownBudget,
                     Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
                 });
-                // One at a time, because a transcription needs more than 1 GB. It keeps the default retry policy (rule 8).
-                backwave.AddWorkerGroup(new WorkerGroupOptions
-                {
-                    Name = TranscriptionQueue,
-                    PoolSize = 1,
-                    Policy = new DispatchPolicy.Strict([TranscriptionQueue]),
-                    PollInterval = TimeSpan.FromSeconds(settingsAtRegistration.PollSeconds),
-                    ShutdownBudget = JobShutdownBudget,
-                    Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
-                });
+                backwave.AddWorkerGroup(TranscriptionWorkers(settingsAtRegistration));
                 builder.Services.AddHostedService<JobHostWatch>();
                 builder.Services.AddHostedService<RecordingSweepService>();
             }

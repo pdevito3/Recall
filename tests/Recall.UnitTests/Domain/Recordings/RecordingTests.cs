@@ -1,5 +1,6 @@
 namespace Recall.UnitTests.Domain.Recordings;
 
+using Recall.Server.Domain.Recordings.Features;
 using Recall.Server.Domain.Recordings;
 using Recall.Server.Domain.Recordings.Dtos;
 using Recall.Server.Domain.Recordings.Jobs;
@@ -368,5 +369,30 @@ public class RecordingTests
 
         // Assert
         text.ShouldBe("typed by hand\n\nheard words");
+    }
+
+    [Test]
+    [Property("Rule", "REC-14")]
+    public void the_status_says_that_the_jobs_stopped_with_what_to_do_and_no_cause()
+    {
+        // Act
+        var status = GetTranscriptionStatus.StatusOf("System.InvalidOperationException", ModelStatus.Ready);
+
+        // Assert
+        status.JobsStopped.ShouldBeTrue();
+        status.JobsStoppedText.ShouldNotBeNullOrWhiteSpace();
+        status.JobsStoppedText.ShouldNotContain("Exception");
+    }
+
+    [Test]
+    [Property("Rule", "REC-14")]
+    public void the_status_names_nothing_while_the_jobs_run()
+    {
+        // Act
+        var status = GetTranscriptionStatus.StatusOf(null, ModelStatus.Ready);
+
+        // Assert
+        status.JobsStopped.ShouldBeFalse();
+        status.JobsStoppedText.ShouldBeNull();
     }
 }

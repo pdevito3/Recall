@@ -1,5 +1,6 @@
 namespace Recall.IntegrationTests.Databases;
 
+using Recall.Server.Databases;
 using Recall.Server.Domain.Recordings;
 using Recall.Server.Domain.Recordings.Features;
 using Recall.Server.Domain.Sessions;
@@ -54,6 +55,23 @@ public class RecordingRaceTests : TestBase
         // Assert
         await Should.ThrowAsync<NotFoundException>(store);
         FolderIsGone(rival, recording).ShouldBeTrue();
+    }
+
+    [Test]
+    [Property("Rule", "REC-11")]
+    public async Task the_database_refuses_a_recording_of_a_deleted_owner()
+    {
+        // Arrange
+        await using var services = PauseAtQuery.After("not.used").BuildServices();
+        var (_, _, recording) = await ScopesWithARecordingAsync(services);
+        await TestFixture.ExecuteOutOfBandAsync("UPDATE users SET is_deleted = 1 WHERE id = @id", ("@id", recording.UserId));
+        var late = Recording.Create(recording.TenantId, recording.UserId, recording.SessionId, $"late-{Guid.NewGuid():N}", RecordingFormat.Webm);
+
+        // Act
+        var insert = () => new TestingServiceScope().InsertAsync(late);
+
+        // Assert
+        (await Should.ThrowAsync<ForbiddenAccessException>(insert)).Message.ShouldContain(JournalTriggers.OwnerDeletedMessage);
     }
 
     [Test]

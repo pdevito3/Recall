@@ -10,6 +10,8 @@ Plan section R11 gives the reasons.
 
 ## 2. Entities and states
 
+The `recordings` table is not in the sync feed. The text of a Recording reaches each device through the feed of its Session, and the upload state is of use only to the device that uploads. The table has its own check that refuses a row of a deleted owner.
+
 | Entity | Root of | Fields that a user sets | States |
 |---|---|---|---|
 | `Recording` | `RecordingSlice` | client recording ID, format | Receiving, Received, Transcribing, Transcribed, Failed |

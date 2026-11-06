@@ -105,17 +105,17 @@ public static class GetTranscriptionStatus
         public Task<TranscriptionStatusDto> Handle(Query request, CancellationToken cancellationToken)
         {
             dbContext.RequireJournalOwner();
-            var jobsStopped = jobHostStatus.StoppedCause() is not null;
-            var model = modelStore.Status;
-            return Task.FromResult(new TranscriptionStatusDto
-            {
-                JobsStopped = jobsStopped,
-                JobsStoppedText = jobsStopped ? JobsStoppedText : null,
-                Model = model.ToString(),
-                ModelText = RecordingViews.ModelTextOf(model),
-            });
+            return Task.FromResult(StatusOf(jobHostStatus.StoppedCause(), modelStore.Status));
         }
     }
+
+    public static TranscriptionStatusDto StatusOf(string? jobsStoppedCause, ModelStatus model) => new()
+    {
+        JobsStopped = jobsStoppedCause is not null,
+        JobsStoppedText = jobsStoppedCause is null ? null : JobsStoppedText,
+        Model = model.ToString(),
+        ModelText = RecordingViews.ModelTextOf(model),
+    };
 }
 
 public sealed class GetTranscriptionStatusEndpoint : IEndpoint

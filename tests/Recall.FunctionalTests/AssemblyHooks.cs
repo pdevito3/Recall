@@ -14,6 +14,10 @@ public static class AssemblyHooks
         _factory = new TestingWebApplicationFactory();
         await _factory.InitializeAsync();
         AuthHosts.Start();
+
+        // Each test of the closed host signs in as "owner". Two first logins at once race: the loser reads no link, then the new tenant, and gets the refusal.
+        using var owner = new AuthBrowser(AuthHosts.Closed);
+        await owner.LoginWebAsync("owner");
     }
 
     [After(Assembly)]
