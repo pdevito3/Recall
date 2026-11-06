@@ -24,7 +24,7 @@ WORKDIR /src
 # The libm.a of the Debian cross package is a linker script that names the native path of the library.
 RUN case "$TARGETARCH" in \
         amd64) arch=x86_64; prefix=x86_64-linux-gnu-; \
-            sed -i 's#/usr/lib/x86_64-linux-gnu/#/usr/x86_64-linux-gnu/lib/#g' /usr/x86_64-linux-gnu/lib/libm.a ;; \
+            if [ -f /usr/x86_64-linux-gnu/lib/libm.a ]; then sed -i 's#/usr/lib/x86_64-linux-gnu/#/usr/x86_64-linux-gnu/lib/#g' /usr/x86_64-linux-gnu/lib/libm.a; fi ;; \
         arm64) arch=aarch64; prefix=aarch64-linux-gnu- ;; \
         *) echo "unknown target $TARGETARCH"; exit 1 ;; \
     esac \
