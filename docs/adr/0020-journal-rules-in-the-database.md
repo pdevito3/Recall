@@ -29,4 +29,5 @@ Tombstones stay until their owner goes. So no cursor is ever too old, and the se
 - An EF table rebuild drops the triggers of the table. A migration that rebuilds a journal table must call `JournalTriggers` again. `JournalTriggerTests` compares `sqlite_master` with the model and fails when it does not.
 - A rule is not visible in the C# of a handler. The [sessions spec](../specs/sessions.md) lists each one.
 - The sequence is one counter across all Users, so a cursor shows how many changes the server made. It shows no words and no IDs.
+- An EF table rebuild of `sync_changes` sets the counter to the newest line that stays, so it can go back after the purge of a User. No client skips a change, because a cursor of a live User is never above that User's newest line, and a line leaves only with its owner.
 - A tombstone stays for each deleted Session, and it holds two IDs.
