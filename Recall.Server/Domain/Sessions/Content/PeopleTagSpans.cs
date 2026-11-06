@@ -58,10 +58,11 @@ public static class PeopleTagSpans
     /// </summary>
     public static IReadOnlyList<string> Contexts(string? plaintext, string? name)
     {
+        // Each read of a Session runs this, and a device can send words with one name many times and no sentence end.
         var text = plaintext ?? string.Empty;
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var contexts = new List<string>();
-        foreach (var start in Occurrences(text, name))
+        foreach (var start in Occurrences(text, name).Take(MaxPreviews))
         {
             var sentence = SentenceAround(text, start);
             if (sentence.Length > 0 && seen.Add(sentence))
@@ -79,16 +80,19 @@ public static class PeopleTagSpans
         return leftOk && rightOk;
     }
 
-    /// <summary>Expands an offset out to the surrounding sentence, bounded by terminators and newlines.</summary>
+    private const int MaxPreviews = 100;
+    private const int MaxPreviewSide = 300;
+
+    /// <summary>Expands an offset out to the surrounding sentence, bounded by terminators, newlines, and a width.</summary>
     private static string SentenceAround(string text, int offset)
     {
         var start = offset;
-        while (start > 0 && !IsTerminator(text[start - 1]))
+        while (start > 0 && offset - start < MaxPreviewSide && !IsTerminator(text[start - 1]))
             start--;
         var end = offset;
-        while (end < text.Length && !IsTerminator(text[end]))
+        while (end < text.Length && end - offset < MaxPreviewSide && !IsTerminator(text[end]))
             end++;
-        if (end < text.Length) // include the trailing terminator (e.g. the full stop)
+        if (end < text.Length && IsTerminator(text[end])) // include the trailing terminator (e.g. the full stop)
             end++;
         return text[start..end].Trim();
     }

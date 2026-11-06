@@ -219,6 +219,35 @@ public class CleanupResultRoutesTests : TestBase
     }
 
     [Test]
+    public async Task a_long_run_of_another_alphabet_fits_as_it_does_in_a_save()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+
+        // Act
+        var session = await CleanedSessionAsync(scenario, ReplyWith(new string('б', 170_000)));
+
+        // Assert
+        session.CleanupFailure.ShouldBe(nameof(CleanupFailure.None));
+        session.CleanupStatus.ShouldBe(nameof(CleanupStatus.Clean));
+    }
+
+    [Test]
+    public async Task a_reply_of_very_deep_markdown_is_stored_after_one_call()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+
+        // Act
+        var session = await CleanedSessionAsync(scenario, ReplyWith(string.Concat(Enumerable.Repeat("> ", 200)) + "deep words"));
+
+        // Assert
+        session.CleanupStatus.ShouldBe(nameof(CleanupStatus.Clean));
+        session.CleanedText.ShouldContain("deep words");
+        scenario.Fake.CompletionCalls.ShouldBe(1);
+    }
+
+    [Test]
     public async Task a_tag_writes_words_of_any_alphabet_as_they_are()
     {
         // Arrange

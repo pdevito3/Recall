@@ -38,8 +38,7 @@ public static class MarkdownToProseMirror
             .UseTaskLists()
             .Build();
 
-    /// <summary>Converts markdown to the canonical Content doc node. Never returns null; never throws.</summary>
-    public static JsonNode Convert(string? markdown)
+    private static JsonObject Convert(string? markdown)
     {
         var content = new JsonArray();
         var doc = new JsonObject { ["type"] = "doc", ["content"] = content };
@@ -55,8 +54,22 @@ public static class MarkdownToProseMirror
         return doc;
     }
 
-    /// <summary>Serialized-JSON convenience over <see cref="Convert"/>.</summary>
-    public static string ConvertToJson(string? markdown) => Convert(markdown).ToJsonString();
+    /// <summary>
+    /// Converts markdown to the JSON of the canonical Content doc node. Never throws. The parser and the JSON writer each
+    /// refuse very deep nesting, and a model can answer with it, so such words become one paragraph.
+    /// </summary>
+    public static string ConvertToJson(string? markdown)
+    {
+        try
+        {
+            return Convert(markdown).ToJsonString(PersonMentions.KeepWords);
+        }
+        catch (Exception fault) when (fault is ArgumentException or InvalidOperationException)
+        {
+            var paragraph = new JsonObject { ["type"] = "paragraph", ["content"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = markdown }) };
+            return new JsonObject { ["type"] = "doc", ["content"] = new JsonArray(paragraph) }.ToJsonString(PersonMentions.KeepWords);
+        }
+    }
 
     // ---- blocks -------------------------------------------------------------------------------
 

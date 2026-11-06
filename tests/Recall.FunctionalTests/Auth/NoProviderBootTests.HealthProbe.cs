@@ -74,6 +74,24 @@ public partial class NoProviderBootTests
     }
 
     [Test]
+    public async Task the_probe_prints_each_line_of_the_answer_and_fails()
+    {
+        // Arrange
+        const string answer = "Unhealthy\nThe background jobs stopped.\nThe key ring changed.";
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var answers = AnswerAsync(listener, [answer, answer, answer, answer]);
+
+        // Act
+        var probe = await RunProbeAsync(((IPEndPoint)listener.LocalEndpoint).Port);
+        await answers;
+
+        // Assert
+        probe.ExitCode.ShouldBe(1);
+        probe.Output.ShouldBe(answer);
+    }
+
+    [Test]
     public async Task the_probe_fails_with_no_server()
     {
         // Arrange

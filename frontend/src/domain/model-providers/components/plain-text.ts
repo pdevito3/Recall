@@ -8,8 +8,9 @@ interface ProseNode {
 function textOf(node: ProseNode): string {
   if (typeof node.text === 'string') return node.text
   if (node.type === 'mention' && typeof node.attrs?.label === 'string') return node.attrs.label
+  if (node.type === 'hardBreak') return '\n'
   if (!Array.isArray(node.content)) return ''
-  const separator = node.type === 'doc' || node.type === 'bulletList' || node.type === 'orderedList' ? '\n\n' : ''
+  const separator = node.type === 'paragraph' || node.type === 'heading' || node.type === 'codeBlock' ? '' : '\n\n'
   return (node.content as ProseNode[]).map(textOf).join(separator)
 }
 

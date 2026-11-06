@@ -106,7 +106,7 @@ public sealed class KeyRingWatch(
     }
 }
 
-/// <summary>A changed ring is a warning for the operator. The journal still works, so the probe stays green.</summary>
+/// <summary>A changed ring needs the operator, so the probe fails as it does on each Degraded. The journal still works, so the answer stays 200.</summary>
 public sealed class KeyRingHealthCheck(KeyRingStatus status) : IHealthCheck
 {
     public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
