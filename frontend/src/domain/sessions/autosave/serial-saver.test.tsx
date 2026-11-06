@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
-import { ProblemDetailsError } from '@/lib/problem-details'
+import { CONCURRENT_CHANGE_PROBLEM_TYPE, ProblemDetailsError, STALE_VERSION_PROBLEM_TYPE } from '@/lib/problem-details'
 
 import { SerialSaver } from './serial-saver'
 
@@ -106,6 +106,16 @@ test.each([
   await vi.advanceTimersByTimeAsync(0)
 
   expect(saver.getStatus().kind).toBe(kind)
+  saver.dispose()
+})
+
+test.each([STALE_VERSION_PROBLEM_TYPE, CONCURRENT_CHANGE_PROBLEM_TYPE])('a 409 of type %s tries again', async (type) => {
+  const { saver } = saverWith(() => Promise.reject(new ProblemDetailsError({ type, title: 'Changed', status: 409 })))
+
+  saver.edit('a')
+  await vi.advanceTimersByTimeAsync(0)
+
+  expect(saver.getStatus().kind).toBe('waiting')
   saver.dispose()
 })
 

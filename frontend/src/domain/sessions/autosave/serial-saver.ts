@@ -1,14 +1,15 @@
-import { isProblemDetailsError, type ProblemDetailsError } from '@/lib/problem-details'
+import { CONCURRENT_CHANGE_PROBLEM_TYPE, isProblemDetailsError, STALE_VERSION_PROBLEM_TYPE, type ProblemDetailsError } from '@/lib/problem-details'
 
 import { emptyQueue, newestUnsettled, nextToSend, statusOf, step, type SaveEvent, type SaveQueue, type SaveStatus, type Stamped } from './save-queue'
 
 const firstRetryMs = 2_000
 const longestRetryMs = 30_000
-const statusesThatCanChange = new Set([401, 408, 409, 429])
+const statusesThatCanChange = new Set([401, 408, 429])
+const conflictsThatPass = new Set([STALE_VERSION_PROBLEM_TYPE, CONCURRENT_CHANGE_PROBLEM_TYPE])
 const statusOfARowThatIsGone = 404
 
 function isFinalRefusal(error: unknown): error is ProblemDetailsError {
-  if (!isProblemDetailsError(error)) return false
+  if (!isProblemDetailsError(error) || conflictsThatPass.has(error.problemDetails.type ?? '')) return false
   const status = error.status ?? 500
   return status >= 400 && status < 500 && !statusesThatCanChange.has(status)
 }

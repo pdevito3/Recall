@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 
 import { useAddPerson, usePeopleDirectory } from '@/domain/people/apis/people'
 
-import { contentOf } from './content'
+import { contentOf } from './content-of'
 import { PersonMention, textExtensions } from './journal-extensions'
 import { mentionSuggestion, type MentionSource } from './mention-suggestion'
 

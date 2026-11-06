@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest'
 
-import { contentOf, plainPreviewOf } from './content'
+import { plainPreviewOf } from './content'
+import { contentOf } from './content-of'
 
 const doc = (...content: object[]) => JSON.stringify({ type: 'doc', content })
 const paragraph = (text: string) => ({ type: 'paragraph', content: [{ type: 'text', text }] })
