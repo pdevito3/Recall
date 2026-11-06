@@ -90,6 +90,9 @@ public sealed class StubOidcProvider : HttpMessageHandler
 
     public string[]? PromptValues { get; init; }
 
+    /// <summary>Changes each answer on its way out, for a fault of a real provider. It gets the path and the answer that the stub would send.</summary>
+    public Func<string, HttpResponseMessage, CancellationToken, Task<HttpResponseMessage>>? AnswerFault { get; set; }
+
     public IReadOnlyCollection<string> HandedOut => _handedOut;
 
     public string Approve(AuthorizeRequest request, StubLogin login)
@@ -127,7 +130,8 @@ public sealed class StubOidcProvider : HttpMessageHandler
         if (Down)
             throw new HttpRequestException("The stub provider is down.");
 
-        return request.RequestUri!.AbsolutePath switch
+        var path = request.RequestUri!.AbsolutePath;
+        var answer = path switch
         {
             "/.well-known/openid-configuration" => Discovery(),
             "/jwks" => JwksBodyIsCorrupt ? CorruptAnswer() : WithCharset(JwksCharset, Json(new Dictionary<string, object> { ["keys"] = new[] { Jwk(), HmacJwk() } })),
@@ -135,6 +139,7 @@ public sealed class StubOidcProvider : HttpMessageHandler
             "/userinfo" => Userinfo(request),
             _ => new HttpResponseMessage(HttpStatusCode.NotFound),
         };
+        return AnswerFault is { } fault ? await fault(path, answer, cancellationToken) : answer;
     }
 
     private HttpResponseMessage Discovery()

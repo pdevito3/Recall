@@ -61,6 +61,9 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
 
     private const string SubjectClaim = "sub";
 
+    // Far above what a provider sends. An ID token over 250 KB already fails its check, and a discovery or key document is a few KB.
+    private const int AnswerLimitBytes = 1024 * 1024;
+
     private static readonly TimeSpan ProbeCache = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan CallTimeout = TimeSpan.FromSeconds(10);
@@ -84,7 +87,7 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
         Id = id;
         _provider = provider;
         _timeProvider = timeProvider;
-        _http = new HttpClient(handler) { Timeout = CallTimeout };
+        _http = new HttpClient(handler) { Timeout = CallTimeout, MaxResponseContentBufferSize = AnswerLimitBytes };
         DisplayName = string.IsNullOrWhiteSpace(provider.DisplayName) ? id : provider.DisplayName;
     }
 
@@ -172,12 +175,14 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
         if (string.IsNullOrEmpty(callback.Code))
             return Refuse("the authorization response has no code");
 
+        var answer = "token";
         try
         {
             var tokens = await ExchangeCodeAsync(discovery, attempt, callback.Code, cancellationToken);
-            if (tokens is not { IdToken: { } idToken })
-                return Refuse("the token endpoint refused the code");
+            if (tokens.IdToken is not { } idToken)
+                return Refuse("the token answer has no id_token");
 
+            answer = "key";
             using var jwksRequest = new HttpRequestMessage(HttpMethod.Get, discovery.JwksUri);
             using var jwks = await SendAsync(jwksRequest, cancellationToken);
             jwks.EnsureSuccessStatusCode();
@@ -186,12 +191,12 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
         {
-            _logger.Here().Warning("Provider {ModeId} stopped answering during a login", Id);
+            _logger.Here().Warning("Provider {ModeId} failed its {Answer} answer during a login: {Cause}", Id, answer, CauseOf(exception));
             return RedeemResult.Failed(LoginFailure.IdpUnreachable);
         }
         catch (NotValidAnswerException exception)
         {
-            return Refuse($"the provider sent a body that is not valid ({exception.GetBaseException().GetType().Name})");
+            return Refuse($"the {answer} answer is not valid: {CauseOf(exception)}");
         }
     }
 
@@ -204,7 +209,8 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
     /// <summary>
     /// Each answer of a provider comes through here, from the send, which reads and decompresses the body, to the last value that a
     /// parser takes from it. The provider chooses the charset, the encoding, and the bytes, and these fail with many types. So each such
-    /// failure leaves here as one type and no caller lists them.
+    /// failure leaves here as one type and no caller lists them. The limit of the client counts the decoded bytes, because the handler
+    /// decompresses before the client buffers, and an answer over it is one such failure.
     /// </summary>
     private static async Task<T> AsAnswerAsync<T>(Func<Task<T>> read)
     {
@@ -212,11 +218,23 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
         {
             return await read();
         }
-        catch (Exception exception) when (exception is not (HttpRequestException or OperationCanceledException))
+        catch (Exception exception) when (exception is HttpRequestException { HttpRequestError: HttpRequestError.ConfigurationLimitExceeded }
+            or not (HttpRequestException or OperationCanceledException))
         {
             throw new NotValidAnswerException(exception);
         }
     }
+
+    /// <summary>The text that a log can carry about a failed answer. A status, a kind, or a type, and never a message, because a message can repeat what the provider sent.</summary>
+    private static string CauseOf(Exception exception) => exception switch
+    {
+        NotValidAnswerException { InnerException: { } cause } => CauseOf(cause),
+        HttpRequestException { HttpRequestError: HttpRequestError.ConfigurationLimitExceeded } => $"over the limit of {AnswerLimitBytes} bytes",
+        HttpRequestException { StatusCode: { } status } => $"status {(int)status}",
+        HttpRequestException { HttpRequestError: var kind and not HttpRequestError.Unknown } => kind.ToString(),
+        OperationCanceledException => "no answer in time",
+        _ => exception.GetBaseException().GetType().Name,
+    };
 
     private sealed class NotValidAnswerException(Exception cause) : Exception(null, cause);
 
@@ -232,7 +250,8 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
         try
         {
             var url = _provider.Issuer!.TrimEnd('/') + "/.well-known/openid-configuration";
-            using var response = await _http.GetAsync(url, timeout.Token);
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            using var response = await SendAsync(request, timeout.Token);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Here().Warning("Provider {ModeId} answered discovery with status {Status}", Id, (int)response.StatusCode);
@@ -247,7 +266,7 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
         // Each caller shares this probe and none owns it, so a fault here would take down the chooser for each provider.
         catch (Exception exception)
         {
-            _logger.Here().Warning("Provider {ModeId} did not answer discovery: {Failure}", Id, exception.GetBaseException().GetType().Name);
+            _logger.Here().Warning("Provider {ModeId} failed its discovery answer: {Cause}", Id, CauseOf(exception));
             return null;
         }
     }
@@ -315,7 +334,7 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
         public override string ToString() => "[provider tokens]";
     }
 
-    private async Task<ProviderTokens?> ExchangeCodeAsync(
+    private async Task<ProviderTokens> ExchangeCodeAsync(
         OidcDiscovery discovery, LoginAttempt attempt, string code, CancellationToken cancellationToken)
     {
         var form = new Dictionary<string, string>
@@ -347,7 +366,7 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
             throw new HttpRequestException("The token endpoint failed.", null, response.StatusCode);
         // The body of a refusal can repeat what the request sent, so it is not read or logged.
         if (!response.IsSuccessStatusCode)
-            return null;
+            throw new NotValidAnswerException(new HttpRequestException(null, null, response.StatusCode));
 
         return await ReadAnswerAsync(response, ProviderTokens.Of, cancellationToken);
     }
@@ -414,12 +433,12 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
             request.Headers.Authorization = bearer;
             using var response = await SendAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode)
-                return UserinfoSubject.NotDifferent;
+                return UnusedUserinfo($"status {(int)response.StatusCode}");
 
             // The subject comes first and alone, so a claim that cannot be read cannot hide another person.
             var subjects = await ReadAnswerAsync(response, text => TextsOf(text, [SubjectClaim]), cancellationToken);
             if (!subjects.TryGetValue(SubjectClaim, out var sub))
-                return UserinfoSubject.NotDifferent;
+                return UnusedUserinfo($"no {SubjectClaim}");
             if (sub != subject)
                 return UserinfoSubject.Other;
 
@@ -431,8 +450,14 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
         }
         catch (Exception exception) when (exception is HttpRequestException or NotValidAnswerException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
         {
-            return UserinfoSubject.NotDifferent;
+            return UnusedUserinfo(CauseOf(exception));
         }
+    }
+
+    private UserinfoSubject UnusedUserinfo(string cause)
+    {
+        _logger.Here().Warning("Provider {ModeId} sent a userinfo answer that this server did not use, so the login goes on with the ID token: {Cause}", Id, cause);
+        return UserinfoSubject.NotDifferent;
     }
 
     private static bool SameText(string a, string b)
