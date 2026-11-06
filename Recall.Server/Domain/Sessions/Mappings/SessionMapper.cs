@@ -36,8 +36,6 @@ public static partial class SessionMapper
     [MapperIgnoreSource(nameof(Session.UserId))]
     [MapperIgnoreSource(nameof(Session.Preview))]
     [MapperIgnoreSource(nameof(Session.CleanupRun))]
-    [MapperIgnoreSource(nameof(Session.MetadataSavedAt))]
-    [MapperIgnoreSource(nameof(Session.MetadataFastClaims))]
     [MapperIgnoreSource(nameof(Session.UserTopics))]
     [MapperIgnoreSource(nameof(Session.AiTopics))]
     [MapperIgnoreSource(nameof(Session.LastModifiedOn))]

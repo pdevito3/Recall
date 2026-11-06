@@ -100,4 +100,11 @@ export type SessionDto = {
      * @type integer
     */
     version: number;
+    /**
+     * @description Send it with the next metadata save. A save of a Draft does not change it.
+     * @minLength 0
+     * @maxLength 4294967295
+     * @type integer
+    */
+    metadataVersion: number;
 };

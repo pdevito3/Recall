@@ -29,4 +29,7 @@ public sealed record SessionDto
     public double? Latitude { get; init; }
     public double? Longitude { get; init; }
     public uint Version { get; init; }
+
+    /// <summary>Send it with the next metadata save. A save of a Draft does not change it.</summary>
+    public uint MetadataVersion { get; init; }
 }

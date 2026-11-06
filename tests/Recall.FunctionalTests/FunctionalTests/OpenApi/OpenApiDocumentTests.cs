@@ -44,8 +44,6 @@ public class OpenApiDocumentTests
     [Test]
     [Arguments("SessionForCreationDto", "startedAt")]
     [Arguments("DraftSaveDto", "savedAt")]
-    [Arguments("SessionMetadataChangeDto", "savedAt")]
-    [Arguments("UserSettingChangeDto", "savedAt")]
     public async Task a_client_time_is_a_date_time_string(string dto, string property)
     {
         // Arrange

@@ -12,7 +12,8 @@
       "moods": [],
       "topics": [],
       "personIds": [],
-      "version": 1
+      "version": 1,
+      "metadataVersion": 0
     }
   ],
   "nextCursor": "1780304400000000_ses_00000000000000000000000000000004"
