@@ -61,7 +61,7 @@ The server keeps its logs and its telemetry to about 460 MiB, and a full disk do
 
 ## The background jobs stopped
 
-A store fault that is not transient, such as a full disk, stops the background jobs and leaves the journal up. `/health` answers 503, and its body starts with `Unhealthy` and says `The background jobs stopped`. The log has one line at the level `Fatal` with the same text. A person can still read and write in the journal. Text that waits for a job, such as a transcript, waits until the jobs run again.
+A store fault that is not transient, such as a full disk, stops the background jobs and leaves the journal up. `/health` answers 503, and its body starts with `Unhealthy` and says `The background jobs stopped`. The log has one line at the level `Fatal` with the same text. The job pages at `/backwave` can show `The job pages cannot open`. A person can still read and write in the journal. Text that waits for a job, such as a transcript, waits until the jobs run again.
 
 The server cannot restart the jobs by itself. Do these steps:
 
@@ -80,7 +80,7 @@ The server cannot restart the jobs by itself. Do these steps:
    4. Start the server with `docker compose start`. BackWave makes each missing job table again and keeps the rows of the journal.
    5. If `/health` still answers 503, these steps cannot fix the cause, because BackWave does not change a job table that exists. The journal still runs. Keep the folder `before-repair`, and report the fault with a support bundle.
 
-A restart during a long job costs one attempt of that job. A job at its last attempt goes to the dead letters. The Owner requeues it at `/backwave/failures`.
+A restart during a long job costs one attempt of that job. A job that a stop or a crash interrupts goes to the dead letters at attempt 10. The Owner requeues it at `/backwave/failures`.
 
 Do not delete the current file of a signal, which is the newest file of that signal, while the server runs. The server keeps it open, so its room stays in use. Each next line of that signal goes to the deleted file and is lost, with no warning, until the file rolls or the server starts again. To remove a current file, stop the server first.
 
