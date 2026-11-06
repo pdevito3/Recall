@@ -26,7 +26,9 @@ export function Timeline({ zone, hiddenSessionId }: TimelineProps) {
   const directory = usePeopleDirectory().data
   const labels = useMemo(() => new Map(directory?.map((person) => [person.id, person.label])), [directory])
   const sentinel = useRef<HTMLDivElement>(null)
+  const pageCount = timeline.data?.pages.length ?? 0
 
+  // An observer tells only of a change. A new observer tells where the end of the list is after each page.
   useEffect(() => {
     if (!hasNextPage || !sentinel.current) return
     const observer = new IntersectionObserver(
@@ -37,7 +39,7 @@ export function Timeline({ zone, hiddenSessionId }: TimelineProps) {
     )
     observer.observe(sentinel.current)
     return () => observer.disconnect()
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, pageCount])
 
   const groups = useMemo(() => {
     const rows = timeline.data?.pages.flatMap((page) => page.items) ?? []

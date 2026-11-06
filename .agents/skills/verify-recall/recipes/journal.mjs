@@ -95,6 +95,7 @@ export default async ({ page, context, step, capture, expect, login }) => {
     await typeAtEnd(page, editor(page), ' The second tab.')
     await expect(saved(page)).toBeVisible()
     await expect(page.getByRole('alert').filter({ hasText: 'These words replaced a save that this page had not shown.' })).toBeVisible()
+    await capture('r12-conflict-notice')
 
     await page.getByRole('button', { name: 'Show history', exact: true }).click()
     const versions = page.getByRole('button', { name: /^View version from/ })
