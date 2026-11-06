@@ -63,7 +63,11 @@ The server cannot restart the jobs by itself. Do these steps:
 1. Fix the cause. For a full disk, see [The disk is full](#the-disk-is-full).
 2. Restart the server with `docker compose restart`. A job that was running runs again.
 3. Open `/health`. It answers 200 when the jobs run.
-4. If `/health` answers 503 again and names `SqliteException` or `InvalidOperationException`, the job tables are damaged. Stop the server, copy `recall.db`, run `sqlite3 /data/recall.db "DELETE FROM backwave_schema_version"`, and start the server. BackWave makes each missing job table again and keeps the rows of the journal.
+4. If `/health` answers 503 again and names `SqliteException` or `InvalidOperationException`, the cause can be a disk that is still full, a damaged file, or damaged job tables. Check the first two first. If the disk has room and `docker compose logs` does not show `database disk image is malformed`, do these steps on the host. The image has no `sqlite3`, so the host needs it, and the steps need the folder of the `/data` volume. Find this folder with `docker volume inspect`.
+   1. Stop the server with `docker compose stop`.
+   2. Copy `recall.db`, `recall.db-wal`, and `recall.db-shm` to a safe place.
+   3. In the folder of the volume, run `sqlite3 recall.db "DELETE FROM backwave_schema_version"`.
+   4. Start the server with `docker compose start`. BackWave makes each missing job table again and keeps the rows of the journal.
 
 A restart during a long job costs one attempt of that job. A job at its last attempt goes to the dead letters. The Owner requeues it at `/backwave/failures`.
 

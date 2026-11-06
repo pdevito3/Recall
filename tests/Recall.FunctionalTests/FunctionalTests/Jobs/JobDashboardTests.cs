@@ -70,18 +70,6 @@ public partial class JobDashboardTests
         page.ShouldNotContain("system-health");
     }
 
-    private static AuthFlowFactory NewHostWithWorker()
-    {
-        var host = new AuthFlowFactory(new Dictionary<string, string?>
-        {
-            ["Auth:OpenSignup"] = "true",
-            ["Auth:StartPermitsPerWindow"] = "100000",
-            ["Jobs:RunWorkers"] = "true",
-        });
-        _ = host.Services;
-        return host;
-    }
-
     private static async Task ExecuteAsync(AuthFlowFactory host, string sql)
     {
         var connectionString = await host.WithDatabaseAsync(database => Task.FromResult(database.Database.GetConnectionString()!));
@@ -127,12 +115,16 @@ public partial class JobDashboardTests
         }
     }
 
+    /// <summary>Code that holds the static Serilog logger writes to the logger of the first host, not to the logger of a later host.</summary>
+    private static IEnumerable<LogEvent> AllLogsOf(AuthFlowFactory host) =>
+        host.Logs.All.Concat(TestingWebApplicationFactory.Instance.CapturedLogs.All);
+
     private static async Task<List<string>> FatalLinesAboutStoppedJobsAsync(AuthFlowFactory host)
     {
         var deadline = DateTimeOffset.UtcNow + WaitLimit;
         while (true)
         {
-            var lines = host.Logs.All
+            var lines = AllLogsOf(host)
                 .Where(entry => entry.Level == LogEventLevel.Fatal)
                 .Select(entry => entry.RenderMessage(CultureInfo.InvariantCulture))
                 .Where(text => text.Contains("The background jobs stopped"))
@@ -269,6 +261,31 @@ public partial class JobDashboardTests
     }
 
     [Test]
+    public async Task a_refusal_after_a_click_on_another_site_loads_once_more_and_other_refusals_do_not()
+    {
+        // Arrange
+        using var browser = new AuthBrowser(AuthHosts.Jobs);
+        using var fromOtherSite = new HttpRequestMessage(HttpMethod.Get, JobDashboard.Path);
+        fromOtherSite.Headers.Add("Sec-Fetch-Site", "cross-site");
+        using var fromThisSite = new HttpRequestMessage(HttpMethod.Get, JobDashboard.Path);
+        fromThisSite.Headers.Add("Sec-Fetch-Site", "same-origin");
+
+        // Act
+        using var first = await browser.SendAsync(fromOtherSite);
+        using var reload = await browser.SendAsync(fromThisSite);
+
+        // Assert
+        first.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        first.Headers.GetValues("Refresh").ShouldHaveSingleItem().ShouldBe("1");
+        ShouldBeTheRefusalPage(await first.Content.ReadAsStringAsync());
+        reload.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        reload.Headers.Contains("Refresh").ShouldBeFalse();
+        reload.Headers.CacheControl!.NoStore.ShouldBeTrue();
+        reload.Content.Headers.ContentType!.MediaType.ShouldBe("text/html");
+        reload.Headers.GetValues("Content-Security-Policy").ShouldHaveSingleItem().ShouldContain("default-src 'none'");
+    }
+
+    [Test]
     public void a_host_with_no_use_for_a_worker_runs_none()
     {
         // Act
@@ -298,7 +315,7 @@ public partial class JobDashboardTests
     public async Task a_live_stream_ends_at_its_limit_and_its_next_request_refuses_a_demoted_owner()
     {
         // Arrange
-        await using var host = NewHostWithWorker();
+        var host = AuthHosts.DemotedLiveStream;
         using var owner = await SignedInAsync(host);
         using var next = await SignedInAsync(host, "jobs-next-admin");
         var ids = await host.WithDatabaseAsync(database => database.Set<ExternalLogin>().IgnoreQueryFilters().ToDictionaryAsync(login => login.Subject, login => login.UserId));
@@ -327,7 +344,7 @@ public partial class JobDashboardTests
     public async Task a_stop_of_the_host_ends_a_live_stream_at_once()
     {
         // Arrange
-        await using var host = NewHostWithWorker();
+        var host = AuthHosts.StoppedLiveStream;
         using var owner = await SignedInAsync(host);
         var stream = owner.GetAsync($"{JobDashboard.Path}?live=1");
         await Task.Delay(TimeSpan.FromSeconds(1));
@@ -414,6 +431,7 @@ public partial class JobDashboardTests
 
         // Assert
         host.ServicesStopConcurrently.ShouldBeTrue();
+        host.ShutdownTimeout.ShouldBeLessThan(TimeSpan.FromSeconds(10), "The default grace of docker stop is 10 s.");
         JobHosting.JobShutdownBudget.ShouldBeLessThanOrEqualTo(host.ShutdownTimeout * 4 / 5);
     }
 
@@ -452,7 +470,7 @@ public partial class JobDashboardTests
     public async Task a_halted_worker_group_answers_503_and_says_to_restart_and_the_journal_still_answers()
     {
         // Arrange
-        await using var host = NewHostWithWorker();
+        var host = AuthHosts.HaltedJobs;
         await OnlyHealthJobInStateAsync(host, JobState.Succeeded);
         using var client = host.NewClient();
 
@@ -505,7 +523,7 @@ public partial class JobDashboardTests
         spans.ShouldAllBe(span => !SpanText(span).Contains(marker));
         spans.ShouldContain(span => SpanText(span).Contains(thrownType));
         bundle.ShouldNotContain(marker);
-        host.Logs.All.ShouldAllBe(entry => !entry.RenderMessage(CultureInfo.InvariantCulture).Contains(marker) && (entry.Exception == null || !entry.Exception.ToString().Contains(marker)));
+        AllLogsOf(host).ShouldAllBe(entry => !entry.RenderMessage(CultureInfo.InvariantCulture).Contains(marker) && (entry.Exception == null || !entry.Exception.ToString().Contains(marker)));
     }
 
     [Test]

@@ -1,6 +1,8 @@
 namespace Recall.UnitTests.Resources.Jobs;
 
+using System.Diagnostics;
 using BackWave.Jobs;
+using Recall.Server.Resources;
 using Recall.Server.Resources.Jobs;
 using Shouldly;
 
@@ -56,6 +58,59 @@ public class JobFailureFilterTests
         seen.StackTrace.ShouldBe(thrown.StackTrace);
         seen.StackTrace!.ShouldContain(nameof(Thrown));
         seen.ToString().ShouldNotContain(Marker);
+    }
+
+    private static string TextOf(Activity span) => string.Join('\n', new[] { span.StatusDescription ?? "" }
+        .Concat(span.Events.SelectMany(spanEvent => spanEvent.Tags.Select(tag => $"{tag.Value}"))));
+
+    [Test]
+    public async Task a_child_span_in_a_job_records_the_type_and_no_message()
+    {
+        // Arrange
+        var span = new Activity("a-child-span");
+        var thrown = Thrown(() => new InvalidOperationException(Marker));
+
+        // Act
+        await RunAsync(() =>
+        {
+            Telemetry.MarkFailed(span, thrown);
+            return Task.CompletedTask;
+        });
+
+        // Assert
+        TextOf(span).ShouldNotContain(Marker);
+        TextOf(span).ShouldContain(typeof(InvalidOperationException).FullName!);
+        TextOf(span).ShouldContain(nameof(Thrown));
+    }
+
+    [Test]
+    public void a_span_outside_a_job_keeps_the_message()
+    {
+        // Arrange
+        var span = new Activity("a-span");
+
+        // Act
+        Telemetry.MarkFailed(span, new InvalidOperationException(Marker));
+
+        // Assert
+        TextOf(span).ShouldContain(Marker);
+    }
+
+    [Test]
+    public async Task a_child_span_in_a_job_keeps_a_text_that_is_safe()
+    {
+        // Arrange
+        var span = new Activity("a-child-span");
+
+        // Act
+        await RunAsync(() =>
+        {
+            Telemetry.MarkFailed(span, new JobSafeTextException("A safe text."));
+            return Task.CompletedTask;
+        });
+
+        // Assert
+        TextOf(span).ShouldContain("A safe text.");
     }
 
     [Test]

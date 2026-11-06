@@ -12,7 +12,7 @@ using Shouldly;
 /// </summary>
 public class JobClientUseTests
 {
-    private const BindingFlags AnyInstanceField = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+    private const BindingFlags AnyMember = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
 
     [Test]
     public void only_the_job_host_holds_a_backwave_client()
@@ -29,6 +29,16 @@ public class JobClientUseTests
     }
 
     [Test]
+    public void the_rule_sees_a_client_that_a_static_method_takes()
+    {
+        // Act
+        var holds = HoldsClient(typeof(EndpointThatTakesAClient));
+
+        // Assert
+        holds.ShouldBeTrue();
+    }
+
+    [Test]
     public void the_rule_sees_a_held_client()
     {
         // Act
@@ -39,9 +49,14 @@ public class JobClientUseTests
     }
 
     private static bool HoldsClient(Type type) =>
-        type.GetFields(AnyInstanceField).Any(field => field.FieldType == typeof(BackWaveClient))
-        || type.GetConstructors(AnyInstanceField).Any(constructor =>
-            constructor.GetParameters().Any(parameter => parameter.ParameterType == typeof(BackWaveClient)));
+        type.GetFields(AnyMember).Any(field => field.FieldType == typeof(BackWaveClient))
+        || type.GetConstructors(AnyMember).Concat<MethodBase>(type.GetMethods(AnyMember)).Any(member =>
+            member.GetParameters().Any(parameter => parameter.ParameterType == typeof(BackWaveClient)));
+
+    private static class EndpointThatTakesAClient
+    {
+        public static string Handle(BackWaveClient client) => client.ToString()!;
+    }
 
     private sealed class HolderOfAClient(BackWaveClient client)
     {

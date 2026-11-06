@@ -31,42 +31,41 @@ public class JobDashboardAccessTests
         options.AuthorizeTriggerSchedule,
     ];
 
+    private static async Task<List<bool>> AnswersAsync(BackWaveDashboardOptions options, string? owner)
+    {
+        var answers = new List<bool>();
+        foreach (var action in WriteActionsOf(options))
+            answers.Add(await action(ContextOf(owner)));
+        return answers;
+    }
+
     [Test]
     public async Task an_action_with_no_callback_is_denied_for_the_owner_too()
     {
-        foreach (var action in WriteActionsOf(new BackWaveDashboardOptions()))
-        {
-            // Act
-            var allowed = await action(ContextOf("the-owner"));
+        // Act
+        var answers = await AnswersAsync(new BackWaveDashboardOptions(), "the-owner");
 
-            // Assert
-            allowed.ShouldBeFalse();
-        }
+        // Assert
+        answers.ShouldAllBe(allowed => !allowed);
     }
 
     [Test]
     public async Task each_action_of_the_dashboard_is_denied_for_a_caller_who_is_not_the_owner()
     {
-        foreach (var action in WriteActionsOf(JobDashboard.DashboardOptions))
-        {
-            // Act
-            var allowed = await action(ContextOf(owner: null));
+        // Act
+        var answers = await AnswersAsync(JobDashboard.DashboardOptions, owner: null);
 
-            // Assert
-            allowed.ShouldBeFalse();
-        }
+        // Assert
+        answers.ShouldAllBe(allowed => !allowed);
     }
 
     [Test]
     public async Task each_action_of_the_dashboard_is_allowed_for_the_owner()
     {
-        foreach (var action in WriteActionsOf(JobDashboard.DashboardOptions))
-        {
-            // Act
-            var allowed = await action(ContextOf("the-owner"));
+        // Act
+        var answers = await AnswersAsync(JobDashboard.DashboardOptions, "the-owner");
 
-            // Assert
-            allowed.ShouldBeTrue();
-        }
+        // Assert
+        answers.ShouldAllBe(allowed => allowed);
     }
 }

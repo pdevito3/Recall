@@ -14,6 +14,7 @@ public sealed class JobHostWatch(BackWaveClient client, IJobStore store, JobHost
     private static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(5);
 
     private readonly ILogger _logger = Log.ForContext<JobHostWatch>();
+    private bool _toldOfWait;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -46,7 +47,12 @@ public sealed class JobHostWatch(BackWaveClient client, IJobStore store, JobHost
         catch (Exception fault) when (!stoppingToken.IsCancellationRequested)
         {
             if (IsTransient(fault))
+            {
+                if (!_toldOfWait)
+                    _logger.Here().Warning("The health job waits for the job store ({FaultType}), and tries again each {Seconds} s.", fault.GetType().FullName, CheckInterval.TotalSeconds);
+                _toldOfWait = true;
                 return true;
+            }
 
             status.ReportStartFault(fault);
             return false;

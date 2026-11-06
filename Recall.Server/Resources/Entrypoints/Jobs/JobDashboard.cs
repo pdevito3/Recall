@@ -55,22 +55,13 @@ public static class JobDashboard
         await next(context);
         if (context.Response.StatusCode == StatusCodes.Status403Forbidden && HttpMethods.IsGet(context.Request.Method) && !context.Response.HasStarted)
         {
-            context.Response.ContentType = "text/html; charset=utf-8";
-            await context.Response.WriteAsync(RefusalPage, context.RequestAborted);
+            // SameSite=Strict holds the cookie back on the redirect from the site of a provider. A reload comes from this site, so it sends the cookie.
+            if (context.Request.Headers["Sec-Fetch-Site"] == "cross-site")
+                context.Response.Headers["Refresh"] = "1";
+
+            await AuthPages.OwnerOnly(Path).ExecuteAsync(context);
         }
     }
-
-    private static readonly string RefusalPage = $"""
-        <!doctype html>
-        <html lang="en">
-        <head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><title>Jobs</title></head>
-        <body style="font-family: system-ui, sans-serif; margin: 4rem auto; max-width: 28rem; padding: 0 1rem">
-        <h1 style="font-size: 1.25rem">Only the Owner can see the jobs</h1>
-        <p>You are signed out, or this account is not the Owner.</p>
-        <p><a href="{AuthRoutes.Login}?returnUrl={Uri.EscapeDataString(Path)}">Sign in</a> or <a href="/">go to Recall</a>.</p>
-        </body>
-        </html>
-        """;
 
     private static async ValueTask<bool> CallerIsOwnerAsync(HttpContext context)
     {

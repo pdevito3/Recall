@@ -26,6 +26,14 @@ public sealed class JobFailureException(Exception thrown) : Exception(thrown.Get
 /// <summary>No one, an admin included, reads the journal of another person, so each job runs inside this filter.</summary>
 public static class JobFailureFilter
 {
+    private static readonly AsyncLocal<bool> InAJob = new();
+
+    /// <summary>What a span records of an exception. Inside a job, a child span obeys the same rule as the span of the job.</summary>
+    public static Exception AsRecorded(Exception thrown) =>
+        InAJob.Value && !TextIsSafe(thrown) ? new JobFailureException(thrown) : thrown;
+
+    private static bool TextIsSafe(Exception thrown) => thrown is JobSafeTextException or InvariantViolationException;
+
     public static JobModule Applied(JobModule module) => new()
     {
         Registrations = [.. module.Registrations.Select(Filtered)],
@@ -50,11 +58,12 @@ public static class JobFailureFilter
 
     private static async Task RunAsync(JobRegistration job, IServiceProvider services, object payload, JobContext context, CancellationToken cancellationToken)
     {
+        InAJob.Value = true;
         try
         {
             await job.Execute(services, payload, context, cancellationToken);
         }
-        catch (Exception thrown) when (thrown is not (JobSafeTextException or InvariantViolationException))
+        catch (Exception thrown) when (!TextIsSafe(thrown))
         {
             if (thrown is OperationCanceledException && cancellationToken.IsCancellationRequested)
                 throw new OperationCanceledException(cancellationToken);

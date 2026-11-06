@@ -31,6 +31,12 @@ public static class AuthHosts
 
     public static AuthFlowFactory FailingJobs { get; private set; } = null!;
 
+    public static AuthFlowFactory HaltedJobs { get; private set; } = null!;
+
+    public static AuthFlowFactory DemotedLiveStream { get; private set; } = null!;
+
+    public static AuthFlowFactory StoppedLiveStream { get; private set; } = null!;
+
     public static AuthFlowFactory OwnerDemotion { get; private set; } = null!;
 
     public static void Start()
@@ -45,7 +51,7 @@ public static class AuthHosts
         RollingKeyProvider = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
         TwoTenants = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
         Bundle = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
-        Jobs = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts, ["Jobs:RunWorkers"] = "true" });
+        Jobs = StartWithWorker();
         FailingJobs = Start(new Dictionary<string, string?>
         {
             ["Auth:OpenSignup"] = "true",
@@ -53,6 +59,9 @@ public static class AuthHosts
             ["Jobs:RunWorkers"] = "true",
             ["Jobs:HealthJob:FailOnPurpose"] = "true",
         });
+        HaltedJobs = StartWithWorker();
+        DemotedLiveStream = StartWithWorker();
+        StoppedLiveStream = StartWithWorker();
         OwnerDemotion = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
         TwoProviders = Start(new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts })
         {
@@ -81,12 +90,15 @@ public static class AuthHosts
 
     public static async Task StopAsync()
     {
-        foreach (var host in new[] { Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, Bundle, OwnerDemotion, Sweep, Jobs, FailingJobs })
+        foreach (var host in new[] { Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, Bundle, OwnerDemotion, Sweep, Jobs, FailingJobs, HaltedJobs, DemotedLiveStream, StoppedLiveStream })
         {
             if (host is not null)
                 await host.DisposeAsync();
         }
     }
+
+    private static AuthFlowFactory StartWithWorker() =>
+        Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts, ["Jobs:RunWorkers"] = "true" });
 
     private static AuthFlowFactory Start(Dictionary<string, string?> settings, StubOidcProvider? provider = null) => Start(new AuthFlowFactory(settings, provider));
 
