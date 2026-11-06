@@ -19,7 +19,7 @@ The pipeline gives each feature these signals:
 | `app.errors` | `Telemetry.RecordError` | A counter of server errors, tagged with `exception.type` |
 | `domain_event.handle` span | `DomainEventDispatcher` | One span for each domain event handler |
 | Request log | `UseSerilogRequestLogging` | One log for each request, at `Error` for a status of 500 or more |
-| SQL span | Npgsql instrumentation | One span for each query |
+| SQL span | `SqlSpanInterceptor` | One span for each query |
 
 These signals tell that a request was slow or failed, and who sent it. They do not tell which entity the request changed, which query was slow, or what the handler decided. The rules below add that data.
 
@@ -238,7 +238,7 @@ Do these steps after each change to the telemetry of a feature. The `aspire-tele
 | A SQL span has the name of the database, not `SQL: ...` | The query has no tag, or the tag is after the materialization | Put `TagWithOperationCallSite` on the `IQueryable`, directly after the `DbSet` |
 | Each span or query has a different name | The name has an id or a value in it | Use a constant name. Put the id in a tag. |
 | The id tag is on a child span, not on the feature span | `SetTag` ran inside a `Telemetry.Trace` scope | Tag `Activity.Current` before you start the child span |
-| A background job has no spans for its queries | No activity is current, so the Npgsql filter drops the queries | Start the job with `Telemetry.TraceRoot` |
+| A background job has no spans for its queries | No activity is current, so `SqlSpanInterceptor` drops the queries | Start the job with `Telemetry.TraceRoot` |
 | A log has no `CallSite` | The log did not go through `Here()` | Write `_logger.Here().Information(...)` |
 | A 404 shows as a server error | The code caught a client error and called `RecordError` | Let the domain exception propagate |
 | `app.errors` counts one failure two times | Two spans called `RecordError` for one exception | Call `MarkFailed` on the inner span |

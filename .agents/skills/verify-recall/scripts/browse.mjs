@@ -26,7 +26,7 @@ import { appendFileSync, existsSync, linkSync, mkdirSync, readFileSync, renameSy
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { postgresContainer, restore, snapshot } from './db.mjs'
+import { restore, snapshot } from './db.mjs'
 import { blockWebFonts, report, routeLongValues, sweepCapture, sweepFocus, trackLastFocused } from './sweep.mjs'
 
 const args = process.argv.slice(2)
@@ -92,11 +92,10 @@ const log = (file, line) => appendFileSync(path.join(outDir, file), line + '\n')
 let captureCount = 0
 
 const snapshotFile = path.join(runDir, 'db-snapshot.json')
-const postgres = postgresContainer(stack)
 if (existsSync(snapshotFile)) {
   let changes
   try {
-    changes = restore(postgres, JSON.parse(readFileSync(snapshotFile, 'utf8')))
+    changes = restore(stack.dataDirectory, JSON.parse(readFileSync(snapshotFile, 'utf8')))
   } catch (e) {
     console.error(`browse: the restore of the snapshot of an earlier run failed: ${e.message}`)
     console.error(`browse: delete ${snapshotFile} to keep the rows as they are, or run cleanup.sh and launch.sh for new rows.`)
@@ -109,7 +108,7 @@ if (existsSync(snapshotFile)) {
 }
 let before = null
 if (!keepData) {
-  before = snapshot(postgres)
+  before = snapshot(stack.dataDirectory)
   writeFileSync(`${snapshotFile}.tmp`, JSON.stringify(before))
   renameSync(`${snapshotFile}.tmp`, snapshotFile)
 }
@@ -313,7 +312,7 @@ try {
   }
   if (before) {
     try {
-      data = { restored: true, changes: restore(postgres, before) }
+      data = { restored: true, changes: restore(stack.dataDirectory, before) }
       rmSync(snapshotFile)
     } catch (e) {
       data = { restored: false, changes: e.changes ?? null, error: e.message }

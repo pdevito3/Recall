@@ -10,7 +10,7 @@ using Shouldly;
 public class VersionColumnTests
 {
     [Test]
-    public void every_entity_maps_its_version_to_xmin_as_a_concurrency_token()
+    public void every_entity_maps_its_version_to_an_integer_column_as_a_concurrency_token()
     {
         // Arrange
         using var context = new AppDbContextFactory().CreateDbContext([]);
@@ -22,10 +22,10 @@ public class VersionColumnTests
         // Act
         var failures = entityTypes
             .Select(e => (Entity: e, Version: e.FindProperty(nameof(BaseEntity.Version))!))
-            .Where(x => x.Version.GetColumnName() != "xmin"
-                        || x.Version.GetColumnType() != "xid"
+            .Where(x => x.Version.GetColumnName() != "version"
+                        || x.Version.GetColumnType() != "INTEGER"
                         || !x.Version.IsConcurrencyToken
-                        || x.Version.ValueGenerated != ValueGenerated.OnAddOrUpdate)
+                        || x.Version.ValueGenerated != ValueGenerated.Never)
             .Select(x => x.Entity.DisplayName())
             .ToList();
 

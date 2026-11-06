@@ -3,14 +3,14 @@ using Microsoft.EntityFrameworkCore;
 namespace Recall.Bff.Sessions;
 
 /// <summary>
-/// The BFF session store on Postgres. The conditional writes use <c>xmin</c>: a write with an old version
-/// changes no row, and EF Core then reports a concurrency failure.
+/// A write with an old version changes no row, and EF Core then reports a concurrency failure.
 /// </summary>
 public sealed class EfBffSessionStore(BffDbContext dbContext, TimeProvider timeProvider) : IBffSessionStore
 {
     public async Task<BffSession> CreateAsync(BffSession session, CancellationToken cancellationToken)
     {
         var entry = dbContext.Sessions.Add(session);
+        entry.Property(e => e.Version).CurrentValue = 1;
         try
         {
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -47,7 +47,7 @@ public sealed class EfBffSessionStore(BffDbContext dbContext, TimeProvider timeP
     public async Task<BffSession?> DeleteAsync(string key, CancellationToken cancellationToken)
     {
         var deleted = await dbContext.Sessions
-            .FromSql($"DELETE FROM sessions WHERE key = {key} RETURNING *, xmin")
+            .FromSql($"DELETE FROM sessions WHERE key = {key} RETURNING *")
             .AsNoTracking()
             .TagWith("bff_sessions.delete")
             .ToListAsync(cancellationToken);
@@ -96,10 +96,6 @@ public sealed class EfBffSessionStore(BffDbContext dbContext, TimeProvider timeP
             .ExecuteDeleteAsync(cancellationToken);
     }
 
-    /// <summary>
-    /// An UPDATE of <paramref name="properties"/> with <c>WHERE key = @key AND xmin = @expectedVersion</c>. The
-    /// update does not read the row first. Only a failed update reads it, to tell a missing row from a conflict.
-    /// </summary>
     private async Task<BffSessionWrite> WriteAsync(string key, uint expectedVersion, Func<BffSession, BffSession> change,
         string[] properties, CancellationToken cancellationToken)
     {
@@ -108,6 +104,7 @@ public sealed class EfBffSessionStore(BffDbContext dbContext, TimeProvider timeP
         var entry = dbContext.Sessions.Attach(stub);
         foreach (var property in properties)
             entry.Property(property).IsModified = true;
+        entry.Property(e => e.Version).CurrentValue = expectedVersion + 1;
 
         try
         {

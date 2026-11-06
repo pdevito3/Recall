@@ -6,7 +6,7 @@ Recall started from [FullstackTemplate](https://github.com/pdevito3/FullstackTem
 
 The stack today has:
 - **React 19** frontend with TanStack Router and React Query
-- **Backend-For-Frontend (BFF)** pattern with YARP and OIDC, and server-side sessions in PostgreSQL
+- **Backend-For-Frontend (BFF)** pattern with YARP and OIDC, and server-side sessions in SQLite
 - **Configurable authentication** - one setting selects the auth provider, and a new provider is one folder in the AppHost
 - **Multi-tenant architecture** with data isolation
 - **OpenTelemetry** observability built-in
@@ -32,7 +32,7 @@ Recall/
 - **Audit Log and Soft Delete** - An append-only log of each change, and soft delete built-in
 - **API Versioning** - URL segment versioning (`/api/v1/...`)
 - **OpenTelemetry** - Distributed tracing and metrics
-- **PostgreSQL** - With EF Core and migrations
+- **SQLite** - With EF Core and migrations. The app data is in `recall.db`, and the BFF sessions are in `bff.db`
 
 ### Frontend Features
 - **TanStack Router** - File-based routing with type safety
@@ -83,7 +83,6 @@ A normal run uses the same ports at each start. All of them are in the block 247
 | 24713 | `server` | https |
 | 24714 | `server` | http |
 | 24715 | `server` | grpc |
-| 24720 | `postgres` | tcp |
 | 24730 | `keycloak` | http |
 | 24731 | `keycloak-postgres` | tcp |
 | 24740 | `zerofactor` | http |
@@ -107,7 +106,7 @@ dotnet tool restore   # once: installs the pinned Aspire CLI as `dotnet aspire`
 dotnet aspire run --isolated --apphost Recall.AppHost
 ```
 
-An isolated run gives each endpoint a random port and uses a copy of the user secrets. It also starts Postgres with no data volume, so each run gets an empty database. A normal run uses the fixed ports of the table above and keeps a separate data volume for each checkout path.
+An isolated run gives each endpoint a random port and uses a copy of the user secrets. It also starts with empty data files in a new temp directory. A normal run uses the fixed ports of the table above and keeps its data files in `.data` of the checkout. `RECALL_DATA_DIR` sets another directory.
 
 ## Auth Provider
 

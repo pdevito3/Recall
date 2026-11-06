@@ -7,14 +7,14 @@ using Recall.Server.Domain.Users;
 using Recall.SharedTestHelpers.Utilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Npgsql;
+using Microsoft.Data.Sqlite;
 using NSubstitute;
 using Shouldly;
 
 /// <summary>A BaseEntity cannot map to a view, so a read model of a view is a [NotAudited] class with ITenantable.</summary>
 public sealed class ReadModelViewTests : IAsyncDisposable
 {
-    private readonly PostgresTestDatabase _database = new();
+    private readonly SqliteTestDatabase _database = new();
 
     public async ValueTask DisposeAsync() => await _database.DisposeAsync();
 
@@ -22,7 +22,6 @@ public sealed class ReadModelViewTests : IAsyncDisposable
     public async Task a_read_model_of_a_view_shows_only_the_rows_of_the_tenant_of_the_caller()
     {
         // Arrange
-        await _database.StartAsync();
         var (mine, theirs) = (EntityId.New(Tenant.IdPrefix), EntityId.New(Tenant.IdPrefix));
         await using (var writer = await CreateContextAsync(TenantScope.AllTenants))
         {
@@ -30,11 +29,11 @@ public sealed class ReadModelViewTests : IAsyncDisposable
             await writer.SaveChangesAsync();
         }
 
-        await using (var connection = new NpgsqlConnection(_database.ConnectionString))
+        await using (var connection = new SqliteConnection(_database.ConnectionString))
         {
             await connection.OpenAsync();
-            await using var command = new NpgsqlCommand(
-                "CREATE VIEW box_counts AS SELECT tenant_id, count(*)::int AS count FROM boxes WHERE NOT is_deleted GROUP BY tenant_id",
+            await using var command = new SqliteCommand(
+                "CREATE VIEW box_counts AS SELECT tenant_id, count(*) AS count FROM boxes WHERE NOT is_deleted GROUP BY tenant_id",
                 connection);
             await command.ExecuteNonQueryAsync();
         }
@@ -52,7 +51,7 @@ public sealed class ReadModelViewTests : IAsyncDisposable
     private async Task<AppDbContext> CreateContextAsync(TenantScope scope)
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(_database.ConnectionString)
+            .UseSqlite(_database.ConnectionString)
             .UseSnakeCaseNamingConvention()
             .Options;
         var scopeProvider = Substitute.For<ITenantScopeProvider>();

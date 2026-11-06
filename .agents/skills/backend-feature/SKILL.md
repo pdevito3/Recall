@@ -80,7 +80,7 @@ Change each of these files:
 Rules:
 
 - Each text, date, or time value has `[Sensitive]` or `[NotSensitive]`. A flag, an enum, a `Guid`, an integer, or a foreign key needs no mark.
-- Check a required text value with `ThrowWhenNullOrWhitespace` first. Check each text value with `ThrowWhenLongerThan` and `ThrowWhenHasCharacterPostgresCannotStore`. Put the checks of a nullable value in an `is not null` block.
+- Check a required text value with `ThrowWhenNullOrWhitespace` first. Check each text value with `ThrowWhenLongerThan` and `ThrowWhenHasCharacterNotStorable`. Put the checks of a nullable value in an `is not null` block.
 - A new required parameter of an MCP tool that exists needs a new tool name. To keep the name, add an optional parameter with the default `null` after `CancellationToken` ("MCP versions" in `docs/backend/endpoints.md`).
 - A gRPC field that can have no value is `optional`. Read `Has<Field>`, and set the response field only when the value is not null.
 - Give each new text value a rule in `<Entity>Rules` that fits the max length. Otherwise `AutoFaker` makes text that is too long, and unrelated tests fail at random.
@@ -114,5 +114,5 @@ The build fails on these rules:
 - The text of a user message obeys `docs/messages.md` (the user message analyzer).
 - A set-based write, raw SQL, or a bulk import uses the paths of `docs/backend/audit-log.md` (RS0030).
 - Each query on a `DbSet` of `AppDbContext` has `TagWithOperationCallSite` (FSTTEL001 and FSTTEL003).
-- A query lambda in a handler compares a text or a list of texts of the request only after `EntityId.IsValid` or `PostgresText.CanStore` checks it, or checks each item of the list (FSTQRY001).
+- A query lambda in a handler compares a text or a list of texts of the request only after `EntityId.IsValid` or `StorableText.CanStore` checks it, or checks each item of the list (FSTQRY001).
 - A request handler that calls `SaveChangesAsync` or `SaveChanges` has a `_logger.Here().Information` log and an `Activity.Current?.SetTag("app.*_id", ...)` tag (FSTTEL002).

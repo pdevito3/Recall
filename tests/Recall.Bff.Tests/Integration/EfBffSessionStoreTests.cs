@@ -4,7 +4,7 @@ using System.Data.Common;
 using Recall.Bff.Sessions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Npgsql;
+using Microsoft.Data.Sqlite;
 using Shouldly;
 
 /// <summary>
@@ -30,35 +30,27 @@ public class EfBffSessionStoreTests
 
         // Assert
         capture.Commands.ShouldNotBeEmpty();
-        await using var connection = new NpgsqlConnection(BffApp.Database.ConnectionString);
+        await using var connection = new SqliteConnection(BffApp.Database.ConnectionString);
         await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-        // The test table is small, so the planner would read all of it and sort it. Make the full reads and the
-        // sort cost much, as on a large table, so that the plan shows if the batch can come from an index in order.
-        await using (var planner = new NpgsqlCommand(
-            "SET LOCAL enable_seqscan = off; SET LOCAL enable_bitmapscan = off; SET LOCAL enable_sort = off", connection, transaction))
-            await planner.ExecuteNonQueryAsync();
 
         foreach (var command in capture.Commands)
         {
-            var plan = await ExplainAsync(connection, transaction, command);
-            plan.ShouldContain("Limit", customMessage: plan);
-            plan.ShouldNotContain("Sort", customMessage: plan);
-            plan.ShouldMatch(@"Index Scan using ix_sessions_(absolute_)?expires on sessions[\s\S]*Index Cond: \((absolute_)?expires <=",
-                customMessage: plan);
+            var plan = await ExplainAsync(connection, command);
+            plan.ShouldNotContain("TEMP B-TREE", customMessage: plan);
+            plan.ShouldMatch(@"SEARCH \S+ USING (COVERING )?INDEX ix_sessions_(absolute_)?expires \((absolute_)?expires<", customMessage: plan);
         }
     }
 
-    private static async Task<string> ExplainAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, DbCommand command)
+    private static async Task<string> ExplainAsync(SqliteConnection connection, DbCommand command)
     {
-        await using var explain = new NpgsqlCommand($"EXPLAIN {command.CommandText}", connection, transaction);
-        foreach (NpgsqlParameter parameter in command.Parameters)
-            explain.Parameters.Add(parameter.Clone());
+        await using var explain = new SqliteCommand($"EXPLAIN QUERY PLAN {command.CommandText}", connection);
+        foreach (SqliteParameter parameter in command.Parameters)
+            explain.Parameters.AddWithValue(parameter.ParameterName, parameter.Value);
 
         var lines = new List<string>();
         await using var reader = await explain.ExecuteReaderAsync();
         while (await reader.ReadAsync())
-            lines.Add(reader.GetString(0));
+            lines.Add(reader.GetString(3));
         return string.Join('\n', lines);
     }
 
@@ -76,11 +68,11 @@ public class EfBffSessionStoreTests
             return ValueTask.FromResult(result);
         }
 
-        private static NpgsqlCommand Copy(DbCommand command)
+        private static SqliteCommand Copy(DbCommand command)
         {
-            var copy = new NpgsqlCommand(command.CommandText);
-            foreach (NpgsqlParameter parameter in command.Parameters)
-                copy.Parameters.Add(parameter.Clone());
+            var copy = new SqliteCommand(command.CommandText);
+            foreach (SqliteParameter parameter in command.Parameters)
+                copy.Parameters.AddWithValue(parameter.ParameterName, parameter.Value);
             return copy;
         }
     }

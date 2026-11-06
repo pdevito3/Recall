@@ -7,7 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="Duende.AccessTokenManagement.OpenIdConnect" />
     <PackageReference Include="EFCore.NamingConventions" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
@@ -16,9 +15,10 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
     <PackageReference Include="Microsoft.Extensions.ServiceDiscovery" />
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
@@ -32,9 +32,14 @@
     <PackageReference Include="Yarp.ReverseProxy" />
   </ItemGroup>
 
-  <!-- The Server and the BFF share no project, so the BFF compiles the one health check wrapper of the Server -->
+  <!-- The Server and the BFF share no project, so the BFF compiles the health check wrapper and the SQLite setup of the Server -->
   <ItemGroup>
     <Compile Include="..\Recall.Server\Resources\Extensions\CallerCancellationHealthCheck.cs" Link="CallerCancellationHealthCheck.cs" />
+    <Compile Include="..\Recall.Server\Databases\Sqlite\NetworkMountCheck.cs" Link="Sqlite\NetworkMountCheck.cs" />
+    <Compile Include="..\Recall.Server\Databases\Sqlite\SqliteConnectionSetup.cs" Link="Sqlite\SqliteConnectionSetup.cs" />
+    <Compile Include="..\Recall.Server\Databases\Sqlite\SqliteFile.cs" Link="Sqlite\SqliteFile.cs" />
+    <Compile Include="..\Recall.Server\Databases\Sqlite\UtcTextConverter.cs" Link="Sqlite\UtcTextConverter.cs" />
+    <Compile Include="..\Recall.Server\Databases\Sqlite\UtcTextParameters.cs" Link="Sqlite\UtcTextParameters.cs" />
   </ItemGroup>
 
 </Project>

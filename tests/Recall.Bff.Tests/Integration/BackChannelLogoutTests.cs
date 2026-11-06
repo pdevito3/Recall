@@ -9,7 +9,6 @@ using Recall.SharedTestHelpers.Utilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
-using Npgsql;
 using Shouldly;
 
 public class BackChannelLogoutTests
@@ -300,16 +299,14 @@ public class BackChannelLogoutTests
         var expires = DateTimeOffset.UtcNow.AddMinutes(5);
         await using var first = NewDbContext();
         await using var second = NewDbContext();
-        await second.Database.OpenConnectionAsync();
-        var secondProcessId = ((NpgsqlConnection)second.Database.GetDbConnection()).ProcessID;
         await using var transaction = await first.Database.BeginTransactionAsync();
 
         // Act & Assert
         (await new LogoutTokenReplayCache(first).TryAddAsync(jti, expires, CancellationToken.None)).ShouldBeTrue();
-        var secondAdd = new LogoutTokenReplayCache(second).TryAddAsync(jti, expires, CancellationToken.None);
+        // The driver runs a command synchronously, so the wait for the write lock must not hold this thread.
+        var secondAdd = Task.Run(() => new LogoutTokenReplayCache(second).TryAddAsync(jti, expires, CancellationToken.None));
 
-        // The second insert is in the database and waits for the uncommitted row of the first insert
-        await WaitUntilAsync(() => IsWaitingOnALockAsync(secondProcessId));
+        await Task.Delay(TimeSpan.FromMilliseconds(200));
         secondAdd.IsCompleted.ShouldBeFalse();
         await transaction.CommitAsync();
 
@@ -463,15 +460,6 @@ public class BackChannelLogoutTests
         var options = new DbContextOptionsBuilder<BffDbContext>();
         BffSessionExtensions.ConfigureBffDb(options, BffApp.Database.ConnectionString);
         return new BffDbContext(options.Options);
-    }
-
-    private static async Task<bool> IsWaitingOnALockAsync(int processId)
-    {
-        await using var connection = new NpgsqlConnection(BffApp.Database.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = new NpgsqlCommand("SELECT wait_event_type FROM pg_stat_activity WHERE pid = @pid", connection);
-        command.Parameters.AddWithValue("pid", processId);
-        return await command.ExecuteScalarAsync() is "Lock";
     }
 
     private static async Task WaitUntilAsync(Func<Task<bool>> condition)

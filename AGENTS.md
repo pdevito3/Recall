@@ -20,7 +20,7 @@ Today this is a .NET Aspire application with a React frontend. It uses the Backe
     └─────────┘          └─────────┘         └──────────┘
          │                    │
     ┌─────────┐        ┌──────────────┐
-    │PostgreSQL│       │Auth Provider │
+    │  SQLite  │       │Auth Provider │
     └─────────┘        └──────────────┘
 ```
 

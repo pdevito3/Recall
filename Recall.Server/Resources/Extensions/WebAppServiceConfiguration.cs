@@ -1,7 +1,7 @@
 namespace Recall.Server.Resources.Extensions;
 
-using System.Diagnostics;
 using Databases;
+using Databases.Sqlite;
 using Domain.Attachments;
 using Domain.Tenants;
 using Domain.Users;
@@ -51,18 +51,15 @@ public static class WebAppServiceConfiguration
         {
             var connectionString = builder.Configuration.GetConnectionString(DatabaseConsts.DatabaseName);
 
-            options.UseNpgsql(connectionString, npgsql => npgsql.ConfigureDataSource(dataSource =>
-                    dataSource.ConfigureTracing(tracing => tracing
-                        // A command with no recorded ambient activity has no exported request or TraceRoot
-                        // to belong to, and would export as an orphan. This covers no activity at all and
-                        // an activity that instrumentation filtered out, such as the /health request.
-                        .ConfigureCommandFilter(_ => Activity.Current is { IsAllDataRequested: true })
-                        .ConfigureCommandEnrichmentCallback((activity, command) =>
-                            QueryTagEnrichment.Enrich(activity, command.CommandText)))))
+            options.UseSqlite(connectionString)
                 .UseSnakeCaseNamingConvention()
-                .AddInterceptors(serviceProvider.GetRequiredService<TenantLookupInterceptor>());
+                .AddInterceptors(
+                    SqliteConnectionSetup.Instance,
+                    UtcTextParameters.Instance,
+                    SqlSpanInterceptor.Instance,
+                    serviceProvider.GetRequiredService<TenantLookupInterceptor>());
         });
-        builder.EnrichNpgsqlDbContext<AppDbContext>();
+        builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>();
 
         builder.Services.AddDomainEvents(typeof(Program).Assembly);
     }

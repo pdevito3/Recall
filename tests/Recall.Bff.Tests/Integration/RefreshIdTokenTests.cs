@@ -119,6 +119,37 @@ public class RefreshIdTokenTests
     }
 
     [Test]
+    public async Task a_waiter_outlasts_the_revocation_of_the_first_call_and_gets_the_end_of_the_session()
+    {
+        // Arrange
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        await using var provider = await FakeIdentityProvider.StartAsync();
+        await using var app = RefreshLockTests.StartWithClock(clock, provider);
+        var (cookie, _) = await RefreshLockTests.SignInAsync(app,
+            $"test_sub={NewSubject()}&test_expires_in=60&test_refresh_id_token=wrong_sub");
+        var gate = provider.HoldRevocations();
+        using var browser = RefreshLockTests.Cookieless(app);
+        try
+        {
+            // Act
+            var first = browser.SendAsync(RefreshLockTests.ApiRequest(cookie));
+            await gate.Arrived.Task.WaitAsync(Timeout);
+            var waiter = browser.SendAsync(RefreshLockTests.ApiRequest(cookie));
+            await RefreshLockTests.WaitForInProcessWaiterAsync(app);
+            clock.Advance(RefreshLockTests.ClockedTokenRequestTimeout + TimeSpan.FromSeconds(3));
+            await first.WaitAsync(Timeout);
+            var response = await waiter.WaitAsync(Timeout);
+
+            // Assert
+            BffApp.SessionCookieValue(response).ShouldBe("");
+        }
+        finally
+        {
+            gate.Released.TrySetResult();
+        }
+    }
+
+    [Test]
     public async Task a_refresh_id_token_with_a_new_key_ends_the_session_when_the_keys_do_not_load_in_time()
     {
         // Arrange

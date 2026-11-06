@@ -145,7 +145,7 @@ _Avoid_: OP, IdP server
 ### Concurrency
 
 **Version**:
-The Postgres `xmin` of the row of an aggregate root. It is opaque, so compare it only for equality. A change to an owned child also gives the root a new version.
+An integer column of the row of an aggregate root. The save sets it to 1 on an add and adds 1 on each update. It is opaque, so compare it only for equality. A change to an owned child also gives the root a new version.
 _Avoid_: Row version, ETag, revision
 
 **Stale version**:

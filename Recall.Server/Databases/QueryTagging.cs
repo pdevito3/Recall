@@ -3,12 +3,6 @@ namespace Recall.Server.Databases;
 using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 
-/// <summary>
-/// Attaches a stable operation name and the C# call site to an EF query. EF writes both as SQL
-/// comments, and <see cref="QueryTagEnrichment"/> promotes them into the Npgsql OpenTelemetry span.
-/// Without this, every database span in a trace reads as the bare database name and you cannot tell
-/// which feature slice issued it.
-/// </summary>
 public static class QueryTagging
 {
     /// <summary>

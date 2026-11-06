@@ -1,5 +1,6 @@
 namespace Recall.UnitTests.Databases;
 
+using Microsoft.Data.Sqlite;
 using Recall.Server.Databases;
 using Shouldly;
 
@@ -22,14 +23,11 @@ public class SqlTextTests
     }
 
     [Test]
-    [Arguments("DELETE FROM used_dpop_proofs WHERE expires <= now()")]
-    [Arguments("UPDATE \"Users\" SET first_name = 'x'")]
+    [Arguments("DELETE FROM used_dpop_proofs WHERE expires <= @now")]
     [Arguments("UPDATE users_archive SET first_name = 'x'")]
     [Arguments("-- users\nSELECT 1")]
-    [Arguments("/* users /* nested users */ users */ SELECT 1")]
+    [Arguments("/* users /* no nesting in SQLite */ SELECT 1")]
     [Arguments("SELECT 'users', 'it''s users'")]
-    [Arguments("SELECT E'it\\'s users'")]
-    [Arguments("SELECT $$users$$, $body$ users $body$")]
     public void finds_no_table_in_a_comment_a_value_or_another_name(string sql)
     {
         // Act & Assert
@@ -37,19 +35,88 @@ public class SqlTextTests
     }
 
     [Test]
-    public void parameter_with_a_dollar_is_not_the_start_of_dollar_quoted_text()
+    [Arguments("/* a comment /* that does not nest */ UPDATE users SET first_name = 'x'")]
+    [Arguments("UPDATE `users` SET first_name = 'x'")]
+    [Arguments("UPDATE [users] SET first_name = 'x'")]
+    [Arguments("UPDATE [USERS] SET first_name = 'x'")]
+    [Arguments("SELECT $1 FROM users WHERE id = $2")]
+    public void finds_a_table_after_a_comment_in_each_form_of_a_quoted_name_and_next_to_a_parameter(string sql)
     {
         // Act & Assert
-        SqlText.FirstNamed("SELECT $1 FROM users WHERE id = $2", Tables).ShouldBe("users");
+        SqlText.FirstNamed(sql, Tables).ShouldBe("users");
+    }
+
+    [Test]
+    [Arguments("UPDATE 'users' SET first_name = 'x'")]
+    [Arguments("UPDATE 'USERS' SET first_name = 'x'")]
+    [Arguments("update/* a comment */'users' set first_name = 'x'")]
+    [Arguments("UPDATE OR REPLACE 'users' SET first_name = 'x'")]
+    [Arguments("UPDATE OR IGNORE 'users' SET first_name = 'x'")]
+    [Arguments("UPDATE main.'users' SET first_name = 'x'")]
+    [Arguments("UPDATE \uFEFF'users' SET first_name = 'x'")]
+    [Arguments("DELETE FROM main.\uFEFF'users'")]
+    [Arguments("UPDATE 'main'.'users' SET first_name = 'x'")]
+    [Arguments("INSERT INTO 'users' (first_name) VALUES ('x')")]
+    [Arguments("INSERT OR REPLACE INTO 'users' (first_name) VALUES ('x')")]
+    [Arguments("INSERT INTO main . 'users' (first_name) VALUES ('x')")]
+    [Arguments("REPLACE INTO 'users' (first_name) VALUES ('x')")]
+    [Arguments("DELETE FROM 'users'")]
+    [Arguments("DELETE FROM main.'users'")]
+    [Arguments("WITH c AS (SELECT 1) DELETE FROM 'users'")]
+    public void a_string_literal_that_sqlite_writes_as_a_table_name_is_a_name(string sql)
+    {
+        // Arrange
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        Run(connection, "CREATE TABLE users (first_name TEXT); INSERT INTO users VALUES ('a')");
+
+        // Act
+        var changedRows = Run(connection, sql);
+
+        // Assert
+        changedRows.ShouldBe(1);
+        SqlText.FirstNamed(sql, Tables).ShouldBe("users");
+    }
+
+    [Test]
+    [Arguments("DROP TABLE 'users'")]
+    [Arguments("DROP TABLE IF EXISTS 'users'")]
+    [Arguments("ALTER TABLE 'users' RENAME TO old_users")]
+    [Arguments("CREATE INDEX i ON 'users' (first_name)")]
+    [Arguments("CREATE TEMP VIEW 'users' AS SELECT 1")]
+    [Arguments("CREATE TRIGGER t AFTER INSERT ON 'users' BEGIN SELECT 1; END")]
+    public void a_string_literal_that_sqlite_changes_the_schema_of_is_a_name(string sql)
+    {
+        // Arrange
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        Run(connection, "CREATE TABLE users (first_name TEXT)");
+
+        // Act
+        Run(connection, sql);
+
+        // Assert
+        SqlText.FirstNamed(sql, Tables).ShouldBe("users");
+    }
+
+    [Test]
+    [Arguments("UPDATE t SET kind = 'users'")]
+    [Arguments("INSERT INTO t VALUES ('users')")]
+    [Arguments("DELETE FROM t WHERE kind = 'users' OR kind IN ('users')")]
+    [Arguments("SELECT replace('users', 'a', 'b')")]
+    public void a_string_literal_that_is_a_value_is_not_a_name(string sql)
+    {
+        // Act & Assert
+        SqlText.FirstNamed(sql, Tables).ShouldBeNull();
     }
 
     [Test]
     [Arguments("INSERT INTO t VALUES (1)", true)]
     [Arguments("WITH c AS (DELETE FROM t RETURNING id) SELECT id FROM c", true)]
-    [Arguments("merge into t using s on t.id = s.id when matched then do nothing", true)]
-    [Arguments("TRUNCATE t", true)]
-    [Arguments("COPY t FROM STDIN", true)]
-    [Arguments("SELECT id FROM t FOR UPDATE", true)]
+    [Arguments("replace into t values (1)", true)]
+    [Arguments("DROP TABLE t", true)]
+    [Arguments("ALTER TABLE t RENAME TO u", true)]
+    [Arguments("CREATE UNIQUE INDEX i ON t (a)", true)]
     [Arguments("SELECT id FROM t", false)]
     [Arguments("SELECT 'UPDATE' FROM t -- DELETE", false)]
     [Arguments("SELECT \"update\" FROM t", false)]
@@ -60,19 +127,10 @@ public class SqlTextTests
         SqlText.IsWrite(sql).ShouldBe(isWrite);
     }
 
-    [Test]
-    [Arguments("DO $$ BEGIN UPDATE users SET first_name = 'x'; END $$", true)]
-    [Arguments("do 'BEGIN UPDATE users SET first_name = ''x''; END'", true)]
-    [Arguments("CALL rename_users()", true)]
-    [Arguments("SELECT 1; call rename_users()", true)]
-    [Arguments("-- note\n/* note */ DO 'BEGIN NULL; END'", true)]
-    [Arguments("SELECT $body$ x $body$", true)]
-    [Arguments("INSERT INTO t (id) VALUES (1) ON CONFLICT (id) DO NOTHING", false)]
-    [Arguments("SELECT \"do\", 'CALL x', $1 FROM t -- DO", false)]
-    [Arguments("SELECT rename_users()", false)]
-    public void hidden_code_is_a_do_block_a_call_or_dollar_quoted_text(string sql, bool runsHiddenCode)
+    private static int Run(SqliteConnection connection, string sql)
     {
-        // Act & Assert
-        SqlText.RunsHiddenCode(sql).ShouldBe(runsHiddenCode);
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        return command.ExecuteNonQuery();
     }
 }

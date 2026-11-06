@@ -5,7 +5,8 @@ using Recall.Server.Exceptions;
 using Recall.Server.Resources.Entrypoints.Grpc;
 using Google.Rpc;
 using Grpc.Core;
-using Npgsql;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using NSubstitute;
 using Shouldly;
 
@@ -131,8 +132,8 @@ public class DomainErrorInterceptorTests
     public async Task a_save_that_a_unique_index_stops_has_the_message_of_the_check()
     {
         // Arrange
-        var conflict = DatabaseConflict.From(new PostgresException(
-            "duplicate key", "ERROR", "ERROR", PostgresErrorCodes.UniqueViolation, constraintName: "ix_tenants_name"),
+        var conflict = DatabaseConflict.From(
+            new DbUpdateException("A save failed.", new SqliteException("SQLite Error 19: 'UNIQUE constraint failed: tenants.name'.", 19, 2067)),
             new AppDbContextFactory().CreateDbContext([]).Model)!;
 
         // Act & Assert

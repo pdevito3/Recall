@@ -25,7 +25,7 @@ public class QueryInputAnalyzerTests
         diagnostic.Id.ShouldBe("FSTQRY001");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage(CultureInfo.InvariantCulture).ShouldBe(
-            "The query compares the request value 'request.Dto.Name', which can hold a NUL that Postgres cannot take. Compare the entity value, or check the input with EntityId.IsValid or PostgresText.CanStore first. For a list, check each item. See docs/backend/features-and-cqrs.md.");
+            "The query compares the request value 'request.Dto.Name', which can hold a NUL or a lone surrogate that SQLite text does not keep. Compare the entity value, or check the input with EntityId.IsValid or StorableText.CanStore first. For a list, check each item. See docs/backend/features-and-cqrs.md.");
     }
 
     [Test]
@@ -83,7 +83,7 @@ public class QueryInputAnalyzerTests
     {
         // Act
         var diagnostics = await RunInHandler("""
-            return PostgresText.CanStore(request.Identifier)
+            return StorableText.CanStore(request.Identifier)
                 && await dbContext.Users.AnyAsync(u => u.Identifier == request.Identifier, cancellationToken);
             """);
 
@@ -97,7 +97,7 @@ public class QueryInputAnalyzerTests
         // Act
         var diagnostics = await RunInHandler("""
             var found = await dbContext.Users.AnyAsync(u => u.Identifier == request.Identifier, cancellationToken);
-            return found && PostgresText.CanStore(request.Identifier);
+            return found && StorableText.CanStore(request.Identifier);
             """);
 
         // Assert
@@ -109,7 +109,7 @@ public class QueryInputAnalyzerTests
     {
         // Act
         var diagnostics = await RunInHandler("""
-            return PostgresText.CanStore(request.Dto.Name)
+            return StorableText.CanStore(request.Dto.Name)
                 && await dbContext.Users.AnyAsync(u => u.Identifier == request.Identifier, cancellationToken);
             """);
 
@@ -140,10 +140,9 @@ public class QueryInputAnalyzerTests
     [Arguments("u => u.Identifier.EndsWith(request.Identifier)", "request.Identifier")]
     [Arguments("u => u.Identifier.Contains(request.Identifier)", "request.Identifier")]
     [Arguments("u => EF.Functions.Like(u.Identifier, request.Identifier)", "request.Identifier")]
-    [Arguments("u => EF.Functions.ILike(u.Identifier, request.Identifier)", "request.Identifier")]
     [Arguments("u => request.Ids.Contains(u.Id)", "request.Ids")]
-    [Arguments("u => EF.Functions.ILike(u.Identifier, $\"%{request.Identifier}%\")", "request.Identifier")]
-    [Arguments("u => EF.Functions.ILike(u.Identifier, LikePattern.Containing(request.Identifier), LikePattern.EscapeCharacter)", "request.Identifier")]
+    [Arguments("u => EF.Functions.Like(u.Identifier, $\"%{request.Identifier}%\")", "request.Identifier")]
+    [Arguments("u => EF.Functions.Like(u.Identifier, LikePattern.Containing(request.Identifier), LikePattern.EscapeCharacter)", "request.Identifier")]
     [Arguments("u => EF.Functions.Like(u.Identifier, LikePattern.StartingWith(request.Identifier.Trim()), LikePattern.EscapeCharacter)", "request.Identifier.Trim()")]
     [Arguments("u => u.Identifier == request.Identifier + \"-1\"", "request.Identifier")]
     [Arguments("u => u.Identifier.StartsWith(\"a\" + request.Identifier + \"b\")", "request.Identifier")]
@@ -159,15 +158,15 @@ public class QueryInputAnalyzerTests
     [Test]
     [Arguments("u => u.Identifier == request.Identifier.Trim()")]
     [Arguments("u => u.Identifier.StartsWith(request.Identifier)")]
-    [Arguments("u => EF.Functions.ILike(u.Identifier, request.Identifier)")]
-    [Arguments("u => EF.Functions.ILike(u.Identifier, $\"%{request.Identifier}%\")")]
-    [Arguments("u => EF.Functions.ILike(u.Identifier, LikePattern.Containing(request.Identifier), LikePattern.EscapeCharacter)")]
+    [Arguments("u => EF.Functions.Like(u.Identifier, request.Identifier)")]
+    [Arguments("u => EF.Functions.Like(u.Identifier, $\"%{request.Identifier}%\")")]
+    [Arguments("u => EF.Functions.Like(u.Identifier, LikePattern.Containing(request.Identifier), LikePattern.EscapeCharacter)")]
     [Arguments("u => u.Identifier == request.Identifier + \"-1\"")]
-    public async Task a_request_text_that_postgres_text_can_store_checks_first_has_no_diagnostics_in_each_operator(string predicate)
+    public async Task a_request_text_that_the_database_can_store_checks_first_has_no_diagnostics_in_each_operator(string predicate)
     {
         // Act
         var diagnostics = await RunInHandler($"""
-            return PostgresText.CanStore(request.Identifier)
+            return StorableText.CanStore(request.Identifier)
                 && await dbContext.Users.AnyAsync({predicate}, cancellationToken);
             """);
 
@@ -181,7 +180,7 @@ public class QueryInputAnalyzerTests
         // Act
         var diagnostics = await RunInHandler("""
             var tenant = Create(request.Dto.Name);
-            return await dbContext.Users.AnyAsync(u => EF.Functions.ILike(u.Identifier, LikePattern.Containing(tenant.Name) + $"{tenant.Id}%", LikePattern.EscapeCharacter), cancellationToken);
+            return await dbContext.Users.AnyAsync(u => EF.Functions.Like(u.Identifier, LikePattern.Containing(tenant.Name) + $"{tenant.Id}%", LikePattern.EscapeCharacter), cancellationToken);
             """);
 
         // Assert
@@ -193,7 +192,7 @@ public class QueryInputAnalyzerTests
     {
         // Act
         var diagnostics = await RunInHandler("""
-            return PostgresText.CanStore(request.Identifier.Trim('\0'))
+            return StorableText.CanStore(request.Identifier.Trim('\0'))
                 && await dbContext.Users.AnyAsync(u => u.Identifier == request.Identifier, cancellationToken);
             """);
 
@@ -203,13 +202,13 @@ public class QueryInputAnalyzerTests
 
     [Test]
     [Arguments("if (!request.Ids.All(id => EntityId.IsValid(id, Tenant.IdPrefix))) return false;")]
-    [Arguments("if (!request.Ids.All(PostgresText.CanStore)) return false;")]
+    [Arguments("if (!request.Ids.All(StorableText.CanStore)) return false;")]
     [Arguments("foreach (var id in request.Ids) { if (!EntityId.IsValid(id, Tenant.IdPrefix)) return false; }")]
     [Arguments("foreach (var id in request.Ids ?? []) { if (!EntityId.IsValid(id, Tenant.IdPrefix)) return false; }")]
     [Arguments("foreach (var raw in request.Ids) { var id = raw.Trim(); if (!EntityId.IsValid(id, Tenant.IdPrefix)) return false; }")]
     [Arguments("for (var i = 0; i < request.Ids.Length; i++) { if (!EntityId.IsValid(request.Ids[i], Tenant.IdPrefix)) return false; }")]
     [Arguments("if (request.Ids?.All(id => EntityId.IsValid(id, Tenant.IdPrefix)) == false) return false;")]
-    [Arguments("if (request.Ids?.All(PostgresText.CanStore) == false) return false;")]
+    [Arguments("if (request.Ids?.All(StorableText.CanStore) == false) return false;")]
     public async Task a_request_list_that_a_check_of_each_item_checks_first_has_no_diagnostics(string check)
     {
         // Act
@@ -245,7 +244,7 @@ public class QueryInputAnalyzerTests
     {
         // Act
         var diagnostics = await RunInHandler($$"""
-            foreach (var id in request.Ids) { {{copy}} if (!PostgresText.CanStore(t)) return false; }
+            foreach (var id in request.Ids) { {{copy}} if (!StorableText.CanStore(t)) return false; }
             return await dbContext.Users.AnyAsync(u => request.Ids.Contains(u.Id), cancellationToken);
             """);
 

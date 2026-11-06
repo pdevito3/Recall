@@ -15,7 +15,7 @@ using Telemetry = Recall.Server.Resources.Telemetry;
 [NotInParallel]
 public class TracingTests : TestBase
 {
-    private const string NpgsqlSource = "Npgsql";
+    private static bool IsSqlSpan(Activity activity) => activity.GetTagItem("db.system.name") as string == "sqlite";
 
     [Test]
     public void startup_migration_exports_one_root_with_the_database_work_under_it()
@@ -26,7 +26,7 @@ public class TracingTests : TestBase
         root.GetTagItem("app.db_context").ShouldBe("AppDbContext");
 
         AllExportedSpans()
-            .Where(a => a.Source.Name == NpgsqlSource && a.TraceId == root.TraceId)
+            .Where(a => IsSqlSpan(a) && a.TraceId == root.TraceId)
             .ShouldNotBeEmpty();
     }
 
@@ -180,7 +180,7 @@ public class TracingTests : TestBase
 
         // Assert
         var query = ExportedSpans().Where(a =>
-            a.Source.Name == NpgsqlSource && a.ParentSpanId == parent.SpanId).ShouldHaveSingleItem();
+            IsSqlSpan(a) && a.ParentSpanId == parent.SpanId).ShouldHaveSingleItem();
         query.DisplayName.ShouldNotStartWith("SQL: ");
         query.GetTagItem("app.db.call_site").ShouldBeNull();
     }
@@ -190,13 +190,13 @@ public class TracingTests : TestBase
     {
         // Arrange
         Activity.Current = null;
-        var before = ExportedSpans().Count(a => a.Source.Name == NpgsqlSource);
+        var before = ExportedSpans().Count(IsSqlSpan);
 
         // Act
         await ExecuteDbContextAsync(db => db.Tenants.CountAsync());
 
         // Assert
-        ExportedSpans().Count(a => a.Source.Name == NpgsqlSource).ShouldBe(before);
+        ExportedSpans().Count(IsSqlSpan).ShouldBe(before);
     }
 
     [Test]

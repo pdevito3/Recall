@@ -13,7 +13,7 @@ public sealed partial class EmailAddress : ValueObject
         Exceptions.ValidationException.ThrowWhenNullOrWhitespace(value, "email", "Please provide a valid email.");
         Exceptions.ValidationException.ThrowWhenLongerThan(value, MaxLength, "email",
             $"An email can have no more than {MaxLength} characters.");
-        Exceptions.ValidationException.ThrowWhenHasCharacterPostgresCannotStore(value, "email",
+        Exceptions.ValidationException.ThrowWhenHasCharacterNotStorable(value, "email",
             "An email has a character that is not allowed.");
         new EmailValidator().ValidateAndThrow(value);
         Value = value;

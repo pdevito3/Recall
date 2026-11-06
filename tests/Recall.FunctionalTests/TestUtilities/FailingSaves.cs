@@ -24,10 +24,6 @@ public sealed class FailingSaves : SaveChangesInterceptor
     /// </summary>
     public void ArmWhere(Func<BaseEntity, bool> matches) => _armedMatches.Add(matches);
 
-    /// <summary>
-    /// Fails each save that writes a matching entity after the save commits, as a lost reply of the commit does. The
-    /// row is in the database, and the handler gets an error.
-    /// </summary>
     public void ArmAfterCommitWhere(Func<BaseEntity, bool> matches) => _armedAfterCommit.Add(matches);
 
     public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)

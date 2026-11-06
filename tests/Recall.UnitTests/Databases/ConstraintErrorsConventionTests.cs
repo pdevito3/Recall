@@ -77,7 +77,7 @@ public class ConstraintErrorsConventionTests
         protected abstract void Configure(IndexBuilder<Gadget> index);
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-            => optionsBuilder.UseNpgsql("Host=unused");
+            => optionsBuilder.UseSqlite("Data Source=unused.db");
 
         protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
             => configurationBuilder.MapConstraintErrors();

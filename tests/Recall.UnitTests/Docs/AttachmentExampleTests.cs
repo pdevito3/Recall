@@ -376,7 +376,7 @@ public class AttachmentExampleTests
     private sealed class RepairContext : DbContext
     {
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-            => optionsBuilder.UseNpgsql("Host=unused");
+            => optionsBuilder.UseSqlite("Data Source=unused.db");
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

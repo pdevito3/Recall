@@ -4,7 +4,7 @@ The audit log records each data change and each action that a handler records. `
 
 ## What a save records
 
-A save adds one audit entry for each entity that it adds, changes, or deletes, and one entry for each recorded action. All entries of one save have the same record id. After a lost acknowledgment of the commit, the save looks for this record id in `audit_entries`. If the entries are there, the save committed, and it returns success (see [concurrency.md](concurrency.md#lost-reply-of-a-commit)).
+A save adds one audit entry for each entity that it adds, changes, or deletes, and one entry for each recorded action. All entries of one save have the same record id.
 
 | Kind | The save | `data` holds |
 |------|----------|--------------|
@@ -26,11 +26,11 @@ Each entry repeats the facts of its save:
 
 Each entry names its entity (`entity_type`, `entity_id`), its aggregate root (`root_type`, `root_id`), and the tenant of the root. The root is the owner at the end of the `Cascade` foreign keys. Thus the history of a user shows the changes of its `UserPermission` rows. An entity whose optional owner key is null is its own root. The entry of a child that moves to another owner names the root after the move, and it holds the old and the new owner key. The tenant comes from the root, not from the caller, so the change of a domain event handler in another tenant goes to that tenant.
 
-The key is `(occurred_at, record_id, ordinal)`. One index serves the history of a root, and one serves the list of a tenant, each newest first. The table has no foreign keys, because an entry outlives its entity. Triggers refuse `UPDATE`, `DELETE`, and `TRUNCATE`.
+The key is `(occurred_at, record_id, ordinal)`. One index serves the history of a root, and one serves the list of a tenant, each newest first. The table has no foreign keys, because an entry outlives its entity. Triggers refuse `UPDATE` and `DELETE`.
 
 ## Rules
 
-1. Write an audited table only through `SaveChangesAsync` or `BulkInsertAsync`. For a change of many rows, load the entities, change them, and save. See [Writes that skip the save](#writes-that-skip-the-save).
+1. Write an audited table only through `SaveChangesAsync`. For a change of many rows, load the entities, change them, and save. See [Writes that skip the save](#writes-that-skip-the-save).
 2. Give each property of an entity `[Sensitive]` or `[NotSensitive]`. Only a plain value (a `bool`, an enum, a `Guid`, or an integer) and a foreign key need no mark. Text, a date, a time, a `decimal`, a `double`, and a value object need a mark, because each can hold personal data, such as a birth date or a salary. The C# type of the property decides, not the column type. Thus a `decimal` that a value converter stores as a number needs a mark, and an enum that it stores as text needs none. `AuditSensitivityTests` fails on a value with no mark or with both marks.
 3. Use `[Sensitive]` for personal or secret data, such as a name, an email address, or free text. Use `[NotSensitive]` for an ID or a name from a fixed set.
 4. Map each value object with `ComplexProperty`, not `OwnsOne`. A complex property can hold only simple properties, not a collection and not another complex property.
@@ -65,33 +65,12 @@ await dbContext.SaveChangesAsync(cancellationToken);
 
 `AuditSubject.Of` takes a `Tenant` or an `ITenantable` root, so the type, the ID, and the tenant come from the entity. For a tree that is one aggregate, give it the top node. The save throws when the subject names a tracked node that has a parent. The save writes the action after the data changes of the same save, under the same record id. An enum value is stored by its name.
 
-## Bulk insert
-
-`AppDbContext.BulkInsertAsync(roots)` inserts many new aggregates with Postgres COPY, for an import. Use it when a save of the same rows is too slow. It is a save with another writer:
-
-- It sets `LastModifiedOn` and writes a `Created` entry for each row, the children of the roots too.
-- It writes the recorded actions of the context.
-- It writes all rows in one transaction, and it raises the save events of EF, so each `SaveChangesInterceptor` runs. Thus `TenantLookupInterceptor` forgets a cached miss of each new user.
-- After a lost acknowledgment of the commit, it looks for its record id in `audit_entries`, as a save does. If the rows are there, it returns success.
-- After it, the entities are tracked and `Unchanged`, with their `Version`. A later save can change them.
-- It returns the number of entity rows that it wrote, the children too.
-
-It refuses these cases with an `InvalidOperationException`:
-
-- The context has pending changes. Save them first.
-- The type is a child of an owner. Add the child to its owner, then bulk insert the owner.
-- A queued domain event has a handler. The bulk insert runs no handler, so save these entities with `SaveChangesAsync`. It drops an event that has no handler, as a save does.
-
-It refuses a type that maps to more than one table, such as a derived type of a TPT hierarchy, with a `NotSupportedException`. Save it with `SaveChangesAsync`, or map the hierarchy with TPH or TPC.
-
-A unique violation gives a `ConstraintConflictException`, as in a save. A failed bulk insert ends the context, as a failed save does. The bulk insert keeps each row in the change tracker, so split a very large import into parts.
-
 ## Writes that skip the save
 
-`ExecuteUpdate`, `ExecuteDelete`, raw SQL, a command on the connection of the context or on a new Npgsql connection, and COPY write no audit entry. Two checks catch them:
+`ExecuteUpdate`, `ExecuteDelete`, raw SQL, and a command on the connection of the context or on a new SQLite connection write no audit entry. Two checks catch them:
 
-- **The build.** `Recall.Server/BannedSymbols.txt` bans these APIs in the Server (RS0030): `Database.GetDbConnection()`, `IRelationalConnection.DbConnection`, the `NpgsqlConnection` constructors, and the methods that make an `NpgsqlDataSource` or get a connection from one. The error names the fix.
-- **The run time.** `WriteGuard` checks each command that EF does not make itself. It refuses a DO block, a CALL, and dollar-quoted text, because their writes are not in the words of the SQL. It refuses a command that can write and that names a guarded table. The guarded tables are each table of the model, `audit_entries` too, except the tables of a `[NotAudited]` type. A LINQ query, a save, a migration, a value generator, and scaffolding run. A raw query with `FromSql` runs when it does not write. While domain event handlers run, only LINQ queries run (see [domain-events.md](domain-events.md#errors)).
+- **The build.** `Recall.Server/BannedSymbols.txt` bans these APIs in the Server (RS0030): `Database.GetDbConnection()`, `IRelationalConnection.DbConnection`, the `SqliteConnection` constructors, and `SqliteTransaction.Connection`. The error names the fix.
+- **The run time.** `WriteGuard` checks each command that EF does not make itself. It refuses a command that can write and that names a guarded table. A name is a word, a quoted name, or a string literal where SQLite reads a table name, as in `UPDATE 'users'`. The guarded tables are each table of the model, `audit_entries` too, except the tables of a `[NotAudited]` type. A LINQ query, a save, a migration, a value generator, and scaffolding run. A raw query with `FromSql` runs when it does not write. While domain event handlers run, only LINQ queries run (see [domain-events.md](domain-events.md#errors)).
 
 The checks catch mistakes, not code that wants to skip them. The guard does not see the writes of a function that a `SELECT` calls. Reflection or a suppressed ban gets past the build.
 
@@ -122,15 +101,13 @@ The cursor text is `{occurred_at in microseconds since 1970}_{record_id}_{ordina
 | An action type has no `[AuditActionName]`, or shares a name with another | `InvalidOperationException` |
 | A complex property is a collection or holds a complex property | `NotSupportedException` |
 | A child has more than one `Cascade` foreign key to an entity | `NotSupportedException` |
-| A bulk insert refusal | `InvalidOperationException`. See [Bulk insert](#bulk-insert). |
 
 ## Tests
 
 - The unit tests check the model rules (`AuditModelTests`), the marks (`AuditSensitivityTests`), the diff (`AuditDiffTests`), the stored format (`AuditValuesTests`), the redaction (`AuditRedactionTests`), and the guard (`WriteGuardTests`).
 - To test the entries of a feature, send its command, then read `AuditEntries` with `ReadAsync` in an integration test. `AuditCaptureTests` and `AuditActionTests` are the examples.
-- `BulkInsertTests` proves the bulk insert against Postgres, also a lost commit and a conflict. `LostCommitReplyTests` proves a save after a lost commit.
 - `GetAuditEntryPageTests` proves the endpoint and the redaction for each permission.
 
 ## Telemetry
 
-The read tags its feature span with `app.audit.entity_id` and `app.audit.reads_sensitive`. A bulk insert has a `database.bulk_insert` span with `app.bulk_insert.entity_type` and `app.bulk_insert.row_count`. Npgsql adds a span for each COPY. A save that finds its audit entries after a lost acknowledgment of the commit adds the span event `database.save.lost_reply_committed`. See [feature-telemetry.md](feature-telemetry.md).
+The read tags its feature span with `app.audit.entity_id` and `app.audit.reads_sensitive`. See [feature-telemetry.md](feature-telemetry.md).

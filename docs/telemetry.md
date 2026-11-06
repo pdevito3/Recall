@@ -6,7 +6,7 @@ The server and the BFF export traces, metrics, and logs with OpenTelemetry. In d
 
 A span carries names, identifiers, and counts. It never carries user-entered content or personal data, such as names or email addresses. Every helper below takes its tags from the caller, so each call site must obey this rule.
 
-Each Npgsql span copies the SQL text into `db.query.text`. Thus a value from the caller must go to the database as a parameter, never as a literal in the SQL text. `CustomQueryKitConfiguration` sets `ParameterizeFilterValues`, so the SQL text of a list query has a parameter name in place of each filter value. The value of a QueryKit `CustomOperation` still goes into the SQL text as a literal.
+`SqlSpanInterceptor` makes a span for each SQL command of the Server, and it copies the SQL text into `db.query.text`. Thus a value from the caller must go to the database as a parameter, never as a literal in the SQL text. `CustomQueryKitConfiguration` sets `ParameterizeFilterValues`, so the SQL text of a list query has a parameter name in place of each filter value. The value of a QueryKit `CustomOperation` still goes into the SQL text as a literal.
 
 The request spans of the server and the BFF keep each query key in `url.query` and replace each value with `Redacted`, for example `?filters=Redacted&pageSize=Redacted`. The ASP.NET Core instrumentation does this by default, but Aspire turns it off in development. Thus `HostExtensions.cs` and the BFF `Extensions.cs` set `url.query` again.
 
@@ -18,8 +18,8 @@ A request through the BFF gives one trace with this shape:
 BFF   GET /api/v1/users
 └─ Server   GET api/v{version}/users
    └─ GetUserList.Query                (RequestTracingBehavior)
-      ├─ SQL: users.list.count         (Npgsql span, the count of the paged list)
-      └─ SQL: users.list               (Npgsql span, tagged query)
+      ├─ SQL: users.list.count         (SQL span, the count of the paged list)
+      └─ SQL: users.list               (SQL span, tagged query)
 ```
 
 A command whose save runs a domain event handler has one more level. The handler span is a child of the feature slice span:
@@ -41,7 +41,7 @@ Server   PUT api/v{version}/tenants/{id}
 | `Recall.Server/Resources/RequestTracingBehavior.cs` | MediatR behavior. Gives each feature slice its own span and its duration metric |
 | `Recall.Server/Resources/LoggerExtensions.cs` | `Here()`, which adds the call site to a log event |
 | `Recall.Server/Databases/QueryTagging.cs` | `TagWithOperationCallSite`, which names an EF query |
-| `Recall.Server/Databases/QueryTagEnrichment.cs` | Copies the query tags into the Npgsql span |
+| `Recall.Server/Databases/QueryTagEnrichment.cs` | Copies the query tags into the SQL span |
 | `Recall.Server/Databases/DomainEventDispatcher.cs` | Runs each domain event handler in its `domain_event.handle` span |
 | `Recall.Server/Resources/Extensions/HostExtensions.cs` | OpenTelemetry and Serilog registration, resource attributes, framework meters, request log level |
 | `Recall.Bff/Telemetry.cs`, `Recall.Bff/LoginTraceLink.cs` | BFF telemetry and the login trace link |
@@ -60,7 +60,7 @@ Each signal answers a different question. Pick the signal from the question:
 | What did the app decide, and why? | Log | `logger.Here().Information(...)` |
 | How many, and how fast, over time? | Metric | `Telemetry.Meter` |
 
-The feature slice span, the HTTP span, and the Npgsql span already exist for each request. Add a child span only for work that has its own duration, such as a call to an external service or a long calculation. Write a log for a state change or a decision that a person can need later, such as "Created tenant 42 for new user 7". Do not write a log that only repeats a span, such as "Handling GetUser".
+The feature slice span, the HTTP span, and the SQL span already exist for each request. Add a child span only for work that has its own duration, such as a call to an external service or a long calculation. Write a log for a state change or a decision that a person can need later, such as "Created tenant 42 for new user 7". Do not write a log that only repeats a span, such as "Handling GetUser".
 
 ## Custom spans and events
 
@@ -86,7 +86,6 @@ The custom metrics are on the `Recall.Server` meter:
 The host also collects these framework meters:
 
 - ASP.NET Core, Kestrel, `System.Net.Http`, and the .NET runtime (from the instrumentation packages).
-- `Npgsql`, from the Aspire Npgsql integration.
 - `Polly`, for the resilience handlers on `HttpClient`. The meter has data only after an outgoing call.
 - `Microsoft.EntityFrameworkCore`. The server only.
 - `Microsoft.AspNetCore.Authentication` and `Microsoft.AspNetCore.Authorization`.
@@ -99,7 +98,7 @@ The BFF has these custom metrics on the `Recall.Bff` meter. Its HTTP, YARP, and 
 | `bff.sessions.ended` | `{session}` | `reason`: `logout`, `backchannel_logout`, `refresh_failure`, or `expiry` | The BFF sessions that ended |
 | `bff.refresh.failures` | `{failure}` | `kind`: `permanent` or `temporary` | The failed token refreshes |
 
-A `permanent` failure is an `invalid_grant`, or an ID token in the refresh response that fails the checks. The BFF then ends the BFF session with `reason=refresh_failure`. A `temporary` failure is any other failure, also a refresh lock that is not free within `Bff:Refresh:LockTimeout`. The BFF session then stays.
+A `permanent` failure is an `invalid_grant`, or an ID token in the refresh response that fails the checks. The BFF then ends the BFF session with `reason=refresh_failure`. A `temporary` failure is any other failure, also a wait for the refresh of another request that reaches its limit. The BFF session then stays.
 
 ## Resource attributes
 
@@ -143,13 +142,13 @@ var tenant = await dbContext.Tenants
     .GetById(request.Id, cancellationToken);
 ```
 
-The Npgsql span then has these properties:
+The SQL span then has these properties:
 
 - The name is `SQL: tenants.get_by_id`.
 - `db.operation.name` is the operation name.
 - `code.function`, `code.file.path`, and `code.line.number` give the C# call site.
 
-Use a stable dotted name in the form `area.operation`. Never put an id or other data in the name. An untagged query keeps the default Npgsql span name.
+Use a stable dotted name in the form `area.operation`. Never put an id or other data in the name. An untagged query keeps the default span name `sqlite.command`.
 
 `PagedList.CreateAsync` runs two queries on the tagged query that it gets: the count and the page. It tags the count query with `TagAsCountQuery`, which adds the `count` suffix to the name. Thus the count of `users.list` is `SQL: users.list.count`, and the page is `SQL: users.list`.
 
@@ -157,7 +156,7 @@ A tenant delete loads the rows of each tenant-owned table with its own query, in
 
 ## Queries with no parent span
 
-The Npgsql command filter exports a query span only when a recorded activity is current. This rule drops two types of orphan traces:
+`SqlSpanInterceptor` makes a query span only when a recorded activity is current. This rule drops two types of orphan traces:
 
 - Queries that run with no activity at all.
 - Queries under a request that the ASP.NET Core filter dropped, such as `/health`.

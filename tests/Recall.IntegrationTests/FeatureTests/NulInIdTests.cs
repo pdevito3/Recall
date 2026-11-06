@@ -9,10 +9,6 @@ using Recall.Server.Exceptions;
 using MediatR;
 using Shouldly;
 
-/// <summary>
-/// Each feature that loads a record by ID gives not found for an ID with a NUL, the same as for each other malformed
-/// ID. Postgres text cannot hold U+0000, so the ID must not get to the query. gRPC and MCP send the ID as it is.
-/// </summary>
 public class NulInIdTests : TestBase
 {
     private const string NulUserId = "usr_a\0b";

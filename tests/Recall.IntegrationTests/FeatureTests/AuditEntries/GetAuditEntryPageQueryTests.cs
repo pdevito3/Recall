@@ -32,6 +32,35 @@ public class GetAuditEntryPageQueryTests : TestBase
     }
 
     [Test]
+    public async Task paging_a_history_of_one_size_at_a_time_shows_each_entry_once_in_the_order_of_the_instants()
+    {
+        // Arrange
+        var (scope, _, target) = await ArrangeReaderAsync(Permission.ReadAuditLog());
+        await RenameAsync(scope, target.Id, "First", "Second", "Third", "Fourth", "Fifth");
+        var expected = await scope.ExecuteDbContextAsync(db => db.AuditEntries.AsNoTracking()
+            .Where(e => e.RootId == target.Id)
+            .OrderByDescending(e => e.OccurredAt).ThenByDescending(e => e.RecordId).ThenByDescending(e => e.Ordinal)
+            .Select(e => e.OccurredAt)
+            .ToListAsync());
+
+        // Act
+        var seen = new List<DateTimeOffset>();
+        string? cursor = null;
+        do
+        {
+            var page = await scope.SendAsync(new GetAuditEntryPage.Query(AuditEntryParametersDto.From(target.Id, cursor, 1)));
+            seen.AddRange(page.Items.Select(e => e.OccurredAt));
+            cursor = page.NextCursor;
+        }
+        while (cursor is not null);
+
+        // Assert
+        expected.Count.ShouldBe(6);
+        seen.ShouldBe(expected);
+        seen.ShouldBeInOrder(SortDirection.Descending);
+    }
+
+    [Test]
     public async Task reader_without_the_sensitive_permission_sees_hidden_personal_values_and_visible_others()
     {
         // Arrange

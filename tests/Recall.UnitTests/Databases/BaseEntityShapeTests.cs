@@ -149,7 +149,7 @@ public class BaseEntityShapeTests
         new DomainEventDispatcher(new ServiceCollection().BuildServiceProvider()))
     {
         private static readonly DbContextOptions<AppDbContext> Options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql("Host=unused")
+            .UseSqlite("Data Source=unused.db")
             .UseSnakeCaseNamingConvention()
             .Options;
 

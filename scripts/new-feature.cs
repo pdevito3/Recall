@@ -1011,7 +1011,7 @@ internal static class Templates
                 $"{TooLong(s, f, "")}");
             """;
         var character = $"""
-            ValidationException.ThrowWhenHasCharacterPostgresCannotStore({value}, "{f.Json}",
+            ValidationException.ThrowWhenHasCharacterNotStorable({value}, "{f.Json}",
                 "{BadCharacter(s, f)}");
             """;
         return f.Kind switch
@@ -1241,7 +1241,7 @@ internal static class Templates
             start.AddRange([$"Activity.Current?.SetTag(\"app.{p.Snake}_id\", request.Dto.{r.Name});", ""]);
             body.AddRange([
                 $$"""
-                // A malformed ID matches no row, and Postgres cannot read some of them, such as one with U+0000
+                // A malformed ID matches no row
                 var {{p.Var}} = EntityId.IsValid(request.Dto.{{r.Name}}, {{p.Entity}}.IdPrefix)
                     ? await dbContext.{{p.Plural}}
                         .TagWithOperationCallSite("{{n.SnakePlural}}.add.load_{{p.Snake}}")
@@ -2623,7 +2623,7 @@ internal static class Templates
         var (parent, fake) = s.Parent is { } p
             ? ($"\n            .Under(tenant).Add{p.Entity}(out var {p.Var})", $"new Fake{e}ForCreationDto({p.Var}.Id)")
             : ("", $"new Fake{e}ForCreationDto()");
-        var usings = Usings([$"{n.Ns}.Features", $"{n.Server}.Domain.Tenants.Features", $"{n.Server}.Exceptions",
+        var usings = Usings([$"{n.Server}.Databases", $"{n.Ns}.Features", $"{n.Server}.Domain.Tenants.Features", $"{n.Server}.Exceptions",
             $"{n.Server}.Resources", $"{n.App}.IntegrationTests.Databases", $"{n.App}.SharedTestHelpers.EntityGraphs",
             $"{n.App}.SharedTestHelpers.Fakes.{n.Plural}", $"{n.App}.SharedTestHelpers.Utilities", s.Parent?.BlueprintNamespace,
             "Microsoft.EntityFrameworkCore", "Shouldly"]);
@@ -2658,7 +2658,7 @@ internal static class Templates
                     var delete = underTest.SendAsync(new DeleteTenant.Command(tenant.Id));
                     await pause.ReachedAsync();
                     var add = rival.SendAsync(new Add{{e}}.Command({{fake}}.Generate()));
-                    await pause.WaitUntilBlockedAsync(add);
+                    await pause.WaitUntilBlockedAsync(add, () => RootLock.Tenant.HasWaiter(tenant.Id));
                     pause.Release();
 
                     // Assert
@@ -2686,7 +2686,7 @@ internal static class Templates
                     var add = underTest.SendAsync(new Add{{e}}.Command({{fake}}.Generate()));
                     await pause.ReachedAsync();
                     var delete = rival.SendAsync(new DeleteTenant.Command(tenant.Id));
-                    await pause.WaitUntilBlockedAsync(delete);
+                    await pause.WaitUntilBlockedAsync(delete, () => RootLock.Tenant.HasWaiter(tenant.Id));
                     pause.Release();
 
                     // Assert

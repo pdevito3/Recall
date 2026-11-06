@@ -141,11 +141,11 @@ For interactive exploration, the Playwright MCP server in `.mcp.json` also works
 
 `browse.mjs` keeps the database of the stack the same across recipe runs:
 
-1. Before the recipe, it copies each table of each database (`appdb`, `bffdb`) to `artifacts/verify/<RUN_ID>/db-snapshot.json`.
+1. Before the recipe, it copies each table of each data file (`recall.db`, `bff.db`) in `artifacts/verify/<RUN_ID>/data/` to `artifacts/verify/<RUN_ID>/db-snapshot.json`.
 2. After the recipe, also after a failed step or a page error, it deletes and inserts only the rows that differ from the copy. Then it reads the tables again. If one still differs, the run fails with `the restore left these tables different`.
-3. `result.json` gives the rows that the run wrote in `data.changes`, for example `"appdb.public.tenants": { "added": 1, "changed": 0, "deleted": 0 }`. If the restore failed, `data.restored` is `false`, and `data.changes` gives the rows that the run wrote. Some of them can still be in the database. If the restore failed before it read the rows, `data.changes` is `null` and `run-twice.sh` prints `unknown`.
+3. `result.json` gives the rows that the run wrote in `data.changes`, for example `"appdb.tenants": { "added": 1, "changed": 0, "deleted": 0 }`. If the restore failed, `data.restored` is `false`, and `data.changes` gives the rows that the run wrote. Some of them can still be in the database. If the restore failed before it read the rows, `data.changes` is `null` and `run-twice.sh` prints `unknown`.
 
-Each row that the restore did not touch keeps its `xmin`, which is the `version` of an entity. A row that the restore put back gets a new `xmin`. The next recipe reads its rows from the page, so it gets the new version.
+A row that the restore put back has its old values again, also its `version`. The next recipe reads its rows from the page, so it gets that version.
 
 If a run stops before the restore (Ctrl-C, a killed process, a restore that failed), `db-snapshot.json` stays. The next `browse.mjs` run restores it first and prints `data: an earlier run did not restore the database`. The doctor prints a `warn` line while the file is there. If that restore also fails, for example after a migration changed a table, `browse.mjs` stops. Delete `db-snapshot.json` to keep the rows as they are, or launch a new stack.
 

@@ -36,7 +36,7 @@ For a dashboard with no AppHost, such as the standalone `aspire-dashboard` conta
 3. Open the file at that line.
 4. If the item has no call site, get its trace id. Then read the other spans and logs of the trace to find an item that has one.
 
-These spans have a call site: the spans from `Telemetry.Trace` and `Telemetry.TraceRoot`, the events from `Telemetry.AddEvent`, and the Npgsql spans of queries tagged with `TagWithOperationCallSite`. A feature slice span has no call site. Its name (for example `GetUser.Query`) is the feature class.
+These spans have a call site: the spans from `Telemetry.Trace` and `Telemetry.TraceRoot`, the events from `Telemetry.AddEvent`, and the SQL spans of queries tagged with `TagWithOperationCallSite`. A feature slice span has no call site. Its name (for example `GetUser.Query`) is the feature class.
 
 ## Write telemetry
 

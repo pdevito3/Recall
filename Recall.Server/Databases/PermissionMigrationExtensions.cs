@@ -36,19 +36,10 @@ public static class PermissionMigrationExtensions
         }
     }
 
-    /// <summary>
-    /// Hard-deletes each row of the permission in both tables, also the soft-deleted rows. Before the migration that
-    /// adds the agents, only <c>user_permissions</c> exists.
-    /// </summary>
     public static void DeletePermission(this MigrationBuilder migrationBuilder, string permission)
         => migrationBuilder.Sql($"""
             DELETE FROM user_permissions WHERE permission = {Literal(permission)};
-            DO $delete$
-            BEGIN
-                IF to_regclass('agent_permissions') IS NOT NULL THEN
-                    DELETE FROM agent_permissions WHERE permission = {Literal(permission)};
-                END IF;
-            END $delete$;
+            DELETE FROM agent_permissions WHERE permission = {Literal(permission)};
             """);
 
     /// <summary>
@@ -58,41 +49,24 @@ public static class PermissionMigrationExtensions
     private static void GrantPermission(
         this MigrationBuilder migrationBuilder, PermissionTable table, string permission, string ownerCondition)
     {
-        var ownersWithoutIt = $"""
+        // The same ID as EntityId.New: the prefix and a UUIDv7 in hex. It has the Unix time in milliseconds in the first
+        // 48 bits, the version nibble 7, the variant bits, and random bits.
+        var newId = $"""
+            '{table.IdPrefix}_'
+                || printf('%012x', CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER))
+                || '7' || lower(substr(hex(randomblob(2)), 2))
+                || substr('89ab', 1 + (abs(random()) % 4), 1) || lower(substr(hex(randomblob(8)), 2))
+            """;
+
+        migrationBuilder.Sql($"""
+            INSERT INTO {table.Name} (id, {table.OwnerColumn}, permission, is_deleted, version)
+            SELECT {newId}, o.id, {Literal(permission)}, 0, 1
             FROM {table.Owners} o
             WHERE {ownerCondition}
               AND NOT o.is_deleted
               AND NOT EXISTS (
                   SELECT 1 FROM {table.Name} p
-                  WHERE p.{table.OwnerColumn} = o.id AND p.permission = {Literal(permission)} AND NOT p.is_deleted)
-            """;
-
-        // The same ID as EntityId.New: the prefix and a UUIDv7 in hex. Postgres 17 has no uuidv7(), so this puts the
-        // Unix time in milliseconds in the first 48 bits of gen_random_uuid(), and bits 52 and 53 change its version
-        // nibble from 4 to 7.
-        var newId = $"""
-            '{table.IdPrefix}_' || encode(set_bit(set_bit(overlay(uuid_send(gen_random_uuid())
-                placing substring(int8send(floor(extract(epoch from clock_timestamp()) * 1000)::bigint) from 3)
-                from 1 for 6), 52, 1), 53, 1), 'hex')
-            """;
-
-        // The migrations before DropWhoAndWhenColumns call this too. Then created_on exists, is NOT NULL, and has no
-        // default. PL/pgSQL checks the columns of a statement only when it runs it, so the branch that names
-        // created_on does no harm after the drop.
-        migrationBuilder.Sql($"""
-            DO $grant$
-            BEGIN
-                IF EXISTS (SELECT 1 FROM pg_attribute
-                           WHERE attrelid = '{table.Name}'::regclass AND attname = 'created_on' AND NOT attisdropped) THEN
-                    INSERT INTO {table.Name} (id, {table.OwnerColumn}, permission, created_on, is_deleted)
-                    SELECT {newId}, o.id, {Literal(permission)}, now(), false
-                    {ownersWithoutIt};
-                ELSE
-                    INSERT INTO {table.Name} (id, {table.OwnerColumn}, permission, is_deleted)
-                    SELECT {newId}, o.id, {Literal(permission)}, false
-                    {ownersWithoutIt};
-                END IF;
-            END $grant$;
+                  WHERE p.{table.OwnerColumn} = o.id AND p.permission = {Literal(permission)} AND NOT p.is_deleted);
             """);
     }
 

@@ -11,7 +11,7 @@ public sealed class BffDbContextFactory : IDesignTimeDbContextFactory<BffDbConte
     public BffDbContext CreateDbContext(string[] args)
     {
         var options = new DbContextOptionsBuilder<BffDbContext>();
-        BffSessionExtensions.ConfigureBffDb(options, "Host=localhost;Database=bffdb");
+        BffSessionExtensions.ConfigureBffDb(options, "Data Source=bff.db");
         return new BffDbContext(options.Options);
     }
 }

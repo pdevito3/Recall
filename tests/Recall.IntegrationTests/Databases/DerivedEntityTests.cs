@@ -15,7 +15,7 @@ using Shouldly;
 
 public sealed class DerivedEntityTests : IAsyncDisposable
 {
-    private readonly PostgresTestDatabase _database = new();
+    private readonly SqliteTestDatabase _database = new();
 
     public async ValueTask DisposeAsync() => await _database.DisposeAsync();
 
@@ -27,7 +27,6 @@ public sealed class DerivedEntityTests : IAsyncDisposable
         string mappingStrategy)
     {
         // Arrange
-        await _database.StartAsync();
         var cat = new Cat("Tom", "grey");
 
         // Act
@@ -46,41 +45,6 @@ public sealed class DerivedEntityTests : IAsyncDisposable
                                  && e.TenantId == cat.TenantId);
         Paths(entries[0]).ShouldBe([nameof(Pet.TenantId), nameof(Pet.Name), nameof(Cat.Tag)], ignoreOrder: true);
         Paths(entries[1]).ShouldBe([nameof(Pet.Name), nameof(Cat.Tag)], ignoreOrder: true);
-    }
-
-    [Test]
-    [Arguments("TPH")]
-    [Arguments("TPC")]
-    public async Task bulk_insert_of_a_derived_entity_writes_its_row_and_a_created_entry(string mappingStrategy)
-    {
-        // Arrange
-        await _database.StartAsync();
-        var cat = new Cat("Tom", "grey");
-
-        // Act
-        await using (var writer = await CreateContextAsync(mappingStrategy))
-            await writer.BulkInsertAsync([cat]);
-
-        // Assert
-        await using var reader = await CreateContextAsync(mappingStrategy);
-        (await reader.Set<Cat>().SingleAsync(c => c.Id == cat.Id)).Tag.ShouldBe("grey");
-        var created = await reader.AuditEntries.SingleAsync(e => e.RootId == cat.Id);
-        (created.Kind, created.EntityType).ShouldBe((AuditEntryKind.Created, nameof(Cat)));
-        Paths(created).ShouldBe([nameof(Pet.TenantId), nameof(Pet.Name), nameof(Cat.Tag)], ignoreOrder: true);
-    }
-
-    [Test]
-    public async Task bulk_insert_of_a_tpt_derived_entity_is_refused()
-    {
-        // Arrange
-        await _database.StartAsync();
-        await using var writer = await CreateContextAsync("TPT");
-
-        // Act
-        var act = () => writer.BulkInsertAsync([new Cat("Tom", "grey")]);
-
-        // Assert
-        (await act.ShouldThrowAsync<NotSupportedException>()).Message.ShouldContain("more than one table");
     }
 
     private async Task AddUpdateAndDeleteAsync(string mappingStrategy, Cat cat)
@@ -109,7 +73,7 @@ public sealed class DerivedEntityTests : IAsyncDisposable
     private async Task<AppDbContext> CreateContextAsync(string mappingStrategy)
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(_database.ConnectionString)
+            .UseSqlite(_database.ConnectionString)
             .UseSnakeCaseNamingConvention()
             .Options;
         var scopeProvider = Substitute.For<ITenantScopeProvider>();

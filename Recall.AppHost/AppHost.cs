@@ -28,22 +28,12 @@ try
     // A normal run uses the fixed ports of the port table in README.md. `aspire run --isolated` gives each proxied
     // endpoint a random port and skips the data volumes, so that worktrees can run the full stack at the same time.
     // See Isolation.cs.
-    var postgres = builder.AddPostgres("postgres", port: 24720)
-        .WithImageTag(Config.PostgresImageTag)
-        .WithDataVolumeUnlessIsolated();
-    var appDb = postgres.AddDatabase("appdb");
-    // The BFF sessions and the Data Protection keys of the BFF
-    var bffDb = postgres.AddDatabase("bffdb");
-
     var server = builder.AddProject<Projects.Recall_Server>("server")
-        .WithReference(appDb)
-        .WaitFor(appDb)
         .WithHttpHealthCheck("/health")
         .WithExternalHttpEndpoints()
         // The endpoints come from Kestrel:Endpoints in the appsettings of the Server, with the HTTP/2-only "grpc"
         // endpoint. Aspire makes one endpoint for each name and sets its Url.
         .WithCSharpRepl();
-    postgres.WithParentRelationship(server);
 
     // S3 object storage. Floci emulates S3 in a local run only. A published server gets the S3 of its cloud and its
     // bucket from the deploy, not an emulator with test credentials. The browser loads the presigned URLs of the
@@ -74,8 +64,6 @@ try
         .WithPnpm();
 
     var bff = builder.AddProject<Projects.Recall_Bff>("bff")
-        .WithReference(bffDb)
-        .WaitFor(bffDb)
         .WithReference(server)
         .WithHttpHealthCheck("/health")
         .WithExternalHttpEndpoints()
@@ -84,6 +72,9 @@ try
     // from wwwroot, so it must not get the reference.
     if (builder.ExecutionContext.IsRunMode)
     {
+        var dataDirectory = builder.DataDirectory();
+        server.WithEnvironment("ConnectionStrings__appdb", $"Data Source={Path.Combine(dataDirectory, "recall.db")}");
+        bff.WithEnvironment("ConnectionStrings__bffdb", $"Data Source={Path.Combine(dataDirectory, "bff.db")}");
         if (builder.Configuration["SpaBuild"] is { Length: > 0 } spaBuild)
             bff.WithEnvironment("ASPNETCORE_WEBROOT", Path.GetFullPath(spaBuild));
         else

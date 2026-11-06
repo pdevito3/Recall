@@ -3,7 +3,6 @@ namespace Recall.SharedTestHelpers.Utilities;
 using System.Data.Common;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Npgsql;
 
 /// <summary>
 /// Holds the first command whose SQL holds a query tag, such as <c>users.add_permission.load</c>, until the test calls
@@ -21,7 +20,7 @@ public sealed class PauseAtQuery : DbCommandInterceptor
     private readonly bool _after;
     private readonly TimeSpan _timeout;
     private readonly Regex _tagInSql;
-    private readonly TaskCompletionSource<NpgsqlConnection> _reached = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _reached = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource _released = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _claimed;
 
@@ -44,22 +43,24 @@ public sealed class PauseAtQuery : DbCommandInterceptor
     public static PauseAtQuery After(string tag, TimeSpan? timeout = null) => new(tag, after: true, timeout);
 
     /// <summary>Waits until the request under test is at the tagged command.</summary>
-    public async Task ReachedAsync() => await ReachedConnectionAsync();
-
-    /// <summary>
-    /// Waits until <paramref name="rival"/> waits on a lock that the held request has (<c>pg_blocking_pids</c>).
-    /// </summary>
-    public async Task WaitUntilBlockedAsync(Task rival)
+    public async Task ReachedAsync()
     {
-        var held = await ReachedConnectionAsync();
-        await using var probe = (NpgsqlConnection)((ICloneable)held).Clone();
-        await probe.OpenAsync();
-        await using var blocked = new NpgsqlCommand(
-            "SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE @held = ANY(pg_blocking_pids(pid)))", probe);
-        blocked.Parameters.AddWithValue("held", held.ProcessID);
+        try
+        {
+            await _reached.Task.WaitAsync(_timeout);
+        }
+        catch (TimeoutException)
+        {
+            throw new TimeoutException($"No command with the tag '{_tag}' ran within {_timeout.TotalSeconds} s.");
+        }
+    }
+
+    public async Task WaitUntilBlockedAsync(Task rival, Func<bool> rivalIsWaiting)
+    {
+        await ReachedAsync();
 
         var deadline = DateTime.UtcNow + _timeout;
-        while (!(bool)(await blocked.ExecuteScalarAsync())!)
+        while (!rivalIsWaiting())
         {
             if (rival.IsCompleted)
             {
@@ -125,26 +126,12 @@ public sealed class PauseAtQuery : DbCommandInterceptor
         return result;
     }
 
-    private async Task<NpgsqlConnection> ReachedConnectionAsync()
-    {
-        try
-        {
-            return await _reached.Task.WaitAsync(_timeout);
-        }
-        catch (TimeoutException)
-        {
-            throw new TimeoutException($"No command with the tag '{_tag}' ran within {_timeout.TotalSeconds} s.");
-        }
-    }
-
-    // The hold does not end when the request is canceled, so a test can cancel a held request and then release it. A
-    // TimeoutException is transient to the retrying execution strategy, so the hold throws another type.
     private async Task HoldIfTaggedAsync(DbCommand command)
     {
         if (!_tagInSql.IsMatch(command.CommandText) || Interlocked.Exchange(ref _claimed, 1) == 1)
             return;
 
-        _reached.TrySetResult((NpgsqlConnection)command.Connection!);
+        _reached.TrySetResult();
         try
         {
             await _released.Task.WaitAsync(_timeout);

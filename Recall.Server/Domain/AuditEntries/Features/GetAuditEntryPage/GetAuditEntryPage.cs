@@ -38,16 +38,18 @@ public static class GetAuditEntryPage
                 .AsNoTracking();
             if (parameters.EntityId is { } entityId)
             {
-                if (!PostgresText.CanStore(entityId))
+                if (!StorableText.CanStore(entityId))
                     throw new QueryInputException(EntityIdParameter, $"The {EntityIdParameter} value has a character that is not allowed.");
                 entries = entries.Where(e => e.RootId == entityId);
             }
             if (parameters.Cursor is { } cursorText)
             {
                 var cursor = AuditCursor.Parse(cursorText);
-                entries = entries.Where(e => EF.Functions.LessThan(
-                    ValueTuple.Create(e.OccurredAt, e.RecordId, e.Ordinal),
-                    ValueTuple.Create(cursor.OccurredAt, cursor.RecordId, cursor.Ordinal)));
+                // The first term bounds the index scan.
+                entries = entries.Where(e => e.OccurredAt <= cursor.OccurredAt
+                    && (e.OccurredAt < cursor.OccurredAt
+                        || e.RecordId < cursor.RecordId
+                        || (e.RecordId == cursor.RecordId && e.Ordinal < cursor.Ordinal)));
             }
 
             // One more row than the page tells if a next page exists

@@ -25,7 +25,7 @@ public class LikePatternTests : TestBase
         // Act
         var found = await testingServiceScope.ExecuteDbContextAsync(db => db.Users
             .Where(u => u.LastName == lastName)
-            .Where(u => EF.Functions.ILike(u.FirstName, pattern, LikePattern.EscapeCharacter))
+            .Where(u => EF.Functions.Like(u.FirstName, pattern, LikePattern.EscapeCharacter))
             .Select(u => u.FirstName)
             .ToListAsync());
 
@@ -44,7 +44,7 @@ public class LikePatternTests : TestBase
         // Act
         var found = await testingServiceScope.ExecuteDbContextAsync(db => db.Users
             .Where(u => u.LastName == lastName)
-            .Where(u => EF.Functions.ILike(u.FirstName, pattern, LikePattern.EscapeCharacter))
+            .Where(u => EF.Functions.Like(u.FirstName, pattern, LikePattern.EscapeCharacter))
             .Select(u => u.FirstName)
             .ToListAsync());
 

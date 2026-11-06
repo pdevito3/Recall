@@ -11,7 +11,7 @@ namespace Recall.Bff.Sessions;
 /// <param name="Expires">The sliding expiry. It never passes <paramref name="AbsoluteExpires"/>.</param>
 /// <param name="AbsoluteExpires"><paramref name="Created"/> plus the absolute limit. It never moves.</param>
 /// <param name="Ticket">The serialized authentication ticket with the tokens, encrypted with Data Protection.</param>
-/// <param name="Version">The concurrency token of the row. On Postgres, this is <c>xmin</c>.</param>
+/// <param name="Version">The concurrency token of the row. It is 1 after the create, and each write increments it.</param>
 public sealed record BffSession(
     string Key,
     string SubjectId,

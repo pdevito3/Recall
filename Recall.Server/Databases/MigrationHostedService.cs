@@ -1,15 +1,10 @@
 namespace Recall.Server.Databases;
 
-using System.Net.Sockets;
-using Medallion.Threading.Postgres;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
-using Microsoft.EntityFrameworkCore.Storage;
-using Npgsql;
 using Resources;
 using Serilog;
 using Serilog.Core;
+using Sqlite;
 
 public class MigrationHostedService<TDbContext>(
     IServiceScopeFactory scopeFactory,
@@ -43,42 +38,13 @@ public class MigrationHostedService<TDbContext>(
                 return;
             }
 
+            await SqliteFile.PrepareAsync(connectionString, cancellationToken);
+
             await using var scope = scopeFactory.CreateAsyncScope();
             var context = scope.ServiceProvider.GetRequiredService<TDbContext>();
-            // The lock connects to the database, so the database must exist before the lock.
-            var databaseCreator = context.GetService<IRelationalDatabaseCreator>();
-            if (!await databaseCreator.ExistsAsync(cancellationToken))
-            {
-                await databaseCreator.CreateAsync(cancellationToken);
-                _logger.Here().Information("Created the database for {DbContext}", typeof(TDbContext).Name);
-            }
-
-            var distributedLock = new PostgresDistributedLock(
-                new PostgresAdvisoryLockKey($"{DatabaseConsts.DatabaseName}_MigrationLock", allowHashing: true),
-                connectionString);
-
-            await using (await distributedLock.AcquireAsync(cancellationToken: cancellationToken))
-            {
-                // Another instance can hold the lock for a full migration run. The event shows where
-                // the wait ended, so the span separates time spent waiting from time spent migrating.
-                Telemetry.AddEvent([], "migration.lock_acquired");
-                _logger.Here().Information("Starting database migration...");
-
-                // On a new database, MigrateAsync reads the history table before it creates it, and EF Core logs the
-                // failed read as an error. Create the table first.
-                await context.GetService<IHistoryRepository>().CreateIfNotExistsAsync(cancellationToken);
-                await context.Database.MigrateAsync(cancellationToken);
-            }
+            await context.Database.MigrateAsync(cancellationToken);
 
             _logger.Here().Information("Migrations complete for {DbContext}", typeof(TDbContext).Name);
-        }
-        catch (Exception ex) when (ex is SocketException or NpgsqlException)
-        {
-            Telemetry.RecordError(trace.Activity, ex);
-            _logger.Here().Error(
-                ex,
-                "Could not connect to the database -- please check the connection string and make sure the database is running");
-            throw;
         }
         catch (Exception ex)
         {

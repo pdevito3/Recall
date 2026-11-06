@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Recall.Server.Databases;
 
 #nullable disable
@@ -17,53 +16,48 @@ namespace Recall.Server.Databases.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.13")
-                .HasAnnotation("Relational:MaxIdentifierLength", 63);
-
-            NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
 
             modelBuilder.Entity("Recall.Server.Domain.Agents.Agent", b =>
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id")
-                        .UseCollation("C");
+                        .UseCollation("BINARY");
 
                     b.Property<string>("ClientId")
                         .IsRequired()
                         .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("client_id")
-                        .UseCollation("C");
+                        .UseCollation("BINARY");
 
                     b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("is_deleted");
 
-                    b.Property<DateTimeOffset?>("LastModifiedOn")
-                        .HasColumnType("timestamp with time zone")
+                    b.Property<string>("LastModifiedOn")
+                        .HasColumnType("TEXT")
                         .HasColumnName("last_modified_on");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("name");
 
                     b.Property<string>("TenantId")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("tenant_id")
-                        .UseCollation("C");
+                        .UseCollation("BINARY");
 
                     b.Property<uint>("Version")
                         .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
 
                     b.ComplexProperty(typeof(Dictionary<string, object>), "Mode", "Recall.Server.Domain.Agents.Agent.Mode#AgentMode", b1 =>
                         {
@@ -72,7 +66,7 @@ namespace Recall.Server.Databases.Migrations
                             b1.Property<string>("Value")
                                 .IsRequired()
                                 .HasMaxLength(50)
-                                .HasColumnType("character varying(50)")
+                                .HasColumnType("TEXT")
                                 .HasColumnName("mode");
                         });
 
@@ -99,30 +93,29 @@ namespace Recall.Server.Databases.Migrations
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id")
-                        .UseCollation("C");
+                        .UseCollation("BINARY");
 
                     b.Property<string>("AgentId")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("agent_id")
-                        .UseCollation("C");
+                        .UseCollation("BINARY");
 
                     b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("is_deleted");
 
-                    b.Property<DateTimeOffset?>("LastModifiedOn")
-                        .HasColumnType("timestamp with time zone")
+                    b.Property<string>("LastModifiedOn")
+                        .HasColumnType("TEXT")
                         .HasColumnName("last_modified_on");
 
                     b.Property<uint>("Version")
                         .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
 
                     b.ComplexProperty(typeof(Dictionary<string, object>), "Permission", "Recall.Server.Domain.Agents.AgentPermission.Permission#Permission", b1 =>
                         {
@@ -131,7 +124,7 @@ namespace Recall.Server.Databases.Migrations
                             b1.Property<string>("Value")
                                 .IsRequired()
                                 .HasMaxLength(100)
-                                .HasColumnType("character varying(100)")
+                                .HasColumnType("TEXT")
                                 .HasColumnName("permission");
                         });
 
@@ -146,102 +139,97 @@ namespace Recall.Server.Databases.Migrations
 
             modelBuilder.Entity("Recall.Server.Domain.AuditEntries.AuditEntry", b =>
                 {
-                    b.Property<DateTimeOffset>("OccurredAt")
-                        .HasColumnType("timestamp with time zone")
+                    b.Property<string>("OccurredAt")
+                        .HasColumnType("TEXT")
                         .HasColumnName("occurred_at");
 
                     b.Property<Guid>("RecordId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("record_id");
 
                     b.Property<int>("Ordinal")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("ordinal");
 
                     b.Property<string>("Action")
                         .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("action");
 
                     b.Property<string>("ActorAgentId")
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("actor_agent_id")
-                        .UseCollation("C");
+                        .UseCollation("BINARY");
 
                     b.Property<string>("ActorClient")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("actor_client");
 
                     b.Property<string>("ActorSubject")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("actor_subject");
 
                     b.Property<string>("ActorUserId")
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("actor_user_id")
-                        .UseCollation("C");
+                        .UseCollation("BINARY");
 
                     b.Property<string>("Data")
                         .IsRequired()
-                        .HasColumnType("jsonb")
+                        .HasColumnType("TEXT")
                         .HasColumnName("data");
 
                     b.Property<string>("EntityId")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("entity_id")
-                        .UseCollation("C");
+                        .UseCollation("BINARY");
 
                     b.Property<string>("EntityType")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("entity_type");
 
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("kind");
 
                     b.Property<string>("RequestName")
                         .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("request_name");
 
                     b.Property<string>("RootId")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("root_id")
-                        .UseCollation("C");
+                        .UseCollation("BINARY");
 
                     b.Property<string>("RootType")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("root_type");
 
                     b.Property<string>("TenantId")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("tenant_id")
-                        .UseCollation("C");
+                        .UseCollation("BINARY");
 
                     b.Property<string>("TraceId")
                         .HasMaxLength(32)
-                        .HasColumnType("character(32)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("trace_id")
                         .IsFixedLength();
-
-                    b.Property<uint>("TransactionId")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
 
                     b.HasKey("OccurredAt", "RecordId", "Ordinal")
                         .HasName("pk_audit_entries");
@@ -264,12 +252,13 @@ namespace Recall.Server.Databases.Migrations
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id")
-                        .UseCollation("C");
+                        .UseCollation("BINARY");
 
-                    b.Property<DateTimeOffset>("Expires")
-                        .HasColumnType("timestamp with time zone")
+                    b.Property<string>("Expires")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
                         .HasColumnName("expires");
 
                     b.HasKey("Id")
@@ -285,29 +274,28 @@ namespace Recall.Server.Databases.Migrations
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id")
-                        .UseCollation("C");
+                        .UseCollation("BINARY");
 
                     b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("is_deleted");
 
-                    b.Property<DateTimeOffset?>("LastModifiedOn")
-                        .HasColumnType("timestamp with time zone")
+                    b.Property<string>("LastModifiedOn")
+                        .HasColumnType("TEXT")
                         .HasColumnName("last_modified_on");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("name");
 
                     b.Property<uint>("Version")
                         .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
 
                     b.HasKey("Id")
                         .HasName("pk_tenants");
@@ -323,54 +311,53 @@ namespace Recall.Server.Databases.Migrations
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id")
-                        .UseCollation("C");
+                        .UseCollation("BINARY");
 
                     b.Property<string>("FirstName")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("first_name");
 
                     b.Property<string>("Identifier")
                         .IsRequired()
                         .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("identifier");
 
                     b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("is_deleted");
 
-                    b.Property<DateTimeOffset?>("LastModifiedOn")
-                        .HasColumnType("timestamp with time zone")
+                    b.Property<string>("LastModifiedOn")
+                        .HasColumnType("TEXT")
                         .HasColumnName("last_modified_on");
 
                     b.Property<string>("LastName")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("last_name");
 
                     b.Property<string>("TenantId")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("tenant_id")
-                        .UseCollation("C");
+                        .UseCollation("BINARY");
 
                     b.Property<string>("Username")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("username");
 
                     b.Property<uint>("Version")
                         .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
 
                     b.ComplexProperty(typeof(Dictionary<string, object>), "Email", "Recall.Server.Domain.Users.User.Email#EmailAddress", b1 =>
                         {
@@ -379,7 +366,7 @@ namespace Recall.Server.Databases.Migrations
                             b1.Property<string>("Value")
                                 .IsRequired()
                                 .HasMaxLength(320)
-                                .HasColumnType("character varying(320)")
+                                .HasColumnType("TEXT")
                                 .HasColumnName("email");
                         });
 
@@ -390,7 +377,7 @@ namespace Recall.Server.Databases.Migrations
                             b1.Property<string>("Value")
                                 .IsRequired()
                                 .HasMaxLength(50)
-                                .HasColumnType("character varying(50)")
+                                .HasColumnType("TEXT")
                                 .HasColumnName("role");
                         });
 
@@ -415,30 +402,29 @@ namespace Recall.Server.Databases.Migrations
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id")
-                        .UseCollation("C");
+                        .UseCollation("BINARY");
 
                     b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("is_deleted");
 
-                    b.Property<DateTimeOffset?>("LastModifiedOn")
-                        .HasColumnType("timestamp with time zone")
+                    b.Property<string>("LastModifiedOn")
+                        .HasColumnType("TEXT")
                         .HasColumnName("last_modified_on");
 
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("user_id")
-                        .UseCollation("C");
+                        .UseCollation("BINARY");
 
                     b.Property<uint>("Version")
                         .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
 
                     b.ComplexProperty(typeof(Dictionary<string, object>), "Permission", "Recall.Server.Domain.Users.UserPermission.Permission#Permission", b1 =>
                         {
@@ -447,7 +433,7 @@ namespace Recall.Server.Databases.Migrations
                             b1.Property<string>("Value")
                                 .IsRequired()
                                 .HasMaxLength(100)
-                                .HasColumnType("character varying(100)")
+                                .HasColumnType("TEXT")
                                 .HasColumnName("permission");
                         });
 
