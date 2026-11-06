@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
+using Recall.Server.Resources.Jobs;
 
 /// <summary>
 /// Centralized telemetry for easy access to tracing and metrics, plus the two trace shapes the request
@@ -54,8 +55,9 @@ public static class Telemetry
     /// </summary>
     public static void MarkFailed(Activity? activity, Exception ex)
     {
-        activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-        activity?.AddException(ex);
+        var recorded = JobFailureFilter.AsRecorded(ex);
+        activity?.SetStatus(ActivityStatusCode.Error, recorded.Message);
+        activity?.AddException(recorded);
     }
 
     /// <summary>

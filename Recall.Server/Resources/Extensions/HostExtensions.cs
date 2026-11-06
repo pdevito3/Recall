@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Entrypoints.Http.OpenApi;
 using FileTelemetry;
+using Jobs;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OpenTelemetry;
@@ -65,6 +66,7 @@ public static class HostExtensions
                 metrics
                     .AddMeter(Telemetry.Meter.Name)
                     .AddMeter(FrameworkMeters)
+                    .AddBackWaveInstrumentation()
                     .AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
                     .AddRuntimeInstrumentation();
@@ -75,6 +77,8 @@ public static class HostExtensions
                     .AddProcessor(new SpanTextCapProcessor())
                     .AddSource(Telemetry.Source.Name)
                     .AddSource(serviceName)
+                    .AddBackWaveInstrumentation()
+                    .AddProcessor(new EmptyClaimSpanFilter())
                     .AddAspNetCoreInstrumentation(opts =>
                     {
                         opts.Filter = ctx => !IsHealthProbe(ctx.Request.Path);
@@ -238,12 +242,23 @@ public static class HostExtensions
 
     public static WebApplication MapDefaultEndpoints(this WebApplication app)
     {
-        app.MapHealthChecks(HealthEndpointPath);
+        app.MapHealthChecks(HealthEndpointPath, new HealthCheckOptions { ResponseWriter = WriteHealthBodyAsync });
         app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
         {
             Predicate = r => r.Tags.Contains("live")
         });
 
         return app;
+    }
+
+    // Each entry can hold the text of an exception, so the body names only the stopped jobs, whose text holds types.
+    private static Task WriteHealthBodyAsync(HttpContext context, HealthReport report)
+    {
+        context.Response.ContentType = "text/plain";
+        var body = report.Status.ToString();
+        if (report.Entries.TryGetValue(JobHosting.HealthCheckName, out var jobs) && jobs.Status == HealthStatus.Unhealthy)
+            body += $"\n{jobs.Description}";
+
+        return context.Response.WriteAsync(body);
     }
 }

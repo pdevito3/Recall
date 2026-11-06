@@ -1,9 +1,7 @@
 namespace Recall.Server.Domain.Support.Features;
 
-using Databases;
 using Exceptions;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 using Resources;
@@ -20,8 +18,7 @@ public static class GetSupportBundle
     public sealed record Query : IRequest<SupportBundle>;
 
     public sealed class Handler(
-        IPermissionGuard permissionGuard,
-        AppDbContext dbContext,
+        IOwnerGuard ownerGuard,
         IConfiguration configuration,
         IHostEnvironment environment,
         TimeProvider timeProvider,
@@ -32,13 +29,12 @@ public static class GetSupportBundle
 
         public async Task<SupportBundle> Handle(Query request, CancellationToken cancellationToken)
         {
-            var caller = await permissionGuard.GetCallerAsync(cancellationToken);
-            if (caller is not Caller.Member member || member.UserId != await OwnerIdAsync(cancellationToken))
-                throw new ForbiddenAccessException(OnlyTheOwner);
+            var ownerId = await ownerGuard.CallerIfOwnerAsync(cancellationToken)
+                ?? throw new ForbiddenAccessException(OnlyTheOwner);
 
             await FlushPendingTelemetryAsync(cancellationToken);
 
-            _logger.Here().Information("The Owner {UserId} downloaded a support bundle", member.UserId);
+            _logger.Here().Information("The Owner {UserId} downloaded a support bundle", ownerId);
             return new SupportBundle(
                 FileTelemetryPlan.For(configuration),
                 configuration.AsEnumerable(),
@@ -51,24 +47,5 @@ public static class GetSupportBundle
             tracerProvider.ForceFlush(FlushMilliseconds);
             meterProvider.ForceFlush(FlushMilliseconds);
         }, cancellationToken);
-
-        private async Task<string?> OwnerIdAsync(CancellationToken cancellationToken)
-        {
-            var oldestTenantId = await dbContext.Tenants
-                .TagWithOperationCallSite("support.bundle.oldest_tenant")
-                .IgnoreQueryFilters()
-                .Where(t => !t.IsDeleted)
-                .OrderBy(t => t.Id)
-                .Select(t => t.Id)
-                .FirstOrDefaultAsync(cancellationToken);
-            if (oldestTenantId is null)
-                return null;
-
-            return await dbContext.Users
-                .TagWithOperationCallSite("support.bundle.owner")
-                .OwnerFirstIn(oldestTenantId)
-                .Select(u => u.Id)
-                .FirstOrDefaultAsync(cancellationToken);
-        }
     }
 }

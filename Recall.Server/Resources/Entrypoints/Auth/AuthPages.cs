@@ -128,6 +128,21 @@ public static class AuthPages
             + $"<form method=\"post\" action=\"{AuthRoutes.Confirm}\"><input type=\"hidden\" name=\"code\" value=\"{E(code)}\"><button type=\"submit\">Continue</button></form>",
         BasePolicy);
 
+    public static IResult OwnerOnly(string returnPath) => Page(
+        StatusCodes.Status403Forbidden,
+        "Only the Owner can see the jobs",
+        "<p>You are signed out, or this account is not the Owner.</p>"
+            + Action("Sign in", $"{AuthRoutes.Login}?returnUrl={Uri.EscapeDataString(returnPath)}")
+            + "<p><a href=\"/\">Go to Recall</a></p>");
+
+    public static IResult JobDashboardFault(string tryAgainPath) => Page(
+        StatusCodes.Status500InternalServerError,
+        "The job pages cannot open",
+        "<p>The server could not read the background jobs.</p>"
+            + "<p>Open <code>/health</code>. If it says The background jobs stopped, do the steps in the section of that name in <code>docs/troubleshooting.md</code>. If it does not, try again in a minute.</p>"
+            + Action("Try again", tryAgainPath)
+            + "<p><a href=\"/\">Go to Recall</a></p>");
+
     public static string ProviderDown(string displayName) => $"{displayName} is not available. Existing sessions keep working.";
 
     private static string NotAvailable(string displayName) => $"{displayName} is not available.";

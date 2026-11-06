@@ -2,6 +2,8 @@ namespace Recall.Server.Databases.Sqlite;
 
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Data.Sqlite;
+using Resources;
+using Serilog;
 
 public static class SqliteFile
 {
@@ -33,6 +35,10 @@ public static class SqliteFile
         await using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA journal_mode = WAL; DROP TABLE IF EXISTS __EFMigrationsLock;";
         await command.ExecuteNonQueryAsync(cancellationToken);
+
+        command.CommandText = "SELECT sqlite_version()";
+        var engine = await command.ExecuteScalarAsync(cancellationToken);
+        Log.ForContext(typeof(SqliteFile)).Here().Information("The SQLite engine is {SqliteVersion}", engine);
     }
 
     public static string? MakeWritableOrRefuse(string directory)

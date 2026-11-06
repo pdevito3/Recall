@@ -44,6 +44,7 @@ Keep implementation details out of the map. Name only user paths, stable handles
 - [Navigation and theme](./navigation-and-theme.md) covers the sidebar links, the breadcrumb, sidebar collapse, and the light/dark/system theme.
 - [First owner](./first-owner.md) covers the first login, which makes the Owner and its tenant, and the refusal of a second person when signup is closed.
 - [Journal](./journal.md) covers capture on `/`, autosave, two tabs, the history, the delete, a phone width, the keyboard, a lost connection, and the file store notice.
+- [Job dashboard](./job-dashboard.md) covers `/backwave`: the BackWave console of the Owner, the finished health job, and the 403 for each other caller.
 - [Users](./users.md) covers `/users` and `/users/<id>`: the list of the users of the tenant, the actions from `allowedActions`, the role change, the delete, and the refusal for a member.
 
 ## Not mapped yet

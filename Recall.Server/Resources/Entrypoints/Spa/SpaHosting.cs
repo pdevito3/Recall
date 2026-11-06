@@ -1,6 +1,7 @@
 namespace Recall.Server.Resources.Entrypoints.Spa;
 
 using System.IO.Compression;
+using Jobs;
 using Microsoft.AspNetCore.ResponseCompression;
 
 public static class SpaHosting
@@ -13,7 +14,7 @@ public static class SpaHosting
         ["text/html", "text/css", "text/javascript", "application/javascript", "application/json", "image/svg+xml", "application/manifest+json"];
 
     private static readonly PathString[] ReservedPrefixes =
-        ["/api", "/auth", "/mcp", "/swagger", "/openapi", "/health", "/alive", "/.well-known"];
+        ["/api", "/auth", "/mcp", "/swagger", "/openapi", "/health", "/alive", "/.well-known", JobDashboard.Path];
 
     public const string ContentSecurityPolicy =
         "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; " +

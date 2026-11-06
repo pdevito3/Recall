@@ -5,6 +5,7 @@ using Databases;
 using Databases.Sqlite;
 using Domain.Tenants;
 using Domain.Users;
+using Jobs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
@@ -33,6 +34,7 @@ public static class WebAppServiceConfiguration
         builder.Services.AddScoped<SystemTenantAccess>();
         builder.Services.AddAuthCore(builder.Configuration);
         builder.AddFileStore();
+        builder.AddJobs();
         builder.Services.AddMediatR(cfg =>
         {
             cfg.RegisterServicesFromAssembly(typeof(Program).Assembly);

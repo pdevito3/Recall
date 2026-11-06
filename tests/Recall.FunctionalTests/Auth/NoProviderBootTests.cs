@@ -54,6 +54,8 @@ public partial class NoProviderBootTests
 
         public int ExitCode => _process.ExitCode;
 
+        public bool HasExited => _process.HasExited;
+
         public string Output => string.Join('\n', _output);
 
         public static async Task<ServerProcess> StartAsync(string? existingRoot = null, IReadOnlyDictionary<string, string>? settings = null)
@@ -442,7 +444,7 @@ public partial class NoProviderBootTests
         // Arrange
         await using var server = await ServerProcess.StartAsync();
 
-        foreach (var path in new[] { "/health/nope", "/alive/nope", "/mcp/nope", "/swagger", "/openapi", "/API/nope", "/.well-known/nope" })
+        foreach (var path in new[] { "/health/nope", "/alive/nope", "/mcp/nope", "/swagger", "/openapi", "/API/nope", "/.well-known/nope", "/backwave", "/backwave/jobs" })
         {
             // Act
             using var response = await GetAsync(server, path, "text/html");
