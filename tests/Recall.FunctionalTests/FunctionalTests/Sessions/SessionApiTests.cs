@@ -226,6 +226,27 @@ public class SessionApiTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-21")]
+    public async Task a_user_topic_that_matches_an_ai_topic_survives_and_shows_once_with_the_spelling_of_the_user()
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        await JournalScenario.ExecuteOutOfBandAsync("UPDATE sessions SET ai_topics = '[\"Work\",\"Trips\"]' WHERE id = @id", ("@id", session.Id));
+
+        // Act
+        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { userTopics = ShoutedTopic, savedAt = JournalScenario.Morning });
+        var kept = await change.Content.ReadFromJsonAsync<SessionDto>();
+        var removal = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { userTopics = Array.Empty<string>(), savedAt = JournalScenario.Morning.AddMinutes(1) });
+        var removed = await removal.Content.ReadFromJsonAsync<SessionDto>();
+
+        // Assert
+        kept!.Topics.Select(t => (t.Name, t.Provenance)).ShouldBe([("WORK", "UserSet"), ("Trips", "AiSuggested")]);
+        removed!.Topics.Select(t => (t.Name, t.Provenance)).ShouldBe([("Trips", "AiSuggested")]);
+    }
+
+    [Test]
     [Property("Rule", "SES-3")]
     public async Task a_create_and_its_replay_give_the_same_text_for_the_start()
     {

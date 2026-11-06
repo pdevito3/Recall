@@ -158,7 +158,8 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         MetadataFastClaims = MetadataFastClaims.Remembering(claimedSavedAt, MetadataSavedAt.Value);
         Activity = metadata.Activity;
         Moods = metadata.Moods;
-        UserTopics = metadata.UserTopics.Where(t => !AiTopics.Contains(t, StringComparer.OrdinalIgnoreCase)).ToList();
+        UserTopics = metadata.UserTopics;
+        AiTopics = AiTopics.Except(UserTopics, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     public void BeginCleanup()
