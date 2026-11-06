@@ -115,6 +115,7 @@ public sealed partial class NoStoreAnswersTests
         using var answer = await browser.GetAsync("/api/v1/users?pageNumber=not-a-number", csrf: true);
 
         // Assert
+        // The exception handler clears the header of UseNoStoreAnswers and sets its own value, so this test holds the framework to it.
         answer.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         answer.Content.Headers.ContentType!.MediaType.ShouldBe("application/problem+json");
         answer.Headers.CacheControl!.NoStore.ShouldBeTrue();

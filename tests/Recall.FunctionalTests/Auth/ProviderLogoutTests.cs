@@ -230,10 +230,13 @@ public class ProviderLogoutTests
         await LogoutAsync(browser);
 
         // Act
-        var secondTab = await browser.GetAsync(SignedOutPage);
+        using var secondTab = await browser.GetAsync(SignedOutPage);
 
         // Assert
-        (await secondTab.Content.ReadAsStringAsync()).ShouldNotContain("did not send you back");
+        secondTab.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var html = await secondTab.Content.ReadAsStringAsync();
+        html.ShouldContain("Recall cannot tell if your session at Stub ended");
+        html.ShouldNotContain("did not send you back");
     }
 
     [Test]
