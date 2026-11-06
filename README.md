@@ -42,6 +42,10 @@ Recall/
 - **Theme System** - Light/dark/system mode
 - **React Hook Form + Zod** - Form handling with validation
 
+## Install
+
+To run Recall on your own machine as one container, see [docs/install.md](docs/install.md).
+
 ## Running the Application
 
 ```bash

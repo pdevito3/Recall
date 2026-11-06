@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { Page } from '@/components/page'
 import { PageHeading } from '@/components/page-heading'
+import { InsecureContextNotice } from '@/domain/capture/components/insecure-context-notice'
 import { ComposerForm } from '@/domain/sessions/components/composer'
 import { Timeline } from '@/domain/sessions/components/timeline'
 import { useComposer } from '@/domain/sessions/components/use-composer'
@@ -22,6 +23,7 @@ function Journal() {
 
   return (
     <Page>
+      <InsecureContextNotice />
       <PageHeading>{today}</PageHeading>
       <ComposerForm composer={composer} />
       <Timeline zone={zone} hiddenSessionId={composer.composingSessionId} />

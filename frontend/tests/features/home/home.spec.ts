@@ -4,6 +4,31 @@ import { as } from '@tests/support/auth/actors'
 import { expect, test } from '@tests/support/fixtures'
 import { homePage } from './home.tasks'
 
+test.describe('the mic message on the journal page', () => {
+  test.use({ actor: as.user('Bob Smith') })
+
+  test('sees that the mic stays off on plain HTTP, with a link to the HTTPS section', async ({ page, api }) => {
+    api.mock(usersApi.currentIs({ identifier: '1', name: 'Robert Smith' }))
+    const home = homePage(page)
+
+    await home.openOnPlainHttp()
+
+    await expect(home.at.micMessage).toBeVisible()
+    await expect(home.at.httpsGuide).toBeVisible()
+    await expect(home.at.journalComposer).toBeVisible()
+  })
+
+  test('sees no mic message on HTTPS', async ({ page, api }) => {
+    api.mock(usersApi.currentIs({ identifier: '1', name: 'Robert Smith' }))
+    const home = homePage(page)
+
+    await home.open()
+
+    await expect(home.at.journalComposer).toBeVisible()
+    await expect(home.at.micMessage).toHaveCount(0)
+  })
+})
+
 test.describe('the user menu of a signed-in user', () => {
   test.use({ actor: as.user('Bob Smith') })
 

@@ -19,6 +19,8 @@ using Shouldly;
 [UnsupportedOSPlatform("windows")]
 public partial class NoProviderBootTests
 {
+    private const string HashedFile = "app-abc123.js";
+
     private const UnixFileMode WideDirectoryMode =
         UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
         | UnixFileMode.GroupRead | UnixFileMode.GroupExecute
@@ -80,6 +82,8 @@ public partial class NoProviderBootTests
             File.SetUnixFileMode(data, WideDirectoryMode);
             Directory.CreateDirectory(web);
             await File.WriteAllTextAsync(Path.Combine(web, "index.html"), "<html>recall spa</html>");
+            Directory.CreateDirectory(Path.Combine(web, "assets"));
+            await File.WriteAllTextAsync(Path.Combine(web, "assets", HashedFile), "console.log('recall spa')");
 
             // The child would inherit the narrow umask of this process, and hide a Server that does not set its own
             var start = new ProcessStartInfo("/bin/sh", ["-c", "umask 022; exec dotnet \"$0\"", ServerDll()])
@@ -123,7 +127,7 @@ public partial class NoProviderBootTests
             await _process.WaitForExitAsync();
         }
 
-        private async Task WaitUntilUpAsync()
+        public async Task WaitUntilUpAsync()
         {
             for (var attempt = 0; attempt < 300; attempt++)
             {
@@ -174,14 +178,8 @@ public partial class NoProviderBootTests
         [GeneratedRegex(@"http://127\.0\.0\.1:[1-9][0-9]*")]
         private static partial Regex ListeningAddress();
 
-        private static string ServerDll()
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Recall.slnx")))
-                directory = directory.Parent;
-            directory.ShouldNotBeNull();
-            return Path.Combine(directory.FullName, "Recall.Server", "bin", TestBuild.Configuration, "net10.0", "Recall.Server.dll");
-        }
+        private static string ServerDll() =>
+            Path.Combine(TestBuild.RepositoryRoot(), "Recall.Server", "bin", TestBuild.Configuration, "net10.0", "Recall.Server.dll");
     }
 
     private static class TestBuild
@@ -191,6 +189,15 @@ public partial class NoProviderBootTests
 #else
         public const string Configuration = "Release";
 #endif
+
+        public static string RepositoryRoot()
+        {
+            var directory = new DirectoryInfo(AppContext.BaseDirectory);
+            while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Recall.slnx")))
+                directory = directory.Parent;
+            directory.ShouldNotBeNull();
+            return directory.FullName;
+        }
     }
 
     [Test]
@@ -317,6 +324,53 @@ public partial class NoProviderBootTests
     }
 
     [Test]
+    public async Task each_answer_of_the_spa_has_the_content_security_policy_and_a_server_path_does_not()
+    {
+        // Arrange
+        await using var server = await ServerProcess.StartAsync();
+
+        // Act
+        using var root = await GetAsync(server, "/", "text/html");
+        using var deepLink = await GetAsync(server, "/users/1", "text/html");
+        using var file = await GetAsync(server, "/index.html", "text/html");
+        using var head = await server.Client.SendAsync(new HttpRequestMessage(HttpMethod.Head, "/about"));
+        using var health = await GetAsync(server, "/health", null);
+
+        // Assert
+        foreach (var answer in new[] { root, deepLink, file, head })
+        {
+            answer.StatusCode.ShouldBe(HttpStatusCode.OK);
+            var policy = answer.Headers.GetValues("Content-Security-Policy").ShouldHaveSingleItem();
+            policy.ShouldContain("frame-ancestors 'none'");
+            policy.ShouldContain("script-src 'self';");
+        }
+
+        health.Headers.Contains("Content-Security-Policy").ShouldBeFalse();
+    }
+
+    [Test]
+    [Arguments("/index.html", false)]
+    [Arguments($"/assets/{HashedFile}", true)]
+    public async Task a_file_of_the_spa_is_compressed_and_has_both_its_cache_rule_and_the_content_security_policy(string path, bool stays)
+    {
+        // Arrange
+        await using var server = await ServerProcess.StartAsync();
+        var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"{server.Client.BaseAddress!.GetLeftPart(UriPartial.Authority)}{path}"));
+        request.Headers.AcceptEncoding.ParseAdd("br");
+
+        // Act
+        using var answer = await server.Client.SendAsync(request);
+
+        // Assert
+        answer.StatusCode.ShouldBe(HttpStatusCode.OK);
+        answer.Content.Headers.ContentEncoding.ShouldHaveSingleItem().ShouldBe("br");
+        answer.Headers.GetValues("Content-Security-Policy").ShouldHaveSingleItem().ShouldContain("script-src 'self';");
+        answer.Headers.CacheControl!.NoCache.ShouldBe(!stays);
+        answer.Headers.CacheControl.Public.ShouldBe(stays);
+        answer.Headers.CacheControl.ToString().Contains("immutable").ShouldBe(stays);
+    }
+
+    [Test]
     public async Task a_path_of_the_server_never_gets_the_spa()
     {
         // Arrange
@@ -394,6 +448,78 @@ public partial class NoProviderBootTests
         // Assert
         server.ExitCode.ShouldNotBe(0);
         server.Output.ShouldContain("AllowHttp");
+    }
+
+    [Test]
+    [Arguments("maybe")]
+    [Arguments("yes")]
+    [Arguments("1")]
+    [Arguments("")]
+    public async Task a_provider_setting_that_cannot_convert_stops_the_server_and_names_the_setting(string allowHttp)
+    {
+        // Arrange
+        const string secret = "a-secret-that-no-log-shows";
+        Dictionary<string, string> provider = new()
+        {
+            ["Auth__Providers__0__Id"] = "stub",
+            ["Auth__Providers__0__Issuer"] = "https://provider.test",
+            ["Auth__Providers__0__ClientId"] = "recall",
+            ["Auth__Providers__0__ClientSecret"] = secret,
+            ["Auth__Providers__0__AllowHttp"] = allowHttp,
+        };
+        await using var server = await ServerProcess.LaunchAsync(null, provider);
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+        // Act
+        await server.WaitForExitAsync(limit.Token);
+
+        // Assert
+        server.ExitCode.ShouldBe(1);
+        server.Output.ShouldContain("Auth:Providers:0:AllowHttp");
+        server.Output.ShouldNotContain(secret);
+    }
+
+    [Test]
+    public async Task a_bad_setting_of_a_later_provider_does_not_leave_the_first_provider_alone_on_the_login_page()
+    {
+        // Arrange
+        Dictionary<string, string> providers = new()
+        {
+            ["Auth__Providers__0__Id"] = "first",
+            ["Auth__Providers__0__Issuer"] = "https://first.test",
+            ["Auth__Providers__0__ClientId"] = "recall",
+            ["Auth__Providers__0__ClientSecret"] = "secret",
+            ["Auth__Providers__1__Id"] = "second",
+            ["Auth__Providers__1__Issuer"] = "https://second.test",
+            ["Auth__Providers__1__ClientId"] = "recall",
+            ["Auth__Providers__1__ClientSecret"] = "secret",
+            ["Auth__Providers__1__AllowHttp"] = "maybe",
+        };
+        await using var server = await ServerProcess.LaunchAsync(null, providers);
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+        // Act
+        await server.WaitForExitAsync(limit.Token);
+
+        // Assert
+        server.ExitCode.ShouldBe(1);
+        server.Output.ShouldContain("Auth:Providers:1:AllowHttp");
+    }
+
+    [Test]
+    public async Task a_provider_with_a_text_value_in_place_of_its_settings_stops_the_server_and_names_the_provider()
+    {
+        // Arrange
+        Dictionary<string, string> provider = new() { ["Auth__Providers__0"] = "keycloak" };
+        await using var server = await ServerProcess.LaunchAsync(null, provider);
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+        // Act
+        await server.WaitForExitAsync(limit.Token);
+
+        // Assert
+        server.ExitCode.ShouldBe(1);
+        server.Output.ShouldContain("Auth:Providers:0:ClientId is missing");
     }
 
     [Test]
