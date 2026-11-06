@@ -1,6 +1,6 @@
 # Install Recall
 
-Recall runs as one container with one volume. All data is in `/data` in the container. These steps were tested with Docker Compose 5.3.1.
+Recall runs as one container with one volume. All data is in `/data` in the container. You need Docker with Docker Compose.
 
 ## Start Recall
 
@@ -17,7 +17,7 @@ Recall runs as one container with one volume. All data is in `/data` in the cont
    docker compose up -d
    ```
 
-   If no image is published, Compose builds the image from this checkout. The build needs about 5 GB of free disk and some minutes.
+   No image is published yet. So Compose tries to pull the image, prints an error, and builds the image from this checkout. Keep 5 GB of disk free for the build, and use Docker Engine 25 or later.
 
 3. Open `http://<address of this machine>:8080`. With no login provider, the page says what to set and gives the callback URL.
 
@@ -87,7 +87,7 @@ Each address of Recall needs its own callback URL at the provider. `/auth/status
 
 ### Tailscale serve
 
-This option needs no open port and no domain. Each device of your tailnet gets a real certificate.
+This option needs no open port and no domain of your own. Tailscale gets a real certificate for the machine. Only the devices of your tailnet can reach Recall.
 
 1. Install Tailscale on the machine, and turn on HTTPS for your tailnet in the Tailscale admin console.
 2. Run this command on the machine:
@@ -116,7 +116,7 @@ This option needs no open port and no domain. Each device of your tailnet gets a
    docker compose -f compose.yaml -f compose.tls.yaml up -d
    ```
 
-Give both `-f` options in each later `docker compose` command.
+Give both `-f` options in each later `docker compose` command. If Compose stops with an error about the `!reset` tag in `compose.tls.yaml`, update Docker Compose.
 
 If another app has port 443, put the port in the address and set `RECALL_TLS_PORT` to the same port. For example, `RECALL_TLS_ORIGIN=https://recall.example.com:8443` and `RECALL_TLS_PORT=8443`. If another app has port 80, set `RECALL_TLS_HTTP_PORT`. A public certificate then needs another way to prove the domain, which is not part of this file.
 
@@ -146,19 +146,19 @@ Docker runs `/app/healthcheck.sh` each hour. Run it yourself to see the state no
 docker compose exec recall /app/healthcheck.sh
 ```
 
-It prints `Healthy`, or it prints `Degraded` and fails when the file store cannot take a write. `docker compose ps` shows the result of the last probe. Docker runs the probe each 5 seconds during the first 2 minutes, until a probe passes. Docker Engine 25 and later do this. An older engine shows `starting` until the first hour ends.
+It prints `Healthy`, or it prints `Degraded` and fails when the file store cannot take a write. A sleeping disk can give a slow answer, so the probe asks up to four times, 10 seconds apart, before it fails. `docker compose ps` shows the result of the last probe. Docker runs the probe each 5 seconds during the first 2 minutes, until a probe passes. Docker Engine 25 and later do this. An older engine shows `starting` until the first hour ends.
 
 Each probe writes to `/data/files` and flushes it to the disk. A probe each 30 seconds changes that folder at each probe, and with no probe no path in `/data` changes. So a short interval keeps a NAS disk awake. A probe each hour lets a disk with a shorter sleep timer sleep between two probes, and the probe wakes it one time each hour. To change this, set `RECALL_PROBE_INTERVAL` in `.env`, for example `RECALL_PROBE_INTERVAL=6h`.
 
 ## Back up and restore
 
-A backup is a copy of `/data` while Recall is stopped. The copy holds the journal and the keys, so keep it private. These commands use the Docker volume, and they write the file in the current folder.
+A backup is a copy of `/data` while Recall is stopped. The copy holds the journal and the keys, so keep it private. These commands use the Docker volume. They write the file in the current folder, and only you can read that file.
 
 To back up:
 
 ```bash
 docker compose stop
-docker run --rm -v recall_recall-data:/data:ro -v "$PWD":/backup alpine tar -C /data -czf /backup/recall-backup.tar.gz .
+(umask 077; docker run --rm -v recall_recall-data:/data:ro alpine tar -C /data -czf - . > recall-backup.tar.gz)
 docker compose start
 ```
 
@@ -167,26 +167,25 @@ To restore on a new container:
 ```bash
 docker compose down -v
 docker compose up --no-start
-docker run --rm -v recall_recall-data:/data -v "$PWD":/backup alpine tar -C /data -xzpf /backup/recall-backup.tar.gz
+docker run --rm -i -v recall_recall-data:/data alpine tar -C /data -xzpf - < recall-backup.tar.gz
 docker compose up -d
 ```
 
-With a folder in place of the volume, stop Recall and copy the folder with `cp -a`.
+With a folder in place of the volume, stop Recall and copy the folder with `sudo cp -a`, which keeps the owners.
 
 ## Upgrade
 
 1. Make a backup. An upgrade can change the database, and an older image cannot read the changed database.
-2. Get the new version:
+2. Get the new version, and start it:
 
    ```bash
    git pull
-   docker compose pull
    docker compose up -d --build
    ```
 
 The Server runs its migrations at startup, and the volume stays.
 
-To stay on one version, set `RECALL_TAG` in `.env` to that version.
+After the first release, you can use the published image in place of a build. Run `docker compose pull` and `docker compose up -d`. To stay on one version, set `RECALL_TAG` in `.env` to that version.
 
 ## Troubleshoot
 
