@@ -39,6 +39,8 @@ The server writes the cause to its console, and not to a file, because the data 
 |---|---|---|
 | `The data directory <path> is not writable...` | The account of the server cannot write to the data folder, or the volume is read-only. | Mount the volume for writing, and give its owner to the account of the server. Then start the server again. |
 | `The setting FileTelemetry:<name> is <value>, and its least value is <least>...` | A limit of the log and telemetry files is too small. | Correct the setting. Then start the server again. |
+| `The setting FileTelemetry:<name> is <value>, and its largest value is <most>...` | A limit of the log and telemetry files is too large. | Correct the setting. Then start the server again. |
+| `Failed to convert configuration value '<value>' at 'FileTelemetry:<name>'... Correct it, and start the server again.` | A limit of the log and telemetry files is not a whole number in the range of its type. | Correct the setting. Then start the server again. |
 
 ## The file store hangs
 
@@ -52,6 +54,10 @@ The server keeps its logs and its telemetry to about 460 MiB, and a full disk do
 
 1. Run `df -h /data` and `du -sh /data/*` to find what holds the space.
 2. Make room on the volume. You can delete old files in `/data/logs` and `/data/telemetry` while the server runs. Do not delete `recall.db`, its `-wal` file, or the `keys` folder.
+
+Do not delete the current file of a signal, which is the newest file of that signal, while the server runs. The server keeps it open, so its room stays in use. Each next line of that signal goes to the deleted file and is lost, with no warning, until the file rolls or the server starts again. To remove a current file, stop the server first.
+
+A stop on a full disk exits with 0. If a file cannot write the lines that it still holds, the console shows `The file <path> did not close at the stop`, and those lines are lost. The console keeps each log. The database is not part of these files.
 
 ## The log files stop
 
