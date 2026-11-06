@@ -41,16 +41,15 @@ public static partial class OwnerOnlyFiles
             files.AddRange(DatabaseFileSuffixes.Select(suffix => fullPath + suffix));
         }
 
-        var keys = KeysDirectory(configuration);
-        if (keys is not null && Directory.Exists(keys))
-            directories.Add(keys);
+        string?[] ownerFolders = [KeysDirectory(configuration), LogsDirectory(configuration), TelemetryDirectory(configuration)];
+        var folders = ownerFolders.OfType<string>().Where(Directory.Exists).ToList();
+        directories.AddRange(folders);
 
         if (configuration[$"{FileStoreOptions.SectionName}:{nameof(FileStoreOptions.Root)}"] is { Length: > 0 } fileRoot && Path.IsPathFullyQualified(fileRoot))
             directories.Add(fileRoot);
 
         var refused = Tighten(directories, [], ModeAccess.Real).ToList();
-        if (keys is not null && Directory.Exists(keys))
-            files.AddRange(FilesIn(keys));
+        files.AddRange(folders.SelectMany(FilesIn));
         refused.AddRange(Tighten([], files, ModeAccess.Real));
         if (refused.Count > 0)
         {
@@ -76,6 +75,10 @@ public static partial class OwnerOnlyFiles
         => DatabaseFile(configuration) is { } file ? Path.GetDirectoryName(file)! : null;
 
     public static string? KeysDirectory(IConfiguration configuration) => InDataDirectory(configuration, "keys");
+
+    public static string? LogsDirectory(IConfiguration configuration) => InDataDirectory(configuration, "logs");
+
+    public static string? TelemetryDirectory(IConfiguration configuration) => InDataDirectory(configuration, "telemetry");
 
     private static string? InDataDirectory(IConfiguration configuration, string name)
         => DataDirectory(configuration) is { } data ? Path.Combine(data, name) : null;

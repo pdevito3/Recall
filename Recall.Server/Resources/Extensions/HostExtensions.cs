@@ -4,6 +4,7 @@ using System.Reflection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.DependencyInjection;
+using FileTelemetry;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
@@ -11,6 +12,7 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Serilog;
 using Serilog.Events;
+using Serilog.Formatting.Compact;
 using Serilog.Sinks.OpenTelemetry;
 
 public static class HostExtensions
@@ -85,16 +87,17 @@ public static class HostExtensions
             });
 
         builder.AddOpenTelemetryExporters();
+        builder.AddFileTelemetryExporters();
 
         return builder;
     }
 
     /// <summary>
-    /// Registers Serilog as the logging provider. Console output comes from configuration, and logs go
-    /// to OTLP (the Aspire dashboard) when an endpoint is configured.
+    /// Registers Serilog as the logging provider. Console output comes from configuration, logs go to rotating JSON
+    /// files beside the database, and logs go to OTLP (the Aspire dashboard) when an endpoint is configured.
     /// </summary>
     /// <remarks>
-    /// The OTLP sink must live inside this one <c>AddSerilog</c> callback. A logger assigned to
+    /// Each sink must live inside this one <c>AddSerilog</c> callback. A logger assigned to
     /// <c>Log.Logger</c> elsewhere is replaced when the host resolves Serilog, so its sinks never run.
     /// </remarks>
     private static TBuilder ConfigureSerilog<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
@@ -109,6 +112,9 @@ public static class HostExtensions
                 .Enrich.WithMachineName()
                 .Enrich.WithThreadId()
                 .Enrich.WithProperty("Application", builder.Environment.ApplicationName);
+
+            if (FileTelemetryPlan.For(services.GetRequiredService<IConfiguration>()) is { } files)
+                lc.WriteTo.RollingFiles(new CompactJsonFormatter(), files.LogFilePath, files.Options.Logs);
 
             if (!string.IsNullOrWhiteSpace(otlpEndpoint))
                 lc.WriteTo.OpenTelemetry(options =>
@@ -174,6 +180,26 @@ public static class HostExtensions
         // builder.Services.AddOpenTelemetry().WithTracing(t => t.AddJaegerExporter());
 
         return builder;
+    }
+
+    /// <summary>
+    /// Writes traces and metrics to rotating files beside the database. The exporter of a span runs on the thread of its
+    /// batch, and the exporter of a metric on the thread of its reader, so a slow disk does not hold a request.
+    /// </summary>
+    private static void AddFileTelemetryExporters<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
+    {
+        builder.Services.ConfigureOpenTelemetryTracerProvider((services, tracing) =>
+        {
+            if (FileTelemetryPlan.For(services.GetRequiredService<IConfiguration>()) is { } files)
+                tracing.AddProcessor(new BatchActivityExportProcessor(new SpanFileExporter(files.NewTracesFile())));
+        });
+        builder.Services.ConfigureOpenTelemetryMeterProvider((services, metrics) =>
+        {
+            if (FileTelemetryPlan.For(services.GetRequiredService<IConfiguration>()) is { } files)
+                metrics.AddReader(new PeriodicExportingMetricReader(
+                    new MetricFileExporter(files.NewMetricsFile()),
+                    files.Options.MetricExportSeconds * 1000));
+        });
     }
 
     private static TBuilder AddDefaultHealthChecks<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder

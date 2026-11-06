@@ -51,9 +51,9 @@ public partial class NoProviderBootTests
 
         public string Output => string.Join('\n', _output);
 
-        public static async Task<ServerProcess> StartAsync(string? existingRoot = null)
+        public static async Task<ServerProcess> StartAsync(string? existingRoot = null, IReadOnlyDictionary<string, string>? settings = null)
         {
-            var server = await LaunchAsync(existingRoot, new Dictionary<string, string>());
+            var server = await LaunchAsync(existingRoot, settings ?? new Dictionary<string, string>());
             try
             {
                 await server.WaitUntilUpAsync();
