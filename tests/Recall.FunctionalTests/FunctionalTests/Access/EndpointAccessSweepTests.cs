@@ -23,6 +23,7 @@ using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using OpenApi;
+using Shouldly;
 using TestUtilities;
 using TestUtilities.AccessSweep;
 
@@ -366,6 +367,8 @@ public class EndpointAccessSweepTests : TestBase
     {
         using var request = endpoint.RequestFor(ids);
         using var response = await FactoryClient.SendAsync(request);
+        // Each caller, with records that exist and with records that do not. The HTTP cache of a browser would keep a private answer after a logout.
+        (response.Headers.CacheControl?.NoStore == true).ShouldBeTrue($"{request.Method} {request.RequestUri}: {(int)response.StatusCode}");
         var body = await response.Content.ReadAsStringAsync();
         return new Outcome(((int)response.StatusCode).ToString(CultureInfo.InvariantCulture), body.Length > 300 ? body[..300] : body);
     }
