@@ -13,7 +13,7 @@ export type UserSettingChangeDto = {
     locationCaptureEnabled: boolean;
     requirePeopleProposalApproval: boolean;
     /**
-     * @description The `version` of the settings that the client read. A save from an older version gets 409, unless the row already holds these values.
+     * @description The `version` of the settings that the client read. A save from another version gets 409, unless the row already holds these values.
      * @minLength 0
      * @maxLength 4294967295
      * @type integer

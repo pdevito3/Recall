@@ -19,7 +19,7 @@ public sealed class SetSessionMetadataEndpoint : IEndpoint
         .ProducesValidationProblem(StatusCodes.Status409Conflict);
 
     /// <summary>
-    /// Replaces the activity, the moods, and the Topics that the caller chose for a Session. A save from an older
+    /// Replaces the activity, the moods, and the Topics that the caller chose for a Session. A save from another
     /// <c>metadataVersion</c> gets 409 and changes nothing, unless the Session already holds these values. Then the response has the
     /// stored Session, so a retry of a save that reached the server gets 200.
     /// </summary>

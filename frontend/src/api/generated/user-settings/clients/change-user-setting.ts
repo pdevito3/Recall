@@ -8,7 +8,7 @@ import type { ChangeUserSettingOptions, ChangeUserSettingResponses } from '../ty
 import { client, unwrapResult } from '../../.kubb/client'
 
 /**
- * @summary Changes the settings of the caller. A save from an older version gets 409 and changes nothing, unless the row already holds
+ * @summary Changes the settings of the caller. A save from another version gets 409 and changes nothing, unless the row already holds
  * these values. Then the response has the stored settings, so a retry of a save that reached the server gets 200.
  * {@link /api/v1/me/settings}
  */

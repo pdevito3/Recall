@@ -12,7 +12,7 @@ export type SessionMetadataChangeDto = {
     moods: string[];
     userTopics: string[];
     /**
-     * @description The `metadataVersion` of the Session that the client read. A save from an older version gets 409, unless the Session already holds these values.
+     * @description The `metadataVersion` of the Session that the client read. A save from another version gets 409, unless the Session already holds these values.
      * @minLength 0
      * @maxLength 4294967295
      * @type integer

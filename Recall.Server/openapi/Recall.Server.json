@@ -1790,7 +1790,7 @@
         "tags": [
           "Sessions"
         ],
-        "summary": "Replaces the activity, the moods, and the Topics that the caller chose for a Session. A save from an older\n`metadataVersion` gets 409 and changes nothing, unless the Session already holds these values. Then the response has the\nstored Session, so a retry of a save that reached the server gets 200.",
+        "summary": "Replaces the activity, the moods, and the Topics that the caller chose for a Session. A save from another\n`metadataVersion` gets 409 and changes nothing, unless the Session already holds these values. Then the response has the\nstored Session, so a retry of a save that reached the server gets 200.",
         "operationId": "SetSessionMetadata",
         "parameters": [
           {
@@ -2307,7 +2307,7 @@
         "tags": [
           "UserSettings"
         ],
-        "summary": "Changes the settings of the caller. A save from an older version gets 409 and changes nothing, unless the row already holds\nthese values. Then the response has the stored settings, so a retry of a save that reached the server gets 200.",
+        "summary": "Changes the settings of the caller. A save from another version gets 409 and changes nothing, unless the row already holds\nthese values. Then the response has the stored settings, so a retry of a save that reached the server gets 200.",
         "operationId": "ChangeUserSetting",
         "requestBody": {
           "content": {
@@ -4167,7 +4167,7 @@
             "maximum": 4294967295,
             "minimum": 0,
             "type": "integer",
-            "description": "The `metadataVersion` of the Session that the client read. A save from an older version gets 409, unless the Session already holds these values."
+            "description": "The `metadataVersion` of the Session that the client read. A save from another version gets 409, unless the Session already holds these values."
           }
         }
       },
@@ -4674,7 +4674,7 @@
             "maximum": 4294967295,
             "minimum": 0,
             "type": "integer",
-            "description": "The `version` of the settings that the client read. A save from an older version gets 409, unless the row already holds these values."
+            "description": "The `version` of the settings that the client read. A save from another version gets 409, unless the row already holds these values."
           }
         }
       },

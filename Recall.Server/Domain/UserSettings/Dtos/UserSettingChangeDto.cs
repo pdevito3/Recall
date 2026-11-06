@@ -11,6 +11,6 @@ public sealed record UserSettingChangeDto
     public required bool LocationCaptureEnabled { get; init; }
     public required bool RequirePeopleProposalApproval { get; init; }
 
-    /// <summary>The <c>version</c> of the settings that the client read. A save from an older version gets 409, unless the row already holds these values.</summary>
+    /// <summary>The <c>version</c> of the settings that the client read. A save from another version gets 409, unless the row already holds these values.</summary>
     public required uint Version { get; init; }
 }

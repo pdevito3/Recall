@@ -9,5 +9,5 @@ export const userSettingChangeDtoSchema = z.object({
   timeZone: z.string().max(100).nullish().describe('The IANA time zone that gives the Journaling day. Null means UTC. The stored zone is always allowed, also when this host does not know it.'),
   locationCaptureEnabled: z.boolean(),
   requirePeopleProposalApproval: z.boolean(),
-  version: z.int().min(0).max(4294967295).describe('The `version` of the settings that the client read. A save from an older version gets 409, unless the row already holds these values.'),
+  version: z.int().min(0).max(4294967295).describe('The `version` of the settings that the client read. A save from another version gets 409, unless the row already holds these values.'),
 })

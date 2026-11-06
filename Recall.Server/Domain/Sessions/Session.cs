@@ -46,10 +46,6 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
 
     public int? LastCleanupRawRevision { get; private set; }
 
-    /// <summary>
-    /// Counts the changes of the activity, the Moods, and the User Topics. A save of a Draft also changes <see cref="BaseEntity.Version"/>,
-    /// so that number would refuse a metadata save that conflicts with nothing.
-    /// </summary>
     public uint MetadataVersion { get; private set; }
 
     [Sensitive] public string Activity { get; private set; } = SessionActivity.None;
@@ -151,8 +147,6 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         RefreshFromDrafts();
     }
 
-    /// <returns>False for a retry: the Session holds these values and the client sent another version.</returns>
-    /// <exception cref="StaleMetadataVersionException">The metadata changed after the version that the client read.</exception>
     public bool SetMetadata(SessionMetadata metadata, uint metadataVersion)
     {
         var isStored = Activity == metadata.Activity && Moods.SequenceEqual(metadata.Moods) && UserTopics.SequenceEqual(metadata.UserTopics);

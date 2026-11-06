@@ -9,5 +9,5 @@ export const sessionMetadataChangeDtoSchema = z.object({
   activity: z.string().max(100).nullish(),
   moods: z.array(z.string().max(100)),
   userTopics: z.array(z.string().max(100)),
-  metadataVersion: z.int().min(0).max(4294967295).describe('The `metadataVersion` of the Session that the client read. A save from an older version gets 409, unless the Session already holds these values.'),
+  metadataVersion: z.int().min(0).max(4294967295).describe('The `metadataVersion` of the Session that the client read. A save from another version gets 409, unless the Session already holds these values.'),
 })

@@ -36,9 +36,8 @@ public static class ChangeUserSetting
                 }
 
                 applied = row.Change(dto.TimeZone, dto.LocationCaptureEnabled, dto.RequirePeopleProposalApproval, dto.Version);
-                // A save of the stored values also takes its version, so another save from that read gets the 409.
                 if (applied)
-                    dbContext.Entry(row).Property(r => r.LastModifiedOn).IsModified = true;
+                    dbContext.MoveVersionOf(row);
 
                 await dbContext.SaveChangesAsync(ct);
                 return row;

@@ -27,8 +27,6 @@ public class UserSetting : BaseEntity, ITenantable, IJournalOwned
 
     public static TimeZoneId ZoneOf(string? timeZone) => TimeZoneId.TryOf(timeZone) ?? Utc;
 
-    /// <returns>False for a retry: the row holds these values and the client sent another version.</returns>
-    /// <exception cref="StaleVersionException">The row changed after the version that the client read.</exception>
     /// <exception cref="ValidationException">The time zone is not an IANA zone, and it is not the stored zone.</exception>
     public bool Change(string? timeZone, bool locationCaptureEnabled, bool requirePeopleProposalApproval, uint version)
     {
