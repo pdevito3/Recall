@@ -2,7 +2,7 @@ import { useMutation, type QueryClient } from '@tanstack/react-query'
 
 import { Notification } from '@/components/notification'
 import { apiClient } from '@/lib/api-client'
-import { getUser } from './get-user'
+import { authUserQuery, getUser } from './get-user'
 
 const serverMaxReturnPathLength = 2048
 
@@ -79,9 +79,9 @@ async function checkSessionOfRestoredPage(queryClient: QueryClient) {
   const noAnswer = new Promise<undefined>((settle) => setTimeout(settle, restoredPageCheckLimitMs))
   const user = await Promise.race([getUser().catch(() => undefined), noAnswer])
   if (user === null) leaveAsSignedOut(queryClient)
-  // A new load shows the alert of a failed check, and the words of this page stay hidden.
-  else if (user === undefined) window.location.reload()
-  else document.documentElement.style.opacity = ''
+  else if (user && user.sid === queryClient.getQueryData(authUserQuery.queryKey)?.sid) document.documentElement.style.opacity = ''
+  // A new load shows the alert of a failed check, or the pages of the session that lives now, and the words of this page stay hidden.
+  else window.location.reload()
 }
 
 /**
