@@ -315,15 +315,6 @@ export function unsentWords(page: Page) {
 
     signOutInAnotherTab: () => page.evaluate(() => new BroadcastChannel('recall.session').postMessage('signed-out')),
 
-    async typeOfTheDialogAtClose() {
-      const dialog = page.waitForEvent('dialog')
-      await page.close({ runBeforeUnload: true })
-      const shown = await dialog
-      const type = shown.type()
-      await shown.accept()
-      return type
-    },
-
     async openSettings() {
       await page.goto('/settings')
       await expect(at.settingsHeading).toBeVisible({ timeout: firstPaintMs })

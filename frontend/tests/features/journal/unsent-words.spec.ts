@@ -606,7 +606,7 @@ test.describe('words that the browser has no room to keep', () => {
     await expect(unsent.at.onlyInMemory).toBeVisible()
     await expect(unsent.at.onlyInMemory).toContainText('Words with no room')
     await expect(unsent.at.copyOnlyInMemory).toBeVisible()
-    expect(await unsent.typeOfTheDialogAtClose()).toBe('beforeunload')
+    expect(await unsent.warnsAtAClose()).toBe(true)
   })
 
   test('at a logout, the dialog does not offer to keep them', async ({ page, api }) => {
