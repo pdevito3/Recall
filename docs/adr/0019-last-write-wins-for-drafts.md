@@ -24,8 +24,30 @@ A person can still lose a change with a 200 in these cases, and the reply shows 
 
 - A change with a time that is not newer than the stored change goes away, as from a slow clock or a queue.
 - A different change with the exact time of a kept claim goes away, because the server cannot tell it from a retry.
-- The time of a change from a fast clock is later than its edit. While that time is ahead of the server, the change gets the time of the server. After that, it keeps its own time. Either way, a change that was made earlier and arrives after a newer change replaces the newer change. This needs a first try that did not reach the server and a client that sends the next change anyway, or a second device. A client that sends a row's changes in order and stops at a failure does not reach it from one device.
+- The time of a change from a fast clock is later than its edit. While that time is ahead of the server, the change gets the time of the server, so the order of arrival decides. After that, it keeps its own time. Either way, a change that was made earlier and arrives after a newer change replaces the newer change. This needs no failed request and no second device, as the next section shows.
 - If the server clock goes back, a change with a time ahead of the server gets a save time below the stored one, and it goes away. The server does not remember it, so its retry applies after the server passes the stored save time, also over a newer change.
+
+## Overlapping changes from one device
+
+Two overlapping PUTs from one device reach the third case above. No request fails, and the client reaches the server each time. We measured settings on localhost with no injected delay, at commit 429e5c6a. Each run sent capture on and then capture off. This table counts the runs that ended with capture on:
+
+| Clock of the client | Time between the two PUTs | Ended with capture on |
+|---|---|---|
+| Right | 0, 1, and 5 ms | 0 of 240 |
+| +2 s | Started together | 28 of 60 |
+| +6 s | Started together | 30 of 60 |
+| +1 h | Started together | 22 of 60 |
+| 2099 | Started together | 23 of 60 |
+| +6 s | 5 ms | 0 of 80 |
+| +1 h | 5 ms | 0 of 80 |
+
+The 5 ms rows do not make a gap safe, because they come from localhost. On another run, the PUT for off went 1 s after the PUT for on, and the PUT for on landed 2 s after the PUT for off. Capture ended on at each fast clock in the table, and the next Session stored a location. With a right clock, capture stayed off. For metadata, the older body also replaced the newer body at each fast clock when it landed second.
+
+So a client must send the settings or metadata changes of a row one at a time and in order, and wait for the reply to each change before it sends the next. After a failure with no reply, it sends that change again with the same time before it sends a newer change. A client that drained a queue in this way at +1 h, with a lost reply and stalled duplicates, kept the newest change for settings and for metadata.
+
+The POC `UserSettingsStore.execute` does not do this, because it starts a PUT for each edit and does not wait for the one before it. R14 must do this.
+
+This rule does not stop the case on a second device. A fast phone that edits first and lands second replaces the edit of a tablet when the phone clock is ahead by more than the time between the two edits. We measured this at +6 s with 3 s between the edits, and at +1 h with 20 s. At +2 s with 3 s between the edits, and at +6 s with 8 s, the edit of the tablet stayed.
 
 ## Consequences
 
