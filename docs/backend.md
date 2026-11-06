@@ -37,7 +37,6 @@ Keep each C# file at 1000 lines or less. This rule covers all C# files in the so
 - **Value objects** (`EmailAddress`, `UserRole`, and more) use SmartEnum when they have fixed options.
 - **Domain events** queue in the entity. `SaveChangesAsync` runs their handlers in the save transaction. See [domain-events.md](backend/domain-events.md).
 - **Audit log**: each save writes an audit entry for each data change and each recorded action, in the save transaction. See [audit-log.md](backend/audit-log.md).
-- **Attachments**: an entity keeps each file as a `StoredFile` in object storage, and declares the types and the size that it takes in its `UploadRules`. See [attachments.md](backend/attachments.md).
 - **Prefixed string IDs**: each entity has a `public const string IdPrefix`, for example `usr`. `EntityId.New` makes IDs like `usr_0199f0c1a2b37c4d8e9f0a1b2c3d4e5f` (the prefix and a UUIDv7). The build gives an error when an entity has no prefix, an invalid prefix, or a prefix that another entity uses. It also gives an error when a constructor does not call `base(IdPrefix)` with the prefix of its own type, or when an entity derives from another entity. A UUIDv7 ID shows the creation time to the millisecond, so the creation time of a record is not secret.
 
 ## Add a new feature
@@ -229,23 +228,31 @@ dotnet ef migrations add MyMigration --project Recall.Server --startup-project R
 dotnet ef database update --project Recall.Server --startup-project Recall.Server
 ```
 
-The server applies migrations at startup. Before them, `SqliteFile.PrepareAsync` makes the directory, refuses a network, FUSE, or shared folder mount, sets WAL, and removes a migration lock that a killed process left.
+The server applies migrations at startup. Before them, `SqliteFile.PrepareAsync` refuses a network, FUSE, or shared folder mount, makes the directory, refuses a directory that is not writable, sets WAL, and removes a migration lock that a killed process left. Each refusal stops the startup with a message that names the path.
 
 `ModelSnapshotTests` fails when the committed model snapshot is not the snapshot that the next migration writes. This includes a model change with no DDL, such as a new navigation, which `dotnet ef migrations has-pending-model-changes` does not find. The test ignores the `using` lines and the `ProductVersion` annotation. To correct the failure, add a migration in the change that changed the model. For a change with no DDL, the `Up` and `Down` of the migration are empty. An update of EF Core that changes the generated code also fails the test. Correct it the same way.
 
-## Object storage
+## File store
 
-The Server keeps the bytes of files in one S3 bucket. The database keeps the metadata of each file and the key of its object. `Resources/Storage/ObjectStorage.cs` puts an object, deletes an object or each object under a prefix, and signs a URL that reads an object. `Resources/Storage/ObjectStorageRegistration.cs` adds the S3 client.
+`FileStore` in `Resources/Storage/` keeps the bytes of files on the local disk, under one root folder. It has four actions: `WriteAsync`, `OpenRead`, `Delete`, and `DeleteUnder`. `OpenRead` throws `NotFoundException` for a key with no file. The store has no download endpoint and no access check, so the feature that calls it does the permission check of the file.
 
-| Where | Storage |
-|-------|---------|
-| `dotnet aspire start` | The `storage` resource of the AppHost. It is Floci, an S3 emulator, on port 24780. When Floci is ready, `Recall.AppHost/Storage/seed/01-create-bucket.sh` makes the bucket `files`. The AppHost gives the Server `AWS_ENDPOINT_URL`, the region, test credentials, and `ObjectStorage__BucketName` |
-| The integration and functional tests | `FlociTestStorage` in `tests/Recall.SharedTestHelpers/Utilities/` starts a Floci container with the same image, and makes a new bucket for each run |
-| Production | S3 of AWS, or a service with the S3 API. A publish of the AppHost has no `storage` resource. Set `ObjectStorage__BucketName`: the Server does not start without it. With no `AWS_ENDPOINT_URL`, the SDK reads the region and the credentials from its default chain. Give the credentials `s3:PutObject`, `s3:GetObject`, and `s3:DeleteObject` on the objects, and `s3:ListBucket` on the bucket for the delete of a tenant. Block all public access to the bucket |
+| Where | Root |
+|-------|------|
+| A container | `/data/files`, from `FileStore:Root` in `appsettings.json` |
+| `dotnet aspire start` | `files` in the data directory of the AppHost: `RECALL_DATA_DIR`, or `.data` of the checkout, or a new temp directory in an isolated run. The AppHost sets `FileStore__Root` |
+| The integration and functional tests | A new temp directory for each run. See `TemporaryFileRoot` |
 
-Floci checks the signature of a signed request (`FLOCI_AUTH_VALIDATE_SIGNATURES`). It does not refuse a request with no signature, so a local bucket is open to each caller that can get to its port. S3 of AWS refuses such a request when the bucket blocks public access.
+A key is a `FileKey`. It is a relative path that refuses `..`, an absolute path, an empty segment, a segment over 255 bytes, a NUL, a lone surrogate, the temporary folder, and the proof file. A bad value throws `InvalidFileKeyException`. This check reads only the text of the key, so it does not make a key safe by itself. A valid key can name a symlink, which the store refuses when the key is used. Two keys that differ only in case name one file on a case-insensitive file system. Make the key of a file of a tenant with `FileKey.ForTenant`, for example `FileKey.ForTenant(tenantId, "recordings", recordingId, "00001.webm")`. It refuses a tenant ID that is not one segment. The result is under `tenants/{tenantId}`, and `DeleteTenant` deletes that folder after the delete of the tenant commits. Nothing removes the folder later. A failed delete of the folder leaves it, a crash between the commit and the delete of the folder leaves it, and a write that ends after the delete makes it again. The first feature that writes files of a tenant must close these gaps.
 
-To keep the files of an entity in storage, follow [attachments.md](backend/attachments.md). It gives the upload rules, the presigned URLs, the order of the writes, and the steps to add attachments to an entity.
+A write goes to a new file in `.tmp` under the root, flushes it to the disk, renames it to its key, and flushes each folder from the key up to the root. So a reader sees the old file or the new file, and a write that returned stays after a power failure. Two writes to one key do not conflict, and the last rename wins. `DeleteUnder` first renames the folder into `.tmp`, so all its keys go at one time.
+
+The root must be one file system. `File.Move` to a mount below the root is a copy and not a rename, so a reader can see a part of a file, and a crash can leave one. The store does not look for such a mount.
+
+At each start, `FileStoreRegistration` runs `NetworkMountCheck` on the real path of the root. A root on a network, FUSE, or shared folder mount stops the startup, the same as the data file. A root with a path that cannot resolve, such as a symlink loop, is checked as it is written. Then `FileStore.Prepare` removes `.tmp` with what an interrupted process left in it, and proves that the root takes a write, with a temporary file, a rename, and a delete. If the proof fails, the store logs one error that names the root and the cause, and the host still starts, because the rest of the app can still serve reads.
+
+`FileStoreHealthCheck` runs the same proof for `/health`. A failed proof gives `Degraded`, so `/health` stays 200 with the body `Degraded`, and `/alive` does not change. The AppHost and a status check of `/health` see 200 and call the server healthy, because a 503 would stop the SPA from starting and tell a proxy to send no reads to the server. So a monitor of the store must read the body. One proof holds for 30 seconds, because a proof can write to the disk and `/health` has no login. So `/health` shows a volume that broke, or one that was repaired, within 30 seconds and with no restart. The proof runs off the request, and only one runs at a time. A proof that does not finish in 5 seconds logs one error, and a probe waits for no more than the rest of those 5 seconds and then gives `Degraded`, so a disk that hangs does not hang `/health`. A proof that never returns keeps `Degraded` until a restart, because no second proof starts while one runs.
+
+The store refuses each symlink that it finds below the root, in the key and in `.tmp`, with an `IOException`. The store makes no links, so a link is a server fault and not a bad request. The check comes before the file call, so a second local writer that changes a folder to a link between them can pass it. The store does not defend against such a writer. The root itself can be a link, and the mount check follows it. At startup, `Prepare` removes a `.tmp` that is a link and keeps its target.
 
 ## Tests
 

@@ -1,17 +1,16 @@
 ---
 name: backend-feature
-description: Scaffolds backend features including new domain entities, new properties on existing entities, new business operations, and file attachments. Use when creating a new domain entity, extending an existing entity with new properties, adding new business features/commands, or letting users upload files to an entity.
+description: Scaffolds backend features including new domain entities, new properties on existing entities, and new business operations. Use when creating a new domain entity, extending an existing entity with new properties, or adding new business features/commands.
 allowed-tools: Read, Glob, Grep, Write, Edit, Bash(dotnet:*, ls:*, mkdir:*, pnpm:*)
 ---
 
 # Backend Feature
 
-Four tasks:
+Three tasks:
 
 1. A new entity: run `scripts/new-feature.cs`, then write the domain rules.
 2. A new property on an entity that exists.
 3. A new business operation on an entity that exists.
-4. Files on an entity that exists: an attachment entity with its upload rules.
 
 The files that the script writes are the reference for each pattern of a CRUD feature.
 
@@ -44,7 +43,7 @@ The script writes a tenant-owned root with add, get, list, update, and delete. I
 - The entity graph blueprint, the rules of the fakes, and the unit, integration, and functional tests.
 - Lines in the shared files, at each `// new-feature:<slot>` marker: the `DbSet`, the permission, the gRPC map, `PermissionTests`, `StringColumnLengthTests`, `TenantDeleteOwnedRowsTests`, and `EndpointAccessSweepTests`.
 
-A second run with the same input changes nothing. When a file that the script writes exists with other content, the script stops before it writes. CI runs the script for two samples on each pull request, and then builds and tests them (the `new-feature` job). To run the same steps before you push a change to `scripts/new-feature.cs` or to a marker, run [scripts/ci/new-feature.cs](../../../scripts/ci/new-feature.cs): `dotnet run scripts/ci/new-feature.cs`. It works on a throwaway copy of the checkout, so it does not change your files. It needs Docker and buf.
+A second run with the same input changes nothing. When a file that the script writes exists with other content, the script stops before it writes. CI runs the script for two samples on each pull request, and then builds and tests them (the `new-feature` job). To run the same steps before you push a change to `scripts/new-feature.cs` or to a marker, run [scripts/ci/new-feature.cs](../../../scripts/ci/new-feature.cs): `dotnet run scripts/ci/new-feature.cs`. It works on a throwaway copy of the checkout, so it does not change your files. It needs buf.
 
 ### Write the domain rules
 
@@ -100,10 +99,6 @@ Rules:
 9. Regenerate and commit the API contract with the `api-contract` skill.
 
 A new permission needs a `Permission.Names` constant, a `PermissionEnum` entry, a factory method, its name in `PermissionTests`, and a migration that gives it to the admins. The script writes these lines for a new entity. Use them as the pattern.
-
-## 4. Attachments
-
-Follow "Add attachments to an entity" in [attachments.md](../../../docs/backend/attachments.md#add-attachments-to-an-entity), on the Server and then in the SPA. The steps build on the parts in `Domain/Attachments/`: the entity declares only its rules, its key, and its owner, and the owner gets a `Manage<Noun>s` action that the add and the delete guard. Done when the functional tests of an upload, a refused type, a file whose bytes do not match its name, and a file over the largest size pass, and the list gives the upload rules.
 
 ## Build rules
 

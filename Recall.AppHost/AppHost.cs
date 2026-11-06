@@ -35,27 +35,6 @@ try
         // endpoint. Aspire makes one endpoint for each name and sets its Url.
         .WithCSharpRepl();
 
-    // S3 object storage. Floci emulates S3 in a local run only. A published server gets the S3 of its cloud and its
-    // bucket from the deploy, not an emulator with test credentials. The browser loads the presigned URLs of the
-    // server from this endpoint, so it must be reachable from the browser. The bucket hook in Storage/seed creates
-    // the bucket.
-    if (builder.ExecutionContext.IsRunMode)
-    {
-        const string storageBucket = "files";
-        var storage = builder.AddFlociAws("storage", port: 24780)
-            .WithImageTag(Config.FlociImageTag)
-            .WithEnvironment(Config.FlociValidateSignaturesVariable, "true")
-            .WithEnvironment("STORAGE_BUCKET", storageBucket)
-            .WithBindMount("./Storage/seed", "/etc/floci/init/ready.d", isReadOnly: true)
-            .WithDataVolumeUnlessIsolated();
-        // A path-style GET of the bucket gives 404 until the hook created it
-        storage.WithHttpHealthCheck($"/{storageBucket}", endpointName: storage.Resource.PrimaryEndpoint.EndpointName);
-        server.WithReference(storage)
-            .WaitFor(storage)
-            .WithEnvironment("ObjectStorage__BucketName", storageBucket);
-        storage.WithParentRelationship(server);
-    }
-
     // MCP clients call the server directly, so the resource of its protected resource metadata is the URL they call.
     server.WithEnvironment("Mcp__PublicOrigin", server.GetEndpoint("https"));
 
@@ -74,6 +53,7 @@ try
     {
         var dataDirectory = builder.DataDirectory();
         server.WithEnvironment("ConnectionStrings__appdb", $"Data Source={Path.Combine(dataDirectory, "recall.db")}");
+        server.WithEnvironment("FileStore__Root", Path.Combine(dataDirectory, "files"));
         bff.WithEnvironment("ConnectionStrings__bffdb", $"Data Source={Path.Combine(dataDirectory, "bff.db")}");
         if (builder.Configuration["SpaBuild"] is { Length: > 0 } spaBuild)
             bff.WithEnvironment("ASPNETCORE_WEBROOT", Path.GetFullPath(spaBuild));
@@ -85,12 +65,6 @@ try
     var bffForContainers = bff.GetEndpoint("http", KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
     // The BFF builds its redirect URIs from its own URL, because the Vite proxy changes the origin.
     bff.WithEnvironment("Bff__PublicOrigin", bff.GetEndpoint("https"));
-    // In a local run, the host filter also lets in the identity provider containers, through the container endpoint
-    // above or host.docker.internal, and the health probes, which call localhost. A published BFF does not trust
-    // these hosts.
-    if (builder.ExecutionContext.IsRunMode)
-        bff.WithEnvironment("Bff__AdditionalAllowedHosts", ReferenceExpression.Create(
-            $"{bffForContainers.Property(EndpointProperty.Host)};host.docker.internal;localhost"));
 
     var authClientUrls = new AuthClientUrls(
         webfrontend.GetEndpoint("http"), server.GetEndpoint("https"), server.GetEndpoint("http"), bff.GetEndpoint("https"),
@@ -99,6 +73,13 @@ try
     // variable AuthProvider=Keycloak overrides it. The e2e tests find the provider from the running stack.
     var selectedProvider = AuthProviderCatalog.Select(builder.Configuration);
     var authProvider = selectedProvider.AddTo(builder, authClientUrls);
+    // In a local run, the host filter also lets in the identity provider containers, through the container endpoint
+    // above or host.docker.internal, and the health probes, which call localhost. A published BFF does not trust
+    // these hosts. Aspire refuses a container endpoint in an app with no container, which is a run with DuendeDemo.
+    if (builder.ExecutionContext.IsRunMode)
+        bff.WithEnvironment("Bff__AdditionalAllowedHosts", builder.Resources.OfType<ContainerResource>().Any()
+            ? ReferenceExpression.Create($"{bffForContainers.Property(EndpointProperty.Host)};host.docker.internal;localhost")
+            : ReferenceExpression.Create($"localhost"));
     // DPoP=true runs the stack with DPoP (RFC 9449): the BFF binds the tokens to its key. The setting is a flag like
     // AuthProvider, for example the environment variable DPoP=true.
     if (AuthProviderDPoP.IsOn(builder))

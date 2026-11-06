@@ -185,7 +185,6 @@ jobs:
           key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
           restore-keys: nuget-${{ runner.os }}-
 
-      # The integration and functional tests start Floci with Testcontainers on the runner's Docker.
       # The api-contract job checks the OpenAPI document, so this build does not write it again.
       # The bff-tests job runs the BFF tests, so this job skips them.
       - name: Run the tests

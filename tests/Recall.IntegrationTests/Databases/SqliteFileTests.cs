@@ -37,6 +37,62 @@ public sealed class SqliteFileTests
     }
 
     [Test]
+    public async Task prepare_refuses_a_network_mount_and_makes_no_directory()
+    {
+        // Arrange
+        var folder = Path.Combine(Path.GetTempPath(), $"recall-file-{Guid.NewGuid():N}");
+        var connectionString = new SqliteConnectionStringBuilder { DataSource = Path.Combine(folder, "nested", "recall.db") }.ToString();
+        ReadMounts readMounts = _ => Task.FromResult<IReadOnlyList<MountEntry>?>([new("/", "nfs4", "nas:/share")]);
+
+        // Act
+        var failure = await Should.ThrowAsync<InvalidOperationException>(
+            () => SqliteFile.PrepareAsync(connectionString, readMounts, CancellationToken.None));
+
+        // Assert
+        failure.Message.ShouldContain("nas:/share");
+        Directory.Exists(folder).ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task prepare_in_a_directory_that_refuses_a_new_file_stops_and_names_the_directory()
+    {
+        // Arrange
+        var directory = Path.Combine(Path.GetTempPath(), $"recall-file-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var connectionString = new SqliteConnectionStringBuilder { DataSource = Path.Combine(directory, "recall.db") }.ToString();
+
+        try
+        {
+            using var readOnly = new ReadOnlyFolder(directory);
+
+            // Act
+            var failure = await Should.ThrowAsync<InvalidOperationException>(
+                () => SqliteFile.PrepareAsync(connectionString, CancellationToken.None));
+
+            // Assert
+            failure.Message.ShouldContain($"The data directory {directory} is not writable");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task prepare_leaves_no_proof_file_in_the_directory()
+    {
+        // Arrange
+        await using var database = new SqliteTestDatabase();
+        var path = new SqliteConnectionStringBuilder(database.ConnectionString).DataSource;
+
+        // Act
+        await SqliteFile.PrepareAsync(database.ConnectionString, CancellationToken.None);
+
+        // Assert
+        Directory.GetFiles(Path.GetDirectoryName(path)!, ".write-proof*").ShouldBeEmpty();
+    }
+
+    [Test]
     public async Task prepare_removes_the_migration_lock_of_a_killed_process_and_migrate_then_ends()
     {
         // Arrange
