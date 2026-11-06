@@ -7,6 +7,13 @@ public sealed record RollingFileLimits
     public int FilesKept { get; init; }
 
     public int DaysKept { get; init; }
+
+    public IEnumerable<(string Name, long Value, long Least)> Rules(string signal) =>
+    [
+        ($"{signal}:{nameof(FileSizeBytes)}", FileSizeBytes, 1),
+        ($"{signal}:{nameof(FilesKept)}", FilesKept, 1),
+        ($"{signal}:{nameof(DaysKept)}", DaysKept, 0),
+    ];
 }
 
 public sealed record FileTelemetryOptions
@@ -20,6 +27,21 @@ public sealed record FileTelemetryOptions
     public RollingFileLimits Metrics { get; init; } = default!;
 
     public int MetricExportSeconds { get; init; }
+
+    public string? Refusal()
+    {
+        (string Name, long Value, long Least)[] rules =
+        [
+            .. Logs.Rules(nameof(Logs)),
+            .. Traces.Rules(nameof(Traces)),
+            .. Metrics.Rules(nameof(Metrics)),
+            (nameof(MetricExportSeconds), MetricExportSeconds, 1),
+        ];
+
+        return rules.Where(rule => rule.Value < rule.Least).Select(rule =>
+                $"The setting {SectionName}:{rule.Name} is {rule.Value}, and its least value is {rule.Least}. Correct it, and start the server again.")
+            .FirstOrDefault();
+    }
 }
 
 public sealed record FileTelemetryPlan(string LogsDirectory, string TelemetryDirectory, FileTelemetryOptions Options)

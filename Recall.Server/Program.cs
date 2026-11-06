@@ -7,6 +7,7 @@ using Recall.Server.Databases.Sqlite;
 using Recall.Server.Resources;
 using Recall.Server.Resources.Entrypoints;
 using Recall.Server.Resources.Entrypoints.Http.OpenApi;
+using Recall.Server.Resources.FileTelemetry;
 using Recall.Server.Resources.Extensions;
 using Serilog;
 using Serilog.Events;
@@ -33,6 +34,13 @@ try
         && SqliteFile.MakeWritableOrRefuse(dataDirectory) is { } notWritable)
     {
         Log.Fatal("{Refusal:l}", notWritable);
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    if (!OpenApiBuildTime.IsActive && FileTelemetryPlan.For(builder.Configuration)?.Options.Refusal() is { } badLimit)
+    {
+        Log.Fatal("{Refusal:l}", badLimit);
         Environment.ExitCode = 1;
         return;
     }

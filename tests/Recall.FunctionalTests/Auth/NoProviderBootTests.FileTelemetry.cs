@@ -1,6 +1,7 @@
 namespace Recall.FunctionalTests.Auth;
 
 using System.Text.Json;
+using Recall.Server.Resources.FileTelemetry;
 using Shouldly;
 
 public partial class NoProviderBootTests
@@ -28,6 +29,63 @@ public partial class NoProviderBootTests
         }
 
         throw new InvalidOperationException($"No line in {folder}/{pattern} matched in 30 seconds.");
+    }
+
+    [Test]
+    public async Task a_negative_days_kept_stops_the_boot_with_one_line_and_no_stack_trace()
+    {
+        // Arrange
+        await using var server = await ServerProcess.LaunchAsync(null, new Dictionary<string, string>
+        {
+            ["FileTelemetry__Logs__DaysKept"] = "-1",
+        });
+
+        // Act
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        await server.WaitForExitAsync(limit.Token);
+
+        // Assert
+        server.ExitCode.ShouldBe(1);
+        server.Output.ShouldContain("The setting FileTelemetry:Logs:DaysKept is -1");
+        server.Output.ShouldNotContain("   at ");
+    }
+
+    [Test]
+    public async Task a_log_file_that_cannot_roll_gives_one_warning_on_the_console_and_the_console_keeps_each_log()
+    {
+        // Arrange
+        const int requests = 40;
+        await using var server = await ServerProcess.StartAsync(settings: new Dictionary<string, string>
+        {
+            ["FileTelemetry__Logs__FileSizeBytes"] = "1024",
+        });
+        var logs = Path.Combine(server.DataDirectory, "logs");
+        var path = $"/{Guid.NewGuid():N}.txt";
+        using var first = await server.Client.GetAsync($"/{Guid.NewGuid():N}.txt");
+        await FirstLineAsync(logs, "recall-*.jsonl", _ => true);
+        File.SetUnixFileMode(logs, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+
+        try
+        {
+            // Act
+            for (var number = 0; number < requests; number++)
+                (await server.Client.GetAsync(path)).Dispose();
+
+            // Assert
+            var lines = server.Output.Split('\n');
+            for (var attempt = 0; attempt < 150 && lines.Count(line => line.Contains(path, StringComparison.Ordinal)) < requests; attempt++)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(200));
+                lines = server.Output.Split('\n');
+            }
+
+            lines.Count(line => line.Contains(path, StringComparison.Ordinal)).ShouldBe(requests);
+            lines.Where(line => line.Contains(FileSinkFailureNotice.Text, StringComparison.Ordinal)).ShouldHaveSingleItem().ShouldContain(logs);
+        }
+        finally
+        {
+            File.SetUnixFileMode(logs, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
     }
 
     [Test]
