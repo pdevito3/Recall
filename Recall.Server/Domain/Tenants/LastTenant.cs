@@ -13,7 +13,7 @@ using Resources;
 public static class LastTenant
 {
     public const string RefusedMessage =
-        "Recall refused this delete, because this is the last tenant, and no one can sign in with no tenant. Add another tenant first, or keep this one.";
+        "Recall refused this delete, because this is the last tenant, and no one can sign in with no tenant. Keep this tenant, or ask the owner of this server to add another tenant first.";
 
     internal const string InstallRoot = "install";
 

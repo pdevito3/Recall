@@ -24,6 +24,10 @@ public class DownProviderTests
         using var htmlRequest = new HttpRequestMessage(HttpMethod.Get, "/auth/oidc/stub/start?client=web");
         htmlRequest.Headers.Accept.ParseAdd("text/html");
         var startHtml = await browser.SendAsync(htmlRequest);
+        var app = NativeApp.New();
+        using var nativeRequest = new HttpRequestMessage(HttpMethod.Get, app.StartUrl);
+        nativeRequest.Headers.Accept.ParseAdd("text/html");
+        var nativeStartHtml = await phone.SendAsync(nativeRequest);
         var login = await new AuthBrowser(host).GetAsync("/auth/login?returnUrl=%2Fentries");
         var webSession = await browser.GetAsync("/auth/me", csrf: true);
         var nativeSession = await phone.GetAsync("/auth/me", authorization: $"Bearer {tokens.AccessToken}");
@@ -42,7 +46,9 @@ public class DownProviderTests
         loginPage.ShouldContain("href=\"/auth/login?returnUrl=%2Fentries\">Try again</a>");
         var startPage = await startHtml.Content.ReadAsStringAsync();
         startPage.ShouldNotContain("Existing sessions");
-        startPage.ShouldContain(">Try again</a>");
+        startPage.ShouldContain("href=\"/auth/oidc/stub/start?client=web\">Try again</a>");
+        nativeStartHtml.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
+        (await nativeStartHtml.Content.ReadAsStringAsync()).ShouldContain($"href=\"{WebUtility.HtmlEncode(app.StartUrl)}\">Try again</a>");
         webSession.StatusCode.ShouldBe(HttpStatusCode.OK);
         nativeSession.StatusCode.ShouldBe(HttpStatusCode.OK);
         refresh.StatusCode.ShouldBe(HttpStatusCode.OK);

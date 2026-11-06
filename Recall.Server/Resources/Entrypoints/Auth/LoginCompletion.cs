@@ -35,7 +35,7 @@ public sealed class LoginCompletion(SessionStore store, LoginModes modes)
     private IResult WebFailure(LoginFailure failure, string modeId) => failure switch
     {
         LoginFailure.AccessDenied => AuthPages.AccessDenied(),
-        LoginFailure.IdpUnreachable => AuthPages.ProviderIsDown(modes.FindOidc(modeId)?.DisplayName ?? modeId),
+        LoginFailure.IdpUnreachable => AuthPages.ProviderIsDown(modes.FindOidc(modeId)?.DisplayName ?? modeId, AuthRoutes.Login),
         _ => AuthPages.InvalidResponse(),
     };
 
