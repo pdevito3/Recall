@@ -6,14 +6,14 @@ using Microsoft.EntityFrameworkCore;
 using Resources;
 
 /// <summary>
-/// An install keeps a live tenant. With none, each login gets a refusal, a restart and open signup change nothing, and a claim file
+/// An install keeps a live tenant. With none left by a delete, each login gets a refusal, a restart and open signup change nothing, and a claim file
 /// has no tenant to recover, so no API call can make that state. The rule reads the other tenants and two deletes hold the locks of
 /// two tenants, so each delete also holds one exclusive lock of the install. See <c>docs/backend/concurrency.md</c>, section "Lock".
 /// </summary>
 public static class LastTenant
 {
     public const string RefusedMessage =
-        "Recall refused this delete, because this is the last tenant, and no one can sign in with no tenant. Keep this tenant, or ask the owner of this server to add another tenant first.";
+        "Recall refused this delete, because this is the last tenant, and no one can sign in with no tenant. Keep this tenant, or ask the person who runs this server to add another tenant first.";
 
     internal const string InstallRoot = "install";
 

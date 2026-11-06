@@ -229,7 +229,7 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
     private static string CauseOf(Exception exception) => exception switch
     {
         NotValidAnswerException { InnerException: { } cause } => CauseOf(cause),
-        HttpRequestException { HttpRequestError: HttpRequestError.ConfigurationLimitExceeded } => $"over the limit of {AnswerLimitBytes} bytes",
+        HttpRequestException { HttpRequestError: HttpRequestError.ConfigurationLimitExceeded } => "over a size limit of this server",
         HttpRequestException { StatusCode: { } status } => $"status {(int)status}",
         HttpRequestException { HttpRequestError: var kind and not HttpRequestError.Unknown } => kind.ToString(),
         OperationCanceledException => "no answer in time",

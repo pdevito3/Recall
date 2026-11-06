@@ -200,18 +200,18 @@ A changed issuer, a new provider, a provider restored with a new `sub`, or a del
 
 The Server links that identity to the oldest live Admin of the oldest live tenant whose identifier is its own ID, gives that Admin each Admin permission back, logs a warning with the user ID and the issuer, and removes the file. If the tenant has no such Admin, the Server adds a new Admin. This also recovers an install where the delete of a tenant left only a tenant with no Admin.
 
-The claim cannot bring back a deleted tenant, so `DELETE /tenants/{id}` gives 409 for the last live tenant. Only a change outside the API can leave an install with no live tenant. In that state, a login with no link gets `signup_closed`. A login with a link still signs in when only the tenant row changed and the user is live, and it gets `signup_closed` when the user is gone too. The Server removes the file in each case. Restore the data directory from a backup.
+The claim cannot bring back a deleted tenant, so `DELETE /tenants/{id}` gives 409 for the last live tenant. Only a change outside the API can leave an install with no live tenant. When a tenant row stays but is marked as deleted, a login with no link gets `signup_closed`. A login with a link still signs in when only the tenant row changed and the user is live, and it gets `signup_closed` when the user is gone too. When no tenant row stays, the Server reads a new install, and the next login with no link becomes the Owner of a new tenant. The Server removes the file in each case. Restore the data directory from a backup.
 
 The claim is also the recovery path for a missing permission. A release can add an Admin permission, and an Admin who exists does not get it. To give it to an Admin who can sign in, create the file and sign in with that login. The Server gives that Admin each Admin permission back, logs a warning that names the file and the user ID, and removes the file.
 
-The first login after you create the file always removes it, also when the claim changes nothing:
+The first login after you create a regular file removes it when the Server can, also when the claim changes nothing:
 
 - A login with a link to a person who is not an Admin, or to an Admin who holds each permission, signs in as usual and logs a warning that names the file. To claim the Owner, create the file again and sign in with the new identity.
 - If the Server cannot remove the file, the claim does nothing and the Server logs a warning that names the file. This can occur when the file is immutable or its folder is read-only. The login adds no file and goes on as if no file exists, so a person with a link can sign in and a person with no link gets the usual answer. Make the file and its folder writable for the Server, remove the file, and create it again.
 - A symbolic link or a folder named `claim-owner` is not a claim, also when the link points to a new file. The Server does not follow the link. It logs a warning that names the entry at each login, leaves the entry in place, and the login goes on as if no file exists. Remove the entry and create a regular file.
 - A file with a write time more than 15 minutes from the current time, in either direction, does nothing. The Server logs a warning that names the file. The login goes on as if no file exists.
 
-The Server removes such a file and does not leave it, because a backup restore that does not keep the write time would make a file that stays new again.
+The Server removes a file with such a write time and does not leave it, because a backup restore that does not keep the write time would make a file that stays new again.
 
 ### Delete old development data
 

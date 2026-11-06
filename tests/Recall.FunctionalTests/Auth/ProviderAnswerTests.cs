@@ -209,6 +209,16 @@ public class ProviderAnswerLogTests
     }
 
     [Test]
+    public async Task a_token_answer_over_the_limit_logs_the_limit()
+    {
+        // Act
+        var lines = await LinesOfALoginAsync(new StubLogin(NewSubject()), AnswerFaults.Padded("/token", AnswerFaults.SizeOf(over: true), gzip: false));
+
+        // Assert
+        ShouldNameIt(lines, "token", "over a size limit");
+    }
+
+    [Test]
     public async Task a_token_answer_with_no_id_token_logs_that_and_not_a_refused_code()
     {
         // Act
