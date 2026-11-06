@@ -202,9 +202,11 @@ The Server links that identity to the oldest live Admin of the oldest live tenan
 
 The claim cannot bring back a deleted tenant, so `DELETE /tenants/{id}` gives 409 for the last live tenant. Only a change outside the API can leave an install with no live tenant. In that state, each login gets `signup_closed` and the Server still removes the file. Restore the data directory from a backup.
 
+The claim is also the recovery path for a missing permission. A release can add an Admin permission, and an Admin who exists does not get it. To give it to an Admin who can sign in, create the file and sign in with that login. The Server gives that Admin each Admin permission back, logs a warning that names the file and the user ID, and removes the file.
+
 The first login after you create the file always removes it, also when the claim changes nothing:
 
-- A login with a link signs in as usual and logs a warning that names the file. Create the file again and sign in with the new identity.
+- A login with a link to a person who is not an Admin, or to an Admin who holds each permission, signs in as usual and logs a warning that names the file. To claim the Owner, create the file again and sign in with the new identity.
 - If the Server cannot remove the file, the claim does nothing and the Server logs a warning that names the file. This can occur when the file is immutable or its folder is read-only. The login goes on as if no file exists, so a person with a link can sign in and a person with no link gets the usual answer. Make the file and its folder writable for the Server, remove the file, and create it again.
 - A file with a write time more than 15 minutes from the current time, in either direction, does nothing. The Server logs a warning that names the file. The login goes on as if no file exists.
 

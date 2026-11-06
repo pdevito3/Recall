@@ -435,6 +435,98 @@ public sealed class ProvisionerTests
         held.ShouldBe(Permission.GetAll(), ignoreOrder: true);
     }
 
+    [Test]
+    public async Task a_claim_with_the_linked_login_of_an_admin_gives_back_each_permission()
+    {
+        // Arrange
+        await using var database = await AuthTestDatabase.CreateAsync();
+        var underTest = ProvisionerOf(database.BuildServices());
+        var owner = UserIdOf(await underTest.ResolveAsync(Person("old-subject"), CancellationToken.None));
+        await RemoveTwoPermissionsAsync(database, owner);
+        await File.WriteAllTextAsync(database.ClaimFilePath, "");
+
+        // Act
+        var outcome = await underTest.ResolveAsync(Person("old-subject"), CancellationToken.None);
+
+        // Assert
+        UserIdOf(outcome).ShouldBe(owner);
+        File.Exists(database.ClaimFilePath).ShouldBeFalse();
+        (await HeldPermissionsAsync(database, owner)).ShouldBe(Permission.GetAll(), ignoreOrder: true);
+    }
+
+    [Test]
+    public async Task a_linked_admin_with_no_claim_file_gets_no_permission_back()
+    {
+        // Arrange
+        await using var database = await AuthTestDatabase.CreateAsync();
+        var underTest = ProvisionerOf(database.BuildServices());
+        var owner = UserIdOf(await underTest.ResolveAsync(Person("old-subject"), CancellationToken.None));
+        await RemoveTwoPermissionsAsync(database, owner);
+
+        // Act
+        await underTest.ResolveAsync(Person("old-subject"), CancellationToken.None);
+
+        // Assert
+        (await HeldPermissionsAsync(database, owner)).Count.ShouldBe(Permission.GetAll().Count - 2);
+    }
+
+    [Test]
+    public async Task a_claim_with_the_linked_login_of_a_member_gives_nothing()
+    {
+        // Arrange
+        await using var database = await AuthTestDatabase.CreateAsync();
+        var underTest = ProvisionerOf(database.BuildServices(openSignup: true));
+        await underTest.ResolveAsync(Person("owner"), CancellationToken.None);
+        var member = UserIdOf(await underTest.ResolveAsync(Person("member"), CancellationToken.None));
+        var heldBefore = await HeldPermissionsAsync(database, member);
+        await File.WriteAllTextAsync(database.ClaimFilePath, "");
+
+        // Act
+        var outcome = await underTest.ResolveAsync(Person("member"), CancellationToken.None);
+
+        // Assert
+        UserIdOf(outcome).ShouldBe(member);
+        File.Exists(database.ClaimFilePath).ShouldBeFalse();
+        (await HeldPermissionsAsync(database, member)).ShouldBe(heldBefore, ignoreOrder: true);
+    }
+
+    [Test]
+    public async Task a_linked_claim_holds_the_tenant_lock_so_a_demotion_cannot_run_under_it()
+    {
+        // Arrange
+        await using var database = await AuthTestDatabase.CreateAsync();
+        var plain = database.BuildServices();
+        var owner = UserIdOf(await ProvisionerOf(plain).ResolveAsync(Person("old-subject"), CancellationToken.None));
+        var tenant = await database.ReadAsync(db => db.Users.Where(u => u.Id == owner).Select(u => u.TenantId).SingleAsync());
+        await File.WriteAllTextAsync(database.ClaimFilePath, "");
+        var pause = PauseAtQuery.After("auth.provision.linked_admin");
+        var underTest = ProvisionerOf(database.BuildServices(interceptor: pause));
+
+        // Act
+        var claim = underTest.ResolveAsync(Person("old-subject"), CancellationToken.None);
+        await pause.ReachedAsync();
+        var rival = ExclusiveCountOfLinksAsync(plain, tenant);
+        await pause.WaitUntilBlockedAsync(rival, () => RootLock.Tenant.HasWaiter(tenant));
+        pause.Release();
+
+        // Assert
+        UserIdOf(await claim).ShouldBe(owner);
+        await rival;
+    }
+
+    private static Task<int> RemoveTwoPermissionsAsync(AuthTestDatabase database, string userId)
+        => database.ReadAsync(async db =>
+        {
+            var user = await db.Users.Include(u => u.UserPermissions).SingleAsync(u => u.Id == userId);
+            var lost = user.UserPermissions.Take(2).ToList();
+            lost.ForEach(permission => user.RemovePermission(permission));
+            db.UserPermissions.RemoveRange(lost);
+            return await db.SaveChangesAsync();
+        });
+
+    private static Task<List<Permission>> HeldPermissionsAsync(AuthTestDatabase database, string userId)
+        => database.ReadAsync(db => db.UserPermissions.Where(p => p.UserId == userId).Select(p => p.Permission).ToListAsync());
+
     private static async Task<int> ExclusiveCountOfLinksAsync(IServiceProvider services, string tenantId)
     {
         await using var scope = services.GetRequiredService<IServiceScopeFactory>().CreateSystemScope();
