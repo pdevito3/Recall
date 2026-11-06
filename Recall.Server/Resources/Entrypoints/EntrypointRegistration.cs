@@ -4,6 +4,7 @@ using Auth;
 using Domain.Users;
 using Http;
 using Http.OpenApi;
+using Jobs;
 using Mcp;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
@@ -31,6 +32,7 @@ public static class EntrypointRegistration
 
         // The job dashboard checks an antiforgery token on each write.
         builder.Services.AddAntiforgery();
+        builder.Services.AddExceptionHandler<JobDashboardFaultPage>();
 
         // MCP. The transport is stateless, so each tool call runs in its own HTTP request. Then the
         // HttpContext, the caller, and the tenant scope are the ones of that request.
@@ -51,6 +53,7 @@ public static class EntrypointRegistration
 
     public static void UseEntrypoints(this WebApplication app)
     {
+        app.UseJobDashboardAnswerHeaders();
         app.UseExceptionHandler(new ExceptionHandlerOptions
         {
             StatusCodeSelector = DomainProblemDetails.StatusCodeFor,

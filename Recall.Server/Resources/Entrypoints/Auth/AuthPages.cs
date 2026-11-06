@@ -131,6 +131,14 @@ public static class AuthPages
             + Action("Sign in", $"{AuthRoutes.Login}?returnUrl={Uri.EscapeDataString(returnPath)}")
             + "<p><a href=\"/\">Go to Recall</a></p>");
 
+    public static IResult JobDashboardFault(string tryAgainPath) => Page(
+        StatusCodes.Status500InternalServerError,
+        "The job pages cannot open",
+        "<p>The server could not read the background jobs. The journal still works.</p>"
+            + "<p>To fix this, do the steps in the section The background jobs stopped in <code>docs/troubleshooting.md</code>.</p>"
+            + Action("Try again", tryAgainPath)
+            + "<p><a href=\"/\">Go to Recall</a></p>");
+
     public static string ProviderDown(string displayName) => $"{displayName} is not available. Existing sessions keep working.";
 
     private static string NotAvailable(string displayName) => $"{displayName} is not available.";

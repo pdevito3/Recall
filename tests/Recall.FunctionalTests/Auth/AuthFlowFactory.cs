@@ -37,6 +37,9 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
     /// <summary>A place for the claim file outside the folder of the database, so a test can refuse a rename there and the database still works.</summary>
     public string? ClaimFilePath { get; init; }
 
+    /// <summary>The clock of the server, for a test of a value that the server takes from the clock.</summary>
+    public TimeProvider? Clock { get; init; }
+
     /// <summary>True on the flow of a request to this host. Each host of the process logs through one static logger, so this tells their lines apart.</summary>
     public bool IsInRequest => _inRequest.Value;
 
@@ -86,6 +89,8 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
             services.AddSingleton<OidcHandlerFactory>(options => options.Id == OtherModeId ? OtherProvider! : Provider);
             if (ClaimFilePath is { } claimFile)
                 services.AddSingleton(provider => new OwnerClaim(claimFile, provider.GetRequiredService<TimeProvider>()));
+            if (Clock is { } clock)
+                services.AddSingleton(clock);
             services.AddSingleton<ILogEventSink>(Logs);
             services.AddSingleton<IStartupFilter, ConnectionAddressFilter>();
             services.AddSingleton<IStartupFilter>(new RequestFlowFilter(_inRequest));
