@@ -35,12 +35,11 @@ public class UserSetting : BaseEntity, ITenantable, IJournalOwned
     /// <exception cref="ValidationException">The time zone is not an IANA zone, and it is not the stored zone.</exception>
     public void Change(string? timeZone, bool locationCaptureEnabled, bool requirePeopleProposalApproval, DateTimeOffset claimedSavedAt, DateTimeOffset now)
     {
-        // A client sends the whole row back, so a stored zone that this host does not know must not stop a change of the other settings.
-        var zone = string.IsNullOrWhiteSpace(timeZone) ? null : timeZone == TimeZone ? timeZone : TimeZoneId.Of(timeZone).Value;
-
         if (!claimedSavedAt.IsNewer(SavedAt, FastClaims, now))
             return;
 
+        // A client sends the whole row back, so a stored zone that this host does not know must not stop a change of the other settings.
+        var zone = string.IsNullOrWhiteSpace(timeZone) ? null : timeZone == TimeZone ? timeZone : TimeZoneId.Of(timeZone).Value;
         var savedAt = FastClockClaims.SaveTimeOf(claimedSavedAt, now);
         TimeZone = zone;
         LocationCaptureEnabled = locationCaptureEnabled;

@@ -9,6 +9,7 @@ public class FastClockRetryTests
 {
     private static readonly DateTimeOffset Noon = new(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset Fast = Noon.AddHours(5);
+    private static readonly DateTimeOffset FarFuture = new(2099, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
     private static Session NewSession() => Session.Create("ten_1", "usr_1", "device-1", Noon.AddDays(-1), null, Noon);
 
@@ -206,6 +207,70 @@ public class FastClockRetryTests
 
         // Assert
         session.Activity.ShouldBe("Walking");
+    }
+
+    [Test]
+    [Property("Rule", "SES-26")]
+    public void a_setting_from_a_slightly_fast_clock_wins_after_a_far_future_claim()
+    {
+        // Arrange
+        var setting = NewSetting();
+        setting.Change(null, true, false, FarFuture, Noon);
+
+        // Act
+        setting.Change(null, false, false, Noon.AddMinutes(1).AddMilliseconds(500), Noon.AddMinutes(1));
+
+        // Assert
+        setting.LocationCaptureEnabled.ShouldBeFalse();
+    }
+
+    [Test]
+    [Property("Rule", "SES-21")]
+    public void metadata_from_a_slightly_fast_clock_wins_after_a_far_future_claim()
+    {
+        // Arrange
+        var session = NewSession();
+        session.SetMetadata(Activity("Resting"), FarFuture, Noon);
+
+        // Act
+        session.SetMetadata(Activity("Walking"), Noon.AddMinutes(1).AddMilliseconds(500), Noon.AddMinutes(1));
+
+        // Assert
+        session.Activity.ShouldBe("Walking");
+    }
+
+    [Test]
+    [Property("Rule", "SES-26")]
+    public void a_retry_from_a_slightly_fast_clock_does_not_undo_a_newer_change_after_a_far_future_claim()
+    {
+        // Arrange
+        var setting = NewSetting();
+        setting.Change(null, true, false, FarFuture, Noon);
+        var slightlyFast = Noon.AddMinutes(1).AddMilliseconds(500);
+        setting.Change(null, false, false, slightlyFast, Noon.AddMinutes(1));
+        setting.Change(null, true, false, slightlyFast.AddSeconds(1), Noon.AddMinutes(1).AddSeconds(1));
+
+        // Act
+        setting.Change(null, false, false, slightlyFast, Noon.AddMinutes(1).AddSeconds(2));
+
+        // Assert
+        setting.LocationCaptureEnabled.ShouldBeTrue();
+    }
+
+    [Test]
+    [Property("Rule", "SES-26")]
+    public void a_retry_with_a_zone_that_is_not_valid_now_does_nothing()
+    {
+        // Arrange
+        var setting = NewSetting();
+        setting.Change("Europe/Riga", true, false, Noon, Noon);
+
+        // Act
+        setting.Change("Not/AZone", false, false, Noon, Noon.AddMinutes(1));
+
+        // Assert
+        setting.TimeZone.ShouldBe("Europe/Riga");
+        setting.LocationCaptureEnabled.ShouldBeTrue();
     }
 
     [Test]

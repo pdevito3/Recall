@@ -16,6 +16,8 @@ The metadata of a Session and the settings of a User follow the same save time r
 
 A time in the future gets the time of the server, so a retry of it gets a later time and looks newer than the changes between them. So a row keeps each claimed time that is ahead of its save time, and a retry of one of them does nothing, for any count of newer changes. When the save time passes a claim, the row drops it, because the time compare now refuses it. One high-water mark cannot do this: under the mark, a late retry and a new change from a good clock look the same.
 
+A different change with a time below a kept claim also does nothing, because the server cannot tell it from a queued older change. This applies only to a time more than 5 seconds ahead of the server. A clock that is a little fast is common, and without this allowance one claim from a far future would stop each later change from that clock.
+
 A different change with a time in the future that is below a kept claim also does nothing, because the server cannot tell it from a retry. After the server passes its time, it compares by that time, the same as an offline change from a good clock.
 
 ## Consequences
@@ -24,3 +26,4 @@ A different change with a time in the future that is below a kept claim also doe
 - The clock of a phone can decide a Draft. A slow clock can lose to an older save. The words of that save stay as a Revision, so a person can get them back.
 - Revisions grow with each losing save and each autosave, and nothing prunes them.
 - A row keeps one claim for each change from a fast clock until the server reaches it, so a clock years ahead grows the row of its owner for that time. It has no cap, because a cap lets a retry undo a newer change again.
+- A clock that is more than 5 seconds fast cannot change a row that keeps a later claim until the server reaches its time. The reply is 200 with the stored row, so a client must compare it. Two changes within 5 seconds of the server and sent out of order can apply in the order that they arrive.

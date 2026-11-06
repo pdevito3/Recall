@@ -8,6 +8,9 @@ namespace Recall.Server.Domain.Sessions;
 /// </summary>
 public static class FastClockClaims
 {
+    // A clock a little ahead is common. It must still save behind a claim from a far future, and a kept claim still stops its retry.
+    private static readonly TimeSpan SkewAllowance = TimeSpan.FromSeconds(5);
+
     public static DateTimeOffset SaveTimeOf(DateTimeOffset claimed, DateTimeOffset now)
     {
         var time = claimed < now ? claimed : now;
@@ -16,7 +19,7 @@ public static class FastClockClaims
 
     public static bool IsNewer(this DateTimeOffset claimed, DateTimeOffset? savedAt, IReadOnlyList<long> claims, DateTimeOffset now)
     {
-        var fastAndOlder = claimed > now && claims.Any(claim => claim > claimed.UtcTicks);
+        var fastAndOlder = claimed > now + SkewAllowance && claims.Any(claim => claim > claimed.UtcTicks);
         return !fastAndOlder && !claims.Contains(claimed.UtcTicks) && (savedAt is null || SaveTimeOf(claimed, now) > savedAt);
     }
 
