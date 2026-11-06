@@ -179,14 +179,16 @@ public class AuthRefusalTests
     }
 
     [Test]
-    public async Task a_token_answer_with_a_charset_that_is_not_known_is_refused()
+    [Arguments("bogus")]
+    [Arguments("utf-7")]
+    public async Task a_token_answer_with_a_charset_that_cannot_be_read_is_refused(string charset)
     {
         // Arrange
         using var browser = NewBrowser();
         var authorize = await browser.StartWebAsync();
 
         // Act
-        var response = await browser.FinishAtProviderAsync(authorize, new StubLogin(NewSubject()) { TokenCharset = "bogus" });
+        var response = await browser.FinishAtProviderAsync(authorize, new StubLogin(NewSubject()) { TokenCharset = charset });
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -195,14 +197,16 @@ public class AuthRefusalTests
     }
 
     [Test]
-    public async Task a_userinfo_answer_with_a_charset_that_is_not_known_leaves_the_login_on_the_id_token()
+    [Arguments("bogus")]
+    [Arguments("utf-7")]
+    public async Task a_userinfo_answer_with_a_charset_that_cannot_be_read_leaves_the_login_on_the_id_token(string charset)
     {
         // Arrange
         using var browser = NewBrowser();
         var authorize = await browser.StartWebAsync();
 
         // Act
-        var response = await browser.FinishAtProviderAsync(authorize, new StubLogin(NewSubject()) { UserinfoCharset = "bogus" });
+        var response = await browser.FinishAtProviderAsync(authorize, new StubLogin(NewSubject()) { UserinfoCharset = charset });
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Redirect);

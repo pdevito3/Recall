@@ -16,12 +16,18 @@ public static class AuthHosts
 
     public static AuthFlowFactory Sweep { get; private set; } = null!;
 
+    public static AuthFlowFactory TwoProviders { get; private set; } = null!;
+
     public static void Start()
     {
         Open = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
         Closed = Start(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts });
         Limited = Start(new Dictionary<string, string?> { ["AllowedHosts"] = "localhost" });
         Failing = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
+        TwoProviders = Start(new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts })
+        {
+            OtherProvider = new StubOidcProvider(AuthFlowFactory.OtherIssuer),
+        });
 
         var main = Log.Logger;
         Sweep = new AuthFlowFactory(new Dictionary<string, string?>
@@ -41,17 +47,18 @@ public static class AuthHosts
 
     public static async Task StopAsync()
     {
-        foreach (var host in new[] { Open, Closed, Limited, Failing, Sweep })
+        foreach (var host in new[] { Open, Closed, Limited, Failing, TwoProviders, Sweep })
         {
             if (host is not null)
                 await host.DisposeAsync();
         }
     }
 
-    private static AuthFlowFactory Start(Dictionary<string, string?> settings)
+    private static AuthFlowFactory Start(Dictionary<string, string?> settings) => Start(new AuthFlowFactory(settings));
+
+    private static AuthFlowFactory Start(AuthFlowFactory host)
     {
         var main = Log.Logger;
-        var host = new AuthFlowFactory(settings);
         _ = host.Services;
         Log.Logger = main;
         return host;

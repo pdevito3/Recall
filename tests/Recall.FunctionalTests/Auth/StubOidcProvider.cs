@@ -60,15 +60,22 @@ public sealed class StubOidcProvider : HttpMessageHandler
     private readonly ConcurrentDictionary<string, (AuthorizeRequest Request, StubLogin Login)> _codes = new();
     private readonly ConcurrentDictionary<string, StubLogin> _accessTokens = new();
     private readonly ConcurrentQueue<string> _handedOut = new();
+    private readonly string _issuer;
 
-    public StubOidcProvider()
+    public StubOidcProvider(string issuer = Issuer)
     {
+        _issuer = issuer;
+
         // RSA.Create makes the pair at its first use. On macOS two threads that race for that use can each make a pair.
         _ = _signingKey.Rsa.ExportParameters(false);
         _ = _otherKey.Rsa.ExportParameters(false);
     }
 
     public string ClientSecret { get; } = Secrets.New();
+
+    public string? DiscoveryCharset { get; set; }
+
+    public string? JwksCharset { get; set; }
 
     public bool Down { get; set; }
 
@@ -114,7 +121,7 @@ public sealed class StubOidcProvider : HttpMessageHandler
         return request.RequestUri!.AbsolutePath switch
         {
             "/.well-known/openid-configuration" => Discovery(),
-            "/jwks" => Json(new Dictionary<string, object> { ["keys"] = new[] { Jwk(), HmacJwk() } }),
+            "/jwks" => WithCharset(JwksCharset, Json(new Dictionary<string, object> { ["keys"] = new[] { Jwk(), HmacJwk() } })),
             "/token" => await TokenAsync(request, cancellationToken),
             "/userinfo" => Userinfo(request),
             _ => new HttpResponseMessage(HttpStatusCode.NotFound),
@@ -125,17 +132,17 @@ public sealed class StubOidcProvider : HttpMessageHandler
     {
         var body = new Dictionary<string, object>
         {
-            ["issuer"] = Issuer,
-            ["authorization_endpoint"] = $"{Issuer}/authorize",
-            ["token_endpoint"] = $"{Issuer}/token",
-            ["jwks_uri"] = $"{Issuer}/jwks",
-            ["userinfo_endpoint"] = $"{Issuer}/userinfo",
+            ["issuer"] = _issuer,
+            ["authorization_endpoint"] = $"{_issuer}/authorize",
+            ["token_endpoint"] = $"{_issuer}/token",
+            ["jwks_uri"] = $"{_issuer}/jwks",
+            ["userinfo_endpoint"] = $"{_issuer}/userinfo",
             ["token_endpoint_auth_methods_supported"] = AuthMethods,
             ["authorization_response_iss_parameter_supported"] = true,
         };
         if (PromptValues is { } values)
             body["prompt_values_supported"] = values;
-        return Json(body);
+        return WithCharset(DiscoveryCharset, Json(body));
     }
 
     private Dictionary<string, string> Jwk()
@@ -175,7 +182,7 @@ public sealed class StubOidcProvider : HttpMessageHandler
         var issuedAt = expires < now ? expires.AddMinutes(-5) : now;
         return new JsonWebTokenHandler { SetDefaultTimesOnTokenCreation = false }.CreateToken(new SecurityTokenDescriptor
         {
-            Issuer = login.IdTokenIssuer ?? Issuer,
+            Issuer = login.IdTokenIssuer ?? _issuer,
             Audience = login.IdTokenAudiences is null ? ClientId : null,
             IssuedAt = issuedAt,
             NotBefore = issuedAt,

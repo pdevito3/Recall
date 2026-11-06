@@ -176,7 +176,9 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
             if (tokens is not { IdToken: { } idToken })
                 return Refuse("the token endpoint refused the code");
 
-            var keys = new JsonWebKeySet(await _http.GetStringAsync(discovery.JwksUri, cancellationToken));
+            using var jwks = await _http.GetAsync(discovery.JwksUri, cancellationToken);
+            jwks.EnsureSuccessStatusCode();
+            var keys = await ReadAnswerAsync(jwks, text => new JsonWebKeySet(text).GetSigningKeys(), cancellationToken);
             return await IdentityOfAsync(discovery, attempt, idToken, tokens.AccessToken, keys, cancellationToken);
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
@@ -184,12 +186,29 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
             _logger.Here().Warning("Provider {ModeId} stopped answering during a login", Id);
             return RedeemResult.Failed(LoginFailure.IdpUnreachable);
         }
-        // A charset that .NET does not know fails the read with InvalidOperationException.
-        catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException)
+        catch (NotValidAnswerException)
         {
             return Refuse("the provider sent a body that is not valid");
         }
     }
+
+    /// <summary>
+    /// Each body of a provider comes through here. The provider chooses the charset and the bytes, and the read and the parsers fail
+    /// with many types, so each such failure leaves here as one type and no caller lists them.
+    /// </summary>
+    private static async Task<T> ReadAnswerAsync<T>(HttpResponseMessage response, Func<string, T> parse, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return parse(await response.Content.ReadAsStringAsync(cancellationToken));
+        }
+        catch (Exception exception) when (exception is not (HttpRequestException or OperationCanceledException))
+        {
+            throw new NotValidAnswerException(exception);
+        }
+    }
+
+    private sealed class NotValidAnswerException(Exception cause) : Exception(null, cause);
 
     private RedeemResult Refuse(string reason)
     {
@@ -210,14 +229,14 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
                 return null;
             }
 
-            var discovery = ParseDiscovery(await response.Content.ReadAsStringAsync(timeout.Token));
+            var discovery = await ReadAnswerAsync(response, ParseDiscovery, timeout.Token);
             if (discovery is null)
                 _logger.Here().Warning("Provider {ModeId} sent a discovery document that this server does not accept", Id);
             return discovery;
         }
-        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or NotValidAnswerException)
         {
-            _logger.Here().Warning("Provider {ModeId} did not answer discovery: {Failure}", Id, exception.GetType().Name);
+            _logger.Here().Warning("Provider {ModeId} did not answer discovery: {Failure}", Id, exception.GetBaseException().GetType().Name);
             return null;
         }
     }
@@ -300,18 +319,18 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
         if (!response.IsSuccessStatusCode)
             return null;
 
-        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+        using var body = await ReadAnswerAsync(response, text => JsonDocument.Parse(text), cancellationToken);
         return new ProviderTokens(Text(body.RootElement, "id_token"), Text(body.RootElement, "access_token"));
     }
 
     private async Task<RedeemResult> IdentityOfAsync(
-        OidcDiscovery discovery, LoginAttempt attempt, string idToken, string? accessToken, JsonWebKeySet keys, CancellationToken cancellationToken)
+        OidcDiscovery discovery, LoginAttempt attempt, string idToken, string? accessToken, IList<SecurityKey> keys, CancellationToken cancellationToken)
     {
         var validation = await new JsonWebTokenHandler().ValidateTokenAsync(idToken, new TokenValidationParameters
         {
             ValidIssuer = discovery.Issuer,
             ValidAudience = _provider.ClientId,
-            IssuerSigningKeys = keys.GetSigningKeys(),
+            IssuerSigningKeys = keys,
             ValidAlgorithms = AllowedAlgorithms,
             RequireExpirationTime = true,
             RequireSignedTokens = true,
@@ -368,7 +387,7 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
             if (!response.IsSuccessStatusCode)
                 return UserinfoSubject.NotDifferent;
 
-            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+            using var body = await ReadAnswerAsync(response, text => JsonDocument.Parse(text), cancellationToken);
             var root = body.RootElement;
             if (root.ValueKind != JsonValueKind.Object)
                 return UserinfoSubject.NotDifferent;
@@ -385,7 +404,7 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
 
             return UserinfoSubject.NotDifferent;
         }
-        catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidOperationException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
+        catch (Exception exception) when (exception is HttpRequestException or NotValidAnswerException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
         {
             return UserinfoSubject.NotDifferent;
         }
