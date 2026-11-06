@@ -108,7 +108,7 @@ public static class AuthEndpoints
     private static AuthRedirect SignedOutReturn(HttpContext http, string? state)
     {
         if (state is not null && SessionCookie.PendingProviderLogoutOf(http.Request)?.State == state)
-            SessionCookie.MarkSignedOut(http.Response, http.Request, pending: null);
+            SessionCookie.MarkSignedOut(http.Response, http.Request);
         return new AuthRedirect($"{AuthRoutes.Login}?signedOut=1");
     }
 
@@ -196,15 +196,22 @@ public static class AuthEndpoints
         var mode = modes.FindOidc(await store.LoginModeOfWebSessionEvenIfEndedAsync(TokenHash.Of(cookie), cancellationToken));
         if (mode is null)
         {
-            SessionCookie.MarkSignedOut(http.Response, request, pending: null);
+            SessionCookie.MarkSignedOut(http.Response, request);
             return Results.NoContent();
         }
 
-        var state = Secrets.New();
-        SessionCookie.MarkSignedOut(http.Response, request, new SessionCookie.PendingProviderLogout(mode.Id, state));
-        return await mode.ProviderLogoutUrlAsync(SignedOutUrlOf(request), state, cancellationToken) is { } providerLogoutUrl
-            ? Results.Json(new LogoutAnswer(providerLogoutUrl))
-            : Results.NoContent();
+        var pending = new SessionCookie.PendingProviderLogout(mode.Id, Secrets.New());
+        // The two calls share one discovery while it runs, so a provider that is down costs one timeout and they read the same answer.
+        var probe = mode.ProbeAsync(cancellationToken);
+        var providerLogoutUrl = await mode.ProviderLogoutUrlAsync(SignedOutUrlOf(request), pending.State, cancellationToken);
+        if (providerLogoutUrl is null && await probe == LoginModeState.Ready)
+        {
+            SessionCookie.MarkProviderSessionStays(http.Response, request, pending);
+            return Results.NoContent();
+        }
+
+        SessionCookie.MarkProviderLogoutUnfinished(http.Response, request, pending);
+        return providerLogoutUrl is null ? Results.NoContent() : Results.Json(new LogoutAnswer(providerLogoutUrl));
     }
 
     private static async Task<IResult> RevokeOthersAsync(HttpContext http, SessionStore store, CancellationToken cancellationToken)

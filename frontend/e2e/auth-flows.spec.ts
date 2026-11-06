@@ -99,7 +99,7 @@ test.describe(`Auth Flows - ${currentIdp.name}`, () => {
 
       if (currentIdp.logoutConfirmSelector) await page.locator(currentIdp.logoutConfirmSelector).click({ timeout: 30000 })
       if (currentIdp.logoutStaysAtProvider) {
-        await page.waitForURL((url) => url.origin !== appOrigin, { timeout: 30000 })
+        await page.waitForURL((url) => url.origin !== appOrigin, { timeout: 30000, waitUntil: 'commit' })
         await page.goto(new URL('/auth/login?signedOut=1', appOrigin).toString())
       }
       await page.waitForURL((url) => url.pathname === '/auth/login' && url.searchParams.get('signedOut') === '1', { timeout: 30000 })

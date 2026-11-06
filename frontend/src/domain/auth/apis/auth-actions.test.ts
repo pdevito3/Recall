@@ -88,6 +88,17 @@ describe('a login after a sign-out', () => {
     expect(replace).toHaveBeenCalledExactlyOnceWith(providerLogoutUrl)
   })
 
+  it('keeps the way to the logout of the provider after a second click, which has no session left to name a provider', async () => {
+    const { replace, logout, post } = await freshActions()
+    post.mockResolvedValueOnce({ status: 200, data: { provider_logout_url: providerLogoutUrl } })
+
+    await logout()
+    await logout()
+
+    expect(replace).toHaveBeenCalledTimes(2)
+    expect(replace).toHaveBeenLastCalledWith(providerLogoutUrl)
+  })
+
   it('waits for the answer of a running logout, because a login now would lose it', async () => {
     const { replace, login, logout, post } = await freshActions()
     let resolve!: (answer: unknown) => void

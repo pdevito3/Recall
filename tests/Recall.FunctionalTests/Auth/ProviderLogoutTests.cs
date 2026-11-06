@@ -31,6 +31,9 @@ public class ProviderLogoutTests
         return await browser.GetAsync($"/auth/signed-out?state={url[ProviderLogoutUrlBeforeItsState.Length..]}");
     }
 
+    private static void ShouldLiveFor(string mark, int seconds)
+        => mark.Split(';', StringSplitOptions.TrimEntries).ShouldContain(part => part.Equals($"max-age={seconds}", StringComparison.OrdinalIgnoreCase));
+
     [Test]
     public async Task a_browser_logout_ends_the_session_and_answers_the_logout_url_of_its_provider()
     {
@@ -92,7 +95,7 @@ public class ProviderLogoutTests
         var mark = browser.SetCookieLines.Last();
         mark.ShouldStartWith("recall_signed_out=");
         mark.ShouldContain("samesite=lax", Case.Insensitive);
-        mark.ShouldContain("max-age=2592000", Case.Insensitive);
+        ShouldLiveFor(mark, 2592000);
         mark.ShouldContain("httponly", Case.Insensitive);
     }
 
@@ -132,7 +135,7 @@ public class ProviderLogoutTests
         var page = await browser.GetAsync(back.Headers.Location!.OriginalString);
 
         // Assert
-        finishedMark.ShouldContain("max-age=60", Case.Insensitive);
+        ShouldLiveFor(finishedMark, 60);
         back.StatusCode.ShouldBe(HttpStatusCode.Redirect);
         back.Headers.Location!.OriginalString.ShouldBe(SignedOutPage);
         page.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -269,10 +272,12 @@ public class ProviderLogoutTests
 
         // Act
         var logout = await LogoutAsync(browser);
+        var mark = browser.SetCookieLines.Last();
         var page = await browser.GetAsync(SignedOutPage);
         var plainVisit = await browser.GetAsync("/auth/login?returnUrl=%2Fentries");
 
         // Assert
+        ShouldLiveFor(mark, 60);
         logout.StatusCode.ShouldBe(HttpStatusCode.NoContent);
         browser.SessionCookie.ShouldBeNull();
         page.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -300,12 +305,14 @@ public class ProviderLogoutTests
 
             // Act
             var logout = await LogoutAsync(browser);
+            var mark = browser.SetCookieLines.Last();
             var page = await browser.GetAsync(SignedOutPage);
             var tryAgain = await browser.GetAsync("/auth/login?returnUrl=%2F");
             browser.SetCookie(browser.SessionCookieName, session);
             var me = await browser.GetAsync("/auth/me", csrf: true);
 
             // Assert
+            ShouldLiveFor(mark, 2592000);
             logout.StatusCode.ShouldBe(HttpStatusCode.NoContent);
             me.StatusCode.ShouldBe(HttpStatusCode.NoContent);
             page.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);

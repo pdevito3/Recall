@@ -146,8 +146,8 @@ A session makes no call to the provider. So a web or native session keeps workin
 | `recall`, on http | `HttpOnly`, `SameSite=Strict`, `Path=/` | The same |
 | `__Host-recall_login_{8 hex}`, on TLS | `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, 10 minutes | The binding of one login attempt |
 | `recall_login_{8 hex}`, on http | `HttpOnly`, `SameSite=Lax`, `Path=/auth/oidc`, 10 minutes | The same |
-| `__Host-recall_signed_out`, on TLS | `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, 30 days until the provider returns, then 60 seconds | The mark of a sign-out that this browser finished |
-| `recall_signed_out`, on http | `HttpOnly`, `SameSite=Lax`, `Path=/`, 30 days until the provider returns, then 60 seconds | The same |
+| `__Host-recall_signed_out`, on TLS | `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, 30 days until the provider returns, then 60 seconds. 60 seconds with a provider that has no `end_session_endpoint` | The mark of a sign-out that this browser finished |
+| `recall_signed_out`, on http | `HttpOnly`, `SameSite=Lax`, `Path=/`, 30 days until the provider returns, then 60 seconds. 60 seconds with a provider that has no `end_session_endpoint` | The same |
 
 The binding cookie is `Lax` because the provider redirects with a cross-site GET. On https, the Server reads only `__Host-recall`, so a `recall` cookie from a plain http neighbor has no effect.
 
@@ -173,7 +173,7 @@ A response tells what happened:
 
 `/auth/login?signedOut=1` starts nothing with no click. It says `You are signed out` only with the mark, so a link from another site cannot make it say that. A live session at this URL goes to the return path.
 
-The mark is `SameSite=Lax`, because a provider on another site returns with a cross-site GET. It lives 30 days until the provider returns, so that a person who closes the confirm page of a provider does not sign in again with no click on a later visit. After the return, it lives 60 seconds. A new login deletes it, so a link cannot show the signed-out page next to a live session. The session cookie stays `Strict`.
+The mark is `SameSite=Lax`, because a provider on another site returns with a cross-site GET. It lives 30 days until the provider returns, so that a person who closes the confirm page of a provider does not sign in again with no click on a later visit. After the return, it lives 60 seconds. A provider with no `end_session_endpoint` cannot return, so its mark also lives 60 seconds. A new login deletes it, so a link cannot show the signed-out page next to a live session. The session cookie stays `Strict`.
 
 ### The session at the provider
 
@@ -183,8 +183,8 @@ The mark holds the login mode and a new random `state` until the provider return
 |---|---|---|
 | The provider returned | `You are signed out`, with no note | Goes to the provider, which has no session and asks for a password |
 | The provider has the endpoint and did not return, for example the person left its confirm page, or the provider refused the return URL | `You are signed out`, says that the session there can still be open, and links to `Sign out of {provider}` | Shows the same page and starts nothing, until the mark ends |
-| The provider did not answer | `You are signed out`, says that the session there can still be open, and `Wait a few minutes, then try again`. | Shows the same page. `Try again` finds the link when the provider is back |
-| The provider has no endpoint | `You are signed out`, says that the session there stays open, and tells the person to sign out on the site of the provider or to delete the cookies of this browser | Goes to the provider, which signs the same person in again with no password |
+| The provider did not answer | `You are signed out`, says that the session there can still be open, and `Wait a few minutes, then try again`. | Shows the same page. `Try again` finds the link when the provider is back. If another provider is ready, the page has its button and no `Try again`, and a reload finds the link |
+| The provider has no endpoint | `You are signed out`, says that the session there stays open, and tells the person to sign out on the site of the provider or to delete the cookies of this browser | Goes to the provider, which signs the same person in again with no password. With more than one provider, the page shows the note until the mark ends, then the usual sign-in page |
 
 `/auth/signed-out` redirects only to the signed-out page, and the return URL that the Server sends to the provider is the origin of the request plus that path. So neither is an open redirect. The provider also checks the URL against its own list.
 
@@ -272,7 +272,7 @@ The redirect URI is that origin plus `/auth/oidc/callback`. The Server stores it
 
 Register the callback URL of each origin at the provider. `/auth/status` gives the URL of the origin that you call.
 
-If the provider has an `end_session_endpoint`, also register `/auth/signed-out` of each origin as a post-logout redirect URI, for example `https://recall.example.com/auth/signed-out`. In Keycloak, this is `Valid post logout redirect URIs` of the client. Without it, Keycloak refuses the logout: the Recall session ends, the session at Keycloak stays, and the person sees the error page of Keycloak. So do this before you upgrade from a version with no provider logout. Recall cannot see the answer that the provider gives to the browser.
+If the provider has an `end_session_endpoint`, also register `/auth/signed-out` of each origin as a post-logout redirect URI, for example `https://recall.example.com/auth/signed-out`. In Keycloak, this is `Valid post logout redirect URIs` of the client. Without it, Keycloak refuses the logout: the Recall session ends, the session at Keycloak stays, and the person sees the error page of Keycloak. So do this before you upgrade from a version with no provider logout. Recall cannot see the answer that the provider gives to the browser. Authentik is the exception: do not register a return URL there, as [The session at the provider](#the-session-at-the-provider) says.
 
 Do not register a wildcard redirect. The Server holds the verifier and the client secret, so the Server can redeem a stolen code. A wildcard at the provider and a forged `Host` then give an attacker a session. An exact match at the provider stops that. To stop it also at the Server, set `AllowedHosts` to your host names. A request with another `Host` then gets a 400.
 

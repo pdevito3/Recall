@@ -40,7 +40,7 @@ export async function logout(): Promise<void> {
   logoutInFlight = answer
   try {
     const { data } = await answer
-    afterSignOut = data?.provider_logout_url ?? signedOutPage
+    afterSignOut = data?.provider_logout_url ?? afterSignOut ?? signedOutPage
     window.location.replace(afterSignOut)
   } finally {
     logoutInFlight = undefined

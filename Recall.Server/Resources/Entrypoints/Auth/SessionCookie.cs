@@ -13,8 +13,8 @@ public static class SessionCookie
     private const string ProviderSessionFinished = "1";
     private const string ProviderSessionOpenPrefix = "open:";
 
-    private static readonly TimeSpan FinishedMarkLifetime = TimeSpan.FromSeconds(60);
-    private static readonly TimeSpan UnfinishedProviderLogoutMarkLifetime = TimeSpan.FromDays(30);
+    private static readonly TimeSpan NoProviderReturnToWaitForLifetime = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan UnfinishedProviderLogoutLifetime = TimeSpan.FromDays(30);
 
     public static string NameFor(HttpRequest request) => request.IsHttps ? SecureName : PlainName;
 
@@ -26,15 +26,25 @@ public static class SessionCookie
     public static void Clear(HttpResponse response, HttpRequest request)
         => response.Cookies.Delete(NameFor(request), Options(request, null));
 
-    public static void MarkSignedOut(HttpResponse response, HttpRequest request, PendingProviderLogout? pending)
+    public static void MarkSignedOut(HttpResponse response, HttpRequest request)
+        => AppendMark(response, request, ProviderSessionFinished, NoProviderReturnToWaitForLifetime);
+
+    public static void MarkProviderSessionStays(HttpResponse response, HttpRequest request, PendingProviderLogout open)
+        => AppendMark(response, request, OpenValueOf(open), NoProviderReturnToWaitForLifetime);
+
+    public static void MarkProviderLogoutUnfinished(HttpResponse response, HttpRequest request, PendingProviderLogout pending)
+        => AppendMark(response, request, OpenValueOf(pending), UnfinishedProviderLogoutLifetime);
+
+    private static void AppendMark(HttpResponse response, HttpRequest request, string value, TimeSpan lifetime)
     {
         var options = Options(request, null);
-        options.MaxAge = pending is null ? FinishedMarkLifetime : UnfinishedProviderLogoutMarkLifetime;
+        options.MaxAge = lifetime;
         // A provider returns with a cross-site GET, so this mark is Lax where the session cookie is Strict.
         options.SameSite = SameSiteMode.Lax;
-        var value = pending is null ? ProviderSessionFinished : $"{ProviderSessionOpenPrefix}{pending.State}:{pending.ModeId}";
         response.Cookies.Append(SignedOutNameFor(request), value, options);
     }
+
+    private static string OpenValueOf(PendingProviderLogout pending) => $"{ProviderSessionOpenPrefix}{pending.State}:{pending.ModeId}";
 
     public static void ClearSignedOutMark(HttpResponse response, HttpRequest request)
         => response.Cookies.Delete(SignedOutNameFor(request), Options(request, null));
