@@ -106,6 +106,11 @@ apiClient.interceptors.response.use(
       return Promise.reject(error)
     }
 
+    // A download asks for a blob, so its Problem Details arrive as one
+    if (error.response?.data instanceof Blob && error.response.data.type.includes('json')) {
+      error.response.data = JSON.parse(await error.response.data.text())
+    }
+
     // Convert to appropriate error type
     const processedError = handleErrorResponse(error)
 
