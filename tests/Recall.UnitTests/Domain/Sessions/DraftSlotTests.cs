@@ -5,6 +5,22 @@ using Shouldly;
 
 public class DraftSlotTests
 {
+    [Test]
+    public void a_save_that_misses_a_transcript_loses_at_any_time_and_stays_as_a_revision()
+    {
+        // Arrange
+        var slot = new DraftSlot("heard words", 6, 6, new DateTimeOffset(2026, 6, 1, 12, 0, 0, TimeSpan.Zero));
+        var save = DraftSave.Of("old copy", 5, new DateTimeOffset(2026, 6, 1, 13, 0, 0, TimeSpan.Zero), new DateTimeOffset(2026, 6, 1, 14, 0, 0, TimeSpan.Zero));
+
+        // Act
+        var decision = slot.Decide(save, isReplay: false, missesTranscript: true);
+
+        // Assert
+        decision.Outcome.ShouldBe(DraftSaveOutcome.Lost);
+        decision.Next.Text.ShouldBe("heard words");
+        decision.MintedRevision.ShouldBe(7);
+    }
+
     private static readonly DateTimeOffset Noon = new(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset Now = Noon.AddDays(1);
 

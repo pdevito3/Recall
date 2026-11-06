@@ -1105,6 +1105,577 @@
         }
       }
     },
+    "/api/v1/sessions/{id}/recordings": {
+      "post": {
+        "tags": [
+          "Recordings"
+        ],
+        "summary": "Starts a Recording in a Session of the caller, or returns the one that has this client recording ID. The first create\ngives 201 and a replay gives 200, so a device can send it again after a lost response.",
+        "operationId": "AddRecording",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordingForCreationDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingDto"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Recordings"
+        ],
+        "summary": "Lists the Recordings of a Session of the caller. Read one Recording to get its stored slices.",
+        "operationId": "GetSessionRecordings",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RecordingDto"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/recordings/{id}": {
+      "delete": {
+        "tags": [
+          "Recordings"
+        ],
+        "summary": "Deletes a Recording of the caller and its audio. Text that is saved in the Session stays.",
+        "operationId": "DeleteRecording",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Recordings"
+        ],
+        "summary": "Gets a Recording of the caller, with its status and, when it has no text, the reason.",
+        "operationId": "GetRecording",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/recordings/{id}/finish": {
+      "post": {
+        "tags": [
+          "Recordings"
+        ],
+        "summary": "Ends the upload and queues the work that makes the text. A gap in the slices gives 409, and the slices stay, so a\nclient can read `storedSlices`, send what is missing, and finish again. A second finish gives the same answer.",
+        "operationId": "FinishRecording",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordingFinishDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/recordings/{id}/files/{name}": {
+      "get": {
+        "tags": [
+          "Recordings"
+        ],
+        "summary": "Downloads the audio of a Recording of the caller, as an attachment. A range request is allowed.",
+        "operationId": "GetRecordingFile",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "audio/webm": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stream"
+                }
+              },
+              "audio/mp4": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stream"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/recordings/status": {
+      "get": {
+        "tags": [
+          "Recordings"
+        ],
+        "summary": "Says if the work behind all audio runs, and what to do when it does not. The capture page shows this.",
+        "operationId": "GetTranscriptionStatus",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscriptionStatusDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/recordings/{id}/retry": {
+      "post": {
+        "tags": [
+          "Recordings"
+        ],
+        "summary": "Queues a Recording that failed or that still waits for its text. It goes on after the text that is saved, so no text repeats.",
+        "operationId": "RetryRecording",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/recordings/{id}/slices/{index}": {
+      "put": {
+        "tags": [
+          "Recordings"
+        ],
+        "summary": "Stores one slice of the audio. A repeat with the same bytes gives the same answer, and slices can come in any order.\nA slice that has other bytes than the stored one gives 409, because a stored slice does not change.",
+        "operationId": "StoreRecordingSlice",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "byte"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingSliceDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
     "/api/v1/sessions": {
       "post": {
         "tags": [
@@ -3920,6 +4491,195 @@
           }
         }
       },
+      "RecordingDto": {
+        "required": [
+          "id",
+          "sessionId",
+          "clientRecordingId",
+          "format",
+          "engine",
+          "status",
+          "problem",
+          "storedSlices",
+          "byteLength",
+          "transcribedMs",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "clientRecordingId": {
+            "type": "string"
+          },
+          "format": {
+            "enum": [
+              "Webm",
+              "Mp4"
+            ],
+            "type": "string"
+          },
+          "engine": {
+            "enum": [
+              "Local"
+            ],
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "Receiving",
+              "Received",
+              "Transcribing",
+              "Transcribed",
+              "Failed"
+            ],
+            "type": "string"
+          },
+          "problem": {
+            "enum": [
+              "None",
+              "WaitingForModel",
+              "AudioUnreadable",
+              "AudioMissing",
+              "OutOfMemory",
+              "EngineCrashed",
+              "EngineStalled",
+              "EngineNotInstalled",
+              "TooManyAttempts",
+              "TooLong",
+              "TextTooLong",
+              "NoWordsFound"
+            ],
+            "type": "string"
+          },
+          "problemText": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "What happened and what to do, for a person. Null when nothing is wrong."
+          },
+          "highestStoredSlice": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "storedSlices": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "The indexes that are stored, so that a client can send the ones that a broken upload lost."
+          },
+          "byteLength": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "durationMs": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "transcribedMs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "audioFileName": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The name for the file route. Null while the upload runs and after the audio is gone."
+          },
+          "audioKeptUntil": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      },
+      "RecordingFinishDto": {
+        "required": [
+          "sliceCount",
+          "byteLength"
+        ],
+        "type": "object",
+        "properties": {
+          "sliceCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "byteLength": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "RecordingForCreationDto": {
+        "required": [
+          "clientRecordingId",
+          "format"
+        ],
+        "type": "object",
+        "properties": {
+          "clientRecordingId": {
+            "maxLength": 100,
+            "type": "string",
+            "description": "The ID that the device made for this Recording. A second create with this ID returns the same Recording."
+          },
+          "format": {
+            "enum": [
+              "Webm",
+              "Mp4"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "RecordingSliceDto": {
+        "required": [
+          "index",
+          "byteLength",
+          "sha256"
+        ],
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "byteLength": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "highestStoredSlice": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "RevisionDto": {
         "required": [
           "number",
@@ -4472,6 +5232,42 @@
           }
         }
       },
+      "TranscriptionStatusDto": {
+        "required": [
+          "jobsStopped",
+          "model"
+        ],
+        "type": "object",
+        "properties": {
+          "jobsStopped": {
+            "type": "boolean"
+          },
+          "jobsStoppedText": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "What it means and what to do, when the jobs stopped. It names no fault."
+          },
+          "model": {
+            "enum": [
+              "Missing",
+              "Downloading",
+              "Ready",
+              "DownloadFailed",
+              "HashRejected"
+            ],
+            "type": "string"
+          },
+          "modelText": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "What a person needs to know about the work behind all audio, whatever the Recording."
+      },
       "UpdateUserRoleDto": {
         "required": [
           "role"
@@ -4810,6 +5606,9 @@
     },
     {
       "name": "People"
+    },
+    {
+      "name": "Recordings"
     },
     {
       "name": "Sessions"

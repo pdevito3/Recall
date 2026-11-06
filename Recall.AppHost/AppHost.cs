@@ -47,6 +47,7 @@ try
         var dataDirectory = builder.DataDirectory();
         server.WithEnvironment("ConnectionStrings__appdb", $"Data Source={Path.Combine(dataDirectory, "recall.db")}");
         server.WithEnvironment("FileStore__Root", Path.Combine(dataDirectory, "files"));
+        server.WithEnvironment("Transcription__ModelRoot", Path.Combine(dataDirectory, "models"));
         if (builder.Configuration["SpaBuild"] is { Length: > 0 } spaBuild)
             server.WithEnvironment("ASPNETCORE_WEBROOT", Path.GetFullPath(spaBuild));
     }

@@ -42,7 +42,7 @@ public sealed class PermissionGuard(
             CallerIdentity.MachineAgent agent => await LoadGrantAsync(agent.AgentId, cancellationToken) is { } grant
                 ? new Caller.MachineAgent(agent.ClientId, grant)
                 : new Caller.Outsider(OutsiderKind.UnknownClient),
-            CallerIdentity.UnknownClient => new Caller.Outsider(OutsiderKind.UnknownClient),
+            CallerIdentity.JournalWork or CallerIdentity.UnknownClient => new Caller.Outsider(OutsiderKind.UnknownClient),
             CallerIdentity.Anonymous => new Caller.Outsider(OutsiderKind.Anonymous),
             _ => throw new UnreachableException(),
         };
