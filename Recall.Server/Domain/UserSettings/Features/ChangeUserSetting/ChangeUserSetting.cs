@@ -23,6 +23,7 @@ public static class ChangeUserSetting
             var dto = request.Dto;
             Activity.Current?.SetTag("app.user_id", owner.UserId);
 
+            var applied = false;
             var setting = await RootLock.Tenant.RunSharedAsync(dbContext, owner.TenantId, async ct =>
             {
                 var row = await dbContext.UserSettings
@@ -34,12 +35,12 @@ public static class ChangeUserSetting
                     await dbContext.UserSettings.AddAsync(row, ct);
                 }
 
-                row.Change(dto.TimeZone, dto.LocationCaptureEnabled, dto.RequirePeopleProposalApproval, dto.SavedAt, timeProvider.GetUtcNow());
+                applied = row.Change(dto.TimeZone, dto.LocationCaptureEnabled, dto.RequirePeopleProposalApproval, dto.SavedAt, timeProvider.GetUtcNow());
                 await dbContext.SaveChangesAsync(ct);
                 return row;
             }, cancellationToken);
 
-            _logger.Here().Information("Changed the settings of user {UserId}", owner.UserId);
+            _logger.Here().Information("Took a settings change of user {UserId}, applied {Applied}", owner.UserId, applied);
             return setting.ToUserSettingDto();
         }
     }

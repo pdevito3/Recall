@@ -121,7 +121,7 @@ public class DirectoryRulesTests
         var setting = UserSetting.DefaultsFor("ten_1", "usr_1");
 
         // Act
-        var change = () => setting.Change("Not/AZone", false, true, Noon, Now);
+        Action change = () => setting.Change("Not/AZone", false, true, Noon, Now);
 
         // Assert
         change.ShouldThrow<ValidationException>().Property.ShouldBe("timeZone");

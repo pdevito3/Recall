@@ -25,10 +25,10 @@ public static class SetSessionMetadata
             var session = await dbContext.Sessions
                 .TagWithOperationCallSite("sessions.set_metadata.load")
                 .GetById(request.Id, cancellationToken);
-            session.SetMetadata(SessionMetadata.Of(request.Dto.Activity, request.Dto.Moods, request.Dto.UserTopics), request.Dto.SavedAt, timeProvider.GetUtcNow());
+            var applied = session.SetMetadata(SessionMetadata.Of(request.Dto.Activity, request.Dto.Moods, request.Dto.UserTopics), request.Dto.SavedAt, timeProvider.GetUtcNow());
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            _logger.Here().Information("Set the metadata of session {SessionId}", session.Id);
+            _logger.Here().Information("Took a metadata change of session {SessionId}, applied {Applied}", session.Id, applied);
             return session.ToSessionDto(await dbContext.LoadJournalZoneAsync(cancellationToken));
         }
     }

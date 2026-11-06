@@ -149,10 +149,11 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         RefreshFromDrafts();
     }
 
-    public void SetMetadata(SessionMetadata metadata, DateTimeOffset claimedSavedAt, DateTimeOffset now)
+    /// <returns>False when the save time is not newer, and the change does nothing.</returns>
+    public bool SetMetadata(SessionMetadata metadata, DateTimeOffset claimedSavedAt, DateTimeOffset now)
     {
         if (!claimedSavedAt.IsNewer(MetadataSavedAt, MetadataFastClaims, now))
-            return;
+            return false;
 
         MetadataSavedAt = FastClockClaims.SaveTimeOf(claimedSavedAt, now);
         MetadataFastClaims = MetadataFastClaims.Remembering(claimedSavedAt, MetadataSavedAt.Value);
@@ -160,6 +161,7 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         Moods = metadata.Moods;
         UserTopics = metadata.UserTopics;
         AiTopics = AiTopics.Where(topic => !UserTopics.Contains(topic.Trim(), StringComparer.OrdinalIgnoreCase)).ToList();
+        return true;
     }
 
     public void BeginCleanup()

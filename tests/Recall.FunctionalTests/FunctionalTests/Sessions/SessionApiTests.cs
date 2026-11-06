@@ -7,6 +7,7 @@ using System.Text.Json;
 using Recall.Server.Domain.People.Dtos;
 using Recall.Server.Domain.Sessions.Dtos;
 using Recall.Server.Domain.UserSettings.Dtos;
+using Serilog.Events;
 using Shouldly;
 using TestUtilities;
 
@@ -302,6 +303,49 @@ public class SessionApiTests : TestBase
         read!.Activity.ShouldBe("None");
         read.Moods.ShouldBeEmpty();
     }
+
+    [Test]
+    [Property("Rule", "SES-26")]
+    public async Task the_log_says_if_a_settings_change_applied_and_holds_no_zone()
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var change = new { timeZone = "Pacific/Chatham", locationCaptureEnabled = false, requirePeopleProposalApproval = false, savedAt = JournalScenario.Morning };
+
+        // Act
+        (await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, change)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, change)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Assert
+        var logs = TestingWebApplicationFactory.Instance.CapturedLogs;
+        AppliedValuesOf(logs.Holding(member.Id)).ShouldBe(["True", "False"]);
+        logs.Holding("Pacific/Chatham").ShouldBeEmpty();
+    }
+
+    [Test]
+    [Property("Rule", "SES-21")]
+    public async Task the_log_says_if_a_metadata_change_applied_and_holds_no_topic()
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        var topic = $"topic{Guid.NewGuid():N}";
+        var change = new { activity = "Walking", moods = Array.Empty<string>(), userTopics = new[] { topic }, savedAt = JournalScenario.Morning };
+
+        // Act
+        (await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), change)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), change)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Assert
+        var logs = TestingWebApplicationFactory.Instance.CapturedLogs;
+        AppliedValuesOf(logs.Holding(session.Id)).ShouldBe(["True", "False"]);
+        logs.Holding(topic).ShouldBeEmpty();
+    }
+
+    private static List<string> AppliedValuesOf(IEnumerable<LogEvent> events)
+        => events.Where(e => e.Properties.ContainsKey("Applied")).Select(e => e.Properties["Applied"].ToString()).ToList();
 
     [Test]
     [Property("Rule", "SES-21")]
