@@ -41,3 +41,20 @@ public sealed class AgentInput
     /// <summary>The permission names of the first grant. The default is no permission.</summary>
     public IReadOnlyList<string>? Permissions { get; set; }
 }
+
+public sealed class SessionInput
+{
+    public string? ClientSessionId { get; set; }
+    public DateTimeOffset? StartedAt { get; set; }
+}
+
+public sealed class PersonInput
+{
+    public string? Label { get; set; }
+}
+
+public sealed class CorrectionInput
+{
+    public string? CanonicalTerm { get; set; }
+    public List<string>? Mishearings { get; set; }
+}

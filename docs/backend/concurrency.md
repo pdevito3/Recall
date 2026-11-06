@@ -47,6 +47,8 @@ The tests do not see these breaks of the rules. Check them in the review:
 - A copy of a marked record with `with` in core code. `EntrypointBoundaryTests` does not count the copy method of a record.
 - A background job in the shared plumbing or the composition root that sends a marked command. `EntrypointBoundaryTests` reads only the core types. `DiscardLostRace` then clears the tracked changes of the job.
 
+A Session is hard-deleted, and a new Revision inserts before the version check of its Session. So `DatabaseConflict` also reads a missing parent of a Revision as a lost race. The next run gives 404. A missing parent of any other row is a server fault, and `a_session_with_an_owner_that_never_existed_is_a_server_fault_and_not_a_lost_race` proves it. See [ADR 0020](../adr/0020-journal-rules-in-the-database.md). A create in the journal does not read its owner again in the work. The owner purge trigger refuses the row of a deleted owner. `an_add_that_a_delete_of_its_owner_beat_saves_no_row` proves it for a delete that commits during the add, and `an_add_and_a_delete_of_its_owner_at_one_time_leave_no_row` proves it for the two at one time, in either order.
+
 Each marked command has a race test (see [Race tests](../backend.md#race-tests)). The test pauses the command after its load, commits a rival write to the same aggregate, and checks that both changes saved.
 
 ## Lock

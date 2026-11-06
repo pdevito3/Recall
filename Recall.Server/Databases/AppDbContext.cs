@@ -5,8 +5,13 @@ using Auditing;
 using Domain;
 using Domain.Agents;
 using Domain.AuditEntries;
+using Domain.Corrections;
+using Domain.People;
+using Domain.Sessions;
+using Domain.Sync;
 using Domain.Tenants;
 using Domain.Users;
+using Domain.UserSettings;
 // new-feature:db-usings
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -31,6 +36,13 @@ public class AppDbContext(
     public DbSet<Agent> Agents => Set<Agent>();
     public DbSet<AgentPermission> AgentPermissions => Set<AgentPermission>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
+    public DbSet<Session> Sessions => Set<Session>();
+    public DbSet<RawRevision> RawRevisions => Set<RawRevision>();
+    public DbSet<CleanedRevision> CleanedRevisions => Set<CleanedRevision>();
+    public DbSet<Person> People => Set<Person>();
+    public DbSet<Correction> Corrections => Set<Correction>();
+    public DbSet<UserSetting> UserSettings => Set<UserSetting>();
+    public DbSet<SyncChange> SyncChanges => Set<SyncChange>();
     // new-feature:db-sets
     #endregion
 
@@ -51,6 +63,8 @@ public class AppDbContext(
     /// </remarks>
     public TenantScope CurrentTenantScope =>
         _narrowedTenantScope ?? (_tenantScope ??= tenantScopeProvider.GetCurrentScope());
+
+    public string? CurrentJournalOwnerId => callerIdentityResolver.Current.JournalOwnerId;
 
     internal bool IsRunningDomainEventHandlers => _saveStage == SaveStage.Dispatching;
 
@@ -118,6 +132,7 @@ public class AppDbContext(
         configurationBuilder.MapVersionToConcurrencyToken();
         configurationBuilder.FilterSoftDeletedRecords();
         configurationBuilder.FilterByTenant(this);
+        configurationBuilder.FilterByJournalOwner(this);
         configurationBuilder.MapConstraintErrors();
     }
 
@@ -325,10 +340,15 @@ public class AppDbContext(
                             ? "Remove a user with Remove(user.Delete()), so that the save queues UserDeleted."
                             : $"Remove a {entry.Metadata.ClrType.Name} with Remove(entity.Delete()), so that the save queues its delete event.");
 
+                    entry.Entity.UpdateIsDeleted(true);
+
+                    var isHardDelete = entry.Entity is IJournalOwned;
+                    if (isHardDelete)
+                        break;
+
                     entry.State = EntityState.Modified;
                     IncrementVersion(entry);
                     entry.Entity.UpdateLastModifiedOn(now);
-                    entry.Entity.UpdateIsDeleted(true);
                     break;
             }
         }

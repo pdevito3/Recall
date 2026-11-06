@@ -5,8 +5,10 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Runtime.Versioning;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Microsoft.Data.Sqlite;
 using Recall.Server.Resources.Entrypoints.Auth;
 using Shouldly;
 
@@ -28,6 +30,7 @@ public partial class NoProviderBootTests
     {
         private readonly Process _process;
         private readonly ConcurrentQueue<string> _output;
+        private bool _killed;
 
         private ServerProcess(Process process, ConcurrentQueue<string> output, string root, HttpClient client)
         {
@@ -120,7 +123,7 @@ public partial class NoProviderBootTests
             await _process.WaitForExitAsync();
         }
 
-        private async Task WaitUntilUpAsync()
+        public async Task WaitUntilUpAsync()
         {
             for (var attempt = 0; attempt < 300; attempt++)
             {
@@ -149,11 +152,21 @@ public partial class NoProviderBootTests
             throw new InvalidOperationException("The server did not answer in 30 seconds.");
         }
 
-        public async ValueTask DisposeAsync()
+        /// <summary>A SIGKILL, so the last connection runs no checkpoint on its close, and the files stay as a crash leaves them.</summary>
+        public async Task KillAsync()
         {
+            if (_killed)
+                return;
+
+            _killed = true;
             Client.Dispose();
             await StopAsync();
             _process.Dispose();
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await KillAsync();
             if (Directory.Exists(Root))
                 Directory.Delete(Root, recursive: true);
         }
@@ -161,14 +174,8 @@ public partial class NoProviderBootTests
         [GeneratedRegex(@"http://127\.0\.0\.1:[1-9][0-9]*")]
         private static partial Regex ListeningAddress();
 
-        private static string ServerDll()
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Recall.slnx")))
-                directory = directory.Parent;
-            directory.ShouldNotBeNull();
-            return Path.Combine(directory.FullName, "Recall.Server", "bin", TestBuild.Configuration, "net10.0", "Recall.Server.dll");
-        }
+        private static string ServerDll() =>
+            Path.Combine(TestBuild.RepositoryRoot(), "Recall.Server", "bin", TestBuild.Configuration, "net10.0", "Recall.Server.dll");
     }
 
     private static class TestBuild
@@ -178,6 +185,49 @@ public partial class NoProviderBootTests
 #else
         public const string Configuration = "Release";
 #endif
+
+        public static string RepositoryRoot()
+        {
+            var directory = new DirectoryInfo(AppContext.BaseDirectory);
+            while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Recall.slnx")))
+                directory = directory.Parent;
+            directory.ShouldNotBeNull();
+            return directory.FullName;
+        }
+    }
+
+    [Test]
+    [Property("Rule", "SES-27")]
+    public async Task a_restart_after_a_kill_clears_committed_deletes_from_the_wal()
+    {
+        // Arrange
+        var words = $"deleted{Guid.NewGuid():N}";
+        await using var first = await ServerProcess.StartAsync();
+        await CommitAWriteAndADeleteAsync(first.Database, words);
+        await first.KillAsync();
+        Holds($"{first.Database}-wal", words).ShouldBeTrue("The kill must leave the words in the WAL.");
+
+        // Act
+        await using var second = await ServerProcess.StartAsync(first.Root);
+        await second.KillAsync();
+
+        // Assert
+        Holds($"{second.Database}-wal", words).ShouldBeFalse();
+        Holds(second.Database, words).ShouldBeFalse();
+    }
+
+    private static bool Holds(string file, string words)
+        => File.ReadAllBytes(file).AsSpan().IndexOf(Encoding.UTF8.GetBytes(words)) >= 0;
+
+    private static async Task CommitAWriteAndADeleteAsync(string database, string words)
+    {
+        var connectionString = new SqliteConnectionStringBuilder { DataSource = database, Pooling = false }.ToString();
+        await using var connection = new SqliteConnection(connectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA secure_delete = ON; CREATE TABLE kill_test (words TEXT NOT NULL); INSERT INTO kill_test VALUES (@words); DELETE FROM kill_test;";
+        command.Parameters.AddWithValue("@words", words);
+        await command.ExecuteNonQueryAsync();
     }
 
     [Test]
@@ -300,6 +350,31 @@ public partial class NoProviderBootTests
     }
 
     [Test]
+    public async Task each_answer_of_the_spa_has_the_content_security_policy_and_a_server_path_does_not()
+    {
+        // Arrange
+        await using var server = await ServerProcess.StartAsync();
+
+        // Act
+        using var root = await GetAsync(server, "/", "text/html");
+        using var deepLink = await GetAsync(server, "/users/1", "text/html");
+        using var file = await GetAsync(server, "/index.html", "text/html");
+        using var head = await server.Client.SendAsync(new HttpRequestMessage(HttpMethod.Head, "/about"));
+        using var health = await GetAsync(server, "/health", null);
+
+        // Assert
+        foreach (var answer in new[] { root, deepLink, file, head })
+        {
+            answer.StatusCode.ShouldBe(HttpStatusCode.OK);
+            var policy = answer.Headers.GetValues("Content-Security-Policy").ShouldHaveSingleItem();
+            policy.ShouldContain("frame-ancestors 'none'");
+            policy.ShouldContain("script-src 'self';");
+        }
+
+        health.Headers.Contains("Content-Security-Policy").ShouldBeFalse();
+    }
+
+    [Test]
     public async Task a_path_of_the_server_never_gets_the_spa()
     {
         // Arrange
@@ -377,6 +452,78 @@ public partial class NoProviderBootTests
         // Assert
         server.ExitCode.ShouldNotBe(0);
         server.Output.ShouldContain("AllowHttp");
+    }
+
+    [Test]
+    [Arguments("maybe")]
+    [Arguments("yes")]
+    [Arguments("1")]
+    [Arguments("")]
+    public async Task a_provider_setting_that_cannot_convert_stops_the_server_and_names_the_setting(string allowHttp)
+    {
+        // Arrange
+        const string secret = "a-secret-that-no-log-shows";
+        Dictionary<string, string> provider = new()
+        {
+            ["Auth__Providers__0__Id"] = "stub",
+            ["Auth__Providers__0__Issuer"] = "https://provider.test",
+            ["Auth__Providers__0__ClientId"] = "recall",
+            ["Auth__Providers__0__ClientSecret"] = secret,
+            ["Auth__Providers__0__AllowHttp"] = allowHttp,
+        };
+        await using var server = await ServerProcess.LaunchAsync(null, provider);
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+        // Act
+        await server.WaitForExitAsync(limit.Token);
+
+        // Assert
+        server.ExitCode.ShouldBe(1);
+        server.Output.ShouldContain("Auth:Providers:0:AllowHttp");
+        server.Output.ShouldNotContain(secret);
+    }
+
+    [Test]
+    public async Task a_bad_setting_of_a_later_provider_does_not_leave_the_first_provider_alone_on_the_login_page()
+    {
+        // Arrange
+        Dictionary<string, string> providers = new()
+        {
+            ["Auth__Providers__0__Id"] = "first",
+            ["Auth__Providers__0__Issuer"] = "https://first.test",
+            ["Auth__Providers__0__ClientId"] = "recall",
+            ["Auth__Providers__0__ClientSecret"] = "secret",
+            ["Auth__Providers__1__Id"] = "second",
+            ["Auth__Providers__1__Issuer"] = "https://second.test",
+            ["Auth__Providers__1__ClientId"] = "recall",
+            ["Auth__Providers__1__ClientSecret"] = "secret",
+            ["Auth__Providers__1__AllowHttp"] = "maybe",
+        };
+        await using var server = await ServerProcess.LaunchAsync(null, providers);
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+        // Act
+        await server.WaitForExitAsync(limit.Token);
+
+        // Assert
+        server.ExitCode.ShouldBe(1);
+        server.Output.ShouldContain("Auth:Providers:1:AllowHttp");
+    }
+
+    [Test]
+    public async Task a_provider_with_a_text_value_in_place_of_its_settings_stops_the_server_and_names_the_provider()
+    {
+        // Arrange
+        Dictionary<string, string> provider = new() { ["Auth__Providers__0"] = "keycloak" };
+        await using var server = await ServerProcess.LaunchAsync(null, provider);
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+        // Act
+        await server.WaitForExitAsync(limit.Token);
+
+        // Assert
+        server.ExitCode.ShouldBe(1);
+        server.Output.ShouldContain("Auth:Providers:0:ClientId is missing");
     }
 
     [Test]

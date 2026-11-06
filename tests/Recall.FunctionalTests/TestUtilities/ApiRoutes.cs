@@ -31,6 +31,41 @@ public static class ApiRoutes
         public static string Delete(string id) => $"{Base}/tenants/{id}";
     }
 
+    public static class Sessions
+    {
+        public static string Root => $"{Base}/sessions";
+        public static string GetRecord(string id) => $"{Base}/sessions/{id}";
+        public static string Draft(string id) => $"{Base}/sessions/{id}/draft";
+        public static string Cleaned(string id) => $"{Base}/sessions/{id}/cleaned";
+        public static string Metadata(string id) => $"{Base}/sessions/{id}/metadata";
+        public static string RawRevisions(string id) => $"{Base}/sessions/{id}/raw-revisions";
+        public static string RawRevision(string id, int number) => $"{Base}/sessions/{id}/raw-revisions/{number}";
+        public static string CleanedRevisions(string id) => $"{Base}/sessions/{id}/cleaned-revisions";
+        public static string CleanedRevision(string id, int number) => $"{Base}/sessions/{id}/cleaned-revisions/{number}";
+    }
+
+    public static class Sync
+    {
+        public static string Changes => $"{Base}/sync/changes";
+    }
+
+    public static class People
+    {
+        public static string Root => $"{Base}/people";
+        public static string GetRecord(string id) => $"{Base}/people/{id}";
+    }
+
+    public static class Corrections
+    {
+        public static string Root => $"{Base}/corrections";
+        public static string GetRecord(string id) => $"{Base}/corrections/{id}";
+    }
+
+    public static class UserSettings
+    {
+        public static string Root => $"{Base}/me/settings";
+    }
+
     public static class Agents
     {
         public static string GetList => $"{Base}/agents";

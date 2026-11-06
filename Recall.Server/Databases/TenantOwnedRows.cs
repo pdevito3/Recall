@@ -42,7 +42,8 @@ internal sealed class TenantOwnedRows
             .Where(e => e.BaseType is null
                 && e.ClrType != typeof(Tenant)
                 && e.ClrType.IsAssignableTo(typeof(BaseEntity))
-                && e.FindDeclaredQueryFilter(QueryFilterNames.Tenant) is not null)
+                && e.FindDeclaredQueryFilter(QueryFilterNames.Tenant) is not null
+                && e.FindDeclaredQueryFilter(QueryFilterNames.JournalOwner) is null)
             .OrderBy(e => OwnerDepth(auditModel, e))];
     }
 

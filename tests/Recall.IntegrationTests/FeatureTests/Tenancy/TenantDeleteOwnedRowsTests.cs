@@ -46,14 +46,14 @@ public class TenantDeleteOwnedRowsTests : TestBase
         stillLive.Where(type => type.Value.Count > 0).ShouldBeEmpty();
     }
 
-    /// <summary>Each root entity type with the tenant filter, except the tenant.</summary>
     private static async Task<Dictionary<string, List<string>>> EachOwnedTypeAsync(
         AppDbContext db, Func<Type, Task<List<string>>> idsOf)
     {
         var ownedTypes = db.Model.GetEntityTypes().Where(e => e.BaseType is null
             && e.ClrType != typeof(Tenant)
             && e.ClrType.IsAssignableTo(typeof(BaseEntity))
-            && e.FindDeclaredQueryFilter(QueryFilterNames.Tenant) is not null);
+            && e.FindDeclaredQueryFilter(QueryFilterNames.Tenant) is not null
+            && e.FindDeclaredQueryFilter(QueryFilterNames.JournalOwner) is null);
 
         var result = new Dictionary<string, List<string>>();
         foreach (var type in ownedTypes)

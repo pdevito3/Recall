@@ -27,6 +27,9 @@ public static class ConstraintErrors
     public static IndexBuilder<TEntity> ForStaleVersion<TEntity>(this IndexBuilder<TEntity> builder)
         => builder.HasAnnotation(StaleVersionAnnotation, new ConstraintError.StaleVersion());
 
+    public static KeyBuilder ForStaleVersion(this KeyBuilder builder)
+        => builder.HasAnnotation(StaleVersionAnnotation, new ConstraintError.StaleVersion());
+
     /// <summary>The errors by constraint name.</summary>
     public static IReadOnlyDictionary<string, ConstraintError> Of(IModel model)
         => model.FindRuntimeAnnotationValue(ModelAnnotation) as IReadOnlyDictionary<string, ConstraintError>
@@ -42,6 +45,7 @@ public static class ConstraintErrors
     private sealed class ConstraintErrorsConvention : IModelFinalizingConvention, IModelFinalizedConvention
     {
         private readonly List<(IReadOnlyIndex Index, ConstraintError Error)> _indexes = [];
+        private readonly List<IReadOnlyKey> _staleVersionKeys = [];
 
         public void ProcessModelFinalizing(IConventionModelBuilder modelBuilder,
             IConventionContext<IConventionModelBuilder> context)
@@ -62,6 +66,12 @@ public static class ConstraintErrors
                         $"The index {name} has {(staleVersion is null ? nameof(ForRequestField) : nameof(ForStaleVersion))}, but it is not unique. Call IsUnique on the index.");
                 _indexes.Add((index, error));
             }
+
+            foreach (var key in modelBuilder.Metadata.GetEntityTypes().SelectMany(e => e.GetDeclaredKeys()))
+            {
+                if (key.RemoveAnnotation(StaleVersionAnnotation) is not null)
+                    _staleVersionKeys.Add(key);
+            }
         }
 
         /// <summary>Throws when an index of the model also has an entry in <see cref="NotInModel"/>.</summary>
@@ -76,6 +86,9 @@ public static class ConstraintErrors
                     throw new InvalidOperationException(
                         $"The index {name} has a constraint error in its configuration and an entry in NotInModel. Remove the entry.");
             }
+
+            foreach (var key in _staleVersionKeys)
+                errors.Add(key.GetName()!, new ConstraintError.StaleVersion());
 
             model.SetRuntimeAnnotation(ModelAnnotation, errors);
             return model;

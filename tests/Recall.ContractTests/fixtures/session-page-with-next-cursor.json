@@ -1,0 +1,19 @@
+{
+  "items": [
+    {
+      "id": "ses_00000000000000000000000000000004",
+      "clientSessionId": "client-session-2",
+      "startedAt": "2026-06-01T09:00:00+00:00",
+      "journalingDay": "2026-06-01",
+      "preview": "",
+      "synopsis": null,
+      "cleanupStatus": "NotRun",
+      "activity": "None",
+      "moods": [],
+      "topics": [],
+      "personIds": [],
+      "version": 1
+    }
+  ],
+  "nextCursor": "1780304400000000_ses_00000000000000000000000000000004"
+}

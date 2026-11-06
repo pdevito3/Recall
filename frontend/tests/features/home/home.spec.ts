@@ -26,6 +26,27 @@ test.describe('a signed-in user on the home page', () => {
     await expect(home.at.signedInAs('user-1')).toBeVisible()
   })
 
+  test('sees that the mic stays off on plain HTTP, with a link to the HTTPS section', async ({ page, api }) => {
+    api.mock(usersApi.currentIs({ identifier: '1', name: 'Robert Smith' }))
+    const home = homePage(page)
+
+    await home.openOnPlainHttp()
+
+    await expect(home.at.micMessage).toBeVisible()
+    await expect(home.at.httpsGuide).toBeVisible()
+    await expect(home.at.signedInAs('Robert Smith')).toBeVisible()
+  })
+
+  test('sees no mic message on HTTPS', async ({ page, api }) => {
+    api.mock(usersApi.currentIs({ identifier: '1', name: 'Robert Smith' }))
+    const home = homePage(page)
+
+    await home.open()
+
+    await expect(home.at.signedInAs('Robert Smith')).toBeVisible()
+    await expect(home.at.micMessage).toHaveCount(0)
+  })
+
   test('sees an error when the Server fails to load the user', async ({ page, api }) => {
     api.mock(usersApi.currentFails(aProblem().saying('The Server is down.')))
     const home = homePage(page)

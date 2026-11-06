@@ -1,0 +1,34 @@
+{
+  "id": "ses_00000000000000000000000000000003",
+  "clientSessionId": "client-session-1",
+  "startedAt": "2026-06-01T08:00:00+00:00",
+  "journalingDay": "2026-06-01",
+  "rawText": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Lunch with \"},{\"type\":\"mention\",\"attrs\":{\"personId\":\"per_00000000000000000000000000000001\",\"label\":\"Sam\"}}]}]}",
+  "rawDraftRevision": 1,
+  "rawLatestRevision": 2,
+  "rawSavedAt": "2026-06-01T08:05:00+00:00",
+  "cleanedText": "Lunch with Sam.",
+  "cleanedDraftRevision": 1,
+  "cleanedLatestRevision": 1,
+  "cleanedSavedAt": "2026-06-01T08:06:00+00:00",
+  "cleanedHasHandEdits": true,
+  "synopsis": null,
+  "cleanupStatus": "NotRun",
+  "lastCleanupRawRevision": null,
+  "activity": "Walking",
+  "moods": [
+    "Calm"
+  ],
+  "topics": [
+    {
+      "name": "Food",
+      "provenance": "UserSet"
+    }
+  ],
+  "personIds": [
+    "per_00000000000000000000000000000001"
+  ],
+  "latitude": 59.437,
+  "longitude": 24.7536,
+  "version": 5
+}

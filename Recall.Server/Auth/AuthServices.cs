@@ -6,7 +6,16 @@ public static class AuthServices
 {
     public static void AddAuthCore(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddOptions<AuthOptions>().Bind(configuration.GetSection(AuthOptions.SectionName)).ValidateOnStart();
+        var section = configuration.GetSection(AuthOptions.SectionName);
+        services.AddOptions<AuthOptions>()
+            .Bind(section)
+            // The binder drops a list element with a value that cannot convert, and says nothing. Alone, an element throws.
+            .Configure(options => options.Providers =
+            [
+                .. section.GetSection(nameof(AuthOptions.Providers)).GetChildren()
+                    .Select(element => element.Get<OidcProviderOptions>() ?? new OidcProviderOptions()),
+            ])
+            .ValidateOnStart();
         services.AddSingleton<IValidateOptions<AuthOptions>, AuthOptionsValidator>();
         services.AddSingleton<OidcHandlerFactory>(OidcLoginMode.DefaultHandler);
         services.AddSingleton<LoginModes>();

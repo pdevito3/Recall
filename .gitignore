@@ -309,3 +309,7 @@ __pycache__/
 
 # The SQLite files of a local run
 .data/
+
+# The files of docs/install.md
+recall-backup*
+compose.override.yaml
