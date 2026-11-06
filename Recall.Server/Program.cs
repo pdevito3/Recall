@@ -23,9 +23,9 @@ try
     CSharpReplGuard.ThrowIfLoadedOutsideDevelopment(builder.Environment);
 
     builder.AddServiceDefaults(); // OpenTelemetry, Serilog, health checks, resilience, service discovery
+    builder.Services.AddHostedService<MigrationHostedService<AppDbContext>>();
     builder.ConfigureServices();
     builder.AddEntrypoints();
-    builder.Services.AddHostedService<MigrationHostedService<AppDbContext>>();
     OpenApiBuildTime.RemoveHostedServices(builder.Services);
 
     var app = builder.Build();

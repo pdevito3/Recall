@@ -91,7 +91,6 @@ A normal run uses the same ports at each start. All of them are in the block 247
 | 24760 | `authentik` | http |
 | 24761 | `authentik-postgres` | tcp |
 | 24770 | `cognito` | http |
-| 24780 | `storage` (S3 object storage) | aws |
 
 The dashboard ports are in `Recall.AppHost/Properties/launchSettings.json`. The server ports are in `Kestrel:Endpoints` of `Recall.Server/appsettings.Development.json`, and the BFF ports are in `Recall.Bff/Properties/launchSettings.json`. The other ports are in `Recall.AppHost/AppHost.cs` and in the class of each auth provider. A new resource takes a port in the block. A new auth provider takes the next free group of ten. `PortTableTests` fails when an endpoint of the AppHost has no row in this table or has a different port.
 

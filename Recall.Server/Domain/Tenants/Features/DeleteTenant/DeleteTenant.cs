@@ -1,10 +1,10 @@
 namespace Recall.Server.Domain.Tenants.Features;
 
 using System.Diagnostics;
-using Attachments;
 using Databases;
 using MediatR;
 using Resources;
+using Resources.Storage;
 using Serilog;
 using Users;
 
@@ -12,7 +12,7 @@ public static class DeleteTenant
 {
     public sealed record Command(string Id) : IRequest, IRunsAgainWhenRaced;
 
-    public sealed class Handler(AppDbContext dbContext, IPermissionGuard permissionGuard, AttachmentStorage attachments)
+    public sealed class Handler(AppDbContext dbContext, IPermissionGuard permissionGuard, FileStore fileStore)
         : IRequestHandler<Command>
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
@@ -42,7 +42,22 @@ public static class DeleteTenant
 
             _logger.Here().Information("Deleted tenant {TenantId} and its rows {@DeletedCounts}", request.Id, deletedCounts);
 
-            await attachments.DeleteFilesOfTenantAsync(request.Id);
+            TryDeleteFilesOfTenant(request.Id);
+        }
+
+        private void TryDeleteFilesOfTenant(string tenantId)
+        {
+            using var activity = Telemetry.Trace([("app.tenant_id", tenantId)], "tenants.delete_files");
+            try
+            {
+                fileStore.DeleteUnder(FileKey.ForTenant(tenantId));
+                _logger.Here().Information("Deleted the files of deleted tenant {TenantId}", tenantId);
+            }
+            catch (Exception ex)
+            {
+                Telemetry.RecordError(activity, ex);
+                _logger.Here().Error(ex, "Could not delete the files of deleted tenant {TenantId}", tenantId);
+            }
         }
     }
 }

@@ -4,7 +4,7 @@
 //
 //   dotnet run scripts/ci/new-feature.cs
 //
-// The tools: git, the .NET SDK, Docker, and buf.
+// The tools: git, the .NET SDK, and buf.
 
 #:include job.cs
 
@@ -39,7 +39,6 @@ return Job.Run("new-feature",
     new("Check the tools", copy =>
     {
         copy.RequireTool("buf", "--version", "Install the buf version that .github/workflows/ci.yml names: https://buf.build/docs/cli/installation/");
-        copy.RequireTool("docker", "info", "The .NET tests start Floci with Testcontainers. Start Docker.");
     }),
     .. examplesSteps,
     new("Generate the sample features", GenerateSamples),

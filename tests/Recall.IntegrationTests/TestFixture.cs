@@ -38,8 +38,7 @@ public sealed class TestFixture : IAsyncDisposable
     public static Tenant DefaultTenant => Seed.Tenant;
     public static User DefaultUser => Seed.User;
     private readonly SqliteTestDatabase _database = new();
-
-    public static FlociTestStorage Storage { get; } = new();
+    private static readonly TemporaryFileRoot FileRoot = new();
 
     public async Task InitializeAsync()
     {
@@ -48,9 +47,7 @@ public sealed class TestFixture : IAsyncDisposable
         // Tests never reload configuration. A file watcher on appsettings can hang on macOS when the system is busy.
         Environment.SetEnvironmentVariable("DOTNET_hostBuilder__reloadConfigOnChange", "false");
 
-        await Storage.StartAsync();
         _connectionString = _database.ConnectionString;
-        Storage.SetEnvironmentVariables();
 
         var provider = AddServices().BuildServiceProvider();
         BaseScopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
@@ -104,6 +101,7 @@ public sealed class TestFixture : IAsyncDisposable
             EnvironmentName = TestingConsts.IntegrationTestingEnvName
         });
         builder.Configuration[$"ConnectionStrings:{DatabaseConsts.DatabaseName}"] = connectionString ?? _connectionString;
+        builder.Configuration["FileStore:Root"] = FileRoot.Path;
 
         builder.Configuration["Auth:Authority"] = "https://localhost";
         builder.Configuration["Auth:Audience"] = "test-api";
@@ -121,7 +119,7 @@ public sealed class TestFixture : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await _database.DisposeAsync();
-        await Storage.DisposeAsync();
+        FileRoot.Dispose();
     }
 
     private static void ConfigureAutoFaker()
