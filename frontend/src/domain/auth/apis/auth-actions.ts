@@ -5,8 +5,10 @@ import { apiClient } from '@/lib/api-client'
 
 const serverMaxReturnPathLength = 2048
 
-/** A call that answers 401 after the logout would start a login, and that navigation aborts the one to the signed-out page. */
-let isGoingToSignedOutPage = false
+const signedOutPage = '/auth/login?signedOut=1'
+
+/** A call that answers 401 after the logout starts a login, and a navigation with a return URL would abort the one to the signed-out page. */
+let hasSignedOut = false
 
 /**
  * The path, the query, and the hash of the page, as a return URL that the Server accepts. The Server refuses a path that
@@ -20,14 +22,13 @@ export function returnUrlOf({ pathname, search, hash }: Pick<Location, 'pathname
 
 /** Replaces the page in the history, so that Back from the login of the provider does not come back to a page that goes to the login again. */
 export function login(returnUrl: string = '/'): void {
-  if (isGoingToSignedOutPage) return
-  window.location.replace(`/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`)
+  window.location.replace(hasSignedOut ? signedOutPage : `/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`)
 }
 
 export async function logout(): Promise<void> {
   await apiClient.post('/auth/logout', undefined, { suppressErrorToast: true })
-  isGoingToSignedOutPage = true
-  window.location.replace('/auth/login?signedOut=1')
+  hasSignedOut = true
+  window.location.replace(signedOutPage)
 }
 
 export function useLogout() {

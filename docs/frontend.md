@@ -154,35 +154,37 @@ Each area keeps its hook and its query key factory in `domain/[area]/apis/`. The
 ```typescript
 import { useCurrentUser } from '@/domain/users/apis/get-current-user'
 import { useAuth } from '@/domain/auth/apis/get-user'
-import { useAuthActions } from '@/domain/auth/apis/auth-actions'
+import { logout } from '@/domain/auth/apis/auth-actions'
 
 const { data, isLoading, error } = useCurrentUser()
-const { isLoggedIn, username, logoutUrl } = useAuth()
-const { logout } = useAuthActions()
+const { isLoggedIn, username } = useAuth()
+await logout()
 ```
 
 Never copy server state into local state. See [server-state.md](frontend/server-state.md).
 
 ## Session
 
-Each page needs a session. The root route (`routes/__root.tsx`) reads `authClaimsQuery` before it shows a page:
+Each page needs a session. The root route (`routes/__root.tsx`) reads `authUserQuery` before it shows a page:
 
 | State of the session query | The root route shows |
 |---|---|
 | Loading | Nothing |
 | No session (`null`) | Nothing. It goes to `/auth/login` with the path, the query, and the hash as `returnUrl`. |
 | Error, and no earlier answer | An alert and Try Again. It does not go to the login. While the check runs again, Try Again is pending and takes no press. |
-| Claims | The layout and the page |
+| A user | The layout and the page |
 
 The app does not poll the session. It finds an ended session at the next call to an endpoint that needs a user: the Server answers 401. A call to an endpoint that allows anonymous callers still answers 200. The Server also answers 401 while the auth session lives, for example when a proxy strips the `X-CSRF` header. So on a 401, `apiClient` checks the session again and waits for the answer (`setSessionEndedCheck` in `main.tsx`):
 
 | The check gives | `apiClient` |
 |---|---|
 | `null` | Shows no toast. The root route goes to the login. |
-| Claims | Shows "The Server did not accept your sign-in for this request." unless the call sets `suppressErrorToast`. The page stays. |
-| An error | Shows the same toast as for claims. The root route keeps the last answer. |
+| A user | Shows "The Server did not accept your sign-in for this request." unless the call sets `suppressErrorToast`. The page stays. |
+| An error | Shows the same toast as for a user. The root route keeps the last answer. |
 
 A 401 of `/auth/me` is a failed check. It does not start a check again.
+
+After a logout, the login goes to the signed-out page and not to the provider. A call that answers 401 after the logout finds no session, and a login with a return URL would abort the navigation to that page.
 
 The session check shows no error toast. The alert is the only message for a failed check. A failed refetch shows no message of its own, because the page still works with the last answer.
 

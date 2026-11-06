@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { returnUrlOf } from './auth-actions'
 
@@ -30,5 +30,39 @@ describe('the return URL of the login', () => {
 
   it('is / when the path alone is longer than 2048 characters', () => {
     expect(returnUrlOf(at(`/${'a'.repeat(2048)}`, '?a=1'))).toBe('/')
+  })
+})
+
+describe('a login after a sign-out', () => {
+  const freshActions = async () => {
+    const replace = vi.fn()
+    vi.stubGlobal('window', { location: { replace } })
+    vi.resetModules()
+    const { apiClient } = await import('@/lib/api-client')
+    vi.spyOn(apiClient, 'post').mockResolvedValue({ status: 204 })
+    return { replace, ...(await import('./auth-actions')) }
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('goes to the signed-out page, because a stopped navigation leaves a document that still calls the API', async () => {
+    const { replace, login, logout } = await freshActions()
+
+    await logout()
+    replace.mockClear()
+    login('/about')
+
+    expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?signedOut=1')
+  })
+
+  it('keeps the return URL when nobody signed out', async () => {
+    const { replace, login } = await freshActions()
+
+    login('/about')
+
+    expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?returnUrl=%2Fabout')
   })
 })
