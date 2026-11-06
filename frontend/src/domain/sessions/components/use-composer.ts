@@ -1,9 +1,10 @@
-import { onlineManager, useQueryClient } from '@tanstack/react-query'
+import { isCancelledError, onlineManager, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
 import { useUserSetting } from '@/domain/settings/apis/user-setting'
 import { mayTakeFocusOnThisPage } from '@/lib/first-page'
+import { isProblemDetailsError } from '@/lib/problem-details'
 import { newUuid } from '@/lib/new-uuid'
 
 import { sessionQueryOptions } from '../apis/get-session'
@@ -59,6 +60,8 @@ function captureLocation(): Promise<{ latitude: number; longitude: number } | nu
 const idleSnapshot: DraftSnapshot = { status: { kind: 'idle' }, conflict: null, sessionId: null, baseRevision: 0, latestRevision: 0 }
 const noSubscription = () => () => undefined
 
+const isTheEntryGone = (error: unknown) => isProblemDetailsError(error) && error.status === 404
+
 const openingWords = (saver: DraftSaver | null, sessionId: string | null, cached: SessionDto | undefined) => {
   const unsettled = saver?.unsettledText() ?? null
   if (unsettled !== null) return unsettled
@@ -83,6 +86,7 @@ export function useComposer() {
     return { key: 0, words: openingWords(saver, resumedSessionId, cached) }
   })
   const currentWords = useRef(editor.words ?? '')
+  const isEditorEmpty = useRef(false)
   const latestSaver = useRef(saver)
   useEffect(() => {
     latestSaver.current = saver
@@ -108,11 +112,14 @@ export function useComposer() {
       currentWords.current = session.rawText
       setEditor(({ key }) => ({ key, words: session.rawText }))
     }
-    void queryClient.fetchQuery({ ...sessionQueryOptions(resumedSessionId), staleTime: 0 }).then(open, () => {
-      const cached = queryClient.getQueryData<SessionDto>(SessionKeys.detail(resumedSessionId))
-      if (cached) open(cached)
-      else startOver()
-    })
+    const read = (): Promise<void> =>
+      queryClient.fetchQuery({ ...sessionQueryOptions(resumedSessionId), staleTime: 0 }).then(open, (error: unknown) => {
+        if (isCancelledError(error)) return read()
+        const cached = queryClient.getQueryData<SessionDto>(SessionKeys.detail(resumedSessionId))
+        if (cached && !isTheEntryGone(error)) open(cached)
+        else startOver()
+      })
+    void read()
   }, [isReading, resumedSessionId, saver, queryClient, startOver])
 
   const shown = saver ?? finished
@@ -147,6 +154,7 @@ export function useComposer() {
   const handleChange = useCallback(
     (text: string, isEmpty: boolean) => {
       currentWords.current = text
+      isEditorEmpty.current = isEmpty
       if (saver) {
         saver.edit(text)
         const current = readPointer(owner)
@@ -160,10 +168,15 @@ export function useComposer() {
 
   const isEntryGone = saver !== null && snapshot.status.kind === 'refused' && snapshot.status.isGone
   useEffect(() => {
-    if (!isEntryGone) return
+    if (!isEntryGone || isReading) return
     saver.discard()
-    beginEntry(currentWords.current)
-  }, [isEntryGone, saver, beginEntry])
+    if (isEditorEmpty.current || currentWords.current === '') {
+      writePointer(null)
+      setSaver(null)
+    } else {
+      beginEntry(currentWords.current)
+    }
+  }, [isEntryGone, isReading, saver, beginEntry])
 
   const canFinish = saver !== null && !isReading && snapshot.status.kind !== 'refused'
   const finish = useCallback(() => {
@@ -190,7 +203,7 @@ export function useComposer() {
     words: editor.words,
     autoFocus: mayTakeFocusOnThisPage() || editor.key > 0,
     status: shownStatusOf(snapshot),
-    conflict: saver ? snapshot.conflict : null,
+    conflict: saver && !isReading ? snapshot.conflict : null,
     composingSessionId: sessionId,
     canFinish,
     handleChange,

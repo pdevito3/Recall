@@ -236,6 +236,43 @@ test.describe('writing a new entry', () => {
     await expect(journal.at.done).toBeEnabled()
   })
 
+  test('a return to the journal after a delete elsewhere starts over, and makes no empty entry', async ({ page, api }) => {
+    api.mock(sessionsApi.creates(created), sessionsApi.oneIs(created), sessionsApi.draftSaveWins(created, 1))
+    const journal = journalPage(page)
+    await journal.open()
+    await journal.write('First words')
+    await expect(journal.at.status('Saved at')).toBeVisible()
+
+    api.mock(sessionsApi.draftSaveIsRefused(created, aProblem().notFound('The entry is gone.')), sessionsApi.oneFails(created.id, aProblem().notFound('The entry is gone.')))
+    await journal.typeWithoutWaiting(' and more')
+    await journal.goToSettings()
+    await expect.poll(() => api.all('put', sessionsPaths.rawDraft(created.id)).length).toBe(2)
+    await journal.goToTheJournalFromTheSidebar()
+
+    await expect(journal.at.composer).toBeEmpty()
+    await journal.letAnAnswerHeldForHalfASecondLand()
+    await journal.letAnAnswerHeldForHalfASecondLand()
+    expect(api.all('post', sessionsPaths.timeline)).toHaveLength(1)
+  })
+
+  test('a conflict from before a return shows only after the words open', async ({ page, api }) => {
+    api.mock(sessionsApi.creates(created), sessionsApi.oneIs(created), sessionsApi.draftSaveLoses(created, { draftRevision: 3, latestRevision: 4 }))
+    const journal = journalPage(page)
+    await journal.open()
+    await journal.write('My words')
+    await expect(journal.at.keepWords).toBeVisible()
+    await journal.goToSettings()
+
+    const newest = { ...aSession().atRevision(3).saying('From the other tab').build(), id: created.id, clientSessionId: created.clientSessionId }
+    api.mock({ ...sessionsApi.oneIs(newest), delayMs: 800 })
+    await journal.goToTheJournalFromTheSidebar()
+
+    await expect(journal.at.loadingEntry).toBeVisible()
+    expect(await journal.at.keepWords.count()).toBe(0)
+    await expect(journal.at.composer).toHaveText('From the other tab')
+    await expect(journal.at.keepWords).toHaveCount(0)
+  })
+
   test('a return to the journal with no network opens the last known words, and a person can write', async ({ page, api }) => {
     const saved = aSession().saying('Morning coffee').build()
     api.mock(sessionsApi.creates(saved), sessionsApi.draftSaveWins(saved, 2), sessionsApi.oneIs(saved))

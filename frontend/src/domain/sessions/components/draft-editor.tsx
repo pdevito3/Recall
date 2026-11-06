@@ -105,7 +105,7 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
           onSubmit={() => saver.flush()}
           toolbar={(editor) => <EditorToolbar editor={editor} />}
         />
-        <SaveStatusLine status={shownStatusOf(snapshot)} zone={zone} />
+        <SaveStatusLine status={shownStatusOf(snapshot)} zone={zone} holdsTheOnlyCopy />
       </section>
       <SessionHistory
         sessionId={session.id}

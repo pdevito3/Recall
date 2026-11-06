@@ -97,6 +97,32 @@ test.describe('an entry', () => {
     await expect(entry.at.words('Mine edited and more')).toBeVisible()
   })
 
+  test('a save reply during a read of the newest words leaves the words on the page and says what happened', async ({ page, api }) => {
+    const session = aSession().atRevision(4).saying('Mine').build()
+    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+    await entry.edit(session.id, ' edited')
+    await expect(entry.at.showNewest).toBeVisible()
+
+    api.mock({ ...sessionsApi.oneIs(session), delayMs: 5000 }, sessionsApi.draftSaveWins(session, 7))
+    await entry.at.showNewest.click()
+    await entry.edit(session.id, ' and more')
+
+    await expect(entry.at.conflict('The other save is safe in History.')).toBeVisible()
+    await expect(entry.at.words('Mine edited and more')).toBeVisible()
+  })
+
+  test('a save to an entry that another tab deleted tells the person to copy the words', async ({ page, api }) => {
+    const session = aSession().saying('Mine').build()
+    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveIsRefused(session, aProblem().notFound('The entry is gone.')))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+    await entry.edit(session.id, ' edited')
+
+    await expect(entry.at.status('This entry was deleted in another tab or device. Copy these words to keep them.')).toBeVisible()
+  })
+
   test('a first read that started before the save of a reload does not open the old words', async ({ page, api }) => {
     const session = aSession().atRevision(4).saying('Mine').build()
     api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveHasNoReply(session))

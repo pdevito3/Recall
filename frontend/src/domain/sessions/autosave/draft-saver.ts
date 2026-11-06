@@ -51,6 +51,7 @@ export class DraftSaver {
   private readonly saver: SerialSaver<string, DraftSaveResultDto>
   private snapshot: DraftSnapshot
   private readonly listeners = new Set<() => void>()
+  private replyCount = 0
 
   constructor(target: DraftTarget, queryClient: QueryClient, resumed?: Stamped<string>) {
     this.target = target
@@ -100,11 +101,12 @@ export class DraftSaver {
   async takeNewestWords(): Promise<string | null> {
     const id = this.snapshot.sessionId
     if (!id) return null
+    const repliesBefore = this.replyCount
     const newest = await this.queryClient.fetchQuery({ ...sessionQueryOptions(id), staleTime: 0 }).catch((error: unknown) => {
       if (!isCancelledError(error)) Notification.error('The newest words did not load. Try again.')
       return null
     })
-    if (!newest || this.unsettledText() !== null) return null
+    if (!newest || this.unsettledText() !== null || this.replyCount !== repliesBefore) return null
     const isRaw = this.target.channel === 'raw'
     this.moveBaseTo(isRaw ? newest.rawDraftRevision : newest.cleanedDraftRevision, isRaw ? newest.rawLatestRevision : newest.cleanedLatestRevision)
     this.dismissConflict()
@@ -167,6 +169,7 @@ export class DraftSaver {
   }
 
   private handleReply(reply: DraftSaveResultDto, change: Stamped<string>) {
+    this.replyCount += 1
     const { baseRevision, latestRevision, conflict } = this.snapshot
     const holdsWords = draftHoldsTheseWords(reply, baseRevision, latestRevision)
     if (holdsWords || reply.outcome === 'Lost') {

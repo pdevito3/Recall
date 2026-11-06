@@ -5,6 +5,7 @@ export const journal = (page: Page) => ({
   done: page.getByRole('button', { name: 'Done', exact: true }),
   status: (text: string) => page.getByRole('status').filter({ hasText: text }),
   conflict: (text: string) => page.getByRole('alert').filter({ hasText: text }),
+  loadingEntry: page.getByRole('status', { name: 'Loading your entry' }),
   showNewest: page.getByRole('button', { name: 'Show the newest words', exact: true }),
   keepWords: page.getByRole('button', { name: 'Keep these words', exact: true }),
   newestWordsFailure: page.getByRole('alertdialog').filter({ hasText: 'The newest words did not load.' }),
