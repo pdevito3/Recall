@@ -257,6 +257,7 @@ jobs:
             stack:
               - 'Recall.AppHost/**'
               - 'Recall.Server/**'
+              - 'Recall.SourceGenerators/**'
               - 'Directory.Packages.props'
               - 'Directory.Build.props'
               - 'global.json'
