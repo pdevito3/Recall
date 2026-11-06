@@ -1,5 +1,6 @@
 namespace Recall.FunctionalTests.FunctionalTests.HealthChecks;
 
+using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using Serilog.Events;
@@ -35,9 +36,9 @@ public class HealthCheckTests : TestBase
         // Arrange
         var factory = TestingWebApplicationFactory.Instance;
         var started = factory.StallingHealthCheck.ArmNext();
-        var userAgent = $"probe-{Guid.NewGuid():N}";
+        var ownTrace = ActivityTraceId.CreateRandom();
         using var request = new HttpRequestMessage(HttpMethod.Get, ApiRoutes.Health);
-        request.Headers.UserAgent.ParseAdd(userAgent);
+        request.Headers.Add("traceparent", $"00-{ownTrace}-{ActivitySpanId.CreateRandom()}-01");
         using var leave = new CancellationTokenSource();
 
         // Act
@@ -47,25 +48,26 @@ public class HealthCheckTests : TestBase
         await Should.ThrowAsync<OperationCanceledException>(probe);
 
         // Assert
-        var requestLog = await WaitForRequestLogAsync(factory.CapturedLogs, userAgent);
-        requestLog.Properties["StatusCode"].ToString().ShouldBe("499");
-        factory.CapturedLogs.InTrace(requestLog.TraceId.ShouldNotBeNull())
+        await WaitForLogOfTheProbeThatLeftAsync(factory.CapturedLogs, ownTrace);
+        factory.CapturedLogs.InTrace(ownTrace)
             .Where(e => e.Level >= LogEventLevel.Error)
             .Select(e => e.RenderMessage(CultureInfo.InvariantCulture))
             .ShouldBeEmpty();
     }
 
     // The server ends the request after the client leaves, so its request log comes a little later
-    private static async Task<LogEvent> WaitForRequestLogAsync(CapturedLogs logs, string userAgent)
+    private static async Task WaitForLogOfTheProbeThatLeftAsync(CapturedLogs logs, ActivityTraceId ownTrace)
     {
         var deadline = DateTime.UtcNow.AddSeconds(5);
         while (true)
         {
-            var requestLog = logs.WithUserAgent(userAgent).FirstOrDefault(e => e.Properties.ContainsKey("StatusCode"));
+            var requestLog = logs.InTrace(ownTrace).FirstOrDefault(e =>
+                e.Properties.TryGetValue("RequestPath", out var path) && path.ToString() == $"\"/{ApiRoutes.Health}\""
+                && e.Properties.TryGetValue("StatusCode", out var status) && status.ToString() == "499");
             if (requestLog is not null)
-                return requestLog;
+                return;
             if (DateTime.UtcNow > deadline)
-                throw new TimeoutException($"No request log for {userAgent}.");
+                throw new TimeoutException($"No request log with status 499 for {ApiRoutes.Health}.");
             await Task.Delay(20);
         }
     }

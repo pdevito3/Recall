@@ -1,10 +1,27 @@
 # Telemetry
 
-The server exports traces, metrics, and logs with OpenTelemetry. In development, the Aspire dashboard shows them at https://localhost:24700 (the `aspire run` output gives the login link). An isolated run (`--isolated`) uses a random port. `dotnet aspire ps` gives its URL.
+The server exports traces, metrics, and logs with OpenTelemetry. In development, the Aspire dashboard shows them at https://localhost:24700 (the `aspire run` output gives the login link). An isolated run (`--isolated`) uses a random port. `dotnet aspire ps` gives its URL. The server also writes all three signals to files beside the database. See [Files](#files) and [troubleshooting.md](troubleshooting.md).
 
 ## Privacy rule
 
-A span carries names, identifiers, and counts. It never carries user-entered content or personal data, such as names or email addresses. Every helper below takes its tags from the caller, so each call site must obey this rule.
+A span, a log, a metric tag, and a telemetry file carry names, identifiers, and counts. They never carry user-entered content or personal data, such as names or email addresses. Journal text is the first example: Raw, Cleaned, a Revision, a Synopsis, a Summary, and the audio of a Session never reach a log, a span, or a support bundle. Every helper below takes its tags from the caller, so each call site must obey this rule.
+
+The rule also covers an exception. A client error can hold text from the caller in its message, so it never becomes a span event or a log with that message. Do not write a route or a query key that holds user text, because the request log and the span keep the path. They also keep the host and the scheme, because a reverse proxy fault shows there. Neither keeps the `User-Agent` header. A caller can put any text in the path, the host, the scheme, or a query key, and the server keeps that text. Journal text does not go there, because no client of Recall sends it there. `SupportBundleTests` sends a marker through the HTTP entrypoints and through each text argument of each MCP tool that the Owner sees, and searches the whole bundle and the captured logs for it. The test finds the tools with `tools/list`, so a new MCP tool that the Owner sees is in the test at once. The test does not reach `add_tenant`, because the Owner does not see it. An argument with a name that ends in `id` gets a real tenant id and no marker, so do not give a text argument such a name. When you add an HTTP entrypoint that takes user text, add it to that test.
+
+`appsettings.json` keeps `Microsoft.AspNetCore.Hosting.Diagnostics` at `Warning`. At `Information` or lower, this category writes each query string, with its values, to each log sink. A list filter can hold text from the caller. No journal route takes text in a query, so a Session, a Revision, a Person, and a Correction do not reach a log in this way.
+
+`SupportBundleTests.JournalText.cs` plants a marker in Raw, Cleaned, a Person, a Correction, and the metadata of a Session. It uses real writes, edits, a save that loses, saves that the server refuses, and saves that fail in the database. Then it searches the bundle, each file, each OTLP export that a test collector takes, and the captured logs. Its host logs at `Debug` in each category except the one above, so the search sees more than a shipped server writes. The search does not see `Verbose`, the categories of Kestrel, because the host has no socket, or a line that a Bundle host writes outside a request. A sentinel must reach the log files, the trace files, the OTLP logs, and the OTLP traces before the search starts, so a search does not pass on a sink that has not had the line yet. The sentinel proves the order and not each delivery: a line that a full queue lost is not in the search of that sink.
+
+The same file proves the rule for an exception. It sends words that make a JSON reader throw, and bodies that the endpoint cannot read. It also makes the database refuse each journal save, so the exception reaches `@x` and a span. The text of that fault must reach each sink, and the marker must not. Thus the channel is active, and the journal text is not in it. Two guards do this work, and the test fails without each of them. `ProseMirrorNode.TryRead` catches the throw of a reader, because the message of a duplicate key names the key. `DomainProblemDetails.IsClientError` keeps a `BadHttpRequestException` out of the log, because the path of a `JsonException` names a key that the type does not have. The test proves what these paths do today, and the rule still applies to each new `throw`: do not put journal text in the message of an exception. A server fault keeps its message, up to the cap, in `@x` and in the exception event of its span.
+
+An MCP call also keeps some fields of the protocol, and a caller can put any text in these fields. No client of Recall sends journal text there, so they stay:
+
+| Field | Where the server keeps it |
+|---|---|
+| The `name` and `version` of `clientInfo` | `EndpointName` in the logs of the MCP SDK |
+| A method that does not exist | `Method` in the logs of the MCP SDK |
+| A tool name that does not exist | `gen_ai.tool.name` on the span of the HTTP request |
+| The `id` argument of `get_tenant` and `update_tenant` | `app.tenant_id` on the span of `GetTenant.Query` and `UpdateTenant.Command` |
 
 `SqlSpanInterceptor` makes a span for each SQL command of the Server, and it copies the SQL text into `db.query.text`. Thus a value from the caller must go to the database as a parameter, never as a literal in the SQL text. `CustomQueryKitConfiguration` sets `ParameterizeFilterValues`, so the SQL text of a list query has a parameter name in place of each filter value. The value of a QueryKit `CustomOperation` still goes into the SQL text as a literal.
 
@@ -43,6 +60,8 @@ Server   PUT api/v{version}/tenants/{id}
 | `Recall.Server/Databases/QueryTagEnrichment.cs` | Copies the query tags into the SQL span |
 | `Recall.Server/Databases/DomainEventDispatcher.cs` | Runs each domain event handler in its `domain_event.handle` span |
 | `Recall.Server/Resources/Extensions/HostExtensions.cs` | OpenTelemetry and Serilog registration, resource attributes, framework meters, request log level |
+| `Recall.Server/Resources/FileTelemetry/` | The rotating files of the logs, the traces, and the metrics, and the two exporters |
+| `Recall.Server/Domain/Support/` | The support bundle |
 
 ## Log, span, or event
 
@@ -86,6 +105,18 @@ The host also collects these framework meters:
 - `Polly`, for the resilience handlers on `HttpClient`. The meter has data only after an outgoing call.
 - `Microsoft.EntityFrameworkCore`. The server only.
 - `Microsoft.AspNetCore.Authentication` and `Microsoft.AspNetCore.Authorization`.
+
+### The metrics of the removed BFF
+
+The BFF had three metrics of its own. The BFF kept each session and refreshed its tokens at the identity provider, and ADR 0014 moved the sessions to the Server. No custom metric replaces the three. These signals answer the same questions:
+
+| Removed metric | The signal now |
+|---|---|
+| `bff.sessions.started` | The log `Started web session {SessionId} for user {UserId}`, and the same log for a native session. `aspnetcore.authentication.sign_ins` does not count them, because the Server stores its own sessions. |
+| `bff.sessions.ended`, with a reason | The columns `revoked_at` and `revoked_reason` of the Auth session row. A refresh token that comes back gives the log `Ended session {SessionId} because an old refresh token came back`. No log marks a logout or an expiry. |
+| `bff.refresh.failures` | An Auth session keeps working when the identity provider is down, so a web session has no refresh that can fail. A failed native refresh shows as the request log of `POST /auth/token` with its 4xx status. |
+
+`aspnetcore.authentication.authenticate.duration` counts each check of a session, and its tag `aspnetcore.authentication.result` tells `success`, `failure`, or `none`.
 
 ## Resource attributes
 
@@ -177,7 +208,7 @@ using var trace = Telemetry.TraceRoot([], "work.run", links);
 
 ## Logs
 
-Serilog is the logging provider. The OTLP sink sends logs to the Aspire dashboard when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. The sink must stay inside the `AddSerilog` callback in `HostExtensions.cs`. The host replaces a logger that you assign to `Log.Logger` in a different location, so its sinks never run.
+Serilog is the logging provider. The file sink writes each log to `logs/` beside the database. The OTLP sink also sends logs to the Aspire dashboard when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Each sink must stay inside the `AddSerilog` callback in `HostExtensions.cs`. A logger that you assign to `Log.Logger` in a different location is replaced when the host resolves `ILoggerFactory`, so its sinks stop there.
 
 ### Call site
 
@@ -194,11 +225,23 @@ _logger.Here().Information("Created tenant {TenantId} for new user {UserId}", te
 - `CallSite` - the short form, for example `MigrationHostedService.cs:StartAsync@31`.
 - `code.function`, `code.file.path`, and `code.line.number` - the same names as on a span.
 
-Log only ids, names of operations, and counts. The privacy rule for spans also applies to logs.
+Log only ids, names of operations, and counts. The [privacy rule](#privacy-rule) applies to each log.
 
 ### Console output
 
 In Development, the console uses a `Serilog.Expressions` template. Each line shows the time, the level, `SourceContext`, `CallSite`, and the trace id. The message is on the next line. In other environments, the console writes `CompactJsonFormatter` JSON. `appsettings.json` gives the formatter as an object, so that `appsettings.Development.json` can replace its type.
+
+The console has no queue. A log call writes to standard output on the thread of the request. When the reader of the pipe stops reading and the pipe is full, each request that writes a log waits until the reader reads again. A probe of `/alive` writes no log, so it stays 200 during this time, and a host that probes only `/alive` does not see the fault. A run with a stopped pipe showed this: requests stopped at 343 of 2000, and `/alive` gave 200 in 0.002 s. That run was a process on a pipe, not a container, so the behavior of a Docker log driver was not measured. The console also has no total limit: a run wrote 292 MB in 25.6 s, and the log driver of the host decides what stays.
+
+`Serilog:WriteTo` holds the console inside `CappedText`, and that setting is the only thing that gives the console its cap. Do not replace it, and do not add a sink to it, unless the new sink is also inside `CappedText`. Three settings show the result of three calls with a text of 20 MB:
+
+| Setting | Result on the console |
+|---|---|
+| `Serilog__WriteTo__0__Name=Console` | No cap and no JSON. The longest line was 20,000,118 bytes, and the total was 60 MB. |
+| `Serilog__WriteTo__1__Name=Console` | The capped console stays, and a second console with no cap and no JSON writes each line again. |
+| `Serilog__WriteTo__0__Name=NoSuchSink` | Only the start line, and no warning. Each later log is lost on the console. |
+
+In each of these runs, the longest line of the log file stayed at 16,968 bytes. `HostExtensions.cs` sets the cap of the file and of the OTLP logs, so these settings do not change it.
 
 ### Request logs
 
@@ -209,12 +252,43 @@ In Development, the console uses a `Serilog.Expressions` template. Each line sho
 - A health probe that the caller leaves during a check gives `Verbose`. In the server, `CallerCancellationHealthCheck` ends each check with the cancellation, so the exception handler gives 499, not 503. A check that runs past its own timeout still reports `Unhealthy` at `Error`.
 - All other requests give `Information`.
 
+## Files
+
+A person who runs Recall on a NAS has no log service, so the server keeps its own files. The folders are beside the database, so `dirname(database)/logs` and `dirname(database)/telemetry`. In the image the database is `/data/recall.db`, so the folders are `/data/logs` and `/data/telemetry`. A process run finds them in the same way. An in-memory database writes no files.
+
+| File | Content | Limit of one file | Files kept | Days kept |
+|---|---|---|---|---|
+| `logs/recall-<date>.jsonl` | One log in each line, in the Serilog compact JSON format, with the trace id in `@tr` and the span id in `@sp` | 10 MiB | 20 | 14 |
+| `telemetry/traces-<date>.jsonl` | One span in each line | 10 MiB | 20 | 14 |
+| `telemetry/metrics-<date>.jsonl` | One point of a metric in each line, each hour | 4 MiB | 15 | 14 |
+
+The most that these limits hold is about 460 MiB: 200 MiB of logs, 200 MiB of traces, and 60 MiB of metrics. The section `FileTelemetry` in `appsettings.json` sets them. Set `FileTelemetry__Logs__FilesKept`, for example, to change one in an environment variable. A file passes its size limit by at most one line, and then the next line opens a new file with a number after the date.
+
+A string in telemetry has at most 16,384 UTF-16 code units (`TelemetryText.MaxLength`). A longer string keeps its start and ends with `...[cut by Recall, length <length>]`. The longest real values that a run gave are stack traces of 8,081 and 5,558 code units, and a caller controls many other strings, such as an MCP method, `clientInfo`, or an argument that an exception message names. The first logger of a start runs before the settings load and has no cap. It writes the start line, a refusal, and a startup failure, and a refusal has its own cap. `SpanTextCapProcessor` runs before each trace exporter, so it holds for the trace file and OTLP. It cuts the name, the status, and the string tags of a span, and the text of each exception event. `LogTextCapSink` wraps the file sink and the OTLP sink in `HostExtensions.cs`, and the console through `Serilog:WriteTo`, so the console keeps it only while that setting stands (see [Console output](#console-output)). It cuts each string value of a log event, its message template, and its exception. An exception that it cuts reaches OTLP with the type `CutException`, and the first words of its text name the real type. `JsonLine` also cuts each tag that is not a string, when it writes the tag to a file, so this holds for the files only.
+
+These caps do not reach each string. A log event keeps the keys of a dictionary, its property names, and a value that is not a string, such as a `Uri`. A span keeps its tag keys, its event names, its trace state, a second value that `AddTag` adds for a key that it already has, and on OTLP the tags of an event that is not an exception. The tests and the attack runs found no way for a client to put a long text in these places, but they do not prove that no way exists. So the limit of a file holds for each client call that they sent, and a new tag or log property that takes text from a caller must be a string value.
+
+A `FileSizeBytes`, `FilesKept`, or `MetricExportSeconds` under 1, a `DaysKept` under 0, a `DaysKept` over 3650, a `MetricExportSeconds` over 86400, or a value that is not a whole number in the range of its type, stops the server at startup with one line that names the setting. A `DaysKept` of 0 keeps only the file that just opened, so each open removes each other file of that signal. The age limit acts when a file opens, so at a start, at the first line of each day, and when a file reaches its size limit.
+
+With a database file, a section with only some of these settings also stops the server at startup with one line that names the first missing setting. With no `FileTelemetry` section, or with an empty one, the server starts, writes no log file and no telemetry file, and gives no warning. The console and OTLP do not change, and a support bundle then has no logs and no telemetry.
+
+`Days kept` is the most that a file stays, and the number of files can remove a file sooner. A request costs about 10.8 KB of traces, so 20 files hold about 19,000 requests. A request costs about 590 bytes of logs, so 20 files hold about 350,000 requests. A flood of requests thus pushes out old logs and old traces, and 14 days holds only on a quiet server. The metrics do hold 14 days. Each day opens a new file, and 15 files hold each file of 14 days. One export is about 9 KB on an idle server and about 48 KB after a request to each route, so one day of exports uses about 1.15 MB of the 4 MiB of its file.
+
+A disk can sleep on an idle server. In 10 minutes with no request, one write reached a file: SQLite moved its write-ahead log into `recall.db` (196,608 bytes) when its last connection closed. An export each 60 seconds gave 10 more writes (91,494 bytes) in the same time, so `FileTelemetry:MetricExportSeconds` is 3600. The server exports metrics each hour, at a stop, and for a support bundle. A crash thus loses at most one hour of metric points. The `auth.sweep` of each hour also opens the database and writes a span, so an idle server writes to the disk at least once in each hour. A probe of `/alive` writes to no file. A probe of `/health` proves that the file store takes a write, at most once in 30 seconds, so a host with a disk that must sleep probes `/alive`.
+
+The server makes these folders with owner-only modes. For these files, a logging call and a span give their data to a queue and return, so a slow or full disk does not hold a request. This is not true for the console, which has no queue (see [Console output](#console-output)). When the disk cannot take a line, or when the queue of 10,000 logs is full, the line goes, and the console shows one warning for each file in each 30 minutes. See [troubleshooting.md](troubleshooting.md#the-log-files-stop). The console and OTLP do not change, and the two OTLP exports run beside the files.
+
+No package fits these files, so `SpanFileExporter` and `MetricFileExporter` are ours. Each writes one JSON line through `JsonLinesFile`, and Serilog.Sinks.File does the rotation. A throw in a span export would end the process, because the batch thread has no catch. A throw in a metric export would lose each metric of that export with no warning, because the metric reader catches it. Each exporter thus catches a throw for each line, such as a tag whose `ToString` throws or an out-of-memory error. It loses that line, keeps the other lines of the batch, reports a failed export, and shows the warning of the file. .NET cannot catch a failure of the runtime itself. A file that cannot flush when it closes, on a full disk or a lost volume, shows one line on the console, and the stop still exits with 0.
+
+The [support bundle](troubleshooting.md#send-a-support-bundle) gives these files to the Owner in one zip. The Owner is the oldest linked Admin of the oldest live tenant. When that Admin loses the role, the next oldest linked Admin becomes the Owner, and the former Owner gets a refusal. Its `settings.json` shows only the sections that `RedactedSettings` names as sections that Recall reads, so a variable of the host stays out. It hides each value unless `RedactedSettings` lists the setting. A new setting thus starts hidden.
+
 ## Tests
 
 - Unit tests use an `ActivityListener` and filter spans by the trace id of the test. Test classes run in parallel, so the listener sees spans from other tests. See `tests/Recall.UnitTests/Resources/TelemetryTests.cs`.
 - Unit tests for metrics use a `MeterListener`. See `tests/Recall.UnitTests/Resources/RequestTracingBehaviorTests.cs`.
 - Functional tests use the OpenTelemetry in-memory exporter. `TestBase.ExportedSpans()` returns the spans that the current test exported. `TestBase.AllExportedSpans()` also returns startup spans, such as `database.migrate`. See `tests/Recall.FunctionalTests/FunctionalTests/Telemetry/TracingTests.cs`.
 - `TestingWebApplicationFactory.ExportedMetrics` collects the exported metrics. Call `MeterProvider.ForceFlush()`, then read them with `ExportedMetrics.Snapshot()`. See `tests/Recall.FunctionalTests/FunctionalTests/Telemetry/MetricsTests.cs`.
+- `OtlpCollector` takes each OTLP export of the `AuthHosts.Bundle` host over gRPC and keeps its bytes. A string in protobuf is plain UTF-8, so `Holds` finds a text with no parser. `AuthHosts` adds the logger of that host to the static `Log.Logger`, because a handler writes through the static logger, and one process has only one. See `tests/Recall.FunctionalTests/FunctionalTests/Support/SupportBundleTests.JournalText.cs`.
 
 ## Read telemetry as an agent
 

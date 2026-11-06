@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { SupportBundleSection } from '@/domain/support/components/support-bundle-section'
 
 export const Route = createFileRoute('/about')({
   component: About,
@@ -43,6 +44,7 @@ function About() {
                 <strong className="text-foreground">React Aria Components + shadcn</strong> - Component library, animated with Animate UI
               </li>
             </ul>
+            <SupportBundleSection />
           </CardContent>
         </Card>
       </div>
