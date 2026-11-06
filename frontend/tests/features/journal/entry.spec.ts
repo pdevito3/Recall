@@ -219,6 +219,26 @@ test.describe('an entry', () => {
     await expect(entry.at.conflict('The words on this page are safe in History.')).toHaveCount(0)
   })
 
+  test('a second save that loses on another page shows the notice again on the way back', async ({ page, api }) => {
+    const session = aSession().atRevision(4).saying('Mine').build()
+    api.mock(sessionsApi.oneIs(session), sessionsApi.timelineIs([]), sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+    await entry.edit(session.id, ' edited')
+    await expect(entry.at.status('Saved in History at')).toBeVisible()
+
+    api.mock({ ...sessionsApi.draftSaveLoses(session, { draftRevision: 7, latestRevision: 8 }), delayMs: 500 })
+    const answered = entry.aSaveAnswered(session.id)
+    await entry.editWithoutWaiting(' twice')
+    await expect.poll(() => api.all('put', sessionsPaths.rawDraft(session.id)).length).toBe(2)
+    await entry.goToTheJournal()
+    await answered
+    await entry.goBack()
+
+    await expect(entry.at.conflict('The words on this page are safe in History.')).toBeVisible()
+    await expect(entry.at.words('twice')).toBeVisible()
+  })
+
   test('newest words that do not load say so, and the words on the page stay', async ({ page, api }) => {
     const session = aSession().atRevision(4).saying('Mine').build()
     api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }))

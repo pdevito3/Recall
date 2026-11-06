@@ -22,7 +22,7 @@ let listedZones: ZoneOption[] | undefined
 
 // The list of the browser leaves out UTC and the new name of a renamed zone, such as Asia/Kolkata. A label costs about 0.5 ms.
 function zoneOptions(savedZone: TimeZone): ZoneOption[] {
-  listedZones ??= ['UTC', ...Intl.supportedValuesOf('timeZone')].sort().map(zoneOption)
+  listedZones ??= [...new Set(['UTC', ...Intl.supportedValuesOf('timeZone')])].sort().map(zoneOption)
   if (listedZones.some(({ id }) => id === savedZone)) return listedZones
   return [...listedZones, zoneOption(savedZone)].sort((a, b) => (a.id < b.id ? -1 : 1))
 }

@@ -55,6 +55,7 @@ export class DraftSaver {
   private replyCount = 0
   private conflictIsUnseen = false
   private wordsInHistory: string | null = null
+  private wordsOnServer: string | null = null
 
   constructor(target: DraftTarget, queryClient: QueryClient, resumed?: Stamped<string>) {
     this.target = target
@@ -93,6 +94,10 @@ export class DraftSaver {
   wordsToOpen() {
     const hasUnseenLoss = this.conflictIsUnseen && this.snapshot.conflict === 'wordsMovedToHistory'
     return this.unsettledText() ?? (hasUnseenLoss ? this.wordsInHistory : null)
+  }
+
+  lastSavedWords() {
+    return this.wordsOnServer
   }
 
   hasUnseenConflict() {
@@ -192,8 +197,9 @@ export class DraftSaver {
       this.update({ baseRevision: reply.draftRevision, latestRevision: Math.max(latestRevision, reply.latestRevision) })
     }
     const nextConflict = conflictAfter(reply, holdsWords, latestRevision, conflict)
-    if (nextConflict !== conflict) this.conflictIsUnseen = this.listeners.size === 0
+    if (nextConflict !== conflict || reply.outcome === 'Lost') this.conflictIsUnseen = this.listeners.size === 0
     if (reply.outcome === 'Lost') this.wordsInHistory = change.value
+    if (holdsWords) this.wordsOnServer = change.value
     this.update({ conflict: nextConflict })
     const id = this.snapshot.sessionId
     if (!id) return
