@@ -30,7 +30,7 @@ Preconditions:
 - **Connect.** Choose `Model providers`. Fill `Name`, `Base URL`, and `API key`. Choose `Connect`. The level 3 heading of the provider shows, and `API key` is empty.
 - **Test.** Choose `Test connection` on the provider. The status starts with `Connected.`.
 - **Model.** Choose `Model of <name>`, then an option. The hint `Test the connection, then pick a model.` goes away.
-- **Bad key.** Connect a second provider with another key, and choose `Test connection`. The alert holds the words of the fake.
+- **Bad key.** Connect a second provider with another key, and choose `Test connection`. The alert holds the words of the fake. The newest provider is active, so choose `Make active` on the first provider before a Cleanup. If you do not, `Run Cleanup` gets a 422 because the active provider has no model.
 - **Cleanup.** Open `/model-providers?session=<id>`, and choose `Run Cleanup`. The status shows `You can close this page`. A reload shows `Cleaned is current.`. Raw shows the words of the draft.
 - **Proof.** Run `node $S/scripts/browse.mjs $S/recipes/model-providers.mjs`. The captures `connected`, `tested`, `bad-key`, `running`, and `cleaned` show each state.
 

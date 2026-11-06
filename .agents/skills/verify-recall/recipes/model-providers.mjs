@@ -32,7 +32,7 @@ export default async ({ page, step, capture, expect, login }) => {
   const key = `fake-key-${randomUUID()}`
   const fake = await startFake(key)
   const name = `Fake ${Date.now().toString(36)}`
-  const cardOf = (title) => page.locator('[data-slot="card"]').filter({ has: page.getByRole('heading', { level: 3, name: title }) })
+  const cardOf = (title) => page.locator('[data-slot="card"]').filter({ has: page.getByRole('heading', { level: 3, name: title, exact: true }) })
 
   const connect = async (title, apiKey) => {
     await page.getByLabel('Name').fill(title)
@@ -76,6 +76,12 @@ export default async ({ page, step, capture, expect, login }) => {
       await expect(card.getByRole('alert')).toContainText('The connection failed.')
     })
     await capture('bad-key')
+
+    await step('the newest provider is active, so make the good one active again', async () => {
+      const card = cardOf(name)
+      await card.getByRole('button', { name: 'Make active' }).click()
+      await expect(card.getByText('Active', { exact: true })).toBeVisible()
+    })
 
     const session = await step('add a Session with a draft through the API', async () => {
       const made = await page.evaluate(async (clientSessionId) => {

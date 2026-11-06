@@ -25,7 +25,8 @@ function open(file) {
 }
 
 function tablesOf(db, database) {
-  const names = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' ORDER BY name`).all()
+  // BackWave owns its tables and writes them on its own clock, so they are no effect of a scenario, and a restore under a live job server must not touch them.
+  const names = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' AND name NOT LIKE 'backwave\\_%' ESCAPE '\\' ORDER BY name`).all()
   const tables = names.map(({ name }) => {
     const info = db.prepare(`PRAGMA table_info(${ident(name)})`).all()
     return {
