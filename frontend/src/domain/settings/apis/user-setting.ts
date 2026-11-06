@@ -86,6 +86,8 @@ export function settingSaver(queryClient: QueryClient) {
     rules: {
       asksFirst: (field, value) => field === 'locationCaptureEnabled' && value === true,
       neverAsks: (field, value) => field === 'locationCaptureEnabled' && value === false,
+      // The first save of a zone comes from the browser. A zone on the row is a choice of the person.
+      yieldsToTheRow: (field, before) => field === 'timeZone' && !before,
     },
     onAppliedWithNoAsk: () => Notification.info('Your location is no longer saved with new entries. Your settings changed elsewhere first, and this change still applied.'),
     resumed: owner ? readUnsentSetting(owner) : null,

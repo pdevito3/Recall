@@ -28,6 +28,8 @@ export interface RowSaverState<F> {
 export interface StaleRules<F> {
   asksFirst?: (field: keyof F, value: F[keyof F]) => boolean
   neverAsks?: (field: keyof F, value: F[keyof F]) => boolean
+  /** The app chose this value and the person did not, so the value of the row wins with no question. */
+  yieldsToTheRow?: (field: keyof F, before: F[keyof F]) => boolean
 }
 
 interface StaleInput<F> {
@@ -54,7 +56,7 @@ export function planAfterStale<F extends object>({ changed, before, fresh, hadNo
   for (const field of fieldsIn(changed)) {
     const yours = changed[field] as F[keyof F]
     const now = fresh[field]
-    if (isSame(yours, now)) continue
+    if (isSame(yours, now) || rules?.yieldsToTheRow?.(field, before[field])) continue
     if (rules?.neverAsks?.(field, yours)) {
       plan.apply[field] = yours as F[typeof field]
       plan.appliedWithNoAsk.push(field)

@@ -165,6 +165,18 @@ test('a change that turns capture on asks after a 409, also when capture did not
   saver.dispose()
 })
 
+test('a value that the app chose yields to the row, with no question', () => {
+  const plan = planAfterStale<Fields>({
+    changed: { zone: 'Europe/Athens', capture: true },
+    before: { zone: '', capture: false, topics: [] },
+    fresh: { zone: 'Africa/Cairo', capture: false, topics: [] },
+    hadNoReply: false,
+    rules: { yieldsToTheRow: (field, before) => field === 'zone' && before === '' },
+  })
+
+  expect(plan).toEqual({ apply: { capture: true }, asks: [], appliedWithNoAsk: [] })
+})
+
 test('a change that turns capture on applies with no prompt when the row did not change', async () => {
   const api = server()
   const { saver } = saverOn(api, { current: api.row.current })
