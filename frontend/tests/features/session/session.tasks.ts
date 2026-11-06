@@ -114,6 +114,7 @@ export function sessionPage(page: Page) {
       })
 
       await link.click()
+      await at.userMenu.click()
       // A fast logout starts its navigation inside the click, and then the click waits for the login that this check holds.
       await Promise.all([at.logout.click(), logoutOpensThe401, checked])
     },

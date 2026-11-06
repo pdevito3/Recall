@@ -74,7 +74,7 @@ export function EditorToolbar({ editor }: { editor: Editor }) {
   const active = useEditorState({
     editor,
     selector: ({ editor: current }) => tools.map((tool) => tool.isActive(current)),
-    equalityFn: (a, b) => a.every((value, index) => value === b[index]),
+    equalityFn: (a, b) => b !== null && a.every((value, index) => value === b[index]),
   })
 
   return (

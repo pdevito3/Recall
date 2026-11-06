@@ -1,6 +1,9 @@
 import { test as base, expect, type Request } from '@playwright/test'
 import { authApi } from './api/auth-api'
 import { membershipApi } from './api/membership-api'
+import { peopleApi } from './api/people-api'
+import { sessionsApi } from './api/sessions-api'
+import { aSetting, settingsApi } from './api/settings-api'
 import { usersApi } from './api/users-api'
 import { isMockedPath, requestRecorder, type HttpMethod, type MockRoute, type ServedRequest } from './api/mock-route'
 import { as, type Identity } from './auth/actors'
@@ -31,7 +34,14 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
   api: [
     async ({ page, actor, baseURL }, provide) => {
       const origin = new URL(baseURL!).origin
-      const routes: MockRoute[] = [authApi.userIs(actor), ...membershipApi.userIs(actor), ...usersApi.currentOf(actor)]
+      const routes: MockRoute[] = [
+        authApi.userIs(actor),
+        ...membershipApi.userIs(actor),
+        ...usersApi.currentOf(actor),
+        settingsApi.are(aSetting()),
+        sessionsApi.timelineIs([]),
+        peopleApi.listIs([]),
+      ]
       const served = requestRecorder()
       const missed: string[] = []
 

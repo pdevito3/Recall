@@ -43,6 +43,10 @@ class ProblemDetailsBuilder {
     })
   }
 
+  refusing(detail: string) {
+    return new ProblemDetailsBuilder({ ...this.problem, status: 422, title: 'Unprocessable Entity', detail })
+  }
+
   forbidden(detail: string) {
     return new ProblemDetailsBuilder({
       ...this.problem,

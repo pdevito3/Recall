@@ -42,7 +42,8 @@ export class SerialSaver<T, R> {
     this.queue = options.initialQueue ?? emptyQueue<T>()
     this.status = statusOf(this.queue)
     window.addEventListener('online', this.retryNow)
-    if (this.queue.unanswered) this.retryNow()
+    // A page can make a saver while it renders, so the first send waits for the render to end.
+    if (this.queue.unanswered) this.retry = setTimeout(this.retryNow, 0)
   }
 
   edit(value: T) {

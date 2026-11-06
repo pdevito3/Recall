@@ -47,7 +47,7 @@ export function Timeline({ zone, hiddenSessionId }: TimelineProps) {
   if (timeline.isPending) {
     return <p role="status" aria-label="Loading your entries" className="text-muted-foreground">Loading your entries</p>
   }
-  if (timeline.isError) {
+  if (timeline.isLoadingError) {
     return <QueryError title="Your entries did not load." error={timeline.error} onRetry={() => timeline.refetch()} />
   }
   if (groups.length === 0) {

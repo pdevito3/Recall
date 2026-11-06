@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useCallback, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 
 import { useUserSetting } from '@/domain/settings/apis/user-setting'
 import { isFirstPageOfLoad } from '@/lib/first-page'
@@ -76,12 +76,18 @@ export function useComposer() {
   const shown = saver ?? finished
   const snapshot = useSyncExternalStore(shown?.subscribe ?? noSubscription, shown?.getSnapshot ?? (() => idleSnapshot))
 
+  const sessionId = saver ? snapshot.sessionId : null
+  useEffect(() => {
+    const current = readPointer()
+    if (sessionId && current) writePointer({ ...current, sessionId })
+  }, [sessionId])
+
   const handleChange = useCallback(
     (text: string, isEmpty: boolean) => {
       if (saver) {
         saver.edit(text)
         const current = readPointer()
-        if (current) writePointer({ ...current, sessionId: saver.getSnapshot().sessionId, touchedAt: Date.now() })
+        if (current) writePointer({ ...current, touchedAt: Date.now() })
         return
       }
       if (isEmpty) return
@@ -112,21 +118,24 @@ export function useComposer() {
     setEditorKey((key) => key + 1)
   }, [saver])
 
+  const startOver = useCallback(() => {
+    writePointer(null)
+    setSaver(null)
+    setEditorKey((key) => key + 1)
+  }, [])
+
   return {
     editorKey,
     autoFocus: isFirstPageOfLoad() || editorKey > 0,
     resumedSessionId,
     saver,
     status: snapshot.status,
-    composingSessionId: saver ? snapshot.sessionId : null,
+    composingSessionId: sessionId,
     canFinish: saver !== null,
     handleChange,
     finish,
+    startOver,
   }
 }
 
 export type Composer = ReturnType<typeof useComposer>
-
-export function forgetComposerEntry() {
-  writePointer(null)
-}

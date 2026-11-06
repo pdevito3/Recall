@@ -5,6 +5,7 @@ import { PageHeading } from '@/components/page-heading'
 import { ComposerForm } from '@/domain/sessions/components/composer'
 import { Timeline } from '@/domain/sessions/components/timeline'
 import { useComposer } from '@/domain/sessions/components/use-composer'
+import { useSeedTimeZone } from '@/domain/settings/apis/use-seed-time-zone'
 import { useJournalZone } from '@/domain/settings/apis/user-setting'
 import { formatDate, todayAt } from '@/lib/zoned-time'
 
@@ -14,6 +15,7 @@ export const Route = createFileRoute('/')({
 })
 
 function Journal() {
+  useSeedTimeZone()
   const zone = useJournalZone()
   const composer = useComposer()
   const today = formatDate(todayAt(zone, new Date()), { weekday: 'long', month: 'long', day: 'numeric' })

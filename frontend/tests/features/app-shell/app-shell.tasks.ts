@@ -55,11 +55,19 @@ export function appShellPage(page: Page) {
     },
 
     async clickBlankContent() {
-      await at.currentPage.click()
+      await at.composerHint.click()
     },
 
     async focusedElement() {
       return page.evaluate(() => (document.activeElement === document.body ? 'body' : document.activeElement?.tagName))
+    },
+
+    async leftEdgeOfThePageHeadingAt(address: string) {
+      await page.goto(address)
+      await expect(at.pageHeading).toBeVisible()
+      const box = await at.pageHeading.boundingBox()
+      if (!box) throw new Error('The heading has no box')
+      return box.x
     },
 
     async addWideContent(width: number) {

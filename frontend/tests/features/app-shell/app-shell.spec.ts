@@ -1,3 +1,4 @@
+import { usersApi } from '@tests/support/api/users-api'
 import { expect, test } from '@tests/support/fixtures'
 import { useDefaultFontSize } from '@tests/support/screen'
 import { homePage } from '../home/home.tasks'
@@ -70,19 +71,19 @@ test.describe('the landmarks of the layout', () => {
 
     await shell.openAbout()
 
-    await expect(shell.at.homeNavigationLink).toBeVisible()
+    await expect(shell.at.journalNavigationLink).toBeVisible()
     await expect(shell.at.aboutNavigationLink).toBeVisible()
   })
 })
 
 test.describe('the current item of the sidebar', () => {
-  test('on the about page, About is the page and Home is not current', async ({ page }) => {
+  test('on the about page, About is the page and Journal is not current', async ({ page }) => {
     const shell = appShellPage(page)
 
     await shell.openAbout()
 
     await expect(shell.at.aboutNavigationLink).toHaveAttribute('aria-current', 'page')
-    await expect(shell.at.homeNavigationLink).not.toHaveAttribute('aria-current')
+    await expect(shell.at.journalNavigationLink).not.toHaveAttribute('aria-current')
     await expect(shell.at.currentNavigationItems).toHaveCount(1)
   })
 
@@ -128,7 +129,7 @@ test.describe('an unknown address', () => {
     await shell.goHome()
 
     await expect(homePage(page).at.heading).toBeVisible()
-    await expect(shell.at.currentPage).toHaveText('Home')
+    await expect(shell.at.currentPage).toHaveText('Journal')
   })
 })
 
@@ -214,5 +215,36 @@ test.describe('the mobile sidebar on a 320 px phone with a 24 px default font', 
         lineBoxOverflowOfTheFontPx,
       ),
     ).toBe(true)
+  })
+})
+
+for (const viewport of [
+  { width: 1280, height: 800 },
+  { width: 390, height: 844 },
+]) {
+  test.describe(`the content of each page at ${viewport.width} px`, () => {
+    test.use({ viewport })
+
+    test('starts at one left edge', async ({ page, api }) => {
+      api.mock(usersApi.listReturns([]))
+      const shell = appShellPage(page)
+
+      const edges = []
+      for (const address of ['/', '/people', '/settings', '/users', '/about']) {
+        edges.push(await shell.leftEdgeOfThePageHeadingAt(address))
+      }
+
+      expect(new Set(edges).size).toBe(1)
+    })
+  })
+}
+
+test.describe('the accessibility tree of the layout', () => {
+  test('names one sidebar toggle', async ({ page }) => {
+    const shell = appShellPage(page)
+
+    await shell.openAbout()
+
+    expect(await shell.at.sidebarToggles.count()).toBe(1)
   })
 })

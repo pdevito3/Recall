@@ -44,9 +44,9 @@ test.describe('a session that ends while the page is open', () => {
     await session.open('/about')
 
     api.mock(...authApi.sessionEnded(usersPaths.current))
-    const { toasted } = await session.followAndGoToLogin(session.at.homeLink)
+    const { toasted } = await session.followAndGoToLogin(session.at.settingsLink)
 
-    expect(api.last('get', authPaths.login)?.query.get('returnUrl')).toBe('/')
+    expect(api.last('get', authPaths.login)?.query.get('returnUrl')).toBe('/settings')
     expect(toasted, 'a toast showed before the login').toBe(false)
   })
 })
@@ -61,7 +61,7 @@ test.describe('a sign-out with a call of the API that answers 401 after it', () 
       { method: 'post', path: authPaths.logout, status: 204 },
       { method: 'get', path: authPaths.me, status: 204 },
     )
-    await session.followAndSignOutBeforeA401(session.at.homeLink, usersPaths.current)
+    await session.followAndSignOutBeforeA401(session.at.settingsLink, usersPaths.current)
 
     await expect.poll(() => page.url(), { timeout: 10000 }).toContain('signedOut=1')
     expect(api.all('get', authPaths.login).filter((request) => request.query.has('returnUrl'))).toHaveLength(0)
@@ -74,7 +74,7 @@ test.describe('a call of the API that answers 401 while the session lives', () =
     await session.open('/about')
 
     api.mock(...authApi.apiAnswers401WhileTheSessionLives(usersPaths.current))
-    await session.followAndWaitForTheSessionCheck(session.at.homeLink)
+    await session.followAndWaitForTheSessionCheck(session.at.settingsLink)
 
     await expect(session.at.rejectedSignInToast).toBeVisible()
     await expect(session.at.navigation).toBeVisible()

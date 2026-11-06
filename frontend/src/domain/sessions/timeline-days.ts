@@ -11,7 +11,7 @@ export interface DayGroup {
 export function groupByDay(rows: SessionSummaryDto[]): DayGroup[] {
   const groups: DayGroup[] = []
   for (const row of rows) {
-    const last = groups.at(-1)
+    const last = groups[groups.length - 1]
     if (last?.day === row.journalingDay) last.rows.push(row)
     else groups.push({ day: row.journalingDay, rows: [row] })
   }

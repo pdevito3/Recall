@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { useJournalZone } from '@/domain/settings/apis/user-setting'
@@ -7,7 +7,7 @@ import { useJournalZone } from '@/domain/settings/apis/user-setting'
 import { sessionQueryOptions } from '../apis/get-session'
 import { JournalEditor } from '../editor/journal-editor'
 import { SaveStatusLine } from './save-status'
-import { forgetComposerEntry, type Composer } from './use-composer'
+import type { Composer } from './use-composer'
 
 const editorLabel = 'New entry'
 
@@ -30,24 +30,31 @@ export function ComposerForm({ composer }: { composer: Composer }) {
 }
 
 function ComposerEditor({ composer }: { composer: Composer }) {
-  // The words of an earlier page load: first those with no reply, then those that the Server holds.
-  const unsettled = composer.saver?.unsettledText() ?? null
-  const needsServerWords = composer.editorKey === 0 && unsettled === null && composer.resumedSessionId !== null
-  const resumed = useQuery({
-    ...sessionQueryOptions(composer.resumedSessionId ?? ''),
-    enabled: needsServerWords,
+  const { saver, resumedSessionId, startOver } = composer
+  // The words of an earlier page load: first those with no reply, then those that the Server holds. The editor reads them once.
+  const [opening] = useState(() => {
+    const unsettled = saver?.unsettledText() ?? null
+    return { unsettled, needsServerWords: unsettled === null && resumedSessionId !== null }
   })
-  const [frozenUnsettled] = useState(unsettled)
+  const resumed = useQuery({
+    ...sessionQueryOptions(resumedSessionId ?? ''),
+    enabled: opening.needsServerWords,
+  })
 
-  if (needsServerWords && resumed.isPending) {
+  useEffect(() => {
+    if (resumed.data) saver?.moveBaseTo(resumed.data.rawLatestRevision)
+    // The entry is gone, for example after a delete in another tab, so the page starts a new one.
+    if (resumed.isError) startOver()
+  }, [resumed.data, resumed.isError, saver, startOver])
+
+  if (opening.needsServerWords && resumed.isPending) {
     return <div role="status" aria-label="Loading your entry" className="min-h-32 rounded-lg border bg-card" />
   }
-  if (needsServerWords && resumed.isError) forgetComposerEntry()
 
   return (
     <JournalEditor
       key={composer.editorKey}
-      initialText={composer.editorKey === 0 ? (frozenUnsettled ?? resumed.data?.rawText ?? '') : ''}
+      initialText={composer.editorKey === 0 ? (opening.unsettled ?? resumed.data?.rawText ?? '') : ''}
       label={editorLabel}
       placeholder="What is on your mind?"
       autoFocus={composer.autoFocus}

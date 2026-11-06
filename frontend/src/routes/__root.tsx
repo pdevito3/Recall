@@ -19,7 +19,6 @@ import { login, returnUrlOf } from '@/domain/auth/apis/auth-actions'
 import { authUserQuery } from '@/domain/auth/apis/get-user'
 import { MembershipCheckFailedNotice } from '@/domain/membership/components/membership-notice'
 import { useResumeUnsentDrafts } from '@/domain/sessions/autosave/use-resume-unsent-drafts'
-import { useSeedTimeZone } from '@/domain/settings/apis/use-seed-time-zone'
 import { HrefRouterProvider } from '@/components/ui/link'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -88,7 +87,6 @@ function Layout() {
 
 function LayoutContent() {
   useResumeUnsentDrafts()
-  useSeedTimeZone()
   const routerState = useRouterState()
   const page = routerState.matches[routerState.matches.length - 1]
   const isNotFound = routerState.matches.some((match) => match.globalNotFound)

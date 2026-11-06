@@ -1,10 +1,7 @@
 import type { Page } from '@playwright/test'
 
 export const home = (page: Page) => ({
-  heading: page.getByRole('heading', { level: 1, name: 'Recall' }),
-  signedInAs: (name: string) => page.getByText(`Signed in as ${name}`, { exact: true }),
-  userFailed: page.getByText('The Server could not load your user.', { exact: true }),
-  logout: page.getByRole('button', { name: 'Logout', exact: true }),
+  heading: page.getByRole('main').getByRole('heading', { level: 1 }),
   userMenu: (name: string) => page.getByRole('button', { name: `User menu for ${name}`, exact: true }),
   userMenuName: (name: string) => page.getByRole('menu', { name: 'User menu' }).getByText(name, { exact: true }),
   userMenuLogout: page.getByRole('menuitem', { name: 'Logout', exact: true }),

@@ -1,6 +1,5 @@
-import { Extension } from '@tiptap/core'
 import { Placeholder } from '@tiptap/extensions'
-import { EditorContent, useEditor, type Editor } from '@tiptap/react'
+import { EditorContent, Extension, useEditor, type Editor } from '@tiptap/react'
 import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 
 import { useAddPerson, usePeopleDirectory } from '@/domain/people/apis/people'
@@ -50,7 +49,8 @@ export function JournalEditor({ initialText, label, placeholder, autoFocus, onCh
       ...textExtensions,
       PersonMention.configure({ suggestion: mentionSuggestion(mentionSource) }),
       Placeholder.configure({ placeholder: placeholder ?? '' }),
-      JournalKeys.configure({ onSubmit: () => callbacks.current.onSubmit?.() }),
+      SubmitKey.configure({ onSubmit: () => callbacks.current.onSubmit?.() }),
+      LeaveKey,
     ],
     editorProps: {
       attributes: {
@@ -71,19 +71,29 @@ export function JournalEditor({ initialText, label, placeholder, autoFocus, onCh
   )
 }
 
-/** A low priority, so that an open list of people gets the Escape key first. */
-const JournalKeys = Extension.create<{ onSubmit: () => void }>({
-  name: 'journalKeys',
-  priority: 50,
+/** A high priority, because a hard break of the StarterKit also binds this key. Shift-Enter still makes a hard break. */
+const SubmitKey = Extension.create<{ onSubmit: () => void }>({
+  name: 'journalSubmitKey',
+  priority: 200,
   addKeyboardShortcuts() {
     return {
       'Mod-Enter': () => {
         this.options.onSubmit()
         return true
       },
-      // Tab moves a list item inside a list, so this is how a keyboard leaves the editor there.
-      Escape: () => this.editor.commands.blur(),
     }
+  },
+})
+
+/**
+ * Tab moves a list item inside a list, so this is how a keyboard leaves the editor there.
+ * A low priority, so that an open list of people gets the Escape key first.
+ */
+const LeaveKey = Extension.create({
+  name: 'journalLeaveKey',
+  priority: 50,
+  addKeyboardShortcuts() {
+    return { Escape: () => this.editor.commands.blur() }
   },
 })
 

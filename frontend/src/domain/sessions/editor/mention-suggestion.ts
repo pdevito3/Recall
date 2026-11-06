@@ -1,5 +1,5 @@
 import { ReactRenderer, type Editor } from '@tiptap/react'
-import type { SuggestionOptions, SuggestionProps } from '@tiptap/suggestion'
+import type { MentionOptions } from '@tiptap/extension-mention'
 
 import { MentionList, type MentionListHandle, type MentionOption } from './mention-list'
 
@@ -45,23 +45,21 @@ function insertMention(editor: Editor, range: { from: number; to: number }, pers
     .run()
 }
 
-export function mentionSuggestion(source: MentionSource): Omit<SuggestionOptions<MentionOption, MentionOption>, 'editor'> {
+export function mentionSuggestion(source: MentionSource): MentionOptions['suggestion'] {
   return {
     char: '@',
     items: ({ query }) => optionsFor(source.people(), query),
     command: ({ editor, range, props }) => {
-      if (props.kind === 'person') {
-        insertMention(editor, range, props.personId, props.label)
+      // The list gives `command` the option that the person picks, and the types of TipTap expect the attributes of a node.
+      const option = props as unknown as MentionOption
+      if (option.kind === 'person') {
+        insertMention(editor, range, option.personId, option.label)
         return
       }
-      void source.addPerson(props.label).then((person) => insertMention(editor, range, person.id, person.label))
+      void source.addPerson(option.label).then((person) => insertMention(editor, range, person.id, person.label))
     },
     render: () => {
       let list: ReactRenderer<MentionListHandle> | undefined
-      const update = (props: SuggestionProps<MentionOption, MentionOption>) => {
-        list?.updateProps(props)
-        if (list) place(list.element as HTMLElement, props.clientRect?.())
-      }
       return {
         onStart: (props) => {
           list = new ReactRenderer(MentionList, { props, editor: props.editor })
@@ -71,7 +69,10 @@ export function mentionSuggestion(source: MentionSource): Omit<SuggestionOptions
           document.body.append(popup)
           place(popup, props.clientRect?.())
         },
-        onUpdate: update,
+        onUpdate: (props) => {
+          list?.updateProps(props)
+          if (list) place(list.element as HTMLElement, props.clientRect?.())
+        },
         onKeyDown: ({ event }) => {
           if (event.key === 'Escape') {
             list?.destroy()

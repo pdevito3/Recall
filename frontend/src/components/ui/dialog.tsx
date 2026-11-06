@@ -130,7 +130,7 @@ function DialogTitle({
       slot="title"
       data-slot="dialog-title"
       className={cn(
-        "text-base leading-snug font-medium wrap-anywhere in-data-close-button:pr-8",
+        "text-base leading-snug font-medium wrap-anywhere in-data-close-button:pr-8 max-md:in-data-close-button:pr-12",
         className
       )}
       {...props}

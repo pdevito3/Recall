@@ -9,7 +9,7 @@ import { saveRawDraft } from '@/api/generated/sessions/clients/save-raw-draft'
 import { SessionKeys, type DraftChannel } from '../apis/session.keys'
 import { patchTimelineRow, refreshTimelineHead } from '../apis/timeline-cache'
 import { plainPreviewOf } from '../editor/content'
-import { readOutbox, removeFromOutbox, writeToOutbox } from './outbox'
+import { readOutbox, readOutboxEntry, removeFromOutbox, writeToOutbox, type OutboxEntry } from './outbox'
 import { queueWithUnanswered, newestUnsettled, type SaveQueue, type SaveStatus, type Stamped } from './save-queue'
 import { SerialSaver } from './serial-saver'
 
@@ -198,11 +198,17 @@ const savers = new Map<string, DraftSaver>()
 const draftKey = ({ clientSessionId, channel }: Pick<DraftTarget, 'clientSessionId' | 'channel'>) =>
   `${clientSessionId}.${channel}`
 
+function saverFromOutbox(entry: OutboxEntry, target: DraftTarget, queryClient: QueryClient) {
+  return new DraftSaver({ ...target, sessionId: entry.sessionId, baseRevision: entry.baseRevision }, queryClient, entry.change)
+}
+
+/** The saver of one text. Words from an earlier page load that have no reply go first. */
 export function draftSaverFor(target: DraftTarget, queryClient: QueryClient): DraftSaver {
   const key = draftKey(target)
   const existing = savers.get(key)
   if (existing) return existing
-  const saver = new DraftSaver(target, queryClient)
+  const entry = readOutboxEntry(target.owner, key)
+  const saver = entry ? saverFromOutbox(entry, target, queryClient) : new DraftSaver(target, queryClient)
   savers.set(key, saver)
   return saver
 }
@@ -213,11 +219,9 @@ export function discardDraftSavers(clientSessionId: string) {
   }
 }
 
-/** Sends the words that an earlier page load did not get a reply for. */
+/** Sends the words that an earlier page load did not get a reply for, also of an entry that no page opens. */
 export function resumeUnsentDrafts(owner: string, queryClient: QueryClient) {
   for (const entry of readOutbox(owner)) {
-    if (savers.has(entry.key)) continue
-    const target: DraftTarget = { ...entry, owner }
-    savers.set(entry.key, new DraftSaver(target, queryClient, entry.change))
+    if (!savers.has(entry.key)) savers.set(entry.key, saverFromOutbox(entry, { ...entry, owner }, queryClient))
   }
 }

@@ -29,6 +29,14 @@ export function removeFromOutbox(owner: string, key: string) {
   }
 }
 
+export function readOutboxEntry(owner: string, key: string): OutboxEntry | null {
+  try {
+    return JSON.parse(localStorage.getItem(prefixOf(owner) + key) ?? 'null') as OutboxEntry | null
+  } catch {
+    return null
+  }
+}
+
 export function readOutbox(owner: string): OutboxEntry[] {
   try {
     return Object.keys(localStorage)
