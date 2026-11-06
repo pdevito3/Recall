@@ -10,8 +10,8 @@ public class ProviderLogoutTests
     private const string SignedOutPage = "/auth/login?signedOut=1";
     private const string ReturnUrl = "http://localhost/auth/signed-out";
 
-    private static readonly string ProviderLogoutUrl =
-        $"{StubOidcProvider.Issuer}/logout?client_id={StubOidcProvider.ClientId}&post_logout_redirect_uri={Uri.EscapeDataString(ReturnUrl)}";
+    private static readonly string ProviderLogoutUrlBeforeItsState =
+        $"{StubOidcProvider.Issuer}/logout?client_id={StubOidcProvider.ClientId}&post_logout_redirect_uri={Uri.EscapeDataString(ReturnUrl)}&state=";
 
     private static async Task<AuthBrowser> SignedInBrowserAsync(AuthFlowFactory host)
     {
@@ -25,6 +25,12 @@ public class ProviderLogoutTests
 
     private static Task<HttpResponseMessage> LogoutAsync(AuthBrowser browser) => browser.PostFormAsync("/auth/logout", [], csrf: true);
 
+    private static async Task<HttpResponseMessage> ReturnFromProviderAsync(AuthBrowser browser, HttpResponseMessage logout)
+    {
+        var url = (await ProviderLogoutUrlOf(logout))!;
+        return await browser.GetAsync($"/auth/signed-out?state={url[ProviderLogoutUrlBeforeItsState.Length..]}");
+    }
+
     [Test]
     public async Task a_browser_logout_ends_the_session_and_answers_the_logout_url_of_its_provider()
     {
@@ -37,7 +43,7 @@ public class ProviderLogoutTests
 
         // Assert
         logout.StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await ProviderLogoutUrlOf(logout)).ShouldBe(ProviderLogoutUrl);
+        (await ProviderLogoutUrlOf(logout)).ShouldStartWith(ProviderLogoutUrlBeforeItsState);
         browser.SessionCookie.ShouldBeNull();
         me.StatusCode.ShouldBe(HttpStatusCode.NoContent);
     }
@@ -55,7 +61,7 @@ public class ProviderLogoutTests
         var logout = await LogoutAsync(browser);
 
         // Assert
-        (await ProviderLogoutUrlOf(logout)).ShouldBe(ProviderLogoutUrl);
+        (await ProviderLogoutUrlOf(logout)).ShouldStartWith(ProviderLogoutUrlBeforeItsState);
     }
 
     [Test]
@@ -95,7 +101,8 @@ public class ProviderLogoutTests
     {
         // Arrange
         using var browser = await SignedInBrowserAsync(AuthHosts.Open);
-        await LogoutAsync(browser);
+        var logout = await LogoutAsync(browser);
+        var providerLogoutUrl = await ProviderLogoutUrlOf(logout);
 
         // Act
         var plainVisit = await browser.GetAsync("/auth/login?returnUrl=%2Fentries");
@@ -108,7 +115,7 @@ public class ProviderLogoutTests
             var html = await page.Content.ReadAsStringAsync();
             html.ShouldContain("<h1>You are signed out</h1>");
             html.ShouldContain("did not send you back");
-            html.ShouldContain($"<a href=\"{WebUtility.HtmlEncode(ProviderLogoutUrl)}\">Sign out of Stub</a>");
+            html.ShouldContain($"<a href=\"{WebUtility.HtmlEncode(providerLogoutUrl)}\">Sign out of Stub</a>");
         }
     }
 
@@ -117,10 +124,10 @@ public class ProviderLogoutTests
     {
         // Arrange
         using var browser = await SignedInBrowserAsync(AuthHosts.Open);
-        await LogoutAsync(browser);
+        var logout = await LogoutAsync(browser);
 
         // Act
-        var back = await browser.GetAsync("/auth/signed-out");
+        var back = await ReturnFromProviderAsync(browser, logout);
         var page = await browser.GetAsync(back.Headers.Location!.OriginalString);
 
         // Assert
@@ -140,8 +147,7 @@ public class ProviderLogoutTests
     {
         // Arrange
         using var browser = await SignedInBrowserAsync(AuthHosts.Open);
-        await LogoutAsync(browser);
-        await browser.GetAsync("/auth/signed-out");
+        await ReturnFromProviderAsync(browser, await LogoutAsync(browser));
 
         // Act
         var plainVisit = await browser.GetAsync("/auth/login?returnUrl=%2Fentries");
@@ -149,6 +155,25 @@ public class ProviderLogoutTests
         // Assert
         plainVisit.StatusCode.ShouldBe(HttpStatusCode.Redirect);
         plainVisit.Headers.Location!.OriginalString.ShouldStartWith("/auth/oidc/stub/start?client=web");
+    }
+
+    [Test]
+    [Arguments("/auth/signed-out")]
+    [Arguments("/auth/signed-out?state=not-the-state")]
+    public async Task a_link_to_the_return_address_cannot_finish_the_sign_out_at_the_provider(string address)
+    {
+        // Arrange
+        using var browser = await SignedInBrowserAsync(AuthHosts.Open);
+        await LogoutAsync(browser);
+
+        // Act
+        var back = await browser.GetAsync(address);
+        var plainVisit = await browser.GetAsync("/auth/login?returnUrl=%2Fentries");
+
+        // Assert
+        back.Headers.Location!.OriginalString.ShouldBe(SignedOutPage);
+        plainVisit.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await plainVisit.Content.ReadAsStringAsync()).ShouldContain("did not send you back");
     }
 
     [Test]
@@ -192,12 +217,13 @@ public class ProviderLogoutTests
         var page = await browser.GetAsync("/auth/login?signedOut=1&returnUrl=https%3A%2F%2Fevil.example%2F");
 
         // Assert
-        (await ProviderLogoutUrlOf(logout)).ShouldBe(ProviderLogoutUrl);
+        (await ProviderLogoutUrlOf(logout)).ShouldStartWith(ProviderLogoutUrlBeforeItsState);
         (await page.Content.ReadAsStringAsync()).ShouldNotContain("evil.example");
     }
 
     [Test]
     [Arguments("open:nope")]
+    [Arguments("open:a-state:nope")]
     [Arguments("open:https://evil.example/")]
     [Arguments("anything")]
     public async Task a_planted_mark_cannot_name_a_login_mode_that_this_server_does_not_have(string value)
@@ -226,10 +252,8 @@ public class ProviderLogoutTests
         await browser.LoginWebAsync($"subject-{Guid.NewGuid():N}");
 
         // Act: a link from another site sends the Lax cookies and not the Strict session cookie.
-        var session = browser.SessionCookie!;
         browser.DropCookie(browser.SessionCookieName);
         var page = await browser.GetAsync(SignedOutPage);
-        browser.SetCookie(browser.SessionCookieName, session);
 
         // Assert
         (await page.Content.ReadAsStringAsync()).ShouldNotContain("You are signed out");

@@ -12,6 +12,9 @@ type LogoutAnswer = { provider_logout_url: string } | undefined
 /** A call that answers 401 after the logout starts a login, and a navigation with a return URL would abort the one that the logout started. */
 let afterSignOut: string | undefined
 
+/** A call that answers 401 while the logout runs also starts a login, and that navigation would lose the answer of the logout. */
+let logoutInFlight: Promise<unknown> | undefined
+
 /**
  * The path, the query, and the hash of the page, as a return URL that the Server accepts. The Server refuses a path that
  * starts with `//` or `/\`. The browser percent-encodes each non-ASCII character of a location, so the length is the
@@ -24,13 +27,24 @@ export function returnUrlOf({ pathname, search, hash }: Pick<Location, 'pathname
 
 /** Replaces the page in the history, so that Back from the login of the provider does not come back to a page that goes to the login again. */
 export function login(returnUrl: string = '/'): void {
+  if (logoutInFlight) {
+    const again = () => login(returnUrl)
+    void logoutInFlight.then(again, again)
+    return
+  }
   window.location.replace(afterSignOut ?? `/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`)
 }
 
 export async function logout(): Promise<void> {
-  const { data } = await apiClient.post<LogoutAnswer>('/auth/logout', undefined, { suppressErrorToast: true })
-  afterSignOut = data?.provider_logout_url ?? signedOutPage
-  window.location.replace(afterSignOut)
+  const answer = apiClient.post<LogoutAnswer>('/auth/logout', undefined, { suppressErrorToast: true })
+  logoutInFlight = answer
+  try {
+    const { data } = await answer
+    afterSignOut = data?.provider_logout_url ?? signedOutPage
+    window.location.replace(afterSignOut)
+  } finally {
+    logoutInFlight = undefined
+  }
 }
 
 export function useLogout() {

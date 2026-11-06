@@ -177,7 +177,7 @@ The mark is `SameSite=Lax`, because a provider on another site returns with a cr
 
 ### The session at the provider
 
-The mark names the login mode until the provider returns to `/auth/signed-out`. What the signed-out page says depends on this:
+The mark holds the login mode and a new random `state` until the provider returns to `/auth/signed-out` with that `state`. A link from another site does not know it, so it cannot end the note or start a login with no click. A provider that does not send `state` back gets the row for `did not return`. What the signed-out page says depends on this:
 
 | The state | The signed-out page | A visit with no click |
 |---|---|---|
@@ -186,15 +186,15 @@ The mark names the login mode until the provider returns to `/auth/signed-out`. 
 | The provider did not answer | `You are signed out`, says that the session there can still be open, and `Wait a few minutes, then try again`. | Shows the same page. `Try again` finds the link when the provider is back |
 | The provider has no endpoint | `You are signed out`, says that the session there stays open, and tells the person to sign out on the site of the provider or to delete the cookies of this browser | Goes to the provider, which signs the same person in again with no password |
 
-The return URL takes no value from a request. `/auth/signed-out` redirects only to the signed-out page, and the URL that the Server sends to the provider is the origin of the request plus that path. So neither is an open redirect. The provider also checks the URL against its own list.
+`/auth/signed-out` redirects only to the signed-out page, and the return URL that the Server sends to the provider is the origin of the request plus that path. So neither is an open redirect. The provider also checks the URL against its own list.
 
-Recall keeps no provider token, so the logout URL has `client_id` and `post_logout_redirect_uri`, and no `id_token_hint`. OpenID Connect lets a provider ask the person to confirm in this case. These are the results with each provider of the lab:
+Recall keeps no provider token, so the logout URL has `client_id`, `post_logout_redirect_uri`, and `state`, and no `id_token_hint`. OpenID Connect tells a provider to ask the person to confirm in this case. These are the results with each provider of the lab:
 
 | Provider | `end_session_endpoint` | With no `id_token_hint` |
 |---|---|---|
-| ZeroFactor | Yes | Ends the session and returns at once. It accepts any return URL. |
-| Keycloak 26 | Yes | Shows `Do you want to log out?`, then returns. With a return URL that is not registered, it shows `Invalid redirect uri`, and its session stays. |
-| Authelia 4.39 | No | Recall keeps its session, and the page says so. |
+| ZeroFactor | Yes | Ends the session and returns at once, with `state`. It accepts any return URL. |
+| Keycloak 26 | Yes | Shows `Do you want to log out?`, then returns, with `state`. Back from the signed-out page shows this page again, with no session behind it, and a second Back shows its sign-in page. With a return URL that is not registered, it shows `Invalid redirect uri`, and its session stays. |
+| Authelia 4.39 | No | Its session stays, and the signed-out page says so. |
 
 ## The user of a session
 

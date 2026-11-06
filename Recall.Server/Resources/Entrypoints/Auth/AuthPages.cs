@@ -34,7 +34,6 @@ public static class AuthPages
 
     public sealed record ChooserMode(string Id, string DisplayName, LoginModeState State);
 
-    /// <summary>The provider session of a sign-out that Recall cannot show as ended.</summary>
     public sealed record OpenProviderSession(string DisplayName, LoginModeState State, string? LogoutUrl);
 
     public static IResult NoMethod(string callbackUrl, string returnPath) => Page(
@@ -44,7 +43,7 @@ public static class AuthPages
             + $"<p>Register this callback URL at the provider:</p><p><code>{BreakableUrl(callbackUrl)}</code></p>"
             + TryAgainTo(returnPath));
 
-    public static IResult Chooser(IReadOnlyList<ChooserMode> modes, string returnPath, bool signedOut, string? message, OpenProviderSession? providerSession = null)
+    public static IResult Chooser(IReadOnlyList<ChooserMode> modes, string returnPath, bool signedOut, string? message, OpenProviderSession? providerSession)
     {
         var items = modes.Select(mode => mode.State == LoginModeState.Ready
             ? $"<li><a class=\"button\" href=\"{E(StartUrl(mode.Id, returnPath))}\">Sign in with {E(mode.DisplayName)}</a></li>"

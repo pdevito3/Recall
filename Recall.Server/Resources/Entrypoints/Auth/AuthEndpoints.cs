@@ -89,11 +89,12 @@ public static class AuthEndpoints
             return AuthPages.NoMethod(AuthRoutes.OriginOf(http.Request) + AuthRoutes.Callback, returnPath);
 
         var states = await Task.WhenAll(modes.All.Select(mode => mode.ProbeAsync(cancellationToken)));
-        var openSession = modes.FindOidc(SessionCookie.OpenProviderSessionModeOf(http.Request));
-        var openSessionLogoutUrl = openSession is null ? null : await openSession.ProviderLogoutUrlAsync(SignedOutUrlOf(http.Request), cancellationToken);
+        var pending = SessionCookie.PendingProviderLogoutOf(http.Request);
+        var openSession = pending is null ? null : modes.FindOidc(pending.ModeId);
+        var openSessionLogoutUrl = pending is null || openSession is null ? null : await openSession.ProviderLogoutUrlAsync(SignedOutUrlOf(http.Request), pending.State, cancellationToken);
 
-        // While a sign-out at the provider has not finished, a login with no click would sign the same person in again.
-        if (modes.All.Count == 1 && states[0] == LoginModeState.Ready && !signedOut && !hasError && openSessionLogoutUrl is null)
+        var mayStartWithNoClick = modes.All.Count == 1 && states[0] == LoginModeState.Ready && !signedOut && !hasError && openSessionLogoutUrl is null;
+        if (mayStartWithNoClick)
             return new AuthRedirect($"/auth/oidc/{Uri.EscapeDataString(modes.All[0].Id)}/start?client=web&returnUrl={Uri.EscapeDataString(returnPath)}");
 
         var isSignedOut = (signedOut || openSessionLogoutUrl is not null) && SessionCookie.IsMarkedSignedOut(http.Request);
@@ -104,11 +105,10 @@ public static class AuthEndpoints
         return AuthPages.Chooser(chooser, returnPath, isSignedOut, hasError ? "The last sign-in did not finish." : null, providerSession);
     }
 
-    /// <summary>The provider comes back here when its session has ended. The address has no value that a caller chooses, so it cannot redirect to another site.</summary>
-    private static AuthRedirect SignedOutReturn(HttpContext http)
+    private static AuthRedirect SignedOutReturn(HttpContext http, string? state)
     {
-        if (SessionCookie.IsMarkedSignedOut(http.Request))
-            SessionCookie.MarkSignedOut(http.Response, http.Request, openProviderSessionMode: null);
+        if (state is not null && SessionCookie.PendingProviderLogoutOf(http.Request)?.State == state)
+            SessionCookie.MarkSignedOut(http.Response, http.Request, pending: null);
         return new AuthRedirect($"{AuthRoutes.Login}?signedOut=1");
     }
 
@@ -193,9 +193,16 @@ public static class AuthEndpoints
         if (cookie is null)
             return Results.NoContent();
 
-        var mode = modes.FindOidc(await store.LoginModeOfWebAsync(TokenHash.Of(cookie), cancellationToken));
-        SessionCookie.MarkSignedOut(http.Response, request, mode?.Id);
-        return mode is not null && await mode.ProviderLogoutUrlAsync(SignedOutUrlOf(request), cancellationToken) is { } providerLogoutUrl
+        var mode = modes.FindOidc(await store.LoginModeOfWebSessionEvenIfEndedAsync(TokenHash.Of(cookie), cancellationToken));
+        if (mode is null)
+        {
+            SessionCookie.MarkSignedOut(http.Response, request, pending: null);
+            return Results.NoContent();
+        }
+
+        var state = Secrets.New();
+        SessionCookie.MarkSignedOut(http.Response, request, new SessionCookie.PendingProviderLogout(mode.Id, state));
+        return await mode.ProviderLogoutUrlAsync(SignedOutUrlOf(request), state, cancellationToken) is { } providerLogoutUrl
             ? Results.Json(new LogoutAnswer(providerLogoutUrl))
             : Results.NoContent();
     }

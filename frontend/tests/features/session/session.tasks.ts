@@ -118,6 +118,18 @@ export function sessionPage(page: Page) {
       await Promise.all([at.logout.click(), logoutOpensThe401, checked])
     },
 
+    async followAndSignOutWithA401BeforeItsAnswer(link: Locator, apiPath: string) {
+      const logoutSent = page.waitForRequest((r) => r.method() === 'POST' && new URL(r.url()).pathname === authPaths.logout)
+      await page.route((url) => url.pathname === apiPath, async (route) => {
+        await logoutSent
+        await route.fulfill({ status: 401 })
+      })
+      const checked = answered(authPaths.me)
+
+      await link.click()
+      await Promise.all([at.logout.click(), checked])
+    },
+
     async openWhileTheCheckFails(path: string) {
       await page.goto(path)
       await expect(at.checkFailed).toBeVisible()

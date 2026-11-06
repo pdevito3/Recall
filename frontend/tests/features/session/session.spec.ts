@@ -85,6 +85,25 @@ test.describe('a sign-out with a call of the API that answers 401 after it', () 
   })
 })
 
+test.describe('a sign-out with a call of the API that answers 401 before its answer', () => {
+  test('still goes to the logout of the provider, and starts no login', async ({ page, api }) => {
+    const providerLogout = 'https://provider.test/logout'
+    await page.route(`${providerLogout}*`, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: 'provider' }))
+    const session = sessionPage(page)
+    await session.open('/about')
+
+    api.mock(
+      authApi.loginOpens(),
+      { method: 'post', path: authPaths.logout, status: 200, body: { provider_logout_url: `${providerLogout}?client_id=recall` }, delayMs: 1500 },
+      { method: 'get', path: authPaths.me, status: 204 },
+    )
+    await session.followAndSignOutWithA401BeforeItsAnswer(session.at.homeLink, usersPaths.current)
+
+    await expect.poll(() => page.url(), { timeout: 10000 }).toBe(`${providerLogout}?client_id=recall`)
+    expect(api.all('get', authPaths.login)).toHaveLength(0)
+  })
+})
+
 test.describe('a call of the API that answers 401 while the session lives', () => {
   test('keeps the page, does not go to the login, and shows a toast', async ({ page, api }) => {
     const session = sessionPage(page)

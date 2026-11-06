@@ -88,6 +88,35 @@ describe('a login after a sign-out', () => {
     expect(replace).toHaveBeenCalledExactlyOnceWith(providerLogoutUrl)
   })
 
+  it('waits for the answer of a running logout, because a login now would lose it', async () => {
+    const { replace, login, logout, post } = await freshActions()
+    let resolve!: (answer: unknown) => void
+    post.mockReturnValue(new Promise((settle) => (resolve = settle)))
+
+    const signingOut = logout()
+    login('/about')
+    expect(replace).not.toHaveBeenCalled()
+    resolve({ status: 200, data: { provider_logout_url: providerLogoutUrl } })
+    await signingOut
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(2))
+
+    expect(replace).toHaveBeenNthCalledWith(1, providerLogoutUrl)
+    expect(replace).toHaveBeenNthCalledWith(2, providerLogoutUrl)
+  })
+
+  it('keeps the return URL of a login that waited for a logout that fails', async () => {
+    const { replace, login, logout, post } = await freshActions()
+    let reject!: (cause: Error) => void
+    post.mockReturnValue(new Promise((_, fail) => (reject = fail)))
+
+    const signingOut = logout()
+    login('/about')
+    reject(new Error('no answer'))
+    await expect(signingOut).rejects.toThrow('no answer')
+
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?returnUrl=%2Fabout'))
+  })
+
   it('keeps the return URL when the logout fails, because the session may still live', async () => {
     const { replace, login, logout, post } = await freshActions()
     post.mockRejectedValue(new Error('no answer'))

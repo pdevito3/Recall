@@ -49,7 +49,7 @@ public class EndpointAccessSweepTests : TestBase
         [AuthRoutes.Confirm] = "The one-time code in the form proves this request. It writes nothing and shows no tenant data.",
         [AuthRoutes.Token] = "The code and PKCE verifier, or the refresh token, prove this request. AuthRefusalTests covers each refusal.",
         [AuthRoutes.Logout] = "Tolerant. It ends only a session that the request proves, and it shows no tenant data.",
-        [AuthRoutes.SignedOut] = "Public. It redirects to the signed-out page, takes no value, and shows no tenant data.",
+        [AuthRoutes.SignedOut] = "Public. It redirects to the signed-out page, and shows no tenant data. It only compares its one value with the cookie of the browser.",
         [AuthRoutes.RevokeOthers] = "Each session ends only the other sessions of its own user. AppSessionTests covers it.",
         [AuthRoutes.Me] = "Each session reads its own identity, and a visitor with no session gets 204. It takes no ID. AppSessionTests covers it.",
     };

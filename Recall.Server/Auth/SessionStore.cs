@@ -39,8 +39,7 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
         return row is null ? null : new SessionPrincipal(row.Id, row.UserId, kind, row.AccessExpiresAt);
     }
 
-    /// <summary>Also for an ended session, because the session at the provider can outlive it.</summary>
-    public Task<string?> LoginModeOfWebAsync(TokenHash hash, CancellationToken cancellationToken)
+    public Task<string?> LoginModeOfWebSessionEvenIfEndedAsync(TokenHash hash, CancellationToken cancellationToken)
         => dbContext.Set<AuthSession>()
             .AsNoTracking()
             .TagWithOperationCallSite("auth.sessions.login_mode_of_web")

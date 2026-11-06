@@ -3,6 +3,8 @@ namespace Recall.Server.Resources.Entrypoints.Auth;
 /// <summary>On https the reader sees only the <c>__Host-</c> name, so a plain-http neighbor cannot plant one.</summary>
 public static class SessionCookie
 {
+    public sealed record PendingProviderLogout(string ModeId, string State);
+
     public const string SecureName = "__Host-recall";
     public const string PlainName = "recall";
     public const string SecureSignedOutName = "__Host-recall_signed_out";
@@ -11,8 +13,7 @@ public static class SessionCookie
     private const string ProviderSessionFinished = "1";
     private const string ProviderSessionOpenPrefix = "open:";
 
-    // Long enough for a person to answer the confirm page of a provider.
-    private static readonly TimeSpan SignedOutMarkLifetime = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan TimeToAnswerAProviderConfirmPage = TimeSpan.FromMinutes(10);
 
     public static string NameFor(HttpRequest request) => request.IsHttps ? SecureName : PlainName;
 
@@ -24,17 +25,13 @@ public static class SessionCookie
     public static void Clear(HttpResponse response, HttpRequest request)
         => response.Cookies.Delete(NameFor(request), Options(request, null));
 
-    /// <summary>
-    /// The proof that the sign-out of this browser ended its session, and the login mode whose provider session can still be open. A link
-    /// from any site can open the signed-out page. A provider also returns there with a cross-site GET, so this mark is Lax where the
-    /// session cookie is Strict. A new session deletes the mark, so a link cannot show the signed-out page next to a live session.
-    /// </summary>
-    public static void MarkSignedOut(HttpResponse response, HttpRequest request, string? openProviderSessionMode)
+    public static void MarkSignedOut(HttpResponse response, HttpRequest request, PendingProviderLogout? pending)
     {
         var options = Options(request, null);
-        options.MaxAge = SignedOutMarkLifetime;
+        options.MaxAge = TimeToAnswerAProviderConfirmPage;
+        // A provider returns with a cross-site GET, so this mark is Lax where the session cookie is Strict.
         options.SameSite = SameSiteMode.Lax;
-        var value = openProviderSessionMode is null ? ProviderSessionFinished : ProviderSessionOpenPrefix + openProviderSessionMode;
+        var value = pending is null ? ProviderSessionFinished : $"{ProviderSessionOpenPrefix}{pending.State}:{pending.ModeId}";
         response.Cookies.Append(SignedOutNameFor(request), value, options);
     }
 
@@ -43,9 +40,11 @@ public static class SessionCookie
 
     public static bool IsMarkedSignedOut(HttpRequest request) => request.Cookies.ContainsKey(SignedOutNameFor(request));
 
-    public static string? OpenProviderSessionModeOf(HttpRequest request)
-        => request.Cookies[SignedOutNameFor(request)] is { } value && value.StartsWith(ProviderSessionOpenPrefix, StringComparison.Ordinal)
-            ? value[ProviderSessionOpenPrefix.Length..]
+    public static PendingProviderLogout? PendingProviderLogoutOf(HttpRequest request)
+        => request.Cookies[SignedOutNameFor(request)] is { } value
+           && value.StartsWith(ProviderSessionOpenPrefix, StringComparison.Ordinal)
+           && value[ProviderSessionOpenPrefix.Length..].Split(':', 2) is [var state, var modeId]
+            ? new PendingProviderLogout(modeId, state)
             : null;
 
     private static string SignedOutNameFor(HttpRequest request) => request.IsHttps ? SecureSignedOutName : PlainSignedOutName;
