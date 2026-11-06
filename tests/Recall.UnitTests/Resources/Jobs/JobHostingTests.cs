@@ -50,6 +50,24 @@ public class JobHostingTests
     }
 
     [Test]
+    [Arguments("Production", true)]
+    [Arguments("Staging", true)]
+    [Arguments("Development", false)]
+    [Arguments("FunctionalTesting", false)]
+    public void the_setting_that_runs_no_worker_works_only_in_development_and_in_a_test(string environment, bool runsWorkers)
+    {
+        // Arrange
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = environment });
+        builder.Configuration["Jobs:RunWorkers"] = "false";
+
+        // Act
+        builder.AddJobs();
+
+        // Assert
+        builder.Services.Any(service => service.ImplementationType == typeof(JobHostWatch)).ShouldBe(runsWorkers);
+    }
+
+    [Test]
     public void the_publish_output_has_the_license_and_the_required_notice()
     {
         // Arrange

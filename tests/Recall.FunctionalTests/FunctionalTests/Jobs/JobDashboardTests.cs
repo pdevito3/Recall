@@ -269,6 +269,18 @@ public partial class JobDashboardTests
     }
 
     [Test]
+    public void a_host_with_no_use_for_a_worker_runs_none()
+    {
+        // Act
+        var withNone = AuthHosts.Open.Services.GetServices<IHostedService>().OfType<JobHostWatch>();
+        var withOne = AuthHosts.Jobs.Services.GetServices<IHostedService>().OfType<JobHostWatch>();
+
+        // Assert
+        withNone.ShouldBeEmpty();
+        withOne.ShouldHaveSingleItem();
+    }
+
+    [Test]
     public async Task the_overview_shows_the_throughput_panel()
     {
         // Arrange
