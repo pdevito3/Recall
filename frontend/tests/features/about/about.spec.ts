@@ -3,8 +3,6 @@ import { supportApi, supportPaths } from '@tests/support/api/support-api'
 import { actorSubject, as } from '@tests/support/auth/actors'
 import { aUser } from '@tests/support/builders/user-builder'
 import { expect, test } from '@tests/support/fixtures'
-import { appShellPage } from '../app-shell/app-shell.tasks'
-import { homePage } from '../home/home.tasks'
 import { aboutPage } from './about.tasks'
 
 const signedInAs = (role: 'Admin' | 'User') => ({
@@ -42,13 +40,8 @@ test.describe('the support bundle on the about page', () => {
   test('a Member does not see the section', async ({ page, api }) => {
     api.mock(signedInAs('User'))
     const about = aboutPage(page)
-    const membershipLoaded = page.waitForResponse((response) => response.url().endsWith(membershipPaths.userOf(actorSubject)))
-    await homePage(page).open()
-    await membershipLoaded
 
-    // The route changes with no reload, so the page renders with the answer that the home page already has.
-    await appShellPage(page).at.aboutNavigationLink.click()
-    await expect(about.at.text).toBeVisible()
+    await about.openFromHomeWithTheMembershipLoaded()
 
     expect(await about.at.supportHeading.count()).toBe(0)
   })
