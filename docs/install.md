@@ -25,7 +25,23 @@ To use another port, add `RECALL_PORT=8090` to `.env`. See [Connect a login prov
 
 ## Keep your data
 
-`/data` holds the database `recall.db`, the stored files in `files/`, and the keys in `keys/`. Later releases add `logs/` and `models/` to the same folder.
+`/data` holds the database `recall.db`, the stored files in `files/`, the speech model in `models/`, and the keys in `keys/`. A later release adds `logs/` to the same folder.
+
+The stored files include the audio of each Recording. Recall does not encrypt the files or the database at rest. Use an encrypted disk if the machine can leave your control.
+
+## Transcribe audio
+
+The image carries ffmpeg and the speech worker. It does not carry the speech model. The first Recording downloads about 660 MB from Hugging Face into `/data/models`, and Recall checks each file against a pinned SHA-256.
+
+The download is the only network call of local transcription. The audio and the text stay on your server. On a machine with no network, each Recording stays stored with the status `Received` and the problem `WaitingForModel`. Recall tries the download again every 15 minutes while a Recording waits.
+
+To install the model on a machine with no network, copy the files `tokens.txt`, `joiner.int8.onnx`, `decoder.int8.onnx`, and `encoder.int8.onnx` of the model into `/data/models/parakeet-tdt-0.6b-v2-int8`. Recall checks each file against its hash and does not download a file that passes.
+
+One transcription needs up to 1.5 GB of memory, and Recall runs one at a time. It uses 2 CPU threads by default. Set `Transcription__Threads` to change this.
+
+A person can download the audio until 7 days after the text is saved. Audio that did not become text stays stored until the person deletes the Recording.
+
+The licenses of ffmpeg, sherpa-onnx, ONNX Runtime, and the Parakeet model are in `/app/ThirdPartyNotices` in the image.
 
 `compose.yaml` keeps `/data` in the Docker volume `recall_recall-data`. `docker compose down` keeps the volume. `docker compose down -v` deletes it, and all of your data with it.
 

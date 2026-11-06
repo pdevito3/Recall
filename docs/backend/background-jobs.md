@@ -36,7 +36,7 @@ If the job store has a fault, `SaveAndEnqueueAsync` throws before it saves, and 
 | Setting | Value | Why |
 |---|---|---|
 | Store | The SQLite file of the app, tables `backwave_*`, `AutoMigrate` on, busy timeout 30 s | One file holds the rows and the jobs, so one transaction holds both. The busy timeout is the one that the app connections use. |
-| Worker group | One group named `system`, on the queue `system` | R9 and R11 add queues to this group. |
+| Worker groups | `system`, on the queue `system`, and `transcription`, on the queue `transcription`, with `PoolSize = 1` | One transcription runs at a time, because it needs more than 1 GB. R9 adds its queue to `system`. |
 | `Jobs__PollSeconds` | 5 | A transactional enqueue waits for one poll. An idle poll writes nothing: at 1 s, 5 s, and 30 s, an idle server wrote no byte to the database, the WAL, or the `-shm` file in 15 minutes. |
 | `MaintenanceInterval` | 5 s, the BackWave default | The sweep that ends a lapsed lease writes nothing when no lease has lapsed. |
 | `LeaseDuration` | 60 s, the BackWave default | The job of a killed process runs again after its lease ends, the next sweep, its retry backoff, and the next poll. For the health job that took about 70 s. After a clean stop it runs at the next start. |

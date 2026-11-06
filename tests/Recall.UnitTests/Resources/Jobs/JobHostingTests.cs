@@ -82,6 +82,24 @@ public class JobHostingTests
     }
 
     [Test]
+    [Arguments("ffmpeg", "NOTICE.md", "https://ffmpeg.org/releases/ffmpeg-7.1.3.tar.xz")]
+    [Arguments("ffmpeg", "COPYING.LGPLv2.1", "GNU LESSER GENERAL PUBLIC LICENSE")]
+    [Arguments("sherpa-onnx", "LICENSE", "Apache License")]
+    [Arguments("onnxruntime", "LICENSE", "MIT License")]
+    [Arguments("parakeet-tdt-0.6b-v2", "NOTICE.md", "Creative Commons Attribution 4.0")]
+    public void the_publish_output_has_the_licenses_of_the_speech_parts(string part, string file, string expected)
+    {
+        // Arrange
+        var path = Path.Combine(AppContext.BaseDirectory, "ThirdPartyNotices", part, file);
+
+        // Act
+        var text = File.ReadAllText(path);
+
+        // Assert
+        text.ShouldContain(expected);
+    }
+
+    [Test]
     [Arguments("BackWave", 0, false)]
     [Arguments("BackWave", 1, true)]
     [Arguments("Other", 0, true)]
