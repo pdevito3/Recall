@@ -12,6 +12,7 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { AppSidebar } from '@/components/app-sidebar'
+import { BreadcrumbNameProvider, useCurrentBreadcrumbName } from '@/components/breadcrumb-name'
 import { Button } from '@/components/ui/button'
 import { login, returnUrlOf } from '@/domain/auth/apis/auth-actions'
 import { authUserQuery } from '@/domain/auth/apis/get-user'
@@ -21,6 +22,7 @@ import { Separator } from '@/components/ui/separator'
 import {
   Breadcrumb,
   BreadcrumbItem,
+  BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbPage,
 } from '@/components/ui/breadcrumb'
@@ -29,6 +31,8 @@ declare module '@tanstack/react-router' {
   interface StaticDataRouteOption {
     /** The name of the page in the breadcrumb of the layout header. Each page route sets it. */
     breadcrumb?: string
+    /** The page above this one, for a detail page. */
+    breadcrumbParent?: { title: string; to: '/' | '/users' }
   }
 }
 
@@ -72,10 +76,20 @@ function SessionCheckFailed({ isRetrying, onRetry }: { isRetrying: boolean; onRe
 }
 
 function Layout() {
+  return (
+    <BreadcrumbNameProvider>
+      <LayoutContent />
+    </BreadcrumbNameProvider>
+  )
+}
+
+function LayoutContent() {
   const routerState = useRouterState()
   const page = routerState.matches[routerState.matches.length - 1]
   const isNotFound = routerState.matches.some((match) => match.globalNotFound)
-  const pageName = isNotFound ? 'Not Found' : page?.staticData.breadcrumb
+  const recordName = useCurrentBreadcrumbName()
+  const parent = isNotFound ? undefined : page?.staticData.breadcrumbParent
+  const pageName = isNotFound ? 'Not Found' : (recordName ?? page?.staticData.breadcrumb)
   const { content, announcement } = usePageFocusAfterNavigation(routerState.resolvedLocation?.pathname, pageName)
 
   return (
@@ -92,6 +106,11 @@ function Layout() {
               />
               <Breadcrumb>
                 <BreadcrumbList>
+                  {parent && (
+                    <BreadcrumbItem>
+                      <BreadcrumbLink to={parent.to}>{parent.title}</BreadcrumbLink>
+                    </BreadcrumbItem>
+                  )}
                   <BreadcrumbItem>
                     <BreadcrumbPage>{pageName}</BreadcrumbPage>
                   </BreadcrumbItem>

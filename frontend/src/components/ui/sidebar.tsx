@@ -282,7 +282,7 @@ function SidebarRail({
     <ButtonPrimitive
       data-sidebar="rail"
       data-slot="sidebar-rail"
-      aria-label="Toggle Sidebar"
+      aria-hidden
       excludeFromTabOrder
       onPress={toggleSidebar}
       className={cn(

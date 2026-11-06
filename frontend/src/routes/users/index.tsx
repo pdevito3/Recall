@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import * as z from 'zod'
 
 import { getUserListQueryPageNumberSchema } from '@/api/generated/users/zod/get-user-list'
+import { Page } from '@/components/page'
 import { PageHeading } from '@/components/page-heading'
 import { QueryError } from '@/components/query-error'
 import { Link } from '@/components/ui/link'
@@ -32,10 +33,10 @@ function UsersPage() {
     navigate({ search: (prev) => ({ ...prev, page: pageNumber === 1 ? undefined : pageNumber }) })
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8">
+    <Page>
       <PageHeading>Users</PageHeading>
       <UserRows list={list} page={page} onPageChange={handlePageChange} />
-    </div>
+    </Page>
   )
 }
 

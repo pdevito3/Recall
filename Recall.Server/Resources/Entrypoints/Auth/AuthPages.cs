@@ -17,7 +17,7 @@ public static class AuthPages
         ":root{color-scheme:light dark;--background:oklch(1 0 0);--foreground:oklch(0.1363 0.0364 259.2010);--primary:oklch(0.5461 0.2152 262.8809);--primary-foreground:oklch(1 0 0);--border:oklch(0.9288 0.0126 255.5078)}"
         + "@media (prefers-color-scheme:dark){:root{--background:oklch(0.1363 0.0364 259.2010);--foreground:oklch(0.9842 0.0034 247.8575);--primary:oklch(0.6231 0.1880 259.8145);--border:oklch(0.2795 0.0368 260.0310)}}"
         + "body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--background);color:var(--foreground);font:16px/1.5 system-ui,sans-serif}"
-        + "main{box-sizing:border-box;width:100%;max-width:28rem;padding:2rem}h1{font-size:1.5rem;margin:0 0 1rem}p{margin:0 0 1rem}code{overflow-wrap:anywhere}"
+        + "main{box-sizing:border-box;width:100%;max-width:28rem;padding:2rem;overflow-wrap:anywhere}@media (max-width:24rem){main{padding:1rem}}h1{font-size:1.5rem;margin:0 0 1rem}p{margin:0 0 1rem}code{font-size:.875rem}"
         + "ul{list-style:none;margin:1rem 0 0;padding:0}li{margin:.5rem 0}li.note{margin:1rem 0}ul+p{margin-top:1rem}form{margin:1rem 0 0}"
         + "a{color:var(--primary)}a.button,button{display:block;box-sizing:border-box;width:100%;padding:.75rem 1rem;border:0;border-radius:.5rem;background:var(--primary);color:var(--primary-foreground);font:inherit;text-align:center;text-decoration:none;cursor:pointer}";
 

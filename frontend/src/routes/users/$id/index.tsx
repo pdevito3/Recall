@@ -3,9 +3,10 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useRef } from 'react'
 
 import { Notification } from '@/components/notification'
+import { useBreadcrumbName } from '@/components/breadcrumb-name'
+import { Page } from '@/components/page'
 import { PageHeading } from '@/components/page-heading'
 import { QueryError } from '@/components/query-error'
-import { Link } from '@/components/ui/link'
 import { useDeleteUser } from '@/domain/users/apis/delete-user'
 import { useUser } from '@/domain/users/apis/get-user'
 import { useUpdateUserRole } from '@/domain/users/apis/update-user-role'
@@ -16,7 +17,7 @@ import { leaveDeletedRecord } from '@/lib/leave-deleted-record'
 
 export const Route = createFileRoute('/users/$id/')({
   component: UserPage,
-  staticData: { breadcrumb: 'User' },
+  staticData: { breadcrumb: 'User', breadcrumbParent: { title: 'Users', to: '/users' } },
 })
 
 function UserPage() {
@@ -27,16 +28,21 @@ function UserPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const headingRef = useRef<HTMLHeadingElement>(null)
+  useBreadcrumbName(user.data?.fullName)
 
   if (user.isPending) {
-    return <p role="status" aria-label="Loading user" className="px-4 py-8 text-muted-foreground">Loading user</p>
+    return (
+      <Page>
+        <p role="status" aria-label="Loading user" className="text-muted-foreground">Loading user</p>
+      </Page>
+    )
   }
 
   if (user.isError) {
     return (
-      <div className="mx-auto w-full max-w-4xl px-4 py-8">
+      <Page>
         <QueryError title="The user did not load." error={user.error} onRetry={() => user.refetch()} />
-      </div>
+      </Page>
     )
   }
 
@@ -58,10 +64,7 @@ function UserPage() {
   const pendingAction = (changeRole.isPending && 'UpdateRole') || (remove.isPending && 'Delete') || undefined
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8">
-      <Link to="/users" className="text-sm text-muted-foreground underline-offset-4 hover:underline">
-        All users
-      </Link>
+    <Page>
       <PageHeading ref={headingRef}>{fullName}</PageHeading>
       <section aria-label="Details">
         <dl className="grid max-w-md grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm wrap-anywhere">
@@ -79,6 +82,6 @@ function UserPage() {
         onChangeRole={(newRole) => changeRole.mutate(newRole, { onSettled: () => headingRef.current?.focus() })}
         onDelete={handleDelete}
       />
-    </div>
+    </Page>
   )
 }

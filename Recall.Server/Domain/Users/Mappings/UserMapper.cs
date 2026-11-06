@@ -53,5 +53,5 @@ public static partial class UserMapper
     // With List<string>, Mapperly ignores it and maps each permission with ToString().
     [SuppressMessage("Performance", "CA1859", Justification = "Mapperly matches on the exact target type.")]
     private static IReadOnlyList<string> MapUserPermissionsToPermissions(IReadOnlyCollection<UserPermission> permissions)
-        => permissions.Select(p => p.Permission.Value).ToList();
+        => permissions.Select(p => p.Permission.Value).Order(StringComparer.Ordinal).ToList();
 }
