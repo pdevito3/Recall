@@ -1,5 +1,6 @@
 namespace Recall.FunctionalTests.Auth;
 
+using Microsoft.Data.Sqlite;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
@@ -7,7 +8,6 @@ using System.Net.Sockets;
 using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json;
-using Microsoft.Data.Sqlite;
 using Recall.Server.Resources.Entrypoints.Auth;
 using Shouldly;
 
