@@ -18,7 +18,7 @@ These routes are not in the OpenAPI document. This section is their contract.
 | `/auth/oidc/callback` | GET | none | The return from the provider |
 | `/auth/oidc/confirm` | POST | none | The form of the native confirm page |
 | `/auth/token` | POST | none | Gives the tokens of a native session |
-| `/auth/logout` | POST | optional | Ends the session that the request names, and answers 204. A cookie with no `X-CSRF: 1` gets 401, and nothing ends. |
+| `/auth/logout` | POST | optional | Ends the session that the request names. See [Logout](#logout) for each answer. A cookie with no `X-CSRF: 1` gets 401, and nothing ends. |
 | `/auth/sessions/revoke-others` | POST | app session | Ends each other session of the user. It answers 204. |
 | `/auth/me` | GET | optional | The user of the session. See [The user of a session](#the-user-of-a-session). |
 
@@ -167,13 +167,32 @@ A response tells what happened:
 |---|---|
 | A cookie with `X-CSRF: 1`, and the provider of its session has an `end_session_endpoint` | Ends the session if it is live, deletes the cookie, and sets the mark. 200 with `{ "provider_logout_url": "..." }`. |
 | A cookie with `X-CSRF: 1`, in each other case | The same, and 204 with no body. |
+| `X-CSRF: 1` and no token, with no cookie or with a cookie of a session that Recall cannot find, on a Server with one provider | This browser can still have a session at the provider, so the Server treats that provider as the provider of the session. The first row or the second row then applies. |
+| The same, on a Server with no provider or with more than one | Sets the mark for 60 seconds, and 204 with no body. Recall does not know the provider, so the page has no note. The page with more than one provider does not start a login with no click. |
 | A cookie with no `X-CSRF: 1`, with or without another credential | 401. Nothing ends, and the cookie stays. |
-| No cookie | Ends what a bearer token or a refresh token names. 204, with no mark. A native app opens no browser, so its logout does not touch the provider. A cross-site page gets this too, because `SameSite=Strict` holds the cookie back. |
+| No cookie, and no `X-CSRF: 1` or a bearer token or a refresh token | Ends what a bearer token or a refresh token names. 204, with no mark. A native app opens no browser, so its logout does not touch the provider. A cross-site page gets this too, because `SameSite=Strict` holds the cookie back. |
 | `GET /auth/logout` | 405. A link cannot end a session. |
 
 `/auth/login?signedOut=1` starts nothing with no click. It says `You are signed out` only with the mark, so a link from another site cannot make it say that. A live session at this URL goes to the return path.
 
 The mark is `SameSite=Lax`, because a provider on another site returns with a cross-site GET. It lives 30 days until the provider returns, so that a person who closes the confirm page of a provider does not sign in again with no click on a later visit. After the return, it lives 60 seconds. A provider with no `end_session_endpoint` cannot return, so its mark also lives 60 seconds. A new login deletes it, so a link cannot show the signed-out page next to a live session. The session cookie stays `Strict`.
+
+### Other tabs, Back, and other browsers
+
+A logout tells the other open tabs of this browser with a `BroadcastChannel` message. Each tab hides its page, clears its data, and goes to the signed-out page, with no wait and no prompt. While the provider of the first tab has not returned, this page has the note of the next section. If the logout fails, the other tabs stay as they are.
+
+The browser can keep a page in its back-forward cache, and Back then shows this page with no load. A page hides itself when it enters this cache. After a restore, it stays hidden until `/auth/me` answers:
+
+| The answer | The page |
+|---|---|
+| The session of this page | Shows itself again, with no new load |
+| No session | Goes to the signed-out page |
+| Another session, for example of the next person on this device | Loads again, so the words of this page stay hidden |
+| A failed call, or no answer in 3 seconds | Loads again, and shows the alert of the session check if the call still fails |
+
+So in a live session, Back from this cache costs one call of `/auth/me`.
+
+Other browsers and other devices stay signed in. Recall has no back-channel logout, so a logout at the provider does not end their Recall sessions. `/auth/sessions/revoke-others` ends them, and they end at their own expiry.
 
 ### The session at the provider
 
@@ -182,11 +201,11 @@ The mark holds the login mode and a new random `state` until the provider return
 | The state | The signed-out page | A visit with no click |
 |---|---|---|
 | The provider returned | `You are signed out`, with no note | Goes to the provider, which has no session and asks for a password |
-| The provider has the endpoint and did not return, for example the person left its confirm page, or the provider refused the return URL | `You are signed out`, says that the session there can still be open, and links to `Sign out of {provider}` | Shows the same page and starts nothing, until the mark ends |
+| The provider has the endpoint and did not return, for example the person left its confirm page, the provider stays on its own page after the logout, or the provider refused the return URL | `You are signed out`, says that the provider did not send the person back, so Recall cannot tell if the session there ended, and links to `Sign out of {provider}` | Shows the same page and starts nothing, until the mark ends or the next login. A provider that never returns shows this note after each logout, also to a person who did sign out there |
 | The provider did not answer | `You are signed out`, says that the session there can still be open, and `Wait a few minutes, then try again`. | Shows the same page. `Try again` finds the link when the provider is back. If another provider is ready, the page has its button and no `Try again`, and a reload finds the link |
 | The provider has no endpoint | `You are signed out`, says that the session there stays open, and tells the person to sign out on the site of the provider or to delete the cookies of this browser | Goes to the provider, which signs the same person in again with no password. With more than one provider, the page shows the note until the mark ends, then the usual sign-in page |
 
-`/auth/signed-out` redirects only to the signed-out page, and the return URL that the Server sends to the provider is the origin of the request plus that path. So neither is an open redirect. The provider also checks the URL against its own list.
+`/auth/signed-out` redirects only to the signed-out page, and the return URL that the Server sends to the provider is the origin of the request plus that path. So neither is an open redirect. Most providers also check the URL against their own list, but ZeroFactor does not.
 
 Recall keeps no provider token, so the logout URL has `client_id`, `post_logout_redirect_uri`, and `state`, and no `id_token_hint`. OpenID Connect tells a provider to ask the person to confirm in this case. These are the results with each provider of the lab:
 
@@ -272,7 +291,7 @@ The redirect URI is that origin plus `/auth/oidc/callback`. The Server stores it
 
 Register the callback URL of each origin at the provider. `/auth/status` gives the URL of the origin that you call.
 
-If the provider has an `end_session_endpoint`, also register `/auth/signed-out` of each origin as a post-logout redirect URI, for example `https://recall.example.com/auth/signed-out`. In Keycloak, this is `Valid post logout redirect URIs` of the client. Without it, Keycloak refuses the logout: the Recall session ends, the session at Keycloak stays, and the person sees the error page of Keycloak. So do this before you upgrade from a version with no provider logout. Recall cannot see the answer that the provider gives to the browser. Authentik is the exception: do not register a return URL there, as [The session at the provider](#the-session-at-the-provider) says.
+If the provider has an `end_session_endpoint`, also register `/auth/signed-out` of each origin as a post-logout redirect URI, for example `https://recall.example.com/auth/signed-out`. In Keycloak, this is `Valid post logout redirect URIs` of the client. Without it, Keycloak refuses the logout. The Recall session ends, the session at Keycloak stays, and the person sees the error page of Keycloak. This is a dead end for each logout until you register the URL. The error page has no way back to Recall, and `Sign out of Keycloak` on the signed-out page goes to the same error. Recall cannot see the answer that the provider gives to the browser, so it cannot warn you. Register the URL before you upgrade from a version with no provider logout. If a person is already at this dead end, register the URL, and then tell the person to open Recall and select `Sign out of Keycloak`. The Server does not need a restart. Authentik is the exception: do not register a return URL there, as [The session at the provider](#the-session-at-the-provider) says.
 
 Do not register a wildcard redirect. The Server holds the verifier and the client secret, so the Server can redeem a stolen code. A wildcard at the provider and a forged `Host` then give an attacker a session. An exact match at the provider stops that. To stop it also at the Server, set `AllowedHosts` to your host names. A request with another `Host` then gets a 400.
 

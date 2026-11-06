@@ -5,6 +5,7 @@
   "usernameSelector": "#Input_Username",
   "passwordSelector": "#Input_Password",
   "submitSelector": "button[value=\"login\"]",
+  "logoutConfirmSelector": "role=button[name=\"Yes\" s]",
   "logoutStaysAtProvider": true,
   "capabilities": {
     "revocation": true,
