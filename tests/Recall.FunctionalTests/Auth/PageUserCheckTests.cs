@@ -14,7 +14,7 @@ public class PageUserCheckTests
 
     private static string NewSubject() => $"subject-{Guid.NewGuid():N}";
 
-    private static AuthBrowser NewBrowser() => new(AuthHosts.Open);
+    private static AuthBrowser NewBrowser() => new(AuthHosts.NoProviderLogout);
 
     private static async Task SwapToAsync(AuthBrowser browser, string subject)
     {

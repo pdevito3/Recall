@@ -11,6 +11,7 @@ using Recall.Server.Auth.Entities;
 using Recall.Server.Domain.Support;
 using Recall.Server.Domain.Support.Features;
 using Recall.Server.Resources.Entrypoints;
+using Recall.Server.Resources.Entrypoints.Auth;
 using Shouldly;
 using TestUtilities;
 
@@ -40,6 +41,7 @@ public partial class SupportBundleTests
     {
         var request = new HttpRequestMessage(method, $"/{route}") { Content = JsonContent.Create(body) };
         request.Headers.Add("X-CSRF", "1");
+        request.Headers.Add(PageUserCheck.Header, await browser.UserOfSessionAsync());
         return await browser.SendAsync(request);
     }
 

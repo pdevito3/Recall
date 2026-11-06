@@ -60,6 +60,7 @@ public partial class JobDashboardTests
     {
         var request = new HttpRequestMessage(HttpMethod.Put, $"/{ApiRoutes.Users.UpdateRole(userId)}") { Content = JsonContent.Create(new { role }) };
         request.Headers.Add("X-CSRF", "1");
+        request.Headers.Add(PageUserCheck.Header, await browser.UserOfSessionAsync());
         return await browser.SendAsync(request);
     }
 
@@ -230,6 +231,7 @@ public partial class JobDashboardTests
             Content = JsonContent.Create(new { role = "Admin" }),
         };
         promote.Headers.Add("X-CSRF", "1");
+        promote.Headers.Add(PageUserCheck.Header, await owner.UserOfSessionAsync());
         using var promoted = await owner.SendAsync(promote);
         promoted.IsSuccessStatusCode.ShouldBeTrue();
 

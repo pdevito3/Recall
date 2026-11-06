@@ -17,6 +17,7 @@ using Recall.Server.Domain.People;
 using Recall.Server.Domain.People.Dtos;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Dtos;
+using Recall.Server.Resources.Entrypoints.Auth;
 using Shouldly;
 using TestUtilities;
 
@@ -54,6 +55,7 @@ public partial class SupportBundleTests
     {
         var request = new HttpRequestMessage(HttpMethod.Delete, $"/{route}");
         request.Headers.Add("X-CSRF", "1");
+        request.Headers.Add(PageUserCheck.Header, await owner.UserOfSessionAsync());
         return await owner.SendAsync(request);
     }
 
@@ -61,6 +63,7 @@ public partial class SupportBundleTests
     {
         var request = new HttpRequestMessage(method, $"/{route}") { Content = new StringContent(body, Encoding.UTF8, "application/json") };
         request.Headers.Add("X-CSRF", "1");
+        request.Headers.Add(PageUserCheck.Header, await owner.UserOfSessionAsync());
         return await owner.SendAsync(request);
     }
 
