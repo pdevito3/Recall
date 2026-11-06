@@ -1,4 +1,3 @@
-import { onlineManager } from '@tanstack/react-query'
 import { useRef } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -26,9 +25,7 @@ export function ComposerForm({ composer }: { composer: Composer }) {
         />
       )}
       {composer.words === null ? (
-        <div role="status" aria-label="Loading your entry" className="min-h-32 rounded-lg border bg-card p-3 text-sm text-muted-foreground">
-          {!onlineManager.isOnline() && 'Your entry opens when the connection returns.'}
-        </div>
+        <div role="status" aria-label="Loading your entry" className="min-h-32 rounded-lg border bg-card" />
       ) : (
         <JournalEditor
           key={composer.editorKey}

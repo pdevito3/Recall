@@ -53,6 +53,8 @@ export class DraftSaver {
   private snapshot: DraftSnapshot
   private readonly listeners = new Set<() => void>()
   private replyCount = 0
+  private conflictIsUnseen = false
+  private wordsInHistory: string | null = null
 
   constructor(target: DraftTarget, queryClient: QueryClient, resumed?: Stamped<string>) {
     this.target = target
@@ -85,6 +87,16 @@ export class DraftSaver {
 
   unsettledText() {
     return this.saver.newestUnsettledValue()
+  }
+
+  /** The words a page must open with: those not yet settled, or those that lost a save while no page showed them. */
+  wordsToOpen() {
+    const hasUnseenLoss = this.conflictIsUnseen && this.snapshot.conflict === 'wordsMovedToHistory'
+    return this.unsettledText() ?? (hasUnseenLoss ? this.wordsInHistory : null)
+  }
+
+  hasUnseenConflict() {
+    return this.conflictIsUnseen && this.snapshot.conflict !== null
   }
 
   dismissConflict() {
@@ -126,6 +138,7 @@ export class DraftSaver {
 
   subscribe = (listener: () => void) => {
     this.listeners.add(listener)
+    this.conflictIsUnseen = false
     return () => {
       this.listeners.delete(listener)
     }
@@ -178,7 +191,10 @@ export class DraftSaver {
     if (holdsWords || reply.outcome === 'Lost') {
       this.update({ baseRevision: reply.draftRevision, latestRevision: Math.max(latestRevision, reply.latestRevision) })
     }
-    this.update({ conflict: conflictAfter(reply, holdsWords, latestRevision, conflict) })
+    const nextConflict = conflictAfter(reply, holdsWords, latestRevision, conflict)
+    if (nextConflict !== conflict) this.conflictIsUnseen = this.listeners.size === 0
+    if (reply.outcome === 'Lost') this.wordsInHistory = change.value
+    this.update({ conflict: nextConflict })
     const id = this.snapshot.sessionId
     if (!id) return
     this.keepSessionCurrent(id, reply, holdsWords ? change.value : null)

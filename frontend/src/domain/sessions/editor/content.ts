@@ -14,12 +14,16 @@ export function parseDocument(text: string): JSONContent | null {
   }
 }
 
+// Another client can save any text, so a document can hold nodes that the editor would not write.
+const childrenOf = (node: JSONContent): JSONContent[] =>
+  Array.isArray(node.content) ? node.content.filter((child) => typeof child === 'object' && child !== null) : []
+
 const blockTypes = new Set(['paragraph', 'heading', 'blockquote', 'listItem', 'taskItem', 'codeBlock', 'hardBreak'])
 
 function plainTextOf(node: JSONContent): string {
   if (node.type === 'text') return node.text ?? ''
   if (node.type === 'mention') return String(node.attrs?.label ?? '')
-  const inner = (node.content ?? []).map(plainTextOf).join('')
+  const inner = childrenOf(node).map(plainTextOf).join('')
   return blockTypes.has(node.type ?? '') ? `${inner} ` : inner
 }
 
@@ -32,7 +36,7 @@ export function plainPreviewOf(text: string, length: number): string {
 function personIdsIn(node: JSONContent): string[] {
   const personId: unknown = node.type === 'mention' ? node.attrs?.personId : null
   const own = typeof personId === 'string' && personId ? [personId] : []
-  return [...own, ...(node.content ?? []).flatMap(personIdsIn)]
+  return [...own, ...childrenOf(node).flatMap(personIdsIn)]
 }
 
 export function mentionedPersonIds(raw: string | null, cleaned: string | null): string[] {

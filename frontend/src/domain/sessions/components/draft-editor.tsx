@@ -34,8 +34,9 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
     latestRevision: latestOf(session, channel),
   })
 
-  const [opened, setOpened] = useState(() => ({ text: saver.unsettledText() ?? draftOf(session, channel), key: 0, takesFocus: false }))
+  const [opened, setOpened] = useState(() => ({ text: saver.wordsToOpen() ?? draftOf(session, channel), key: 0, takesFocus: false }))
   const [revisionsAtOpen] = useState(() => ({ draft: draftRevisionOf(session, channel), latest: latestOf(session, channel) }))
+  const [opensAConflict] = useState(() => saver.hasUnseenConflict())
   const [wasUpdated, setWasUpdated] = useState(false)
   const currentText = useRef(opened.text)
   const section = useRef<HTMLElement>(null)
@@ -49,10 +50,10 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
   const serverDraft = draftRevisionOf(session, channel)
   const serverLatest = latestOf(session, channel)
   useEffect(() => {
-    if (saver.unsettledText() !== null) return
+    if (opensAConflict || saver.unsettledText() !== null) return
     saver.dismissConflict()
     saver.moveBaseTo(revisionsAtOpen.draft, revisionsAtOpen.latest)
-  }, [saver, revisionsAtOpen])
+  }, [saver, revisionsAtOpen, opensAConflict])
   useEffect(() => {
     const { baseRevision, conflict } = saver.getSnapshot()
     if (serverDraft <= baseRevision || saver.unsettledText() !== null || conflict === 'wordsMovedToHistory') return

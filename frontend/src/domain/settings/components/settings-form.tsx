@@ -11,10 +11,20 @@ import { journalZoneOf, settingSaver, useUserSetting, type SettingChange } from 
 import { useCurrentUser } from '@/domain/users/apis/get-current-user'
 import { parseTimeZone, timeZoneLabel, type TimeZone } from '@/lib/zoned-time'
 
-// The list of the browser leaves out UTC and the new name of a renamed zone, such as Asia/Kolkata.
-function zoneOptions(savedZone: TimeZone): { id: string; label: string }[] {
-  const ids = new Set(['UTC', savedZone, ...Intl.supportedValuesOf('timeZone')])
-  return [...ids].sort().map((id) => ({ id, label: `${id.replaceAll('/', ' / ')} (${timeZoneLabel(id as TimeZone)})` }))
+interface ZoneOption {
+  id: string
+  label: string
+}
+
+const zoneOption = (id: string): ZoneOption => ({ id, label: `${id.replaceAll('/', ' / ')} (${timeZoneLabel(id as TimeZone)})` })
+
+let listedZones: ZoneOption[] | undefined
+
+// The list of the browser leaves out UTC and the new name of a renamed zone, such as Asia/Kolkata. A label costs about 0.5 ms.
+function zoneOptions(savedZone: TimeZone): ZoneOption[] {
+  listedZones ??= ['UTC', ...Intl.supportedValuesOf('timeZone')].sort().map(zoneOption)
+  if (listedZones.some(({ id }) => id === savedZone)) return listedZones
+  return [...listedZones, zoneOption(savedZone)].sort((a, b) => (a.id < b.id ? -1 : 1))
 }
 
 export function SettingsForm() {
@@ -63,7 +73,7 @@ export function SettingsForm() {
           <ComboboxInput />
           <ComboboxContent>
             <ComboboxList>
-              {(item: { id: string; label: string }) => <ComboboxItem id={item.id} textValue={item.label}>{item.label}</ComboboxItem>}
+              {(item: ZoneOption) => <ComboboxItem id={item.id} textValue={item.label}>{item.label}</ComboboxItem>}
             </ComboboxList>
           </ComboboxContent>
         </Combobox>

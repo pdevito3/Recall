@@ -196,6 +196,29 @@ test.describe('an entry', () => {
     await expect(entry.at.words('From the other device')).toBeVisible()
   })
 
+  test('a save that loses while the person is on another page opens with its words and the notice', async ({ page, api }) => {
+    const session = aSession().atRevision(4).saying('Mine').build()
+    api.mock(sessionsApi.oneIs(session), sessionsApi.timelineIs([]))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+
+    api.mock({ ...sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }), delayMs: 500 })
+    const answered = entry.aSaveAnswered(session.id)
+    await entry.editWithoutWaiting(' edited')
+    await expect.poll(() => api.all('put', sessionsPaths.rawDraft(session.id)).length).toBe(1)
+    const newest = { ...aSession().atRevision(5).saying('From the other device').build(), id: session.id, clientSessionId: session.clientSessionId }
+    api.mock(sessionsApi.oneIs(newest))
+    await entry.goToTheJournal()
+    await answered
+    await entry.goBack()
+
+    await expect(entry.at.conflict('The words on this page are safe in History.')).toBeVisible()
+    await expect(entry.at.words('Mine edited')).toBeVisible()
+    await entry.at.showNewest.click()
+    await expect(entry.at.words('From the other device')).toBeVisible()
+    await expect(entry.at.conflict('The words on this page are safe in History.')).toHaveCount(0)
+  })
+
   test('newest words that do not load say so, and the words on the page stay', async ({ page, api }) => {
     const session = aSession().atRevision(4).saying('Mine').build()
     api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }))

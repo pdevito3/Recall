@@ -9,7 +9,7 @@ import { newUuid } from '@/lib/new-uuid'
 
 import { sessionQueryOptions } from '../apis/get-session'
 import { SessionKeys } from '../apis/session.keys'
-import { readPointer, writePointer } from '../autosave/composer-pointer'
+import { readPointer, writePointer, type ComposerPointer } from '../autosave/composer-pointer'
 import { draftSaverFor, shownStatusOf, type DraftSaver, type DraftSnapshot } from '../autosave/draft-saver'
 import { useOwner } from '../autosave/use-draft-saver'
 
@@ -36,8 +36,8 @@ const noSubscription = () => () => undefined
 const isTheEntryGone = (error: unknown) => isProblemDetailsError(error) && error.status === 404
 
 const openingWords = (saver: DraftSaver | null, sessionId: string | null, cached: SessionDto | undefined) => {
-  const unsettled = saver?.unsettledText() ?? null
-  if (unsettled !== null) return unsettled
+  const kept = saver?.wordsToOpen() ?? null
+  if (kept !== null) return kept
   if (!sessionId) return ''
   return onlineManager.isOnline() ? null : (cached?.rawText ?? null)
 }
@@ -53,7 +53,8 @@ export function useComposer() {
     return draftSaverFor({ ...pointer, channel: 'raw', baseRevision: 0, latestRevision: 0 }, queryClient)
   })
   const [resumedSessionId] = useState(() => saver?.getSnapshot().sessionId ?? readPointer(owner)?.sessionId ?? null)
-  const [finished, setFinished] = useState<DraftSaver | null>(null)
+  const [opensAConflict] = useState(() => saver?.hasUnseenConflict() ?? false)
+  const [finished, setFinished] = useState<{ saver: DraftSaver; words: string; pointer: ComposerPointer | null } | null>(null)
   const [editor, setEditor] = useState(() => {
     const cached = resumedSessionId ? queryClient.getQueryData<SessionDto>(SessionKeys.detail(resumedSessionId)) : undefined
     return { key: 0, words: openingWords(saver, resumedSessionId, cached) }
@@ -79,23 +80,42 @@ export function useComposer() {
   const isReading = editor.words === null
   useEffect(() => {
     if (!isReading || !resumedSessionId) return
+    let isCurrent = true
     const open = (session: SessionDto) => {
+      if (!isCurrent) return
       saver?.moveBaseTo(session.rawDraftRevision, session.rawLatestRevision)
-      saver?.dismissConflict()
+      if (!opensAConflict) saver?.dismissConflict()
       currentWords.current = session.rawText
       setEditor(({ key }) => ({ key, words: session.rawText }))
     }
+    const openWithNoRead = () => {
+      if (!isCurrent) return
+      const cached = queryClient.getQueryData<SessionDto>(SessionKeys.detail(resumedSessionId))
+      if (cached) open(cached)
+      else startOver()
+    }
+    if (!onlineManager.isOnline()) {
+      openWithNoRead()
+      return
+    }
+    const stopWatching = onlineManager.subscribe((isOnline) => {
+      if (!isOnline) openWithNoRead()
+    })
     const read = (): Promise<void> =>
       queryClient.fetchQuery({ ...sessionQueryOptions(resumedSessionId), staleTime: 0 }).then(open, (error: unknown) => {
+        if (!isCurrent) return
         if (isCancelledError(error)) return read()
-        const cached = queryClient.getQueryData<SessionDto>(SessionKeys.detail(resumedSessionId))
-        if (cached && !isTheEntryGone(error)) open(cached)
-        else startOver()
+        if (isTheEntryGone(error)) startOver()
+        else openWithNoRead()
       })
     void read()
-  }, [isReading, resumedSessionId, saver, queryClient, startOver])
+    return () => {
+      isCurrent = false
+      stopWatching()
+    }
+  }, [isReading, resumedSessionId, saver, opensAConflict, queryClient, startOver])
 
-  const shown = saver ?? finished
+  const shown = saver ?? finished?.saver ?? null
   const snapshot = useSyncExternalStore(shown?.subscribe ?? noSubscription, shown?.getSnapshot ?? (() => idleSnapshot))
 
   const sessionId = saver ? snapshot.sessionId : null
@@ -147,15 +167,24 @@ export function useComposer() {
     }
   }, [isEntryGone, isReading, saver, beginEntry])
 
+  const isRefusedAfterDone = saver === null && finished !== null && snapshot.status.kind === 'refused'
+  useEffect(() => {
+    if (!isRefusedAfterDone) return
+    writePointer(finished.pointer)
+    setSaver(finished.saver)
+    setFinished(null)
+    openEditorWith(finished.words)
+  }, [isRefusedAfterDone, finished, openEditorWith])
+
   const canFinish = saver !== null && !isReading && snapshot.status.kind !== 'refused'
   const finish = useCallback(() => {
     if (!saver || !canFinish) return
     saver.flush()
+    setFinished({ saver, words: currentWords.current, pointer: readPointer(owner) })
     writePointer(null)
-    setFinished(saver)
     setSaver(null)
     openEditorWith('')
-  }, [saver, canFinish, openEditorWith])
+  }, [saver, canFinish, owner, openEditorWith])
 
   const keepWords = useCallback(() => {
     saver?.keepWords(currentWords.current)

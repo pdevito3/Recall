@@ -48,3 +48,8 @@ test('the people of an entry are the mentions of each text, once each, in the or
 test.each([['plain words'], ['{not json'], [null]])('the text %s mentions no one', (text) => {
   expect(mentionedPersonIds(text, null)).toEqual([])
 })
+
+test.each(['{"type":"doc","content":"x"}', '{"type":"doc","content":[null]}'])('the document %s reads as no words and no people', (text) => {
+  expect(plainPreviewOf(text, 200)).toBe('')
+  expect(mentionedPersonIds(text, null)).toEqual([])
+})

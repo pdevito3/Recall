@@ -317,6 +317,26 @@ test.describe('writing a new entry', () => {
     await page.context().setOffline(false)
   })
 
+  test('a return with no network after the last read has expired starts a new entry, so a person can write', async ({ page, api }) => {
+    const saved = aSession().saying('Morning coffee').build()
+    api.mock(sessionsApi.creates(saved), sessionsApi.draftSaveWins(saved, 2), sessionsApi.oneIs(saved))
+    const journal = journalPage(page)
+    await page.clock.install()
+    await journal.open()
+    await journal.write('Morning coffee')
+    await expect(journal.at.status('Saved at')).toBeVisible()
+    await journal.goToSettings()
+
+    await page.context().setOffline(true)
+    await page.clock.fastForward('06:00')
+    await journal.goToTheJournalFromTheSidebar()
+
+    await expect(journal.at.composer).toBeEmpty()
+    await journal.typeWithoutWaiting('Words with no network')
+    await expect(journal.at.composer).toHaveText('Words with no network')
+    await page.context().setOffline(false)
+  })
+
   test('Done during a read of the newest words leaves the next entry empty', async ({ page, api }) => {
     api.mock(sessionsApi.creates(created), sessionsApi.oneIs(created), sessionsApi.draftSaveLoses(created, { draftRevision: 3, latestRevision: 4 }))
     const journal = journalPage(page)
@@ -358,7 +378,8 @@ test.describe('writing a new entry', () => {
     await journal.open()
     await expect.poll(() => api.all('get', peoplePaths.list).length).toBeGreaterThan(0)
 
-    await journal.typeWithoutWaiting('Lunch with @Ana')
+    await journal.write('Lunch with')
+    await journal.typeWithoutWaiting(' @Ana')
     await expect(journal.at.mentionOption('Ana Reyes')).toBeVisible()
     await journal.pickFromTheMentionList()
     await expect.poll(() => JSON.stringify(api.last('put', sessionsPaths.rawDraft(created.id))?.body)).toContain('per_1')
@@ -448,6 +469,38 @@ test.describe('the timeline', () => {
 
     await expect(journal.at.status('Not saved. This text is too long.')).toBeVisible()
     await expect(journal.at.done).toBeDisabled()
+  })
+
+  test('a refusal that answers after Done brings the words back, and Done stays off', async ({ page, api }) => {
+    const session = aSession().build()
+    api.mock(sessionsApi.creates(session), { ...sessionsApi.draftSaveIsRefused(session, aProblem().refusing('This text is too long.')), delayMs: 300 })
+    const journal = journalPage(page)
+    await journal.open()
+
+    await journal.typeWithoutWaiting('Too many words')
+    await journal.finish()
+
+    await expect(journal.at.status('Not saved. This text is too long.')).toBeVisible()
+    await expect(journal.at.composer).toHaveText('Too many words')
+    await expect(journal.at.done).toBeDisabled()
+  })
+
+  test('a delete that answers after Done starts a new entry with the words', async ({ page, api }) => {
+    const session = aSession().build()
+    api.mock(sessionsApi.creates(session), sessionsApi.draftSaveWins(session, 1))
+    const journal = journalPage(page)
+    await journal.open()
+    await journal.write('Words for a deleted entry')
+    await expect(journal.at.status('Saved at')).toBeVisible()
+
+    api.mock({ ...sessionsApi.draftSaveIsRefused(session, aProblem().notFound('This Session does not exist.')), delayMs: 300 })
+    await journal.typeWithoutWaiting(' and more')
+    await journal.finish()
+    const next = aSession().build()
+    api.mock(sessionsApi.creates(next), sessionsApi.draftSaveWins(next, 1))
+
+    await expect.poll(() => JSON.stringify(api.last('put', sessionsPaths.rawDraft(next.id))?.body)).toContain('Words for a deleted entry and more')
+    await expect(journal.at.composer).toHaveText('Words for a deleted entry and more')
   })
 
   test('reads the next page with the cursor when the person scrolls to the end', async ({ page, api }) => {
