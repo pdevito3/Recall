@@ -6,8 +6,17 @@ export const supportPaths = {
 }
 
 export const supportApi = {
-  bundleIsReady(): MockRoute {
-    return { method: 'get', path: supportPaths.bundle, status: 200, body: {}, headers: { 'Content-Type': 'application/zip' } }
+  bundleIsReady(fileName: string): MockRoute {
+    return {
+      method: 'get',
+      path: supportPaths.bundle,
+      status: 200,
+      body: {},
+      headers: {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename=${fileName}; filename*=UTF-8''${fileName}`,
+      },
+    }
   },
 
   bundleRefuses(detail: string): MockRoute {

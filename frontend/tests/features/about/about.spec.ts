@@ -15,14 +15,15 @@ const signedInAs = (role: 'Admin' | 'User') => ({
 test.describe('the support bundle on the about page', () => {
   test.use({ actor: as.user('Bob Smith') })
 
-  test('an Admin downloads one zip with the CSRF header on the request', async ({ page, api }) => {
-    api.mock(signedInAs('Admin'), supportApi.bundleIsReady())
+  test('an Admin downloads one zip with the name of the Server and the CSRF header on the request', async ({ page, api }) => {
+    const nameOfTheServer = 'recall-support-20261106-091205.zip'
+    api.mock(signedInAs('Admin'), supportApi.bundleIsReady(nameOfTheServer))
     const about = aboutPage(page)
     await about.open()
 
     const download = await about.downloadSupportBundle()
 
-    expect(download.suggestedFilename()).toBe('recall-support.zip')
+    expect(download.suggestedFilename()).toBe(nameOfTheServer)
     expect(api.last('get', supportPaths.bundle)?.headers.get('x-csrf')).toBe('1')
   })
 
