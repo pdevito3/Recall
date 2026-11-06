@@ -8,7 +8,7 @@ import type { ChangeUserSettingOptions, ChangeUserSettingResponses } from '../ty
 import { client, unwrapResult } from '../../.kubb/client'
 
 /**
- * @summary Changes the settings of the caller, with Last-write-wins on the save time. A change with an older save time than
+ * @summary Changes the settings of the caller, with Last-write-wins on the save time. A change with a save time that is not newer than
  * the stored settings does nothing, and the response has the stored settings.
  * {@link /api/v1/me/settings}
  */

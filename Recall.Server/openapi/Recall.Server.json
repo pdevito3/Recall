@@ -2307,7 +2307,7 @@
         "tags": [
           "UserSettings"
         ],
-        "summary": "Changes the settings of the caller, with Last-write-wins on the save time. A change with an older save time than\nthe stored settings does nothing, and the response has the stored settings.",
+        "summary": "Changes the settings of the caller, with Last-write-wins on the save time. A change with a save time that is not newer than\nthe stored settings does nothing, and the response has the stored settings.",
         "operationId": "ChangeUserSetting",
         "requestBody": {
           "content": {
@@ -4158,7 +4158,7 @@
           },
           "savedAt": {
             "type": "string",
-            "description": "The time of the edit on the client. A change with an older time than the stored change does nothing.",
+            "description": "The time of the edit on the client. A change with a time that is not newer than the stored change does nothing.",
             "format": "date-time"
           }
         }
@@ -4657,7 +4657,7 @@
           },
           "savedAt": {
             "type": "string",
-            "description": "When the person made the change. A change with an older save time than the stored settings does nothing.",
+            "description": "When the person made the change. A change with a save time that is not newer than the stored settings does nothing.",
             "format": "date-time"
           }
         }

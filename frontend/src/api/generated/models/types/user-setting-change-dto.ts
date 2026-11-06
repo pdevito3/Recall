@@ -13,7 +13,7 @@ export type UserSettingChangeDto = {
     locationCaptureEnabled: boolean;
     requirePeopleProposalApproval: boolean;
     /**
-     * @description When the person made the change. A change with an older save time than the stored settings does nothing.
+     * @description When the person made the change. A change with a save time that is not newer than the stored settings does nothing.
      *
      * Format: `date-time`
      * @type string

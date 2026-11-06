@@ -19,7 +19,7 @@ public sealed class ChangeUserSettingEndpoint : IEndpoint
         .ProducesValidationProblem(StatusCodes.Status409Conflict);
 
     /// <summary>
-    /// Changes the settings of the caller, with Last-write-wins on the save time. A change with an older save time than
+    /// Changes the settings of the caller, with Last-write-wins on the save time. A change with a save time that is not newer than
     /// the stored settings does nothing, and the response has the stored settings.
     /// </summary>
     public static async Task<Ok<UserSettingDto>> Handle(

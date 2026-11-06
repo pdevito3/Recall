@@ -12,7 +12,7 @@ export type SessionMetadataChangeDto = {
     moods: string[];
     userTopics: string[];
     /**
-     * @description The time of the edit on the client. A change with an older time than the stored change does nothing.
+     * @description The time of the edit on the client. A change with a time that is not newer than the stored change does nothing.
      *
      * Format: `date-time`
      * @type string
