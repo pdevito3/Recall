@@ -39,8 +39,8 @@ describe('a login after a sign-out', () => {
     vi.stubGlobal('window', { location: { replace } })
     vi.resetModules()
     const { apiClient } = await import('@/lib/api-client')
-    vi.spyOn(apiClient, 'post').mockResolvedValue({ status: 204 })
-    return { replace, ...(await import('./auth-actions')) }
+    const post = vi.spyOn(apiClient, 'post').mockResolvedValue({ status: 204 })
+    return { replace, post, ...(await import('./auth-actions')) }
   }
 
   afterEach(() => {
@@ -56,6 +56,16 @@ describe('a login after a sign-out', () => {
     login('/about')
 
     expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?signedOut=1')
+  })
+
+  it('keeps the return URL when the logout fails, because the session may still live', async () => {
+    const { replace, login, logout, post } = await freshActions()
+    post.mockRejectedValue(new Error('no answer'))
+
+    await expect(logout()).rejects.toThrow('no answer')
+    login('/about')
+
+    expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?returnUrl=%2Fabout')
   })
 
   it('keeps the return URL when nobody signed out', async () => {

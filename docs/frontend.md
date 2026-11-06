@@ -154,11 +154,11 @@ Each area keeps its hook and its query key factory in `domain/[area]/apis/`. The
 ```typescript
 import { useCurrentUser } from '@/domain/users/apis/get-current-user'
 import { useAuth } from '@/domain/auth/apis/get-user'
-import { logout } from '@/domain/auth/apis/auth-actions'
+import { useLogout } from '@/domain/auth/apis/auth-actions'
 
 const { data, isLoading, error } = useCurrentUser()
 const { isLoggedIn, username } = useAuth()
-await logout()
+const logout = useLogout()
 ```
 
 Never copy server state into local state. See [server-state.md](frontend/server-state.md).
