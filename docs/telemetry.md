@@ -235,7 +235,7 @@ A person who runs Recall on a NAS has no log service, so the server keeps its ow
 | `telemetry/traces-<date>.jsonl` | One span in each line | 10 MiB | 20 | 14 |
 | `telemetry/metrics-<date>.jsonl` | One point of a metric in each line, each 60 seconds | 10 MiB | 5 | 14 |
 
-These limits hold about 450 MiB. The section `FileTelemetry` in `appsettings.json` sets them. Set `FileTelemetry__Logs__FilesKept`, for example, to change one in an environment variable. A file passes its size limit by at most one line, and then the next line opens a new file with a number after the date. The age limit acts when a file opens, so at a start, at the first line of each day, and when a file reaches its size limit.
+These limits hold about 450 MiB. The section `FileTelemetry` in `appsettings.json` sets them. Set `FileTelemetry__Logs__FilesKept`, for example, to change one in an environment variable. A value of 0 for `FileSizeBytes`, `FilesKept`, or `MetricExportSeconds` stops the server at startup, and a `DaysKept` of 0 does not. A file passes its size limit by at most one line, and then the next line opens a new file with a number after the date. The age limit acts when a file opens, so at a start, at the first line of each day, and when a file reaches its size limit.
 
 The server makes these folders with owner-only modes. A logging call and a span give their data to a queue and return, so a slow or full disk does not hold a request. When the disk cannot take a line, the line goes. The console and OTLP do not change, and the two OTLP exports run beside the files.
 
