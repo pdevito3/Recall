@@ -1,5 +1,6 @@
 import { useNavigate } from '@tanstack/react-router'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
 import { Button } from '@/components/ui/button'
@@ -43,7 +44,7 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
   }))
   const [revisionsAtOpen] = useState(() => ({ draft: draftRevisionOf(session, channel), latest: latestOf(session, channel) }))
   const [opensAConflict] = useState(() => saver.hasUnseenConflict())
-  const [wasUpdated, setWasUpdated] = useState(false)
+  const [changeNote, setChangeNote] = useState<string | null>(null)
   const currentText = useRef(opened.text)
   const section = useRef<HTMLElement>(null)
 
@@ -68,8 +69,21 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
     currentText.current = serverText
     const hadFocus = section.current?.contains(document.activeElement) ?? false
     setOpened((previous) => ({ text: serverText, key: previous.key + 1, takesFocus: hadFocus }))
-    setWasUpdated(true)
+    setChangeNote('These words changed in another tab or device. This page now shows the newest words.')
   }, [saver, serverDraft, serverLatest, serverText])
+
+  useLayoutEffect(
+    () =>
+      saver.subscribeToHoldJoin((joined) => {
+        currentText.current = joined
+        const hadFocus = section.current?.contains(document.activeElement) ?? false
+        flushSync(() => {
+          setOpened((previous) => ({ text: joined, key: previous.key + 1, takesFocus: hadFocus }))
+          setChangeNote('Words that you typed while this entry loaded joined the end of this entry.')
+        })
+      }),
+    [saver],
+  )
 
   const newEntryId = snapshot.movedFromDeletedEntry && snapshot.sessionId !== session.id ? snapshot.sessionId : null
   useEffect(() => {
@@ -98,20 +112,20 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
         {snapshot.conflict && (
           <ConflictNotice conflict={snapshot.conflict} onShowNewest={() => void showNewest()} onKeep={keep} />
         )}
-        {wasUpdated && (
+        {changeNote && (
           <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted p-3 text-sm dark:bg-card">
-            <p>These words changed in another tab or device. This page now shows the newest words.</p>
-            <Button variant="ghost" onPress={() => setWasUpdated(false)}>Dismiss</Button>
+            <p>{changeNote}</p>
+            <Button variant="ghost" onPress={() => setChangeNote(null)}>Dismiss</Button>
           </div>
         )}
         <JournalEditor
-          key={opened.key}
+          revision={opened.key}
           initialText={opened.text}
           label={channelLabels[channel]}
           autoFocus={opened.takesFocus}
           onChange={(text) => {
             currentText.current = text
-            setWasUpdated(false)
+            setChangeNote(null)
             saver.edit(text)
           }}
           onSubmit={() => saver.flush()}

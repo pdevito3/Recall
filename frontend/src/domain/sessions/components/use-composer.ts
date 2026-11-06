@@ -1,5 +1,6 @@
 import { isCancelledError, onlineManager, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { flushSync } from 'react-dom'
 
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
 import { useUserSetting } from '@/domain/settings/apis/user-setting'
@@ -34,7 +35,7 @@ function captureLocation(): Promise<{ latitude: number; longitude: number } | nu
   })
 }
 
-const idleSnapshot: DraftSnapshot = { status: { kind: 'idle' }, conflict: null, sessionId: null, baseRevision: 0, latestRevision: 0, movedFromDeletedEntry: false }
+const idleSnapshot: DraftSnapshot = { status: { kind: 'idle' }, conflict: null, sessionId: null, baseRevision: 0, latestRevision: 0, movedFromDeletedEntry: false, isOnlyInMemory: false }
 const noSubscription = () => () => undefined
 
 const isTheEntryGone = (error: unknown) => isProblemDetailsError(error) && error.status === 404
@@ -67,8 +68,7 @@ export function useComposer() {
   })
   const currentWords = useRef(editor.words ?? '')
   const heldAtOpen = useRef(saver?.wordsInHold() ?? null)
-  const typedWhileReading = useRef(heldAtOpen.current)
-  const wordsFromRead = useRef('')
+  const readsAtOpen = useRef(editor.words === null)
   const latestSaver = useRef(saver)
 
   // A second keystroke can come before React renders the first, and it must reach the same entry.
@@ -92,15 +92,13 @@ export function useComposer() {
   useEffect(() => {
     if (!isReading || !resumedSessionId) return
     let isCurrent = true
+    // The answer must reach the screen before the next key, so that the key lands in the words of the entry.
     const openWords = (words: string) => {
       if (!opensAConflict) saver?.dismissConflict()
-      wordsFromRead.current = words
-      const typed = typedWhileReading.current
-      typedWhileReading.current = null
-      const opened = typed === null ? words : joinWords(words, typed)
+      const opened = saver?.joinHoldInto(words) ?? words
       currentWords.current = opened
-      setEditor(({ key }) => ({ key: key + 1, words: opened, takesFocus: isWritingNow() }))
-      if (typed !== null) saver?.edit(opened)
+      flushSync(() => setEditor(({ key }) => ({ key: key + 1, words: opened, takesFocus: isWritingNow() })))
+      if (saver?.wordsInHold() != null) void saver.joinHoldWithNoPage()
     }
     const open = (session: SessionDto) => {
       if (!isCurrent) return
@@ -115,8 +113,10 @@ export function useComposer() {
       else if (cached) open(cached)
     }
     if (!onlineManager.isOnline()) {
-      openWithNoRead()
-      return
+      queueMicrotask(openWithNoRead)
+      return () => {
+        isCurrent = false
+      }
     }
     const stopWatching = onlineManager.subscribe((isOnline) => {
       if (!isOnline) openWithNoRead()
@@ -129,7 +129,7 @@ export function useComposer() {
         if (!isCurrent) return
         if (isCancelledError(error)) return read()
         if (isTheEntryGone(error)) {
-          if (typedWhileReading.current === null) startOver()
+          if (saver?.wordsInHold() == null) flushSync(startOver)
           else openWords('')
           return
         }
@@ -147,23 +147,19 @@ export function useComposer() {
   }, [isReading, resumedSessionId, saver, opensAConflict, queryClient, startOver])
 
   useEffect(() => {
-    latestSaver.current?.takeHold()
-    if (latestSaver.current?.wordsInHold() == null) {
-      heldAtOpen.current = null
-      typedWhileReading.current = null
-    }
+    if (readsAtOpen.current) latestSaver.current?.takeHold()
+    else void latestSaver.current?.joinHoldWithNoPage()
     return () => void latestSaver.current?.joinHoldWithNoPage()
   }, [])
 
-  // A key can land after the read answered and before the editor opened with its words.
-  useEffect(() => {
-    const late = typedWhileReading.current
-    if (isReading || late === null) return
-    typedWhileReading.current = null
-    const joined = joinWords(wordsFromRead.current, late)
-    openEditorWith(joined)
-    latestSaver.current?.edit(joined)
-  }, [isReading, openEditorWith])
+  useLayoutEffect(
+    () =>
+      saver?.subscribeToHoldJoin((joined) => {
+        currentWords.current = joined
+        flushSync(() => setEditor(({ key }) => ({ key: key + 1, words: joined, takesFocus: isWritingNow() })))
+      }),
+    [saver],
+  )
 
   const shown = saver ?? finished?.saver ?? null
   const snapshot = useSyncExternalStore(shown?.subscribe ?? noSubscription, shown?.getSnapshot ?? (() => idleSnapshot))
@@ -194,9 +190,9 @@ export function useComposer() {
     (text: string, isEmpty: boolean) => {
       currentWords.current = text
       if (isReading) {
+        if (latestSaver.current?.wordsInHold() == null) heldAtOpen.current = null
         const held = heldAtOpen.current
         const typed = isEmpty ? held : held === null ? text : joinWords(held, text)
-        typedWhileReading.current = typed
         if (typed === null) latestSaver.current?.releaseFromOutbox()
         else latestSaver.current?.holdInOutbox(typed)
         return

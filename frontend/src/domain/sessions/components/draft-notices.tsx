@@ -42,12 +42,46 @@ function MovedNotice({ notice }: { notice: Extract<DraftNotice, { kind: 'moved' 
   )
 }
 
-function RefusedNotice({ notice }: { notice: Extract<DraftNotice, { kind: 'refused' }> }) {
+function CopyWords({ words }: { words: string }) {
   const copy = () =>
-    copyToClipboard(plainWordsOf(notice.words)).then(
+    copyToClipboard(plainWordsOf(words)).then(
       () => Notification.success('Words copied'),
       () => Notification.error('The browser did not copy the words. Open this page in a newer browser and try again.'),
     )
+  return <Button variant="outline" onPress={() => void copy()}>Copy words</Button>
+}
+
+function WaitingNotice({ notice }: { notice: Extract<DraftNotice, { kind: 'waiting' }> }) {
+  return (
+    <section role="alert" aria-label="Words not saved yet" className={`${noticeClass} bg-muted dark:bg-card`}>
+      <div className="min-w-0 flex-1 basis-64 space-y-1">
+        <p className="font-medium wrap-anywhere">These words are not saved yet. Recall keeps trying while this page is open.</p>
+        <p dir="auto" className="line-clamp-2 wrap-anywhere text-muted-foreground">{plainPreviewOf(notice.words, previewLength)}</p>
+      </div>
+      <div className="flex items-center gap-2">
+        <CopyWords words={notice.words} />
+        <Button variant="ghost" onPress={() => notice.saver.discard()}>Discard</Button>
+      </div>
+    </section>
+  )
+}
+
+function OnlyInMemoryNotice({ notice }: { notice: Extract<DraftNotice, { kind: 'onlyInMemory' }> }) {
+  return (
+    <section role="alert" aria-label="Words only in this page" className={`${noticeClass} border-destructive/20 bg-destructive/10`}>
+      <div className="min-w-0 flex-1 basis-64 space-y-1">
+        <p className="font-medium text-destructive wrap-anywhere">This browser has no room to keep these words. They are lost if you close or reload this page before they reach the server. {notice.reason}</p>
+        <p dir="auto" className="line-clamp-2 wrap-anywhere text-muted-foreground">{plainPreviewOf(notice.words, previewLength)}</p>
+      </div>
+      <div className="flex items-center gap-2">
+        <CopyWords words={notice.words} />
+        {notice.reason && <Button variant="ghost" onPress={() => notice.saver.discard()}>Discard</Button>}
+      </div>
+    </section>
+  )
+}
+
+function RefusedNotice({ notice }: { notice: Extract<DraftNotice, { kind: 'refused' }> }) {
   return (
     <section role="alert" aria-label="Words not saved" className={`${noticeClass} border-destructive/20 bg-destructive/10`}>
       <div className="min-w-0 flex-1 basis-64 space-y-1">
@@ -56,16 +90,27 @@ function RefusedNotice({ notice }: { notice: Extract<DraftNotice, { kind: 'refus
         <p className="text-muted-foreground">Copy the words, make them shorter, and put them in a new entry. They stay here until you discard them.</p>
       </div>
       <div className="flex items-center gap-2">
-        <Button variant="outline" onPress={() => void copy()}>Copy words</Button>
+        <CopyWords words={notice.words} />
         <Button variant="ghost" onPress={() => notice.saver.discard()}>Discard</Button>
       </div>
     </section>
   )
 }
 
+function Notice({ notice }: { notice: DraftNotice }) {
+  switch (notice.kind) {
+    case 'moved':
+      return <MovedNotice notice={notice} />
+    case 'refused':
+      return <RefusedNotice notice={notice} />
+    case 'waiting':
+      return <WaitingNotice notice={notice} />
+    case 'onlyInMemory':
+      return <OnlyInMemoryNotice notice={notice} />
+  }
+}
+
 export function DraftNotices() {
   const notices = useSyncExternalStore(subscribeToDraftNotices, draftNotices)
-  return notices.map((notice, index) =>
-    notice.kind === 'moved' ? <MovedNotice key={index} notice={notice} /> : <RefusedNotice key={index} notice={notice} />,
-  )
+  return notices.map((notice, index) => <Notice key={index} notice={notice} />)
 }

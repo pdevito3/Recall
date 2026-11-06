@@ -4,7 +4,7 @@ import { writePointer } from '@/domain/sessions/autosave/composer-pointer'
 import { discardUnsentDrafts, settleDraftSavers, stopDraftSavers } from '@/domain/sessions/autosave/draft-saver'
 import { settleSettingSaver, stopSettingSaver } from '@/domain/settings/apis/user-setting'
 
-type Choice = 'keep' | 'discard'
+type Choice = 'keep' | 'discard' | 'stay'
 
 const settleLimitMs = 5_000
 
@@ -36,6 +36,7 @@ const withinLimit = (settled: Promise<boolean>) =>
 export async function settleUnsentWords(): Promise<() => void> {
   const [areWordsSent] = await Promise.all([withinLimit(settleDraftSavers()), withinLimit(settleSettingSaver())])
   const choice = areWordsSent ? 'keep' : await new Promise<Choice>((resolve) => setAnswer(resolve))
+  if (choice === 'stay') throw new Error('The person stayed signed in, to copy the words first.')
   return () => {
     stopDraftSavers()
     stopSettingSaver()

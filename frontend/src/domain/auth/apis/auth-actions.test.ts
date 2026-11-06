@@ -189,7 +189,7 @@ describe('a login after a sign-out', () => {
 })
 
 describe('a sign-out in another tab', () => {
-  const channels: { postMessage: ReturnType<typeof vi.fn>; onmessage?: () => void }[] = []
+  const channels: { postMessage: ReturnType<typeof vi.fn>; close: () => void; onmessage?: (event: { data: unknown }) => void }[] = []
 
   const guardedActions = async () => {
     channels.length = 0
@@ -201,6 +201,7 @@ describe('a sign-out in another tab', () => {
     vi.stubGlobal('document', { documentElement: { style: {} } })
     vi.stubGlobal('BroadcastChannel', function (this: (typeof channels)[number]) {
       this.postMessage = vi.fn()
+      this.close = vi.fn()
       channels.push(this)
     })
     vi.resetModules()
@@ -275,7 +276,7 @@ describe('a sign-out in another tab', () => {
     const { replace, queryClient, channel } = await guardedActions()
     queryClient.setQueryData(['private'], 'words of this person')
 
-    channel.onmessage!()
+    channel.onmessage!({ data: 'signed-out' })
 
     expect(document.documentElement.style.opacity).toBe('0')
     expect(queryClient.getQueryCache().getAll()).toHaveLength(0)

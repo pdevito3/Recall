@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 
 import { resumeUnsentSetting } from '@/domain/settings/apis/user-setting'
 
-import { resumeUnsentDrafts } from './draft-saver'
+import { isAnyWordOnlyInMemory, resumeUnsentDrafts } from './draft-saver'
 import { useOwner } from './use-draft-saver'
 
 export function useResumeUnsentDrafts() {
@@ -14,4 +14,12 @@ export function useResumeUnsentDrafts() {
     resumeUnsentDrafts(owner, queryClient)
     resumeUnsentSetting(owner, queryClient)
   }, [owner, queryClient])
+
+  useEffect(() => {
+    const warnOfTheLoss = (event: BeforeUnloadEvent) => {
+      if (isAnyWordOnlyInMemory()) event.preventDefault()
+    }
+    window.addEventListener('beforeunload', warnOfTheLoss)
+    return () => window.removeEventListener('beforeunload', warnOfTheLoss)
+  }, [])
 }

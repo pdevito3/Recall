@@ -25,7 +25,7 @@ export function ComposerForm({ composer }: { composer: Composer }) {
         />
       )}
       <JournalEditor
-        key={composer.editorKey}
+        revision={composer.editorKey}
         initialText={composer.words ?? ''}
         label="New entry"
         placeholder={composer.words === null ? '' : 'What is on your mind?'}

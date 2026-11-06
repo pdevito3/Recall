@@ -49,7 +49,7 @@ export function SessionTags({ session }: { session: SessionDto }) {
       )}
       {aiTopics.length > 0 && <TagLine label="Suggested topics" tags={aiTopics} />}
       {people.length > 0 && <TagLine label="People" tags={people.map((label) => `@${label}`)} />}
-      <SaveStatusLine status={status} zone={zone} />
+      {asks.length === 0 && <SaveStatusLine status={status} zone={zone} />}
     </section>
   )
 }

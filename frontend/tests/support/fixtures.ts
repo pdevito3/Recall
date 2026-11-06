@@ -1,4 +1,4 @@
-import { test as base, expect, type Request } from '@playwright/test'
+import { test as base, expect, type Request, type Route } from '@playwright/test'
 import { authApi } from './api/auth-api'
 import { membershipApi } from './api/membership-api'
 import { peopleApi } from './api/people-api'
@@ -46,6 +46,7 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
       ]
       const served = requestRecorder()
       const missed: string[] = []
+      const openCalls: Route[] = []
 
       // On the context, so that a second tab of the test gets the same answers.
       await context.route(
@@ -64,6 +65,10 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
           }
 
           served.add(newestMock.method, url, new Headers(await request.allHeaders()), postBody(request))
+          if (newestMock.neverAnswers) {
+            openCalls.push(route)
+            return
+          }
           if (newestMock.delayMs) await new Promise((resolve) => setTimeout(resolve, newestMock.delayMs))
           await route.fulfill({
             status: newestMock.status,
@@ -81,6 +86,7 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
         all: served.all,
       })
 
+      await Promise.all(openCalls.map((route) => route.abort().catch(() => undefined)))
       // Let an in-flight handler finish, so that a late call is still recorded.
       await page.unrouteAll({ behavior: 'wait' })
       await context.unrouteAll({ behavior: 'wait' })

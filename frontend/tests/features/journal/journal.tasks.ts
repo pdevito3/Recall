@@ -42,6 +42,14 @@ export function journalPage(page: Page) {
       await page.keyboard.type(words)
     },
 
+    async markTheEditor() {
+      await at.composer.evaluate((editor) => {
+        ;(window as unknown as { markedEditor: Element }).markedEditor = editor
+      })
+    },
+
+    isTheSameEditor: () => at.composer.evaluate((editor) => (window as unknown as { markedEditor: Element }).markedEditor === editor),
+
     async moveTheCursorOneBack() {
       await page.keyboard.press('ArrowLeft')
     },
@@ -264,9 +272,35 @@ export function unsentWords(page: Page) {
 
     stored: (key: string) => page.evaluate((k) => localStorage.getItem(k), key),
     keys: () => page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('recall.unsent.'))),
+    clientSessionIdOfTheHold: () =>
+      page.evaluate(() => Object.keys(localStorage).find((key) => key.endsWith('.hold'))!.split('.')[3]),
     settingKeys: () => page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('recall.unsent-setting.'))),
     composerPointer: () => page.evaluate(() => sessionStorage.getItem('recall.composer')),
     clipboardText: () => page.evaluate(() => navigator.clipboard.readText()),
+
+    /** As much as the storage of this origin takes, so that the next write of the words fails. */
+    async fillTheStorage() {
+      await page.evaluate(() => {
+        let size = 1 << 20
+        let index = 0
+        while (size >= 1) {
+          try {
+            localStorage.setItem(`fill.${index++}`, 'x'.repeat(size))
+          } catch {
+            size >>= 1
+          }
+        }
+      })
+    },
+
+    async typeOfTheDialogAtClose() {
+      const dialog = page.waitForEvent('dialog')
+      await page.close({ runBeforeUnload: true })
+      const shown = await dialog
+      const type = shown.type()
+      await shown.accept()
+      return type
+    },
 
     async openSettings() {
       await page.goto('/settings')
@@ -280,6 +314,10 @@ export function unsentWords(page: Page) {
 
     async comeBackToTheTab() {
       await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')))
+    },
+
+    async signalThatTheConnectionReturned() {
+      await page.evaluate(() => window.dispatchEvent(new Event('online')))
     },
 
     async letAnAnswerLand() {

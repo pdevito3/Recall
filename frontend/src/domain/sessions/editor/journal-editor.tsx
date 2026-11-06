@@ -1,6 +1,7 @@
+import { EditorState, Selection } from '@tiptap/pm/state'
 import { Placeholder } from '@tiptap/extensions'
 import { EditorContent, Extension, useEditor, type Editor } from '@tiptap/react'
-import { useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 
 import { useAddPerson, usePeopleDirectory } from '@/domain/people/apis/people'
 
@@ -10,6 +11,8 @@ import { mentionSuggestion, type MentionSource } from './mention-suggestion'
 
 interface JournalEditorProps {
   initialText: string
+  /** A new value opens `initialText` in this editor, as a new document with no undo. The editor stays mounted, so a key at this moment reaches it. */
+  revision: number
   label: string
   placeholder?: string
   autoFocus?: boolean
@@ -34,12 +37,12 @@ function useMentionSource(): MentionSource {
   )
 }
 
-export function JournalEditor({ initialText, label, placeholder, autoFocus, onChange, onSubmit, toolbar }: JournalEditorProps) {
+export function JournalEditor({ initialText, revision, label, placeholder, autoFocus, onChange, onSubmit, toolbar }: JournalEditorProps) {
   const mentionSource = useMentionSource()
-  const callbacks = useRef({ onChange, onSubmit })
-  useEffect(() => {
-    callbacks.current = { onChange, onSubmit }
-  }, [onChange, onSubmit])
+  const callbacks = useRef({ onChange, onSubmit, placeholder })
+  useLayoutEffect(() => {
+    callbacks.current = { onChange, onSubmit, placeholder }
+  }, [onChange, onSubmit, placeholder])
 
   const editor = useEditor({
     autofocus: autoFocus ? 'end' : false,
@@ -47,7 +50,7 @@ export function JournalEditor({ initialText, label, placeholder, autoFocus, onCh
     extensions: [
       ...textExtensions,
       PersonMention.configure({ suggestion: mentionSuggestion(mentionSource) }),
-      Placeholder.configure({ placeholder: placeholder ?? '' }),
+      Placeholder.configure({ placeholder: () => callbacks.current.placeholder ?? '' }),
       SubmitKey.configure({ onSubmit: () => callbacks.current.onSubmit?.() }),
       LeaveKey,
     ],
@@ -62,6 +65,16 @@ export function JournalEditor({ initialText, label, placeholder, autoFocus, onCh
     },
     onUpdate: ({ editor: changed }) => callbacks.current.onChange(JSON.stringify(changed.getJSON()), changed.isEmpty),
   })
+
+  const openedRevision = useRef(revision)
+  useLayoutEffect(() => {
+    if (!editor || openedRevision.current === revision) return
+    openedRevision.current = revision
+    const { schema, plugins } = editor.state
+    const doc = schema.nodeFromJSON(contentOf(initialText))
+    editor.view.updateState(EditorState.create({ doc, plugins, selection: Selection.atEnd(doc) }))
+    if (autoFocus) editor.view.focus()
+  }, [editor, revision, initialText, autoFocus])
 
   return (
     <div className="flex flex-col rounded-lg border bg-card focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">

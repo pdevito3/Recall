@@ -2,6 +2,7 @@ import { useMutation, type QueryClient } from '@tanstack/react-query'
 
 import { Notification } from '@/components/notification'
 import { apiClient } from '@/lib/api-client'
+import { noteSignInOfAnotherTab, sessionChannelName } from '@/lib/page-user'
 import { authUserQuery, getUser } from './get-user'
 
 import { settleUnsentWords } from './unsent-words-at-logout'
@@ -119,8 +120,11 @@ async function checkSessionOfRestoredPage(queryClient: QueryClient) {
  * guard for that cache acts in a browser that still restores, as a WKWebView did. docs/authentication.md has the runs.
  */
 export function guardPageAgainstEndedSession(queryClient: QueryClient) {
-  otherTabs = new BroadcastChannel('recall.session')
-  otherTabs.onmessage = () => leaveAsSignedOut(queryClient)
+  otherTabs = new BroadcastChannel(sessionChannelName)
+  otherTabs.onmessage = ({ data }: MessageEvent<'signed-out' | { signedInAs: string }>) => {
+    if (data === 'signed-out') leaveAsSignedOut(queryClient)
+    else noteSignInOfAnotherTab(data.signedInAs)
+  }
   window.addEventListener('pagehide', (event) => {
     if (!event.persisted) return
     hidePage()

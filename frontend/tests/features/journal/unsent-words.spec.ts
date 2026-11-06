@@ -205,7 +205,7 @@ test.describe('the outbox', () => {
     expect(await unsent.stored(key)).toContain('Words of another person')
   })
 
-  test('sends each entry that it can read, and leaves an entry that it cannot read', async ({ page, api }) => {
+  test('sends each entry that it can read, and removes an entry that it cannot read', async ({ page, api }) => {
     const unsent = unsentWords(page)
     const session = aSession().build()
     api.mock(sessionsApi.draftSaveWins(session, 2))
@@ -218,8 +218,8 @@ test.describe('the outbox', () => {
     await unsent.openSettings()
 
     await expect.poll(() => wordsOf(api.last('put', sessionsPaths.rawDraft(session.id)))).toContain('Words that can be read')
-    expect(await unsent.stored(literalNull)).toBe('null')
-    expect(await unsent.stored(broken)).toBe('{broken')
+    expect(await unsent.stored(literalNull)).toBeNull()
+    expect(await unsent.stored(broken)).toBeNull()
   })
 
   test('a delete of an entry removes its unsent words', async ({ page, api }) => {
@@ -390,6 +390,45 @@ test.describe('a return to an entry whose read is slow', () => {
     expect(wordsOf(api.last('put', sessionsPaths.rawDraft(session.id)))).toContain('Words typed early')
   })
 
+  test('a key on the entry page during a hold keeps the held words, and the page shows them', async ({ page, api }) => {
+    const session = aSession().build()
+    const journal = journalPage(page)
+    const entry = entryPage(page)
+    const unsent = unsentWords(page)
+    const saved = { ...aSession().atRevision(1).saying('Words from before').build(), id: session.id }
+    await aReturnDuringASlowRead(journal, page, api, session, () => ({ ...sessionsApi.oneIs(saved), neverAnswers: true }))
+    await journal.typeWithoutWaiting('Words typed early')
+
+    // The read of a mock does not change with a save, so the save must answer after the page opens.
+    api.mock(
+      sessionsApi.oneIs({ ...saved, clientSessionId: await unsent.clientSessionIdOfTheHold() }),
+      { ...sessionsApi.draftSaveWins(session, 2), delayMs: 3_000 },
+    )
+    await entry.open(session.id)
+    await entry.typeWithoutWaiting(' a key on the entry page')
+
+    await expect(entry.at.editor).toContainText('Words typed early', { timeout: 10_000 })
+    await expect(entry.at.editor).toContainText('a key on the entry page')
+    await expect.poll(() => wordsOf(api.last('put', sessionsPaths.rawDraft(session.id))), { timeout: 10_000 }).toContain('Words typed early')
+    await expect.poll(() => wordsOf(api.last('put', sessionsPaths.rawDraft(session.id))), { timeout: 10_000 }).toContain('a key on the entry page')
+  })
+
+  test('the editor stays the same at the answer of a read, so each key lands in the words', async ({ page, api }) => {
+    const session = aSession().build()
+    const journal = journalPage(page)
+    const saved = { ...aSession().atRevision(1).saying('Words from before').build(), id: session.id, clientSessionId: session.clientSessionId }
+    await aReturnDuringASlowRead(journal, page, api, session, () => ({ ...sessionsApi.oneIs(saved), delayMs: 500 }))
+    await journal.at.composer.click()
+    await journal.markTheEditor()
+
+    await page.keyboard.type('abcdefghijklmnopqrstuvwxyz', { delay: 40 })
+
+    await expect(journal.at.loadingEntry).toHaveCount(0)
+    expect(await journal.isTheSameEditor()).toBe(true)
+    await expect(journal.at.composer).toContainText('Words from before')
+    await expect(journal.at.composer).toContainText('abcdefghijklmnopqrstuvwxyz')
+  })
+
   test('a reload during the read joins the keys to the entry, and does not replace it', async ({ page, api }) => {
     const session = aSession().build()
     const journal = journalPage(page)
@@ -508,5 +547,95 @@ test.describe('a setting that did not reach the Server', () => {
 
     await expect.poll(() => api.all('put', settingsPaths.mine).length).toBeGreaterThan(0)
     for (const put of api.all('put', settingsPaths.mine)) expect(JSON.stringify(put.body)).toContain('"locationCaptureEnabled":true')
+  })
+})
+
+test.describe('words that the browser has no room to keep', () => {
+  test('show a notice at once with a copy, and the page warns before it closes', async ({ page, api }) => {
+    const unsent = unsentWords(page)
+    const session = aSession().build()
+    api.mock(sessionsApi.creates(session), { method: 'put', path: sessionsPaths.rawDraft(session.id), status: 503 })
+    const journal = journalPage(page)
+    await journal.open()
+    await unsent.fillTheStorage()
+
+    await journal.typeWithoutWaiting('Words with no room')
+
+    await expect(unsent.at.onlyInMemory).toBeVisible()
+    await expect(unsent.at.onlyInMemory).toContainText('Words with no room')
+    await expect(unsent.at.copyOnlyInMemory).toBeVisible()
+    expect(await unsent.typeOfTheDialogAtClose()).toBe('beforeunload')
+  })
+
+  test('at a logout, the dialog does not offer to keep them', async ({ page, api }) => {
+    const unsent = unsentWords(page)
+    const session = aSession().build()
+    api.mock(sessionsApi.creates(session), { method: 'put', path: sessionsPaths.rawDraft(session.id), status: 503 })
+    const journal = journalPage(page)
+    await journal.open()
+    await unsent.fillTheStorage()
+    await journal.typeWithoutWaiting('Words with no room')
+    await expect(unsent.at.onlyInMemory).toBeVisible()
+
+    await unsent.logOut()
+
+    await expect(unsent.at.logoutDialog).toContainText('no room', { timeout: 10_000 })
+    await expect(unsent.at.logoutChoice('Keep words and sign out')).toHaveCount(0)
+    await unsent.answerTheLogoutDialog('Stay signed in')
+    await expect(unsent.at.onlyInMemory).toBeVisible()
+    expect(api.all('post', '/auth/logout')).toHaveLength(0)
+  })
+})
+
+test.describe('a save that waits after Done', () => {
+  test('has a notice on each page until the save works', async ({ page, api }) => {
+    const unsent = unsentWords(page)
+    const session = aSession().build()
+    api.mock(sessionsApi.creates(session), { method: 'put', path: sessionsPaths.rawDraft(session.id), status: 503 })
+    const journal = journalPage(page)
+    await journal.open()
+    await journal.typeWithoutWaiting('Words after Done')
+    await journal.finishFromTheKeyboard()
+
+    await journal.goToSettings()
+
+    await expect(unsent.at.waiting).toContainText('Words after Done')
+    await expect(unsent.at.copyWaiting).toBeVisible()
+    await expect(unsent.at.discardWaiting).toBeVisible()
+
+    api.mock(sessionsApi.draftSaveWins(session, 1))
+    await unsent.signalThatTheConnectionReturned()
+
+    await expect(unsent.at.waiting).toHaveCount(0)
+  })
+})
+
+test.describe('the editor at the moment that it opens other words', () => {
+  test('stays the same editor at Done, and the first key of the next entry lands in it', async ({ page, api }) => {
+    const session = aSession().build()
+    api.mock(sessionsApi.creates(session), sessionsApi.draftSaveWins(session, 1))
+    const journal = journalPage(page)
+    await journal.open()
+    await journal.typeWithoutWaiting('First entry')
+    await journal.markTheEditor()
+
+    await page.keyboard.press('ControlOrMeta+Enter')
+    await page.keyboard.type('Next')
+
+    expect(await journal.isTheSameEditor()).toBe(true)
+    await expect(journal.at.composer).toHaveText('Next')
+  })
+
+  test('undo after Done does not bring back the words of the last entry', async ({ page, api }) => {
+    const session = aSession().build()
+    api.mock(sessionsApi.creates(session), sessionsApi.draftSaveWins(session, 1))
+    const journal = journalPage(page)
+    await journal.open()
+    await journal.typeWithoutWaiting('First entry')
+
+    await page.keyboard.press('ControlOrMeta+Enter')
+    await page.keyboard.press('ControlOrMeta+z')
+
+    await expect(journal.at.composer).not.toContainText('First entry')
   })
 })

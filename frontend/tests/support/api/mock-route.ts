@@ -8,6 +8,8 @@ export interface MockRoute {
   headers?: Record<string, string>
   /** Holds the answer, so that a later request can overtake this one. */
   delayMs?: number
+  /** The call stays open until the page leaves, as a read that hangs does. */
+  neverAnswers?: boolean
 }
 
 // The SPA sends these paths to the Server. The Vite dev server serves the source files of the app under /src,

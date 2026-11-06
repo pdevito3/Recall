@@ -13,7 +13,8 @@ import { SessionKeys, type DraftChannel } from '../apis/session.keys'
 import { patchTimelineRow, refreshTimelineHead } from '../apis/timeline-cache'
 import { joinWords, mentionedPersonIds, plainPreviewOf } from '../editor/content'
 import { pointAtCreatedSession, pointAtNewEntry } from './composer-pointer'
-import { readOutbox, readOutboxEntry, removeFromOutbox, writeToOutbox, type OutboxEntry } from './outbox'
+import { claimHold } from './hold-lock'
+import { readHoldFromOutbox, readOutbox, readOutboxEntry, removeFromOutbox, removeHoldFromOutbox, writeToOutbox, type OutboxEntry } from './outbox'
 import { queueWithRefusal, queueWithUnanswered, newestUnsettled, type SaveQueue, type SaveStatus, type Stamped } from './save-queue'
 import { isARowThatIsGone, SerialSaver } from './serial-saver'
 
@@ -28,11 +29,14 @@ export interface DraftSnapshot {
   baseRevision: number
   latestRevision: number
   movedFromDeletedEntry: boolean
+  isOnlyInMemory: boolean
 }
 
 export type DraftNotice =
   | { kind: 'moved'; saver: DraftSaver; sessionId: string | null }
   | { kind: 'refused'; saver: DraftSaver; reason: string; words: string }
+  | { kind: 'waiting'; saver: DraftSaver; words: string }
+  | { kind: 'onlyInMemory'; saver: DraftSaver; reason: string | null; words: string }
 
 export function shownStatusOf({ status, conflict }: DraftSnapshot): ShownSaveStatus {
   return status.kind === 'saved' && conflict === 'wordsMovedToHistory' ? { kind: 'savedInHistory', at: status.at } : status
@@ -66,11 +70,15 @@ export class DraftSaver {
   private wordsOnServer: string | null = null
   private heldWords: string | null = null
   private holdRun = 0
+  private releaseHold: (() => void) | null = null
+  private ownsHold = false
+  private isHoldReadByPage = false
+  private readonly holdJoinListeners = new Set<(words: string) => void>()
   private isStopped = false
   private isDiscarded = false
   private isBeingDeleted = false
 
-  constructor(target: DraftTarget, queryClient: QueryClient, resumed?: OutboxEntry) {
+  constructor(target: DraftTarget, queryClient: QueryClient, resumed?: OutboxEntry | null, resumedHold?: OutboxEntry | null) {
     this.target = target
     this.queryClient = queryClient
     this.snapshot = {
@@ -80,24 +88,24 @@ export class DraftSaver {
       baseRevision: target.baseRevision,
       latestRevision: target.latestRevision,
       movedFromDeletedEntry: resumed?.movedFromDeletedEntry ?? false,
+      isOnlyInMemory: false,
     }
     this.saver = new SerialSaver({
       debounceMs: pauseInTypingMs,
       send: (change, signal) => this.send(change, signal),
       onReply: (reply, change) => this.handleReply(reply, change),
       onQueueChange: (queue) => this.keepInOutbox(queue),
-      initialQueue: resumed && !resumed.isHold ? (resumed.refusal ? queueWithRefusal(resumed.change, resumed.refusal) : queueWithUnanswered(resumed.change)) : undefined,
+      initialQueue: resumed ? (resumed.refusal ? queueWithRefusal(resumed.change, resumed.refusal) : queueWithUnanswered(resumed.change)) : undefined,
     })
     this.snapshot = { ...this.snapshot, status: this.saver.getStatus() }
     this.saver.subscribe(() => this.update({ status: this.saver.getStatus() }))
-    if (resumed?.isHold) {
-      this.heldWords = resumed.change.value
-      void this.joinHoldWithNoPage()
+    if (resumedHold) {
+      this.heldWords = resumedHold.change.value
+      this.claimTheHold()
     }
   }
 
   edit(text: string) {
-    this.heldWords = null
     this.saver.edit(text)
   }
 
@@ -113,6 +121,7 @@ export class DraftSaver {
   stop() {
     this.isStopped = true
     this.saver.dispose()
+    this.letGoOfHold()
   }
 
   noteDelete(isRunning: boolean) {
@@ -125,21 +134,44 @@ export class DraftSaver {
 
   holdInOutbox(text: string) {
     this.heldWords = text
-    this.writeToOutbox({ value: text, savedAt: new Date().toISOString() }, null)
+    this.claimTheHold()
+    this.noteOutboxWrite(writeToOutbox(this.target.owner, { ...this.outboxEntry({ value: text, savedAt: new Date().toISOString() }, null), isHold: true }))
   }
 
   releaseFromOutbox() {
     this.heldWords = null
-    removeFromOutbox(this.target.owner, draftKey(this.target))
+    removeHoldFromOutbox(this.target.owner, draftKey(this.target))
+    this.letGoOfHold()
+    if (this.saver.newestUnsettled() === null) this.noteOutboxWrite(true)
   }
 
   /** A page that reads the entry joins the held words itself, so the read of the saver stops. */
   takeHold() {
     this.holdRun += 1
+    this.isHoldReadByPage = true
+  }
+
+  /** Words typed before a read answered go after the words of the entry. Only the tab that has the lock joins them, and the words stay in the hold until then. */
+  joinHoldInto(words: string) {
+    const held = this.heldWords
+    if (held === null || !this.ownsHold) return words
+    const joined = joinWords(words, held)
+    this.saveJoined(joined)
+    return joined
+  }
+
+  /** A page that shows this entry opens the joined words at once, and its next key must not save the old text over them. */
+  subscribeToHoldJoin(listener: (words: string) => void) {
+    this.holdJoinListeners.add(listener)
+    return () => {
+      this.holdJoinListeners.delete(listener)
+    }
   }
 
   /** Held words were typed before a read answered. They join the words of the entry and must not replace them, also with no page open. */
   async joinHoldWithNoPage() {
+    this.isHoldReadByPage = false
+    if (!this.ownsHold) return
     const run = ++this.holdRun
     const isCurrent = () => run === this.holdRun && !this.isStopped
     const id = this.snapshot.sessionId
@@ -155,9 +187,39 @@ export class DraftSaver {
         await new Promise((resolve) => setTimeout(resolve, holdReadRetryMs))
         continue
       }
-      if (session) this.moveBaseTo(session.rawDraftRevision, session.rawLatestRevision)
-      if (this.heldWords !== null) this.edit(joinWords(session?.rawText ?? '', this.heldWords))
+      if (this.heldWords === null) return
+      const unsettled = this.unsettledText()
+      if (session && unsettled === null) this.moveBaseTo(session.rawDraftRevision, session.rawLatestRevision)
+      const joined = this.joinHoldInto(unsettled ?? session?.rawText ?? '')
+      for (const listener of this.holdJoinListeners) listener(joined)
     }
+  }
+
+  private claimTheHold() {
+    this.releaseHold ??= claimHold(`${this.target.owner}.${draftKey(this.target)}`, () => {
+      if (this.isStopped) return
+      this.ownsHold = true
+      // Another tab can have joined the words while this tab waited, or typed more of them.
+      const entry = readHoldFromOutbox(this.target.owner, draftKey(this.target))
+      if (entry) this.heldWords = entry.change.value
+      else if (!this.snapshot.isOnlyInMemory) this.heldWords = null
+      if (this.heldWords === null) this.letGoOfHold()
+      else if (!this.isHoldReadByPage) void this.joinHoldWithNoPage()
+    })
+  }
+
+  private letGoOfHold() {
+    this.releaseHold?.()
+    this.releaseHold = null
+    this.ownsHold = false
+  }
+
+  /** The saved queue is in the outbox before the hold goes, so a close between the two can show the words twice and cannot lose them. */
+  private saveJoined(joined: string) {
+    this.saver.edit(joined)
+    this.heldWords = null
+    removeHoldFromOutbox(this.target.owner, draftKey(this.target))
+    this.letGoOfHold()
   }
 
   dismissMovedNotice() {
@@ -167,10 +229,13 @@ export class DraftSaver {
   }
 
   notice(): DraftNotice | null {
-    const { status, movedFromDeletedEntry, sessionId } = this.snapshot
+    const { status, movedFromDeletedEntry, sessionId, isOnlyInMemory } = this.snapshot
+    const words = this.unsettledText() ?? this.heldWords ?? ''
+    if (isOnlyInMemory) return { kind: 'onlyInMemory', saver: this, reason: status.kind === 'refused' ? status.message : null, words }
     if (status.kind === 'refused' && this.listeners.size === 0) {
-      return { kind: 'refused', saver: this, reason: status.message, words: this.unsettledText() ?? '' }
+      return { kind: 'refused', saver: this, reason: status.message, words }
     }
+    if (status.kind === 'waiting' && this.listeners.size === 0) return { kind: 'waiting', saver: this, words }
     return movedFromDeletedEntry ? { kind: 'moved', saver: this, sessionId } : null
   }
 
@@ -181,7 +246,12 @@ export class DraftSaver {
   /** The words a page must open with: those not yet settled, or those that lost a save while no page showed them. */
   wordsToOpen() {
     const hasUnseenLoss = this.conflictIsUnseen && this.snapshot.conflict === 'wordsMovedToHistory'
-    return this.unsettledText() ?? (hasUnseenLoss ? this.wordsInHistory : null)
+    const kept = this.unsettledText() ?? (hasUnseenLoss ? this.wordsInHistory : null)
+    return kept === null ? null : this.joinHoldInto(kept)
+  }
+
+  isHoldingWordsOnlyInMemory() {
+    return this.snapshot.isOnlyInMemory && !this.isStopped
   }
 
   lastSavedWords() {
@@ -227,6 +297,7 @@ export class DraftSaver {
     this.isDiscarded = true
     this.stop()
     removeFromOutbox(this.target.owner, draftKey(this.target))
+    removeHoldFromOutbox(this.target.owner, draftKey(this.target))
     for (const [key, saver] of savers) {
       if (saver === this) savers.delete(key)
     }
@@ -305,6 +376,8 @@ export class DraftSaver {
     this.update({ sessionId: null, baseRevision: 0, latestRevision: 0, conflict: null, movedFromDeletedEntry: true })
     this.writeToOutbox(this.saver.newestUnsettled() ?? change, null)
     removeFromOutbox(this.target.owner, oldKey)
+    if (this.heldWords !== null) this.holdInOutbox(this.heldWords)
+    removeHoldFromOutbox(this.target.owner, oldKey)
   }
 
   private handleReply(reply: DraftSaveResultDto, change: Stamped<string>) {
@@ -365,14 +438,22 @@ export class DraftSaver {
     const change = newestUnsettled(queue)
     if (!change) {
       removeFromOutbox(this.target.owner, draftKey(this.target))
+      if (this.heldWords === null) this.noteOutboxWrite(true)
       return
     }
     this.writeToOutbox(change, queue.refusal?.change === change ? queue.refusal.message : null)
   }
 
   private writeToOutbox(change: Stamped<string>, refusal: string | null) {
-    if (this.isDiscarded) return
-    writeToOutbox(this.target.owner, {
+    if (!this.isDiscarded) this.noteOutboxWrite(writeToOutbox(this.target.owner, this.outboxEntry(change, refusal)))
+  }
+
+  private noteOutboxWrite(isWritten: boolean) {
+    if (this.snapshot.isOnlyInMemory === isWritten) this.update({ isOnlyInMemory: !isWritten })
+  }
+
+  private outboxEntry(change: Stamped<string>, refusal: string | null): OutboxEntry {
+    return {
       key: draftKey(this.target),
       channel: this.target.channel,
       clientSessionId: this.target.clientSessionId,
@@ -383,8 +464,7 @@ export class DraftSaver {
       change,
       refusal,
       movedFromDeletedEntry: this.snapshot.movedFromDeletedEntry,
-      isHold: this.heldWords !== null,
-    })
+    }
   }
 }
 
@@ -408,20 +488,20 @@ const savers = new Map<string, DraftSaver>()
 const draftKey = ({ clientSessionId, channel }: Pick<DraftTarget, 'clientSessionId' | 'channel'>) =>
   `${clientSessionId}.${channel}`
 
-function saverFromOutbox(entry: OutboxEntry, target: DraftTarget, queryClient: QueryClient) {
-  return new DraftSaver(
-    { ...target, sessionId: entry.sessionId, baseRevision: entry.baseRevision, latestRevision: entry.latestRevision },
-    queryClient,
-    entry,
-  )
+function saverFromOutbox(target: DraftTarget, queryClient: QueryClient) {
+  const key = draftKey(target)
+  const entry = readOutboxEntry(target.owner, key)
+  const hold = readHoldFromOutbox(target.owner, key)
+  const kept = entry ?? hold
+  if (!kept) return new DraftSaver(target, queryClient)
+  return new DraftSaver({ ...target, sessionId: kept.sessionId, baseRevision: kept.baseRevision, latestRevision: kept.latestRevision }, queryClient, entry, hold)
 }
 
 export function draftSaverFor(target: DraftTarget, queryClient: QueryClient): DraftSaver {
   const key = draftKey(target)
   const existing = savers.get(key)
   if (existing) return existing
-  const entry = readOutboxEntry(target.owner, key)
-  const saver = entry ? saverFromOutbox(entry, target, queryClient) : new DraftSaver(target, queryClient)
+  const saver = saverFromOutbox(target, queryClient)
   savers.set(key, saver)
   return saver
 }
@@ -440,7 +520,7 @@ export function noteDeleteOfDrafts(clientSessionId: string, isRunning: boolean) 
 
 export function resumeUnsentDrafts(owner: string, queryClient: QueryClient) {
   for (const entry of readOutbox(owner)) {
-    if (!savers.has(entry.key)) savers.set(entry.key, saverFromOutbox(entry, { ...entry, owner }, queryClient))
+    if (!savers.has(entry.key)) savers.set(entry.key, saverFromOutbox({ ...entry, owner }, queryClient))
   }
   refreshDraftNotices()
 }
@@ -463,6 +543,8 @@ export function subscribeToDraftNotices(listener: () => void) {
 }
 
 const everySaver = () => [...new Set(savers.values())]
+
+export const isAnyWordOnlyInMemory = () => everySaver().some((saver) => saver.isHoldingWordsOnlyInMemory())
 
 export async function settleDraftSavers() {
   const settled = await Promise.all(everySaver().map((saver) => saver.settle()))

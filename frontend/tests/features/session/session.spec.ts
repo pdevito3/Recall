@@ -1,7 +1,9 @@
 import { authApi, authPaths } from '@tests/support/api/auth-api'
 import { as } from '@tests/support/auth/actors'
+import { membershipPaths } from '@tests/support/api/membership-api'
 import { usersPaths } from '@tests/support/api/users-api'
 import { aProblem } from '@tests/support/builders/problem-details-builder'
+import { aUser } from '@tests/support/builders/user-builder'
 import { expect, test } from '@tests/support/fixtures'
 import { blankPage, sessionPage } from './session.tasks'
 
@@ -66,6 +68,33 @@ test.describe('a sign-out in another tab', () => {
     await expect.poll(() => page.url()).toContain('signedOut=1')
     await expect.poll(() => otherPage.url()).toContain('signedOut=1')
     await expect(otherTab.at.navigation).toHaveCount(0)
+  })
+
+  test('leaves this tab at once when a second person signs in in another tab', async ({ page, context, api }) => {
+    const session = sessionPage(page)
+    await session.open('/about')
+
+    api.mock(
+      authApi.loginOpens(),
+      { method: 'get', path: authPaths.me, status: 200, body: { sub: '2', name: 'Next Person', sid: 'session-of-next-person', client_kind: 'web' } },
+      { method: 'get', path: membershipPaths.userOf('2'), status: 200, body: aUser().identifiedBy('2').build() },
+    )
+    const otherPage = await context.newPage()
+    await otherPage.goto('/about')
+
+    await expect.poll(() => page.url()).toContain('anotherPerson=1')
+    expect(new URL(otherPage.url()).pathname).toBe('/about')
+  })
+
+  test('stays when the same person opens another tab', async ({ page, context }) => {
+    const session = sessionPage(page)
+    await session.open('/about')
+
+    const otherPage = await context.newPage()
+    await sessionPage(otherPage).open('/about')
+
+    await expect(session.at.navigation).toBeVisible()
+    expect(new URL(page.url()).pathname).toBe('/about')
   })
 
   test('leaves this tab as it is when the sign-out fails', async ({ page, context, api }) => {

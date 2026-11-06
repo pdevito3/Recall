@@ -18,6 +18,8 @@ const ownerWithNoDot = (owner: string) => encodeURIComponent(owner).replaceAll('
 
 const prefixOf = (owner: string) => `recall.unsent.${ownerWithNoDot(owner)}.`
 
+const holdSuffix = '.hold'
+
 const isStamped = (value: unknown): value is Stamped<string> => {
   const change = value as Stamped<string> | null
   return typeof change?.value === 'string' && typeof change.savedAt === 'string'
@@ -40,12 +42,13 @@ function parseEntry(stored: string | null): OutboxEntry | null {
   }
 }
 
-// Storage can be full or blocked. The save still goes to the Server, so a reload before the reply can lose words, and so can a reload after a refusal.
-export function writeToOutbox(owner: string, entry: OutboxEntry) {
+/** Storage can be full or blocked, and then a reload loses the words. The false answer lets the page tell the person at once. */
+export function writeToOutbox(owner: string, entry: OutboxEntry): boolean {
   try {
-    localStorage.setItem(prefixOf(owner) + entry.key, JSON.stringify(entry))
+    localStorage.setItem(prefixOf(owner) + entry.key + (entry.isHold ? holdSuffix : ''), JSON.stringify(entry))
+    return true
   } catch {
-    return
+    return false
   }
 }
 
@@ -55,6 +58,14 @@ export function removeFromOutbox(owner: string, key: string) {
   } catch {
     return
   }
+}
+
+export function removeHoldFromOutbox(owner: string, key: string) {
+  removeFromOutbox(owner, key + holdSuffix)
+}
+
+export function readHoldFromOutbox(owner: string, key: string): OutboxEntry | null {
+  return readOutboxEntry(owner, key + holdSuffix)
 }
 
 export function readOutboxEntry(owner: string, key: string): OutboxEntry | null {
@@ -69,7 +80,11 @@ export function readOutbox(owner: string): OutboxEntry[] {
   try {
     return Object.keys(localStorage)
       .filter((key) => key.startsWith(prefixOf(owner)))
-      .flatMap((key) => parseEntry(localStorage.getItem(key)) ?? [])
+      .flatMap((key) => {
+        const entry = parseEntry(localStorage.getItem(key))
+        if (!entry) localStorage.removeItem(key)
+        return entry ?? []
+      })
   } catch {
     return []
   }

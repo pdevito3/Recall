@@ -40,12 +40,12 @@ for (const [name, stored] of [
   ['an entry with no change', JSON.stringify({ ...entryWith('x'), change: undefined })],
   ['an entry with a channel that does not exist', JSON.stringify({ ...entryWith('x'), channel: 'other' })],
 ] as const) {
-  test(`${name} does not hide the other words, and it stays in storage`, () => {
+  test(`${name} does not hide the other words, and it goes from storage`, () => {
     writeToOutbox('person-a', entryWith('good words'))
     localStorage.setItem('recall.unsent.person-a.broken', stored)
 
     expect(readOutbox('person-a').map((entry) => entry.change.value)).toEqual(['good words'])
     expect(readOutboxEntry('person-a', 'broken')).toBeNull()
-    expect(localStorage.getItem('recall.unsent.person-a.broken')).toBe(stored)
+    expect(localStorage.getItem('recall.unsent.person-a.broken')).toBeNull()
   })
 }
