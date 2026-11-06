@@ -14,7 +14,6 @@ using TestUtilities;
 public class SessionApiTests : TestBase
 {
     private static readonly string[] FirstTopic = ["first"];
-    private static readonly DateTimeOffset FarFuture = new(2099, 1, 1, 0, 0, 0, TimeSpan.Zero);
     private static readonly string[] ShoutedTopic = [" WORK "];
 
     [Test]
@@ -85,15 +84,15 @@ public class SessionApiTests : TestBase
 
     [Test]
     [Property("Rule", "SES-26")]
-    public async Task a_settings_change_with_only_the_zone_and_the_save_time_gives_400()
+    public async Task a_settings_change_with_only_the_zone_and_the_version_gives_400()
     {
         // Arrange
         var (_, member) = await JournalScenario.AddPeopleAsync();
         FactoryClient.SignInAsAppUser(member.Identifier);
 
         // Act
-        var partial = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = "UTC", savedAt = JournalScenario.Morning });
-        var noZone = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { locationCaptureEnabled = false, requirePeopleProposalApproval = true, savedAt = JournalScenario.Morning });
+        var partial = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = "UTC", version = 0 });
+        var noZone = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { locationCaptureEnabled = false, requirePeopleProposalApproval = true, version = 0 });
 
         // Assert
         partial.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -153,118 +152,6 @@ public class SessionApiTests : TestBase
 
     [Test]
     [Property("Rule", "SES-26")]
-    public async Task a_retry_from_a_fast_clock_does_not_turn_location_capture_on_again()
-    {
-        // Arrange
-        var (_, member) = await JournalScenario.AddPeopleAsync();
-        FactoryClient.SignInAsAppUser(member.Identifier);
-        var fast = DateTimeOffset.UtcNow.AddHours(5);
-        var on = new { timeZone = "UTC", locationCaptureEnabled = true, requirePeopleProposalApproval = false, savedAt = fast };
-        (await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, on)).StatusCode.ShouldBe(HttpStatusCode.OK);
-        var off = new { timeZone = "UTC", locationCaptureEnabled = false, requirePeopleProposalApproval = false, savedAt = fast.AddMinutes(1) };
-        (await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, off)).StatusCode.ShouldBe(HttpStatusCode.OK);
-
-        // Act
-        var retry = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, on);
-        var created = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.Root, new { clientSessionId = Guid.NewGuid().ToString(), startedAt = JournalScenario.Morning, latitude = 1.5, longitude = 2.5 });
-        var session = await created.Content.ReadFromJsonAsync<SessionDto>();
-
-        // Assert
-        retry.StatusCode.ShouldBe(HttpStatusCode.OK);
-        session!.Latitude.ShouldBeNull();
-        session.Longitude.ShouldBeNull();
-    }
-
-    [Test]
-    [Property("Rule", "SES-26")]
-    public async Task a_retry_after_more_than_16_newer_fast_changes_does_not_turn_location_capture_on_again()
-    {
-        // Arrange
-        var (_, member) = await JournalScenario.AddPeopleAsync();
-        FactoryClient.SignInAsAppUser(member.Identifier);
-        var fast = DateTimeOffset.UtcNow.AddHours(5);
-        var on = new { timeZone = "UTC", locationCaptureEnabled = true, requirePeopleProposalApproval = false, savedAt = fast };
-        (await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, on)).StatusCode.ShouldBe(HttpStatusCode.OK);
-        foreach (var change in Enumerable.Range(1, 17))
-        {
-            var off = new { timeZone = "UTC", locationCaptureEnabled = false, requirePeopleProposalApproval = false, savedAt = fast.AddMinutes(change) };
-            (await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, off)).StatusCode.ShouldBe(HttpStatusCode.OK);
-        }
-
-        // Act
-        var retry = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, on);
-        var created = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.Root, new { clientSessionId = Guid.NewGuid().ToString(), startedAt = JournalScenario.Morning, latitude = 1.5, longitude = 2.5 });
-        var session = await created.Content.ReadFromJsonAsync<SessionDto>();
-
-        // Assert
-        (await retry.Content.ReadFromJsonAsync<UserSettingDto>())!.LocationCaptureEnabled.ShouldBeFalse();
-        session!.Latitude.ShouldBeNull();
-    }
-
-    [Test]
-    [Property("Rule", "SES-26")]
-    public async Task location_capture_off_from_a_clock_6_seconds_fast_takes_effect_behind_a_far_future_claim()
-    {
-        // Arrange
-        var (_, member) = await JournalScenario.AddPeopleAsync();
-        FactoryClient.SignInAsAppUser(member.Identifier);
-        var on = new { timeZone = "UTC", locationCaptureEnabled = true, requirePeopleProposalApproval = false, savedAt = FarFuture };
-        (await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, on)).StatusCode.ShouldBe(HttpStatusCode.OK);
-
-        // Act
-        var off = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = "UTC", locationCaptureEnabled = false, requirePeopleProposalApproval = false, savedAt = DateTimeOffset.UtcNow.AddSeconds(6) });
-        var created = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.Root, new { clientSessionId = Guid.NewGuid().ToString(), startedAt = JournalScenario.Morning, latitude = 1.5, longitude = 2.5 });
-        var session = await created.Content.ReadFromJsonAsync<SessionDto>();
-
-        // Assert
-        (await off.Content.ReadFromJsonAsync<UserSettingDto>())!.LocationCaptureEnabled.ShouldBeFalse();
-        session!.Latitude.ShouldBeNull();
-        session.Longitude.ShouldBeNull();
-    }
-
-    [Test]
-    [Property("Rule", "SES-21")]
-    public async Task metadata_from_a_clock_6_seconds_fast_takes_effect_behind_a_far_future_claim()
-    {
-        // Arrange
-        var (_, member) = await JournalScenario.AddPeopleAsync();
-        FactoryClient.SignInAsAppUser(member.Identifier);
-        var session = await FactoryClient.AddSessionAsync();
-        var far = new { activity = "Resting", moods = Array.Empty<string>(), userTopics = FirstTopic, savedAt = FarFuture };
-        (await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), far)).StatusCode.ShouldBe(HttpStatusCode.OK);
-
-        // Act
-        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { activity = "Walking", moods = Array.Empty<string>(), userTopics = FirstTopic, savedAt = DateTimeOffset.UtcNow.AddSeconds(6) });
-
-        // Assert
-        (await change.Content.ReadFromJsonAsync<SessionDto>())!.Activity.ShouldBe("Walking");
-    }
-
-    // A rule that ignores a first try while its time is far ahead would take this retry when the time comes near, so the retry waits.
-    [Test]
-    [Property("Rule", "SES-26")]
-    public async Task a_setting_that_arrives_behind_a_far_future_claim_and_its_retry_do_not_undo_a_newer_change()
-    {
-        // Arrange
-        var (_, member) = await JournalScenario.AddPeopleAsync();
-        FactoryClient.SignInAsAppUser(member.Identifier);
-        var far = new { timeZone = "UTC", locationCaptureEnabled = false, requirePeopleProposalApproval = false, savedAt = FarFuture };
-        (await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, far)).StatusCode.ShouldBe(HttpStatusCode.OK);
-        var fast = new { timeZone = "UTC", locationCaptureEnabled = true, requirePeopleProposalApproval = false, savedAt = DateTimeOffset.UtcNow.AddSeconds(6) };
-        (await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, fast)).StatusCode.ShouldBe(HttpStatusCode.OK);
-        var rightClock = new { timeZone = "UTC", locationCaptureEnabled = false, requirePeopleProposalApproval = false, savedAt = DateTimeOffset.UtcNow };
-        (await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, rightClock)).StatusCode.ShouldBe(HttpStatusCode.OK);
-        await Task.Delay(TimeSpan.FromSeconds(1.5));
-
-        // Act
-        var retry = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, fast);
-
-        // Assert
-        (await retry.Content.ReadFromJsonAsync<UserSettingDto>())!.LocationCaptureEnabled.ShouldBeFalse();
-    }
-
-    [Test]
-    [Property("Rule", "SES-26")]
     [Arguments(null)]
     [Arguments("")]
     [Arguments("   ")]
@@ -273,11 +160,11 @@ public class SessionApiTests : TestBase
         // Arrange
         var (_, member) = await JournalScenario.AddPeopleAsync();
         FactoryClient.SignInAsAppUser(member.Identifier);
-        var withZone = new { timeZone = "Europe/Riga", locationCaptureEnabled = false, requirePeopleProposalApproval = false, savedAt = JournalScenario.Morning };
+        var withZone = new { timeZone = "Europe/Riga", locationCaptureEnabled = false, requirePeopleProposalApproval = false, version = 0 };
         (await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, withZone)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // Act
-        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = zone, locationCaptureEnabled = false, requirePeopleProposalApproval = false, savedAt = JournalScenario.Morning.AddMinutes(1) });
+        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = zone, locationCaptureEnabled = false, requirePeopleProposalApproval = false, version = 1 });
         var stored = await FactoryClient.GetFromJsonAsync<UserSettingDto>(ApiRoutes.UserSettings.Root);
 
         // Assert
@@ -287,17 +174,17 @@ public class SessionApiTests : TestBase
 
     [Test]
     [Property("Rule", "SES-21")]
-    public async Task a_metadata_body_with_only_topics_and_a_save_time_clears_the_activity_and_the_moods()
+    public async Task a_metadata_body_with_only_topics_clears_the_activity_and_the_moods()
     {
         // Arrange
         var (_, member) = await JournalScenario.AddPeopleAsync();
         FactoryClient.SignInAsAppUser(member.Identifier);
         var session = await FactoryClient.AddSessionAsync();
-        var full = new { activity = "Walking", moods = new[] { "Calm" }, userTopics = FirstTopic, savedAt = JournalScenario.Morning };
+        var full = new { activity = "Walking", moods = new[] { "Calm" }, userTopics = FirstTopic, metadataVersion = 0 };
         (await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), full)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // Act
-        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { userTopics = FirstTopic, savedAt = JournalScenario.Morning.AddMinutes(1) });
+        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { userTopics = FirstTopic, metadataVersion = 1 });
         var read = await change.Content.ReadFromJsonAsync<SessionDto>();
 
         // Assert
@@ -313,11 +200,11 @@ public class SessionApiTests : TestBase
         var (_, member) = await JournalScenario.AddPeopleAsync();
         FactoryClient.SignInAsAppUser(member.Identifier);
         var session = await FactoryClient.AddSessionAsync();
-        var full = new { activity = "Walking", moods = Array.Empty<string>(), userTopics = FirstTopic, savedAt = JournalScenario.Morning };
+        var full = new { activity = "Walking", moods = Array.Empty<string>(), userTopics = FirstTopic, metadataVersion = 0 };
         (await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), full)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // Act
-        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { topics = FirstTopic, savedAt = JournalScenario.Morning.AddMinutes(1) });
+        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { topics = FirstTopic, metadataVersion = 1 });
         var read = await change.Content.ReadFromJsonAsync<SessionDto>();
 
         // Assert
@@ -331,7 +218,7 @@ public class SessionApiTests : TestBase
         // Arrange
         var (_, member) = await JournalScenario.AddPeopleAsync();
         FactoryClient.SignInAsAppUser(member.Identifier);
-        var change = new { timeZone = "Pacific/Chatham", locationCaptureEnabled = false, requirePeopleProposalApproval = false, savedAt = JournalScenario.Morning };
+        var change = new { timeZone = "Pacific/Chatham", locationCaptureEnabled = false, requirePeopleProposalApproval = false, version = 0 };
 
         // Act
         (await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, change)).StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -352,7 +239,7 @@ public class SessionApiTests : TestBase
         FactoryClient.SignInAsAppUser(member.Identifier);
         var session = await FactoryClient.AddSessionAsync();
         var topic = $"topic{Guid.NewGuid():N}";
-        var change = new { activity = "Walking", moods = Array.Empty<string>(), userTopics = new[] { topic }, savedAt = JournalScenario.Morning };
+        var change = new { activity = "Walking", moods = Array.Empty<string>(), userTopics = new[] { topic }, metadataVersion = 0 };
 
         // Act
         (await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), change)).StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -366,50 +253,6 @@ public class SessionApiTests : TestBase
 
     private static List<string> AppliedValuesOf(IEnumerable<LogEvent> events)
         => events.Where(e => e.Properties.ContainsKey("Applied")).Select(e => e.Properties["Applied"].ToString()).ToList();
-
-    [Test]
-    [Property("Rule", "SES-21")]
-    public async Task a_retry_after_more_than_16_newer_fast_changes_does_not_undo_the_metadata()
-    {
-        // Arrange
-        var (_, member) = await JournalScenario.AddPeopleAsync();
-        FactoryClient.SignInAsAppUser(member.Identifier);
-        var session = await FactoryClient.AddSessionAsync();
-        var fast = DateTimeOffset.UtcNow.AddHours(5);
-        var first = new { activity = "Walking", moods = Array.Empty<string>(), userTopics = FirstTopic, savedAt = fast };
-        (await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), first)).StatusCode.ShouldBe(HttpStatusCode.OK);
-        foreach (var change in Enumerable.Range(1, 17))
-        {
-            var newer = new { activity = "Resting", moods = Array.Empty<string>(), userTopics = new[] { $"newer {change}" }, savedAt = fast.AddMinutes(change) };
-            (await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), newer)).StatusCode.ShouldBe(HttpStatusCode.OK);
-        }
-
-        // Act
-        var retry = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), first);
-        var read = await retry.Content.ReadFromJsonAsync<SessionDto>();
-
-        // Assert
-        read!.Activity.ShouldBe("Resting");
-        read.Topics.ShouldHaveSingleItem().Name.ShouldBe("newer 17");
-    }
-
-    [Test]
-    [Property("Rule", "SES-21")]
-    public async Task a_retry_with_the_stored_time_does_not_undo_the_metadata_also_with_more_digits_than_the_database_keeps()
-    {
-        // Arrange
-        var (_, member) = await JournalScenario.AddPeopleAsync();
-        FactoryClient.SignInAsAppUser(member.Identifier);
-        var session = await FactoryClient.AddSessionAsync();
-        const string time = "2026-06-01T08:00:00.1234567Z";
-        (await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { activity = "Resting", savedAt = time })).StatusCode.ShouldBe(HttpStatusCode.OK);
-
-        // Act
-        var other = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { activity = "Walking", savedAt = time });
-
-        // Assert
-        (await other.Content.ReadFromJsonAsync<SessionDto>())!.Activity.ShouldBe("Resting");
-    }
 
     [Test]
     [Property("Rule", "SES-8")]
@@ -443,9 +286,9 @@ public class SessionApiTests : TestBase
         await JournalScenario.ExecuteOutOfBandAsync("UPDATE sessions SET ai_topics = '[\"Work\",\"Trips\"]' WHERE id = @id", ("@id", session.Id));
 
         // Act
-        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { userTopics = ShoutedTopic, savedAt = JournalScenario.Morning });
+        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { userTopics = ShoutedTopic, metadataVersion = 0 });
         var kept = await change.Content.ReadFromJsonAsync<SessionDto>();
-        var removal = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { userTopics = Array.Empty<string>(), savedAt = JournalScenario.Morning.AddMinutes(1) });
+        var removal = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { userTopics = Array.Empty<string>(), metadataVersion = 1 });
         var removed = await removal.Content.ReadFromJsonAsync<SessionDto>();
 
         // Assert
@@ -464,7 +307,7 @@ public class SessionApiTests : TestBase
         await JournalScenario.ExecuteOutOfBandAsync("UPDATE sessions SET ai_topics = '[\" Work \",\"Trips\"]' WHERE id = @id", ("@id", session.Id));
 
         // Act
-        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { userTopics = ShoutedTopic, savedAt = JournalScenario.Morning });
+        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { userTopics = ShoutedTopic, metadataVersion = 0 });
         var kept = await change.Content.ReadFromJsonAsync<SessionDto>();
 
         // Assert
@@ -501,7 +344,7 @@ public class SessionApiTests : TestBase
         var session = await FactoryClient.AddSessionAsync();
 
         // Act
-        var metadata = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { moods = (string[]?)null, userTopics = new string?[] { null }, savedAt = JournalScenario.Morning });
+        var metadata = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { moods = (string[]?)null, userTopics = new string?[] { null }, metadataVersion = 0 });
         var correction = await FactoryClient.PostAsJsonAsync(ApiRoutes.Corrections.Root, new { canonicalTerm = "term", mishearings = (string[]?)null });
 
         // Assert
@@ -647,7 +490,7 @@ public class SessionApiTests : TestBase
             timeZone = (string?)null,
             locationCaptureEnabled = true,
             requirePeopleProposalApproval = true,
-            savedAt = JournalScenario.Morning,
+            version = 0,
         });
         var on = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.Root, location with { clientSessionId = Guid.NewGuid().ToString() });
 
@@ -675,7 +518,7 @@ public class SessionApiTests : TestBase
             timeZone = "America/Chicago",
             locationCaptureEnabled = false,
             requirePeopleProposalApproval = true,
-            savedAt = JournalScenario.Morning,
+            version = 0,
         });
         var read = await FactoryClient.GetFromJsonAsync<SessionDto>(ApiRoutes.Sessions.GetRecord(session.Id));
 

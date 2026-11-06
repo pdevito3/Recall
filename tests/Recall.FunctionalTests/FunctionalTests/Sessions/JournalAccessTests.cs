@@ -90,7 +90,7 @@ public class JournalAccessTests : TestBase
             timeZone = "Europe/Tallinn",
             locationCaptureEnabled = true,
             requirePeopleProposalApproval = false,
-            savedAt = JournalScenario.Morning,
+            version = 0,
         });
         await FactoryClient.DeleteAsync(ApiRoutes.Sessions.GetRecord(session.Id));
         FactoryClient.SignInAsAppUser(admin.Identifier);

@@ -283,35 +283,18 @@ public class SessionTests
     }
 
     [Test]
-    [Property("Rule", "SES-21")]
-    public void a_metadata_change_with_an_older_save_time_changes_nothing()
+    [Property("Rule", "SES-3")]
+    public void a_session_stores_its_start_as_utc_at_the_precision_of_the_database()
     {
         // Arrange
-        var session = NewSession();
-        session.SetMetadata(SessionMetadata.Of("Walking", ["Calm"], ["Food"]), Noon, Noon);
+        var claimed = new DateTimeOffset(2026, 5, 1, 10, 0, 0, TimeSpan.FromHours(5)).AddTicks(1234567);
 
         // Act
-        session.SetMetadata(SessionMetadata.Of("Driving", ["Sad"], ["Work"]), Noon.AddMinutes(-1), Noon);
+        var session = Session.Create("ten_1", "usr_1", "device-1", claimed, null, Noon);
 
         // Assert
-        session.Activity.ShouldBe("Walking");
-        session.Moods.ShouldBe(["Calm"]);
-        session.UserTopics.ShouldBe(["Food"]);
-    }
-
-    [Test]
-    [Property("Rule", "SES-7")]
-    public void a_metadata_change_from_the_future_does_not_beat_each_later_change()
-    {
-        // Arrange
-        var session = NewSession();
-        session.SetMetadata(SessionMetadata.Of("Walking", [], []), Noon.AddYears(1), Noon);
-
-        // Act
-        session.SetMetadata(SessionMetadata.Of("Driving", [], []), Noon.AddMinutes(1), Noon.AddMinutes(1));
-
-        // Assert
-        session.Activity.ShouldBe("Driving");
+        session.StartedAt.Offset.ShouldBe(TimeSpan.Zero);
+        session.StartedAt.ShouldBe(new DateTimeOffset(2026, 5, 1, 5, 0, 0, TimeSpan.Zero).AddTicks(1234560));
     }
 
     [Test]
