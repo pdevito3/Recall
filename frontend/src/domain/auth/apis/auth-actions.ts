@@ -129,6 +129,6 @@ export function guardPageAgainstEndedSession(queryClient: QueryClient) {
 export function useLogout() {
   return useMutation({
     mutationFn: logout,
-    onError: () => Notification.error('You are still signed in, because the sign-out did not finish. Try again.'),
+    onError: () => Notification.error('You are still signed in, because signing out did not finish. Try again.'),
   })
 }
