@@ -159,7 +159,7 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         Activity = metadata.Activity;
         Moods = metadata.Moods;
         UserTopics = metadata.UserTopics;
-        AiTopics = AiTopics.Except(UserTopics, StringComparer.OrdinalIgnoreCase).ToList();
+        AiTopics = AiTopics.Where(topic => !UserTopics.Contains(topic.Trim(), StringComparer.OrdinalIgnoreCase)).ToList();
     }
 
     public void BeginCleanup()
