@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+        <OutputType>Exe</OutputType>
+        <!-- CS1574: a linked file of the functional tests names a member of their TestBase, which is not linked here. -->
+        <NoWarn>$(NoWarn);CS1573;CS1574</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+        <PackageReference Include="TUnit" />
+        <PackageReference Include="Shouldly" />
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+        <PackageReference Include="WebMotions.Fake.Authentication.JwtBearer" />
+        <PackageReference Include="OpenTelemetry.Exporter.InMemory" />
+    </ItemGroup>
+
+    <!-- The same server and the same sign-in as the functional tests, so a fixture is a real response of the real pipeline. -->
+    <ItemGroup>
+        <Compile Include="..\Recall.FunctionalTests\TestingWebApplicationFactory.cs" Link="Linked\TestingWebApplicationFactory.cs" />
+        <Compile Include="..\Recall.FunctionalTests\TestUtilities\CapturedLogs.cs" Link="Linked\CapturedLogs.cs" />
+        <Compile Include="..\Recall.FunctionalTests\TestUtilities\ExportedTelemetry.cs" Link="Linked\ExportedTelemetry.cs" />
+        <Compile Include="..\Recall.FunctionalTests\TestUtilities\HttpClientExtensions.cs" Link="Linked\HttpClientExtensions.cs" />
+        <Compile Include="..\Recall.FunctionalTests\TestUtilities\ApiRoutes.cs" Link="Linked\ApiRoutes.cs" />
+        <Compile Include="..\Recall.FunctionalTests\TestUtilities\FailingSaves.cs" Link="Linked\FailingSaves.cs" />
+        <Compile Include="..\Recall.FunctionalTests\TestUtilities\StallingHealthCheck.cs" Link="Linked\StallingHealthCheck.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\Recall.Server\Recall.Server.csproj" />
+        <ProjectReference Include="..\Recall.SharedTestHelpers\Recall.SharedTestHelpers.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <AdditionalFiles Include="..\BannedSymbols.txt" />
+        <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+
+</Project>

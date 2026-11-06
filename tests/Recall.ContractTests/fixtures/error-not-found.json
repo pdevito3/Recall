@@ -1,0 +1,7 @@
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5",
+  "title": "The resource was not found.",
+  "status": 404,
+  "detail": "Session was not found.",
+  "traceId": "00000000000000000000000000000000"
+}

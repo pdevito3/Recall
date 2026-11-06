@@ -90,10 +90,14 @@ public class TenantOwnedRowsTests
             .. roots.Where(root => (HasTenantId(root) || HasTenantFilter(root))
                                    && HoldsRowsOfItsOwn(root)
                                    && !deleted.Contains(root)
+                                   && !GoesWithItsOwner(root)
                                    && !TypesWhoseRowsOutliveTheirTenant.ContainsKey(root.ClrType))
                 .Select(root => $"{root.ClrType.Name}: not deleted"),
         ];
     }
+
+    private static bool GoesWithItsOwner(IEntityType root)
+        => root.FindDeclaredQueryFilter(QueryFilterNames.JournalOwner) is not null;
 
     private static bool HasTenantId(IEntityType root)
         => root.GetDerivedTypesInclusive().Any(e => e.FindProperty(nameof(ITenantable.TenantId)) is not null);

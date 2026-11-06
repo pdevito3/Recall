@@ -8,7 +8,8 @@ using Microsoft.EntityFrameworkCore.Metadata;
 
 /// <summary>
 /// One value column of an entity type, with its audit facts. <c>IsRecorded</c> is false for the key, the
-/// <see cref="BaseEntity"/> bookkeeping (<c>LastModifiedOn</c> and <c>IsDeleted</c>), and the TPH discriminator.
+/// <see cref="BaseEntity"/> bookkeeping (<c>LastModifiedOn</c> and <c>IsDeleted</c>), the TPH discriminator, and each
+/// column of an <see cref="IJournalOwned"/> type other than its tenant and its owner.
 /// </summary>
 internal sealed record AuditedValue(string Path, EntityColumn Column, bool IsRecorded, Sensitivity Sensitivity);
 
@@ -59,7 +60,13 @@ internal sealed class AuditModel
     public IForeignKey? OwnerKeyOf(IEntityType entityType) => _ownerKeys[entityType];
 
     private static List<AuditedValue> ValuesOfType(IEntityType entityType)
-        => EntityColumn.Of(entityType).Select(ValueOf).ToList();
+    {
+        var values = EntityColumn.Of(entityType).Select(ValueOf);
+        return (entityType.ClrType.IsAssignableTo(typeof(IJournalOwned)) ? values.Select(RecordOnlyTheOwner) : values).ToList();
+    }
+
+    private static AuditedValue RecordOnlyTheOwner(AuditedValue value)
+        => value with { IsRecorded = value.Path is nameof(ITenantable.TenantId) or nameof(IJournalOwned.UserId) };
 
     private static AuditedValue ValueOf(EntityColumn column)
     {

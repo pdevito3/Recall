@@ -23,13 +23,19 @@ public sealed partial class TimeZoneId : ValueObject
     // EF Core sets only Value when it loads a row, so the zone is found from the value on first use
     private TimeZoneInfo Zone => _zone ??= Find(Value);
 
-    private TimeZoneId(string value)
+    private TimeZoneId(string value) : this(Find(value), value) { }
+
+    private TimeZoneId(TimeZoneInfo zone, string value)
     {
-        _zone = Find(value);
+        _zone = zone;
         Value = value;
     }
 
     public static TimeZoneId Of(string value) => new(value);
+
+    /// <summary>The zone of a stored value, or null when this host does not know it. A restore onto other tzdata can reach this.</summary>
+    public static TimeZoneId? TryOf(string? value)
+        => value is not null && Lookup(value) is { } zone ? new TimeZoneId(zone, value) : null;
 
     public override string ToString() => Value;
 
@@ -63,18 +69,24 @@ public sealed partial class TimeZoneId : ValueObject
         ValidationException.ThrowWhenLongerThan(value, MaxLength, RequestField,
             $"A time zone can have no more than {MaxLength} characters.");
 
-        // A Windows ID such as "Central Standard Time" also resolves, so the check keeps only IANA IDs.
-        var wrongCase = IanaIdsIgnoringCase.TryGetValue(value, out var listed) && listed != value;
-        TimeZoneInfo? zone = null;
-        var found = !wrongCase
-            && TimeZoneInfo.TryFindSystemTimeZoneById(value, out zone)
-            && zone.HasIanaId
-            // The cached zone of an alias keeps the case of the first lookup, so compare with no case
-            && zone.Id.Equals(value, StringComparison.OrdinalIgnoreCase);
-        ValidationException.Must(found, RequestField,
+        var zone = Lookup(value);
+        ValidationException.Must(zone is not null, RequestField,
             $"'{value}' is not a time zone that the server knows. Use an IANA ID such as America/Chicago.");
 
         return zone!;
+    }
+
+    private static TimeZoneInfo? Lookup(string value)
+    {
+        // A Windows ID such as "Central Standard Time" also resolves, so the check keeps only IANA IDs.
+        if (IanaIdsIgnoringCase.TryGetValue(value, out var listed) && listed != value)
+            return null;
+
+        var found = TimeZoneInfo.TryFindSystemTimeZoneById(value, out var zone)
+            && zone.HasIanaId
+            // The cached zone of an alias keeps the case of the first lookup, so compare with no case
+            && zone.Id.Equals(value, StringComparison.OrdinalIgnoreCase);
+        return found ? zone : null;
     }
 
     private TimeZoneId() { } // EF Core
