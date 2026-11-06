@@ -407,6 +407,8 @@ public partial class NoProviderBootTests
             var policy = answer.Headers.GetValues("Content-Security-Policy").ShouldHaveSingleItem();
             policy.ShouldContain("frame-ancestors 'none'");
             policy.ShouldContain("script-src 'self';");
+            answer.Headers.GetValues("X-Content-Type-Options").ShouldHaveSingleItem().ShouldBe("nosniff");
+            answer.Headers.GetValues("Referrer-Policy").ShouldHaveSingleItem().ShouldBe("no-referrer");
         }
 
         health.Headers.Contains("Content-Security-Policy").ShouldBeFalse();

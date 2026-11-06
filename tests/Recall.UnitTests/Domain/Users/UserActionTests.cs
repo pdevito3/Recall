@@ -38,11 +38,11 @@ public class UserActionTests
     public static IEnumerable<Func<(string Case, string TargetRole, UserAction Action, Func<User, Caller> Caller, string? Denial)>>
         Cases()
     {
-        const string manageUsersDenial = "You cannot manage users. Ask a tenant admin for access.";
-        const string manageUserAccessDenial = "You cannot manage the access of users. Ask a tenant admin for access.";
-        const string readUsersDenial = "You cannot see the users of the tenant. Ask a tenant admin for access.";
+        const string manageUsersDenial = "You cannot manage users. Ask an admin for access.";
+        const string manageUserAccessDenial = "You cannot manage the access of users. Ask an admin for access.";
+        const string readUsersDenial = "You cannot see the users. Ask an admin for access.";
         // An admin holds each permission. The caller must hold them all to take them away, and manage_agents is first.
-        const string adminPermissionDenial = "You cannot manage agents. Ask a tenant admin for access.";
+        const string adminPermissionDenial = "You cannot manage agents. Ask an admin for access.";
 
         yield return () => ("user on their own record", "User", UserAction.Update(), OwnRecord, null);
         yield return () => ("user on another user", "User", UserAction.Update(), _ => MemberWith(), manageUsersDenial);

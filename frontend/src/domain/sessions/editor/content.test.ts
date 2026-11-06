@@ -32,9 +32,9 @@ test('the preview of plain words is those words, cut to the length', () => {
 })
 
 test('a document with a node that the editor does not know shows its text, so the words are not blank', () => {
-  const text = JSON.stringify({ type: 'doc', content: [{ type: 'hologram', content: [{ type: 'text', text: 'Words' }] }] })
+  const text = JSON.stringify({ type: 'doc', content: [paragraph('First'), { type: 'hologram', content: [{ type: 'text', text: 'Words' }] }] })
 
-  expect(contentOf(text)).toEqual({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] })
+  expect(contentOf(text)).toEqual({ type: 'doc', content: [paragraph('First'), paragraph('Words')] })
 })
 
 test('the people of an entry are the mentions of each text, once each, in the order of the Server', () => {

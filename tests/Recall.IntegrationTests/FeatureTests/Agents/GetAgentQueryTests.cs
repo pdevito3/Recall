@@ -44,7 +44,7 @@ public class GetAgentQueryTests : TestBase
 
         // Assert
         (await act.ShouldThrowAsync<ForbiddenAccessException>()).Message
-            .ShouldBe("You cannot see the agents of the tenant. Ask a tenant admin for access.");
+            .ShouldBe("You cannot see the agents. Ask an admin for access.");
     }
 
     [Test]

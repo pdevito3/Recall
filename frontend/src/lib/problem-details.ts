@@ -72,11 +72,7 @@ export function isProblemDetails(obj: unknown): obj is ProblemDetails {
     return false
   }
   const pd = obj as Record<string, unknown>
-  return (
-    typeof pd.type === 'string' &&
-    typeof pd.title === 'string' &&
-    typeof pd.status === 'number'
-  )
+  return (typeof pd.title === 'string' || typeof pd.detail === 'string') && typeof pd.status === 'number'
 }
 
 export const STALE_VERSION_PROBLEM_TYPE = 'urn:recall:problem:stale-version'

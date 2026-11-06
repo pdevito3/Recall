@@ -40,7 +40,11 @@ export function ComposerForm({ composer }: { composer: Composer }) {
         <SaveStatusLine status={composer.status} zone={zone} />
         <div className="ml-auto flex items-center gap-3">
           <p className="text-xs text-muted-foreground max-md:hidden">Type @ to tag a person</p>
-          <Button isDisabled={!composer.canFinish} onPress={composer.finish}>
+          <Button
+            className="disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100"
+            isDisabled={!composer.canFinish}
+            onPress={composer.finish}
+          >
             Done
           </Button>
         </div>

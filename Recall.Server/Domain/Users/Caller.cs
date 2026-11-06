@@ -168,7 +168,7 @@ public abstract record Caller
         _ => throw new UnreachableException(),
     };
 
-    private static string UserLacks(Permission permission) => $"You cannot {permission.Words}. Ask a tenant admin for access.";
+    private static string UserLacks(Permission permission) => $"You cannot {permission.Words}. Ask an admin for access.";
 
     private static string GrantLacks(Permission permission)
         => $"This agent has no grant to {permission.Words}. A tenant admin can grant it.";

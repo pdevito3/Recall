@@ -36,8 +36,11 @@ export function plainPreviewOf(text: string, length: number): string {
 export function plainWordsOf(text: string): string {
   const document = parseDocument(text)
   if (!document) return text
-  const lineOf = (node: JSONContent): string =>
-    blockTypes.has(node.type ?? '') ? plainTextOf(node).trimEnd() : childrenOf(node).map(lineOf).join('\n')
+  const lineOf = (node: JSONContent): string => {
+    const children = childrenOf(node)
+    const holdsWords = blockTypes.has(node.type ?? '') || children.some((child) => child.type === 'text' || child.type === 'mention')
+    return holdsWords ? plainTextOf(node).trimEnd() : children.map(lineOf).join('\n')
+  }
   return lineOf(document)
 }
 

@@ -634,6 +634,23 @@ test.describe('the timeline', () => {
 })
 
 test.describe('the journal on a phone', () => {
+  test('keeps the line with the cursor above the status and Done in a long text', async ({ page, api }) => {
+    const session = aSession().build()
+    api.mock(sessionsApi.creates(session), sessionsApi.draftSaveWins(session, 1))
+    const journal = journalPage(page)
+    await page.setViewportSize({ width: 390, height: 500 })
+    await journal.open()
+    await journal.at.composer.click()
+
+    for (let line = 0; line < 30; line++) {
+      await page.keyboard.insertText(`line ${line}`)
+      await page.keyboard.press('Enter')
+    }
+    await page.keyboard.insertText('the last line')
+
+    expect((await journal.cursorLineBottom()) ?? Infinity).toBeLessThanOrEqual((await journal.at.done.boundingBox())!.y)
+  })
+
   test.use({ viewport: { width: 390, height: 844 } })
 
   test('has no sideways scroll with a long word', async ({ page, api }) => {

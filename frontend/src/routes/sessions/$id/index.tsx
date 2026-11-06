@@ -23,7 +23,7 @@ function SessionRoute() {
         isProblemDetailsError(session.error) && session.error.status === 404 ? (
           <p className="text-muted-foreground">
             This entry does not exist. It may have been deleted.{' '}
-            <Link to="/" className="underline underline-offset-4 hover:text-primary">Go to your journal</Link>
+            <Link to="/" className="underline underline-offset-4 hover:text-primary max-md:inline-flex max-md:min-h-11 max-md:items-center">Go to your journal</Link>
           </p>
         ) : (
           <QueryError title="This entry did not load." error={session.error} onRetry={() => session.refetch()} />

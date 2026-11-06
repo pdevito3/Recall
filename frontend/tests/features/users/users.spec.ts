@@ -99,14 +99,14 @@ test.describe('the users of a tenant', () => {
     const users = usersPage(page)
     await users.openDetail(id)
     api.mock(
-      usersApi.roleChangeFails(id, aProblem().forbidden('You cannot manage the access of users. Ask a tenant admin for access.')),
+      usersApi.roleChangeFails(id, aProblem().forbidden('You cannot manage the access of users. Ask an admin for access.')),
       usersApi.oneIs(grace.allowing('Delete')),
     )
 
     await users.pickRole('Grace Hopper', 'Admin')
     await users.confirmRoleRefused(id)
 
-    await expect(users.at.toast('You cannot manage the access of users. Ask a tenant admin for access.')).toBeVisible()
+    await expect(users.at.toast('You cannot manage the access of users. Ask an admin for access.')).toBeVisible()
     await expect(users.at.actionButton('Grace Hopper', 'Change role')).toHaveCount(0)
     await expect(users.at.actionButton('Grace Hopper', 'Delete')).toBeVisible()
     await expect(users.at.detail('User')).toBeVisible()
@@ -143,14 +143,14 @@ test.describe('the users of a tenant', () => {
   test('a refused delete keeps the user on the page, with the focus on the heading', { tag: '@UM-3' }, async ({ page, api }) => {
     const grace = aUser().named('Grace Hopper').seenByAdmin()
     const { id } = grace.build()
-    api.mock(usersApi.oneIs(grace), usersApi.deleteFails(id, aProblem().forbidden('You cannot manage users. Ask a tenant admin for access.')))
+    api.mock(usersApi.oneIs(grace), usersApi.deleteFails(id, aProblem().forbidden('You cannot manage users. Ask an admin for access.')))
     const users = usersPage(page)
     await users.openDetail(id)
 
     await users.askToDelete('Grace Hopper')
     await users.confirmDeleteRefused(id)
 
-    await expect(users.at.toast('You cannot manage users. Ask a tenant admin for access.')).toBeVisible()
+    await expect(users.at.toast('You cannot manage users. Ask an admin for access.')).toBeVisible()
     await expect(page).toHaveURL(`/users/${id}`)
     await expect(users.at.detailHeading('Grace Hopper')).toBeFocused()
   })
@@ -205,12 +205,12 @@ test.describe('the users of a tenant, for a member who cannot see them', () => {
   test.use({ actor: as.user('Bob Smith') })
 
   test('shows the refusal of the Server in place of the list', { tag: '@UM-1' }, async ({ page, api }) => {
-    api.mock(usersApi.listFails(aProblem().forbidden('You cannot see the users of the tenant. Ask a tenant admin for access.')))
+    api.mock(usersApi.listFails(aProblem().forbidden('You cannot see the users. Ask an admin for access.')))
     const users = usersPage(page)
 
     await users.openList()
 
-    await expect(users.at.loadFailure).toContainText('You cannot see the users of the tenant. Ask a tenant admin for access.')
+    await expect(users.at.loadFailure).toContainText('You cannot see the users. Ask an admin for access.')
     await expect(users.at.grid).toHaveCount(0)
   })
 })

@@ -65,7 +65,7 @@ public class GetAuditEntryPageTests : TestBase
         // Assert
         result.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await result.Content.ReadFromJsonAsync<ProblemDetails>())!.Detail
-            .ShouldBe("You cannot read the audit log. Ask a tenant admin for access.");
+            .ShouldBe("You cannot read the audit log. Ask an admin for access.");
     }
 
     private static async Task<(User Reader, User Target)> AddReaderAndTargetAsync(params Permission[] permissions)

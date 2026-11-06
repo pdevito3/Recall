@@ -9,6 +9,9 @@ import { contentOf } from './content-of'
 import { PersonMention, textExtensions } from './journal-extensions'
 import { mentionSuggestion, type MentionSource } from './mention-suggestion'
 
+// The status bar sticks to the bottom of the screen, so the line with the cursor must stay above it.
+const stickyBarRoom = { top: 0, right: 0, bottom: 80, left: 0 }
+
 interface JournalEditorProps {
   initialText: string
   /** A new value opens `initialText` in this editor, as a new document with no undo. The editor stays mounted, so a key at this moment reaches it. */
@@ -55,6 +58,8 @@ export function JournalEditor({ initialText, revision, label, placeholder, autoF
       LeaveKey,
     ],
     editorProps: {
+      scrollThreshold: stickyBarRoom,
+      scrollMargin: stickyBarRoom,
       attributes: {
         role: 'textbox',
         'aria-multiline': 'true',

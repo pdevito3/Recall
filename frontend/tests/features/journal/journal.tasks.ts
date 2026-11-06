@@ -42,6 +42,8 @@ export function journalPage(page: Page) {
       await page.keyboard.type(words)
     },
 
+    cursorLineBottom: () => page.evaluate(() => window.getSelection()?.getRangeAt(0).getBoundingClientRect().bottom),
+
     async markTheEditor() {
       await at.composer.evaluate((editor) => {
         ;(window as unknown as { markedEditor: Element }).markedEditor = editor

@@ -177,7 +177,7 @@ public class AddAgentCommandTests : TestBase
 
         // Assert
         (await act.ShouldThrowAsync<ForbiddenAccessException>()).Message
-            .ShouldBe("You cannot manage agents. Ask a tenant admin for access.");
+            .ShouldBe("You cannot manage agents. Ask an admin for access.");
     }
 
     [Test]
@@ -196,7 +196,7 @@ public class AddAgentCommandTests : TestBase
 
         // Assert
         (await act.ShouldThrowAsync<ForbiddenAccessException>()).Message
-            .ShouldBe("You cannot manage the tenant. Ask a tenant admin for access.");
+            .ShouldBe("You cannot manage the tenant. Ask an admin for access.");
         (await AgentCountAsync(dto.ClientId)).ShouldBe(0);
     }
 

@@ -28,9 +28,9 @@ public sealed class DraftSave
     public static DraftSave Of(string text, int baseRevision, DateTimeOffset claimedSavedAt, DateTimeOffset now)
     {
         ValidationException.ThrowWhenLongerThan(text, Session.DraftMaxStoredLength, TextField,
-            "The text has too much formatting to save. Remove some formatting or split the text.");
+            "The text is too long or has too much formatting to save. Make the text shorter or split the text.");
         ValidationException.ThrowWhenLongerThan(ProseMirrorToPlainText.Render(text), Session.DraftMaxLength, TextField,
-            $"The text must not have more than {Session.DraftMaxLength:N0} characters.");
+            $"The text must not have more than {Session.DraftMaxLength:N0} characters, and each line break counts.");
         ValidationException.ThrowWhenHasCharacterNotStorable(text, TextField, "The text has a character that is not allowed.");
 
         ValidationException.Must(baseRevision >= DraftSlot.NoRevision, BaseRevisionField, "The base revision must not be negative.");

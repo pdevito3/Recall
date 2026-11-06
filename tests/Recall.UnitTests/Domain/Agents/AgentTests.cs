@@ -75,7 +75,7 @@ public class AgentTests
 
         // Assert
         act.ShouldThrow<ForbiddenAccessException>().Message
-            .ShouldBe("You cannot manage the tenant. Ask a tenant admin for access.");
+            .ShouldBe("You cannot manage the tenant. Ask an admin for access.");
     }
 
     [Test]
@@ -90,7 +90,7 @@ public class AgentTests
 
         // Assert
         act.ShouldThrow<ForbiddenAccessException>().Message
-            .ShouldBe("You cannot manage users. Ask a tenant admin for access.");
+            .ShouldBe("You cannot manage users. Ask an admin for access.");
         agent.Permissions.ShouldBeEmpty();
     }
 

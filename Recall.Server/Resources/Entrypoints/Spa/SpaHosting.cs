@@ -50,7 +50,7 @@ public static class SpaHosting
                 headers.CacheControl = file.File.Name == IndexFile ? "no-store"
                     : file.Context.Request.Path.StartsWithSegments(HashedFilesFolder) ? HashedFileCacheControl
                     : "no-cache";
-                headers.ContentSecurityPolicy = ContentSecurityPolicy;
+                AddPageHeaders(headers);
             },
         });
     }
@@ -71,7 +71,7 @@ public static class SpaHosting
 
             context.Response.ContentType = "text/html; charset=utf-8";
             context.Response.ContentLength = index.Length;
-            context.Response.Headers.ContentSecurityPolicy = ContentSecurityPolicy;
+            AddPageHeaders(context.Response.Headers);
             if (HttpMethods.IsGet(context.Request.Method))
                 await context.Response.SendFileAsync(index, context.RequestAborted);
         });
@@ -95,6 +95,13 @@ public static class SpaHosting
             && context.GetEndpoint() is null
             && (!Path.HasExtension(request.Path.Value) || AsksForAPage(request))
             && !IsReserved(request.Path);
+    }
+
+    private static void AddPageHeaders(IHeaderDictionary headers)
+    {
+        headers.ContentSecurityPolicy = ContentSecurityPolicy;
+        headers.XContentTypeOptions = "nosniff";
+        headers["Referrer-Policy"] = "no-referrer";
     }
 
     private static bool IsReserved(PathString path) => ReservedPrefixes.Any(prefix => path.StartsWithSegments(prefix));

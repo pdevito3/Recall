@@ -9,8 +9,8 @@ using Shouldly;
 
 public class AgentActionTests
 {
-    private const string ManageAgentsDenial = "You cannot manage agents. Ask a tenant admin for access.";
-    private const string ReadAgentsDenial = "You cannot see the agents of the tenant. Ask a tenant admin for access.";
+    private const string ManageAgentsDenial = "You cannot manage agents. Ask an admin for access.";
+    private const string ReadAgentsDenial = "You cannot see the agents. Ask an admin for access.";
 
     private static readonly AgentAction[] Actions =
         [AgentAction.AddPermission(), AgentAction.RemovePermission(), AgentAction.Delete()];
