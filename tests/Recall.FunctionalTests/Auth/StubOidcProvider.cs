@@ -61,6 +61,13 @@ public sealed class StubOidcProvider : HttpMessageHandler
     private readonly ConcurrentDictionary<string, StubLogin> _accessTokens = new();
     private readonly ConcurrentQueue<string> _handedOut = new();
 
+    public StubOidcProvider()
+    {
+        // RSA.Create makes the pair at its first use. On macOS two threads that race for that use can each make a pair.
+        _ = _signingKey.Rsa.ExportParameters(false);
+        _ = _otherKey.Rsa.ExportParameters(false);
+    }
+
     public string ClientSecret { get; } = Secrets.New();
 
     public bool Down { get; set; }
