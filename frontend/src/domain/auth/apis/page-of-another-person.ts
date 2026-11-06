@@ -3,8 +3,8 @@ import { useSyncExternalStore } from 'react'
 
 import { toastQueue } from '@/components/notification'
 import { writePointer } from '@/domain/sessions/autosave/composer-pointer'
-import { stopDraftSavers } from '@/domain/sessions/autosave/draft-saver'
-import { stopSettingSaver } from '@/domain/settings/apis/user-setting'
+
+import { stopSaversBeforeLeaving } from './unsent-words-at-logout'
 
 export const signInForAnotherPersonPage = '/auth/login?anotherPerson=1'
 
@@ -23,8 +23,7 @@ export const useHasLeftThePage = () => useSyncExternalStore(subscribe, () => has
 export function leaveThePageOfAnotherPerson(queryClient: QueryClient) {
   if (hasLeft) return
   hasLeft = true
-  stopDraftSavers()
-  stopSettingSaver()
+  stopSaversBeforeLeaving()
   writePointer(null)
   void queryClient.cancelQueries()
   queryClient.clear()

@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react'
 
 import { writePointer } from '@/domain/sessions/autosave/composer-pointer'
 import { discardUnsentDrafts, settleDraftSavers, stopDraftSavers } from '@/domain/sessions/autosave/draft-saver'
+import { settleMetadataSavers, stopMetadataSavers } from '@/domain/sessions/autosave/metadata-saver'
 import { settleSettingSaver, stopSettingSaver } from '@/domain/settings/apis/user-setting'
 
 type Choice = 'keep' | 'discard' | 'stay'
@@ -33,13 +34,22 @@ export function answerAboutUnsentWords(choice: Choice) {
 const withinLimit = (settled: Promise<boolean>) =>
   Promise.race([settled, new Promise<boolean>((resolve) => setTimeout(() => resolve(false), settleLimitMs))])
 
+/** The person chose to stay and copy the words, so the logout ends with no error. */
+export class StayedSignedIn extends Error {}
+
+/** A tab that leaves its session stops each saver first. A saver that still runs would ask at `beforeunload`, and a stay there leaves a hidden page. */
+export function stopSaversBeforeLeaving() {
+  stopDraftSavers()
+  stopSettingSaver()
+  stopMetadataSavers()
+}
+
 export async function settleUnsentWords(): Promise<() => void> {
-  const [areWordsSent] = await Promise.all([withinLimit(settleDraftSavers()), withinLimit(settleSettingSaver())])
+  const [areWordsSent] = await Promise.all([withinLimit(settleDraftSavers()), withinLimit(settleSettingSaver()), withinLimit(settleMetadataSavers())])
   const choice = areWordsSent ? 'keep' : await new Promise<Choice>((resolve) => setAnswer(resolve))
-  if (choice === 'stay') throw new Error('The person stayed signed in, to copy the words first.')
+  if (choice === 'stay') throw new StayedSignedIn()
   return () => {
-    stopDraftSavers()
-    stopSettingSaver()
+    stopSaversBeforeLeaving()
     if (choice === 'discard') discardUnsentDrafts()
     writePointer(null)
   }

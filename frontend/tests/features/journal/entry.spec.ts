@@ -2,6 +2,7 @@ import { sessionsApi, sessionsPaths } from '@tests/support/api/sessions-api'
 import { aProblem } from '@tests/support/builders/problem-details-builder'
 import { aSession, documentWith } from '@tests/support/builders/session-builder'
 import { expect, test } from '@tests/support/fixtures'
+import { STALE_VERSION_PROBLEM_TYPE } from '@/lib/problem-details'
 import { entryPage, unsentWords } from './journal.tasks'
 
 test.describe('an entry', () => {
@@ -464,6 +465,37 @@ test.describe('the tags of an entry', () => {
     expect(body.metadataVersion).toBe(session.metadataVersion)
     expect(body.savedAt).toBeUndefined()
     await expect(entry.at.moodChip('Tired')).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  test('a change of a tag with no answer yet warns at a close', async ({ page, api }) => {
+    const session = aSession().tagged({ moods: ['Calm'], topics: [] }).build()
+    api.mock(sessionsApi.oneIs(session), { ...sessionsApi.metadataSaves(session), neverAnswers: true })
+    const entry = entryPage(page)
+    await entry.open(session.id)
+    await entry.at.editTags.click()
+
+    await entry.at.moodChip('Tired').click()
+
+    expect(await unsentWords(page).warnsAtAClose()).toBe(true)
+  })
+
+  test('a question about one tag leaves the status of a failed save in view', async ({ page, api }) => {
+    const session = aSession().tagged({ moods: [], topics: [] }).build()
+    api.mock(sessionsApi.oneIs(session))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+    await entry.at.editTags.click()
+
+    const elsewhere = { ...session, moods: ['Calm'], metadataVersion: session.metadataVersion + 1 }
+    api.mock(sessionsApi.oneIs(elsewhere), { method: 'put', path: sessionsPaths.metadata(session.id), status: 409, body: { type: STALE_VERSION_PROBLEM_TYPE, title: 'Changed', status: 409 } })
+    await entry.pressMood(session.id, 'Tired')
+    await expect(entry.at.tagQuestion).toBeVisible()
+
+    api.mock({ method: 'put', path: sessionsPaths.metadata(session.id), status: 503 })
+    await entry.addTopic(session.id, 'work')
+
+    await expect(entry.at.status('Not saved yet')).toBeVisible()
+    await expect(entry.at.tagQuestion).toBeVisible()
   })
 
   test('a read that started before a mood press does not undo the press', async ({ page, api }) => {

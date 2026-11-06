@@ -6,8 +6,9 @@ import type { SessionDto } from '@/api/generated/models/types/session-dto'
 import { saveRawDraft } from '@/api/generated/sessions/clients/save-raw-draft'
 import { ProblemDetailsError } from '@/lib/problem-details'
 
-import { DraftSaver, type DraftTarget } from './draft-saver'
-import { readHoldFromOutbox, readOutbox, readOutboxEntry } from './outbox'
+import { plainWordsOf } from '../editor/content'
+import { DraftSaver, draftNotices, draftSaverFor, type DraftTarget } from './draft-saver'
+import { readHoldsFromOutbox, readOutbox, readOutboxEntry, writeHoldToOutbox } from './outbox'
 
 vi.mock('@/api/generated/sessions/clients/add-session')
 vi.mock('@/api/generated/sessions/clients/save-raw-draft')
@@ -84,7 +85,7 @@ test('a key on another page during a hold does not remove the held words from st
   saver.holdInOutbox('held words')
   saver.edit('a key on the entry page')
 
-  expect(readHoldFromOutbox(owner, key)?.change.value).toBe('held words')
+  expect(readHoldsFromOutbox(owner, key)[0]?.entry.change.value).toBe('held words')
   expect(readOutboxEntry(owner, key)?.change.value).toBe('a key on the entry page')
   expect(saver.wordsInHold()).toBe('held words')
   saver.stop()
@@ -100,7 +101,7 @@ test('the join puts the held words after the newest words of the person, and rem
 
   await vi.waitFor(() => expect(saver.wordsInHold()).toBe(null))
 
-  expect(readHoldFromOutbox(owner, key)).toBeNull()
+  expect(readHoldsFromOutbox(owner, key)).toEqual([])
   expect(readOutboxEntry(owner, key)?.change.value).toContain('a key on the entry page')
   expect(readOutboxEntry(owner, key)?.change.value).toContain('held words')
   expect(shown).toHaveBeenCalledWith(readOutboxEntry(owner, key)?.change.value)
@@ -130,7 +131,7 @@ test('only one tab joins a hold: a second tab waits, and the words go out once',
   firstTab.holdInOutbox('held words')
 
   const queryClient = clientAnswering('words on the server')
-  const secondTab = new DraftSaver(target, queryClient, null, held('held words'))
+  const secondTab = new DraftSaver(target, queryClient, null, [held('held words')])
   await new Promise((resolve) => setTimeout(resolve, 50))
   expect(queryClient.fetchQuery).not.toHaveBeenCalled()
   expect(secondTab.joinHoldInto('words on the server')).toBe('words on the server')
@@ -151,7 +152,7 @@ test('a tab that closes hands its hold to the next tab, and the words are not lo
   firstTab.takeHold()
   firstTab.holdInOutbox('held words')
   await new Promise((resolve) => setTimeout(resolve, 20))
-  const secondTab = new DraftSaver(target, clientAnswering('words on the server'), null, held('held words'))
+  const secondTab = new DraftSaver(target, clientAnswering('words on the server'), null, [held('held words')])
 
   firstTab.stop()
 
@@ -167,7 +168,7 @@ test('a hold keeps its own key, so a regular save in another tab does not overwr
   const second = aSaver()
   second.edit('words of the other tab')
 
-  expect(readHoldFromOutbox(owner, key)?.change.value).toBe('held words')
+  expect(readHoldsFromOutbox(owner, key)[0]?.entry.change.value).toBe('held words')
   first.stop()
   second.stop()
 })
@@ -225,4 +226,141 @@ test('a save that waits with no page open has a notice until it succeeds', async
   expect(saver.notice()).toBeNull()
   saver.stop()
   vi.useRealTimers()
+})
+
+const lockIsGiven = () => new Promise((resolve) => setTimeout(resolve, 20))
+
+const fullStorage = () =>
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new DOMException('full', 'QuotaExceededError')
+  })
+
+test('two tabs that type different words during a hold both reach the entry, in each order of the keys', async () => {
+  for (const [first, second] of [['aaa', 'bbb'], ['bbb', 'aaa']] as const) {
+    localStorage.clear()
+    vi.mocked(saveRawDraft).mockResolvedValue(wonAt(2))
+    const firstTab = aSaver()
+    const secondTab = aSaver()
+    firstTab.takeHold()
+    secondTab.takeHold()
+    firstTab.holdInOutbox(first)
+    await lockIsGiven()
+    secondTab.holdInOutbox(second)
+    firstTab.holdInOutbox(`${first} more`)
+
+    const joined = firstTab.joinHoldInto('')
+    await vi.waitFor(() => expect(secondTab.wordsInHold()).toBeNull())
+
+    expect(joined).toContain(`${first} more`)
+    expect(joined).toContain(second)
+    firstTab.stop()
+    secondTab.stop()
+  }
+})
+
+test('a key in a waiting tab reaches the entry, also when the first tab joins the older words of the hold', async () => {
+  vi.mocked(saveRawDraft).mockResolvedValue(wonAt(2))
+  writeHoldToOutbox(owner, held('held words'), 'a closed tab')
+  const firstTab = new DraftSaver(target, new QueryClient(), null, [held('held words')])
+  firstTab.takeHold()
+  await lockIsGiven()
+  const waitingTab = aSaver()
+  waitingTab.takeHold()
+  waitingTab.holdInOutbox('held words x')
+
+  const joined = firstTab.joinHoldInto('')
+
+  expect(plainWordsOf(joined)).toContain('held words x')
+  expect(plainWordsOf(joined).match(/held words/g)).toHaveLength(1)
+  await vi.waitFor(() => expect(waitingTab.wordsInHold()).toBeNull())
+  expect(readHoldsFromOutbox(owner, key)).toEqual([])
+  firstTab.stop()
+  waitingTab.stop()
+})
+
+test('a tab with a failed write keeps its newer words when the lock comes', async () => {
+  const firstTab = aSaver()
+  firstTab.takeHold()
+  firstTab.holdInOutbox('first tab')
+  await lockIsGiven()
+  const secondTab = aSaver()
+  secondTab.takeHold()
+  secondTab.holdInOutbox('second')
+  const setItem = fullStorage()
+  secondTab.holdInOutbox('second tab typed more')
+  setItem.mockRestore()
+
+  firstTab.joinHoldInto('')
+  await vi.waitFor(() => expect(secondTab.joinHoldInto('')).toContain('second tab typed more'))
+
+  firstTab.stop()
+  secondTab.stop()
+})
+
+test('a join on a full storage keeps the only saved copy until the queue is in the outbox', async () => {
+  vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
+  const saver = aSaver()
+  saver.takeHold()
+  saver.holdInOutbox('held words')
+  await lockIsGiven()
+  const setItem = fullStorage()
+
+  saver.joinHoldInto('words on the server')
+
+  expect(saver.wordsInHold()).toBeNull()
+  expect(readHoldsFromOutbox(owner, key)[0]?.entry.change.value).toBe('held words')
+  expect(saver.notice()).toMatchObject({ kind: 'onlyInMemory' })
+
+  setItem.mockRestore()
+  saver.edit('words with room')
+
+  expect(readHoldsFromOutbox(owner, key)).toEqual([])
+  saver.stop()
+})
+
+test('the notice has the newest held words at once, and also the words of the queue', () => {
+  vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
+  const saver = draftSaverFor(target, new QueryClient())
+  saver.takeHold()
+  const setItem = fullStorage()
+
+  saver.holdInOutbox('first')
+  saver.holdInOutbox('first and more')
+  expect(draftNotices()[0]).toMatchObject({ kind: 'onlyInMemory', words: 'first and more' })
+
+  saver.edit('a key on another page')
+  const [notice] = draftNotices()
+  const words = notice?.kind === 'onlyInMemory' ? plainWordsOf(notice.words) : ''
+  expect(words).toContain('first and more')
+  expect(words).toContain('a key on another page')
+
+  setItem.mockRestore()
+  saver.discard()
+})
+
+test('a hold that the browser can write does not end the warning for a queue that it could not write', () => {
+  vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
+  const saver = aSaver()
+  saver.takeHold()
+  const setItem = fullStorage()
+  saver.edit('words with no room')
+  setItem.mockRestore()
+
+  saver.holdInOutbox('a short hold')
+
+  expect(saver.isHoldingWordsOnlyInMemory()).toBe(true)
+  saver.stop()
+})
+
+test('an open page offers no discard of its words, because the page would stop saving', () => {
+  fullStorage()
+  vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
+  const saver = aSaver()
+  saver.edit('words with no room')
+
+  expect(saver.notice()).toMatchObject({ kind: 'onlyInMemory', canDiscard: true })
+  const stop = saver.subscribe(() => undefined)
+  expect(saver.notice()).toMatchObject({ kind: 'onlyInMemory', canDiscard: false })
+  stop()
+  saver.stop()
 })

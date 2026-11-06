@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'vitest'
+import { afterEach, expect, test, vi } from 'vitest'
 
 import { readOutbox, readOutboxEntry, removeFromOutbox, writeToOutbox, type OutboxEntry } from './outbox'
 
@@ -38,7 +38,6 @@ for (const [name, stored] of [
   ['null', 'null'],
   ['a number', '42'],
   ['an entry with no change', JSON.stringify({ ...entryWith('x'), change: undefined })],
-  ['an entry with a channel that does not exist', JSON.stringify({ ...entryWith('x'), channel: 'other' })],
 ] as const) {
   test(`${name} does not hide the other words, and it goes from storage`, () => {
     writeToOutbox('person-a', entryWith('good words'))
@@ -49,3 +48,26 @@ for (const [name, stored] of [
     expect(localStorage.getItem('recall.unsent.person-a.broken')).toBeNull()
   })
 }
+
+test('an entry that this version cannot read keeps its words as a new entry', () => {
+  localStorage.setItem('recall.unsent.person-a.unknown', JSON.stringify({ ...entryWith('words of an old version'), channel: 'other' }))
+
+  const [entry] = readOutbox('person-a')
+
+  expect(entry).toMatchObject({ channel: 'raw', sessionId: null, change: { value: 'words of an old version' } })
+  expect(readOutboxEntry('person-a', entry!.key)?.change.value).toBe('words of an old version')
+  expect(localStorage.getItem('recall.unsent.person-a.unknown')).toBeNull()
+})
+
+test('an entry that this version cannot read stays in storage while the browser has no room for the new entry', () => {
+  const stored = JSON.stringify({ ...entryWith('words of an old version'), channel: 'other' })
+  localStorage.setItem('recall.unsent.person-a.unknown', stored)
+  const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new DOMException('full', 'QuotaExceededError')
+  })
+
+  expect(readOutbox('person-a')).toEqual([])
+
+  setItem.mockRestore()
+  expect(localStorage.getItem('recall.unsent.person-a.unknown')).toBe(stored)
+})

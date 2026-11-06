@@ -75,7 +75,7 @@ function OnlyInMemoryNotice({ notice }: { notice: Extract<DraftNotice, { kind: '
       </div>
       <div className="flex items-center gap-2">
         <CopyWords words={notice.words} />
-        {notice.reason && <Button variant="ghost" onPress={() => notice.saver.discard()}>Discard</Button>}
+        {notice.canDiscard && <Button variant="ghost" onPress={() => notice.saver.discard()}>Discard</Button>}
       </div>
     </section>
   )

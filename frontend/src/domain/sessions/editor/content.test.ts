@@ -37,6 +37,12 @@ test('a document with a node that the editor does not know shows its text, so th
   expect(contentOf(text)).toEqual({ type: 'doc', content: [paragraph('First'), paragraph('Words')] })
 })
 
+test('a document with words only in fields that the app does not read shows its text, so the page is not blank', () => {
+  const text = JSON.stringify({ type: 'doc', blocks: [{ words: 'kept words' }] })
+
+  expect(JSON.stringify(contentOf(text))).toContain('kept words')
+})
+
 test('the people of an entry are the mentions of each text, once each, in the order of the Server', () => {
   const mention = (personId: string) => ({ type: 'mention', attrs: { personId, label: personId } })
   const raw = doc({ type: 'paragraph', content: [mention('b'), mention('a')] })

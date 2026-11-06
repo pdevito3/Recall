@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { resumeUnsentSetting } from '@/domain/settings/apis/user-setting'
 
 import { isAnyWordOnlyInMemory, resumeUnsentDrafts } from './draft-saver'
+import { isAnyTagChangeUnsaved } from './metadata-saver'
 import { useOwner } from './use-draft-saver'
 
 export function useResumeUnsentDrafts() {
@@ -17,7 +18,7 @@ export function useResumeUnsentDrafts() {
 
   useEffect(() => {
     const warnOfTheLoss = (event: BeforeUnloadEvent) => {
-      if (isAnyWordOnlyInMemory()) event.preventDefault()
+      if (isAnyWordOnlyInMemory() || isAnyTagChangeUnsaved()) event.preventDefault()
     }
     window.addEventListener('beforeunload', warnOfTheLoss)
     return () => window.removeEventListener('beforeunload', warnOfTheLoss)

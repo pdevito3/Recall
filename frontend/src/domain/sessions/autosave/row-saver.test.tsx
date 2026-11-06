@@ -165,6 +165,103 @@ test('a change that turns capture on asks after a 409, also when capture did not
   saver.dispose()
 })
 
+test('an edit that comes during a save that meets a stale row is the value that the ask offers', async () => {
+  const api = server()
+  const { saver } = saverOn(api, { current: api.row.current })
+  api.otherClientSets({ topics: ['theirs'] })
+  const { put } = api
+  let isFirst = true
+  api.put = (values, version) => {
+    if (isFirst) saver.edit({ topics: ['a', 'b'] })
+    isFirst = false
+    return put(values, version)
+  }
+
+  saver.edit({ topics: ['a'] })
+  await vi.advanceTimersByTimeAsync(0)
+
+  expect(saver.asks()).toEqual([{ field: 'topics', yours: ['a', 'b'], now: ['theirs'] }])
+  saver.answerAsk(saver.asks()[0]!, true)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(api.row.current.topics).toEqual(['a', 'b'])
+  saver.dispose()
+})
+
+test('Keep what is there holds when a retry of the save still has the field', async () => {
+  const api = server()
+  const { saver } = saverOn(api, { current: api.row.current })
+  api.otherClientSets({ zone: 'Africa/Cairo' })
+  const { put } = api
+  let puts = 0
+  api.put = (values, version) => {
+    puts += 1
+    return puts === 2 ? Promise.reject(new Error('Network Error')) : put(values, version)
+  }
+
+  saver.edit({ zone: 'Europe/Athens', topics: ['work'] })
+  await vi.advanceTimersByTimeAsync(0)
+  saver.answerAsk(saver.asks()[0]!, false)
+  await vi.advanceTimersByTimeAsync(60_000)
+
+  expect(api.row.current).toMatchObject({ zone: 'Africa/Cairo', topics: ['work'] })
+  expect(saver.pendingFields()).toEqual({})
+  saver.dispose()
+})
+
+test('a field that the person kept as it is goes out again after a new change of that field', async () => {
+  const api = server()
+  const { saver } = saverOn(api, { current: api.row.current })
+  api.otherClientSets({ zone: 'Africa/Cairo' })
+  saver.edit({ zone: 'Europe/Athens' })
+  await vi.advanceTimersByTimeAsync(0)
+  saver.answerAsk(saver.asks()[0]!, false)
+
+  saver.edit({ zone: 'Asia/Kolkata' })
+  await vi.advanceTimersByTimeAsync(0)
+
+  expect(api.row.current.zone).toBe('Asia/Kolkata')
+  saver.dispose()
+})
+
+test('the note of a change with no ask comes after the Server took the change', async () => {
+  const api = server({ capture: true })
+  const { saver, told } = saverOn(api, { current: api.row.current })
+  api.otherClientSets({ zone: 'Africa/Cairo' })
+  const { put } = api
+  let puts = 0
+  let answer = () => undefined as void
+  api.put = (values, version) => {
+    puts += 1
+    if (puts === 1) return put(values, version)
+    return new Promise((resolve) => {
+      answer = () => resolve(put(values, version))
+    })
+  }
+
+  saver.edit({ capture: false })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(puts).toBe(2)
+  expect(told).not.toHaveBeenCalled()
+
+  answer()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(told).toHaveBeenCalledWith(['capture'])
+  saver.dispose()
+})
+
+test('an unsaved change counts as unsaved, and a stopped saver does not', () => {
+  const api = server()
+  const { saver } = saverOn(api, { current: api.row.current })
+  api.put = () => new Promise(() => undefined)
+
+  expect(saver.hasUnsaved()).toBe(false)
+  saver.edit({ zone: 'Europe/Athens' })
+  expect(saver.hasUnsaved()).toBe(true)
+
+  saver.dispose()
+  expect(saver.hasUnsaved()).toBe(false)
+})
+
 test('a value that the app chose yields to the row, with no question', () => {
   const plan = planAfterStale<Fields>({
     changed: { zone: 'Europe/Athens', capture: true },

@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test'
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
+import { authApi } from '@tests/support/api/auth-api'
 import { aSetting, settingsApi, settingsPaths } from '@tests/support/api/settings-api'
 import { sessionsApi, sessionsPaths } from '@tests/support/api/sessions-api'
 import type { MockRoute } from '@tests/support/api/mock-route'
@@ -429,6 +430,30 @@ test.describe('a return to an entry whose read is slow', () => {
     await expect(journal.at.composer).toContainText('abcdefghijklmnopqrstuvwxyz')
   })
 
+  test('a composer that opens with no network reads the entry when the network returns, and joins the keys', async ({ page, api }) => {
+    const session = aSession().build()
+    const journal = journalPage(page)
+    api.mock(sessionsApi.creates(session), sessionsApi.oneIs(session), sessionsApi.draftSaveWins(session, 1))
+    await journal.open()
+    await journal.write('Words from before')
+    await expect(journal.at.status('Saved at')).toBeVisible()
+    await journal.goToSettings()
+    const saved = { ...aSession().atRevision(1).saying('Words from before').build(), id: session.id, clientSessionId: session.clientSessionId }
+    api.mock(sessionsApi.oneIs(saved), sessionsApi.draftSaveWins(session, 2))
+    await page.reload()
+    await journal.settingsIsOpen()
+    await page.context().setOffline(true)
+    await journal.goToTheJournalFromTheSidebar()
+    await expect(journal.at.loadingEntry).toBeVisible()
+    await journal.typeWithoutWaiting('Words typed offline')
+
+    await page.context().setOffline(false)
+
+    await expect(journal.at.loadingEntry).toHaveCount(0)
+    await expect(journal.at.composer).toContainText('Words from before')
+    await expect(journal.at.composer).toContainText('Words typed offline')
+  })
+
   test('a reload during the read joins the keys to the entry, and does not replace it', async ({ page, api }) => {
     const session = aSession().build()
     const journal = journalPage(page)
@@ -584,6 +609,23 @@ test.describe('words that the browser has no room to keep', () => {
     await unsent.answerTheLogoutDialog('Stay signed in')
     await expect(unsent.at.onlyInMemory).toBeVisible()
     expect(api.all('post', '/auth/logout')).toHaveLength(0)
+    await expect(unsent.at.signOutDidNotFinish).toHaveCount(0)
+  })
+
+  test('at a sign-out in another tab, the tab leaves with no question, so that no hidden page stays', async ({ page, api }) => {
+    const unsent = unsentWords(page)
+    const session = aSession().build()
+    api.mock(sessionsApi.creates(session), { method: 'put', path: sessionsPaths.rawDraft(session.id), status: 503 })
+    const journal = journalPage(page)
+    await journal.open()
+    await unsent.fillTheStorage()
+    await journal.typeWithoutWaiting('Words with no room')
+    await expect(unsent.at.onlyInMemory).toBeVisible()
+    api.mock(authApi.loginOpens())
+
+    await unsent.signOutInAnotherTab()
+
+    await expect.poll(() => page.url()).toContain('signedOut=1')
   })
 })
 

@@ -87,8 +87,8 @@ interface RowSaverOptions<F extends object, R> {
 
 const mergeFields = <F extends object>(older: Partial<F>, newer: Partial<F>): Partial<F> => ({ ...older, ...newer })
 
-const withoutFields = <F extends object>(change: Partial<F>, asks: FieldAsk<F>[]) =>
-  Object.fromEntries(Object.entries(change).filter(([field]) => !asks.some((ask) => ask.field === field))) as Partial<F>
+const withoutFields = <F extends object>(change: Partial<F>, fields: string[]) =>
+  Object.fromEntries(Object.entries(change).filter(([field]) => !fields.includes(field))) as Partial<F>
 
 /** The saves of one row with a base version: the queue holds the fields that the person changed, and each body comes from the copy of the row. */
 export class RowSaver<F extends object, R> {
@@ -96,6 +96,7 @@ export class RowSaver<F extends object, R> {
   private readonly saver: SerialSaver<Partial<F>, R>
   private attempt: Attempt<F> | null
   private currentAsks: FieldAsk<F>[]
+  private readonly keptAsTheyAre = new Set<string>()
   private readonly listeners = new Set<() => void>()
   private isDisposed = false
 
@@ -117,6 +118,7 @@ export class RowSaver<F extends object, R> {
 
   edit(fields: Partial<F>) {
     this.currentAsks = this.currentAsks.filter((ask) => !(ask.field in fields))
+    for (const field of fieldsIn(fields)) this.keptAsTheyAre.delete(field)
     this.saver.edit(fields)
     this.notify()
   }
@@ -124,6 +126,7 @@ export class RowSaver<F extends object, R> {
   answerAsk(ask: FieldAsk<F>, usesYours: boolean) {
     this.currentAsks = this.currentAsks.filter((other) => other !== ask)
     if (usesYours) this.edit({ [ask.field]: ask.yours } as Partial<F>)
+    else this.keptAsTheyAre.add(ask.field)
     this.keep()
     this.notify()
   }
@@ -131,7 +134,12 @@ export class RowSaver<F extends object, R> {
   asks = () => this.currentAsks
 
   pendingFields(): Partial<F> {
-    return this.saver.unsettled().reduce<Partial<F>>((fields, { value }) => ({ ...fields, ...value }), {})
+    const pending = this.saver.unsettled().reduce<Partial<F>>((fields, { value }) => ({ ...fields, ...value }), {})
+    return withoutFields(pending, [...this.keptAsTheyAre])
+  }
+
+  hasUnsaved() {
+    return !this.isDisposed && (this.currentAsks.length > 0 || fieldsIn(this.pendingFields()).length > 0)
   }
 
   settle = () => this.saver.settle()
@@ -161,7 +169,9 @@ export class RowSaver<F extends object, R> {
   }
 
   private async send(queued: Partial<F>, signal: AbortSignal): Promise<R> {
-    let fields = withoutFields(queued, this.currentAsks)
+    let fields = withoutFields(queued, [...this.currentAsks.map((ask) => ask.field), ...this.keptAsTheyAre])
+    if (fieldsIn(fields).length === 0) return this.options.copyOf() ?? this.options.read(signal)
+    const appliedWithNoAsk: (keyof F & string)[] = []
     this.attempt ??= { base: this.baseOf(this.options.copyOf() ?? (await this.options.read(signal))), hadNoReply: false }
     let { base, hadNoReply } = this.attempt
     this.keep()
@@ -169,6 +179,7 @@ export class RowSaver<F extends object, R> {
       try {
         const reply = await this.options.put({ ...base.values, ...fields }, base.version, signal)
         this.attempt = null
+        if (appliedWithNoAsk.length > 0) this.options.onAppliedWithNoAsk?.(appliedWithNoAsk)
         return reply
       } catch (error) {
         if (!isStaleVersionError(error)) {
@@ -180,7 +191,7 @@ export class RowSaver<F extends object, R> {
       if (this.isDisposed) throw new Error('This save stopped.')
       const plan = planAfterStale({ changed: fields, before: base.values, fresh: this.options.fieldsOf(fresh), hadNoReply, rules: this.options.rules })
       if (plan.asks.length > 0) this.addAsks(plan.asks)
-      if (plan.appliedWithNoAsk.length > 0) this.options.onAppliedWithNoAsk?.(plan.appliedWithNoAsk)
+      appliedWithNoAsk.push(...plan.appliedWithNoAsk)
       base = this.baseOf(fresh)
       hadNoReply = false
       fields = plan.apply
@@ -193,8 +204,11 @@ export class RowSaver<F extends object, R> {
     throw new Error('The row changed again during each try.')
   }
 
+  /** The person can have changed the field again while the save ran, and the ask must offer that newest value. */
   private addAsks(asks: FieldAsk<F>[]) {
-    this.currentAsks = [...this.currentAsks.filter((old) => !asks.some((ask) => ask.field === old.field)), ...asks]
+    const pending = this.pendingFields()
+    const newest = asks.map((ask) => (ask.field in pending ? { ...ask, yours: pending[ask.field] as F[keyof F] } : ask))
+    this.currentAsks = [...this.currentAsks.filter((old) => !asks.some((ask) => ask.field === old.field)), ...newest]
     this.notify()
   }
 

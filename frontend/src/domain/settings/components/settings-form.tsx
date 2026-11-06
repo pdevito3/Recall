@@ -84,7 +84,7 @@ export function SettingsForm() {
       <section className="flex flex-col gap-3" aria-labelledby="settings-entries">
         <div className="flex flex-wrap items-baseline justify-between gap-x-4">
           <h2 id="settings-entries" className="text-lg font-semibold">Entries</h2>
-          {asks.length === 0 && <SaveStatusLine status={status} zone={zone} />}
+          {(asks.length === 0 || status.kind !== 'saved') && <SaveStatusLine status={status} zone={zone} />}
         </div>
         <Checkbox
           className="max-md:min-h-11"

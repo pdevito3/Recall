@@ -60,6 +60,8 @@ export function journalPage(page: Page) {
       await page.keyboard.type(words)
     },
 
+    settingsIsOpen: () => expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible(),
+
     async goToSettings() {
       await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Settings', exact: true }).click()
       await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible()
@@ -275,7 +277,7 @@ export function unsentWords(page: Page) {
     stored: (key: string) => page.evaluate((k) => localStorage.getItem(k), key),
     keys: () => page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('recall.unsent.'))),
     clientSessionIdOfTheHold: () =>
-      page.evaluate(() => Object.keys(localStorage).find((key) => key.endsWith('.hold'))!.split('.')[3]),
+      page.evaluate(() => Object.keys(localStorage).find((key) => key.includes('.hold.'))!.split('.')[3]),
     settingKeys: () => page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('recall.unsent-setting.'))),
     composerPointer: () => page.evaluate(() => sessionStorage.getItem('recall.composer')),
     clipboardText: () => page.evaluate(() => navigator.clipboard.readText()),
@@ -294,6 +296,15 @@ export function unsentWords(page: Page) {
         }
       })
     },
+
+    warnsAtAClose: () =>
+      page.evaluate(() => {
+        const close = new Event('beforeunload', { cancelable: true })
+        window.dispatchEvent(close)
+        return close.defaultPrevented
+      }),
+
+    signOutInAnotherTab: () => page.evaluate(() => new BroadcastChannel('recall.session').postMessage('signed-out')),
 
     async typeOfTheDialogAtClose() {
       const dialog = page.waitForEvent('dialog')

@@ -112,15 +112,6 @@ export function useComposer() {
       if (lastSaved !== null) openWords(lastSaved)
       else if (cached) open(cached)
     }
-    if (!onlineManager.isOnline()) {
-      queueMicrotask(openWithNoRead)
-      return () => {
-        isCurrent = false
-      }
-    }
-    const stopWatching = onlineManager.subscribe((isOnline) => {
-      if (!isOnline) openWithNoRead()
-    })
     const giveUp = setTimeout(openWithNoRead, readWaitMs)
     const readLimit = setInterval(() => void queryClient.cancelQueries({ queryKey: SessionKeys.detail(resumedSessionId), exact: true }), readLimitMs)
     let readRetry: ReturnType<typeof setTimeout> | undefined
@@ -136,7 +127,12 @@ export function useComposer() {
         openWithNoRead()
         readRetry = setTimeout(() => void read(), readRetryMs)
       })
-    void read()
+    const stopWatching = onlineManager.subscribe((isOnline) => {
+      if (isOnline) void read()
+      else openWithNoRead()
+    })
+    if (onlineManager.isOnline()) void read()
+    else queueMicrotask(openWithNoRead)
     return () => {
       isCurrent = false
       stopWatching()
@@ -215,7 +211,8 @@ export function useComposer() {
     writePointer(finished.pointer && { ...finished.pointer, sessionId: finished.saver.getSnapshot().sessionId })
     setSaver(finished.saver)
     setFinished(null)
-    openEditorWith(finished.words)
+    // A hold can have joined the entry after Done, and those words are in the queue and not in the words at Done.
+    openEditorWith(finished.saver.unsettledText() ?? finished.words)
   }, [needsThePersonAfterDone, finished, setSaver, openEditorWith])
 
   const canFinish = saver !== null && !isReading && snapshot.status.kind !== 'refused'

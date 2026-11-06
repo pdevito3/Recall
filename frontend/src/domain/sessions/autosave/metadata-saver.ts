@@ -40,6 +40,14 @@ export function metadataSaverFor(id: string, queryClient: QueryClient) {
   return saver
 }
 
+export const isAnyTagChangeUnsaved = () => [...savers.values()].some((saver) => saver.hasUnsaved())
+
+export const stopMetadataSavers = () => {
+  for (const saver of savers.values()) saver.dispose()
+}
+
+export const settleMetadataSavers = async () => (await Promise.all([...savers.values()].map((saver) => saver.settle()))).every(Boolean)
+
 export function discardMetadataSaver(id: string) {
   savers.get(id)?.dispose()
   savers.delete(id)

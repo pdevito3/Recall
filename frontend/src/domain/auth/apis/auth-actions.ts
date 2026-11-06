@@ -5,7 +5,7 @@ import { apiClient } from '@/lib/api-client'
 import { noteSignInOfAnotherTab, sessionChannelName } from '@/lib/page-user'
 import { authUserQuery, getUser } from './get-user'
 
-import { settleUnsentWords } from './unsent-words-at-logout'
+import { settleUnsentWords, StayedSignedIn, stopSaversBeforeLeaving } from './unsent-words-at-logout'
 
 const serverMaxReturnPathLength = 2048
 
@@ -93,6 +93,7 @@ function showPage() {
  */
 function leaveAsSignedOut(queryClient: QueryClient) {
   hidePage()
+  stopSaversBeforeLeaving()
   queryClient.clear()
   afterSignOut ??= signedOutPage
   window.location.replace(afterSignOut)
@@ -141,6 +142,8 @@ export function useLogout() {
     mutationFn: logout,
     // By default a mutation waits with no sign while the browser has no network, and the logout must ask about unsent words now.
     networkMode: 'always',
-    onError: () => Notification.error('You are still signed in, because signing out did not finish. Try again.'),
+    onError: (error) => {
+      if (!(error instanceof StayedSignedIn)) Notification.error('You are still signed in, because signing out did not finish. Try again.')
+    },
   })
 }
