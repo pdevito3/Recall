@@ -1,0 +1,179 @@
+import { membershipPaths } from '@tests/support/api/membership-api'
+import { aProvider, aSession, modelProviderPaths, modelProvidersApi } from '@tests/support/api/model-providers-api'
+import { actorSubject, as } from '@tests/support/auth/actors'
+import { aUser } from '@tests/support/builders/user-builder'
+import { expect, test } from '@tests/support/fixtures'
+import { modelProviders } from './model-providers.locators'
+
+const signedInAs = (role: 'Admin' | 'User') => ({
+  method: 'get' as const,
+  path: membershipPaths.userOf(actorSubject),
+  status: 200,
+  body: aUser().identifiedBy(actorSubject).inRole(role).build(),
+})
+
+const noSessions = { method: 'get' as const, path: '/api/v1/sessions', status: 200, body: { items: [], nextCursor: null } }
+
+test.describe('the model providers page', () => {
+  test.use({ actor: as.user('Bob Smith') })
+
+  test('an Admin connects a model provider, sends the key once, and no page shows the key again', async ({ page, api }) => {
+    const provider = aProvider()
+    api.mock(signedInAs('Admin'), noSessions, modelProvidersApi.listHolds([]), modelProvidersApi.addAnswers(provider))
+    const at = modelProviders(page)
+    await page.goto('/model-providers')
+    await expect(at.heading).toBeVisible()
+
+    await at.name.fill('Mine')
+    await at.apiKey.fill('a-key-of-this-test')
+    api.mock(modelProvidersApi.listHolds([provider]))
+    await at.connect.click()
+
+    await expect(at.providerHeading('Mine')).toBeVisible()
+    await expect(at.name).toHaveValue('')
+    await expect(at.apiKey).toHaveValue('')
+    await expect(at.text('a-key-of-this-test')).toHaveCount(0)
+    expect(api.last('post', modelProviderPaths.list)?.body).toMatchObject({ kind: 'Anthropic', name: 'Mine', apiKey: 'a-key-of-this-test' })
+  })
+
+  test('a refused connect shows the message on its field', async ({ page, api }) => {
+    const message = 'Please provide the API key of the model provider.'
+    api.mock(signedInAs('Admin'), noSessions, modelProvidersApi.listHolds([]), modelProvidersApi.addRefuses({ apiKey: [message] }))
+    const at = modelProviders(page)
+    await page.goto('/model-providers')
+
+    await at.name.fill('Mine')
+    await at.connect.click()
+
+    await expect(at.fieldError(message)).toBeVisible()
+  })
+
+  test('the test button shows the models of the provider, and a pick saves the model', async ({ page, api }) => {
+    const provider = aProvider()
+    api.mock(
+      signedInAs('Admin'),
+      noSessions,
+      modelProvidersApi.listHolds([provider]),
+      modelProvidersApi.testAnswers(provider, { ok: true, models: [{ id: 'model-a', displayName: 'Model A' }] }),
+      modelProvidersApi.updateAnswers({ ...provider, model: 'model-a' }),
+    )
+    const at = modelProviders(page)
+    await page.goto('/model-providers')
+
+    await at.test.click()
+    await expect(at.connected).toContainText('offers 1 model.')
+    await at.modelSelect('Mine').click()
+    await at.modelOption('Model A').click()
+
+    await expect.poll(() => api.last('put', modelProviderPaths.record(provider.id))?.body).toMatchObject({ model: 'model-a', version: 1 })
+  })
+
+  test('the test button shows the words of a provider that refuses', async ({ page, api }) => {
+    const provider = aProvider()
+    const words = 'Your API key is not valid.'
+    api.mock(
+      signedInAs('Admin'),
+      noSessions,
+      modelProvidersApi.listHolds([provider]),
+      modelProvidersApi.testAnswers(provider, { ok: false, models: [], failure: { kind: 'Refused', statusCode: 401, message: words } }),
+    )
+    const at = modelProviders(page)
+    await page.goto('/model-providers')
+
+    await at.test.click()
+
+    await expect(at.connectFailed).toContainText(words)
+  })
+
+  test('a changed key ring shows a warning', async ({ page, api }) => {
+    api.mock(signedInAs('Admin'), noSessions, modelProvidersApi.listHolds([aProvider({ keyState: 'Unreadable' })], 'Changed'))
+    const at = modelProviders(page)
+
+    await page.goto('/model-providers')
+
+    await expect(at.keyRingWarning).toBeVisible()
+    await expect(at.text('The server cannot read this key. Enter it again.')).toBeVisible()
+  })
+
+  test('a member who is no Admin does not ask for the providers', async ({ page, api }) => {
+    api.mock(signedInAs('User'), noSessions)
+    const at = modelProviders(page)
+
+    await page.goto('/model-providers')
+
+    await expect(at.noAdminNote).toBeVisible()
+    expect(api.last('get', modelProviderPaths.list)).toBeUndefined()
+  })
+})
+
+test.describe('the Cleanup card', () => {
+  test.use({ actor: as.user('Bob Smith') })
+
+  const sessionUrl = (id: string) => `/model-providers?session=${id}`
+
+  test('a run shows that the person can leave, and a later visit finds Cleaned with Raw unchanged', async ({ page, api }) => {
+    const session = aSession()
+    const running = aSession({ cleanupStatus: 'Running' })
+    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(session), modelProvidersApi.cleanupStarts(running))
+    const at = modelProviders(page)
+    await page.goto(sessionUrl(session.id))
+    await expect(at.runCleanup).toBeEnabled()
+
+    api.mock(modelProvidersApi.sessionIs(running))
+    await at.runCleanup.click()
+    await expect(at.cleanupRunning).toBeVisible()
+    await expect(at.runCleanup).toBeDisabled()
+
+    await page.goto('/about')
+    api.mock(modelProvidersApi.sessionIs(aSession({ cleanupStatus: 'Clean', cleanedText: 'I met Sam today.' })))
+    await page.goto(sessionUrl(session.id))
+
+    await expect(at.cleanedWords).toContainText('I met Sam today.')
+    await expect(at.rawWords).toContainText('um I met sam today')
+  })
+
+  test('a Running run polls until the result arrives', async ({ page, api }) => {
+    const running = aSession({ cleanupStatus: 'Running' })
+    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(running))
+    const at = modelProviders(page)
+    await page.goto(sessionUrl(running.id))
+    await expect(at.cleanupRunning).toBeVisible()
+
+    api.mock(modelProvidersApi.sessionIs(aSession({ cleanupStatus: 'Clean', cleanedText: 'Done now.' })))
+
+    await expect(at.cleanedWords).toContainText('Done now.')
+    await expect(at.cleanupRunning).toHaveCount(0)
+  })
+
+  test('a refused start shows why', async ({ page, api }) => {
+    const session = aSession()
+    const message = 'An Admin must connect a model provider and pick a model first.'
+    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(session), modelProvidersApi.cleanupRefuses(session, message))
+    const at = modelProviders(page)
+    await page.goto(sessionUrl(session.id))
+
+    await at.runCleanup.click()
+
+    await expect(at.cleanupRefused(message)).toBeVisible()
+  })
+
+  test('a failed run shows a closed reason', async ({ page, api }) => {
+    const failed = aSession({ cleanupStatus: 'Failed', cleanupFailure: 'ProviderRefused' })
+    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(failed))
+    const at = modelProviders(page)
+
+    await page.goto(sessionUrl(failed.id))
+
+    await expect(at.cleanupFailure('The model provider refused the request.')).toBeVisible()
+  })
+
+  test('hand edits warn before a new run', async ({ page, api }) => {
+    const edited = aSession({ cleanupStatus: 'Clean', cleanedText: 'Mine.', cleanedHasHandEdits: true })
+    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(edited))
+    const at = modelProviders(page)
+
+    await page.goto(sessionUrl(edited.id))
+
+    await expect(at.text('You edited Cleaned by hand.')).toBeVisible()
+  })
+})

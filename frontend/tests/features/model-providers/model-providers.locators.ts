@@ -1,0 +1,25 @@
+import type { Page } from '@playwright/test'
+
+export const modelProviders = (page: Page) => ({
+  heading: page.getByRole('heading', { level: 1, name: 'Model providers' }),
+  name: page.getByLabel('Name'),
+  baseUrl: page.getByLabel('Base URL'),
+  apiKey: page.getByLabel('API key', { exact: true }),
+  connect: page.getByRole('button', { name: 'Connect' }),
+  test: page.getByRole('button', { name: 'Test connection' }),
+  connected: page.getByRole('status').filter({ hasText: 'Connected.' }),
+  connectFailed: page.getByRole('alert').filter({ hasText: 'The connection failed.' }),
+  modelSelect: (provider: string) => page.getByRole('button', { name: new RegExp(`Model of ${provider}`) }),
+  modelOption: (name: string) => page.getByRole('option', { name }),
+  noAdminNote: page.getByText('An Admin connects the model provider of this install.'),
+  keyRingWarning: page.getByRole('alert').filter({ hasText: 'The key ring changed' }),
+  providerHeading: (name: string) => page.getByRole('heading', { level: 3, name }),
+  fieldError: (text: string) => page.getByText(text),
+  text: (words: string) => page.getByText(words),
+  runCleanup: page.getByRole('button', { name: /^Run Cleanup/ }),
+  cleanupRunning: page.getByRole('status').filter({ hasText: 'You can close this page' }),
+  cleanupRefused: (text: string) => page.getByRole('alert').filter({ hasText: text }),
+  cleanupFailure: (text: string) => page.getByRole('alert').filter({ hasText: text }),
+  cleanedWords: page.locator('section', { has: page.getByRole('heading', { level: 3, name: 'Cleaned' }) }),
+  rawWords: page.locator('section', { has: page.getByRole('heading', { level: 3, name: 'Raw' }) }),
+})
