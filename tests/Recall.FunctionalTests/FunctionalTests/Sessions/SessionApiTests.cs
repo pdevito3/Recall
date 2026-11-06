@@ -205,6 +205,27 @@ public class SessionApiTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-8")]
+    public async Task a_save_of_the_same_words_keeps_the_save_time_so_a_later_offline_edit_keeps_the_slot()
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        (await FactoryClient.SaveDraftAsync(session.Id, "words", 0, JournalScenario.Morning)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var resaved = await FactoryClient.SaveDraftAsync(session.Id, "words", 1, JournalScenario.Morning.AddHours(2));
+
+        // Act
+        var offline = await FactoryClient.SaveDraftAsync(session.Id, "words from an offline phone", 0, JournalScenario.Morning.AddHours(1));
+        var read = await FactoryClient.GetFromJsonAsync<SessionDto>(ApiRoutes.Sessions.GetRecord(session.Id));
+
+        // Assert
+        (await resaved.Content.ReadFromJsonAsync<DraftSaveResultDto>())!.SavedAt.ShouldBe(JournalScenario.Morning);
+        (await offline.Content.ReadFromJsonAsync<DraftSaveResultDto>())!.Outcome.ShouldBe("Won");
+        read!.RawText.ShouldBe("words from an offline phone");
+    }
+
+    [Test]
     [Property("Rule", "SES-3")]
     public async Task a_create_and_its_replay_give_the_same_text_for_the_start()
     {

@@ -11,7 +11,7 @@ public sealed record DraftSlot(string Text, int DraftRevision, int LatestRevisio
     public DraftDecision Decide(DraftSave save, bool isReplay)
     {
         if (save.Text == Text)
-            return new DraftDecision(save.BaseRevision == DraftRevision ? this with { SavedAt = LaterOf(SavedAt, save.SavedAt) } : this, DraftSaveOutcome.Unchanged, null);
+            return new DraftDecision(this, DraftSaveOutcome.Unchanged, null);
 
         if (isReplay)
             return new DraftDecision(this, DraftSaveOutcome.Unchanged, null);

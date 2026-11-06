@@ -120,7 +120,23 @@ public class DraftSlotTests
         // Assert
         decision.Outcome.ShouldBe(DraftSaveOutcome.Unchanged);
         decision.MintedRevision.ShouldBeNull();
-        decision.Next.SavedAt.ShouldBe(Noon.AddMinutes(5));
+        decision.Next.ShouldBe(slot);
+    }
+
+    [Test]
+    [Property("Rule", "SES-8")]
+    public void a_later_offline_edit_keeps_the_slot_after_a_save_of_the_same_words()
+    {
+        // Arrange
+        var slot = At(4, Noon);
+        var resaved = slot.Decide(Save("current words", 4, Noon.AddMinutes(10)), false).Next;
+
+        // Act
+        var offline = resaved.Decide(Save("offline words", 3, Noon.AddMinutes(5)), false);
+
+        // Assert
+        offline.Outcome.ShouldBe(DraftSaveOutcome.Won);
+        offline.Next.Text.ShouldBe("offline words");
     }
 
     [Test]
