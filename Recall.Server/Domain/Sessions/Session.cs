@@ -155,7 +155,8 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
     /// <exception cref="StaleMetadataVersionException">The metadata changed after the version that the client read.</exception>
     public bool SetMetadata(SessionMetadata metadata, uint metadataVersion)
     {
-        if (Activity == metadata.Activity && Moods.SequenceEqual(metadata.Moods) && UserTopics.SequenceEqual(metadata.UserTopics))
+        var isStored = Activity == metadata.Activity && Moods.SequenceEqual(metadata.Moods) && UserTopics.SequenceEqual(metadata.UserTopics);
+        if (isStored && metadataVersion != MetadataVersion)
             return false;
 
         if (metadataVersion != MetadataVersion)

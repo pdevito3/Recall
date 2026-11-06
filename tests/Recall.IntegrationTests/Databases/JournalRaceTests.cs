@@ -307,6 +307,28 @@ public class JournalRaceTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-34")]
+    public async Task a_save_of_the_stored_settings_that_a_rival_beat_after_the_load_is_refused()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        await ScopeOf(owner).SendAsync(new ChangeUserSetting.Command(Setting("Europe/Riga", 0)));
+        var pause = PauseAtQuery.After("user_settings.change.load");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var change = ScopeOf(owner, services).SendAsync(new ChangeUserSetting.Command(Setting("Europe/Riga", 1)));
+        await pause.ReachedAsync();
+        await ScopeOf(owner).SendAsync(new ChangeUserSetting.Command(Setting("Europe/Paris", 1)));
+        pause.Release();
+
+        // Assert
+        (await Should.ThrowAsync<Exception>(change)).ShouldBeOfType<StaleVersionException>();
+        var stored = await ScopeOf(owner).ExecuteDbContextAsync(db => db.UserSettings.SingleAsync());
+        stored.TimeZone.ShouldBe("Europe/Paris");
+    }
+
+    [Test]
     [Property("Rule", "SES-31")]
     public async Task a_settings_change_that_a_rival_beat_after_the_load_is_refused()
     {

@@ -49,7 +49,7 @@ public class BaseVersionRulesTests
 
     [Test]
     [Property("Rule", "SES-34")]
-    public void a_settings_change_with_the_stored_values_does_nothing_at_any_version()
+    public void a_settings_change_with_the_stored_values_from_another_version_does_nothing()
     {
         // Arrange
         var setting = NewSetting();
@@ -59,6 +59,20 @@ public class BaseVersionRulesTests
 
         // Assert
         applied.ShouldBeFalse();
+    }
+
+    [Test]
+    [Property("Rule", "SES-34")]
+    public void a_settings_change_with_the_stored_values_from_the_current_version_takes_that_version()
+    {
+        // Arrange
+        var setting = NewSetting();
+
+        // Act
+        var applied = setting.Change(null, false, true, 0u);
+
+        // Assert
+        applied.ShouldBeTrue();
     }
 
     [Test]
@@ -130,9 +144,8 @@ public class BaseVersionRulesTests
     [Test]
     [Property("Rule", "SES-34")]
     [Arguments(0u)]
-    [Arguments(1u)]
     [Arguments(9u)]
-    public void a_metadata_change_with_the_stored_values_does_nothing_at_any_version(uint sent)
+    public void a_metadata_change_with_the_stored_values_from_another_version_does_nothing(uint sent)
     {
         // Arrange
         var session = NewSession();
@@ -144,5 +157,21 @@ public class BaseVersionRulesTests
         // Assert
         applied.ShouldBeFalse();
         session.MetadataVersion.ShouldBe(1u);
+    }
+
+    [Test]
+    [Property("Rule", "SES-34")]
+    public void a_metadata_change_with_the_stored_values_from_the_current_version_takes_that_version()
+    {
+        // Arrange
+        var session = NewSession();
+        session.SetMetadata(Topics("Food"), 0u);
+
+        // Act
+        var applied = session.SetMetadata(Topics("Food"), 1u);
+
+        // Assert
+        applied.ShouldBeTrue();
+        session.MetadataVersion.ShouldBe(2u);
     }
 }

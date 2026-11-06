@@ -23,7 +23,8 @@ So these saves now send a base version, with the rules in the [sessions spec](..
 - A settings save sends the `version` of the row, and the entity calls `GuardVersion`. This is the rule of [concurrency](../backend/concurrency.md) for a PUT that replaces the fields of a form.
 - A metadata save sends `metadataVersion`. The `version` of the Session row moves on each Draft save, so it cannot be the base. An offline queue that drains a Draft save first would get a refusal for each metadata save behind it. So `metadataVersion` moves only when a metadata change applies.
 - A save from another version gets 409 and changes nothing. A refused metadata save stays out of the Draft routes, so no words go away.
-- A save with the values that the row already holds does nothing at any version, and it gets 200. So a retry after a lost reply is safe. A retry after a newer change holds other values, so it gets 409.
+- A save from another version with the values that the row already holds does nothing, and it gets 200. So a retry after a lost reply is safe. A retry after a newer change holds other values, so it gets 409.
+- A save of the stored values from the current version moves the version. If it did not, an overlap of on and off from one read could apply off as no change and then apply on, with two 200s. The cost is a row in the sync feed for a save that changes no value, and a reload for another device that holds the old version.
 - A body with no version gives 400. The `required` keyword does this, as for each other form PUT.
 - The server ignores a `savedAt` on these two routes, so the columns of the save time and the list of claims are gone.
 

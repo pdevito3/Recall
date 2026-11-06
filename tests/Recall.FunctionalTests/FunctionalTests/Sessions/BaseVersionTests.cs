@@ -289,6 +289,45 @@ public class BaseVersionTests : TestBase
 
     [Test]
     [Property("Rule", "SES-34")]
+    public async Task a_second_settings_save_from_one_read_is_refused_also_after_a_save_of_the_stored_values()
+    {
+        // Arrange
+        await SignInAsync();
+        (await SaveSettingsAsync(await SettingsAsync(), capture: false, zone: "UTC")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var read = await SettingsAsync();
+        (await SaveSettingsAsync(read, capture: false, zone: "UTC")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Act
+        var second = await SaveSettingsAsync(read, capture: true, zone: "UTC");
+        var stored = await SettingsAsync();
+
+        // Assert
+        second.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        stored.GetProperty("locationCaptureEnabled").GetBoolean().ShouldBeFalse();
+    }
+
+    [Test]
+    [Property("Rule", "SES-34")]
+    public async Task a_second_metadata_save_from_one_read_is_refused_also_after_a_save_of_the_stored_values()
+    {
+        // Arrange
+        await SignInAsync();
+        var session = await AddSessionAsync();
+        (await SaveMetadataAsync(session, "None", Food)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var read = await SessionAsync(session);
+        (await SaveMetadataAsync(read, "None", Food)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Act
+        var second = await SaveMetadataAsync(read, "None", Travel);
+        var stored = await SessionAsync(session);
+
+        // Assert
+        second.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        TopicsOf(stored).ShouldBe(Food);
+    }
+
+    [Test]
+    [Property("Rule", "SES-34")]
     public async Task a_retry_with_a_stored_zone_that_this_host_does_not_know_does_nothing_at_an_old_version()
     {
         // Arrange

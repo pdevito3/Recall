@@ -45,7 +45,7 @@ The client must do these steps:
 2. Send that value in each save. On a fresh account with no settings row, send the 0 that the read gave.
 3. Send the changes of a row one at a time and in order. Wait for the reply, and take the next base from the reply.
 4. On a 409, read the row again. Apply again only the fields that the person changed, on the new row, and send them with the new base. If the same field changed, show the new value and ask the person. Do not send the stale body again with the new base, because that brings back the old value of each other field.
-5. On a failure with no reply, send the same body again with the same base. If the first try reached the server, the reply is 200 with the stored row. If a newer change came after it, the reply is 409, so go to step 4.
+5. On a failure with no reply, send the same body again with the same base. If the first try reached the server, the reply is 200 with the stored row. If a newer change came after it, the reply is 409, so go to step 4. Two different bodies from one base cannot both get 200, so a break of step 3 gives a 409 and not a lost change.
 6. Keep the 409 and the 400 out of the Draft queue. A refused metadata save does not stop a Draft save, so send the words on their own schedule.
 
 The replies are these:

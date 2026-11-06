@@ -27,13 +27,14 @@ public class UserSetting : BaseEntity, ITenantable, IJournalOwned
 
     public static TimeZoneId ZoneOf(string? timeZone) => TimeZoneId.TryOf(timeZone) ?? Utc;
 
-    /// <returns>False when the row already holds these values, so a retry does nothing at any version.</returns>
+    /// <returns>False for a retry: the row holds these values and the client sent another version.</returns>
     /// <exception cref="StaleVersionException">The row changed after the version that the client read.</exception>
     /// <exception cref="ValidationException">The time zone is not an IANA zone, and it is not the stored zone.</exception>
     public bool Change(string? timeZone, bool locationCaptureEnabled, bool requirePeopleProposalApproval, uint version)
     {
         var zone = string.IsNullOrWhiteSpace(timeZone) ? null : timeZone;
-        if (zone == TimeZone && locationCaptureEnabled == LocationCaptureEnabled && requirePeopleProposalApproval == RequirePeopleProposalApproval)
+        var isStored = zone == TimeZone && locationCaptureEnabled == LocationCaptureEnabled && requirePeopleProposalApproval == RequirePeopleProposalApproval;
+        if (isStored && version != Version)
             return false;
 
         GuardVersion(version);
