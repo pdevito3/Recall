@@ -19,6 +19,12 @@ public static class HttpClientExtensions
             ["client_id"] = TestingWebApplicationFactory.TrustedMachineClientId,
         });
 
+    public static void SignInAsMachineClient(this HttpClient client, string clientId)
+        => client.SetFakeBearerToken(new Dictionary<string, object> { ["client_id"] = clientId });
+
+    public static void SignInAsDelegatedClient(this HttpClient client, string subject, string clientId)
+        => client.SetFakeBearerToken(new Dictionary<string, object> { ["sub"] = subject, ["azp"] = clientId });
+
     public static async Task<HttpResponseMessage> GetRequestAsync(this HttpClient client, string url)
         => await client.GetAsync(url);
 

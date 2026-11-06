@@ -2,6 +2,7 @@ namespace Recall.Server.Domain.Users.Features;
 
 using System.Diagnostics;
 using Databases;
+using Databases.Sqlite;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Resources;
@@ -42,7 +43,9 @@ public static class DeleteUser
                 return user;
             }, cancellationToken);
 
-            _logger.Here().Information("Deleted user {UserId}", user.Id);
+            var scrubbed = await WalScrub.TryTruncateAsync(dbContext.Database.GetConnectionString()!);
+            Activity.Current?.SetTag("app.user.wal_scrubbed", scrubbed);
+            _logger.Here().Information("Deleted user {UserId}, WAL scrubbed {WalScrubbed}", user.Id, scrubbed);
         }
     }
 }

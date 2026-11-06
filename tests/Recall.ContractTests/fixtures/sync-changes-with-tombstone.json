@@ -1,0 +1,15 @@
+{
+  "cursor": "2",
+  "hasMore": false,
+  "sessions": [],
+  "people": [],
+  "corrections": [],
+  "settings": null,
+  "tombstones": [
+    {
+      "entityType": "Session",
+      "id": "ses_00000000000000000000000000000003",
+      "clientSessionId": "client-session-1"
+    }
+  ]
+}

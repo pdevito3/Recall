@@ -44,7 +44,12 @@ public class MigrationHostedService<TDbContext>(
             var context = scope.ServiceProvider.GetRequiredService<TDbContext>();
             await context.Database.MigrateAsync(cancellationToken);
 
-            _logger.Here().Information("Migrations complete for {DbContext}", typeof(TDbContext).Name);
+            // A kill between the commit of a delete and its scrub leaves the deleted words in the WAL. This runs before Kestrel binds.
+            var scrubbed = await WalScrub.TryTruncateAsync(connectionString);
+            if (!scrubbed)
+                _logger.Here().Warning("Could not truncate the WAL at startup, so deleted words can stay in the WAL");
+
+            _logger.Here().Information("Migrations complete for {DbContext}, WAL scrubbed {WalScrubbed}", typeof(TDbContext).Name, scrubbed);
         }
         catch (Exception ex)
         {

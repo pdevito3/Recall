@@ -5,6 +5,11 @@ using Recall.Server.Auth.Entities;
 using Recall.Server.Databases;
 using Recall.Server.Domain.Agents;
 using Recall.Server.Domain.AuditEntries;
+using Recall.Server.Domain.Corrections;
+using Recall.Server.Domain.People;
+using Recall.Server.Domain.Sessions;
+using Recall.Server.Domain.Sessions.Metadata;
+using Recall.Server.Domain.Sync;
 using Recall.Server.Domain.Users;
 using Recall.Server.Exceptions;
 using Recall.SharedTestHelpers.EntityGraphs;
@@ -33,6 +38,14 @@ public class StringColumnLengthTests
         ["tenants.name"] = new("name", Text, v => TestGraph.Start(out _).AddTenant(out _, t => t.Name = v)),
         ["agents.name"] = new("name", Text, v => TestGraph.Start(out _).AddTenant(out _).AddAgent(out _, a => a.Name = v)),
         ["agents.client_id"] = new("clientId", Text, v => TestGraph.Start(out _).AddTenant(out _).AddAgent(out _, a => a.ClientId = v)),
+        ["people.label"] = new("label", Text, v => Person.Create("ten_1", "usr_1", v)),
+        ["corrections.canonical_term"] = new("canonicalTerm", Text, v => Correction.Create("ten_1", "usr_1", v, [], false)),
+        ["sessions.client_session_id"] = new("clientSessionId", Text, v => Session.Create("ten_1", "usr_1", v, DateTimeOffset.UnixEpoch, null, DateTimeOffset.UnixEpoch)),
+        ["sessions.activity"] = new("activity", Text, v => SessionMetadata.Of(v, [], [])),
+        ["sessions.raw_text"] = new("text", Text, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)),
+        ["sessions.cleaned_text"] = new("text", Text, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)),
+        ["raw_revisions.text"] = new("text", Text, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)),
+        ["cleaned_revisions.text"] = new("text", Text, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)),
         // new-feature:caller-columns
     };
 
@@ -46,6 +59,9 @@ public class StringColumnLengthTests
         ["auth_sessions.client_kind"] = SessionKindText.All,
         ["auth_sessions.revoked_reason"] = RevokeReasonText.All,
         ["auth_login_attempts.client_kind"] = SessionKindText.All,
+        ["sessions.cleanup_run"] = Enum.GetNames<CleanupRunState>(),
+        ["sync_changes.entity_type"] = Enum.GetNames<SyncEntityType>(),
+        ["user_settings.time_zone"] = TimeZoneInfo.GetSystemTimeZones().Where(zone => zone.HasIanaId).Select(zone => zone.Id).ToList(),
         // new-feature:fixed-option-columns
     };
 
@@ -78,6 +94,16 @@ public class StringColumnLengthTests
         "auth_sessions.login_mode",
         "auth_sessions.refresh_family_hash",
         "auth_sessions.refresh_hash",
+        "corrections.mishearings",
+        "sessions.ai_topics",
+        "sessions.mentioned_person_ids",
+        "sessions.moods",
+        "sessions.preview",
+        "sessions.synopsis",
+        "sessions.user_topics",
+        "sync_changes.client_session_id",
+        "sync_changes.entity_id",
+        "sync_changes.user_id",
     ];
 
     [Test]
