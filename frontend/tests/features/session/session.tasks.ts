@@ -95,6 +95,30 @@ export function sessionPage(page: Page) {
       await checked
     },
 
+    /** Holds the 401 until the logout answers, and the login until the check that the 401 starts answers, so that each run has the same order. */
+    async followAndSignOutBeforeA401(link: Locator, apiPath: string) {
+      let answerThe401!: () => void
+      const logoutAnswered = new Promise<void>((resolve) => {
+        answerThe401 = resolve
+      })
+      const logoutOpensThe401 = page
+        .waitForResponse((r) => r.request().method() === 'POST' && new URL(r.url()).pathname === authPaths.logout)
+        .then(answerThe401)
+      const checked = answered(authPaths.me)
+      await page.route((url) => url.pathname === apiPath, async (route) => {
+        await logoutAnswered
+        await route.fulfill({ status: 401 })
+      })
+      await page.route((url) => url.pathname === authPaths.login, async (route) => {
+        await checked
+        await route.fallback()
+      })
+
+      await link.click()
+      // A click waits for the navigation that it starts, and the login waits for this check, so the 401 cannot wait for the click.
+      await Promise.all([at.logout.click(), logoutOpensThe401, checked])
+    },
+
     async openWhileTheCheckFails(path: string) {
       await page.goto(path)
       await expect(at.checkFailed).toBeVisible()

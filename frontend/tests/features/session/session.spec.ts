@@ -51,6 +51,23 @@ test.describe('a session that ends while the page is open', () => {
   })
 })
 
+test.describe('a sign-out with a call of the API that answers 401 after it', () => {
+  test('opens the signed-out page, and starts no login with a return URL', async ({ page, api }) => {
+    const session = sessionPage(page)
+    await session.open('/about')
+
+    api.mock(
+      authApi.loginOpens(),
+      { method: 'post', path: authPaths.logout, status: 204 },
+      { method: 'get', path: authPaths.me, status: 204 },
+    )
+    await session.followAndSignOutBeforeA401(session.at.homeLink, usersPaths.current)
+
+    await expect.poll(() => page.url(), { timeout: 10000 }).toContain('signedOut=1')
+    expect(api.all('get', authPaths.login).filter((request) => request.query.has('returnUrl'))).toHaveLength(0)
+  })
+})
+
 test.describe('a call of the API that answers 401 while the session lives', () => {
   test('keeps the page, does not go to the login, and shows a toast', async ({ page, api }) => {
     const session = sessionPage(page)
