@@ -13,3 +13,4 @@ artifacts
 **/playwright-report
 **/.vitest
 .env
+recall-backup*

@@ -31,7 +31,7 @@ To use another port, add `RECALL_PORT=8090` to `.env`. See [Connect a login prov
 
 **A run with no `/data` mount loses data.** If you start the image with `docker run` and no `-v` for `/data`, Docker makes an anonymous volume for that one container. A new container does not get that volume, so an upgrade starts with an empty journal. `docker run --rm` deletes the volume when the container stops.
 
-`/data` must be on a local disk of the machine. The Server refuses to start on a network file system, on a shared folder, and on a FUSE file system other than `fuseblk`, because SQLite WAL is safe only on a local disk.
+`/data` must be on a local disk of the machine. The Server refuses to start on a network file system, on a folder that a hypervisor or Docker Desktop shares from the host, and on a FUSE file system other than `fuseblk`, because SQLite WAL is safe only on a local disk.
 
 **On Unraid, the path must not be under `/mnt/user`.** It is a FUSE file system. Use a path such as `/mnt/cache/appdata/recall` or `/mnt/disk1/appdata/recall`.
 
@@ -64,6 +64,8 @@ docker compose stop
 docker run --rm -v recall_recall-data:/data:ro -v /volume1/docker/recall:/new alpine sh -c 'cp -a /data/. /new/ && chown -R 1026:100 /new'
 ```
 
+After you see your journal in the folder, remove the old volume with `docker volume rm recall_recall-data`. Then no command can use the old copy by mistake.
+
 Do not set `PUID` or `PGID` with the Docker volume. The volume belongs to user `1654`, so another user cannot write to it. The Server then cannot start, and the log says `The data directory /data is not writable`.
 
 ## Connect a login provider
@@ -72,10 +74,10 @@ Recall has no passwords. A person signs in with your OpenID Connect provider, fo
 
 1. At the provider, make a confidential client that uses the authorization code flow. In Keycloak, turn on **Client authentication** and **Standard flow**.
 2. Add the callback URL as a redirect URI of the client. The URL is `http://<address of this machine>:8080/auth/oidc/callback`, and the login page of Recall shows it. Do not use a wildcard.
-3. Make the file `.env`, and edit the values:
+3. Make the file `.env`, and edit the values. If `.env` exists, this command keeps it, so copy the lines of the provider from `.env.example` into it.
 
    ```bash
-   cp .env.example .env
+   cp -n .env.example .env
    ```
 
    `Auth__Providers__0__Issuer` is the issuer URL. In Keycloak, it is `https://<keycloak address>/realms/<realm>`. The browser and the container must both reach the provider at this URL. So do not use `localhost`, because in the container `localhost` is the container. For an issuer on `http`, remove the `#` in front of `Auth__Providers__0__AllowHttp=true`. Put a value that has a `$` or a `#` in single quotes.
@@ -84,7 +86,20 @@ Recall has no passwords. A person signs in with your OpenID Connect provider, fo
 5. **Prepare the first login.** The first person who signs in becomes the Owner, an Admin of the journal. If your provider has open registration, a stranger who registers and signs in first owns your journal. Before the first login, turn off open registration, or limit the client to your own account.
 6. Open Recall, and sign in.
 
-After the first login, Recall refuses each other person until you set `Auth__OpenSignup=true`. To recover a lost Owner, see [docs/authentication.md](authentication.md#recover-a-lost-owner). A private CA and the other settings are in [Login providers](authentication.md#login-providers). `compose.yaml` passes only the names in its `environment` list, so add a line there for each other setting that you use.
+After the first login, Recall refuses each other person until you set `Auth__OpenSignup=true`. To recover a lost Owner, see [docs/authentication.md](authentication.md#recover-a-lost-owner). The other settings are in [Login providers](authentication.md#login-providers).
+
+`compose.yaml` passes only the names in its `environment` list. To pass another setting, make the file `compose.override.yaml`. Do not edit `compose.yaml`, because a later `git pull` can then stop. For example, this file gives a private CA to the Server, and user `1654` must be able to read `ca.pem`:
+
+```yaml
+services:
+  recall:
+    environment:
+      - Auth__Providers__0__CaCertificatePath=/certs/ca.pem
+    volumes:
+      - ./ca.pem:/certs/ca.pem:ro
+```
+
+Compose reads this file when you give no `-f` option. With `compose.tls.yaml`, also give `-f compose.override.yaml`.
 
 ## Turn on HTTPS
 
@@ -103,14 +118,16 @@ This option needs no open port and no domain of your own. Tailscale gets a real 
    tailscale serve --bg 8080
    ```
 
+   If you set `RECALL_PORT`, use that port.
+
 3. Add `https://<machine>.<tailnet>.ts.net/auth/oidc/callback` as a redirect URI at the provider.
 4. Open `https://<machine>.<tailnet>.ts.net`.
 
-Port 8080 stays open on your LAN. To close it, add `RECALL_PORT=127.0.0.1:8080` to `.env`, and run `docker compose up -d`. Tailscale serve still reaches Recall.
+Port 8080 stays open on your LAN. To close it, add `RECALL_PORT=127.0.0.1:8080` to `.env`, with your own port if you use another port, and run `docker compose up -d`. Tailscale serve still reaches Recall.
 
 ### Caddy
 
-`compose.tls.yaml` adds a Caddy container in front of Recall, and it closes the plain HTTP port of Recall. This option needs a domain name that points to the machine. Ports 80 and 443 must be open from the internet, so that Caddy can get a certificate.
+`compose.tls.yaml` adds a Caddy container in front of Recall, and it closes the plain HTTP port of Recall. This option needs a domain name that points to the machine.
 
 1. Add the address to `.env`:
 
@@ -161,21 +178,24 @@ A probe writes to `/data/files` and flushes it to the disk, at most one time in 
 
 ## Back up and restore
 
-A backup is a copy of `/data` while Recall is stopped. The copy holds the journal and the keys, so keep it private. These commands use the Docker volume. They write `recall-backup.tar.gz` in the current folder, and only you can read that file. A failed backup keeps the file of the last backup, and it leaves `recall-backup.new.tar.gz`.
+A backup is a copy of `/data` while Recall is stopped. The copy holds the journal and the keys, so keep it private. These commands use the Docker volume. They write `recall-backup.tar.gz` in the current folder, and only you can read that file. If the commands do not print `The backup is complete`, the backup failed. The file of the last backup then stays, and the failed backup stays as `recall-backup.new.tar.gz`.
 
 To back up:
 
 ```bash
 docker compose stop
-(umask 077; docker run --rm -v recall_recall-data:/data:ro alpine tar -C /data -czf - . > recall-backup.new.tar.gz)
-tar -tzf recall-backup.new.tar.gz | grep -q '^./recall.db$' && mv recall-backup.new.tar.gz recall-backup.tar.gz
+(umask 077; docker run --rm -v recall_recall-data:/data:ro alpine tar -C /data -czf - . > recall-backup.new.tar.gz) &&
+  tar -tzf recall-backup.new.tar.gz > recall-backup.list &&
+  grep -qx './recall.db' recall-backup.list &&
+  mv recall-backup.new.tar.gz recall-backup.tar.gz &&
+  echo 'The backup is complete'
 docker compose start
 ```
 
 To restore on a new container, first examine the file. This command must print `The backup has a database`. Do not continue if it does not, because the next commands delete the volume.
 
 ```bash
-tar -tzf recall-backup.tar.gz | grep -q '^./recall.db$' && echo 'The backup has a database'
+tar -tzf recall-backup.tar.gz > recall-backup.list && grep -qx './recall.db' recall-backup.list && echo 'The backup has a database'
 ```
 
 Then run these commands:
@@ -208,8 +228,8 @@ After the first release, you can use the published image in place of a build. Ru
 
 | What you see | Cause | What to do |
 |---|---|---|
-| `docker compose ps` shows `Restarting`, and `docker compose logs` says `is on the mount` | `/data` is on a network, FUSE, or shared folder file system | Move `/data` to a local disk |
-| `docker compose ps` shows `Restarting`, and the log says `is not writable` | The user of the container cannot write to `/data` | Set `PUID` and `PGID` to the owner of the folder |
+| `docker compose ps` shows `Restarting`, and `docker compose logs` says `is on the mount` | `/data` is on a file system that the Server refuses. See [Keep your data](#keep-your-data) | Move `/data` to a local disk |
+| `docker compose ps` shows `Restarting`, and the log says `is not writable` | The user of the container cannot write to `/data` | With a folder, set `PUID` and `PGID` to its owner. With the Docker volume, remove `PUID` and `PGID` |
 | `docker compose ps` shows `Restarting`, and the log names `Auth:Providers:0` | A setting of the provider is missing or wrong | Correct the value in `.env`, and run `docker compose up -d` |
 | The provider says that the redirect URI is not valid | The callback URL of this address is not registered, or a proxy changed `Host` | Register the URL from `/auth/status`, and see [Another proxy](#another-proxy) |
 | The page says `This server does not accept new people` | The journal has an Owner, and signup is closed | See [First login and the Owner](authentication.md#first-login-and-the-owner) |
