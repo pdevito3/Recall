@@ -41,19 +41,35 @@ public sealed class KeyRingWatch(
 
         var keysAreUnreadable = protectedKeys.Any(key => keys.Read(key) is ProtectedKeyRead.Unreadable);
         var markerIsUnreadable = marker is not null && !Reads(marker.ProtectedValue);
-        status.RingChanged = keysAreUnreadable || markerIsUnreadable;
+        status.RingChanged = keysAreUnreadable || (markerIsUnreadable && protectedKeys.Count == 0);
 
-        if (marker is null)
-            await dbContext.KeyRingMarkers.AddAsync(new KeyRingMarker { ProtectedValue = _markers.Protect(MarkerWord) }, cancellationToken);
-        else if (markerIsUnreadable && !keysAreUnreadable)
-            marker.ProtectedValue = _markers.Protect(MarkerWord);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        if ((marker is null || (markerIsUnreadable && !keysAreUnreadable)) && NewMarker() is { } newMarker)
+        {
+            if (marker is null)
+                await dbContext.KeyRingMarkers.AddAsync(new KeyRingMarker { ProtectedValue = newMarker }, cancellationToken);
+            else
+                marker.ProtectedValue = newMarker;
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
 
         if (status.Warning is { } warning)
             _logger.Here().Warning("{KeyRingWarning}", warning);
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    /// <summary>A key folder that holds no ring and takes no write gives no marker. The status already says so, and the journal must still start.</summary>
+    private string? NewMarker()
+    {
+        try
+        {
+            return _markers.Protect(MarkerWord);
+        }
+        catch (CryptographicException)
+        {
+            return null;
+        }
+    }
 
     private bool Reads(string protectedValue)
     {

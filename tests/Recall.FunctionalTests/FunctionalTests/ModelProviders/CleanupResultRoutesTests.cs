@@ -3,6 +3,7 @@ namespace Recall.FunctionalTests.FunctionalTests.ModelProviders;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Recall.FunctionalTests.FunctionalTests.Sessions;
 using Recall.Server.Domain.People.Dtos;
 using Recall.Server.Domain.Sessions;
@@ -175,6 +176,46 @@ public class CleanupResultRoutesTests : TestBase
 
         // Assert
         answer.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Test]
+    public async Task two_proposals_of_one_name_give_one_person_and_only_a_request_gives_a_second()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        var reply = ReplyWith("I had lunch with Sam.", people: ["Sam"]);
+        var first = await CleanedSessionAsync(scenario, reply);
+        var second = await CleanedSessionAsync(scenario, reply);
+        var third = await CleanedSessionAsync(scenario, reply);
+
+        // Act
+        await PostAsync(ApiRoutes.Sessions.RespondToPersonProposal(first.Id), new { label = "Sam", approve = true, createNew = false });
+        await PostAsync(ApiRoutes.Sessions.RespondToPersonProposal(second.Id), new { label = "Sam", approve = true, createNew = false });
+        var afterTwo = await ExecuteDbContextAsync(db => db.People.IgnoreQueryFilters().CountAsync(person => person.Label == "Sam" && person.UserId == scenario.Member.Id));
+        await PostAsync(ApiRoutes.Sessions.RespondToPersonProposal(third.Id), new { label = "Sam", approve = true, createNew = true });
+        var afterRequest = await ExecuteDbContextAsync(db => db.People.IgnoreQueryFilters().CountAsync(person => person.Label == "Sam" && person.UserId == scenario.Member.Id));
+
+        // Assert
+        afterTwo.ShouldBe(1);
+        afterRequest.ShouldBe(2);
+    }
+
+    [Test]
+    public async Task a_run_whose_stored_form_is_too_long_adds_no_person()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        var settings = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { locationCaptureEnabled = false, requirePeopleProposalApproval = false, version = 0 });
+        settings.EnsureSuccessStatusCode();
+        var words = string.Concat(Enumerable.Repeat("Quinn. ", Session.DraftMaxLength / 100));
+
+        // Act
+        var session = await CleanedSessionAsync(scenario, ReplyWith(words, people: ["Quinn"]));
+        var people = await ExecuteDbContextAsync(db => db.People.IgnoreQueryFilters().CountAsync(person => person.Label == "Quinn" && person.UserId == scenario.Member.Id));
+
+        // Assert
+        session.CleanupFailure.ShouldBe(nameof(CleanupFailure.BadModelOutput));
+        people.ShouldBe(0);
     }
 
     [Test]

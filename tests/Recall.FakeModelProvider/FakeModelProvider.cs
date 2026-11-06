@@ -24,6 +24,9 @@ public enum FakeMode
     /// <summary>Waits for <see cref="FakeBehavior.DelayMs"/> before the answer. A closed connection ends the wait.</summary>
     Hold,
 
+    /// <summary>An Anthropic stream that sends its first events and then nothing, as a connection whose route dropped does.</summary>
+    StallMidStream,
+
     /// <summary>A 200 with a cut answer: <c>max_tokens</c> or <c>length</c>.</summary>
     Truncate,
 
@@ -257,6 +260,12 @@ public sealed class FakeModelProvider : IAsyncDisposable
             },
         });
         await WriteEventAsync(context, "content_block_start", new { type = "content_block_start", index = 0, content_block = new { type = "text", text = string.Empty } });
+        if (Behavior.Mode == FakeMode.StallMidStream)
+        {
+            await Task.Delay(Timeout.Infinite, context.RequestAborted);
+            return;
+        }
+
         if (Behavior.Mode == FakeMode.MidStreamError)
         {
             await WriteEventAsync(context, "error", new { type = "error", error = new { type = "overloaded_error", message = $"Stopped at: {requestText} with key {_apiKey}" } });

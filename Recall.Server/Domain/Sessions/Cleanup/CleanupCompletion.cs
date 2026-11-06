@@ -9,7 +9,7 @@ using System.Text;
 
 /// <summary>
 /// Turns an output into what a Session stores, the same way for a model on the server and a model on a device. It reads the
-/// rows of the owner. With approval off, it adds a Person for a new name, and the caller saves the Person.
+/// rows of the owner. With approval off, it adds a Person for a new name to a result that fits, and the caller saves the Person.
 /// </summary>
 public sealed class CleanupCompletion(AppDbContext dbContext)
 {
@@ -32,6 +32,7 @@ public sealed class CleanupCompletion(AppDbContext dbContext)
         var names = output.PersonNames.Where(name => PeopleTagSpans.Occurrences(plain, name).Count > 0).ToList();
 
         IReadOnlyList<PersonProposal> proposals = [];
+        var added = new List<Person>();
         if (approvalIsOn)
         {
             proposals = names.Select(name => new PersonProposal(name, MatchOf(people, name)?.Id)).ToList();
@@ -41,27 +42,28 @@ public sealed class CleanupCompletion(AppDbContext dbContext)
             var spans = new List<MentionSpan>();
             foreach (var name in names)
             {
-                var person = MatchOf(people, name) ?? await AddPersonAsync(session, name, cancellationToken);
+                var person = MatchOf(people.Concat(added), name);
+                if (person is null)
+                {
+                    person = Person.Create(session.TenantId, session.UserId, name);
+                    added.Add(person);
+                }
+
                 spans.AddRange(PeopleTagSpans.Spans(plain, name, person.Id, person.Label));
             }
 
             cleaned = MentionInsertion.Insert(cleaned, spans);
         }
 
-        return cleaned.Length > Session.DraftMaxLength
-            ? null
-            : new CleanupOutcome(cleaned, output.Synopsis, output.TopicSuggestions, output.MoodSuggestions, proposals);
+        if (cleaned.Length > Session.DraftMaxLength)
+            return null;
+
+        await dbContext.People.AddRangeAsync(added, cancellationToken);
+        return new CleanupOutcome(cleaned, output.Synopsis, output.TopicSuggestions, output.MoodSuggestions, proposals);
     }
 
-    private static Person? MatchOf(IEnumerable<Person> people, string name)
+    public static Person? MatchOf(IEnumerable<Person> people, string name)
         => people.FirstOrDefault(person => person.Label.Equals(name.Trim(), StringComparison.OrdinalIgnoreCase));
-
-    private async Task<Person> AddPersonAsync(Session session, string name, CancellationToken cancellationToken)
-    {
-        var person = Person.Create(session.TenantId, session.UserId, name);
-        await dbContext.People.AddAsync(person, cancellationToken);
-        return person;
-    }
 
     /// <summary>Each hard-replace mishearing becomes its term, whole word and in any case. Raw is not an input here.</summary>
     public static string WithHardReplacements(string markdown, IEnumerable<Correction> corrections)

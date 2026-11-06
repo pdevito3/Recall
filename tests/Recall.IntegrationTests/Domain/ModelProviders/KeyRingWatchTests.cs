@@ -110,6 +110,26 @@ public class KeyRingWatchTests
     }
 
     [Test]
+    public async Task keys_entered_again_after_a_restore_clear_the_warning_at_the_next_start()
+    {
+        // Arrange
+        await using var database = new SqliteTestDatabase();
+        var services = await DatabaseAsync(database);
+        var folder = Directory.CreateTempSubdirectory("recall-data");
+        await StartWatchAsync(services, folder, NewRing());
+        var newRing = NewRing();
+        await ConnectProviderUnderAsync(services, newRing);
+
+        // Act
+        var nextStart = await StartWatchAsync(services, folder, newRing);
+        var startAfter = await StartWatchAsync(services, folder, newRing);
+
+        // Assert
+        nextStart.Warning.ShouldBeNull();
+        startAfter.Warning.ShouldBeNull();
+    }
+
+    [Test]
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     public async Task a_key_folder_that_takes_no_write_warns()
     {
@@ -121,10 +141,10 @@ public class KeyRingWatchTests
         File.SetUnixFileMode(keys.FullName, UnixFileMode.UserRead | UnixFileMode.UserExecute);
         KeyRingStatus status;
 
-        // Act
+        // Act: the ring of the server lives in this folder, so it holds no key and cannot make one.
         try
         {
-            status = await StartWatchAsync(services, folder, NewRing());
+            status = await StartWatchAsync(services, folder, DataProtectionProvider.Create(keys));
         }
         finally
         {

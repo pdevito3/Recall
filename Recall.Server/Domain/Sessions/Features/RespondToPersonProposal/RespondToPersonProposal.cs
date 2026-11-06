@@ -1,6 +1,7 @@
 namespace Recall.Server.Domain.Sessions.Features;
 
 using System.Diagnostics;
+using Cleanup;
 using Databases;
 using Dtos;
 using Mappings;
@@ -56,14 +57,17 @@ public static class RespondToPersonProposal
                     .GetById(chosen, cancellationToken);
             }
 
-            // A person can delete the match after the Cleanup, and the words of the proposal still name someone.
-            var match = dto.CreateNew || proposal.MatchedPersonId is null
-                ? null
-                : await dbContext.People
+            // The directory can change after the Cleanup: a person can delete the match, or an answer to the proposal of
+            // another Session can add this name. So the name decides now, and only an explicit request adds a second Person.
+            if (!dto.CreateNew)
+            {
+                var people = await dbContext.People.AsNoTracking()
                     .TagWithOperationCallSite("sessions.respond_to_person_proposal.match")
-                    .FirstOrDefaultAsync(person => person.Id == proposal.MatchedPersonId, cancellationToken);
-            if (match is not null)
-                return match;
+                    .ToListAsync(cancellationToken);
+                var match = people.FirstOrDefault(person => person.Id == proposal.MatchedPersonId) ?? CleanupCompletion.MatchOf(people, proposal.Label);
+                if (match is not null)
+                    return match;
+            }
 
             var person = Person.Create(session.TenantId, session.UserId, proposal.Label);
             await dbContext.People.AddAsync(person, cancellationToken);

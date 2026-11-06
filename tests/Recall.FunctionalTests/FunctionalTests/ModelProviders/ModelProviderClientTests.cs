@@ -80,6 +80,41 @@ public class ModelProviderClientTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-37")]
+    public async Task an_anthropic_stream_that_stalls_after_its_first_events_ends_at_the_call_limit()
+    {
+        // Arrange
+        var key = CleanupScenario.NewKey();
+        await using var fake = await FakeWithAsync(key, new FakeBehavior { Mode = FakeMode.StallMidStream });
+        var factory = TestingWebApplicationFactory.Instance.Services.GetRequiredService<IHttpClientFactory>();
+        var client = new AnthropicModelClient(factory) { CallLimit = TimeSpan.FromSeconds(2) };
+
+        // Act
+        var reply = await client.CompleteAsync(EndpointOf(fake, ModelProviderKind.Anthropic, key), FakeModelProvider.ModelId, Instructions, "some words", CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(30));
+
+        // Assert
+        FailureOf(reply).Kind.ShouldBe(ProviderFailureKind.Unavailable);
+    }
+
+    [Test]
+    [Property("Rule", "SES-37")]
+    public async Task a_stop_of_the_host_during_a_stalled_stream_is_a_cancel_and_no_failure_of_the_provider()
+    {
+        // Arrange
+        var key = CleanupScenario.NewKey();
+        await using var fake = await FakeWithAsync(key, new FakeBehavior { Mode = FakeMode.StallMidStream });
+        using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+
+        // Act
+        var call = () => Client.CompleteAsync(EndpointOf(fake, ModelProviderKind.Anthropic, key), FakeModelProvider.ModelId, Instructions, "some words", stop.Token)
+            .WaitAsync(TimeSpan.FromSeconds(30));
+
+        // Assert
+        await call.ShouldThrowAsync<OperationCanceledException>();
+    }
+
+    [Test]
     public async Task an_anthropic_request_sends_the_cap_of_the_model_and_no_temperature()
     {
         // Arrange

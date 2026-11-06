@@ -18,6 +18,7 @@ export const modelProviders = (page: Page) => ({
   text: (words: string) => page.getByText(words),
   pageOverflow: () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
   runCleanup: page.getByRole('button', { name: /^Run Cleanup/ }),
+  tagPerson: (label: string) => page.getByRole('button', { name: `Tag ${label}`, exact: true }),
   cleanupRunning: page.getByRole('status').filter({ hasText: 'You can close this page' }),
   cleanupRefused: (text: string) => page.getByRole('alert').filter({ hasText: text }),
   cleanupFailure: (text: string) => page.getByRole('alert').filter({ hasText: text }),

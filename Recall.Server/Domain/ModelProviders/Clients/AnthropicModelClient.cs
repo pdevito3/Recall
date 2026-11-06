@@ -18,20 +18,23 @@ public sealed class AnthropicModelClient(IHttpClientFactory httpClientFactory)
 
     private const int CharactersPerTokenAtMost = 3;
 
+    /// <summary>The limit of one call with its whole stream. The timeout of the SDK ends at the headers.</summary>
+    public TimeSpan CallLimit { get; init; } = ModelProviderHttp.CallLimit;
+
     public async Task<ProviderReply<IReadOnlyList<ProviderModel>>> ListModelsAsync(ModelEndpoint endpoint, CancellationToken cancellationToken)
-        => await GuardedAsync<IReadOnlyList<ProviderModel>>(endpoint, async client =>
+        => await GuardedAsync<IReadOnlyList<ProviderModel>>(endpoint, async (client, limit) =>
         {
             var models = new List<ProviderModel>();
-            var page = await client.Models.List(cancellationToken: cancellationToken);
-            await foreach (var model in page.Paginate(cancellationToken))
+            var page = await client.Models.List(cancellationToken: limit);
+            await foreach (var model in page.Paginate(limit))
                 models.Add(new ProviderModel(model.ID, model.DisplayName));
             return models;
         }, cancellationToken);
 
     public async Task<ProviderReply<string>> CompleteAsync(ModelEndpoint endpoint, string model, string instructions, string text, CancellationToken cancellationToken)
-        => await GuardedAsync<string>(endpoint, async client =>
+        => await GuardedAsync<string>(endpoint, async (client, limit) =>
         {
-            var info = await client.Models.Retrieve(new ModelRetrieveParams { ModelID = model }, cancellationToken);
+            var info = await client.Models.Retrieve(new ModelRetrieveParams { ModelID = model }, limit);
             var parameters = new MessageCreateParams
             {
                 Model = model,
@@ -40,7 +43,7 @@ public sealed class AnthropicModelClient(IHttpClientFactory httpClientFactory)
                 Messages = [new UserMessageParam { Content = text }],
             };
 
-            var message = await client.Messages.CreateStreaming(parameters, cancellationToken).Aggregate();
+            var message = await client.Messages.CreateStreaming(parameters, limit).Aggregate();
             return TextOf(message);
         }, cancellationToken);
 
@@ -61,13 +64,15 @@ public sealed class AnthropicModelClient(IHttpClientFactory httpClientFactory)
         return text.Length > 0 ? text : null;
     }
 
-    private async Task<ProviderReply<T>> GuardedAsync<T>(ModelEndpoint endpoint, Func<AnthropicClient, Task<T?>> call, CancellationToken cancellationToken)
+    private async Task<ProviderReply<T>> GuardedAsync<T>(ModelEndpoint endpoint, Func<AnthropicClient, CancellationToken, Task<T?>> call, CancellationToken cancellationToken)
         where T : class
     {
         using var client = ClientFor(endpoint);
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        limit.CancelAfter(CallLimit);
         try
         {
-            return await call(client) is { } value
+            return await call(client, limit.Token) is { } value
                 ? new ProviderReply<T>.Answered(value)
                 : new ProviderReply<T>.Failed(ProviderFailureText.Unusable());
         }
@@ -75,6 +80,10 @@ public sealed class AnthropicModelClient(IHttpClientFactory httpClientFactory)
         {
             // A stop of the host returns the lease, so this is no failure of the provider, and the SDK can wrap it.
             throw new OperationCanceledException(cancellationToken);
+        }
+        catch (Exception) when (limit.IsCancellationRequested)
+        {
+            return new ProviderReply<T>.Failed(ProviderFailureText.NoAnswer());
         }
         catch (AnthropicApiException fault)
         {

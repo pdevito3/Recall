@@ -32,7 +32,9 @@ public class ModelProvider : BaseEntity, ITenantable
     [NotSensitive] public string? BaseUrl { get; private set; }
 
     /// <summary>The API key under the key ring. Only <see cref="ApiKeyProtector"/> reads it.</summary>
-    [Sensitive] public string? ProtectedApiKey { get; private set; }
+    [Sensitive]
+    [NotRecorded("A key that a person deletes or replaces must not stay in an audit entry beside the key ring in a backup.")]
+    public string? ProtectedApiKey { get; private set; }
 
     /// <summary>A model from the list of the provider. It is null until the Admin picks one.</summary>
     [NotSensitive] public string? Model { get; private set; }
@@ -49,12 +51,14 @@ public class ModelProvider : BaseEntity, ITenantable
         return provider;
     }
 
-    /// <summary>A null key keeps the stored key, so an edit of the name needs no key.</summary>
+    /// <summary>A null key keeps the stored key, so an edit of the name needs no key. A new address needs the key again, so a stored key never goes to an address that the person who entered it did not see.</summary>
     public void Update(string name, string? baseUrl, string? protectedApiKey, string? model, uint version)
     {
         GuardVersion(version);
         SetName(name);
+        var addressWas = BaseUrl;
         SetBaseUrl(baseUrl);
+        ValidationException.Must(BaseUrl == addressWas || ProtectedApiKey is null || protectedApiKey is not null, ApiKeyField, "Please enter the API key again for the new base URL.");
         ProtectedApiKey = protectedApiKey ?? ProtectedApiKey;
         RequireKey();
         SetModel(model);

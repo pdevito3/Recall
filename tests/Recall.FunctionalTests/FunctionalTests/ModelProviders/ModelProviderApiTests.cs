@@ -112,6 +112,52 @@ public class ModelProviderApiTests : TestBase
         protectedAfter.ShouldBeNull();
     }
 
+    [Test]
+    public async Task no_audit_entry_holds_a_form_of_the_key_and_a_change_of_key_is_recorded()
+    {
+        // Arrange
+        var (fake, key) = await StartAdminAsync();
+        await using var _ = fake;
+        var provider = await CleanupScenario.ConnectAsync(FactoryClient, ModelProviderKind.Anthropic, fake.AnthropicBaseUrl, key);
+        var firstProtected = (await JournalKeyOfAsync(provider.Id)).ShouldNotBeNull();
+
+        // Act
+        var replaced = await FactoryClient.PutAsJsonAsync(ApiRoutes.ModelProviders.GetRecord(provider.Id), new { name = provider.Name, baseUrl = provider.BaseUrl, apiKey = key, version = provider.Version });
+        replaced.StatusCode.ShouldBe(HttpStatusCode.OK, await replaced.Content.ReadAsStringAsync());
+        var secondProtected = (await JournalKeyOfAsync(provider.Id)).ShouldNotBeNull();
+        (await FactoryClient.DeleteAsync(ApiRoutes.ModelProviders.GetRecord(provider.Id))).EnsureSuccessStatusCode();
+        var entries = await ExecuteDbContextAsync(db => db.AuditEntries.IgnoreQueryFilters()
+            .Where(entry => entry.RootId == provider.Id)
+            .ToListAsync());
+
+        // Assert
+        var text = string.Join("\n", entries.Select(entry => entry.Data));
+        entries.ShouldContain(entry => entry.Action == "model_provider_key_changed");
+        text.ShouldNotContain(firstProtected);
+        text.ShouldNotContain(secondProtected);
+        text.ShouldNotContain(nameof(ModelProvider.ProtectedApiKey));
+    }
+
+    [Test]
+    public async Task a_new_base_url_needs_the_key_again()
+    {
+        // Arrange
+        var (fake, key) = await StartAdminAsync();
+        await using var _ = fake;
+        var provider = await CleanupScenario.ConnectAsync(FactoryClient, ModelProviderKind.OpenAiCompatible, fake.CompatibleBaseUrl, key);
+        const string other = "https://elsewhere.example/v1";
+
+        // Act
+        var noKey = await FactoryClient.PutAsJsonAsync(ApiRoutes.ModelProviders.GetRecord(provider.Id), new { name = provider.Name, baseUrl = other, version = provider.Version });
+        var sameAddress = await FactoryClient.PutAsJsonAsync(ApiRoutes.ModelProviders.GetRecord(provider.Id), new { name = "Renamed", baseUrl = provider.BaseUrl, version = provider.Version });
+        var renamed = (await sameAddress.Content.ReadFromJsonAsync<ModelProviderDto>()).ShouldNotBeNull();
+        var withKey = await FactoryClient.PutAsJsonAsync(ApiRoutes.ModelProviders.GetRecord(provider.Id), new { name = "Renamed", baseUrl = other, apiKey = key, version = renamed.Version });
+
+        // Assert
+        noKey.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        withKey.StatusCode.ShouldBe(HttpStatusCode.OK, await withKey.Content.ReadAsStringAsync());
+    }
+
     private static Task<string?> JournalKeyOfAsync(string id) => ExecuteDbContextAsync(db => db.ModelProviders
         .IgnoreQueryFilters()
         .Where(p => p.Id == id)

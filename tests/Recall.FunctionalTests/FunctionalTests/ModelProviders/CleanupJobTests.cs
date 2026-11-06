@@ -10,6 +10,7 @@ using Recall.FunctionalTests.FunctionalTests.Sessions;
 using Recall.Server.Domain.ModelProviders;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Cleanup;
+using Recall.Server.Domain.Sessions.Dtos;
 using Recall.Server.Domain.Sessions.Jobs;
 using Recall.Server.Domain.Users;
 using Recall.Server.Resources.Jobs;
@@ -329,6 +330,54 @@ public class CleanupJobTests : TestBase
     }
 
     [Test]
+    public async Task the_watch_reads_past_a_full_page_of_ended_jobs()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        SessionDto? last = null;
+        for (var i = 0; i <= 200; i++)
+        {
+            last = await scenario.SessionWithRunningCleanupAsync($"{Words} {i}");
+            await SetJobStateAsync(last.Id, JobState.Cancelled);
+        }
+
+        var watch = ActivatorUtilities.CreateInstance<CleanupJobWatch>(Services);
+
+        // Act
+        await watch.EndRunsOfEndedJobsAsync(CancellationToken.None);
+        var session = await scenario.ReadAsync(last!.Id);
+
+        // Assert
+        session.CleanupStatus.ShouldBe(nameof(CleanupStatus.Failed));
+    }
+
+    [Test]
+    [Property("Rule", "SES-37")]
+    public async Task a_payload_that_does_not_read_stops_only_itself()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        var broken = await scenario.SessionWithRunningCleanupAsync(Words);
+        var good = await scenario.SessionWithRunningCleanupAsync(Words);
+        await SetJobStateAsync(broken.Id, JobState.Quarantined);
+        await SetJobStateAsync(good.Id, JobState.Quarantined);
+        await JournalScenario.ExecuteOutOfBandAsync(
+            "UPDATE backwave_jobs SET payload = $bad WHERE wire_name = $wire AND CAST(payload AS TEXT) LIKE $session",
+            ("$bad", "not json"u8.ToArray()),
+            ("$wire", CleanupJob.WireName),
+            ("$session", $"%{broken.Id}%"));
+        var watch = ActivatorUtilities.CreateInstance<CleanupJobWatch>(Services);
+
+        // Act
+        await watch.EndRunsOfEndedJobsAsync(CancellationToken.None);
+        var session = await scenario.ReadAsync(good.Id);
+
+        // Assert
+        session.CleanupStatus.ShouldBe(nameof(CleanupStatus.Failed));
+    }
+
+    [Test]
+    [Property("Rule", "SES-37")]
     public async Task the_watch_leaves_a_run_that_got_a_result_before_the_job_ended()
     {
         // Arrange

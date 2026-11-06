@@ -20,6 +20,9 @@ public sealed class CleanupJobWatch(IJobStore store, IServiceScopeFactory scopeF
     private static readonly JobState[] EndedWithNoResult = [JobState.DeadLettered, JobState.Cancelled, JobState.Quarantined];
     private static readonly JsonSerializerOptions AnyCase = new(JsonSerializerDefaults.Web);
 
+    /// <summary>The largest page that the store gives. A shorter page is the last one.</summary>
+    private const int PageSize = 200;
+
     private readonly ILogger _logger = Log.ForContext<CleanupJobWatch>();
     private readonly HashSet<Guid> _ended = [];
 
@@ -45,18 +48,37 @@ public sealed class CleanupJobWatch(IJobStore store, IServiceScopeFactory scopeF
     {
         foreach (var state in EndedWithNoResult)
         {
-            var jobs = await store.ListJobsAsync(new JobQuery { State = state, WireName = CleanupJob.WireName }, cancellationToken);
-            foreach (var job in jobs.Where(job => !_ended.Contains(job.JobId)))
+            long? after = null;
+            while (true)
             {
-                await EndRunAsync(job, cancellationToken);
-                _ended.Add(job.JobId);
+                var jobs = await store.ListJobsAsync(new JobQuery { State = state, WireName = CleanupJob.WireName, AfterSequence = after, MaxResults = PageSize }, cancellationToken);
+                foreach (var job in jobs.Where(job => !_ended.Contains(job.JobId)))
+                {
+                    await EndRunAsync(job, cancellationToken);
+                    _ended.Add(job.JobId);
+                }
+
+                if (jobs.Count < PageSize)
+                    break;
+                after = jobs[^1].Sequence;
             }
         }
     }
 
     private async Task EndRunAsync(JobRecord job, CancellationToken cancellationToken)
     {
-        var payload = JsonSerializer.Deserialize<CleanupSession>(job.Payload.Span, AnyCase);
+        CleanupSession? payload;
+        try
+        {
+            payload = JsonSerializer.Deserialize<CleanupSession>(job.Payload.Span, AnyCase);
+        }
+        catch (JsonException)
+        {
+            // The text of the exception can quote the payload, so the type of the failure is all that goes to the log.
+            _logger.Here().Warning("Cleanup job {JobId} has a payload that does not read, so no run can end from it.", job.JobId);
+            return;
+        }
+
         if (payload is null)
             return;
 

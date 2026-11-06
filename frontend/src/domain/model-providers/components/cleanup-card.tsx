@@ -67,17 +67,10 @@ function PeopleProposals({ session }: { session: SessionDto }) {
     <section className="flex flex-col gap-2">
       <h3 className="text-sm font-medium">People</h3>
       <ul className="flex flex-col gap-2">
-        {session.peopleProposals.map(({ label, isNew }) => (
+        {session.peopleProposals.map(({ label }) => (
           <li key={label} className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="min-w-24 flex-1 wrap-anywhere">
-              {label} {isNew && <span className="text-muted-foreground">(new person)</span>}
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              aria-label={`Tag ${label}`}
-              onPress={() => respond.mutate({ label, approve: true, createNew: isNew })}
-            >
+            <span className="min-w-24 flex-1 wrap-anywhere">{label}</span>
+            <Button size="sm" variant="outline" aria-label={`Tag ${label}`} onPress={() => respond.mutate({ label, approve: true, createNew: false })}>
               Tag
             </Button>
             <Button size="sm" variant="ghost" aria-label={`Do not tag ${label}`} onPress={() => respond.mutate({ label, approve: false, createNew: false })}>
@@ -108,7 +101,7 @@ export function CleanupCard({ sessionId }: { sessionId: string }) {
 
   const { data } = session
   const isRunning = data.cleanupStatus === 'Running'
-  const failure = data.cleanupStatus === 'Failed' ? FAILURE_TEXT[data.cleanupFailure] : null
+  const failure = FAILURE_TEXT[data.cleanupFailure]
 
   return (
     <Card>

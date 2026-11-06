@@ -1,6 +1,7 @@
 namespace Recall.Server.Domain.ModelProviders.Features;
 
 using System.Diagnostics;
+using AuditEntries;
 using Databases;
 using Dtos;
 using Mappings;
@@ -30,6 +31,8 @@ public static class UpdateModelProvider
 
             var protectedKey = keys.Protect(ModelProvider.ApiKeyOf(request.Dto.ApiKey));
             provider.Update(request.Dto.Name, request.Dto.BaseUrl, protectedKey, request.Dto.Model, request.Dto.Version);
+            if (protectedKey is not null)
+                dbContext.RecordAction(new ModelProviderKeyChanged(AuditSubject.Of(provider)));
             if (request.Dto.MakeActive)
                 provider.Activate(timeProvider.GetUtcNow());
             await dbContext.SaveChangesAsync(cancellationToken);

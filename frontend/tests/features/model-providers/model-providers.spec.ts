@@ -183,6 +183,35 @@ test.describe('the Cleanup card', () => {
     await expect(at.cleanupFailure('The model provider refused the request.')).toBeVisible()
   })
 
+  test('a failed new run shows its reason while Raw is newer than Cleaned', async ({ page, api }) => {
+    const failed = aSession({ cleanupStatus: 'Stale', cleanupFailure: 'ProviderRefused' })
+    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(failed))
+    const at = modelProviders(page)
+
+    await page.goto(sessionUrl(failed.id))
+
+    await expect(at.cleanupFailure('The model provider refused the request.')).toBeVisible()
+  })
+
+  test('a tag leaves the choice of the Person to the server, so one name gives one Person', async ({ page, api }) => {
+    const proposal = { label: 'Sam', matchedPersonId: null, isNew: true, contexts: ['I met Sam today.'] }
+    const session = aSession({ cleanupStatus: 'Clean', cleanedText: 'I met Sam today.', peopleProposals: [proposal] })
+    const respondPath = `/api/v1/sessions/${session.id}/people-proposals/respond`
+    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(session), {
+      method: 'post',
+      path: respondPath,
+      status: 200,
+      body: { ...session, peopleProposals: [] },
+    })
+    const at = modelProviders(page)
+    await page.goto(sessionUrl(session.id))
+
+    await at.tagPerson('Sam').click()
+
+    await expect(at.tagPerson('Sam')).toHaveCount(0)
+    expect(api.last('post', respondPath)?.body).toMatchObject({ label: 'Sam', approve: true, createNew: false })
+  })
+
   test('hand edits warn before a new run', async ({ page, api }) => {
     const edited = aSession({ cleanupStatus: 'Clean', cleanedText: 'Mine.', cleanedHasHandEdits: true })
     api.mock(signedInAs('User'), modelProvidersApi.sessionIs(edited))
