@@ -16,7 +16,6 @@ export function aboutPage(page: Page) {
       await expect(at.text).toBeVisible()
     },
 
-    /** The route changes with no reload, so the page renders with the answer that the home page already has. */
     async openFromHomeWithTheMembershipLoaded() {
       const membershipLoaded = page.waitForResponse((response) => response.url().endsWith(membershipPaths.userOf(actorSubject)))
       await homePage(page).open()

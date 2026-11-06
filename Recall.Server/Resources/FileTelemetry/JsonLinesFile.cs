@@ -5,10 +5,6 @@ using Serilog.Core;
 using Serilog.Events;
 using Serilog.Formatting;
 
-/// <summary>
-/// One line of JSON for each span or metric point, in rotating files. Serilog.Sinks.File keeps the limits, so an exporter
-/// holds no rotation code. This logger is its own: it writes no other event, and the app logger does not see its lines.
-/// </summary>
 public sealed class JsonLinesFile(string path, RollingFileLimits limits) : IDisposable
 {
     private const string LineProperty = "Line";

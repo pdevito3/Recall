@@ -3,12 +3,12 @@ import { useMembership } from '@/domain/membership/apis/get-membership'
 
 import { useDownloadSupportBundle } from '../apis/download-support-bundle'
 
-/** Each Admin sees this, because the Server alone knows who the Owner is. The Server refuses each other Admin. */
 export function SupportBundleSection() {
   const membership = useMembership()
   const download = useDownloadSupportBundle()
 
-  if (membership.status !== 'member' || membership.user.role !== 'Admin') return null
+  const mightBeTheOwner = membership.status === 'member' && membership.user.role === 'Admin'
+  if (!mightBeTheOwner) return null
 
   return (
     <section aria-labelledby="support-heading" className="space-y-3 border-t pt-4">

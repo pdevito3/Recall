@@ -26,7 +26,7 @@ public sealed class GetSupportBundleEndpoint : IEndpoint
     {
         var bundle = await mediator.Send(new GetSupportBundle.Query(), cancellationToken);
 
-        // A zip entry writes its last bytes, about 24, in a dispose that has no async form
+        // The stream of a zip entry has no DisposeAsync, so its close writes synchronously
         httpContext.Features.GetRequiredFeature<IHttpBodyControlFeature>().AllowSynchronousIO = true;
 
         return TypedResults.Stream(output => bundle.WriteToAsync(output, cancellationToken), ZipContentType, bundle.FileName);

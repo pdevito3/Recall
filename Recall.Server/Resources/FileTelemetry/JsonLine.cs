@@ -7,7 +7,6 @@ using System.Text.Json;
 
 public static class JsonLine
 {
-    /// <summary>One JSON object on one line.</summary>
     public static string Of(Action<Utf8JsonWriter> writeProperties)
     {
         var buffer = new ArrayBufferWriter<byte>();

@@ -2,10 +2,6 @@ namespace Recall.Server.Domain.Support;
 
 using System.Text.RegularExpressions;
 
-/// <summary>
-/// The settings for a support bundle. A setting shows its name, and only a setting on this list shows its value. A new
-/// setting thus starts hidden, so a secret that someone adds later stays out of a bundle.
-/// </summary>
 public static partial class RedactedSettings
 {
     public const string Hidden = "[redacted]";
@@ -16,7 +12,7 @@ public static partial class RedactedSettings
         foreach (var (key, value) in settings)
         {
             if (value is not null)
-                shown[key] = SafeToShow().IsMatch(key) ? value : Hidden;
+                shown[key] = AllowlistOfShownValues().IsMatch(key) ? value : Hidden;
         }
 
         return shown;
@@ -35,5 +31,5 @@ public static partial class RedactedSettings
         )$
         """,
         RegexOptions.IgnoreCase | RegexOptions.IgnorePatternWhitespace | RegexOptions.CultureInvariant)]
-    private static partial Regex SafeToShow();
+    private static partial Regex AllowlistOfShownValues();
 }

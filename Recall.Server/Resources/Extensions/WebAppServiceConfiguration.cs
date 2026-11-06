@@ -53,11 +53,7 @@ public static class WebAppServiceConfiguration
 
             options.UseSqlite(connectionString)
                 .UseSnakeCaseNamingConvention()
-                // Each of these failures also reaches the caller of the command. A unique conflict is an expected
-                // answer that the caller handles, and a server fault gets its one Error log from that caller.
-                .ConfigureWarnings(warnings => warnings.Log(
-                    (RelationalEventId.CommandError, LogLevel.Debug),
-                    (CoreEventId.SaveChangesFailed, LogLevel.Debug)))
+                .ConfigureWarnings(LeaveFailureLogsToTheCaller)
                 .AddInterceptors(
                     SqliteConnectionSetup.Instance,
                     UtcTextParameters.Instance,
@@ -68,4 +64,8 @@ public static class WebAppServiceConfiguration
 
         builder.Services.AddDomainEvents(typeof(Program).Assembly);
     }
+
+    private static void LeaveFailureLogsToTheCaller(WarningsConfigurationBuilder warnings) => warnings.Log(
+        (RelationalEventId.CommandError, LogLevel.Debug),
+        (CoreEventId.SaveChangesFailed, LogLevel.Debug));
 }

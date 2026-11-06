@@ -22,13 +22,8 @@ public sealed record FileTelemetryOptions
     public int MetricExportSeconds { get; init; }
 }
 
-/// <summary>
-/// Where the log and telemetry files of this process go. The folders are beside the database, so that a process run
-/// and an image run keep them in the data directory with no other setting.
-/// </summary>
 public sealed record FileTelemetryPlan(string LogsDirectory, string TelemetryDirectory, FileTelemetryOptions Options)
 {
-    /// <summary>Null when the process keeps no files: an in-memory database, or no configuration file.</summary>
     public static FileTelemetryPlan? For(IConfiguration configuration)
     {
         if (OwnerOnlyFiles.LogsDirectory(configuration) is not { } logs

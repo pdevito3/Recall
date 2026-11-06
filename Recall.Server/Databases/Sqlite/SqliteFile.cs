@@ -25,7 +25,7 @@ public static class SqliteFile
             && NetworkMountCheck.Refusal(NetworkMountCheck.RealPathOf(path), mounts) is { } refusal)
             throw new InvalidOperationException(refusal);
 
-        if (NotWritableRefusal(Path.GetDirectoryName(path)!) is { } notWritable)
+        if (MakeWritableOrRefuse(Path.GetDirectoryName(path)!) is { } notWritable)
             throw new InvalidOperationException(notWritable);
 
         await using var connection = new SqliteConnection(connectionString);
@@ -35,9 +35,7 @@ public static class SqliteFile
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    /// <summary>Makes the directory and proves that it takes a new file.</summary>
-    /// <returns>What the operator must correct, or null when the directory takes a write.</returns>
-    public static string? NotWritableRefusal(string directory)
+    public static string? MakeWritableOrRefuse(string directory)
     {
         try
         {

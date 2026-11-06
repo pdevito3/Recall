@@ -8,10 +8,7 @@ public static class RollingFileSinks
 {
     private const int LinesThatWaitForTheDisk = 10_000;
 
-    /// <summary>
-    /// Writes lines to files with a size limit, a count limit, and an age limit. A logging call gives its line to a queue
-    /// and returns. When the disk hangs and the queue is full, the line goes and the request continues.
-    /// </summary>
+    /// <summary>When the disk hangs and the queue is full, the line goes and the request continues.</summary>
     public static LoggerConfiguration RollingFiles(this LoggerSinkConfiguration writeTo, ITextFormatter formatter, string path, RollingFileLimits limits)
         => writeTo.Async(
             to => to.RollingFilesWithNoQueue(formatter, path, limits),

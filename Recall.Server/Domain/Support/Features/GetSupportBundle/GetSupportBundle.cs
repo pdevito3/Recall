@@ -36,12 +36,7 @@ public static class GetSupportBundle
             if (caller is not Caller.Member member || member.UserId != await OwnerIdAsync(cancellationToken))
                 throw new ForbiddenAccessException(OnlyTheOwner);
 
-            // The last spans and metric points wait in memory, and the request that failed just before this one is the one to see
-            await Task.Run(() =>
-            {
-                tracerProvider.ForceFlush(FlushMilliseconds);
-                meterProvider.ForceFlush(FlushMilliseconds);
-            }, cancellationToken);
+            await FlushPendingTelemetryAsync(cancellationToken);
 
             _logger.Here().Information("The Owner {UserId} downloaded a support bundle", member.UserId);
             return new SupportBundle(
@@ -50,6 +45,12 @@ public static class GetSupportBundle
                 environment.EnvironmentName,
                 timeProvider.GetUtcNow());
         }
+
+        private Task FlushPendingTelemetryAsync(CancellationToken cancellationToken) => Task.Run(() =>
+        {
+            tracerProvider.ForceFlush(FlushMilliseconds);
+            meterProvider.ForceFlush(FlushMilliseconds);
+        }, cancellationToken);
 
         private async Task<string?> OwnerIdAsync(CancellationToken cancellationToken)
         {
