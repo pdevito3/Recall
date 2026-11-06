@@ -80,6 +80,60 @@ test.describe('an entry', () => {
     await expect(entry.at.editor).toBeFocused()
   })
 
+  test('words typed during a read of the newest words stay on the page', async ({ page, api }) => {
+    const session = aSession().atRevision(4).saying('Mine').build()
+    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+    await entry.edit(session.id, ' edited')
+    await expect(entry.at.showNewest).toBeVisible()
+
+    const newest = { ...aSession().atRevision(5).saying('From the other device').build(), id: session.id, clientSessionId: session.clientSessionId }
+    api.mock({ ...sessionsApi.oneIs(newest), delayMs: 500 }, sessionsApi.draftSaveWins(session, 7))
+    await entry.at.showNewest.click()
+    await entry.editWithoutWaiting(' and more')
+    await entry.letAnAnswerHeldForHalfASecondLand()
+
+    await expect(entry.at.words('Mine edited and more')).toBeVisible()
+  })
+
+  test('a first read that started before the save of a reload does not open the old words', async ({ page, api }) => {
+    const session = aSession().atRevision(4).saying('Mine').build()
+    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveHasNoReply(session))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+    await entry.edit(session.id, ' edited')
+    await expect(entry.at.status('Not saved yet')).toBeVisible()
+
+    const saved = { ...aSession().atRevision(5).saying('Mine edited').build(), id: session.id, clientSessionId: session.clientSessionId }
+    api.mock({ ...sessionsApi.oneIs(session), delayMs: 800 }, sessionsApi.draftSaveWins(session, 5))
+    const saveAnswered = entry.aSaveAnswered(session.id)
+    await page.reload()
+    await saveAnswered
+    api.mock(sessionsApi.oneIs(saved))
+
+    await expect(entry.at.words('Mine edited')).toBeVisible()
+    await entry.letAnAnswerHeldForHalfASecondLand()
+    await expect(entry.at.words('Mine edited')).toBeVisible()
+    await expect(entry.at.updatedNotice).toHaveCount(0)
+  })
+
+  test('Keep on a notice leaves the cursor in place', async ({ page, api }) => {
+    const session = aSession().atRevision(4).saying('Mine').build()
+    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveWins(session, 9))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+    await entry.edit(session.id, ' edited')
+    await expect(entry.at.keepWords).toBeVisible()
+    await entry.moveTheCursorOneBack()
+
+    await entry.at.keepWords.click()
+    await expect(entry.at.keepWords).toHaveCount(0)
+    await entry.typeAfterTheCursor('X')
+
+    await expect(entry.at.words('Mine editeXd')).toBeVisible()
+  })
+
   test('a save reply that lands before the first read of a reload still opens the entry', async ({ page, api }) => {
     const session = aSession().atRevision(4).saying('Mine').build()
     api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveHasNoReply(session))

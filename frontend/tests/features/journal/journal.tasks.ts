@@ -38,6 +38,27 @@ export function journalPage(page: Page) {
       await page.keyboard.type(words)
     },
 
+    async moveTheCursorOneBack() {
+      await page.keyboard.press('ArrowLeft')
+    },
+
+    async typeAfterTheCursor(words: string) {
+      await page.keyboard.type(words)
+    },
+
+    async goToSettings() {
+      await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Settings', exact: true }).click()
+      await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible()
+    },
+
+    async goToTheJournalFromTheSidebar() {
+      await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Journal', exact: true }).click()
+    },
+
+    async letAnAnswerHeldForHalfASecondLand() {
+      await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 700)))
+    },
+
     async pickFromTheMentionList() {
       await page.keyboard.press('Enter')
     },
@@ -105,6 +126,18 @@ export function entryPage(page: Page) {
     async editWithoutWaiting(words: string) {
       await at.editor.click()
       await page.keyboard.press('End')
+      await page.keyboard.type(words)
+    },
+
+    aSaveAnswered(id: string) {
+      return putTo(sessionsPaths.rawDraft(id))
+    },
+
+    async moveTheCursorOneBack() {
+      await page.keyboard.press('ArrowLeft')
+    },
+
+    async typeAfterTheCursor(words: string) {
       await page.keyboard.type(words)
     },
 

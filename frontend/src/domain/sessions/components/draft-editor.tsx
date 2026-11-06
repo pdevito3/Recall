@@ -8,6 +8,7 @@ import type { DraftChannel } from '../apis/session.keys'
 import { shownStatusOf } from '../autosave/draft-saver'
 import { useDraftSaver } from '../autosave/use-draft-saver'
 import { EditorToolbar } from '../editor/editor-toolbar'
+import { focusEditorIn } from '../editor/focus-editor'
 import { JournalEditor } from '../editor/journal-editor'
 import { ConflictNotice } from './conflict-notice'
 import { SaveStatusLine } from './save-status'
@@ -70,7 +71,7 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
 
   const keep = () => {
     saver.keepWords(currentText.current)
-    reopenWith(currentText.current)
+    focusEditorIn(section.current)
   }
 
   const restore = (text: string) => {

@@ -1,4 +1,4 @@
-import type { QueryClient } from '@tanstack/react-query'
+import { isCancelledError, type QueryClient } from '@tanstack/react-query'
 
 import type { DraftSaveResultDto } from '@/api/generated/models/types/draft-save-result-dto'
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
@@ -99,11 +99,12 @@ export class DraftSaver {
 
   async takeNewestWords(): Promise<string | null> {
     const id = this.snapshot.sessionId
-    const newest = id && (await this.queryClient.fetchQuery({ ...sessionQueryOptions(id), staleTime: 0 }).catch(() => null))
-    if (!newest) {
-      Notification.error('The newest words did not load. Try again.')
+    if (!id) return null
+    const newest = await this.queryClient.fetchQuery({ ...sessionQueryOptions(id), staleTime: 0 }).catch((error: unknown) => {
+      if (!isCancelledError(error)) Notification.error('The newest words did not load. Try again.')
       return null
-    }
+    })
+    if (!newest || this.unsettledText() !== null) return null
     const isRaw = this.target.channel === 'raw'
     this.moveBaseTo(isRaw ? newest.rawDraftRevision : newest.cleanedDraftRevision, isRaw ? newest.rawLatestRevision : newest.cleanedLatestRevision)
     this.dismissConflict()
@@ -182,7 +183,9 @@ export class DraftSaver {
   private keepSessionCurrent(id: string, reply: DraftSaveResultDto, words: string | null) {
     const key = SessionKeys.detail(id)
     const isLoaded = this.queryClient.getQueryData(key) !== undefined
-    void (isLoaded ? this.queryClient.cancelQueries({ queryKey: key, exact: true }) : this.queryClient.invalidateQueries({ queryKey: key, exact: true }))
+    void this.queryClient.cancelQueries({ queryKey: key, exact: true }).then(() => {
+      if (!isLoaded) void this.queryClient.invalidateQueries({ queryKey: key, exact: true })
+    })
     this.queryClient.setQueryData<SessionDto>(key, (session) => {
       if (!session) return session
       const isRaw = this.target.channel === 'raw'

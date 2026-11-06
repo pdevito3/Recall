@@ -219,7 +219,7 @@ export default async ({ page, context, step, capture, expect, login }) => {
     await page.keyboard.press('Enter')
     await tabTo(page.getByRole('button', { name: 'Calm', exact: true }))
     await page.keyboard.press('Space')
-    await expect(saved(page)).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Tags' }).getByRole('status').filter({ hasText: /^Saved/ })).toBeVisible()
     expect(unseen).toEqual([])
   })
   await capture('r12-keyboard', { fullPage: false })

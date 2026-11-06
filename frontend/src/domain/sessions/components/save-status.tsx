@@ -16,7 +16,7 @@ interface Shown {
   tone: string
 }
 
-const deletedEntryText = 'Not saved. This entry was deleted in another tab or device. Copy these words to keep them.'
+const deletedEntryText = 'Not saved. This entry was deleted in another tab or device.'
 
 const timeOf = (at: string, zone: TimeZone) => formatInstant(new Date(at), zone, { hour: 'numeric', minute: '2-digit' })
 

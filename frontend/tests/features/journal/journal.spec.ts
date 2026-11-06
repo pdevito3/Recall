@@ -124,13 +124,14 @@ test.describe('writing a new entry', () => {
     expect(api.all('post', sessionsPaths.timeline)).toHaveLength(2)
   })
 
-  test('a save that loses says so, and Keep sends the words again with the cursor still in the words', async ({ page, api }) => {
+  test('a save that loses says so, and Keep sends the words again and leaves the cursor in place', async ({ page, api }) => {
     api.mock(sessionsApi.creates(created), sessionsApi.oneIs(created), sessionsApi.draftSaveLoses(created, { draftRevision: 3, latestRevision: 4 }))
     const journal = journalPage(page)
     await journal.open()
     await journal.write('My words')
     await expect(journal.at.conflict('The words on this page are safe in History.')).toBeVisible()
     await expect(journal.at.status('Saved in History at')).toBeVisible()
+    await journal.moveTheCursorOneBack()
 
     api.mock(sessionsApi.draftSaveWins(created, 5))
     await journal.at.keepWords.click()
@@ -139,6 +140,8 @@ test.describe('writing a new entry', () => {
     await expect(journal.at.conflict('The words on this page are safe in History.')).toHaveCount(0)
     await expect(journal.at.composer).toHaveText('My words')
     await expect(journal.at.composer).toBeFocused()
+    await journal.typeAfterTheCursor('X')
+    await expect(journal.at.composer).toHaveText('My wordXs')
   })
 
   test('a save that loses can show the newest words, and the next save bases on them', async ({ page, api }) => {
@@ -166,30 +169,101 @@ test.describe('writing a new entry', () => {
     await expect(journal.at.conflict('The other save is safe in History.')).toBeVisible()
   })
 
-  test('an entry that was deleted says so and asks the person to copy the words, and Done still clears the page', async ({ page, api }) => {
-    api.mock(sessionsApi.creates(created), sessionsApi.draftSaveIsRefused(created, aProblem().notFound('The entry is gone.')))
-    const journal = journalPage(page)
-    await journal.open()
-    await journal.write('Words for a deleted entry')
-
-    await expect(journal.at.status('This entry was deleted in another tab or device. Copy these words to keep them.')).toBeVisible()
-    await expect(journal.at.composer).toHaveText('Words for a deleted entry')
-    await journal.finish()
-
-    await expect(journal.at.composer).toBeEmpty()
-  })
-
-  test('a create that the Server refuses for a deleted entry does not go again after a reload', async ({ page, api }) => {
-    api.mock(sessionsApi.createIsRefused(aProblem().conflict('This Session was deleted, so it cannot come back. Drop the local copy.')))
+  test('an entry that another tab deleted starts again as a new entry with all the words on the page', async ({ page, api }) => {
+    api.mock(sessionsApi.creates(created), { ...sessionsApi.draftSaveIsRefused(created, aProblem().notFound('The entry is gone.')), delayMs: 1000 })
     const journal = journalPage(page)
     await journal.open()
     await journal.typeWithoutWaiting('Words for a deleted entry')
-    await expect(journal.at.status('This entry was deleted in another tab or device.')).toBeVisible()
+    await expect.poll(() => api.all('put', sessionsPaths.rawDraft(created.id)).length).toBe(1)
 
-    await journal.reload()
+    const next = aSession().build()
+    api.mock(sessionsApi.creates(next), sessionsApi.draftSaveWins(next, 1))
+
+    await expect(journal.at.status('Saved at')).toBeVisible()
+    await expect(journal.at.composer).toHaveText('Words for a deleted entry')
+    expect(JSON.stringify(api.last('put', sessionsPaths.rawDraft(next.id))?.body)).toContain('Words for a deleted entry')
+    const [first, second] = api.all('post', sessionsPaths.timeline).map((r) => (r.body as { clientSessionId: string }).clientSessionId)
+    expect(second).not.toBe(first)
+  })
+
+  test('a create that the Server refuses for a deleted entry starts again as a new entry', async ({ page, api }) => {
+    api.mock({ ...sessionsApi.createIsRefused(aProblem().conflict('This Session was deleted, so it cannot come back. Drop the local copy.')), delayMs: 1000 })
+    const journal = journalPage(page)
+    await journal.open()
+    await journal.typeWithoutWaiting('Words for a deleted entry')
+    await expect.poll(() => api.all('post', sessionsPaths.timeline).length).toBe(1)
+
+    const next = aSession().build()
+    api.mock(sessionsApi.creates(next), sessionsApi.draftSaveWins(next, 1))
+
+    await expect(journal.at.status('Saved at')).toBeVisible()
+    await expect(journal.at.composer).toHaveText('Words for a deleted entry')
+  })
+
+  test('a person who leaves just after the first words finds them on the way back', async ({ page, api }) => {
+    api.mock({ ...sessionsApi.creates(created), delayMs: 300 }, sessionsApi.draftSaveWins(created, 1))
+    const journal = journalPage(page)
+    await journal.open()
+    await journal.typeWithoutWaiting('Words before a move')
+    await journal.goToSettings()
+    await expect.poll(() => api.all('put', sessionsPaths.rawDraft(created.id)).length).toBe(1)
+
+    const saved = { ...aSession().saying('Words before a move').build(), id: created.id, clientSessionId: created.clientSessionId }
+    api.mock(sessionsApi.oneIs(saved))
+    await journal.goToTheJournalFromTheSidebar()
+
+    await expect(journal.at.composer).toHaveText('Words before a move')
+  })
+
+  test('a return to the journal with a read that fails opens the last known words and keeps the entry', async ({ page, api }) => {
+    const saved = aSession().saying('Morning coffee').build()
+    api.mock(sessionsApi.creates(saved), sessionsApi.draftSaveWins(saved, 2), sessionsApi.oneIs(saved))
+    const journal = journalPage(page)
+    await journal.open()
+    await journal.write('Morning coffee')
+    await expect(journal.at.status('Saved at')).toBeVisible()
+    await journal.goToSettings()
+    await journal.goToTheJournalFromTheSidebar()
+    await expect(journal.at.composer).toHaveText('Morning coffee')
+
+    await journal.goToSettings()
+    api.mock(sessionsApi.oneFails(saved.id, aProblem().refusing('Not now.')))
+    await journal.goToTheJournalFromTheSidebar()
+
+    await expect(journal.at.composer).toHaveText('Morning coffee')
+    await expect(journal.at.done).toBeEnabled()
+  })
+
+  test('a return to the journal with no network opens the last known words, and a person can write', async ({ page, api }) => {
+    const saved = aSession().saying('Morning coffee').build()
+    api.mock(sessionsApi.creates(saved), sessionsApi.draftSaveWins(saved, 2), sessionsApi.oneIs(saved))
+    const journal = journalPage(page)
+    await journal.open()
+    await journal.write('Morning coffee')
+    await expect(journal.at.status('Saved at')).toBeVisible()
+    await journal.goToSettings()
+
+    await page.context().setOffline(true)
+    await journal.goToTheJournalFromTheSidebar()
+
+    await expect(journal.at.composer).toHaveText('Morning coffee')
+    await page.context().setOffline(false)
+  })
+
+  test('Done during a read of the newest words leaves the next entry empty', async ({ page, api }) => {
+    api.mock(sessionsApi.creates(created), sessionsApi.oneIs(created), sessionsApi.draftSaveLoses(created, { draftRevision: 3, latestRevision: 4 }))
+    const journal = journalPage(page)
+    await journal.open()
+    await journal.write('My words')
+    await expect(journal.at.showNewest).toBeVisible()
+
+    const newest = { ...aSession().atRevision(3).saying('From the other tab').build(), id: created.id, clientSessionId: created.clientSessionId }
+    api.mock({ ...sessionsApi.oneIs(newest), delayMs: 300 })
+    await journal.at.showNewest.click()
+    await journal.finish()
+    await journal.letAnAnswerHeldForHalfASecondLand()
 
     await expect(journal.at.composer).toBeEmpty()
-    expect(api.all('post', sessionsPaths.timeline)).toHaveLength(1)
   })
 
   test('a mention names a person from the directory, and a save carries the ID of the person', async ({ page, api }) => {
@@ -254,7 +328,7 @@ test.describe('the timeline', () => {
 
   test('an entry whose first reply was lost opens with its words', async ({ page, api }) => {
     const session = aSession().atRevision(0).saying('').build()
-    const row = { ...aSession().summary('The new entry'), id: session.id }
+    const row = { ...aSession().summary('Words that reached the server'), id: session.id }
     api.mock(sessionsApi.creates(session), sessionsApi.oneIs(session), sessionsApi.draftSaveIsUnchanged(session, { draftRevision: 1, latestRevision: 1 }), sessionsApi.timelineIs([row]))
     const journal = journalPage(page)
     await journal.open()
