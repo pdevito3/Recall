@@ -20,7 +20,7 @@ A kept claim stops only a change with its exact time, at any distance from the s
 
 The server could refuse a time far ahead with a 422 and keep no such claim. It does not, because a server with a slow clock would then refuse each client.
 
-A person can still lose a change with a 200 in these cases, and the reply shows the row that the server has. We cannot show that this list is full:
+A person can still lose a change with a 200 in these cases, and the reply shows the row that the server has. This list may not be full:
 
 - A change with a time that is not newer than the stored change goes away, as from a slow clock or a queue.
 - A different change with the exact time of a kept claim goes away, because the server cannot tell it from a retry.
@@ -30,7 +30,7 @@ A person can still lose a change with a 200 in these cases, and the reply shows 
 
 ## Overlapping changes from one device
 
-Two overlapping PUTs from one device reach the third case above. No request fails, and the client reaches the server each time. We measured settings on localhost with no injected delay, at commit 429e5c6a. Each run sent capture on and then capture off. This table counts the runs that ended with capture on:
+Two overlapping PUTs from one device reach the third case above. No request fails. This table counts settings runs on localhost with no injected delay, at commit 429e5c6a. Each run sent capture on and then capture off, and the count is of the runs that ended with capture on:
 
 | Clock of the client | Time between the two PUTs | Ended with capture on |
 |---|---|---|
@@ -42,13 +42,13 @@ Two overlapping PUTs from one device reach the third case above. No request fail
 | +6 s | 5 ms | 0 of 80 |
 | +1 h | 5 ms | 0 of 80 |
 
-The 5 ms rows do not make a gap safe, because they come from localhost. On another run, the PUT for off went 1 s after the PUT for on, and the PUT for on landed 2 s after the PUT for off. Capture ended on at each fast clock in the table, and the next Session stored a location. With a right clock, capture stayed off. For metadata, the older body also replaced the newer body at each fast clock when it landed second.
+The 5 ms rows do not make a gap safe, because they come from localhost. Another run injected a delay. The PUT for off went 1 s after the PUT for on, and the PUT for on landed 2 s after the PUT for off. Capture ended on at each fast clock in the table, and the next Session stored a location. With a right clock, capture stayed off. For metadata, the older body also replaced the newer body at each fast clock when it landed second.
 
-So a client must send the settings or metadata changes of a row one at a time and in order, and wait for the reply to each change before it sends the next. After a failure with no reply, it sends that change again with the same time before it sends a newer change. A client that drained a queue in this way at +1 h, with a lost reply and stalled duplicates, kept the newest change for settings and for metadata.
+So a client must send the settings or metadata changes of a row one at a time and in order, and wait for the reply to each change before it sends the next. After a failure with no reply, it sends that change again with the same time before it sends a newer change. A client that drained a queue in order at +1 h kept the newest change for metadata, and for settings with a lost reply and stalled duplicates.
 
 The POC `UserSettingsStore.execute` does not do this, because it starts a PUT for each edit and does not wait for the one before it. R14 must do this.
 
-This rule does not stop the case on a second device. A fast phone that edits first and lands second replaces the edit of a tablet when the phone clock is ahead by more than the time between the two edits. We measured this at +6 s with 3 s between the edits, and at +1 h with 20 s. At +2 s with 3 s between the edits, and at +6 s with 8 s, the edit of the tablet stayed.
+This rule does not stop the case on a second device. A fast phone that edits first and lands second replaces the edit of a tablet when the phone clock is ahead by more than the time between the two edits. This happened at +6 s with 3 s between the edits, and at +1 h with 20 s. At +2 s with 3 s between the edits, and at +6 s with 8 s, the edit of the tablet stayed.
 
 ## Consequences
 
