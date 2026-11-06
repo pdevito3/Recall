@@ -11,7 +11,7 @@ export type UserSettingChangeDto = {
     */
     timeZone?: string | null;
     locationCaptureEnabled: boolean;
-    requirePeopleTagApproval: boolean;
+    requirePeopleProposalApproval: boolean;
     /**
      * @description When the person made the change. A change with an older save time than the stored settings does nothing.
      *

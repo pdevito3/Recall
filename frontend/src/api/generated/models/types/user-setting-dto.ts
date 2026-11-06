@@ -11,7 +11,7 @@ export type UserSettingDto = {
     */
     timeZoneIsKnown: boolean;
     locationCaptureEnabled: boolean;
-    requirePeopleTagApproval: boolean;
+    requirePeopleProposalApproval: boolean;
     /**
      * @description
      * Format: `date-time`

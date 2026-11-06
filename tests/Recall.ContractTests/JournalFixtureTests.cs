@@ -56,7 +56,7 @@ public class JournalFixtureTests
         {
             timeZone = "Europe/Tallinn",
             locationCaptureEnabled = true,
-            requirePeopleTagApproval = true,
+            requirePeopleProposalApproval = true,
             savedAt = Morning,
         });
         settings.StatusCode.ShouldBe(HttpStatusCode.OK);

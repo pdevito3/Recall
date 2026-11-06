@@ -34,7 +34,7 @@ public static class ChangeUserSetting
                     await dbContext.UserSettings.AddAsync(row, ct);
                 }
 
-                row.Change(dto.TimeZone, dto.LocationCaptureEnabled, dto.RequirePeopleTagApproval, dto.SavedAt, timeProvider.GetUtcNow());
+                row.Change(dto.TimeZone, dto.LocationCaptureEnabled, dto.RequirePeopleProposalApproval, dto.SavedAt, timeProvider.GetUtcNow());
                 await dbContext.SaveChangesAsync(ct);
                 return row;
             }, cancellationToken);

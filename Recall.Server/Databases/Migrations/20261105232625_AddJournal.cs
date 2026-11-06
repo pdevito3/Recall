@@ -142,7 +142,7 @@ namespace Recall.Server.Databases.Migrations
                     user_id = table.Column<string>(type: "TEXT", maxLength: 50, nullable: false, collation: "BINARY"),
                     time_zone = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
                     location_capture_enabled = table.Column<bool>(type: "INTEGER", nullable: false),
-                    require_people_tag_approval = table.Column<bool>(type: "INTEGER", nullable: false),
+                    require_people_proposal_approval = table.Column<bool>(type: "INTEGER", nullable: false),
                     saved_at = table.Column<string>(type: "TEXT", nullable: true),
                     fast_claims = table.Column<string>(type: "TEXT", nullable: false),
                     last_modified_on = table.Column<string>(type: "TEXT", nullable: true),

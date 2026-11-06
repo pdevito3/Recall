@@ -15,7 +15,7 @@ This spec leaves out Cleanup, Summaries, audio, and each screen. Later units bui
 | `Session` | `RawRevision`, `CleanedRevision` | client session ID, start time, location, Raw, Cleaned, activity, Moods, Topics | None. A Session has no lifecycle. |
 | `Person` | | label | None |
 | `Correction` | | canonical term, mishearings, hard replace | None |
-| `UserSetting` | | time zone, location capture, People review | None |
+| `UserSetting` | | time zone, location capture, People proposal review | None |
 | `SyncChange` | | None. Triggers write it. | Live, or tombstone |
 
 `CleanupStatus` comes from three stored values, and nothing stores it:

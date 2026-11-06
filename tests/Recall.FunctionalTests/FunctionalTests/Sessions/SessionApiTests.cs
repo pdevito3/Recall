@@ -2,6 +2,7 @@ namespace Recall.FunctionalTests.FunctionalTests.Sessions;
 
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using Recall.Server.Domain.People.Dtos;
 using Recall.Server.Domain.Sessions.Dtos;
@@ -118,9 +119,9 @@ public class SessionApiTests : TestBase
         var (_, member) = await JournalScenario.AddPeopleAsync();
         FactoryClient.SignInAsAppUser(member.Identifier);
         var fast = DateTimeOffset.UtcNow.AddHours(5);
-        var on = new { timeZone = "UTC", locationCaptureEnabled = true, requirePeopleTagApproval = false, savedAt = fast };
+        var on = new { timeZone = "UTC", locationCaptureEnabled = true, requirePeopleProposalApproval = false, savedAt = fast };
         (await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, on)).StatusCode.ShouldBe(HttpStatusCode.OK);
-        var off = new { timeZone = "UTC", locationCaptureEnabled = false, requirePeopleTagApproval = false, savedAt = fast.AddMinutes(1) };
+        var off = new { timeZone = "UTC", locationCaptureEnabled = false, requirePeopleProposalApproval = false, savedAt = fast.AddMinutes(1) };
         (await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, off)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // Act
@@ -142,11 +143,11 @@ public class SessionApiTests : TestBase
         var (_, member) = await JournalScenario.AddPeopleAsync();
         FactoryClient.SignInAsAppUser(member.Identifier);
         var fast = DateTimeOffset.UtcNow.AddHours(5);
-        var on = new { timeZone = "UTC", locationCaptureEnabled = true, requirePeopleTagApproval = false, savedAt = fast };
+        var on = new { timeZone = "UTC", locationCaptureEnabled = true, requirePeopleProposalApproval = false, savedAt = fast };
         (await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, on)).StatusCode.ShouldBe(HttpStatusCode.OK);
         foreach (var change in Enumerable.Range(1, 17))
         {
-            var off = new { timeZone = "UTC", locationCaptureEnabled = false, requirePeopleTagApproval = false, savedAt = fast.AddMinutes(change) };
+            var off = new { timeZone = "UTC", locationCaptureEnabled = false, requirePeopleProposalApproval = false, savedAt = fast.AddMinutes(change) };
             (await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, off)).StatusCode.ShouldBe(HttpStatusCode.OK);
         }
 
@@ -421,7 +422,7 @@ public class SessionApiTests : TestBase
         {
             timeZone = (string?)null,
             locationCaptureEnabled = true,
-            requirePeopleTagApproval = true,
+            requirePeopleProposalApproval = true,
             savedAt = JournalScenario.Morning,
         });
         var on = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.Root, location with { clientSessionId = Guid.NewGuid().ToString() });
@@ -449,7 +450,7 @@ public class SessionApiTests : TestBase
         {
             timeZone = "America/Chicago",
             locationCaptureEnabled = false,
-            requirePeopleTagApproval = true,
+            requirePeopleProposalApproval = true,
             savedAt = JournalScenario.Morning,
         });
         var read = await FactoryClient.GetFromJsonAsync<SessionDto>(ApiRoutes.Sessions.GetRecord(session.Id));

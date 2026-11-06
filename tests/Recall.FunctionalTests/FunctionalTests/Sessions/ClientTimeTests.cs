@@ -31,7 +31,7 @@ public class ClientTimeTests : TestBase
         var raw = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Draft(session.Id), new { text = "words", baseRevision = 0, savedAt = time });
         var cleaned = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Cleaned(session.Id), new { text = "words", baseRevision = 0, savedAt = time });
         var metadata = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { activity = "Walking", savedAt = time });
-        var settings = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { locationCaptureEnabled = true, requirePeopleTagApproval = true, savedAt = time });
+        var settings = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { locationCaptureEnabled = true, requirePeopleProposalApproval = true, savedAt = time });
         var read = await FactoryClient.GetFromJsonAsync<SessionDto>(ApiRoutes.Sessions.GetRecord(session.Id));
         var stored = await FactoryClient.GetFromJsonAsync<UserSettingDto>(ApiRoutes.UserSettings.Root);
 

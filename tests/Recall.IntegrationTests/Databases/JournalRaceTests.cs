@@ -290,7 +290,7 @@ public class JournalRaceTests : TestBase
         => new() { Text = text, BaseRevision = 0, SavedAt = savedAt };
 
     private static UserSettingChangeDto Setting(string zone, DateTimeOffset savedAt)
-        => new() { TimeZone = zone, LocationCaptureEnabled = false, RequirePeopleTagApproval = true, SavedAt = savedAt };
+        => new() { TimeZone = zone, LocationCaptureEnabled = false, RequirePeopleProposalApproval = true, SavedAt = savedAt };
 
     private static async Task<User> AddOwnerAsync()
     {

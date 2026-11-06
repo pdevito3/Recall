@@ -10,7 +10,7 @@ public sealed record UserSettingChangeDto
     [SchemaMaxLength(typeof(TimeZoneId), nameof(TimeZoneId.MaxLength))]
     public string? TimeZone { get; init; }
     public required bool LocationCaptureEnabled { get; init; }
-    public required bool RequirePeopleTagApproval { get; init; }
+    public required bool RequirePeopleProposalApproval { get; init; }
 
     /// <summary>When the person made the change. A change with an older save time than the stored settings does nothing.</summary>
     [JsonConverter(typeof(InstantWithOffsetConverter))]

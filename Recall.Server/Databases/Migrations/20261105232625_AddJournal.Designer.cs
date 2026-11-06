@@ -1031,9 +1031,9 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("location_capture_enabled");
 
-                    b.Property<bool>("RequirePeopleTagApproval")
+                    b.Property<bool>("RequirePeopleProposalApproval")
                         .HasColumnType("INTEGER")
-                        .HasColumnName("require_people_tag_approval");
+                        .HasColumnName("require_people_proposal_approval");
 
                     b.Property<string>("SavedAt")
                         .HasColumnType("TEXT")

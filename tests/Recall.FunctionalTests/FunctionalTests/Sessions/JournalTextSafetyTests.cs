@@ -38,7 +38,7 @@ public class JournalTextSafetyTests : TestBase
         var added = (await correction.Content.ReadFromJsonAsync<CorrectionDto>())!;
         responses.Add(correction);
         responses.Add(await FactoryClient.PutAsJsonAsync(ApiRoutes.Corrections.GetRecord(added.Id), new { canonicalTerm = $"changed {marker}", mishearings = new[] { $"misheard {marker}" }, version = added.Version }));
-        responses.Add(await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new UserSettingChangeDto { TimeZone = "Europe/Tallinn", LocationCaptureEnabled = true, RequirePeopleTagApproval = true, SavedAt = JournalScenario.Morning }));
+        responses.Add(await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new UserSettingChangeDto { TimeZone = "Europe/Tallinn", LocationCaptureEnabled = true, RequirePeopleProposalApproval = true, SavedAt = JournalScenario.Morning }));
         responses.Add(await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Draft(session.Id), new { text = new string('x', 1_000_001) + marker, baseRevision = 1, savedAt = JournalScenario.Morning }));
         responses.Add(await FactoryClient.DeleteAsync(ApiRoutes.Corrections.GetRecord(added.Id)));
         responses.Add(await FactoryClient.DeleteAsync(ApiRoutes.Sessions.GetRecord(session.Id)));
