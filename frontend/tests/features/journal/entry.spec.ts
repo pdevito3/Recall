@@ -202,7 +202,7 @@ test.describe('an entry', () => {
     const entry = entryPage(page)
     await entry.open(session.id)
 
-    api.mock({ ...sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }), delayMs: 500 })
+    api.mock({ ...sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }), delayMs: 2000 })
     const answered = entry.aSaveAnswered(session.id)
     await entry.editWithoutWaiting(' edited')
     await expect.poll(() => api.all('put', sessionsPaths.rawDraft(session.id)).length).toBe(1)
@@ -227,7 +227,7 @@ test.describe('an entry', () => {
     await entry.edit(session.id, ' edited')
     await expect(entry.at.status('Saved in History at')).toBeVisible()
 
-    api.mock({ ...sessionsApi.draftSaveLoses(session, { draftRevision: 7, latestRevision: 8 }), delayMs: 500 })
+    api.mock({ ...sessionsApi.draftSaveLoses(session, { draftRevision: 7, latestRevision: 8 }), delayMs: 2000 })
     const answered = entry.aSaveAnswered(session.id)
     await entry.editWithoutWaiting(' twice')
     await expect.poll(() => api.all('put', sessionsPaths.rawDraft(session.id)).length).toBe(2)
