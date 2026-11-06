@@ -3,9 +3,11 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Recall.Server;
 using Recall.Server.Databases;
+using Recall.Server.Databases.Sqlite;
 using Recall.Server.Resources;
 using Recall.Server.Resources.Entrypoints;
 using Recall.Server.Resources.Entrypoints.Http.OpenApi;
+using Recall.Server.Resources.FileTelemetry;
 using Recall.Server.Resources.Extensions;
 using Serilog;
 using Serilog.Events;
@@ -26,6 +28,22 @@ try
 
     var builder = WebApplication.CreateBuilder(OpenApiBuildTime.WithHostArgs(args));
     CSharpReplGuard.ThrowIfLoadedOutsideDevelopment(builder.Environment);
+
+    if (!OpenApiBuildTime.IsActive
+        && OwnerOnlyFiles.DataDirectory(builder.Configuration) is { } dataDirectory
+        && SqliteFile.MakeWritableOrRefuse(dataDirectory) is { } notWritable)
+    {
+        Log.Fatal("{Refusal:l}", notWritable);
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    if (!OpenApiBuildTime.IsActive && FileTelemetryPlan.RefusalFor(builder.Configuration) is { } badLimit)
+    {
+        Log.Fatal("{Refusal:l}", badLimit);
+        Environment.ExitCode = 1;
+        return;
+    }
 
     builder.AddServiceDefaults(); // OpenTelemetry, Serilog, health checks, resilience, service discovery
     builder.Services.AddHostedService<MigrationHostedService<AppDbContext>>();
@@ -58,7 +76,6 @@ try
         {
             diagnosticContext.Set("RequestHost", LogValue.Clean(httpContext.Request.Host.Value));
             diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme);
-            diagnosticContext.Set("UserAgent", LogValue.Clean(httpContext.Request.Headers.UserAgent.ToString()));
         };
     });
 

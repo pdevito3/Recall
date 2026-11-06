@@ -3,6 +3,8 @@ namespace Recall.Server.Resources.Extensions;
 using System.Reflection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Entrypoints.Http.OpenApi;
+using FileTelemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OpenTelemetry;
@@ -11,6 +13,7 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Serilog;
 using Serilog.Events;
+using Serilog.Formatting.Compact;
 using Serilog.Sinks.OpenTelemetry;
 
 public static class HostExtensions
@@ -32,7 +35,7 @@ public static class HostExtensions
     private static string RedactedQuery(string query) =>
         "?" + string.Join('&', query.TrimStart('?')
             .Split('&', StringSplitOptions.RemoveEmptyEntries)
-            .Select(pair => $"{pair.Split('=')[0]}=Redacted"));
+            .Select(pair => pair.Contains('=') ? $"{pair.Split('=')[0]}=Redacted" : "Redacted"));
 
     public static TBuilder AddServiceDefaults<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
@@ -69,6 +72,7 @@ public static class HostExtensions
             .WithTracing(tracing =>
             {
                 tracing
+                    .AddProcessor(new SpanTextCapProcessor())
                     .AddSource(Telemetry.Source.Name)
                     .AddSource(serviceName)
                     .AddAspNetCoreInstrumentation(opts =>
@@ -77,6 +81,7 @@ public static class HostExtensions
                         opts.RecordException = true;
                         opts.EnrichWithHttpRequest = (activity, request) =>
                         {
+                            activity.SetTag("user_agent.original", null);
                             if (request.QueryString.HasValue)
                                 activity.SetTag("url.query", RedactedQuery(request.QueryString.Value!));
                         };
@@ -85,17 +90,14 @@ public static class HostExtensions
             });
 
         builder.AddOpenTelemetryExporters();
+        builder.AddFileTelemetryExporters();
 
         return builder;
     }
 
-    /// <summary>
-    /// Registers Serilog as the logging provider. Console output comes from configuration, and logs go
-    /// to OTLP (the Aspire dashboard) when an endpoint is configured.
-    /// </summary>
     /// <remarks>
-    /// The OTLP sink must live inside this one <c>AddSerilog</c> callback. A logger assigned to
-    /// <c>Log.Logger</c> elsewhere is replaced when the host resolves Serilog, so its sinks never run.
+    /// Each sink must live inside this one <c>AddSerilog</c> callback. A logger assigned to <c>Log.Logger</c> elsewhere
+    /// is replaced when the host resolves <c>ILoggerFactory</c>, so its sinks stop there.
     /// </remarks>
     private static TBuilder ConfigureSerilog<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
@@ -110,13 +112,19 @@ public static class HostExtensions
                 .Enrich.WithThreadId()
                 .Enrich.WithProperty("Application", builder.Environment.ApplicationName);
 
-            if (!string.IsNullOrWhiteSpace(otlpEndpoint))
-                lc.WriteTo.OpenTelemetry(options =>
-                {
-                    options.Endpoint = otlpEndpoint;
-                    options.Protocol = OtlpProtocol.Grpc;
-                    options.ResourceAttributes = ResourceAttributes(builder);
-                });
+            lc.WriteTo.CappedText(to =>
+            {
+                if (FilesOutsideTheOpenApiBuild(services) is { } files)
+                    to.RollingFiles(new CompactJsonFormatter(), files.LogFilePath, files.Options.Logs);
+
+                if (!string.IsNullOrWhiteSpace(otlpEndpoint))
+                    to.OpenTelemetry(options =>
+                    {
+                        options.Endpoint = otlpEndpoint;
+                        options.Protocol = OtlpProtocol.Grpc;
+                        options.ResourceAttributes = ResourceAttributes(builder);
+                    });
+            });
         });
 
         return builder;
@@ -175,6 +183,29 @@ public static class HostExtensions
 
         return builder;
     }
+
+    /// <summary>
+    /// The exporter of a span runs on the thread of its batch, and the exporter of a metric on the thread of its reader,
+    /// so a slow disk does not hold a request.
+    /// </summary>
+    private static void AddFileTelemetryExporters<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
+    {
+        builder.Services.ConfigureOpenTelemetryTracerProvider((services, tracing) =>
+        {
+            if (FilesOutsideTheOpenApiBuild(services) is { } files)
+                tracing.AddProcessor(new BatchActivityExportProcessor(new SpanFileExporter(files.NewTracesFile())));
+        });
+        builder.Services.ConfigureOpenTelemetryMeterProvider((services, metrics) =>
+        {
+            if (FilesOutsideTheOpenApiBuild(services) is { } files)
+                metrics.AddReader(new PeriodicExportingMetricReader(
+                    new MetricFileExporter(files.NewMetricsFile()),
+                    files.Options.MetricExportSeconds * 1000));
+        });
+    }
+
+    private static FileTelemetryPlan? FilesOutsideTheOpenApiBuild(IServiceProvider services)
+        => OpenApiBuildTime.IsActive ? null : FileTelemetryPlan.For(services.GetRequiredService<IConfiguration>());
 
     private static TBuilder AddDefaultHealthChecks<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {

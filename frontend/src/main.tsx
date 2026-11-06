@@ -6,6 +6,7 @@ import { RouterProvider, createRouter } from '@tanstack/react-router'
 import { NotFound } from '@/components/not-found'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/toaster'
+import { guardPageAgainstEndedSession } from '@/domain/auth/apis/auth-actions'
 import { AuthKeys } from '@/domain/auth/apis/auth.keys'
 // Connects the generated API clients to apiClient before the first request.
 import { setSessionEndedCheck } from '@/lib/api-client'
@@ -31,6 +32,7 @@ setSessionEndedCheck(async () => {
   await queryClient.invalidateQueries({ queryKey: AuthKeys.user() }, { cancelRefetch: false })
   return queryClient.getQueryData(AuthKeys.user()) === null
 })
+guardPageAgainstEndedSession(queryClient)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

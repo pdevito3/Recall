@@ -6,6 +6,7 @@ using Databases.Sqlite;
 using Domain.Tenants;
 using Domain.Users;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using Storage;
 using ZiggyCreatures.Caching.Fusion;
@@ -52,6 +53,7 @@ public static class WebAppServiceConfiguration
 
             options.UseSqlite(connectionString)
                 .UseSnakeCaseNamingConvention()
+                .ConfigureWarnings(LeaveFailureLogsToTheCaller)
                 .AddInterceptors(
                     SqliteConnectionSetup.Instance,
                     UtcTextParameters.Instance,
@@ -62,4 +64,8 @@ public static class WebAppServiceConfiguration
 
         builder.Services.AddDomainEvents(typeof(Program).Assembly);
     }
+
+    private static void LeaveFailureLogsToTheCaller(WarningsConfigurationBuilder warnings) => warnings.Log(
+        (RelationalEventId.CommandError, LogLevel.Debug),
+        (CoreEventId.SaveChangesFailed, LogLevel.Debug));
 }

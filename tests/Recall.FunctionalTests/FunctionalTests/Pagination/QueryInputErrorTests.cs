@@ -92,6 +92,26 @@ public class QueryInputErrorTests : TestBase
     }
 
     [Test]
+    public async Task sort_on_a_field_that_the_list_does_not_have_names_it_to_the_caller_and_not_to_the_logs()
+    {
+        // Arrange
+        FactoryClient.SetFakeBearerToken(new Dictionary<string, object>
+        {
+            ["client_id"] = TestingWebApplicationFactory.TrustedMachineClientId
+        });
+        var email = $"jane{Guid.NewGuid():N}@example.com";
+
+        // Act
+        var result = await FactoryClient.GetRequestAsync($"{ApiRoutes.Tenants.GetList}?sortOrder={Uri.EscapeDataString(email)}");
+
+        // Assert
+        result.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = (await result.Content.ReadFromJsonAsync<ValidationProblemDetails>()).ShouldNotBeNull();
+        problem.Detail.ShouldBe($"The sort order names the field {email}, which this list does not have. Use one of these fields: id, name.");
+        TestingWebApplicationFactory.Instance.CapturedLogs.Holding(email).ShouldBeEmpty();
+    }
+
+    [Test]
     public async Task page_number_that_is_not_a_number_names_the_value_and_the_field()
     {
         // Arrange
