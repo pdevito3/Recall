@@ -351,7 +351,7 @@ public partial class NoProviderBootTests
     [Test]
     [Arguments("/index.html", false)]
     [Arguments($"/assets/{HashedFile}", true)]
-    public async Task a_file_of_the_spa_is_compressed_and_has_both_its_cache_rule_and_the_content_security_policy(string path, bool stays)
+    public async Task a_file_of_the_spa_is_compressed_and_has_both_its_cache_rule_and_the_content_security_policy(string path, bool hashed)
     {
         // Arrange
         await using var server = await ServerProcess.StartAsync();
@@ -365,9 +365,9 @@ public partial class NoProviderBootTests
         answer.StatusCode.ShouldBe(HttpStatusCode.OK);
         answer.Content.Headers.ContentEncoding.ShouldHaveSingleItem().ShouldBe("br");
         answer.Headers.GetValues("Content-Security-Policy").ShouldHaveSingleItem().ShouldContain("script-src 'self';");
-        answer.Headers.CacheControl!.NoCache.ShouldBe(!stays);
-        answer.Headers.CacheControl.Public.ShouldBe(stays);
-        answer.Headers.CacheControl.ToString().Contains("immutable").ShouldBe(stays);
+        answer.Headers.CacheControl!.NoCache.ShouldBe(!hashed);
+        answer.Headers.CacheControl.Public.ShouldBe(hashed);
+        answer.Headers.CacheControl.ToString().Contains("immutable").ShouldBe(hashed);
     }
 
     [Test]
