@@ -1,9 +1,13 @@
 namespace Recall.Server.Domain.Sessions.Content;
 
+using System.Text.Encodings.Web;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 public static class RawTranscript
 {
+    private static readonly JsonSerializerOptions PlainCharacters = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
     public static string Append(string raw, string words)
     {
         if (string.IsNullOrWhiteSpace(raw))
@@ -29,7 +33,7 @@ public static class RawTranscript
             document["content"] = new JsonArray(ParagraphOf(words));
         }
 
-        return document.ToJsonString();
+        return document.ToJsonString(PlainCharacters);
     }
 
     // The editor keeps one empty paragraph in a document with no words.
@@ -37,7 +41,7 @@ public static class RawTranscript
         => content is [JsonObject only] && ProseMirrorNode.TypeOf(only) == "paragraph" && only["content"] is null or JsonArray { Count: 0 };
 
     private static string DocumentOf(JsonArray content)
-        => new JsonObject { ["type"] = "doc", ["content"] = content }.ToJsonString();
+        => new JsonObject { ["type"] = "doc", ["content"] = content }.ToJsonString(PlainCharacters);
 
     private static JsonObject ParagraphOf(string words) => new()
     {

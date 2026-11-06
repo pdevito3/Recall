@@ -136,6 +136,25 @@ public class RecordingApiTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "REC-7")]
+    public async Task a_second_finish_and_a_retry_queue_the_work_again_while_it_waits()
+    {
+        // Arrange
+        var (sessionId, _, _) = await SignedInWithSessionAsync();
+        var recording = await FactoryClient.AddFinishedRecordingAsync(sessionId);
+        var before = await RecordingSweepTests.CountJobsAsync("transcribe-recording", recording.Id);
+
+        // Act
+        var finish = await FactoryClient.FinishAsync(recording.Id, 2, recording.ByteLength);
+        var retry = await FactoryClient.PostAsync(ApiRoutes.Recordings.Retry(recording.Id), null);
+
+        // Assert
+        finish.StatusCode.ShouldBe(HttpStatusCode.OK);
+        retry.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await RecordingSweepTests.CountJobsAsync("transcribe-recording", recording.Id)).ShouldBeGreaterThanOrEqualTo(before + 2);
+    }
+
+    [Test]
     public async Task a_first_slice_that_is_not_the_named_format_is_refused()
     {
         // Arrange

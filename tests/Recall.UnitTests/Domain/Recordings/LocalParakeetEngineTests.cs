@@ -186,6 +186,22 @@ public class LocalParakeetEngineTests
     }
 
     [Test]
+    [Arguments("worker")]
+    [Arguments("worker.dll")]
+    public async Task a_machine_with_no_worker_says_that_the_engine_is_not_installed(string name)
+    {
+        // Arrange
+        using var rig = new Rig();
+        var engine = rig.Engine(Path.Combine(rig.Folder, "no-such-folder", name));
+
+        // Act
+        var problem = await ProblemOfAsync(engine, rig.Input());
+
+        // Assert
+        problem.ShouldBe(RecordingProblem.EngineNotInstalled);
+    }
+
+    [Test]
     public async Task audio_past_the_limit_is_too_long()
     {
         // Arrange

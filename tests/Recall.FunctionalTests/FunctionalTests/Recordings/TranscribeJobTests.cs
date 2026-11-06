@@ -277,6 +277,62 @@ public class TranscribeJobTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "REC-6")]
+    public async Task a_save_from_before_a_chunk_loses_and_the_chunk_stays_in_the_draft()
+    {
+        // Arrange
+        var (recording, admin) = await FinishedRecordingAsync();
+        var session = await FactoryClient.GetFromJsonAsync<SessionDto>(ApiRoutes.Sessions.GetRecord(recording.SessionId));
+        await RunAsync(JobWith(Saying("heard words")), recording, admin);
+
+        // Act
+        var save = await FactoryClient.SaveDraftAsync(recording.SessionId, "typed from an old copy", session!.RawDraftRevision);
+
+        // Assert
+        save.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await PlainRawAsync(recording.SessionId)).ShouldBe("heard words");
+    }
+
+    [Test]
+    [Property("Rule", "REC-6")]
+    public async Task a_chunk_at_or_before_the_pointer_adds_no_text()
+    {
+        // Arrange
+        var (recording, admin) = await FinishedRecordingAsync();
+        var engine = new FakeEngine(true, (input, token) => TheSameChunkTwice());
+
+        // Act
+        await RunAsync(JobWith(engine), recording, admin);
+
+        // Assert
+        (await PlainRawAsync(recording.SessionId)).ShouldBe("heard words");
+    }
+
+    private static async IAsyncEnumerable<TranscriptChunk> TheSameChunkTwice()
+    {
+        yield return new TranscriptChunk(16_000, 16_000, "heard words");
+        await Task.Yield();
+        yield return new TranscriptChunk(16_000, 16_000, "heard words");
+    }
+
+    [Test]
+    [Property("Rule", "REC-6")]
+    public async Task words_that_cannot_be_stored_fail_the_recording_and_keep_the_pointer()
+    {
+        // Arrange
+        var (recording, admin) = await FinishedRecordingAsync();
+
+        // Act
+        await RunAsync(JobWith(Saying("bad\0words")), recording, admin);
+
+        // Assert
+        var read = await FactoryClient.GetRecordingAsync(recording.Id);
+        read.Status.ShouldBe(nameof(RecordingStatus.Failed));
+        read.Problem.ShouldBe(nameof(RecordingProblem.EngineCrashed));
+        (await FactoryClient.GetAsync(ApiRoutes.Recordings.File(recording.Id, "audio.webm"))).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Test]
     public async Task the_kept_audio_goes_after_seven_days_and_the_text_stays()
     {
         // Arrange

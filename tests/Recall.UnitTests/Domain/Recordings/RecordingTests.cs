@@ -51,6 +51,78 @@ public class RecordingTests
     }
 
     [Test]
+    public void a_recording_that_does_not_wait_takes_no_attempt()
+    {
+        // Arrange
+        var receiving = Receiving();
+        var failed = Received();
+        failed.Fail(RecordingProblem.EngineCrashed);
+
+        // Act and assert
+        Should.Throw<ConflictException>(() => receiving.BeginAttempt());
+        Should.Throw<ConflictException>(() => failed.BeginAttempt());
+    }
+
+    [Test]
+    public void a_retry_of_a_recording_that_waits_changes_nothing()
+    {
+        // Arrange
+        var recording = Received();
+        recording.BeginAttempt();
+
+        // Act
+        recording.Retry();
+
+        // Assert
+        recording.Status.ShouldBe(RecordingStatus.Transcribing);
+        recording.AttemptsWithoutProgress.ShouldBe(1);
+    }
+
+    [Test]
+    public void a_retry_after_no_words_reads_the_audio_from_the_start()
+    {
+        // Arrange
+        var recording = Received();
+        recording.BeginAttempt();
+        recording.AdvanceTo(32_000, 32_000, hasWords: false);
+        recording.Complete(Now);
+        recording.Problem.ShouldBe(RecordingProblem.NoWordsFound);
+
+        // Act
+        recording.Retry();
+
+        // Assert
+        recording.TranscribedSamples.ShouldBe(0);
+    }
+
+    [Test]
+    public void a_repeat_of_a_saved_chunk_does_not_advance_the_pointer()
+    {
+        // Arrange
+        var recording = Received();
+        recording.BeginAttempt();
+        recording.AdvanceTo(16_000, 32_000, hasWords: true);
+
+        // Act
+        var advanced = recording.AdvanceTo(16_000, 32_000, hasWords: true);
+
+        // Assert
+        advanced.ShouldBeFalse();
+    }
+
+    [Test]
+    public void transcript_text_keeps_its_characters_so_that_it_takes_no_extra_length()
+    {
+        // Arrange and act
+        var text = RawTranscript.Append("", "don't, käsi");
+        var appended = RawTranscript.Append(text, "сказал");
+
+        // Assert
+        text.ShouldContain("don't, käsi");
+        appended.ShouldContain("сказал");
+    }
+
+    [Test]
     public void a_slice_after_the_finish_is_a_conflict()
     {
         // Arrange
@@ -258,10 +330,13 @@ public class RecordingTests
     }
 
     [Test]
-    public void a_retry_of_a_recording_that_did_not_fail_is_a_conflict()
+    public void a_retry_of_a_recording_with_its_text_is_a_conflict()
     {
         // Arrange
         var recording = Received();
+        recording.BeginAttempt();
+        recording.AdvanceTo(16_000, 16_000, hasWords: true);
+        recording.Complete(Now);
 
         // Act and assert
         Should.Throw<ConflictException>(recording.Retry);

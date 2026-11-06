@@ -172,12 +172,17 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
 
     public void Retry()
     {
+        if (WaitsForTranscription)
+            return;
+
         if (Status != RecordingStatus.Failed)
-            throw new ConflictException(StatusField, "Only a Recording that failed can run again.");
+            throw new ConflictException(StatusField, "Only a Recording that failed or that waits for its text can run again.");
 
         Status = RecordingStatus.Received;
         Problem = RecordingProblem.None;
         AttemptsWithoutProgress = 0;
+        if (!HasText)
+            TranscribedSamples = 0;
     }
 
     public bool CanDeleteAudio(DateTimeOffset now)

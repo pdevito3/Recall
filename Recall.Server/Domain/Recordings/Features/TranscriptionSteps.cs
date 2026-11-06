@@ -70,7 +70,15 @@ public static class SaveTranscriptChunk
                 .GetById(request.Id, cancellationToken);
 
             var words = request.Words.Trim();
-            var hasWords = words.Length > 0 && StorableText.CanStore(words);
+            if (!StorableText.CanStore(words))
+            {
+                recording.Fail(RecordingProblem.EngineCrashed);
+                await dbContext.SaveChangesAsync(cancellationToken);
+                _logger.Here().Warning("The engine gave text that cannot be stored for recording {RecordingId}", recording.Id);
+                return false;
+            }
+
+            var hasWords = words.Length > 0;
             if (!recording.AdvanceTo(request.EndSample, request.TotalSamples, hasWords))
             {
                 await dbContext.SaveChangesAsync(cancellationToken);
@@ -190,6 +198,7 @@ public static class RemoveKeptAudio
                 return;
 
             fileStore.Delete(RecordingFiles.Audio(recording));
+            fileStore.Delete(RecordingFiles.WorkAudio(recording));
             recording.MarkAudioDeleted(now);
             await dbContext.SaveChangesAsync(cancellationToken);
             _logger.Here().Information("Removed the kept audio of recording {RecordingId}", recording.Id);

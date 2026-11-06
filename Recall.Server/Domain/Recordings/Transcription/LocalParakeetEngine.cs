@@ -97,17 +97,23 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
 
     private string[] WorkerCommand(TranscriptionOptions settings, string wav, long startSample)
     {
+        if (!File.Exists(settings.WorkerPath))
+            throw new TranscriptionEngineException(RecordingProblem.EngineNotInstalled);
+
         string[] arguments =
         [
             wav, modelStore.Folder, settings.Threads.ToString(CultureInfo.InvariantCulture),
             startSample.ToString(CultureInfo.InvariantCulture),
         ];
         return RunsUnderDotnet(settings.WorkerPath)
-            ? [Environment.ProcessPath!, settings.WorkerPath, .. arguments]
+            ? [DotnetHost(), settings.WorkerPath, .. arguments]
             : [settings.WorkerPath, .. arguments];
     }
 
     private static bool RunsUnderDotnet(string workerPath) => workerPath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase);
+
+    private static string DotnetHost()
+        => Path.GetFileNameWithoutExtension(Environment.ProcessPath) == "dotnet" ? Environment.ProcessPath! : "dotnet";
 
     private static Process Start(string[] command, int threads)
     {

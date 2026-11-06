@@ -46,6 +46,8 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
 
     public int? LastCleanupRawRevision { get; private set; }
 
+    public int? LastTranscriptRevision { get; private set; }
+
     public uint MetadataVersion { get; private set; }
 
     [Sensitive] public string Activity { get; private set; } = SessionActivity.None;
@@ -102,7 +104,7 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
 
     public DraftSaveOutcome SaveRaw(DraftSave save, bool isReplay)
     {
-        var decision = Raw.Decide(save, isReplay);
+        var decision = Raw.Decide(save, isReplay, missesTranscript: save.BaseRevision < LastTranscriptRevision);
         Raw = decision.Next;
         if (decision.MintedRevision is { } number)
             _appendedRawRevisions.Add(new RawRevision(Id, number, save.SavedAt, save.ClaimedSavedAt, save.Text));
@@ -132,6 +134,7 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
 
         var number = Raw.LatestRevision + 1;
         Raw = new DraftSlot(text, number, number, now);
+        LastTranscriptRevision = number;
         _appendedRawRevisions.Add(new RawRevision(Id, number, now, now, text));
         RefreshFromDrafts();
         return true;

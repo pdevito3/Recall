@@ -8,7 +8,7 @@ import type { RetryRecordingOptions, RetryRecordingResponses } from '../types/re
 import { client, unwrapResult } from '../../.kubb/client'
 
 /**
- * @summary Queues a Recording that failed again. It goes on after the text that is saved, so no text repeats.
+ * @summary Queues a Recording that failed or that still waits for its text. It goes on after the text that is saved, so no text repeats.
  * {@link /api/v1/recordings/:id/retry}
  */
 export function retryRecording<ThrowOnError extends boolean = true>(options: Options<RetryRecordingOptions, ThrowOnError>): Promise<UnwrappedResult<RetryRecordingResponses, ThrowOnError>> {

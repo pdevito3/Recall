@@ -38,7 +38,11 @@ public static class FinishRecording
             var stored = slices.Select(s => s.Index).ToList();
 
             if (recording.Status != RecordingStatus.Receiving && request.Dto.SliceCount == stored.Count && request.Dto.ByteLength == recording.ByteLength)
+            {
+                if (recording.WaitsForTranscription)
+                    await RecordingWork.TryQueueTranscriptionAsync(dbContext, recording, timeProvider, _logger);
                 return recording.ToDto(stored, modelStore.Status);
+            }
 
             recording.Finish(stored, request.Dto.SliceCount, request.Dto.ByteLength);
             await fileStore.WriteAsync(RecordingFiles.Audio(recording), async (target, ct) =>
@@ -51,7 +55,7 @@ public static class FinishRecording
             }, cancellationToken);
 
             await dbContext.SaveChangesAsync(cancellationToken);
-            await RecordingWork.TryQueueTranscriptionAsync(dbContext, recording, timeProvider, _logger, cancellationToken);
+            await RecordingWork.TryQueueTranscriptionAsync(dbContext, recording, timeProvider, _logger);
             RecordingWork.TryDeleteSlices(fileStore, recording, _logger);
 
             Activity.Current?.SetTag("app.recording.byte_length", recording.ByteLength);
@@ -85,19 +89,19 @@ public sealed class FinishRecordingEndpoint : IEndpoint
 
 public static class RecordingWork
 {
-    public static async Task TryQueueTranscriptionAsync(
-        AppDbContext dbContext, Recording recording, TimeProvider timeProvider, ILogger logger, CancellationToken cancellationToken)
+    // The status is already saved, so a client that goes away here must not stop the work.
+    public static async Task TryQueueTranscriptionAsync(AppDbContext dbContext, Recording recording, TimeProvider timeProvider, ILogger logger)
     {
         try
         {
             await dbContext.SaveAndEnqueueAsync(
                 (jobs, ct) => jobs.EnqueueAsync(new TranscribeRecording(recording.Id, recording.UserId, recording.TenantId), timeProvider.GetUtcNow(), ct),
-                cancellationToken);
+                CancellationToken.None);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (Exception exception)
         {
             Activity.Current?.SetTag("app.recording.queue_fault", exception.GetType().Name);
-            logger.Here().Warning("Could not queue the text of recording {RecordingId}, because of {FaultType}. The next start queues it", recording.Id, exception.GetType().Name);
+            logger.Here().Warning("Could not queue the text of recording {RecordingId}, because of {FaultType}. The sweep queues it within the hour", recording.Id, exception.GetType().Name);
         }
     }
 

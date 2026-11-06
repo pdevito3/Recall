@@ -3,6 +3,7 @@ namespace Recall.FunctionalTests.FunctionalTests.Recordings;
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Polly.Timeout;
 using Recall.Server.Domain.Recordings.Jobs;
 using Recall.Server.Domain.Recordings.Transcription;
 using Shouldly;
@@ -99,6 +100,50 @@ public class DownloadModelJobTests : TestBase
         // Assert
         store.Status.ShouldBe(ModelStatus.DownloadFailed);
         (await RecordingSweepTests.CountJobsAsync("download-model", "")).ShouldBe(before + 1);
+    }
+
+    [Test]
+    [Property("Rule", "REC-12")]
+    public async Task a_timeout_of_the_resilience_handler_ends_as_a_failed_download_with_a_retry()
+    {
+        // Arrange
+        using var rig = new Rig();
+        using var answer = new Answering(_ => throw new TimeoutRejectedException());
+        var (job, store) = rig.Build(answer);
+        var before = await RecordingSweepTests.CountJobsAsync("download-model", "");
+
+        // Act
+        await job.DownloadModelAsync(CancellationToken.None);
+
+        // Assert
+        store.Status.ShouldBe(ModelStatus.DownloadFailed);
+        (await RecordingSweepTests.CountJobsAsync("download-model", "")).ShouldBe(before + 1);
+    }
+
+    [Test]
+    [Property("Rule", "REC-12")]
+    public async Task a_retry_that_cannot_be_queued_leaves_the_next_attempt_free_to_run()
+    {
+        // Arrange
+        using var rig = new Rig();
+        using var answer = new Answering(_ => throw new HttpRequestException("Connection refused"));
+        var settings = Options.Create(new TranscriptionOptions { ModelRoot = rig.Root });
+        var store = new ModelStore(settings);
+        var scopes = Services.GetRequiredService<IServiceScopeFactory>();
+        var job = new DownloadModelJob(answer, store, new ModelDownloads(new NoScopes(), store, TimeProvider.System),
+            new RecordingSweep(scopes, Services.GetRequiredService<Recall.Server.Resources.Storage.FileStore>(), TimeProvider.System), settings, TimeProvider.System);
+
+        // Act
+        await Should.ThrowAsync<InvalidOperationException>(() => job.DownloadModelAsync(CancellationToken.None));
+
+        // Assert
+        store.TryReserveDownload().ShouldBeTrue();
+        store.TryBeginDownload(DateTimeOffset.UtcNow, TimeSpan.FromMinutes(15)).ShouldBeTrue();
+    }
+
+    private sealed class NoScopes : IServiceScopeFactory
+    {
+        public IServiceScope CreateScope() => throw new InvalidOperationException("The database is not there.");
     }
 
     [Test]

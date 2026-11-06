@@ -67,7 +67,7 @@ public sealed class DownloadModelJob(
         {
             await EndWithFaultAsync(ModelStatus.HashRejected, nameof(ModelHashRejectedException), retryGap, cancellationToken);
         }
-        catch (Exception exception) when (exception is HttpRequestException or IOException or UnauthorizedAccessException or OperationCanceledException)
+        catch (Exception exception)
         {
             await EndWithFaultAsync(ModelStatus.DownloadFailed, exception.GetType().Name, retryGap, cancellationToken);
         }
@@ -78,7 +78,15 @@ public sealed class DownloadModelJob(
         Activity.Current?.SetTag("app.model.fault", faultType);
         _logger.Here().Warning("The speech model download ended with {ModelStatus}, because of {FaultType}", fault, faultType);
         modelStore.EndDownload(fault, retryIsQueued: true);
-        await modelDownloads.EnqueueAsync(timeProvider.GetUtcNow() + retryGap, cancellationToken);
+        try
+        {
+            await modelDownloads.EnqueueAsync(timeProvider.GetUtcNow() + retryGap, cancellationToken);
+        }
+        catch
+        {
+            modelStore.ForgetRetry();
+            throw;
+        }
     }
 
     private async Task GetEachFileAsync(CancellationToken cancellationToken)

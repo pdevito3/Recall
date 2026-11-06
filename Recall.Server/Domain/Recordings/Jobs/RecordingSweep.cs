@@ -16,23 +16,40 @@ public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore 
     {
         var (owners, deletedTenants, liveTenants) = await ReadOwnersAsync(cancellationToken);
 
+        foreach (var owner in owners)
+            await QueueWaitingAsync(owner, cancellationToken);
+
         foreach (var tenantId in deletedTenants)
             RecordingWork.TryDeleteFolder(fileStore, FileKey.ForTenant(tenantId), tenantId, _logger);
 
         foreach (var tenantId in liveTenants)
-        {
-            var folder = FileKey.ForTenant(tenantId, RecordingFiles.RootFolder);
-            foreach (var userId in fileStore.FolderNamesUnder(folder).Where(name => !owners.Contains(new JournalOwner(name, tenantId))))
-                RecordingWork.TryDeleteFolder(fileStore, RecordingFiles.OwnerFolder(tenantId, userId), userId, _logger);
-        }
+            await SweepStepAsync(tenantId, () => SweepOwnerFoldersOfTenantAsync(tenantId, cancellationToken));
 
         foreach (var owner in owners)
-        {
-            await QueueWaitingAsync(owner, cancellationToken);
-            await SweepFilesOfOwnerAsync(owner, cancellationToken);
-        }
+            await SweepStepAsync(owner.UserId, () => SweepFilesOfOwnerAsync(owner, cancellationToken));
 
         _logger.Here().Information("Swept the audio of {OwnerCount} owners and {DeletedTenantCount} deleted tenants", owners.Count, deletedTenants.Count);
+    }
+
+    private async Task SweepStepAsync(string folderOwnerId, Func<Task> step)
+    {
+        try
+        {
+            await step();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.Here().Warning("Could not sweep the audio of {FolderOwnerId}, because of {FaultType}. The next start tries again", folderOwnerId, exception.GetType().Name);
+        }
+    }
+
+    // Each sweep lists folders before it reads rows. A row commits before its first file, so a new upload is never unknown.
+    private async Task SweepOwnerFoldersOfTenantAsync(string tenantId, CancellationToken cancellationToken)
+    {
+        var names = fileStore.FolderNamesUnder(FileKey.ForTenant(tenantId, RecordingFiles.RootFolder)).ToList();
+        var (owners, _, _) = await ReadOwnersAsync(cancellationToken);
+        foreach (var userId in names.Where(name => !owners.Contains(new JournalOwner(name, tenantId))))
+            RecordingWork.TryDeleteFolder(fileStore, RecordingFiles.OwnerFolder(tenantId, userId), userId, _logger);
     }
 
     public async Task QueueWaitingRecordingsAsync(CancellationToken cancellationToken)
@@ -68,6 +85,7 @@ public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore 
         await using var scope = scopeFactory.CreateJournalScope(owner);
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var now = timeProvider.GetUtcNow();
+        var folders = fileStore.FolderNamesUnder(RecordingFiles.OwnerFolder(owner.TenantId, owner.UserId)).ToList();
         var rows = await dbContext.Recordings
             .TagWithOperationCallSite("recordings.sweep.rows")
             .AsNoTracking()
@@ -75,7 +93,7 @@ public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore 
             .ToListAsync(cancellationToken);
 
         var known = rows.Select(r => r.Id).ToHashSet(StringComparer.Ordinal);
-        foreach (var folder in fileStore.FolderNamesUnder(RecordingFiles.OwnerFolder(owner.TenantId, owner.UserId)).Where(name => !known.Contains(name)))
+        foreach (var folder in folders.Where(name => !known.Contains(name)))
             RecordingWork.TryDeleteFolder(fileStore, RecordingFiles.Folder(owner.TenantId, owner.UserId, folder), folder, _logger);
 
         var overdue = rows
@@ -115,20 +133,32 @@ public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore 
     }
 }
 
-public sealed class RecordingSweepService(RecordingSweep sweep) : BackgroundService
+public sealed class RecordingSweepService(RecordingSweep sweep, TimeProvider timeProvider) : BackgroundService
 {
+    public static readonly TimeSpan WaitingCheck = TimeSpan.FromHours(1);
+
     private readonly ILogger _logger = Log.ForContext<RecordingSweepService>();
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        await RunGuardedAsync(sweep.RunAsync, stoppingToken);
+
+        // A queue fault or a dead-lettered job leaves a Recording that waits with no job. A second job for one that has a job does nothing.
+        using var timer = new PeriodicTimer(WaitingCheck, timeProvider);
+        while (await timer.WaitForNextTickAsync(stoppingToken))
+            await RunGuardedAsync(sweep.QueueWaitingRecordingsAsync, stoppingToken);
+    }
+
+    private async Task RunGuardedAsync(Func<CancellationToken, Task> work, CancellationToken stoppingToken)
+    {
         try
         {
-            await sweep.RunAsync(stoppingToken);
+            await work(stoppingToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             Telemetry.RecordError(System.Diagnostics.Activity.Current, exception);
-            _logger.Here().Error("The audio sweep failed with {FaultType}. The next start tries again", exception.GetType().Name);
+            _logger.Here().Error("The audio sweep failed with {FaultType}. The next check tries again", exception.GetType().Name);
         }
     }
 }

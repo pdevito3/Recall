@@ -28,7 +28,7 @@ public static class RetryRecording
                 .GetById(request.Id, cancellationToken);
             recording.Retry();
             await dbContext.SaveChangesAsync(cancellationToken);
-            await RecordingWork.TryQueueTranscriptionAsync(dbContext, recording, timeProvider, _logger, cancellationToken);
+            await RecordingWork.TryQueueTranscriptionAsync(dbContext, recording, timeProvider, _logger);
 
             _logger.Here().Information("Queued recording {RecordingId} again", recording.Id);
             return recording.ToDto([], modelStore.Status);
@@ -48,7 +48,7 @@ public sealed class RetryRecordingEndpoint : IEndpoint
         .ProducesValidationProblem(StatusCodes.Status409Conflict)
         .ProducesValidationProblem(StatusCodes.Status422UnprocessableEntity);
 
-    /// <summary>Queues a Recording that failed again. It goes on after the text that is saved, so no text repeats.</summary>
+    /// <summary>Queues a Recording that failed or that still waits for its text. It goes on after the text that is saved, so no text repeats.</summary>
     public static async Task<Ok<RecordingDto>> Handle(string id, IMediator mediator, CancellationToken cancellationToken)
         => TypedResults.Ok(await mediator.Send(new RetryRecording.Command(id), cancellationToken));
 }

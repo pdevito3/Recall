@@ -32,7 +32,7 @@ An append-only snapshot of Raw or of Cleaned, made at a save point. Each change 
 _Avoid_: Version (the concurrency token of a row), history entry
 
 **Last-write-wins**:
-The rule for two saves of one Draft. The later save time holds the Draft, and the earlier save stays as a Revision, so no words go away.
+The rule for two saves of one Draft. The later save time holds the Draft, and the earlier save stays as a Revision, so no words go away. A transcript chunk is not a save, so a save from a base older than the last chunk loses at any save time.
 _Avoid_: Conflict, merge
 
 **Stale**:

@@ -908,6 +908,10 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("last_modified_on");
 
+                    b.Property<int?>("LastTranscriptRevision")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("last_transcript_revision");
+
                     b.Property<double?>("Latitude")
                         .HasColumnType("REAL")
                         .HasColumnName("latitude");

@@ -3,6 +3,7 @@ namespace Recall.FunctionalTests.FunctionalTests.Recordings;
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Recall.Server.Domain.Recordings;
 using Recall.Server.Domain.Recordings.Jobs;
 using Recall.Server.Domain.Tenants;
@@ -129,6 +130,44 @@ public class RecordingSweepTests : TestBase
 
         // Assert
         folder.Holds(orphan).ShouldBeFalse();
+    }
+
+    [Test]
+    [Property("Rule", "REC-7")]
+    public async Task the_hourly_check_queues_a_recording_that_still_waits()
+    {
+        // Arrange
+        var (admin, _) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(admin.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        var recording = await FactoryClient.AddFinishedRecordingAsync(session.Id);
+        using var folder = new SweptFolder();
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var sweep = new RecordingSweep(Services.GetRequiredService<IServiceScopeFactory>(), folder.Store, clock);
+        using var service = new RecordingSweepService(sweep, clock);
+        var before = await CountJobsAsync("transcribe-recording", recording.Id);
+
+        // Act
+        await service.StartAsync(CancellationToken.None);
+        var afterStart = await WaitForMoreJobsAsync(recording.Id, before);
+        clock.Advance(RecordingSweepService.WaitingCheck);
+        var afterHour = await WaitForMoreJobsAsync(recording.Id, afterStart);
+        await service.StopAsync(CancellationToken.None);
+
+        // Assert
+        afterHour.ShouldBeGreaterThan(afterStart);
+    }
+
+    private static async Task<long> WaitForMoreJobsAsync(string recordingId, long known)
+    {
+        var count = known;
+        for (var tries = 0; tries < 200 && count <= known; tries++)
+        {
+            await Task.Delay(100);
+            count = await CountJobsAsync("transcribe-recording", recordingId);
+        }
+
+        return count;
     }
 
     [Test]

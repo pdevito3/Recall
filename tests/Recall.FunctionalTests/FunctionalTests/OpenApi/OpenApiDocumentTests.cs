@@ -38,7 +38,8 @@ public class OpenApiDocumentTests
         var schema = root["paths"]?["/api/v1/recordings/{id}/slices/{index}"]?["put"]?["requestBody"]?["content"]?["application/octet-stream"]?["schema"];
 
         // Assert
-        schema?["format"]?.GetValue<string>().ShouldBe("byte");
+        schema.ShouldNotBeNull();
+        schema["format"]?.GetValue<string>().ShouldBe("byte");
     }
 
     [Test]

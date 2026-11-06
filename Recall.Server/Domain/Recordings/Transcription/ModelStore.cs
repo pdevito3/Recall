@@ -103,5 +103,14 @@ public sealed class ModelStore(IOptions<TranscriptionOptions> options)
         }
     }
 
+    public void ForgetRetry()
+    {
+        lock (_gate)
+        {
+            _downloadIsQueued = false;
+            _lastTry = null;
+        }
+    }
+
     private string MarkerPath => Path.Combine(Folder, AllHashesPassedMarker);
 }
