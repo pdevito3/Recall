@@ -1,4 +1,4 @@
-namespace Recall.Server.Resources.Jobs;
+namespace Recall.Server.Resources.Entrypoints.Jobs;
 
 using BackWave.Dashboard;
 using Domain.Users;

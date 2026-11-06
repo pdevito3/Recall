@@ -7,8 +7,8 @@ using Recall.Server.Databases.Sqlite;
 using Recall.Server.Resources;
 using Recall.Server.Resources.Entrypoints;
 using Recall.Server.Resources.Entrypoints.Http.OpenApi;
+using Recall.Server.Resources.Entrypoints.Jobs;
 using Recall.Server.Resources.Extensions;
-using Recall.Server.Resources.Jobs;
 using Serilog;
 using Serilog.Events;
 

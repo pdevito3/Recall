@@ -29,6 +29,9 @@ public static class EntrypointRegistration
         builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
         builder.Services.AddSwaggerExtension(builder.Configuration);
 
+        // The job dashboard checks an antiforgery token on each write.
+        builder.Services.AddAntiforgery();
+
         // MCP. The transport is stateless, so each tool call runs in its own HTTP request. Then the
         // HttpContext, the caller, and the tenant scope are the ones of that request.
         builder.Services.AddMcpServer()

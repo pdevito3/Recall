@@ -2,6 +2,7 @@ namespace Recall.UnitTests.Resources.Jobs;
 
 using System.Diagnostics;
 using Microsoft.AspNetCore.Http;
+using Recall.Server.Resources.Entrypoints.Jobs;
 using Recall.Server.Resources.Jobs;
 using Shouldly;
 

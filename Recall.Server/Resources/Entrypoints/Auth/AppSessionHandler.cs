@@ -7,7 +7,7 @@ using Microsoft.Extensions.Options;
 using Recall.Server.Auth;
 using Recall.Server.Auth.Entities;
 using Recall.Server.Domain.Users;
-using Recall.Server.Resources.Jobs;
+using Recall.Server.Resources.Entrypoints.Jobs;
 
 /// <summary>
 /// A cookie needs <c>X-CSRF: 1</c>, and a cross-site page cannot send that header. A browser that opens

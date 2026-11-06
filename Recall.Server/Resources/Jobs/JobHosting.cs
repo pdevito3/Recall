@@ -31,7 +31,6 @@ public static class JobHosting
 
         builder.Services.Configure<JobOptions>(section);
         builder.Services.Configure<HostOptions>(host => host.ShutdownTimeout = HostShutdownTimeout);
-        builder.Services.AddAntiforgery();
         builder.Services.AddBackWave(backwave =>
         {
             backwave.UseStore(services => new SqliteJobStore(new SqliteStoreOptions

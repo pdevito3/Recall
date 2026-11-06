@@ -1,6 +1,6 @@
 # Background jobs
 
-Work that does not fit in a request runs as a BackWave job. A job survives a crash and a restart, because its row is in the database of the app. `Recall.Server/Resources/Jobs/` holds the host setup and the one health job.
+Work that does not fit in a request runs as a BackWave job. A job survives a crash and a restart, because its row is in the database of the app. `Recall.Server/Resources/Jobs/` holds the host setup and the one health job. `Recall.Server/Resources/Entrypoints/Jobs/` holds the dashboard.
 
 ## Rules for a job
 
@@ -16,10 +16,10 @@ Work that does not fit in a request runs as a BackWave job. A job survives a cra
 
 To write rows and enqueue a job as one unit, use `AppDbContext.SaveAndEnqueueAsync`. It runs the handlers of the domain events first, then it opens one transaction for the changes, the audit entries, and the enqueue. Give that transaction to `BackWaveClient.EnqueueAsync`:
 
+<!-- code: tests/Recall.IntegrationTests/Jobs/SaveAndEnqueueTests.cs -->
 ```csharp
-await dbContext.SaveAndEnqueueAsync((transaction, cancellationToken) =>
-    client.EnqueueAsync(new TranscribeEntry(entry.Id), dueTime: now, transaction: transaction, cancellationToken: cancellationToken).AsTask(),
-    cancellationToken);
+await db.SaveAndEnqueueAsync(async (transaction, ct) =>
+    jobId = await client.EnqueueAsync(new SystemHealth(), dueTime: DateTimeOffset.UtcNow.AddDays(1), transaction: transaction, cancellationToken: ct));
 ```
 
 If the save, the enqueue, or the commit fails, neither the rows nor the job stay. The context then refuses each later save, as after each failed save. `SaveChangesAsync` still refuses a transaction that you opened.

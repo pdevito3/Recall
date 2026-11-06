@@ -15,6 +15,7 @@ using Microsoft.Extensions.Options;
 using Recall.FunctionalTests.Auth;
 using Recall.Server.Auth.Entities;
 using TestUtilities;
+using Recall.Server.Resources.Entrypoints.Jobs;
 using Recall.Server.Resources.Jobs;
 using Shouldly;
 
