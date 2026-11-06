@@ -270,6 +270,22 @@ public partial class NoProviderBootTests
     }
 
     [Test]
+    public async Task the_html_of_the_app_tells_the_browser_to_store_nothing()
+    {
+        // Arrange
+        await using var server = await ServerProcess.StartAsync();
+
+        // Act
+        using var index = await server.Client.GetAsync("/");
+        using var route = await server.Client.GetAsync("/users");
+
+        // Assert
+        // With this header, Chromium did not restore a page after its cookies were removed. docs/authentication.md has the runs.
+        index.Headers.CacheControl!.NoStore.ShouldBeTrue();
+        route.Headers.CacheControl!.NoStore.ShouldBeTrue();
+    }
+
+    [Test]
     public async Task a_path_of_the_server_never_gets_the_spa()
     {
         // Arrange

@@ -192,11 +192,22 @@ The browser can keep a page in its back-forward cache, and Back then shows this 
 
 So in a live session, Back from this cache costs one call of `/auth/me`.
 
-Limits of this hide:
+The HTML of the app has `Cache-Control: no-store`. In the runs below, Chromium did not restore a page with this header after the cookies were gone, and it did restore the page while the cookies stayed.
 
+This hide and this header have limits. Each count in this table is the number of local runs in Chromium, with the cache on, that had private text on a frame:
+
+| The case | Without `no-store` | With `no-store` |
+|---|---|---|
+| All cookies removed while the page waits in the cache, over HTTP | 2 of 8, and 3 of 8 in a second set. Chromium restored the page | 0 of 8. Chromium did not restore the page |
+| All cookies removed while the page waits in the cache, over HTTPS | 4 of 8. Chromium restored the page | 0 of 8. Chromium did not restore the page |
+| The session revoked on the Server, with the cookie still in the browser, over HTTP | 3 of 8. Chromium restored the page | 4 of 8. Chromium restored the page |
+
+- `no-store` does not close the revoke case. The last frame from before the hide stayed for up to 78 ms. Then the page went to the signed-out page.
+- The expiry of a real cookie is not measured, so the table does not say what Chromium does at that expiry.
+- With the cookies gone and `no-store`, Back loads the page again, and this load acts as a visit with no session. In the runs, it ended at the sign-in page of the provider, not at the signed-out page, because the removal also took the cookies of the provider. If the session at the provider still lives, this load can sign the person in with no click (inferred from the visit rules of the next section, not measured).
+- In a live session, `no-store` does not change the time of Back, because Chromium still restores the page and requests no HTML. Three alternating sets of 8 Backs over HTTP had medians of 37 to 73 ms with `no-store`, and 37 to 63 ms without it.
 - A logout in this browser sends the message above, and this message removes the page from the cache of Chromium. Back then loads the page again, with no data of the old session.
-- If a session ends with no such message, for example at its expiry or by a revoke, Chromium can show the last frame from before the hide. In 5 of 8 local runs on a loaded machine, this frame stayed for 38 to 227 ms. Then the page goes to the signed-out page.
-- WebKit keeps the page in its cache after the message. A snapshot of a WKWebView 20 ms after Back was blank, but a snapshot can draw a new frame, so it does not prove what the screen showed in this time.
+- WebKit keeps the page in its cache after the message. With `no-store`, one WKWebView run over HTTP also restored the page after a logout, and one restored it after the cookies were removed. A snapshot of a WKWebView 20 ms after Back was blank, but a snapshot can draw a new frame, so it does not prove what the screen showed in this time.
 
 Other browsers and other devices stay signed in. Recall has no back-channel logout, so a logout at the provider does not end their Recall sessions. `/auth/sessions/revoke-others` ends them, and they end at their own expiry.
 
