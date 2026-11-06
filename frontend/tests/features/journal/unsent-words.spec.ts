@@ -454,6 +454,23 @@ test.describe('a return to an entry whose read is slow', () => {
     await expect(journal.at.composer).toContainText('Words typed offline')
   })
 
+  test('a composition that runs when the read answers keeps each word', async ({ page, api }) => {
+    const session = aSession().build()
+    const journal = journalPage(page)
+    const saved = { ...aSession().atRevision(1).saying('Words from before').build(), id: session.id, clientSessionId: session.clientSessionId }
+    await aReturnDuringASlowRead(journal, page, api, session, () => ({ ...sessionsApi.oneIs(saved), delayMs: 1_500 }))
+    await journal.at.composer.click()
+    const ime = await page.context().newCDPSession(page)
+
+    await ime.send('Input.imeSetComposition', { text: 'dictated', selectionStart: 8, selectionEnd: 8 })
+    await expect(journal.at.composer).toContainText('Words from before', { timeout: 5_000 })
+    await ime.send('Input.imeSetComposition', { text: 'dictated words', selectionStart: 14, selectionEnd: 14 })
+    await ime.send('Input.insertText', { text: 'dictated words' })
+
+    await expect(journal.at.composer).toContainText('Words from before')
+    await expect(journal.at.composer).toContainText('dictated words')
+  })
+
   test('a reload during the read joins the keys to the entry, and does not replace it', async ({ page, api }) => {
     const session = aSession().build()
     const journal = journalPage(page)
@@ -622,10 +639,12 @@ test.describe('words that the browser has no room to keep', () => {
     await journal.typeWithoutWaiting('Words with no room')
     await expect(unsent.at.onlyInMemory).toBeVisible()
     api.mock(authApi.loginOpens())
+    const dialogs = unsent.countTheDialogs()
 
     await unsent.signOutInAnotherTab()
 
     await expect.poll(() => page.url()).toContain('signedOut=1')
+    expect(dialogs()).toBe(0)
   })
 })
 

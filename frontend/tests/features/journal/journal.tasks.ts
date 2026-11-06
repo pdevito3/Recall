@@ -304,6 +304,15 @@ export function unsentWords(page: Page) {
         return close.defaultPrevented
       }),
 
+    countTheDialogs() {
+      let dialogs = 0
+      page.on('dialog', (dialog) => {
+        dialogs += 1
+        void dialog.accept()
+      })
+      return () => dialogs
+    },
+
     signOutInAnotherTab: () => page.evaluate(() => new BroadcastChannel('recall.session').postMessage('signed-out')),
 
     async typeOfTheDialogAtClose() {
