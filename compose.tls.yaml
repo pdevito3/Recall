@@ -1,0 +1,19 @@
+# Caddy keeps the Host header and sets X-Forwarded-Proto, as Recall needs.
+services:
+  recall:
+    ports: !reset []
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    command: caddy reverse-proxy --from ${RECALL_TLS_ORIGIN:?Set RECALL_TLS_ORIGIN in .env. See docs/install.md.} --to recall:8080
+    ports:
+      - ${RECALL_TLS_HTTP_PORT:-80}:80
+      - ${RECALL_TLS_PORT:-443}:${RECALL_TLS_PORT:-443}
+    volumes:
+      - caddy-data:/data
+    depends_on:
+      - recall
+
+volumes:
+  caddy-data:

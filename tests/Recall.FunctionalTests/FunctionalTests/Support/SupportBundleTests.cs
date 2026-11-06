@@ -15,7 +15,7 @@ using Shouldly;
 using TestUtilities;
 
 [NotInParallel(nameof(SupportBundleTests))]
-public class SupportBundleTests
+public partial class SupportBundleTests
 {
     private const string OwnerSubject = "bundle-owner";
 
@@ -200,6 +200,7 @@ public class SupportBundleTests
         using var rename = await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Users.Put(ownerId), new { firstName = marker, lastName = marker, username = marker, email = $"{marker}@example.com", version });
         var tenantId = await Host.WithDatabaseAsync(database => database.Users.IgnoreQueryFilters().Where(user => user.Id == ownerId).Select(user => user.TenantId).SingleAsync());
         var toolsCalled = await CallEachMcpToolAsync(owner, marker, tenantId!);
+        await WaitUntilEachSinkHoldsAsync((await AddSessionAsync(owner)).Id);
         var entries = await EntriesOfBundleAsync(owner);
 
         // Assert
@@ -213,9 +214,6 @@ public class SupportBundleTests
         auditFilter.StatusCode.ShouldBe(HttpStatusCode.OK, await auditFilter.Content.ReadAsStringAsync());
         withAgent.StatusCode.ShouldBe(HttpStatusCode.OK, await withAgent.Content.ReadAsStringAsync());
         entries.Keys.Count(name => name.StartsWith("telemetry/traces-", StringComparison.Ordinal)).ShouldBeGreaterThan(0);
-        foreach (var (name, content) in entries)
-            content.ShouldNotContain(marker, customMessage: name);
-        Host.Logs.Holding(marker).ShouldBeEmpty();
-        TestingWebApplicationFactory.Instance.CapturedLogs.Holding(marker).ShouldBeEmpty();
+        ShouldHoldNoMarker(marker, entries);
     }
 }

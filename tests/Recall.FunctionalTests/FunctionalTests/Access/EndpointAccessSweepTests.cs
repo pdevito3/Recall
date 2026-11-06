@@ -6,6 +6,9 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Recall.Server.Domain;
+using Recall.Server.Domain.Corrections;
+using Recall.Server.Domain.People;
+using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Users;
 using Recall.Server.Resources.Entrypoints;
 using Recall.Server.Resources.Entrypoints.Auth;
@@ -20,12 +23,15 @@ using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using OpenApi;
+using Shouldly;
 using TestUtilities;
 using TestUtilities.AccessSweep;
 
 public class EndpointAccessSweepTests : TestBase
 {
     // An entry that matches no entrypoint does no harm, so that the removal of a feature does not break the sweep
+    private const string JournalOfEachMember = "Each member owns a journal, and the journal owner filter limits each member to it.";
+
     private static readonly IReadOnlyDictionary<string, Open> OpenToEachMember = new Dictionary<string, Open>
     {
         ["GetTenant"] = new("Each member reads the own tenant. The tenant filter hides each other tenant."),
@@ -33,6 +39,29 @@ public class EndpointAccessSweepTests : TestBase
         ["GetCurrentUser"] = new("Each signed-in caller reads the own identity. It takes no ID, and its one read is the own user row behind the tenant filter."),
         ["get_tenant"] = new("ToolAccessKind.Read. Each member reads the own tenant, and the tenant filter hides the others."),
         ["list_tenants"] = new("ToolAccessKind.Read. Each member lists the own tenant, and the tenant filter hides the others."),
+        ["AddSession"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetSession"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetSessionPage"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["SaveRawDraft"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["SaveCleanedDraft"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["SetSessionMetadata"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["DeleteSession"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetRawRevisionPage"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetRawRevision"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetCleanedRevisionPage"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetCleanedRevision"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetSyncChangePage"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["AddPerson"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetPerson"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetPersonList"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["RenamePerson"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["AddCorrection"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetCorrection"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetCorrectionList"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["UpdateCorrection"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["DeleteCorrection"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetUserSetting"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["ChangeUserSetting"] = new(JournalOfEachMember, OwnerOnly: true),
         // new-feature:open-to-each-member
     };
 
@@ -49,6 +78,7 @@ public class EndpointAccessSweepTests : TestBase
         [AuthRoutes.Confirm] = "The one-time code in the form proves this request. It writes nothing and shows no tenant data.",
         [AuthRoutes.Token] = "The code and PKCE verifier, or the refresh token, prove this request. AuthRefusalTests covers each refusal.",
         [AuthRoutes.Logout] = "Tolerant. It ends only a session that the request proves, and it shows no tenant data.",
+        [AuthRoutes.SignedOut] = "Public. It redirects to the signed-out page, and shows no tenant data. It only compares its one value with the cookie of the browser.",
         [AuthRoutes.RevokeOthers] = "Each session ends only the other sessions of its own user. AppSessionTests covers it.",
         [AuthRoutes.Me] = "Each session reads its own identity, and a visitor with no session gets 204. It takes no ID. AppSessionTests covers it.",
     };
@@ -272,6 +302,7 @@ public class EndpointAccessSweepTests : TestBase
                 : throw new SweepSetupException($"It has the route value {{{name}}} under '{kind}', which the sweep does not know. "
                     + $"Make a record of this kind in {nameof(AddTenantAsync)} and add its ID under '{kind}/{name}'."),
             "permission" => PermissionName,
+            "number" => "1",
             _ => null,
         };
     }
@@ -292,6 +323,14 @@ public class EndpointAccessSweepTests : TestBase
         await InsertAsync(tenant);
         await InsertAsync(users);
         await InsertAsync(agent);
+        var session = Session.Create(tenant.Id, admin.Id, $"sweep-{Guid.NewGuid():N}", DateTimeOffset.UnixEpoch, null, DateTimeOffset.UtcNow);
+        session.SaveRaw(DraftSave.Of("sweep words", 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UtcNow), false);
+        session.SaveCleaned(DraftSave.Of("sweep words", 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UtcNow), false);
+        var person = Person.Create(tenant.Id, admin.Id, "Sweep person");
+        var correction = Correction.Create(tenant.Id, admin.Id, "Sweep term", [], false);
+        await InsertAsync(session);
+        await InsertAsync(person);
+        await InsertAsync(correction);
         // new-feature:sweep-inserts
 
         var idsByKind = new Dictionary<string, string>
@@ -299,6 +338,9 @@ public class EndpointAccessSweepTests : TestBase
             ["users"] = otherUser.Id,
             ["agents"] = agent.Id,
             ["tenants"] = tenant.Id,
+            ["sessions"] = session.Id,
+            ["people"] = person.Id,
+            ["corrections"] = correction.Id,
             // new-feature:sweep-ids
         };
         return new TenantRecords(member, admin, new RecordIds(idsByKind, otherUser.Identifier));
@@ -325,6 +367,8 @@ public class EndpointAccessSweepTests : TestBase
     {
         using var request = endpoint.RequestFor(ids);
         using var response = await FactoryClient.SendAsync(request);
+        // Each caller, with records that exist and with records that do not. The HTTP cache of a browser would keep a private answer after a logout.
+        (response.Headers.CacheControl?.NoStore == true).ShouldBeTrue($"{request.Method} {request.RequestUri}: {(int)response.StatusCode}");
         var body = await response.Content.ReadAsStringAsync();
         return new Outcome(((int)response.StatusCode).ToString(CultureInfo.InvariantCulture), body.Length > 300 ? body[..300] : body);
     }

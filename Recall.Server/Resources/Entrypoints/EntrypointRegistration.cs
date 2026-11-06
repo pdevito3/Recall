@@ -59,6 +59,7 @@ public static class EntrypointRegistration
         });
         app.UseRequestTooLargeProblem();
         app.UseSpaStaticFiles();
+        app.UseNoStoreAnswers();
         // Routing checks the request content type, so the text/json rewrite must run before routing
         app.UseMiddleware<JsonMediaTypeMiddleware>();
         app.UseRouting();

@@ -3,6 +3,8 @@ namespace Recall.SharedTestHelpers.EntityGraphs;
 using Bogus;
 using Recall.Server.Domain.Agents;
 using Recall.Server.Domain.Agents.Models;
+using Recall.Server.Domain.Corrections;
+using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Tenants;
 using Recall.Server.Domain.Tenants.Models;
 using Recall.Server.Domain.Users;
@@ -79,4 +81,25 @@ public static class Blueprints
         .Derive(i => i.ClientId, (_, _) => AgentRules.ClientId(Faker))
         .Derive(i => i.Mode, (_, _) => AgentRules.Mode(Faker))
         .Derive(i => i.Permissions, (_, _) => []);
+
+    public static readonly ChildInputBlueprint<TestSeed, User, SessionInput, Session> Session = Blueprint
+        .ChildFromInput<TestSeed, User, SessionInput, Session>(
+            () => new(),
+            (user, input, _) => Server.Domain.Sessions.Session.Create(
+                user.TenantId, user.Id, input.ClientSessionId!, input.StartedAt!.Value, null, DateTimeOffset.UtcNow))
+        .Derive(i => i.ClientSessionId, (_, _) => Faker.Random.Guid().ToString())
+        .Derive(i => i.StartedAt, (_, _) => DateTimeOffset.UtcNow.AddMinutes(-Faker.Random.Int(1, 10_000)));
+
+    public static readonly ChildInputBlueprint<TestSeed, User, PersonInput, Server.Domain.People.Person> Person = Blueprint
+        .ChildFromInput<TestSeed, User, PersonInput, Server.Domain.People.Person>(
+            () => new(),
+            (user, input, _) => Server.Domain.People.Person.Create(user.TenantId, user.Id, input.Label!))
+        .Derive(i => i.Label, (_, _) => Faker.Person.FullName);
+
+    public static readonly ChildInputBlueprint<TestSeed, User, CorrectionInput, Correction> Correction = Blueprint
+        .ChildFromInput<TestSeed, User, CorrectionInput, Correction>(
+            () => new(),
+            (user, input, _) => Server.Domain.Corrections.Correction.Create(user.TenantId, user.Id, input.CanonicalTerm!, input.Mishearings!, false))
+        .Derive(i => i.CanonicalTerm, (_, _) => Faker.Lorem.Word())
+        .Derive(i => i.Mishearings, (_, _) => []);
 }

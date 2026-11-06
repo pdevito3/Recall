@@ -48,6 +48,8 @@ public abstract record CallerIdentity
         _ => TenantScope.NoTenant,
     };
 
+    public string? JournalOwnerId => this is User { LiveUser: { } liveUser } ? liveUser.UserId : null;
+
     /// <summary>
     /// True for system work and for a client on the manage allow-list. It is a capability, not a permission
     /// (ADR 0009).

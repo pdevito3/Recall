@@ -42,6 +42,26 @@ public class OpenApiDocumentTests
     }
 
     [Test]
+    [Arguments("SessionForCreationDto", "startedAt")]
+    [Arguments("DraftSaveDto", "savedAt")]
+    [Arguments("SessionMetadataChangeDto", "savedAt")]
+    [Arguments("UserSettingChangeDto", "savedAt")]
+    public async Task a_client_time_is_a_date_time_string(string dto, string property)
+    {
+        // Arrange
+        var root = await LoadDocumentAsync();
+
+        // Act
+        var schema = root["components"]?["schemas"]?[dto]?["properties"]?[property];
+        var type = schema?["type"]?.GetValue<string>();
+        var format = schema?["format"]?.GetValue<string>();
+
+        // Assert
+        type.ShouldBe("string");
+        format.ShouldBe("date-time");
+    }
+
+    [Test]
     public async Task error_responses_use_only_problem_json()
     {
         // Arrange

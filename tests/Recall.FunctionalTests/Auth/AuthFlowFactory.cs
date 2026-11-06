@@ -25,6 +25,7 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
 
     private readonly SqliteTestDatabase _database = new();
     private readonly Lock _clientLock = new();
+    private readonly AsyncLocal<bool> _inRequest = new();
 
     public StubOidcProvider Provider { get; } = provider ?? new();
 
@@ -35,6 +36,9 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
 
     /// <summary>A place for the claim file outside the folder of the database, so a test can refuse a rename there and the database still works.</summary>
     public string? ClaimFilePath { get; init; }
+
+    /// <summary>True on the flow of a request to this host. Each host of the process logs through one static logger, so this tells their lines apart.</summary>
+    public bool IsInRequest => _inRequest.Value;
 
     public HttpClient NewClient()
     {
@@ -84,6 +88,7 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
                 services.AddSingleton(provider => new OwnerClaim(claimFile, provider.GetRequiredService<TimeProvider>()));
             services.AddSingleton<ILogEventSink>(Logs);
             services.AddSingleton<IStartupFilter, ConnectionAddressFilter>();
+            services.AddSingleton<IStartupFilter>(new RequestFlowFilter(_inRequest));
             services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
                 options.ConfigurationManager = new StaticConfigurationManager<OpenIdConnectConfiguration>(Provider.JwtConfiguration()));
         });
@@ -95,6 +100,19 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
         await _database.DisposeAsync();
         if (ClaimFilePath is { } claimFile)
             Directory.Delete(Path.GetDirectoryName(claimFile)!, recursive: true);
+    }
+
+    private sealed class RequestFlowFilter(AsyncLocal<bool> inRequest) : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Use((context, nextStep) =>
+            {
+                inRequest.Value = true;
+                return nextStep(context);
+            });
+            next(app);
+        };
     }
 
     /// <summary>The test server has no socket, so this is how a test stands at a connection address.</summary>

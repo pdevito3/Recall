@@ -1,0 +1,42 @@
+{
+  "items": [
+    {
+      "id": "ses_00000000000000000000000000000004",
+      "clientSessionId": "client-session-2",
+      "startedAt": "2026-06-01T09:00:00+00:00",
+      "journalingDay": "2026-06-01",
+      "preview": "",
+      "synopsis": null,
+      "cleanupStatus": "NotRun",
+      "activity": "None",
+      "moods": [],
+      "topics": [],
+      "personIds": [],
+      "version": 1
+    },
+    {
+      "id": "ses_00000000000000000000000000000003",
+      "clientSessionId": "client-session-1",
+      "startedAt": "2026-06-01T08:00:00+00:00",
+      "journalingDay": "2026-06-01",
+      "preview": "Lunch with Sam",
+      "synopsis": null,
+      "cleanupStatus": "NotRun",
+      "activity": "Walking",
+      "moods": [
+        "Calm"
+      ],
+      "topics": [
+        {
+          "name": "Food",
+          "provenance": "UserSet"
+        }
+      ],
+      "personIds": [
+        "per_00000000000000000000000000000001"
+      ],
+      "version": 5
+    }
+  ],
+  "nextCursor": null
+}

@@ -41,6 +41,9 @@ The server writes the cause to its console, and not to a file, because the data 
 | `The setting FileTelemetry:<name> is <value>, and its least value is <least>...` | A limit of the log and telemetry files is too small. | Correct the setting. Then start the server again. |
 | `The setting FileTelemetry:<name> is <value>, and its largest value is <most>...` | A limit of the log and telemetry files is too large. | Correct the setting. Then start the server again. |
 | `Failed to convert configuration value '<value>' at 'FileTelemetry:<name>'... Correct it, and start the server again.` | A limit of the log and telemetry files is not a whole number in the range of its type. | Correct the setting. Then start the server again. |
+| `The setting FileTelemetry:<name> is missing. Correct it, and start the server again.` | The section `FileTelemetry` has only some of its settings. | Add the setting, or remove the whole section. Then start the server again. |
+
+With no `FileTelemetry` section, the server starts, writes no log file and no telemetry file, and gives no warning. See [Files](telemetry.md#files).
 
 ## The file store hangs
 
