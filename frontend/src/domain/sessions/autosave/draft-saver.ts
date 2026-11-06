@@ -62,6 +62,8 @@ export class DraftSaver {
   private conflictIsUnseen = false
   private wordsInHistory: string | null = null
   private wordsOnServer: string | null = null
+  private isHoldingWords = false
+  private mayMoveToNewEntry = true
 
   constructor(target: DraftTarget, queryClient: QueryClient, resumed?: OutboxEntry) {
     this.target = target
@@ -86,6 +88,7 @@ export class DraftSaver {
   }
 
   edit(text: string) {
+    this.isHoldingWords = false
     this.saver.edit(text)
   }
 
@@ -93,19 +96,27 @@ export class DraftSaver {
     this.saver.flush()
   }
 
-  settle() {
-    return this.saver.settle()
+  async settle() {
+    const isSent = await this.saver.settle()
+    return isSent && !this.isHoldingWords
   }
 
   stop() {
+    this.mayMoveToNewEntry = false
     this.saver.dispose()
   }
 
+  noteDelete(isRunning: boolean) {
+    this.mayMoveToNewEntry = !isRunning
+  }
+
   holdInOutbox(text: string) {
+    this.isHoldingWords = true
     this.writeToOutbox({ value: text, savedAt: new Date().toISOString() }, null)
   }
 
   releaseFromOutbox() {
+    this.isHoldingWords = false
     removeFromOutbox(this.target.owner, draftKey(this.target))
   }
 
@@ -173,7 +184,7 @@ export class DraftSaver {
   }
 
   discard() {
-    this.saver.dispose()
+    this.stop()
     removeFromOutbox(this.target.owner, draftKey(this.target))
     for (const [key, saver] of savers) {
       if (saver === this) savers.delete(key)
@@ -228,7 +239,8 @@ export class DraftSaver {
     try {
       return await this.saveWords(change, signal)
     } catch (error) {
-      if (!isARowThatIsGone(error)) throw error
+      // The delete of this tab, or a discard at logout, is the wish of the person. The words must not come back as a new entry.
+      if (!isARowThatIsGone(error) || !this.mayMoveToNewEntry) throw error
       this.moveToNewEntry(change)
       return this.saveWords(change, signal)
     }
@@ -250,7 +262,7 @@ export class DraftSaver {
     this.target = { ...this.target, clientSessionId, channel: 'raw', sessionId: null, baseRevision: 0, latestRevision: 0 }
     savers.set(draftKey(this.target), this)
     this.update({ sessionId: null, baseRevision: 0, latestRevision: 0, conflict: null, movedFromDeletedEntry: true })
-    this.writeToOutbox(change, null)
+    this.writeToOutbox(this.saver.newestUnsettled() ?? change, null)
     removeFromOutbox(this.target.owner, oldKey)
   }
 
@@ -374,6 +386,12 @@ export function draftSaverFor(target: DraftTarget, queryClient: QueryClient): Dr
 export function discardDraftSavers(clientSessionId: string) {
   for (const channel of ['raw', 'cleaned'] as const) {
     savers.get(draftKey({ clientSessionId, channel }))?.discard()
+  }
+}
+
+export function noteDeleteOfDrafts(clientSessionId: string, isRunning: boolean) {
+  for (const channel of ['raw', 'cleaned'] as const) {
+    savers.get(draftKey({ clientSessionId, channel }))?.noteDelete(isRunning)
   }
 }
 

@@ -2,7 +2,7 @@ import { sessionsApi, sessionsPaths } from '@tests/support/api/sessions-api'
 import { aProblem } from '@tests/support/builders/problem-details-builder'
 import { aSession, documentWith } from '@tests/support/builders/session-builder'
 import { expect, test } from '@tests/support/fixtures'
-import { entryPage } from './journal.tasks'
+import { entryPage, unsentWords } from './journal.tasks'
 
 test.describe('an entry', () => {
   test('shows its words and a breadcrumb back to the journal', async ({ page, api }) => {
@@ -134,6 +134,28 @@ test.describe('an entry', () => {
     await page.reload()
     await expect(entry.at.words('Mine edited')).toBeVisible()
     await expect.poll(() => page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('recall.unsent')))).toEqual([])
+  })
+
+  test('a move to a new entry stores the newest words, and not those of the save that got the 404', async ({ page, api }) => {
+    const session = aSession().saying('Mine').build()
+    const next = aSession().build()
+    api.mock(
+      sessionsApi.oneIs(session),
+      { ...sessionsApi.draftSaveIsRefused(session, aProblem().notFound('The entry is gone.')), delayMs: 2_000 },
+      { ...sessionsApi.creates(next), delayMs: 5_000 },
+    )
+    const entry = entryPage(page)
+    const unsent = unsentWords(page)
+    await entry.open(session.id)
+    await entry.typeWithoutWaiting(' first')
+    await expect.poll(() => api.all('put', sessionsPaths.rawDraft(session.id)).length).toBe(1)
+
+    await entry.typeWithoutWaiting(' newest')
+    await expect.poll(() => api.all('post', sessionsPaths.timeline).length).toBe(1)
+
+    const [key] = await unsent.keys()
+    expect(key).not.toContain(session.clientSessionId)
+    expect(await unsent.stored(key)).toContain('newest')
   })
 
   test('a first read that started before the save of a reload does not open the old words', async ({ page, api }) => {
@@ -569,6 +591,36 @@ test.describe('deleting an entry', () => {
     expect(api.all('delete', sessionsPaths.one(session.id))).toHaveLength(1)
     expect(await entry.at.deletedToast.count()).toBe(1)
   })
+
+  for (const { order, saveMs, deleteMs } of [
+    { order: 'while the delete runs', saveMs: 4_000, deleteMs: 6_000 },
+    { order: 'after the delete', saveMs: 4_000, deleteMs: 0 },
+  ]) {
+    test(`a save that answers 404 ${order} does not bring the words back`, async ({ page, api }) => {
+      const session = aSession().saying('Mine').build()
+      api.mock(
+        sessionsApi.oneIs(session),
+        { ...sessionsApi.draftSaveIsRefused(session, aProblem().notFound('The entry is gone.')), delayMs: saveMs },
+        { ...sessionsApi.deletes(session.id), delayMs: deleteMs },
+        sessionsApi.creates(aSession().build()),
+      )
+      const entry = entryPage(page)
+      const unsent = unsentWords(page)
+      await entry.open(session.id)
+      const answered = entry.aDraftSaveAnswered(session.id)
+      await entry.typeWithoutWaiting(' and words to delete')
+      await expect.poll(() => api.all('put', sessionsPaths.rawDraft(session.id)).length).toBe(1)
+
+      await entry.confirmDelete()
+      await answered
+      await expect(entry.at.deletedToast).toBeVisible({ timeout: 10_000 })
+      await unsent.letAnAnswerLand()
+
+      expect(api.all('post', sessionsPaths.timeline)).toHaveLength(0)
+      expect(await unsent.keys()).toEqual([])
+      await expect(unsent.at.wholePage).not.toContainText('Your words are safe')
+    })
+  }
 })
 
 test.describe('the cleaned version', () => {

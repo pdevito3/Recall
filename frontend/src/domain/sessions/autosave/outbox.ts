@@ -39,7 +39,7 @@ function parseEntry(stored: string | null): OutboxEntry | null {
   }
 }
 
-// Storage can be full or blocked. The save still goes to the Server, so only a reload before the reply can lose words.
+// Storage can be full or blocked. The save still goes to the Server, so a reload before the reply can lose words, and so can a reload after a refusal.
 export function writeToOutbox(owner: string, entry: OutboxEntry) {
   try {
     localStorage.setItem(prefixOf(owner) + entry.key, JSON.stringify(entry))

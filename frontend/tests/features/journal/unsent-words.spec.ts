@@ -1,10 +1,12 @@
+import type { Page } from '@playwright/test'
+import type { SessionDto } from '@/api/generated/models/types/session-dto'
 import { aSetting, settingsApi, settingsPaths } from '@tests/support/api/settings-api'
 import { sessionsApi, sessionsPaths } from '@tests/support/api/sessions-api'
 import type { MockRoute } from '@tests/support/api/mock-route'
 import { actorSubject } from '@tests/support/auth/actors'
 import { aProblem } from '@tests/support/builders/problem-details-builder'
 import { aSession } from '@tests/support/builders/session-builder'
-import { expect, test } from '@tests/support/fixtures'
+import { expect, test, type Api } from '@tests/support/fixtures'
 import { entryPage, journalPage, unsentWords } from './journal.tasks'
 
 const wordsOf = (request: { body: unknown } | undefined) => JSON.stringify(request?.body)
@@ -319,6 +321,52 @@ test.describe('a return to an entry whose read is slow', () => {
     await expect.poll(() => wordsOf(api.last('put', sessionsPaths.rawDraft(session.id)))).toContain('Words typed early')
     expect(wordsOf(api.last('put', sessionsPaths.rawDraft(session.id)))).toContain('Words from before')
     expect(api.all('post', sessionsPaths.timeline)).toHaveLength(1)
+  })
+
+  const aReturnDuringASlowRead = async (journal: ReturnType<typeof journalPage>, page: Page, api: Api, session: SessionDto, slowRead: (saved: SessionDto) => MockRoute) => {
+    api.mock(sessionsApi.creates(session), sessionsApi.oneIs(session), sessionsApi.draftSaveWins(session, 1))
+    await journal.open()
+    await journal.write('Words from before')
+    await expect(journal.at.status('Saved at')).toBeVisible()
+    await journal.goToSettings()
+
+    const saved = { ...aSession().atRevision(1).saying('Words from before').build(), id: session.id, clientSessionId: session.clientSessionId }
+    api.mock(slowRead(saved))
+    await page.reload()
+    await expect(journal.at.loadingEntry).toHaveCount(0)
+    await journal.goToTheJournalFromTheSidebar()
+    await expect(journal.at.loadingEntry).toBeVisible()
+    await journal.typeWithoutWaiting('Words typed early')
+  }
+
+  test('a person who leaves during the read does not lose the keys', async ({ page, api }) => {
+    const session = aSession().build()
+    const journal = journalPage(page)
+    // A move away cancels a read that takes long, and a cancelled call cannot have a mocked answer. So this read fails at once and tries again.
+    await aReturnDuringASlowRead(journal, page, api, session, (saved) => sessionsApi.oneFails(saved.id, aProblem().saying('The Server is busy.')))
+
+    api.mock({ ...sessionsApi.draftSaveWins(session, 2), delayMs: 3_000 })
+    await journal.goToSettings()
+    await expect.poll(() => wordsOf(api.last('put', sessionsPaths.rawDraft(session.id)))).toContain('Words typed early')
+
+    await journal.goToTheJournalFromTheSidebar()
+    await expect(journal.at.composer).toContainText('Words typed early')
+  })
+
+  test('a logout during the read asks about the keys', async ({ page, api }) => {
+    const unsent = unsentWords(page)
+    const session = aSession().build()
+    api.mock(signInPage, logoutWorks)
+    const journal = journalPage(page)
+    await aReturnDuringASlowRead(journal, page, api, session, (saved) => ({ ...sessionsApi.oneIs(saved), delayMs: 10_000 }))
+
+    await unsent.logOut()
+
+    await expect(unsent.at.logoutDialog).toBeVisible()
+    await unsent.answerTheLogoutDialog('Keep words and sign out')
+    await unsent.reachTheSignedOutPage()
+    const [key] = await unsent.keys()
+    expect(await unsent.stored(key)).toContain('Words typed early')
   })
 })
 

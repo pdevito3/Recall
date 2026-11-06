@@ -28,6 +28,14 @@ public class StringColumnLengthTests
 
     private static string Email(string character, int length) => Text(character, length - "@example.com".Length) + "@example.com";
 
+    // The limit of a column of words is on the stored document, so the value is a document that shows no words.
+    private static string DocumentWithNoWords(string character, int length)
+    {
+        const string start = "{\"type\":\"doc\",\"padding\":\"";
+        const string end = "\"}";
+        return start + Text(character, Math.Max(0, length - start.Length - end.Length)) + end;
+    }
+
     private static readonly Dictionary<string, CallerColumn> CallerColumns = new()
     {
         ["users.first_name"] = new("firstName", Text, v => TestGraph.Start(out _).AddTenant(out _).AddUser(out _, u => u.FirstName = v)),
@@ -42,10 +50,10 @@ public class StringColumnLengthTests
         ["corrections.canonical_term"] = new("canonicalTerm", Text, v => Correction.Create("ten_1", "usr_1", v, [], false)),
         ["sessions.client_session_id"] = new("clientSessionId", Text, v => Session.Create("ten_1", "usr_1", v, DateTimeOffset.UnixEpoch, null, DateTimeOffset.UnixEpoch)),
         ["sessions.activity"] = new("activity", Text, v => SessionMetadata.Of(v, [], [])),
-        ["sessions.raw_text"] = new("text", Text, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)),
-        ["sessions.cleaned_text"] = new("text", Text, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)),
-        ["raw_revisions.text"] = new("text", Text, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)),
-        ["cleaned_revisions.text"] = new("text", Text, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)),
+        ["sessions.raw_text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)),
+        ["sessions.cleaned_text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)),
+        ["raw_revisions.text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)),
+        ["cleaned_revisions.text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)),
         // new-feature:caller-columns
     };
 

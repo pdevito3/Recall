@@ -114,6 +114,14 @@ export function entryPage(page: Page) {
       await saved
     },
 
+    async typeWithoutWaiting(words: string) {
+      await at.editor.click()
+      await page.keyboard.press('End')
+      await page.keyboard.type(words)
+    },
+
+    aDraftSaveAnswered: (id: string) => putTo(sessionsPaths.rawDraft(id)),
+
     async goToAnotherEntryThroughTheJournal(preview: string) {
       await at.journalLink.click()
       await at.rowOfTheJournal(preview).click()

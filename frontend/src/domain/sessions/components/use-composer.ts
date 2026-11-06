@@ -142,6 +142,11 @@ export function useComposer() {
     }
   }, [isReading, resumedSessionId, saver, opensAConflict, queryClient, startOver])
 
+  // A person who leaves during the read takes the page with these words. The saver sends them, and if they lose, the Server keeps them in History.
+  useEffect(() => () => {
+    if (typedWhileReading.current !== null) latestSaver.current?.edit(typedWhileReading.current)
+  }, [])
+
   const shown = saver ?? finished?.saver ?? null
   const snapshot = useSyncExternalStore(shown?.subscribe ?? noSubscription, shown?.getSnapshot ?? (() => idleSnapshot))
 

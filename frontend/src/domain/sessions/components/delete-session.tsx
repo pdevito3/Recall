@@ -17,7 +17,7 @@ import {
 import { useDeleteSession } from '../apis/delete-session'
 import { SessionKeys } from '../apis/session.keys'
 import { removeTimelineRow } from '../apis/timeline-cache'
-import { discardDraftSavers } from '../autosave/draft-saver'
+import { discardDraftSavers, noteDeleteOfDrafts } from '../autosave/draft-saver'
 import { discardMetadataSaver } from '../autosave/metadata-saver'
 
 export function DeleteSession({ session }: { session: SessionDto }) {
@@ -25,8 +25,10 @@ export function DeleteSession({ session }: { session: SessionDto }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
 
-  const handleDelete = () =>
+  const handleDelete = () => {
+    noteDeleteOfDrafts(session.clientSessionId, true)
     remove.mutate(session.id, {
+      onError: () => noteDeleteOfDrafts(session.clientSessionId, false),
       onSuccess: async () => {
         discardDraftSavers(session.clientSessionId)
         discardMetadataSaver(session.id)
@@ -37,6 +39,7 @@ export function DeleteSession({ session }: { session: SessionDto }) {
         queryClient.removeQueries({ queryKey: SessionKeys.detail(session.id) })
       },
     })
+  }
 
   return (
     <ResponsiveDialogTrigger>

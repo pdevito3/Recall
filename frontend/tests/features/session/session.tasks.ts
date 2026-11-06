@@ -4,6 +4,9 @@ import { session } from './session.locators'
 
 export const blankPage = 'data:text/html,blank'
 
+// The first page of a run makes a cold Vite compile each module of the app, and that takes more than the 5 s of an assertion.
+const firstPaintMs = 30_000
+
 export function sessionPage(page: Page) {
   const at = session(page)
   const answered = (path: string) =>
@@ -60,7 +63,7 @@ export function sessionPage(page: Page) {
 
     async openDeepLinkAndWaitForLogin(path: string) {
       await page.goto(path, { waitUntil: 'commit' })
-      await expect.poll(() => new URL(page.url()).pathname).toBe(authPaths.login)
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: firstPaintMs }).toBe(authPaths.login)
       await page.waitForLoadState()
     },
 

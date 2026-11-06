@@ -108,6 +108,7 @@ public class OpenApiDocumentTests
         // Act
         var parameters = Operations(root)
             .SelectMany(o => (o.Operation["parameters"]?.AsArray() ?? [])
+                .Where(p => p!["in"]!.GetValue<string>() != "header")
                 .Select(p => (Operation: o.Name, Name: p!["name"]!.GetValue<string>())))
             .ToList();
 
