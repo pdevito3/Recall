@@ -68,7 +68,6 @@ try
         {
             diagnosticContext.Set("RequestHost", LogValue.Clean(httpContext.Request.Host.Value));
             diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme);
-            diagnosticContext.Set("UserAgent", LogValue.Clean(httpContext.Request.Headers.UserAgent.ToString()));
         };
     });
 

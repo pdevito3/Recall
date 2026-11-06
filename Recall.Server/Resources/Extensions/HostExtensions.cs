@@ -80,6 +80,7 @@ public static class HostExtensions
                         opts.RecordException = true;
                         opts.EnrichWithHttpRequest = (activity, request) =>
                         {
+                            activity.SetTag("user_agent.original", null);
                             if (request.QueryString.HasValue)
                                 activity.SetTag("url.query", RedactedQuery(request.QueryString.Value!));
                         };

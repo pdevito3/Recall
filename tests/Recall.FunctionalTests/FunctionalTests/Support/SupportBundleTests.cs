@@ -117,6 +117,11 @@ public class SupportBundleTests
         using var badFilter = await owner.GetAsync($"/{ApiRoutes.Users.GetList}?filters={marker}", csrf: true);
         using var badSort = await owner.GetAsync($"/{ApiRoutes.Users.GetList}?sortOrder={marker}", csrf: true);
         using var queryWithNoValue = await owner.GetAsync($"/{ApiRoutes.Users.GetList}?{marker}", csrf: true);
+        using var auditFilter = await owner.GetAsync($"/{ApiRoutes.AuditEntries.GetPage(marker)}", csrf: true);
+        using var requestWithAgent = new HttpRequestMessage(HttpMethod.Get, $"/{ApiRoutes.Users.GetList}");
+        requestWithAgent.Headers.Add("X-CSRF", "1");
+        requestWithAgent.Headers.UserAgent.ParseAdd(marker);
+        using var withAgent = await owner.SendAsync(requestWithAgent);
         using var badBody = await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Users.Put(ownerId), new { firstName = new string('x', 5000) + marker, username = marker, email = marker, version });
         using var rename = await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Users.Put(ownerId), new { firstName = marker, lastName = marker, username = marker, email = $"{marker}@example.com", version });
         var entries = await EntriesOfBundleAsync(owner);
@@ -128,6 +133,8 @@ public class SupportBundleTests
         badFilter.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await badFilter.Content.ReadAsStringAsync());
         badBody.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity, await badBody.Content.ReadAsStringAsync());
         filter.StatusCode.ShouldBe(HttpStatusCode.OK, await filter.Content.ReadAsStringAsync());
+        auditFilter.StatusCode.ShouldBe(HttpStatusCode.OK, await auditFilter.Content.ReadAsStringAsync());
+        withAgent.StatusCode.ShouldBe(HttpStatusCode.OK, await withAgent.Content.ReadAsStringAsync());
         entries.Keys.Count(name => name.StartsWith("telemetry/traces-", StringComparison.Ordinal)).ShouldBeGreaterThan(0);
         foreach (var (name, content) in entries)
             content.ShouldNotContain(marker, customMessage: name);
