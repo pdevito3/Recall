@@ -79,7 +79,7 @@ public interface ICurrentUserService
 
 /// <summary>
 /// Gives the principal of the current caller. The core does not know the transport, so an entrypoint gives the
-/// principal. <c>HttpContextPrincipalAccessor</c> reads it from the HTTP request of HTTP and MCP.
+/// principal.
 /// </summary>
 public interface ICurrentPrincipalAccessor
 {

@@ -3,7 +3,6 @@
 // tests. See .agents/skills/backend-feature/SKILL.md.
 //
 //   dotnet run scripts/new-feature.cs -- SupplyItem --fields "Name:text, Notes:text?, Quantity:int, IsActive:bool"
-//   dotnet run scripts/new-feature.cs -- SupplyItem --fields "..." --entrypoints http,mcp --plural SupplyItems --prefix sup
 //   dotnet run scripts/new-feature.cs -- Delivery --fields "Title:text, SupplyItem:ref, DueOn:zoned-date"
 //
 // A second run with the same input changes nothing. A run that would change a file that exists stops before it writes.

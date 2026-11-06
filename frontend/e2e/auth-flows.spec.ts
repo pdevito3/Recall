@@ -167,8 +167,6 @@ test.describe(`Session cookie - ${currentIdp.name}`, () => {
 
     await loginAtIdp(page, currentIdp)
 
-    // The first load after the redirect is cross-site, so its HTML has no session cookie. The SPA calls /auth/me
-    // same-site, with the cookie, and shows the signed-in user.
     await page.waitForURL('/', { timeout: 30000 })
     await expect(page.getByRole('button', { name: /logout/i })).toBeVisible({ timeout: 10000 })
 

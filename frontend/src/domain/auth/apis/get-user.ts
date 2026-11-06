@@ -9,7 +9,7 @@ const isAuthUser = (data: unknown): data is AuthUser =>
 /**
  * Fetches the user of the session. Returns null when nobody is signed in: the Server answers 204 for an
  * anonymous visitor. A 4xx or 5xx status is an error with no toast, because the root route shows
- * the error. Any other body, such as the index.html of a dev server with no Server, is an error too.
+ * the error.
  */
 export async function getUser(): Promise<AuthUser | null> {
   const response = await apiClient.get<unknown>(sessionCheckPath, { suppressErrorToast: true })
