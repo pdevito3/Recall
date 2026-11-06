@@ -9,6 +9,12 @@ public abstract record CallerIdentity
     public sealed record System : CallerIdentity;
 
     /// <summary>
+    /// A job that acts in the journal of one person, in a scope from
+    /// <see cref="SystemScopeExtensions.CreateJournalScope"/>. It sees that journal and no other (SES-15).
+    /// </summary>
+    public sealed record JournalWork(string UserId, string TenantId) : CallerIdentity;
+
+    /// <summary>
     /// A client on <see cref="TenancyOptions.ReadAllTenantsClientIds"/> or
     /// <see cref="TenancyOptions.ManageAllTenantsClientIds"/>, whatever the <c>sub</c> of the token.
     /// </summary>
@@ -42,13 +48,19 @@ public abstract record CallerIdentity
     public TenantScope Scope => this switch
     {
         System or AllTenantsClient => TenantScope.AllTenants,
+        JournalWork work => TenantScope.ForTenant(work.TenantId),
         User { LiveUser: { } liveUser } => TenantScope.ForTenant(liveUser.TenantId),
         DelegatedAgent agent => TenantScope.ForTenant(agent.LiveUser.TenantId),
         MachineAgent agent => TenantScope.ForTenant(agent.TenantId),
         _ => TenantScope.NoTenant,
     };
 
-    public string? JournalOwnerId => this is User { LiveUser: { } liveUser } ? liveUser.UserId : null;
+    public string? JournalOwnerId => this switch
+    {
+        User { LiveUser: { } liveUser } => liveUser.UserId,
+        JournalWork work => work.UserId,
+        _ => null,
+    };
 
     /// <summary>
     /// True for system work and for a client on the manage allow-list. It is a capability, not a permission

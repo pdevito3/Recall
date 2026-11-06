@@ -28,6 +28,15 @@ public class EntrypointBoundaryTests
     /// </summary>
     private static readonly string[] ServerAllowedTransportTypes = [];
 
+    /// <summary>
+    /// A job method is an entrypoint with no IEndpoint to mark it. This one opens a new scope for each command, so a run
+    /// again discards only the changes of that command.
+    /// </summary>
+    private static readonly string[] JobsWithAScopeForEachCommand =
+    [
+        "Recall.Server.Domain.Recordings.Jobs.TranscribeRecordingJob",
+    ];
+
     private static readonly Lazy<BoundaryScanner> Server = new(() => new BoundaryScanner(
         typeof(Recall.Server.Resources.PagedList).Assembly,
         "Recall.Server",
@@ -67,7 +76,7 @@ public class EntrypointBoundaryTests
     public void only_an_entrypoint_creates_a_command_that_runs_again_when_raced()
     {
         // Act & Assert
-        Server.Value.CoreThatCreatesARunAgainRequest().ShouldBeEmpty(
+        Server.Value.CoreThatCreatesARunAgainRequest().Except(JobsWithAScopeForEachCommand).ShouldBeEmpty(
             "A run again discards each tracked change of the scope, also those of the handler that sent the command. " +
             "Send the command from an entrypoint, or call the domain method of the command in the handler.");
     }

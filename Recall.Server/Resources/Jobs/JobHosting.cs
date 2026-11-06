@@ -6,10 +6,13 @@ using BackWave.Generated;
 using BackWave.Hosting;
 using BackWave.Sqlite;
 using Databases;
+using Domain.Recordings.Jobs;
 
 public static class JobHosting
 {
     public const string SystemQueue = "system";
+
+    public const string TranscriptionQueue = "transcription";
 
     public const string HealthCheckName = "backwave";
 
@@ -34,7 +37,11 @@ public static class JobHosting
 
         builder.Services.Configure<JobOptions>(section);
         if (!inDevelopmentOrTest)
-            builder.Services.PostConfigure<JobOptions>(options => options.HealthJob = new HealthJobOptions());
+            builder.Services.PostConfigure<JobOptions>(options =>
+            {
+                options.HealthJob = new HealthJobOptions();
+                options.KillBeforeTenantFolderDelete = false;
+            });
         builder.Services.Configure<HostOptions>(host =>
         {
             host.ShutdownTimeout = HostShutdownTimeout;
@@ -62,7 +69,18 @@ public static class JobHosting
                     ShutdownBudget = JobShutdownBudget,
                     Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
                 });
+                // One at a time, because a transcription needs more than 1 GB. It keeps the default retry policy (rule 8).
+                backwave.AddWorkerGroup(new WorkerGroupOptions
+                {
+                    Name = TranscriptionQueue,
+                    PoolSize = 1,
+                    Policy = new DispatchPolicy.Strict([TranscriptionQueue]),
+                    PollInterval = TimeSpan.FromSeconds(settingsAtRegistration.PollSeconds),
+                    ShutdownBudget = JobShutdownBudget,
+                    Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
+                });
                 builder.Services.AddHostedService<JobHostWatch>();
+                builder.Services.AddHostedService<RecordingSweepService>();
             }
         });
         builder.Services.AddBackWaveDashboardMetrics();

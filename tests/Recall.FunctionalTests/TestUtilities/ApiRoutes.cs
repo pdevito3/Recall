@@ -31,6 +31,17 @@ public static class ApiRoutes
         public static string Delete(string id) => $"{Base}/tenants/{id}";
     }
 
+    public static class Recordings
+    {
+        public static string Status => $"{Base}/recordings/status";
+        public static string GetRecord(string id) => $"{Base}/recordings/{id}";
+        public static string Slice(string id, int index) => $"{Base}/recordings/{id}/slices/{index}";
+        public static string Finish(string id) => $"{Base}/recordings/{id}/finish";
+        public static string Retry(string id) => $"{Base}/recordings/{id}/retry";
+        public static string File(string id, string name) => $"{Base}/recordings/{id}/files/{name}";
+        public static string OfSession(string sessionId) => $"{Base}/sessions/{sessionId}/recordings";
+    }
+
     public static class Sessions
     {
         public static string Root => $"{Base}/sessions";

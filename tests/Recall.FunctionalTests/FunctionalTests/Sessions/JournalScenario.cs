@@ -38,6 +38,18 @@ internal static class JournalScenario
         await command.ExecuteNonQueryAsync();
     }
 
+    public static async Task<long> CountOutOfBandAsync(string sql, params (string Name, object Value)[] parameters)
+    {
+        var connectionString = await TestBase.ExecuteDbContextAsync(db => Task.FromResult(db.Database.GetConnectionString()!));
+        await using var connection = new SqliteConnection(connectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        foreach (var (name, value) in parameters)
+            command.Parameters.AddWithValue(name, value);
+        return (long)(await command.ExecuteScalarAsync())!;
+    }
+
     public static async Task<SessionDto> AddSessionAsync(this HttpClient client, DateTimeOffset? startedAt = null, string? clientSessionId = null)
     {
         var response = await client.PostAsJsonAsync(ApiRoutes.Sessions.Root, new

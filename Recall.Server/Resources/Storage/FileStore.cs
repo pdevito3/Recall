@@ -72,7 +72,11 @@ public sealed class FileStore(IOptions<FileStoreOptions> options)
     }
 
     /// <summary>Writes all of the stream to the key, in place of a file that the key has.</summary>
-    public async Task WriteAsync(FileKey key, Stream content, CancellationToken cancellationToken)
+    public Task WriteAsync(FileKey key, Stream content, CancellationToken cancellationToken)
+        => WriteAsync(key, content.CopyToAsync, cancellationToken);
+
+    /// <summary>Writes what <paramref name="write"/> gives to the key, in place of a file that the key has.</summary>
+    public async Task WriteAsync(FileKey key, Func<Stream, CancellationToken, Task> write, CancellationToken cancellationToken)
     {
         var path = ResolveWithNoSymlink(key);
         var temporary = NewTemporaryPath();
@@ -86,7 +90,7 @@ public sealed class FileStore(IOptions<FileStoreOptions> options)
                 BufferSize = 0,
             }))
             {
-                await content.CopyToAsync(file, cancellationToken);
+                await write(file, cancellationToken);
                 file.Flush(flushToDisk: true);
             }
 
@@ -125,6 +129,27 @@ public sealed class FileStore(IOptions<FileStoreOptions> options)
         {
             throw NoFile(ex);
         }
+    }
+
+    public bool Exists(FileKey key) => File.Exists(ResolveWithNoSymlink(key));
+
+    /// <summary>The path of a key for a subprocess, which takes no stream. The folder of the path exists after this call.</summary>
+    public string LocalPathOf(FileKey key)
+    {
+        var path = ResolveWithNoSymlink(key);
+        if (!File.Exists(path))
+            Directory.CreateDirectory(Directory.Exists(path) ? path : Path.GetDirectoryName(path)!);
+
+        return path;
+    }
+
+    /// <summary>The names of the folders directly in the folder of the prefix. A prefix with no folder has none.</summary>
+    public IReadOnlyList<string> FolderNamesUnder(FileKey prefix)
+    {
+        var path = ResolveWithNoSymlink(prefix);
+        return Directory.Exists(path)
+            ? Directory.GetDirectories(path).Select(folder => Path.GetFileName(folder)).ToList()
+            : [];
     }
 
     /// <summary>Deletes the file of the key. A second delete is a no-op.</summary>

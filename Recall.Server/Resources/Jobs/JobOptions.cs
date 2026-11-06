@@ -11,6 +11,12 @@ public sealed class JobOptions
     public bool RunWorkers { get; init; } = true;
 
     public HealthJobOptions HealthJob { get; set; } = new();
+
+    /// <summary>
+    /// Kills the process between the commit of a tenant delete and the delete of its folder, so a test can prove the
+    /// sweep at the next start. It works only in Development and in the test environments.
+    /// </summary>
+    public bool KillBeforeTenantFolderDelete { get; set; }
 }
 
 /// <summary>
