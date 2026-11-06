@@ -170,7 +170,7 @@ public class NoProviderBootTests
 
     [Test]
     [Property("Rule", "SES-27")]
-    public async Task a_restart_after_a_kill_clears_committed_deletes_from_the_wal_before_the_first_request()
+    public async Task a_restart_after_a_kill_clears_committed_deletes_from_the_wal()
     {
         // Arrange
         var words = $"deleted{Guid.NewGuid():N}";

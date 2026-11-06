@@ -240,7 +240,7 @@ public class SessionApiTests : TestBase
         (await change.Content.ReadFromJsonAsync<SessionDto>())!.Activity.ShouldBe("Walking");
     }
 
-    // The wait puts the retry within 5 seconds of its claim, where a first try that the server ignored would apply.
+    // A rule that ignores a first try while its time is far ahead would take this retry when the time comes near, so the retry waits.
     [Test]
     [Property("Rule", "SES-26")]
     public async Task a_setting_that_arrives_behind_a_far_future_claim_and_its_retry_do_not_undo_a_newer_change()
@@ -267,6 +267,7 @@ public class SessionApiTests : TestBase
     [Property("Rule", "SES-26")]
     [Arguments(null)]
     [Arguments("")]
+    [Arguments("   ")]
     public async Task a_settings_change_with_no_zone_stores_none_and_replies_with_a_null_zone(string? zone)
     {
         // Arrange
@@ -302,6 +303,25 @@ public class SessionApiTests : TestBase
         // Assert
         read!.Activity.ShouldBe("None");
         read.Moods.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Property("Rule", "SES-21")]
+    public async Task a_metadata_body_that_sends_topics_in_place_of_user_topics_empties_the_user_topics()
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        var full = new { activity = "Walking", moods = Array.Empty<string>(), userTopics = FirstTopic, savedAt = JournalScenario.Morning };
+        (await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), full)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Act
+        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { topics = FirstTopic, savedAt = JournalScenario.Morning.AddMinutes(1) });
+        var read = await change.Content.ReadFromJsonAsync<SessionDto>();
+
+        // Assert
+        read!.Topics.ShouldBeEmpty();
     }
 
     [Test]

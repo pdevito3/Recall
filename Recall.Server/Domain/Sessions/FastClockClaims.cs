@@ -5,7 +5,7 @@ namespace Recall.Server.Domain.Sessions;
 /// server, so its retry gets a later time and looks newer than the changes between them. A row remembers such a claim
 /// until its save time passes the claim. From then on the claim is not newer by its own time, so it needs no entry.
 /// One mark in place of the list cannot hold: under a mark, a late retry and a new edit from a right clock look the same.
-/// A kept claim stops only a change with its exact time, so a clock years ahead cannot stop a later change.
+/// A kept claim stops only a change with its exact time, so a clock years ahead cannot stop a change with another time.
 /// </summary>
 public static class FastClockClaims
 {

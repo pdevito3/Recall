@@ -16,7 +16,7 @@ The metadata of a Session and the settings of a User follow the same save time r
 
 A time in the future gets the time of the server, so a retry of it gets a later time and looks newer than the changes between them. So a row keeps each claimed time that is ahead of its save time, and a retry of one of them does nothing, for any count of newer changes. When the save time passes a claim, the row drops it, because the time compare now refuses it. One high-water mark cannot do this: under the mark, a late retry and a new change from a good clock look the same.
 
-A kept claim stops only a change with its exact time, at any distance from the server. So the time that one wrong clock can block a different change is zero. A claim from 2099 cannot lock a row for years, and location capture off from a fast clock takes effect. A fast change that arrives first always applies, so the server has no ignored first try that a later retry could apply.
+A kept claim stops only a change with its exact time, at any distance from the server. So the time that one wrong clock can block a change with another time is zero. A claim from 2099 does not lock a row for years, and location capture off from a fast clock takes effect. The one exception is a client that reuses one time for each change: each change after the first stays stopped until a save time passes that time, and other clients are not stopped. While the server clock does not go back, a fast change that arrives first applies, so the server has no ignored first try that a later retry could apply.
 
 The server could refuse a time far ahead with a 422 and keep no such claim. It does not, because a server with a slow clock would then refuse each client.
 
@@ -24,8 +24,8 @@ A person can still lose a change with a 200 in these cases, and the reply shows 
 
 - A change with a time that is not newer than the stored change goes away, as from a slow clock or a queue.
 - A different change with the exact time of a kept claim goes away, because the server cannot tell it from a retry.
-- A change from a fast clock applies at the time of the server when it arrives. A change that was made earlier and arrives after a newer change replaces the newer change. This needs a first try that did not reach the server and a client that sends the next change anyway, or a second device. A client that sends a row's changes in order and stops at a failure does not reach it from one device.
-- If the server clock goes back, a change with a time ahead of the server gets a save time below the stored one, and it goes away until the server passes the stored save time.
+- The time of a change from a fast clock is later than its edit. While that time is ahead of the server, the change gets the time of the server. After that, it keeps its own time. Either way, a change that was made earlier and arrives after a newer change replaces the newer change. This needs a first try that did not reach the server and a client that sends the next change anyway, or a second device. A client that sends a row's changes in order and stops at a failure does not reach it from one device.
+- If the server clock goes back, a change with a time ahead of the server gets a save time below the stored one, and it goes away. The server does not remember it, so its retry applies after the server passes the stored save time, also over a newer change.
 
 ## Consequences
 
@@ -33,4 +33,4 @@ A person can still lose a change with a 200 in these cases, and the reply shows 
 - The clock of a phone can decide a Draft. A slow clock can lose to an older save. The words of that save stay as a Revision, so a person can get them back.
 - Revisions grow with each losing save and each autosave, and nothing prunes them.
 - A row keeps one claim for each change from a fast clock until a save time of the row passes it, so a clock years ahead grows the row of its owner for that time. It has no cap, because a cap lets a retry undo a newer change again.
-- A 200 does not say that a change applied, so a client must compare the reply.
+- A 200 does not say that a change applied. A client that sees a reply that differs from what it sent must show the reply and must not send again with a new time, because that can undo a newer change.
