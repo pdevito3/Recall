@@ -20,7 +20,7 @@ pnpm dev      # dev server
 pnpm build    # production build
 pnpm lint     # ESLint
 pnpm test     # Vitest: unit tests (src/**/*.test.ts, e2e/*.test.ts) in Node, component tests (src/**/*.test.tsx) in headless Chromium
-pnpm test:e2e # Playwright: the functional suite (tests/), the SPA against a mocked BFF. See docs/frontend/testing.md
+pnpm test:e2e # Playwright: the functional suite (tests/), the SPA against a mocked Server. See docs/frontend/testing.md
 pnpm generate:api  # API contract from the OpenAPI document
 ```
 
@@ -59,10 +59,10 @@ Wrap the `cva` call of a `*-variants.ts` file in `withMergedClasses` from `@/lib
 
 ## API client
 
-`lib/api-client.ts` exports `apiClient`, an Axios instance for the BFF:
+`lib/api-client.ts` exports `apiClient`, an Axios instance for the Server:
 
-- `withCredentials: true` sends the BFF cookie.
-- The `X-CSRF: 1` header is necessary for the BFF CSRF protection.
+- `withCredentials: true` sends the session cookie.
+- The `X-CSRF: 1` header is necessary for the CSRF protection of the Server.
 - An error response that has problem details becomes a `ProblemDetailsError`. The client shows it as a toast by default. To stop the toast, send `{ suppressErrorToast: true }` with the request.
 
 The generated API clients send each request through `apiClient`. `main.tsx` imports `lib/api-client.ts` to connect them before the first request. Use `apiClient` directly only for endpoints that are not in the OpenAPI document, such as `/bff/user`.
@@ -174,7 +174,7 @@ Each page needs a session. The root route (`routes/__root.tsx`) reads `authClaim
 | Error, and no earlier answer | An alert and Try Again. It does not go to the login. While the check runs again, Try Again is pending and takes no press. |
 | Claims | The layout and the page |
 
-The app does not poll the session. It finds an ended BFF session, for example after a back-channel logout, at the next call to an endpoint that needs a user: the Server answers 401, and the BFF passes it on. A call to an endpoint that allows anonymous callers still answers 200. The Server also answers 401 while the BFF session lives, for example when a token refresh fails for a short time. So on a 401, `apiClient` checks the session again and waits for the answer (`onUnauthorized` in `main.tsx`):
+The app does not poll the session. It finds an ended session at the next call to an endpoint that needs a user: the Server answers 401. A call to an endpoint that allows anonymous callers still answers 200. The Server also answers 401 while the BFF session lives, for example when a token refresh fails for a short time. So on a 401, `apiClient` checks the session again and waits for the answer (`onUnauthorized` in `main.tsx`):
 
 | The check gives | `apiClient` |
 |---|---|

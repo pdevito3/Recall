@@ -167,6 +167,8 @@ const capturedErrors = new Set()
 
 function hideRouterDevtoolsOfDevBuild() {
   document.addEventListener('DOMContentLoaded', () => {
+    const isSpaPage = document.getElementById('root') !== null
+    if (!isSpaPage) return
     const style = document.createElement('style')
     style.textContent = '.TanStackRouterDevtools { display: none !important; }'
     document.head.append(style)
@@ -221,9 +223,6 @@ async function capture(name, { fullPage = true } = {}) {
   if (sweep && name !== 'failure') await sweepCapture({ page, cdp, settle, outDir, capture: base, faults: sweepFaults, holdsOverlay: !fullPage })
 }
 
-// Logs in through the real BFF and the IdP of the stack, then returns the user's `name` claim from the BFF.
-// The SPA sends a visitor with no session to the IdP at once, and the IdP sends the browser back to the page that
-// the visitor opened.
 // `user` is a user of that IdP. Without it, the IdP's first user signs in.
 //   ZeroFactor (default): admin@example.com (Admin User), user@example.com (Test User). One click signs in.
 //   DuendeDemo: bob (Bob Smith), alice (Alice Smith). The password is the user name.
@@ -243,7 +242,7 @@ async function login(user) {
   await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible({ timeout: 15_000 })
   const claims = await page.evaluate(async () => (await fetch('/bff/user', { headers: { 'X-CSRF': '1' } })).json())
   const name = claims.find((c) => c.type === 'name')?.value
-  if (!name) throw new Error(`The BFF session of ${stack.authProvider} has no name claim.`)
+  if (!name) throw new Error(`The session from ${stack.authProvider} has no name claim.`)
   return { name }
 }
 
@@ -266,16 +265,9 @@ async function signInAtDuendeDemo(user) {
   await page.locator('button[value="login"]').click()
 }
 
-// Logs out through the BFF. 0factor sends the browser back at once. Duende shows a "return to the application"
-// page, which this follows. Back on the app, the SPA has no session, so it sends the browser to the login of the IdP.
 async function logout() {
-  const loginAgain = page.waitForRequest((r) => new URL(r.url()).pathname === '/bff/login', { timeout: 30_000 })
   await page.getByRole('button', { name: 'Logout' }).click()
-  const back = page.locator('a[href*="signout-callback-oidc"]')
-  const followedBack = back.waitFor({ timeout: 20_000 }).then(() => back.click(), () => {})
-  await Promise.race([followedBack, loginAgain])
-  await loginAgain
-  await page.waitForURL((u) => u.origin !== new URL(stack.urls.web).origin, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+  await page.waitForURL((u) => u.pathname === '/auth/login' && u.searchParams.has('signedOut'), { waitUntil: 'domcontentloaded', timeout: 30_000 })
 }
 
 let status = 'passed'

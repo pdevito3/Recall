@@ -23,7 +23,7 @@ function Home() {
     <div className="bg-background">
       <div className="max-w-2xl mx-auto px-4 py-8">
         <PageHeading>Recall</PageHeading>
-        <p className="text-muted-foreground mt-1">.NET Aspire + React with a BFF</p>
+        <p className="text-muted-foreground mt-1">.NET Aspire + React</p>
 
         <Card className="mt-8">
           <CardHeader>

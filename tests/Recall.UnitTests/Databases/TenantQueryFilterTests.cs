@@ -1,6 +1,7 @@
 namespace Recall.UnitTests.Databases;
 
 using System.Reflection;
+using Recall.Server.Auth.Entities;
 using Recall.Server.Databases;
 using Recall.Server.Domain.DPoPProofs;
 using Recall.Server.Resources;
@@ -13,7 +14,11 @@ using Shouldly;
 
 public class TenantQueryFilterTests
 {
-    private static readonly Type[] EntitiesWithNoTenantData = [typeof(UsedDPoPProof)];
+    private static readonly Type[] AuthEntitiesReadBeforeACallerExists =
+        [typeof(ExternalLogin), typeof(AuthSession), typeof(AppCode)];
+
+    private static readonly Type[] EntitiesWithNoTenantData =
+        [typeof(UsedDPoPProof), typeof(LoginAttempt), .. AuthEntitiesReadBeforeACallerExists];
 
     [Test]
     public void every_entity_has_the_tenant_filter_unless_it_is_named_as_an_entity_with_no_tenant_filter()
@@ -43,6 +48,7 @@ public class TenantQueryFilterTests
             .Where(e => !e.IsOwned() && !HasTenantFilter(e))
             .Where(e => e.GetForeignKeys().Any(fk => HasTenantFilter(fk.PrincipalEntityType)))
             .Select(e => e.ClrType)
+            .Except(AuthEntitiesReadBeforeACallerExists)
             .ToList();
 
         // Assert

@@ -18,7 +18,7 @@ Each save writes the audit log in its transaction, so a feature gets its audit e
 2. Build the Server. An RS0030 error for a write names a write that skips the save. Change the write to a save. Do not suppress the error for an audited table. For an RS0030 error on `Like`, see `docs/backend/features-and-cqrs.md`, section "Search text".
 3. Run the unit tests. `AuditModelTests` and `AuditSensitivityTests` fail on a model rule or a mark that is missing, and the message names the fix.
 4. Write an integration test that sends the command, then reads `AuditEntries` with `ReadAsync`. Assert the kind, the values, the actor, and the request name. `AuditCaptureTests` and `AuditActionTests` are the examples.
-5. In the running stack, do the change, then get `/api/v1/audit-entries?entityId={root id}` through the BFF. Make sure that the entry has the request name and the trace id of your request.
+5. In the running stack, do the change, then get `/api/v1/audit-entries?entityId={root id}`. Make sure that the entry has the request name and the trace id of your request.
 
 ## Review the result
 
@@ -30,4 +30,4 @@ Before you call the change done, make sure that each item is true:
 - [ ] Each action has an `[AuditActionName]` that no other action has. The name of a released action is the same as before.
 - [ ] Each success path of a handler that records an action calls `SaveChangesAsync`.
 - [ ] No code or migration adds, changes, or deletes a row of `audit_entries`. The save writes each row.
-- [ ] The integration test reads the entries of the change, and the stack shows them through the BFF.
+- [ ] The integration test reads the entries of the change, and the stack shows them.

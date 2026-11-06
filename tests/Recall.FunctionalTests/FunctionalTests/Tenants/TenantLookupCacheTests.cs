@@ -72,12 +72,14 @@ public class TenantLookupCacheTests : TestBase
         var miss = await FactoryClient.GetRequestAsync($"{ApiRoutes.Tenants.GetList}?pageSize=500");
         (await miss.Content.ReadFromJsonAsync<List<object>>()).ShouldNotBeNull().ShouldBeEmpty();
 
+        FactoryClient.SignInAsTrustedMachineClient();
         var initiated = await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.Initiate, dto);
         initiated.StatusCode.ShouldBe(HttpStatusCode.Created);
         var tenantId = (await initiated.Content.ReadFromJsonAsync<InitiateUserAndTenantResponseDto>())
             .ShouldNotBeNull().Tenant.Id;
 
         // Act
+        FactoryClient.SignInAsAppUser(dto.Identifier);
         var result = await FactoryClient.GetRequestAsync(ApiRoutes.Tenants.GetRecord(tenantId));
 
         // Assert
@@ -127,12 +129,13 @@ public class TenantLookupCacheTests : TestBase
             .ShouldBe(HttpStatusCode.NoContent);
 
         // Act
-        SignInAs(removed);
+        FactoryClient.SignInAsTrustedMachineClient();
         var dto = new FakeInitiateUserAndTenantDto()
             .RuleFor(x => x.Identifier, _ => removed.Identifier)
             .RuleFor(x => x.Role, _ => "Admin")
             .Generate();
         var initiated = await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.Initiate, dto);
+        SignInAs(removed);
 
         // Assert
         initiated.StatusCode.ShouldBe(HttpStatusCode.Created);

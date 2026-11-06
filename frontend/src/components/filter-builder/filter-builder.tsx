@@ -14,6 +14,7 @@ import { isFilter } from './types'
 import { canCreateGroup } from './utils/depth'
 import { LogicalOperators } from './utils/operators'
 import { getFilterName } from './utils/filter-name'
+import { newFilterId } from './utils/filter-state'
 import { useFilterBuilderReducer } from './use-filter-builder-reducer'
 
 export function FilterBuilder({
@@ -35,7 +36,7 @@ export function FilterBuilder({
   const handleAddFilter = (filter: Omit<Filter, 'id'>) => {
     const newFilter: Filter = {
       ...filter,
-      id: crypto.randomUUID(),
+      id: newFilterId(),
     }
     actions.addFilter(newFilter)
   }

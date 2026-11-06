@@ -80,7 +80,7 @@ public class PermissionsInResponseTests : TestBase
         [Name(typeof(InitiateUserAndTenant.Command))] = async a =>
         {
             var dto = new FakeInitiateUserAndTenantDto().Generate() with { Role = UserRole.Admin().Value };
-            a.Client.SignInAsAppUser(dto.Identifier);
+            a.Client.SignInAsTrustedMachineClient();
             var initiated = await ReadAsync<InitiateUserAndTenantResponseDto>(
                 await a.Client.PostJsonRequestAsync(ApiRoutes.Users.Initiate, dto), HttpStatusCode.Created);
             return Returned.OfUser(initiated.User);

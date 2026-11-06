@@ -14,6 +14,12 @@ public static class HttpClientExtensions
             ["azp"] = TestingWebApplicationFactory.FirstPartyClientId,
         });
 
+    public static void SignInAsTrustedMachineClient(this HttpClient client)
+        => client.SetFakeBearerToken(new Dictionary<string, object>
+        {
+            ["client_id"] = TestingWebApplicationFactory.TrustedMachineClientId,
+        });
+
     public static async Task<HttpResponseMessage> GetRequestAsync(this HttpClient client, string url)
         => await client.GetAsync(url);
 

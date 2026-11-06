@@ -15,9 +15,9 @@ An isolated run (`--isolated`) gives the stack its own copy of everything that c
 
 | Item | Normal run | Isolated run |
 |---|---|---|
-| Ports of the dashboard, the server, the BFF, Vite, and the auth containers | Fixed. See the port table in `README.md`. | Random |
+| Ports of the dashboard, the server, Vite, and the auth containers | Fixed. See the port table in `README.md`. | Random |
 | User secrets | The AppHost secrets | A copy, deleted at the end of the run |
-| Data files (`recall.db`, `bff.db`, `files/`) | `.data` of the checkout, or `RECALL_DATA_DIR` | A new temp directory, or `RECALL_DATA_DIR`. The data is empty at each start. |
+| Data files (`recall.db`, `files/`) | `.data` of the checkout, or `RECALL_DATA_DIR` | A new temp directory, or `RECALL_DATA_DIR`. The data is empty at each start. |
 | Postgres data of an auth provider with its own Postgres | A volume for each checkout path | No volume. The data is empty at each start. |
 
 Thus a worktree run never shares a port or a database with another run. The Docker images, the NuGet and pnpm caches, and the Duende demo identity server stay shared.
@@ -39,7 +39,7 @@ For a Playwright run against an isolated stack, set `BASE_URL` to the `webfronte
 
    ```bash
    dotnet aspire wait server --apphost Recall.AppHost
-   dotnet aspire wait bff --apphost Recall.AppHost
+   dotnet aspire wait webfrontend --apphost Recall.AppHost
    ```
 
 4. Get the URLs. The app URL is the `webfrontend` URL. The dashboard URL is in the `dotnet aspire ps` output.
@@ -72,14 +72,14 @@ All rows need `--apphost Recall.AppHost` (see [Select the AppHost](#select-the-a
 | Rebuild a .NET project and restart it | `dotnet aspire resource <resource> rebuild` |
 | Stop the stack | `dotnet aspire stop` |
 
-The resource names are the names in `Recall.AppHost/AppHost.cs`: `server`, `bff`, `webfrontend`, and `tests` (the Labcoat test UI).
+The resource names are the names in `Recall.AppHost/AppHost.cs`: `server`, `webfrontend`, and `tests` (the Labcoat test UI).
 
 ## Code changes
 
 | You changed | Do |
 |---|---|
 | Frontend code | Nothing. Vite reloads the page. |
-| Server or BFF code | `dotnet aspire resource server rebuild` (or `bff`) |
+| Server code | `dotnet aspire resource server rebuild` |
 | `AppHost.cs` or another AppHost file | Stop the stack, then start it again |
 
 ## Stop

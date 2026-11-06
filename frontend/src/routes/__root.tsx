@@ -50,7 +50,11 @@ function RootComponent() {
 }
 
 function GoToLogin() {
+  // StrictMode runs an effect twice in a dev build, and a second location.replace aborts the navigation of the first
+  const isGoing = useRef(false)
   useEffect(() => {
+    if (isGoing.current) return
+    isGoing.current = true
     login(returnUrlOf(window.location))
   }, [])
   return null

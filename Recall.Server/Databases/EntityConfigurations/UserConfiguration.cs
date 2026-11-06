@@ -21,7 +21,6 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
             .HasMaxLength(User.FirstNameMaxLength);
 
         builder.Property(e => e.LastName)
-            .IsRequired()
             .HasMaxLength(User.LastNameMaxLength);
 
         builder.Property(e => e.Identifier)

@@ -21,16 +21,7 @@ public interface IAuthProvider
     /// </summary>
     bool RunsE2eTests => true;
 
-    /// <summary>
-    /// Whether the stack can run this provider with DPoP=true. Set it only for a provider that the e2e tests prove with
-    /// DPoP. Its e2e file must then list the dpop capability. A provider can list DPoP in discovery and still not set it.
-    /// </summary>
-    bool TestedWithDPoP => false;
-
-    /// <summary>
-    /// Adds the resources of the provider to the stack and returns the settings for the server and the BFF.
-    /// </summary>
-    AuthProviderConfig AddTo(IDistributedApplicationBuilder builder, AuthClientUrls clientUrls);
+    AuthProviderConfig? AddTo(IDistributedApplicationBuilder builder, AuthClientUrls clientUrls);
 }
 
 /// <summary>

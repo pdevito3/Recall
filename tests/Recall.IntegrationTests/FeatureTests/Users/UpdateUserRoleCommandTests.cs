@@ -1,10 +1,14 @@
 namespace Recall.IntegrationTests.FeatureTests.Users;
 
+using Recall.Server.Databases;
 using Recall.Server.Domain;
 using Recall.Server.Domain.Users;
 using Recall.Server.Domain.Users.Features;
 using Recall.Server.Exceptions;
+using Recall.Server.Resources;
+using Recall.IntegrationTests.Databases;
 using Recall.SharedTestHelpers.EntityGraphs;
+using Recall.SharedTestHelpers.Utilities;
 using Microsoft.EntityFrameworkCore;
 using Shouldly;
 
@@ -179,5 +183,225 @@ public class UpdateUserRoleCommandTests : TestBase
         userReturned.Permissions.ShouldNotContain("manage_tenant");
         var saved = await testingServiceScope.SendAsync(new GetUser.Query(createdUser.Id));
         saved.Permissions.ShouldNotContain("manage_tenant");
+    }
+
+    [Test]
+    public async Task the_only_admin_who_can_sign_in_cannot_be_demoted()
+    {
+        // Arrange
+        var scope = new TestingServiceScope();
+        await scope.StartGraph(out _)
+            .AddTenant(out _)
+            .AddUser(out var owner, u => u.Role = "Admin")
+            .BuildAsync();
+        await scope.AddSignInLinkAsync(owner);
+        scope.SetUserWithDefaults(identifier: owner.Identifier);
+
+        // Act
+        var act = () => scope.SendAsync(new UpdateUserRole.Command(owner.Id, "User"));
+
+        // Assert
+        var refused = await act.ShouldThrowAsync<ConflictException>();
+        refused.Message.ShouldBe(LastAdmin.RefusedMessage);
+        var role = await scope.ExecuteDbContextAsync(db => db.Users
+            .IgnoreQueryFilters([QueryFilterNames.Tenant]).Where(u => u.Id == owner.Id).Select(u => u.Role.Value).SingleAsync());
+        role.ShouldBe("Admin");
+    }
+
+    [Test]
+    public async Task the_only_admin_who_can_sign_in_can_stay_an_admin()
+    {
+        // Arrange
+        var scope = new TestingServiceScope();
+        await scope.StartGraph(out _)
+            .AddTenant(out _)
+            .AddUser(out var owner, u => u.Role = "Admin")
+            .BuildAsync();
+        await scope.AddSignInLinkAsync(owner);
+        scope.SetUserWithDefaults(identifier: owner.Identifier);
+
+        // Act
+        var result = await scope.SendAsync(new UpdateUserRole.Command(owner.Id, "Admin"));
+
+        // Assert
+        result.Role.ShouldBe("Admin");
+    }
+
+    [Test]
+    public async Task two_admins_who_demote_each_other_at_one_time_leave_one_admin()
+    {
+        // Arrange
+        var pause = PauseAtQuery.After("users.last_admin.another");
+        await using var services = pause.BuildServices();
+        var scope = new TestingServiceScope();
+        await scope.StartGraph(out _)
+            .AddTenant(out var tenant)
+            .AddUser(out var first, u => u.Role = "Admin")
+            .Under(tenant)
+            .AddUser(out var second, u => u.Role = "Admin")
+            .BuildAsync();
+        await scope.AddSignInLinkAsync(first);
+        await scope.AddSignInLinkAsync(second);
+        var firstScope = new TestingServiceScope(services);
+        var secondScope = new TestingServiceScope();
+        firstScope.SetUserWithDefaults(identifier: second.Identifier);
+        secondScope.SetUserWithDefaults(identifier: first.Identifier);
+
+        // Act
+        var demoteFirst = firstScope.SendAsync(new UpdateUserRole.Command(first.Id, "User"));
+        await pause.ReachedAsync();
+        var demoteSecond = secondScope.SendAsync(new UpdateUserRole.Command(second.Id, "User"));
+        await pause.WaitUntilBlockedAsync(demoteSecond, () => RootLock.Tenant.HasWaiter(tenant.Id));
+        pause.Release();
+
+        // Assert
+        await demoteFirst;
+        await Should.ThrowAsync<ConflictException>(demoteSecond);
+    }
+
+    [Test]
+    public async Task an_admin_who_cannot_manage_access_does_not_count_as_another_admin()
+    {
+        // Arrange
+        var scope = new TestingServiceScope();
+        await scope.StartGraph(out _)
+            .AddTenant(out var tenant)
+            .AddUser(out var owner, u => u.Role = "Admin")
+            .Under(tenant)
+            .AddUser(out var other, u => u.Role = "Admin")
+            .BuildAsync();
+        await scope.AddSignInLinkAsync(owner);
+        await scope.AddSignInLinkAsync(other);
+        scope.SetUserWithDefaults(identifier: owner.Identifier);
+        await scope.SendAsync(new RemoveUserPermission.Command(other.Id, Permission.ManageUserAccess().Value));
+
+        // Act
+        var act = () => scope.SendAsync(new UpdateUserRole.Command(owner.Id, "User"));
+
+        // Assert
+        var refused = await act.ShouldThrowAsync<ConflictException>();
+        refused.Message.ShouldBe(LastAdmin.RefusedMessage);
+    }
+
+    [Test]
+    public async Task the_only_admin_who_can_manage_access_cannot_give_it_up()
+    {
+        // Arrange
+        var scope = new TestingServiceScope();
+        await scope.StartGraph(out _)
+            .AddTenant(out _)
+            .AddUser(out var owner, u => u.Role = "Admin")
+            .BuildAsync();
+        await scope.AddSignInLinkAsync(owner);
+        scope.SetUserWithDefaults(identifier: owner.Identifier);
+
+        // Act
+        var act = () => scope.SendAsync(new RemoveUserPermission.Command(owner.Id, Permission.ManageUserAccess().Value));
+
+        // Assert
+        var refused = await act.ShouldThrowAsync<ConflictException>();
+        refused.Message.ShouldBe(LastAdmin.RefusedMessage);
+        (await scope.SendAsync(new GetUser.Query(owner.Id))).Permissions.ShouldContain(Permission.ManageUserAccess().Value);
+    }
+
+    [Test]
+    [Arguments("read_users")]
+    [Arguments("read_agents")]
+    public async Task the_only_admin_cannot_give_up_a_permission_it_needs_to_make_another_admin(string permission)
+    {
+        // Arrange
+        var scope = new TestingServiceScope();
+        await scope.StartGraph(out _)
+            .AddTenant(out _)
+            .AddUser(out var owner, u => u.Role = "Admin")
+            .BuildAsync();
+        await scope.AddSignInLinkAsync(owner);
+        scope.SetUserWithDefaults(identifier: owner.Identifier);
+
+        // Act
+        var act = () => scope.SendAsync(new RemoveUserPermission.Command(owner.Id, permission));
+
+        // Assert
+        var refused = await act.ShouldThrowAsync<ConflictException>();
+        refused.Message.ShouldBe(LastAdmin.RefusedMessage);
+        (await scope.SendAsync(new GetUser.Query(owner.Id))).Permissions.ShouldContain(permission);
+    }
+
+    [Test]
+    public async Task an_admin_with_a_permission_missing_does_not_count_as_another_admin()
+    {
+        // Arrange
+        var scope = new TestingServiceScope();
+        await scope.StartGraph(out _)
+            .AddTenant(out var tenant)
+            .AddUser(out var owner, u => u.Role = "Admin")
+            .Under(tenant)
+            .AddUser(out var other, u => u.Role = "Admin")
+            .BuildAsync();
+        await scope.AddSignInLinkAsync(owner);
+        await scope.AddSignInLinkAsync(other);
+        scope.SetUserWithDefaults(identifier: owner.Identifier);
+        await scope.SendAsync(new RemoveUserPermission.Command(other.Id, Permission.ReadUsers().Value));
+
+        // Act
+        var act = () => scope.SendAsync(new UpdateUserRole.Command(owner.Id, "User"));
+
+        // Assert
+        var refused = await act.ShouldThrowAsync<ConflictException>();
+        refused.Message.ShouldBe(LastAdmin.RefusedMessage);
+    }
+
+    [Test]
+    public async Task a_permission_of_a_member_can_go_with_no_regard_for_the_admins()
+    {
+        // Arrange
+        var scope = new TestingServiceScope();
+        await scope.StartGraph(out _)
+            .AddTenant(out var tenant)
+            .AddUser(out var owner, u => u.Role = "Admin")
+            .Under(tenant)
+            .AddUser(out var member, u => u.Role = "User")
+            .BuildAsync();
+        await scope.AddSignInLinkAsync(member);
+        scope.SetUserWithDefaults(identifier: owner.Identifier);
+        await scope.SendAsync(new AddUserPermission.Command(member.Id, Permission.ReadUsers().Value));
+
+        // Act
+        var result = await scope.SendAsync(new RemoveUserPermission.Command(member.Id, Permission.ReadUsers().Value));
+
+        // Assert
+        result.Permissions.ShouldNotContain(Permission.ReadUsers().Value);
+    }
+
+    [Test]
+    public async Task two_admins_who_remove_a_permission_of_each_other_at_one_time_leave_one_complete_admin()
+    {
+        // Arrange
+        var pause = PauseAtQuery.After("users.last_admin.another");
+        await using var services = pause.BuildServices();
+        var scope = new TestingServiceScope();
+        await scope.StartGraph(out _)
+            .AddTenant(out var tenant)
+            .AddUser(out var first, u => u.Role = "Admin")
+            .Under(tenant)
+            .AddUser(out var second, u => u.Role = "Admin")
+            .BuildAsync();
+        await scope.AddSignInLinkAsync(first);
+        await scope.AddSignInLinkAsync(second);
+        var firstScope = new TestingServiceScope(services);
+        var secondScope = new TestingServiceScope();
+        firstScope.SetUserWithDefaults(identifier: second.Identifier);
+        secondScope.SetUserWithDefaults(identifier: first.Identifier);
+
+        // Act
+        var removeFromFirst = firstScope.SendAsync(new RemoveUserPermission.Command(first.Id, Permission.ReadUsers().Value));
+        await pause.ReachedAsync();
+        var removeFromSecond = secondScope.SendAsync(new RemoveUserPermission.Command(second.Id, Permission.ReadUsers().Value));
+        await pause.WaitUntilBlockedAsync(removeFromSecond, () => RootLock.Tenant.HasWaiter(tenant.Id));
+        pause.Release();
+
+        // Assert
+        await removeFromFirst;
+        await Should.ThrowAsync<ConflictException>(removeFromSecond);
     }
 }

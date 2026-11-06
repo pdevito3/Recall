@@ -1,0 +1,45 @@
+server:
+  address: tcp://0.0.0.0:9091
+  tls:
+    certificate: /config/tls.crt
+    key: /config/tls.key
+authentication_backend:
+  file:
+    path: /config/users.yml
+access_control:
+  default_policy: one_factor
+session:
+  secret: __R1__
+  cookies:
+    - domain: recall.localhost
+      authelia_url: https://auth.recall.localhost:29191
+storage:
+  encryption_key: __R2__
+  local:
+    path: /tmp/db.sqlite3
+notifier:
+  filesystem:
+    filename: /tmp/notifications.txt
+identity_validation:
+  reset_password:
+    jwt_secret: __R3__
+identity_providers:
+  oidc:
+    hmac_secret: __R4__
+    jwks:
+      - key: {{ secret "/config/oidc.pem" | mindent 10 "|" | msquote }}
+    clients:
+      - client_id: recall
+        client_name: Recall
+        client_secret: "__CLIENT_HASH__"
+        public: false
+        authorization_policy: one_factor
+        consent_mode: implicit
+        require_pkce: true
+        pkce_challenge_method: S256
+        token_endpoint_auth_method: client_secret_basic
+        scopes: [openid, profile, email]
+        redirect_uris:
+          - http://localhost:24000/auth/oidc/callback
+          - http://__LAN_IP__:24000/auth/oidc/callback
+          - https://recall.localhost:24443/auth/oidc/callback

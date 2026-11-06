@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Configuration;
+
 namespace Recall.AppHost.AuthProviders;
 
 /// <summary>
@@ -24,18 +26,6 @@ public sealed record AuthProviderConfig
     public IResourceBuilder<ContainerResource>? AuthResource { get; init; }
 
     /// <summary>
-    /// The Auth:Features settings of the BFF. The defaults decide each feature from the discovery document of the
-    /// provider, which is correct for each provider.
-    /// </summary>
-    public AuthFeatureSettings Features { get; init; } = new();
-
-    /// <summary>
-    /// The DPoP key of the BFF (<c>Auth:DPoPJsonWebKey</c>), when the stack runs with DPoP. See
-    /// <see cref="AuthProviderDPoP.WithDPoP"/>.
-    /// </summary>
-    public IResourceBuilder<ParameterResource>? DPoPKey { get; init; }
-
-    /// <summary>
     /// Whether to include the Audience as an OAuth scope.
     /// Some providers (like Keycloak) require the audience as a scope to get proper access tokens.
     /// FusionAuth doesn't support custom scopes and will reject unknown scopes.
@@ -51,83 +41,31 @@ public sealed record AuthProviderConfig
     public string? AuthorityPathSuffix { get; init; }
 
     /// <summary>
-    /// Whether the BFF requests the offline_access scope for a refresh token.
-    /// Cognito rejects this scope with invalid_scope and returns a refresh token without it.
-    /// </summary>
-    public bool RequestOfflineAccess { get; init; } = true;
-
-    /// <summary>
     /// The access token claim that the API compares with the Audience.
     /// Cognito access tokens have no aud claim. They put the app client ID in client_id.
     /// </summary>
     public string AudienceClaimType { get; init; } = "aud";
 
     /// <summary>
-    /// Path of the logout endpoint on the container, for providers whose discovery document has no end_session_endpoint.
-    /// The BFF sends client_id and logout_uri to it, as Cognito requires.
-    /// </summary>
-    public string? LogoutPath { get; init; }
-
-    /// <summary>
-    /// Whether the end_session_endpoint accepts client_id with no id_token_hint. A logout with the cookie of an ended
-    /// BFF session has no ID token, and the BFF then ends the IdP session only if this is true. ZeroFactor refuses
-    /// such a request.
-    /// </summary>
-    public bool EndSessionWithoutIdTokenHint { get; init; }
-
-    /// <summary>
-    /// More environment variables for the BFF only, for a provider that needs a BFF setting that no other provider needs.
-    /// </summary>
-    public IReadOnlyDictionary<string, string> BffSettings { get; init; } = new Dictionary<string, string>();
-
-    /// <summary>
     /// More environment variables for the server only, for a provider that needs a server setting that no other
     /// provider needs.
     /// </summary>
     public IReadOnlyDictionary<string, string> ServerSettings { get; init; } = new Dictionary<string, string>();
-
-    /// <summary>
-    /// Changes the BFF resource after the AppHost has given it the auth settings, for a provider that must change how
-    /// the BFF starts or listens.
-    /// </summary>
-    public Action<IResourceBuilder<ProjectResource>>? ConfigureBff { get; init; }
-}
-
-/// <summary>
-/// The Auth:Features settings of the BFF: Auto, Require, or Disable for each optional feature of the provider.
-/// See section 3.3 of docs/specs/home-rolled-bff.md.
-/// </summary>
-public sealed record AuthFeatureSettings
-{
-    public string Revocation { get; init; } = "Auto";
-    public string IssuerParameter { get; init; } = "Auto";
-    public string BackChannelLogout { get; init; } = "Auto";
-    public string EndSession { get; init; } = "Auto";
-    public string PushedAuthorization { get; init; } = "Auto";
-    public string DPoP { get; init; } = "Disable";
 }
 
 /// <summary>
 /// The app URLs that a local identity provider must accept as redirect targets.
 /// An isolated run gives these endpoints random ports, so the seed files read them from environment variables.
-/// The BFF builds its OIDC redirect URI from its own URL, because the Vite proxy changes the origin.
 /// <para><paramref name="ServerHttp"/> is the server http endpoint, for a login in Swagger UI on that endpoint.</para>
-/// <para><paramref name="BffForContainers"/> is the BFF http endpoint in the container network view. The identity
-/// provider containers send the back-channel logout token to it. The http endpoint, because the containers do not
-/// trust the development certificate.</para>
 /// </summary>
 public sealed record AuthClientUrls(
     EndpointReference Frontend,
     EndpointReference Server,
-    EndpointReference ServerHttp,
-    EndpointReference Bff,
-    EndpointReference BffForContainers)
+    EndpointReference ServerHttp)
 {
     public const string FrontendVariable = "APP_FRONTEND_URL";
     public const string ServerVariable = "APP_SERVER_URL";
     public const string ServerHttpVariable = "APP_SERVER_HTTP_URL";
-    public const string BffVariable = "APP_BFF_URL";
-    public const string BffBackChannelVariable = "APP_BFF_BACKCHANNEL_URL";
 }
 
 /// <summary>
@@ -135,12 +73,10 @@ public sealed record AuthClientUrls(
 /// </summary>
 public static class AuthProviderExtensions
 {
-    /// <summary>
-    /// Applies server authentication environment variables to a resource.
-    /// </summary>
     public static IResourceBuilder<T> WithServerAuth<T>(
         this IResourceBuilder<T> resource,
-        AuthProviderConfig authProvider) where T : IResourceWithEnvironment, IResourceWithWaitSupport
+        AuthProviderConfig authProvider,
+        IAuthProvider provider) where T : IResourceWithEnvironment, IResourceWithWaitSupport
     {
         resource
             .WithEnvironment("Auth__ClientId", authProvider.ClientId)
@@ -150,38 +86,42 @@ public static class AuthProviderExtensions
             .WithEnvironment("Auth__NameClaimType", authProvider.NameClaimType)
             .WithEnvironment("Auth__RoleClaimType", authProvider.RoleClaimType)
             .WithEnvironment("Auth__UseAudienceAsScope", authProvider.UseAudienceAsScope.ToString())
-            .WithEnvironment("Auth__AudienceClaimType", authProvider.AudienceClaimType);
+            .WithEnvironment("Auth__AudienceClaimType", authProvider.AudienceClaimType)
+            .WithEnvironment("Auth__Providers__0__Id", provider.Name.ToLowerInvariant())
+            .WithEnvironment("Auth__Providers__0__DisplayName", provider.Name)
+            .WithEnvironment("Auth__Providers__0__ClientId", authProvider.ClientId)
+            .WithEnvironment("Auth__Providers__0__ClientSecret", authProvider.ClientSecret)
+            .WithEnvironment("Auth__Providers__0__AllowHttp", (!authProvider.RequireHttpsMetadata).ToString());
 
         foreach (var (name, value) in authProvider.ServerSettings)
         {
             resource.WithEnvironment(name, value);
         }
 
-        // Apply authority - either static URL or container endpoint
-        if (authProvider.Authority is not null)
-        {
-            resource.WithEnvironment("Auth__Authority", authProvider.Authority);
-        }
-        else if (authProvider.AuthResource is not null)
-        {
-            // The app reads the OIDC discovery document at startup, so it waits for the health check of the provider
+        if (authProvider.AuthResource is not null)
             resource.WaitFor(authProvider.AuthResource);
 
-            if (authProvider.AuthorityPathSuffix is not null)
-            {
-                // Build authority URL with path suffix (e.g., for Keycloak realms)
-                resource.WithEnvironment(context =>
-                {
-                    var endpoint = authProvider.AuthResource.GetEndpoint("http");
-                    context.EnvironmentVariables["Auth__Authority"] = ReferenceExpression.Create(
-                        $"{endpoint}{authProvider.AuthorityPathSuffix}");
-                });
-            }
-            else
-            {
-                resource.WithEnvironment("Auth__Authority", authProvider.AuthResource.GetEndpoint("http"));
-            }
-        }
+        resource.WithEnvironment(context =>
+        {
+            var issuer = authProvider.AuthResource is { } container
+                ? ReferenceExpression.Create($"{container.GetEndpoint("http")}{authProvider.AuthorityPathSuffix}")
+                : ReferenceExpression.Create($"{authProvider.Authority}");
+            context.EnvironmentVariables["Auth__Authority"] = issuer;
+            context.EnvironmentVariables["Auth__Providers__0__Issuer"] = issuer;
+        });
+
+        return resource;
+    }
+
+    public static IResourceBuilder<T> WithForwardedAuth<T>(
+        this IResourceBuilder<T> resource,
+        IConfiguration configuration) where T : IResourceWithEnvironment
+    {
+        var settings = configuration.GetSection("Auth:Providers").AsEnumerable()
+            .Append(new("Auth:OpenSignup", configuration["Auth:OpenSignup"]))
+            .Where(setting => setting.Value is not null);
+        foreach (var (key, value) in settings)
+            resource.WithEnvironment(key.Replace(":", "__", StringComparison.Ordinal), value);
 
         return resource;
     }
@@ -200,82 +140,6 @@ public static class AuthProviderExtensions
             context.EnvironmentVariables[AuthClientUrls.FrontendVariable] = clientUrls.Frontend.Url;
             context.EnvironmentVariables[AuthClientUrls.ServerVariable] = clientUrls.Server.Url;
             context.EnvironmentVariables[AuthClientUrls.ServerHttpVariable] = clientUrls.ServerHttp.Url;
-            context.EnvironmentVariables[AuthClientUrls.BffVariable] = clientUrls.Bff.Url;
-            context.EnvironmentVariables[AuthClientUrls.BffBackChannelVariable] =
-                ReferenceExpression.Create($"{clientUrls.BffForContainers}/bff/backchannel");
         });
-    }
-
-    /// <summary>
-    /// Applies BFF authentication environment variables to a resource.
-    /// </summary>
-    public static IResourceBuilder<T> WithBffAuth<T>(
-        this IResourceBuilder<T> resource,
-        AuthProviderConfig authProvider) where T : IResourceWithEnvironment, IResourceWithWaitSupport
-    {
-        resource
-            .WithEnvironment("Auth__ClientId", authProvider.ClientId)
-            .WithEnvironment("Auth__ClientSecret", authProvider.ClientSecret)
-            .WithEnvironment("Auth__Audience", authProvider.Audience)
-            .WithEnvironment("Auth__RequireHttpsMetadata", authProvider.RequireHttpsMetadata.ToString())
-            .WithEnvironment("Auth__NameClaimType", authProvider.NameClaimType)
-            .WithEnvironment("Auth__RoleClaimType", authProvider.RoleClaimType)
-            .WithEnvironment("Auth__UseAudienceAsScope", authProvider.UseAudienceAsScope.ToString())
-            .WithEnvironment("Auth__RequestOfflineAccess", authProvider.RequestOfflineAccess.ToString())
-            .WithEnvironment("Auth__EndSessionWithoutIdTokenHint", authProvider.EndSessionWithoutIdTokenHint.ToString())
-            .WithEnvironment("Auth__Features__Revocation", authProvider.Features.Revocation)
-            .WithEnvironment("Auth__Features__IssuerParameter", authProvider.Features.IssuerParameter)
-            .WithEnvironment("Auth__Features__BackChannelLogout", authProvider.Features.BackChannelLogout)
-            .WithEnvironment("Auth__Features__EndSession", authProvider.Features.EndSession)
-            .WithEnvironment("Auth__Features__PushedAuthorization", authProvider.Features.PushedAuthorization)
-            .WithEnvironment("Auth__Features__DPoP", authProvider.Features.DPoP);
-
-        if (authProvider.DPoPKey is not null)
-        {
-            resource.WithEnvironment("Auth__DPoPJsonWebKey", authProvider.DPoPKey);
-        }
-
-        foreach (var (name, value) in authProvider.BffSettings)
-        {
-            resource.WithEnvironment(name, value);
-        }
-
-        if (authProvider is { LogoutPath: not null, AuthResource: not null })
-        {
-            resource.WithEnvironment(context =>
-            {
-                var endpoint = authProvider.AuthResource.GetEndpoint("http");
-                context.EnvironmentVariables["Auth__LogoutEndpoint"] = ReferenceExpression.Create(
-                    $"{endpoint}{authProvider.LogoutPath}");
-            });
-        }
-
-        // Apply authority - either static URL or container endpoint
-        if (authProvider.Authority is not null)
-        {
-            resource.WithEnvironment("Auth__Authority", authProvider.Authority);
-        }
-        else if (authProvider.AuthResource is not null)
-        {
-            // The app reads the OIDC discovery document at startup, so it waits for the health check of the provider
-            resource.WaitFor(authProvider.AuthResource);
-
-            if (authProvider.AuthorityPathSuffix is not null)
-            {
-                // Build authority URL with path suffix (e.g., for Keycloak realms)
-                resource.WithEnvironment(context =>
-                {
-                    var endpoint = authProvider.AuthResource.GetEndpoint("http");
-                    context.EnvironmentVariables["Auth__Authority"] = ReferenceExpression.Create(
-                        $"{endpoint}{authProvider.AuthorityPathSuffix}");
-                });
-            }
-            else
-            {
-                resource.WithEnvironment("Auth__Authority", authProvider.AuthResource.GetEndpoint("http"));
-            }
-        }
-
-        return resource;
     }
 }

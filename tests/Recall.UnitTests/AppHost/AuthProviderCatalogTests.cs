@@ -1,6 +1,5 @@
 namespace Recall.UnitTests.AppHost;
 
-using System.Text.Json;
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Recall.AppHost.AuthProviders;
@@ -82,63 +81,19 @@ public class AuthProviderCatalogTests
 
     [Test]
     [MethodDataSource(nameof(ProviderNames))]
-    public void dpop_runs_only_with_a_provider_that_the_stack_tests_with_dpop(string name)
-    {
-        // Arrange
-        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions { DisableDashboard = true });
-        var provider = AuthProviderCatalog.Select(Settings(name));
-        var config = new AuthProviderConfig
-        {
-            ClientId = "client", ClientSecret = "secret", Audience = "api", RequireHttpsMetadata = false,
-            NameClaimType = "name", RoleClaimType = "role", Authority = "https://idp.example",
-        };
-
-        // Act and assert
-        if (provider.TestedWithDPoP)
-        {
-            var withDPoP = config.WithDPoP(provider, builder);
-            withDPoP.Features.DPoP.ShouldBe("Require");
-            withDPoP.DPoPKey.ShouldNotBeNull();
-        }
-        else
-        {
-            var exception = Should.Throw<InvalidOperationException>(() => config.WithDPoP(provider, builder));
-            exception.Message.ShouldContain(name);
-        }
-    }
-
-    [Test]
-    [MethodDataSource(nameof(ProviderNames))]
-    public void a_provider_that_the_stack_tests_with_dpop_lists_dpop_in_its_e2e_file(string name)
-    {
-        // Arrange
-        var provider = AuthProviderCatalog.Select(Settings(name));
-        if (!provider.TestedWithDPoP)
-            return;
-        var e2eFile = Path.Combine(Path.GetDirectoryName(AppHostSourceDirectory())!, "frontend", "e2e", "idps", $"{name.ToLowerInvariant()}.json");
-
-        // Act
-        using var idp = JsonDocument.Parse(File.ReadAllText(e2eFile));
-
-        // Assert
-        idp.RootElement.GetProperty("capabilities").GetProperty("dpop").GetBoolean().ShouldBeTrue(
-            $"{name} runs with DPoP=true, so its discovery must list DPoP, and frontend/e2e/idps/{name.ToLowerInvariant()}.json must say so.");
-    }
-
-    [Test]
-    [MethodDataSource(nameof(ProviderNames))]
     public void each_provider_gives_an_authority_and_mounts_seed_files_that_exist(string name)
     {
         // Arrange
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions { DisableDashboard = true });
         var app = builder.AddContainer("app", "app").WithHttpEndpoint(name: "http");
-        var clientUrls = new AuthClientUrls(app.GetEndpoint("http"), app.GetEndpoint("http"), app.GetEndpoint("http"), app.GetEndpoint("http"), app.GetEndpoint("http"));
+        var clientUrls = new AuthClientUrls(app.GetEndpoint("http"), app.GetEndpoint("http"), app.GetEndpoint("http"));
 
         // Act
         var config = AuthProviderCatalog.Select(Settings(name)).AddTo(builder, clientUrls);
 
         // Assert
-        (config.Authority is null).ShouldNotBe(config.AuthResource is null, "A provider sets either a static authority or a container.");
+        if (config is not null)
+            (config.Authority is null).ShouldNotBe(config.AuthResource is null, "A provider sets either a static authority or a container.");
         var seedMounts = builder.Resources
             .SelectMany(resource => resource.Annotations.OfType<ContainerMountAnnotation>())
             .Where(mount => mount.Type == ContainerMountType.BindMount)

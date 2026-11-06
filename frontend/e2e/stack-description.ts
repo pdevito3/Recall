@@ -21,8 +21,8 @@ export type DescribeRun = Pick<SpawnSyncReturns<string>, 'status' | 'stdout' | '
 export type StackCheck = { kind: 'ready'; resources: StackResource[] } | { kind: 'not-ready'; message: string }
 
 // The resources that the stack tests use. CI waits until each one is healthy before it runs the tests.
-const neededResources = ['server', 'bff', 'webfrontend']
-const neededList = `${neededResources.slice(0, -1).join(', ')}, and ${neededResources.at(-1)}`
+const neededResources = ['server', 'webfrontend']
+const neededList = neededResources.join(' and ')
 
 export function checkStack({ run, appHost }: { run: DescribeRun; appHost: string }): StackCheck {
   const startHint = [

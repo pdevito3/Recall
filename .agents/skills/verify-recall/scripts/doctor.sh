@@ -66,7 +66,7 @@ rev="$(git -C "$ROOT" rev-parse HEAD)"
   || if [[ "$build" == "production" ]]; then
     echo "warn  HEAD moved since launch. The production build does not reload. Run cleanup.sh, then launch.sh --preview."
   else
-    echo "warn  HEAD moved since launch. Frontend code hot-reloads. For server or BFF changes, run: dotnet aspire resource server rebuild --apphost $APPHOST_DIR"
+    echo "warn  HEAD moved since launch. Frontend code hot-reloads. For server changes, run: dotnet aspire resource server rebuild --apphost $APPHOST_DIR"
   fi
 
 exit $(( fails > 0 ))

@@ -69,7 +69,7 @@ public class DomainEventTenantTests : TestBase
         }));
         var scope = new TestingServiceScope(services);
         var dto = new FakeInitiateUserAndTenantDto().Generate();
-        scope.SetUserWithDefaults(identifier: dto.Identifier);
+        scope.SetMachineClient(TestFixture.TrustedMachineClientId);
 
         // Act
         var result = await scope.SendAsync(new InitiateUserAndTenant.Command(dto));

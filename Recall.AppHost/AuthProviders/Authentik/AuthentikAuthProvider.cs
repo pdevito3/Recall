@@ -18,8 +18,6 @@ public sealed class AuthentikAuthProvider : IAuthProvider
         const string clientId = "aspire-app";
 
         var authentikSecretKey = builder.AddParameter("authentik-secret-key", new GenerateParameterDefault { MinLength = 50, Special = false }, secret: true, persist: true);
-        // The API token of akadmin. The back-channel logout e2e test ends a user session through the API with it.
-        var authentikBootstrapToken = builder.AddParameter("authentik-bootstrap-token", new GenerateParameterDefault { MinLength = 50, Special = false }, secret: true, persist: true);
 
         // PostgreSQL database for Authentik
         var authentikDbPassword = builder.AddParameter("authentik-db-password", new GenerateParameterDefault { MinLength = 32, Special = false }, secret: true, persist: true);
@@ -30,7 +28,7 @@ public sealed class AuthentikAuthProvider : IAuthProvider
 
         var postgresEndpoint = authentikPostgres.GetEndpoint("tcp", KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
 
-        // Authentik Worker (must start before server to apply blueprints). It also sends the back-channel logout tokens.
+        // Authentik Worker (must start before server to apply blueprints)
         var worker = builder.AddContainer("authentik-worker", "ghcr.io/goauthentik/server", ImageTag)
             .WithReference(authentikDb)
             .WithEnvironment("AUTHENTIK_SECRET_KEY", authentikSecretKey)
@@ -44,7 +42,6 @@ public sealed class AuthentikAuthProvider : IAuthProvider
             .WithEnvironment("AUTHENTIK_POSTGRESQL__PASSWORD", authentikDbPassword)
             .WithEnvironment("AUTHENTIK_BOOTSTRAP_PASSWORD", "password123!")
             .WithEnvironment("AUTHENTIK_BOOTSTRAP_EMAIL", "akadmin@example.com")
-            .WithEnvironment("AUTHENTIK_BOOTSTRAP_TOKEN", authentikBootstrapToken)
             .WithSeedFiles(this, "/blueprints/custom")
             .WithClientUrls(clientUrls)
             .WithArgs("worker")

@@ -37,10 +37,10 @@ export type UserDto = {
     id: string;
     tenantId: string;
     firstName: string;
-    lastName: string;
+    lastName?: string | null;
     fullName: string;
     identifier: string;
-    email: string;
+    email?: string | null;
     username: string;
     role: UserDtoRoleEnumKey;
     permissions: UserDtoPermissionsEnumKey[];

@@ -6,29 +6,29 @@ Guidance for coding agents that work in this repository.
 
 Recall is a self-hosted journal. A person opens the phone, dictates, and the entry is captured with no friction. Read [CONTEXT.md](CONTEXT.md) for its language and [docs/adr/](docs/adr/) for its decisions. ADRs 0013 to 0016 give the target shape, and the code moves to it PR by PR.
 
-Today this is a .NET Aspire application with a React frontend. It uses the Backend-For-Frontend (BFF) pattern. It has multi-tenancy, a CQRS architecture, and a configurable auth provider. The `AuthProvider` setting of the AppHost selects it. See [docs/authentication.md](docs/authentication.md).
+Today this is a .NET Aspire application with a React frontend. The Server runs the login and owns the sessions (ADR 0014). It has multi-tenancy, a CQRS architecture, and a configurable auth provider. The `AuthProvider` setting of the AppHost selects it for a local run. See [docs/authentication.md](docs/authentication.md).
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Aspire AppHost                           │
 │                 (Orchestration Layer)                       │
 └─────────────────────────────────────────────────────────────┘
-         │                    │                    │
-    ┌─────────┐          ┌─────────┐         ┌──────────┐
-    │ Server  │◄────────►│   BFF   │◄───────►│ Frontend │
-    │  (API)  │  (JWT)   │ (OIDC)  │ (REST)  │  (React) │
-    └─────────┘          └─────────┘         └──────────┘
-         │                    │
-    ┌─────────┐        ┌──────────────┐
-    │  SQLite  │       │Auth Provider │
-    └─────────┘        └──────────────┘
+         │                                         │
+    ┌───────────┐                            ┌──────────┐
+    │  Server   │◄──────────────────────────►│ Frontend │
+    │(API, auth)│    (cookie, X-CSRF: 1)     │  (React) │
+    └───────────┘                            └──────────┘
+       │     │
+┌────────┐ ┌──────────────┐
+│ SQLite │ │Auth Provider │
+└────────┘ └──────────────┘
 ```
 
 | Project | Purpose |
 |---------|---------|
 | `Recall.AppHost` | Aspire orchestration. Defines all resources in `AppHost.cs` |
-| `Recall.Server` | Backend API (.NET 10, JWT auth, CQRS, multi-tenant) |
-| `Recall.Bff` | BFF proxy (YARP and OIDC auth). Serves the SPA in production |
+| `Recall.Server` | Backend API and login (.NET 10, app sessions, CQRS, multi-tenant). Serves the SPA in production |
+| `Recall.Bff` | The old BFF. Nothing runs it, and it stays in the solution until a later change deletes it. Do not add to it |
 | `frontend` | React SPA (React 19, TanStack Router, TanStack Query, Tailwind v4) |
 | `tests/` | Unit, integration, and functional tests |
 
@@ -44,7 +44,7 @@ Read the doc for an area before you change code in that area.
 | [docs/telemetry.md](docs/telemetry.md) | Traces, metrics, logs, `Trace`, `AddEvent`, `Here()`, `TraceRoot`, `TraceContext`, named queries |
 | [docs/messages.md](docs/messages.md) | The text of error messages, alerts, toasts, and labels |
 | [docs/multi-tenancy.md](docs/multi-tenancy.md) | Tenant isolation |
-| [docs/authentication.md](docs/authentication.md) | BFF login flow, auth providers, test users |
+| [docs/authentication.md](docs/authentication.md) | Web and native login, sessions, origins, auth providers, test users |
 | [docs/frontend.md](docs/frontend.md) | Frontend structure, API client, query hooks, routes, forms |
 | [docs/frontend/](docs/frontend/) | Rules for server state, client state, code style, and tests |
 | [docs/specs/](docs/specs/) | The specs of a domain or an effort. Start a new spec from [TEMPLATE.md](docs/specs/TEMPLATE.md): each rule has an ID, and a test names the ID |
@@ -64,7 +64,7 @@ The Aspire CLI is a local tool in `dotnet-tools.json`. Run `dotnet tool restore`
 dotnet aspire start --isolated --non-interactive --apphost Recall.AppHost
 ```
 
-This command starts the Aspire dashboard, the server, the BFF, the Vite dev server, and the auth provider in the background. `--isolated` gives the stack random ports and its own empty database, so that each worktree can run a stack at the same time. The `aspire-cli` skill gives the commands to wait for, inspect, restart, and stop the stack.
+This command starts the Aspire dashboard, the server, the Vite dev server, and the auth provider in the background. `--isolated` gives the stack random ports and its own empty database, so that each worktree can run a stack at the same time. The `aspire-cli` skill gives the commands to wait for, inspect, restart, and stop the stack.
 
 1. Before you make changes, start the stack and make sure that all resources are healthy.
 2. If you change `AppHost.cs`, restart the stack. Other code changes hot-reload.

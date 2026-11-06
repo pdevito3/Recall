@@ -45,7 +45,7 @@ public class AuditActionTests : TestBase
         var user = await db.Users.SingleAsync(u => u.Id == scenario.FirstUser.Id);
 
         // Act
-        user.UpdateFromIdp($"{user.FirstName}x", user.LastName, user.Email, user.Username);
+        user.UpdateFromIdp($"{user.FirstName}x", user.LastName, user.Email?.Value, user.Username);
         db.RecordAction(new UsersExported(AuditSubject.Of(user), "csv", 1));
         await db.SaveChangesAsync();
 

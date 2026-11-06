@@ -21,11 +21,11 @@ public class TracingTests : TestBase
     public void startup_migration_exports_one_root_with_the_database_work_under_it()
     {
         // Act & Assert
-        var root = AllExportedSpans().Where(a => a.DisplayName == "database.migrate").ShouldHaveSingleItem();
+        var root = StartupSpans().Where(a => a.DisplayName == "database.migrate").ShouldHaveSingleItem();
         root.ParentSpanId.ShouldBe(default);
         root.GetTagItem("app.db_context").ShouldBe("AppDbContext");
 
-        AllExportedSpans()
+        StartupSpans()
             .Where(a => IsSqlSpan(a) && a.TraceId == root.TraceId)
             .ShouldNotBeEmpty();
     }
@@ -34,7 +34,7 @@ public class TracingTests : TestBase
     public void startup_migration_on_an_empty_database_logs_no_error()
     {
         // Act & Assert
-        var root = AllExportedSpans().Where(a => a.DisplayName == "database.migrate").ShouldHaveSingleItem();
+        var root = StartupSpans().Where(a => a.DisplayName == "database.migrate").ShouldHaveSingleItem();
         TestingWebApplicationFactory.Instance.CapturedLogs.InTrace(root.TraceId)
             .Where(e => e.Level >= LogEventLevel.Error)
             .Select(e => e.MessageTemplate.Text)

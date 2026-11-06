@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
-const DATA_FILES = { appdb: 'recall.db', bffdb: 'bff.db' }
+const DATA_FILES = { appdb: 'recall.db' }
 
 const ident = (name) => `"${name.replaceAll('"', '""')}"`
 

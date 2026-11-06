@@ -1,6 +1,6 @@
 # Telemetry
 
-The server and the BFF export traces, metrics, and logs with OpenTelemetry. In development, the Aspire dashboard shows them at https://localhost:24700 (the `aspire run` output gives the login link). An isolated run (`--isolated`) uses a random port. `dotnet aspire ps` gives its URL.
+The server exports traces, metrics, and logs with OpenTelemetry. In development, the Aspire dashboard shows them at https://localhost:24700 (the `aspire run` output gives the login link). An isolated run (`--isolated`) uses a random port. `dotnet aspire ps` gives its URL.
 
 ## Privacy rule
 
@@ -8,18 +8,17 @@ A span carries names, identifiers, and counts. It never carries user-entered con
 
 `SqlSpanInterceptor` makes a span for each SQL command of the Server, and it copies the SQL text into `db.query.text`. Thus a value from the caller must go to the database as a parameter, never as a literal in the SQL text. `CustomQueryKitConfiguration` sets `ParameterizeFilterValues`, so the SQL text of a list query has a parameter name in place of each filter value. The value of a QueryKit `CustomOperation` still goes into the SQL text as a literal.
 
-The request spans of the server and the BFF keep each query key in `url.query` and replace each value with `Redacted`, for example `?filters=Redacted&pageSize=Redacted`. The ASP.NET Core instrumentation does this by default, but Aspire turns it off in development. Thus `HostExtensions.cs` and the BFF `Extensions.cs` set `url.query` again.
+The request spans of the server keep each query key in `url.query` and replace each value with `Redacted`, for example `?filters=Redacted&pageSize=Redacted`. The ASP.NET Core instrumentation does this by default, but Aspire turns it off in development. Thus `HostExtensions.cs` and the BFF `Extensions.cs` set `url.query` again.
 
 ## What a trace looks like
 
-A request through the BFF gives one trace with this shape:
+A request gives one trace with this shape:
 
 ```
-BFF   GET /api/v1/users
-└─ Server   GET api/v{version}/users
-   └─ GetUserList.Query                (RequestTracingBehavior)
-      ├─ SQL: users.list.count         (SQL span, the count of the paged list)
-      └─ SQL: users.list               (SQL span, tagged query)
+Server   GET api/v{version}/users
+└─ GetUserList.Query                (RequestTracingBehavior)
+   ├─ SQL: users.list.count         (SQL span, the count of the paged list)
+   └─ SQL: users.list               (SQL span, tagged query)
 ```
 
 A command whose save runs a domain event handler has one more level. The handler span is a child of the feature slice span:
@@ -44,8 +43,6 @@ Server   PUT api/v{version}/tenants/{id}
 | `Recall.Server/Databases/QueryTagEnrichment.cs` | Copies the query tags into the SQL span |
 | `Recall.Server/Databases/DomainEventDispatcher.cs` | Runs each domain event handler in its `domain_event.handle` span |
 | `Recall.Server/Resources/Extensions/HostExtensions.cs` | OpenTelemetry and Serilog registration, resource attributes, framework meters, request log level |
-| `Recall.Bff/Telemetry.cs`, `Recall.Bff/LoginTraceLink.cs` | BFF telemetry and the login trace link |
-| `Recall.Bff/LoggerExtensions.cs`, `Recall.Bff/Extensions.cs` | The BFF copies of `Here()` and of the registration |
 
 ## Log, span, or event
 
@@ -90,21 +87,11 @@ The host also collects these framework meters:
 - `Microsoft.EntityFrameworkCore`. The server only.
 - `Microsoft.AspNetCore.Authentication` and `Microsoft.AspNetCore.Authorization`.
 
-The BFF has these custom metrics on the `Recall.Bff` meter. Its HTTP, YARP, and auth meters measure each request. The BFF keeps `app.errors` for `RecordError`.
-
-| Counter | Unit | Tags | Content |
-|---|---|---|---|
-| `bff.sessions.started` | `{session}` | none | The BFF sessions that a login created |
-| `bff.sessions.ended` | `{session}` | `reason`: `logout`, `backchannel_logout`, `refresh_failure`, or `expiry` | The BFF sessions that ended |
-| `bff.refresh.failures` | `{failure}` | `kind`: `permanent` or `temporary` | The failed token refreshes |
-
-A `permanent` failure is an `invalid_grant`, or an ID token in the refresh response that fails the checks. The BFF then ends the BFF session with `reason=refresh_failure`. A `temporary` failure is any other failure, also a wait for the refresh of another request that reaches its limit. The BFF session then stays.
-
 ## Resource attributes
 
 Traces, metrics, and logs share the same resource attributes: `service.name`, `service.version`, `service.instance.id`, `deployment.environment`, and `host.name`. Serilog exports logs with its own OTLP sink, not with the OpenTelemetry SDK. For this reason, `HostExtensions.ResourceAttributes` gives the one list to both. As a result, the dashboard shows one resource for all three signals.
 
-The values in `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES` win over the defaults in the code. Aspire sets `service.name` to the resource name (`server` or `bff`) and `service.instance.id` to the replica id. The dashboard finds the telemetry of a resource by these two values. Thus `dotnet aspire otel traces server` finds the traces of the server. With no such variables, as in a deployment that does not set them, `service.name` is the application name, for example `Recall.Server`.
+The values in `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES` win over the defaults in the code. Aspire sets `service.name` to the resource name (`server`) and `service.instance.id` to the replica id. The dashboard finds the telemetry of a resource by these two values. Thus `dotnet aspire otel traces server` finds the traces of the server. With no such variables, as in a deployment that does not set them, `service.name` is the application name, for example `Recall.Server`.
 
 ## Feature slice spans
 
@@ -188,12 +175,6 @@ using var trace = Telemetry.TraceRoot([], "work.run", links);
 
 `TryParseTraceContext` returns false for a null, empty, or malformed context. The receiver then continues with no link.
 
-## Login trace link
-
-A login is two requests with a browser redirect through the identity provider between them. `LoginTraceLink` stores the trace context of `/bff/login` in the OIDC authentication properties. These properties travel in the data-protected `state` parameter. The `/signin-oidc` callback reads the context and adds a span link to the login trace.
-
-The BFF names the OIDC callback spans `GET /signin-oidc` and `GET /signout-callback-oidc`. No route handles these paths, so without this rule the span name is only `GET`.
-
 ## Logs
 
 Serilog is the logging provider. The OTLP sink sends logs to the Aspire dashboard when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. The sink must stay inside the `AddSerilog` callback in `HostExtensions.cs`. The host replaces a logger that you assign to `Log.Logger` in a different location, so its sinks never run.
@@ -227,7 +208,7 @@ In Development, the console uses a `Serilog.Expressions` template. Each line sho
 
 - An exception or a status code of 500 or more gives `Error`.
 - A health probe (`/health` or `/alive`) gives `Verbose`, so the default minimum level drops it.
-- A health probe that the caller leaves during a check gives `Verbose`. In the server and the BFF, `CallerCancellationHealthCheck` ends each check with the cancellation, so the exception handler gives 499, not 503. A check that runs past its own timeout still reports `Unhealthy` at `Error`.
+- A health probe that the caller leaves during a check gives `Verbose`. In the server, `CallerCancellationHealthCheck` ends each check with the cancellation, so the exception handler gives 499, not 503. A check that runs past its own timeout still reports `Unhealthy` at `Error`.
 - All other requests give `Information`.
 
 ## Tests

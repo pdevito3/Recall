@@ -38,6 +38,36 @@ public class UpdateUserCommandTests : TestBase
     }
 
     [Test]
+    public async Task can_clear_email_and_last_name_and_read_the_user_back()
+    {
+        // Arrange
+        var testingServiceScope = new TestingServiceScope();
+        await testingServiceScope.StartGraph(out _)
+            .AddUser(out var fakeUser)
+            .BuildAsync();
+
+        var updateDto = new FakeUserForUpdateDto().Generate() with
+        {
+            Version = fakeUser.Version,
+            Email = null,
+            LastName = null,
+        };
+
+        // Act
+        await testingServiceScope.SendAsync(new UpdateUser.Command(fakeUser.Id, updateDto));
+        var userRead = await testingServiceScope.SendAsync(new GetUser.Query(fakeUser.Id));
+        var usersListed = await testingServiceScope.ExecuteDbContextAsync(db =>
+            db.Users.AsNoTracking().Where(u => u.Id == fakeUser.Id).ToListAsync());
+
+        // Assert
+        userRead.Email.ShouldBeNull();
+        userRead.LastName.ShouldBeNull();
+        userRead.FullName.ShouldBe(updateDto.FirstName);
+        usersListed.ShouldHaveSingleItem().Email.ShouldBeNull();
+        usersListed[0].LastName.ShouldBeNull();
+    }
+
+    [Test]
     public async Task can_update_user_email()
     {
         // Arrange
@@ -59,6 +89,6 @@ public class UpdateUserCommandTests : TestBase
             db.Users.FirstOrDefaultAsync(u => u.Id == fakeUser.Id));
 
         userInDb.ShouldNotBeNull();
-        userInDb.Email.Value.ShouldBe("newemail@example.com");
+        userInDb.Email!.Value.ShouldBe("newemail@example.com");
     }
 }

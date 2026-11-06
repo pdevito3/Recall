@@ -27,20 +27,20 @@ public sealed class FirstPartyClientOptionsTests
 
         // Assert
         options.Contains(swaggerClientId).ShouldBeFalse();
-        options.ClientIds.ShouldBe(["app"]);
+        options.ClientIds.ShouldBe(["recall", "app"], ignoreOrder: true);
     }
 
     [Test]
-    public void missing_auth_client_id_stops_startup()
+    public void with_no_settings_the_only_first_party_client_is_the_app_session()
     {
         // Arrange
         var configuration = new ConfigurationBuilder().Build();
 
         // Act
-        var act = () => FirstPartyClientOptions.FromConfiguration(configuration);
+        var options = FirstPartyClientOptions.FromConfiguration(configuration);
 
         // Assert
-        act.ShouldThrow<InvalidOperationException>().Message.ShouldBe("Auth:ClientId configuration is required.");
+        options.ClientIds.ShouldBe([FirstPartyClientOptions.AppClientId]);
     }
 
     private static FirstPartyClientOptions FromConfiguration(string swaggerClientId)

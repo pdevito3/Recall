@@ -1,11 +1,6 @@
 namespace Recall.Server.Domain.Users;
 
 using Domain.Tenants;
-/// <summary>
-/// Who sent the current request, before permissions. The tenant scope, the permission guard, and the start-a-tenant
-/// check read this one answer. <see cref="ICallerIdentityResolver"/> makes it once for each DI scope.
-/// It holds IDs only. The permission guard reads the permissions as rows for each check (ADR 0009).
-/// </summary>
 public abstract record CallerIdentity
 {
     private CallerIdentity() { }
@@ -19,10 +14,6 @@ public abstract record CallerIdentity
     /// </summary>
     public sealed record AllTenantsClient(string ClientId, bool CanManage) : CallerIdentity;
 
-    /// <summary>
-    /// A user of a first-party client (the BFF or Swagger UI). <paramref name="LiveUser"/> is null when the user has
-    /// no live user record.
-    /// </summary>
     public sealed record User(string Subject, LiveUser? LiveUser) : CallerIdentity;
 
     /// <summary>

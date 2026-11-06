@@ -99,7 +99,7 @@ function UserRows({ list, page, onPageChange }: UserRowsProps) {
                   <Link to="/users/$id" params={{ id: user.id }} className="font-medium underline-offset-4 hover:underline">
                     {user.fullName}
                   </Link>
-                  {isMobile && <p className="text-sm text-muted-foreground">{user.email}</p>}
+                  {isMobile && user.email && <p className="text-sm text-muted-foreground">{user.email}</p>}
                 </TableCell>
                 {!isMobile && <TableCell className="wrap-anywhere">{user.email}</TableCell>}
                 <TableCell className="whitespace-nowrap">{ROLE_LABELS[user.role]}</TableCell>

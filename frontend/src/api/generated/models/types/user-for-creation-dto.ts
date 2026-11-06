@@ -23,9 +23,9 @@ export type UserForCreationDto = {
     firstName: string;
     /**
      * @maxLength 200
-     * @type string
+     * @type string | undefined
     */
-    lastName: string;
+    lastName?: string | null;
     /**
      * @maxLength 255
      * @type string
@@ -33,9 +33,9 @@ export type UserForCreationDto = {
     identifier: string;
     /**
      * @maxLength 320
-     * @type string
+     * @type string | undefined
     */
-    email: string;
+    email?: string | null;
     /**
      * @maxLength 100
      * @type string

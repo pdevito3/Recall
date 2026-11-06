@@ -6,7 +6,7 @@ This directory is the maintained source for the proof of user-facing behavior in
 
 - `scripts/launch.sh` started an isolated stack for this checkout, and `scripts/doctor.sh` exits with 0.
 - The browser is a new Chromium context from `scripts/browse.mjs`. Nobody is logged in. `localStorage` is empty, so the theme is `system`.
-- The database has the rows of a new stack. `browse.mjs` puts back each row that a recipe writes, so each recipe starts from the same rows. Only [Start a tenant](./start-tenant.md) and [Users](./users.md) write app data. A login writes a BFF session row, and the restore deletes it.
+- The database has the rows of a new stack. `browse.mjs` puts back each row that a recipe writes, so each recipe starts from the same rows. Each recipe that logs in writes rows, because the first login makes the Owner. A login writes a BFF session row, and the restore deletes it.
 - The IdP is ZeroFactor, unless `launch.sh` got `--auth-provider`. The ZeroFactor users are `admin@example.com` (name `Admin User`) and `user@example.com` (name `Test User`).
 - Never drive a stack that the current verification run did not start.
 
@@ -22,7 +22,7 @@ This directory is the maintained source for the proof of user-facing behavior in
 
 - Capture the user action and the resulting state, not only the last screen.
 - UI proof is a screenshot and an ARIA snapshot from `capture()`, with the URL in the `.aria.txt` file.
-- Proof of a side effect is a second, read-only view: the API response, the BFF session, or `localStorage`.
+- Proof of a side effect is a second, read-only view: the API response, the session of the Server, or `localStorage`.
 - Record the feature ID and the entry point for each artifact. The `steps.log` step names do this.
 - If a path is not reachable, report the command and the precondition that failed. For example, the Duende demo IdP is down.
 - Do not report an entry point as verified when you used a different entry point.
@@ -40,11 +40,11 @@ Keep implementation details out of the map. Name only user paths, stable handles
 
 ## Features
 
-- [Login and logout](./login-logout.md) covers the BFF login through the IdP of the stack, the session, the name that the Server reads from the token, and logout.
+- [Login and logout](./login-logout.md) covers the Server login through the IdP of the stack, the session, the name of the user, and logout.
 - [Navigation and theme](./navigation-and-theme.md) covers the sidebar links, the breadcrumb, sidebar collapse, and the light/dark/system theme.
-- [Start a tenant](./start-tenant.md) covers the notice for a signed-in user with no user record, the form at `/start-tenant`, and the start of a tenant with the user as its admin.
+- [Start a tenant](./start-tenant.md) covers the first login, which makes the Owner and its tenant, and the refusal of a second person when signup is closed.
 - [Users](./users.md) covers `/users` and `/users/<id>`: the list of the users of the tenant, the actions from `allowedActions`, the role change, the delete, and the refusal for a member.
 
 ## Not mapped yet
 - Swagger UI on the server (`/swagger`). The Playwright spec `frontend/e2e/auth-flows.spec.ts` covers it.
-- The Users and Tenants JSON API, other than the start of a tenant. It has no UI.
+- The Users and Tenants JSON API. It has no UI.

@@ -78,7 +78,7 @@ public class UserMalformedIdTests : TestBase
     private static async Task<User> AddUserAsync()
     {
         var tenant = Tenant.Create(new FakeTenantForCreation().Generate());
-        var user = User.Create(new FakeUserForCreation().RuleFor(u => u.TenantId, tenant.Id).Generate());
+        var user = User.Create(new FakeUserForCreation().RuleFor(u => u.TenantId, tenant.Id).RuleFor(u => u.Role, UserRole.User()).Generate());
         await InsertAsync(tenant);
         await InsertAsync(user);
         return user;

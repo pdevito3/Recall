@@ -22,20 +22,25 @@ public static class DeleteUser
             var caller = await permissionGuard.GetCallerAsync(cancellationToken);
             UserAction.Delete().GuardBeforeLoad(caller, request.Id);
 
-            var user = await dbContext.Users
-                .TagWithOperationCallSite("users.delete.load")
-                .Include(u => u.UserPermissions)
-                .GetById(request.Id, cancellationToken);
-            user.GuardAllows(UserAction.Delete(), caller);
-
-            // Remove permissions first (due to PropertyAccessMode.Field)
-            foreach (var permission in user.UserPermissions.ToList())
+            var user = await LastAdmin.RunWithTenantLockAsync(dbContext, request.Id, async ct =>
             {
-                dbContext.UserPermissions.Remove(permission);
-            }
+                var user = await dbContext.Users
+                    .TagWithOperationCallSite("users.delete.load")
+                    .Include(u => u.UserPermissions)
+                    .GetById(request.Id, ct);
+                user.GuardAllows(UserAction.Delete(), caller);
+                await LastAdmin.GuardAsync(dbContext, user, ct);
 
-            dbContext.Users.Remove(user.Delete());
-            await dbContext.SaveChangesAsync(cancellationToken);
+                // Remove permissions first (due to PropertyAccessMode.Field)
+                foreach (var permission in user.UserPermissions.ToList())
+                {
+                    dbContext.UserPermissions.Remove(permission);
+                }
+
+                dbContext.Users.Remove(user.Delete());
+                await dbContext.SaveChangesAsync(ct);
+                return user;
+            }, cancellationToken);
 
             _logger.Here().Information("Deleted user {UserId}", user.Id);
         }
