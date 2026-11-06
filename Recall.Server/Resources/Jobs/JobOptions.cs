@@ -5,7 +5,7 @@ public sealed class JobOptions
     public const string SectionName = "Jobs";
 
     /// <summary>How long a committed job can wait for a worker, because a transactional enqueue wakes no worker.</summary>
-    public int PollSeconds { get; init; } = 5;
+    public int PollSeconds { get; init; } = 1;
 
     /// <summary>A test host with no use for a worker runs none. It works only in Development and in the test environments.</summary>
     public bool RunWorkers { get; init; } = true;

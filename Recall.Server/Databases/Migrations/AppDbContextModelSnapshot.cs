@@ -588,6 +588,93 @@ namespace Recall.Server.Databases.Migrations
                     b.ToTable("corrections", (string)null);
                 });
 
+            modelBuilder.Entity("Recall.Server.Domain.ModelProviders.KeyRingMarker", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ProtectedValue")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("protected_value");
+
+                    b.HasKey("Id")
+                        .HasName("pk_key_ring_markers");
+
+                    b.ToTable("key_ring_markers", (string)null);
+                });
+
+            modelBuilder.Entity("Recall.Server.Domain.ModelProviders.ModelProvider", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id")
+                        .UseCollation("BINARY");
+
+                    b.Property<string>("ActivatedOn")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("activated_on");
+
+                    b.Property<string>("BaseUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("base_url");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("LastModifiedOn")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_modified_on");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("model");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<string>("ProtectedApiKey")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("protected_api_key");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("tenant_id")
+                        .UseCollation("BINARY");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_model_providers");
+
+                    b.HasIndex("TenantId", "ActivatedOn")
+                        .HasDatabaseName("ix_model_providers_tenant_id_activated_on");
+
+                    b.ToTable("model_providers", (string)null);
+                });
+
             modelBuilder.Entity("Recall.Server.Domain.People.Person", b =>
                 {
                     b.Property<string>("Id")
@@ -733,11 +820,23 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("cleaned_has_hand_edits");
 
+                    b.Property<string>("CleanupFailure")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("cleanup_failure");
+
                     b.Property<string>("CleanupRun")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("TEXT")
                         .HasColumnName("cleanup_run");
+
+                    b.Property<string>("CleanupRunId")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("cleanup_run_id")
+                        .UseCollation("BINARY");
 
                     b.Property<string>("ClientSessionId")
                         .IsRequired()
@@ -775,11 +874,23 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("metadata_version");
 
+                    b.PrimitiveCollection<string>("MoodSuggestions")
+                        .IsRequired()
+                        .HasMaxLength(30150)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("mood_suggestions");
+
                     b.PrimitiveCollection<string>("Moods")
                         .IsRequired()
                         .HasMaxLength(30150)
                         .HasColumnType("TEXT")
                         .HasColumnName("moods");
+
+                    b.Property<string>("PeopleProposals")
+                        .IsRequired()
+                        .HasMaxLength(13000)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("people_proposals");
 
                     b.Property<string>("Preview")
                         .IsRequired()
@@ -803,6 +914,12 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("tenant_id")
                         .UseCollation("BINARY");
+
+                    b.PrimitiveCollection<string>("TopicSuggestions")
+                        .IsRequired()
+                        .HasMaxLength(30150)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("topic_suggestions");
 
                     b.Property<string>("UserId")
                         .IsRequired()
@@ -1240,6 +1357,16 @@ namespace Recall.Server.Databases.Migrations
                         .OnDelete(DeleteBehavior.ClientNoAction)
                         .IsRequired()
                         .HasConstraintName("fk_corrections_users_user_id");
+                });
+
+            modelBuilder.Entity("Recall.Server.Domain.ModelProviders.ModelProvider", b =>
+                {
+                    b.HasOne("Recall.Server.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.ClientNoAction)
+                        .IsRequired()
+                        .HasConstraintName("fk_model_providers_tenants_tenant_id");
                 });
 
             modelBuilder.Entity("Recall.Server.Domain.People.Person", b =>

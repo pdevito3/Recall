@@ -835,6 +835,295 @@
         }
       }
     },
+    "/api/v1/model-providers": {
+      "post": {
+        "tags": [
+          "ModelProviders"
+        ],
+        "summary": "Connects a model provider and makes it the active one. The key goes under the key ring, and no answer holds it.",
+        "operationId": "AddModelProvider",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelProviderForCreationDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelProviderDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "ModelProviders"
+        ],
+        "summary": "Gets the model providers of the tenant and the state of the key ring. The first one is the active one.",
+        "operationId": "GetModelProviders",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelProviderListDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/model-providers/{id}": {
+      "delete": {
+        "tags": [
+          "ModelProviders"
+        ],
+        "summary": "Removes a model provider and its key. The provider that was active before it becomes the active one.",
+        "operationId": "DeleteModelProvider",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "ModelProviders"
+        ],
+        "summary": "Changes a model provider. A blank key keeps the stored key.",
+        "operationId": "UpdateModelProvider",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelProviderForUpdateDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelProviderDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/model-providers/{id}/test": {
+      "post": {
+        "tags": [
+          "ModelProviders"
+        ],
+        "summary": "Asks the provider for its list of models. A refusal is a 200 with the words of the provider, because this server worked.",
+        "operationId": "TestModelProvider",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelProviderTestResultDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
     "/api/v1/people": {
       "post": {
         "tags": [
@@ -1617,6 +1906,342 @@
         }
       }
     },
+    "/api/v1/sessions/{id}/cleanup/result": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Stores the Cleanup of a model on the device as a new Cleaned Revision, and Raw does not change. A call while a Cleanup job\nruns gets 422. A retry with the same words and the same base gets 200 and adds no Revision.",
+        "operationId": "RecordCleanupResult",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CleanupResultDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{id}/people-proposals/respond": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Approves or drops a People proposal. An approval tags each place in Cleaned, as a new Cleaned Revision, and Raw does not change.\nA proposal that the Session no longer holds gets 200 and changes nothing, so a retry is safe.",
+        "operationId": "RespondToPersonProposal",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonProposalResponseDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{id}/suggestions/accept": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Adds a suggested Topic as an AI Topic, or a suggested Mood as a Mood, and moves `metadataVersion`. A Topic that the\nUser holds stays the Topic of the User. A suggestion that the Session no longer offers gets 200 and changes nothing, so a retry is safe.",
+        "operationId": "AcceptSuggestion",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuggestionResponseDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{id}/suggestions/reject": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Removes a suggestion. A suggestion that the Session no longer offers gets 200 and changes nothing, so a retry is safe.",
+        "operationId": "RejectSuggestion",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuggestionResponseDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
     "/api/v1/sessions/{id}/cleaned": {
       "put": {
         "tags": [
@@ -1829,6 +2454,134 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{id}/cleanup": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Starts a Cleanup as a job and answers at once. While a Cleanup runs, a second call joins it. The result stays when the client goes away.",
+        "operationId": "StartCleanup",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{id}/cleanup/stream": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Starts a Cleanup, or joins the one that runs, and sends its state as server-sent events. Each event holds the JSON\n`{ type, data: { message, stopReason } }`. Close the connection at any time. The Cleanup goes on, and its result stays on the Session.",
+        "operationId": "StreamCleanup",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/SseItemOfCleanupEventDto"
                 }
               }
             }
@@ -3300,6 +4053,7 @@
             "items": {
               "enum": [
                 "manage_agents",
+                "manage_model_providers",
                 "manage_tenant",
                 "manage_user_access",
                 "manage_users",
@@ -3366,6 +4120,7 @@
             "items": {
               "enum": [
                 "manage_agents",
+                "manage_model_providers",
                 "manage_tenant",
                 "manage_user_access",
                 "manage_users",
@@ -3389,6 +4144,7 @@
           "permission": {
             "enum": [
               "manage_agents",
+              "manage_model_providers",
               "manage_tenant",
               "manage_user_access",
               "manage_users",
@@ -3557,6 +4313,100 @@
             "description": "True when the caller has no `read_audit_log_sensitive` and the value is sensitive, or is a value that the\ncode no longer knows."
           }
         }
+      },
+      "CleanupEventDataDto": {
+        "required": [
+          "stopReason"
+        ],
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "stopReason": {
+            "enum": [
+              "None",
+              "NoModelProvider",
+              "KeyUnreadable",
+              "ProviderRefused",
+              "ProviderUnavailable",
+              "BadModelOutput",
+              "Interrupted"
+            ],
+            "type": "string",
+            "description": "The code of CleanupFailure of a `failed` event."
+          }
+        }
+      },
+      "CleanupEventDto": {
+        "required": [
+          "type",
+          "data"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "`run.started`, `progress`, `completed`, `failed`, or `stopped`."
+          },
+          "data": {
+            "$ref": "#/components/schemas/CleanupEventDataDto"
+          }
+        },
+        "description": "One event of `POST /sessions/{id}/cleanup/stream`. An event holds no words of the journal and no words of a model provider."
+      },
+      "CleanupResultDto": {
+        "required": [
+          "cleanedMarkdown",
+          "baseRawRevision",
+          "topicSuggestions",
+          "moodSuggestions",
+          "peopleProposal"
+        ],
+        "type": "object",
+        "properties": {
+          "cleanedMarkdown": {
+            "maxLength": 1000000,
+            "type": "string"
+          },
+          "synopsis": {
+            "maxLength": 10000,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "topicSuggestions": {
+            "type": "array",
+            "items": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          "moodSuggestions": {
+            "type": "array",
+            "items": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          "peopleProposal": {
+            "type": "array",
+            "items": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          "baseRawRevision": {
+            "type": "integer",
+            "description": "The Revision of Raw that the model read. A later Revision of Raw makes the Session Stale.",
+            "format": "int32"
+          }
+        },
+        "description": "A Cleanup that a model on the device did. The server does the same work on it as on the answer of a model provider."
       },
       "CorrectionDto": {
         "required": [
@@ -3800,6 +4650,225 @@
           }
         }
       },
+      "ModelProviderDto": {
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "isActive",
+          "keyState",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "Anthropic",
+              "OpenAiCompatible"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "baseUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "model": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "keyState": {
+            "enum": [
+              "None",
+              "Readable",
+              "Unreadable"
+            ],
+            "type": "string",
+            "description": "`Unreadable` means that the key ring of this server cannot read the key, so the Admin must enter it again."
+          },
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "description": "A model provider. No answer holds the key."
+      },
+      "ModelProviderFailureDto": {
+        "required": [
+          "kind",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "Refused",
+              "Unavailable",
+              "BadOutput"
+            ],
+            "type": "string"
+          },
+          "statusCode": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "message": {
+            "type": "string",
+            "description": "The words of the provider, with the key removed."
+          }
+        }
+      },
+      "ModelProviderForCreationDto": {
+        "required": [
+          "kind",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "Anthropic",
+              "OpenAiCompatible"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "type": "string"
+          },
+          "baseUrl": {
+            "maxLength": 500,
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The address that comes before `/models`, for example `http://localhost:11434/v1`. It is required for `OpenAiCompatible`."
+          },
+          "apiKey": {
+            "maxLength": 1000,
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "It is required for `Anthropic`. A local `OpenAiCompatible` endpoint can work with no key."
+          }
+        }
+      },
+      "ModelProviderForUpdateDto": {
+        "required": [
+          "name",
+          "version",
+          "makeActive"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "type": "string"
+          },
+          "baseUrl": {
+            "maxLength": 500,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "apiKey": {
+            "maxLength": 1000,
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "A blank value keeps the stored key."
+          },
+          "model": {
+            "maxLength": 200,
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "An ID from the list that the test of this provider gives."
+          },
+          "makeActive": {
+            "type": "boolean",
+            "description": "True makes this one the active provider. False changes nothing."
+          },
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      },
+      "ModelProviderListDto": {
+        "required": [
+          "items",
+          "keyRing"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelProviderDto"
+            }
+          },
+          "keyRing": {
+            "enum": [
+              "Same",
+              "Changed",
+              "NotWritable"
+            ],
+            "type": "string",
+            "description": "`Changed`: a key is not readable, so it was saved under another key ring. `NotWritable`: the key folder takes no write, so the next start makes a new ring."
+          }
+        }
+      },
+      "ModelProviderTestResultDto": {
+        "required": [
+          "ok",
+          "models"
+        ],
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProviderModelDto"
+            }
+          },
+          "failure": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelProviderFailureDto"
+              }
+            ]
+          }
+        },
+        "description": "The answer of the provider to a request for its list of models."
+      },
       "PaginationMetadata": {
         "required": [
           "totalCount",
@@ -3884,6 +4953,65 @@
           }
         }
       },
+      "PersonProposalDto": {
+        "required": [
+          "label",
+          "isNew",
+          "contexts"
+        ],
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "matchedPersonId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isNew": {
+            "type": "boolean",
+            "description": "True when the directory has no match, so an approval adds a Person."
+          },
+          "contexts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Each sentence of Cleaned that an approval tags."
+          }
+        }
+      },
+      "PersonProposalResponseDto": {
+        "required": [
+          "label",
+          "approve",
+          "createNew"
+        ],
+        "type": "object",
+        "properties": {
+          "label": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "approve": {
+            "type": "boolean",
+            "description": "False drops the proposal. True tags each place in Cleaned."
+          },
+          "bindToPersonId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The Person to tag. When this is null, the match of the proposal is the Person."
+          },
+          "createNew": {
+            "type": "boolean",
+            "description": "True adds a Person with this label, in place of a match."
+          }
+        }
+      },
       "ProblemDetails": {
         "type": "object",
         "properties": {
@@ -3917,6 +5045,21 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "ProviderModelDto": {
+        "required": [
+          "id",
+          "displayName"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
           }
         }
       },
@@ -4000,6 +5143,9 @@
           "cleanedLatestRevision",
           "cleanedHasHandEdits",
           "cleanupStatus",
+          "cleanupFailure",
+          "suggestions",
+          "peopleProposals",
           "activity",
           "moods",
           "topics",
@@ -4085,6 +5231,31 @@
               "integer"
             ],
             "format": "int32"
+          },
+          "cleanupFailure": {
+            "enum": [
+              "None",
+              "NoModelProvider",
+              "KeyUnreadable",
+              "ProviderRefused",
+              "ProviderUnavailable",
+              "BadModelOutput",
+              "Interrupted"
+            ],
+            "type": "string",
+            "description": "Why the last Cleanup failed. It is a closed code, and the words of a model provider never come here."
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionSuggestionDto"
+            }
+          },
+          "peopleProposals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PersonProposalDto"
+            }
           },
           "activity": {
             "type": "string"
@@ -4227,6 +5398,25 @@
           }
         }
       },
+      "SessionSuggestionDto": {
+        "required": [
+          "kind",
+          "value"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "Topic",
+              "Mood"
+            ],
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
       "SessionSummaryDto": {
         "required": [
           "id",
@@ -4332,9 +5522,56 @@
           }
         }
       },
+      "SseItemOfCleanupEventDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/CleanupEventDto"
+          },
+          "eventType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "eventId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "reconnectionInterval": {
+            "pattern": "^-?(\\d+\\.)?\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,7})?$",
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "Stream": {
         "type": "string",
         "format": "binary"
+      },
+      "SuggestionResponseDto": {
+        "required": [
+          "kind",
+          "value"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "Topic",
+              "Mood"
+            ],
+            "type": "string"
+          },
+          "value": {
+            "maxLength": 100,
+            "type": "string"
+          }
+        }
       },
       "SyncChangePageDto": {
         "required": [
@@ -4544,6 +5781,7 @@
             "items": {
               "enum": [
                 "manage_agents",
+                "manage_model_providers",
                 "manage_tenant",
                 "manage_user_access",
                 "manage_users",
@@ -4674,6 +5912,7 @@
           "permission": {
             "enum": [
               "manage_agents",
+              "manage_model_providers",
               "manage_tenant",
               "manage_user_access",
               "manage_users",
@@ -4807,6 +6046,9 @@
     },
     {
       "name": "Corrections"
+    },
+    {
+      "name": "ModelProviders"
     },
     {
       "name": "People"

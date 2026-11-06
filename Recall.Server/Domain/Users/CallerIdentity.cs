@@ -16,6 +16,9 @@ public abstract record CallerIdentity
 
     public sealed record User(string Subject, LiveUser? LiveUser) : CallerIdentity;
 
+    /// <summary>Work for one journal owner in a scope from <see cref="JournalWorkScopeExtensions.CreateJournalScope"/>, such as a job.</summary>
+    public sealed record JournalWork(string UserId, string TenantId) : CallerIdentity;
+
     /// <summary>
     /// A client that the tenant of the user registered as a delegated agent, in a token for a live app user of that
     /// tenant.
@@ -43,12 +46,18 @@ public abstract record CallerIdentity
     {
         System or AllTenantsClient => TenantScope.AllTenants,
         User { LiveUser: { } liveUser } => TenantScope.ForTenant(liveUser.TenantId),
+        JournalWork work => TenantScope.ForTenant(work.TenantId),
         DelegatedAgent agent => TenantScope.ForTenant(agent.LiveUser.TenantId),
         MachineAgent agent => TenantScope.ForTenant(agent.TenantId),
         _ => TenantScope.NoTenant,
     };
 
-    public string? JournalOwnerId => this is User { LiveUser: { } liveUser } ? liveUser.UserId : null;
+    public string? JournalOwnerId => this switch
+    {
+        User { LiveUser: { } liveUser } => liveUser.UserId,
+        JournalWork work => work.UserId,
+        _ => null,
+    };
 
     /// <summary>
     /// True for system work and for a client on the manage allow-list. It is a capability, not a permission

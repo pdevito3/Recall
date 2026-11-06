@@ -22,6 +22,12 @@ public sealed record SessionDto
     [EnumNames<CleanupStatus>]
     public string CleanupStatus { get; init; } = default!;
     public int? LastCleanupRawRevision { get; init; }
+
+    /// <summary>Why the last Cleanup failed. It is a closed code, and the words of a model provider never come here.</summary>
+    [EnumNames<CleanupFailure>]
+    public string CleanupFailure { get; init; } = nameof(Sessions.CleanupFailure.None);
+    public IReadOnlyList<SessionSuggestionDto> Suggestions { get; init; } = [];
+    public IReadOnlyList<PersonProposalDto> PeopleProposals { get; init; } = [];
     public string Activity { get; init; } = default!;
     public IReadOnlyList<string> Moods { get; init; } = [];
     public IReadOnlyList<SessionTopicDto> Topics { get; init; } = [];

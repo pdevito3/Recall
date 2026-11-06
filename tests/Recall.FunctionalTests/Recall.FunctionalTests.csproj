@@ -24,6 +24,7 @@
     <ItemGroup>
         <ProjectReference Include="..\..\Recall.Server\Recall.Server.csproj" />
         <ProjectReference Include="..\Recall.SharedTestHelpers\Recall.SharedTestHelpers.csproj" />
+        <ProjectReference Include="..\Recall.FakeModelProvider\Recall.FakeModelProvider.csproj" />
     </ItemGroup>
 
     <!-- BannedSymbols.txt bans a today that comes from the UTC date or the clock of the machine -->

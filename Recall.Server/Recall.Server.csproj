@@ -53,6 +53,8 @@
 
   <ItemGroup>
     <PackageReference Include="Asp.Versioning.Http" />
+    <PackageReference Include="Anthropic" />
+    <PackageReference Include="Markdig" />
     <PackageReference Include="BackWave" />
     <PackageReference Include="BackWave.Dashboard" />
     <PackageReference Include="BackWave.Hosting" />

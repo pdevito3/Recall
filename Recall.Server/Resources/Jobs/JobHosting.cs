@@ -6,10 +6,13 @@ using BackWave.Generated;
 using BackWave.Hosting;
 using BackWave.Sqlite;
 using Databases;
+using Domain.Sessions.Jobs;
 
 public static class JobHosting
 {
     public const string SystemQueue = "system";
+
+    public const string CleanupQueue = "cleanup";
 
     public const string HealthCheckName = "backwave";
 
@@ -57,12 +60,14 @@ public static class JobHosting
                 backwave.AddWorkerGroup(new WorkerGroupOptions
                 {
                     Name = "system",
-                    Policy = new DispatchPolicy.Strict([SystemQueue]),
+                    Policy = new DispatchPolicy.Strict([SystemQueue, CleanupQueue]),
                     PollInterval = TimeSpan.FromSeconds(settingsAtRegistration.PollSeconds),
                     ShutdownBudget = JobShutdownBudget,
                     Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
                 });
                 builder.Services.AddHostedService<JobHostWatch>();
+                builder.Services.AddSingleton<CleanupJobWatch>();
+                builder.Services.AddHostedService(services => services.GetRequiredService<CleanupJobWatch>());
             }
         });
         builder.Services.AddBackWaveDashboardMetrics();

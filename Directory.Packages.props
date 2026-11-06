@@ -38,6 +38,9 @@
     <PackageVersion Include="Microsoft.OpenApi" Version="2.12.2" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.11.0" />
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.11.0" />
+    <!-- Model providers -->
+    <PackageVersion Include="Anthropic" Version="13.6.0" />
+    <PackageVersion Include="Markdig" Version="1.6.0" />
     <!-- BackWave -->
     <PackageVersion Include="BackWave" Version="1.7.0" />
     <PackageVersion Include="BackWave.Dashboard" Version="1.7.0" />

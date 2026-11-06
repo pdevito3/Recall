@@ -16,6 +16,7 @@ public static class CallerTelemetry
             CallerIdentity.System => ("system", null, null, null, null),
             CallerIdentity.AllTenantsClient client => ("all_tenants_client", null, client.ClientId, null, null),
             CallerIdentity.User user => ("user", user.Subject, null, null, user.LiveUser?.TenantId),
+            CallerIdentity.JournalWork work => ("journal_work", null, null, null, work.TenantId),
             CallerIdentity.DelegatedAgent agent => ("delegated_agent", agent.Subject, agent.ClientId, agent.AgentId, agent.LiveUser.TenantId),
             CallerIdentity.MachineAgent agent => ("machine_agent", null, agent.ClientId, agent.AgentId, agent.TenantId),
             CallerIdentity.UnknownClient client => ("unknown_client", null, client.ClientId, null, null),

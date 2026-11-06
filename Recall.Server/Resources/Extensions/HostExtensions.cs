@@ -3,6 +3,7 @@ namespace Recall.Server.Resources.Extensions;
 using System.Reflection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Domain.ModelProviders;
 using Entrypoints.Http.OpenApi;
 using FileTelemetry;
 using Jobs;
@@ -251,13 +252,15 @@ public static class HostExtensions
         return app;
     }
 
-    // Each entry can hold the text of an exception, so the body names only the stopped jobs, whose text holds types.
+    // Each entry can hold the text of an exception, so the body names only the stopped jobs and the key ring, whose texts are fixed.
     private static Task WriteHealthBodyAsync(HttpContext context, HealthReport report)
     {
         context.Response.ContentType = "text/plain";
         var body = report.Status.ToString();
         if (report.Entries.TryGetValue(JobHosting.HealthCheckName, out var jobs) && jobs.Status == HealthStatus.Unhealthy)
             body += $"\n{jobs.Description}";
+        if (report.Entries.TryGetValue(KeyRingStatus.HealthCheckName, out var keyRing) && keyRing.Status != HealthStatus.Healthy)
+            body += $"\n{keyRing.Description}";
 
         return context.Response.WriteAsync(body);
     }

@@ -20,6 +20,8 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
 
     private const string ClientSessionIdField = "clientSessionId";
     private const string CleanupField = "cleanup";
+    private const string SuggestionField = "value";
+    private const string CleanupRunIdPrefix = "run";
 
     private readonly List<RawRevision> _appendedRawRevisions = [];
     private readonly List<CleanedRevision> _appendedCleanedRevisions = [];
@@ -45,6 +47,17 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
     public CleanupRunState CleanupRun { get; private set; }
 
     public int? LastCleanupRawRevision { get; private set; }
+
+    /// <summary>The Cleanup that runs or that ran last. A job works only for its own run.</summary>
+    [NotSensitive] public string? CleanupRunId { get; private set; }
+
+    public CleanupFailure CleanupFailure { get; private set; }
+
+    [Sensitive] public IReadOnlyList<string> TopicSuggestions { get; private set; } = [];
+
+    [Sensitive] public IReadOnlyList<string> MoodSuggestions { get; private set; } = [];
+
+    [Sensitive] public IReadOnlyList<PersonProposal> PeopleProposals { get; private set; } = [];
 
     public uint MetadataVersion { get; private set; }
 
@@ -164,29 +177,110 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         return true;
     }
 
-    public void BeginCleanup()
+    /// <summary>The new run goes in the job payload, so a job of an older run cannot end this one.</summary>
+    public string BeginCleanup()
     {
         ValidationException.MustNot(CleanupRun == CleanupRunState.Running, CleanupField, "A Cleanup of this Session already runs.");
         CleanupRun = CleanupRunState.Running;
+        CleanupRunId = EntityId.New(CleanupRunIdPrefix);
+        CleanupFailure = CleanupFailure.None;
+        return CleanupRunId;
     }
 
-    public void CompleteCleanup(string cleanedText, string synopsis, int rawRevisionRead, DateTimeOffset now)
+    public void CompleteCleanup(CleanupOutcome outcome, int rawRevisionRead, DateTimeOffset now)
     {
         RequireRunningCleanup();
-        Cleaned = new DraftSlot(cleanedText, Cleaned.LatestRevision + 1, Cleaned.LatestRevision + 1, now);
-        _appendedCleanedRevisions.Add(new CleanedRevision(Id, Cleaned.DraftRevision, now, now, cleanedText));
-        Synopsis = synopsis;
+        Cleaned = new DraftSlot(outcome.CleanedText, Cleaned.LatestRevision + 1, Cleaned.LatestRevision + 1, now);
+        _appendedCleanedRevisions.Add(new CleanedRevision(Id, Cleaned.DraftRevision, now, now, outcome.CleanedText));
+        Synopsis = outcome.Synopsis;
         CleanedHasHandEdits = false;
         LastCleanupRawRevision = rawRevisionRead;
         CleanupRun = CleanupRunState.Clean;
+        TopicSuggestions = outcome.TopicSuggestions.Where(topic => !HoldsTopic(topic)).ToList();
+        MoodSuggestions = outcome.MoodSuggestions.Where(mood => !Moods.Contains(mood, StringComparer.OrdinalIgnoreCase)).ToList();
+        PeopleProposals = outcome.PeopleProposals;
         RefreshFromDrafts();
     }
 
-    public void FailCleanup()
+    public void FailCleanup(CleanupFailure failure)
     {
         RequireRunningCleanup();
         CleanupRun = CleanupRunState.Failed;
+        CleanupFailure = failure;
     }
+
+    /// <summary>The one writer of AI Topics. It adds no Topic that the User holds (SES-21). A second accept changes nothing.</summary>
+    public bool AcceptTopicSuggestion(string topic)
+    {
+        var offered = TopicSuggestions.FirstOrDefault(t => t.Equals(topic.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (offered is null)
+            return false;
+
+        TopicSuggestions = TopicSuggestions.Where(t => t != offered).ToList();
+        if (HoldsTopic(offered))
+            return true;
+
+        ValidationException.Must(AiTopics.Count < MetadataListMaxCount, SuggestionField, $"A Session must not have more than {MetadataListMaxCount} AI Topics.");
+        AiTopics = [.. AiTopics, offered];
+        MetadataVersion++;
+        return true;
+    }
+
+    public bool AcceptMoodSuggestion(string mood)
+    {
+        var offered = MoodSuggestions.FirstOrDefault(m => m.Equals(mood.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (offered is null)
+            return false;
+
+        MoodSuggestions = MoodSuggestions.Where(m => m != offered).ToList();
+        if (Moods.Contains(offered, StringComparer.OrdinalIgnoreCase))
+            return true;
+
+        ValidationException.Must(Moods.Count < MetadataListMaxCount, SuggestionField, $"A Session must not have more than {MetadataListMaxCount} Moods.");
+        Moods = [.. Moods, offered];
+        MetadataVersion++;
+        return true;
+    }
+
+    public bool RejectTopicSuggestion(string topic)
+    {
+        var kept = TopicSuggestions.Where(t => !t.Equals(topic.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+        var changed = kept.Count != TopicSuggestions.Count;
+        TopicSuggestions = changed ? kept : TopicSuggestions;
+        return changed;
+    }
+
+    public bool RejectMoodSuggestion(string mood)
+    {
+        var kept = MoodSuggestions.Where(m => !m.Equals(mood.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+        var changed = kept.Count != MoodSuggestions.Count;
+        MoodSuggestions = changed ? kept : MoodSuggestions;
+        return changed;
+    }
+
+    public PersonProposal? ProposalFor(string label)
+        => PeopleProposals.FirstOrDefault(p => p.Label.Equals(label.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    public void DropPersonProposal(PersonProposal proposal)
+        => PeopleProposals = PeopleProposals.Where(p => p != proposal).ToList();
+
+    /// <summary>Approval adds the mention to Cleaned, and the words before it stay as a Revision. Raw does not change.</summary>
+    public void ApprovePersonProposal(PersonProposal proposal, string personId, string personLabel, DateTimeOffset now)
+    {
+        DropPersonProposal(proposal);
+        var plain = ProseMirrorToPlainText.Render(Cleaned.Text);
+        var cleaned = MentionInsertion.Insert(Cleaned.Text, PeopleTagSpans.Spans(plain, proposal.Label, personId, personLabel));
+        if (cleaned != Cleaned.Text)
+        {
+            Cleaned = Cleaned.RewrittenKeepingSavedAt(cleaned);
+            _appendedCleanedRevisions.Add(new CleanedRevision(Id, Cleaned.DraftRevision, now, now, cleaned));
+        }
+
+        RefreshFromDrafts();
+    }
+
+    private bool HoldsTopic(string topic)
+        => UserTopics.Concat(AiTopics).Any(held => held.Trim().Equals(topic.Trim(), StringComparison.OrdinalIgnoreCase));
 
     private void RequireRunningCleanup()
         => ValidationException.Must(CleanupRun == CleanupRunState.Running, CleanupField, "No Cleanup of this Session runs.");

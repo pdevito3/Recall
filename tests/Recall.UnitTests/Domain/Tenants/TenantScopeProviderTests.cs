@@ -42,6 +42,7 @@ public sealed class TenantScopeProviderTests : IDisposable
         services.AddSingleton(Options.Create(new FirstPartyClientOptions { ClientIds = new HashSet<string> { FirstPartyClientId } }));
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<SystemTenantAccess>();
+        services.AddScoped<JournalWorkAccess>();
         services.AddScoped<ICallerIdentityResolver, CallerIdentityResolver>();
         services.AddScoped<ITenantScopeProvider, TenantScopeProvider>();
         _services = services.BuildServiceProvider();
