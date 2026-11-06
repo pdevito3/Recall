@@ -25,6 +25,8 @@ public static class AuthHosts
 
     public static AuthFlowFactory TwoTenants { get; private set; } = null!;
 
+    public static AuthFlowFactory Bundle { get; private set; } = null!;
+
     public static void Start()
     {
         Open = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
@@ -36,6 +38,7 @@ public static class AuthHosts
             new StubOidcProvider { AuthMethods = ["client_secret_post"], ListsIssParameter = false });
         RollingKeyProvider = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
         TwoTenants = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
+        Bundle = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
         TwoProviders = Start(new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts })
         {
             OtherProvider = new StubOidcProvider(AuthFlowFactory.OtherIssuer),
@@ -63,7 +66,7 @@ public static class AuthHosts
 
     public static async Task StopAsync()
     {
-        foreach (var host in new[] { Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, Sweep })
+        foreach (var host in new[] { Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, Bundle, Sweep })
         {
             if (host is not null)
                 await host.DisposeAsync();
