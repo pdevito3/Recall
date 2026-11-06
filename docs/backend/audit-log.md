@@ -110,4 +110,4 @@ The cursor text is `{occurred_at in microseconds since 1970}_{record_id}_{ordina
 
 ## Telemetry
 
-The read tags its feature span with `app.audit.entity_id` and `app.audit.reads_sensitive`. See [feature-telemetry.md](feature-telemetry.md).
+The read tags its feature span with `app.audit.reads_sensitive`. The value of `entityId` comes from the caller, so no tag holds it. See [feature-telemetry.md](feature-telemetry.md).
