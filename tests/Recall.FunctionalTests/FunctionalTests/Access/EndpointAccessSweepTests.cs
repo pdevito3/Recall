@@ -61,6 +61,7 @@ public class EndpointAccessSweepTests : TestBase
         ["DeleteCorrection"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetUserSetting"] = new(JournalOfEachMember, OwnerOnly: true),
         ["ChangeUserSetting"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetFileStoreStatus"] = new("Each member can lose a recording to this fault, and the reply is one flag with no tenant data."),
         // new-feature:open-to-each-member
     };
 

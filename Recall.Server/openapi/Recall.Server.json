@@ -3219,6 +3219,40 @@
           }
         }
       }
+    },
+    "/api/v1/file-store/status": {
+      "get": {
+        "tags": [
+          "FileStore"
+        ],
+        "summary": "Tells a client whether the file store takes writes, so a person sees the fault before a recording is at risk.",
+        "operationId": "GetFileStoreStatus",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileStoreStatusDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3703,6 +3737,17 @@
             "maximum": 4294967295,
             "minimum": 0,
             "type": "integer"
+          }
+        }
+      },
+      "FileStoreStatusDto": {
+        "required": [
+          "canWrite"
+        ],
+        "type": "object",
+        "properties": {
+          "canWrite": {
+            "type": "boolean"
           }
         }
       },
@@ -4778,6 +4823,9 @@
     },
     {
       "name": "Users"
+    },
+    {
+      "name": "FileStore"
     }
   ]
 }

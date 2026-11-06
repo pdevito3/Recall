@@ -1,3 +1,4 @@
+import { fileStoreApi } from '@tests/support/api/file-store-api'
 import { usersApi } from '@tests/support/api/users-api'
 import { expect, test } from '@tests/support/fixtures'
 import { useDefaultFontSize } from '@tests/support/screen'
@@ -53,6 +54,25 @@ test.describe('the layout header', () => {
     await shell.openAbout()
 
     expect(await shell.verticalCenter(shell.at.headerSeparator)).toBeCloseTo(await shell.verticalCenter(shell.at.sidebarTrigger), 0)
+  })
+})
+
+test.describe('the file store notice', () => {
+  test('stays away while the file store takes writes', async ({ page }) => {
+    const shell = appShellPage(page)
+
+    await shell.openAbout()
+
+    await expect(shell.at.fileStoreNotice).toBeHidden()
+  })
+
+  test('tells the person what happened and what to do when the file store refuses a write', async ({ page, api }) => {
+    const shell = appShellPage(page)
+    api.mock(fileStoreApi.refusesWrites())
+
+    await shell.openAbout()
+
+    await expect(shell.at.fileStoreNotice).toContainText('Check that the computer that runs Recall has free disk space')
   })
 })
 

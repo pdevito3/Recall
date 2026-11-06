@@ -22,4 +22,5 @@ export const appShell = (page: Page) => ({
   homeLink: page.getByRole('link', { name: 'Go to the home page' }),
   composerHint: page.getByText('Type @ to tag a person', { exact: true }),
   pageAnnouncement: page.getByTestId('page-announcement'),
+  fileStoreNotice: page.getByRole('alert').filter({ hasText: 'Recall cannot write to its file store' }),
 })

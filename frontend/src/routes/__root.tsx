@@ -17,6 +17,7 @@ import { BreadcrumbNameProvider } from '@/components/breadcrumb-name-provider'
 import { Button } from '@/components/ui/button'
 import { login, returnUrlOf } from '@/domain/auth/apis/auth-actions'
 import { authUserQuery } from '@/domain/auth/apis/get-user'
+import { FileStoreNotice } from '@/domain/file-store/components/file-store-notice'
 import { MembershipCheckFailedNotice } from '@/domain/membership/components/membership-notice'
 import { useResumeUnsentDrafts } from '@/domain/sessions/autosave/use-resume-unsent-drafts'
 import { HrefRouterProvider } from '@/components/ui/link'
@@ -122,6 +123,7 @@ function LayoutContent() {
             </div>
           </header>
           <MembershipCheckFailedNotice />
+          <FileStoreNotice />
           <div ref={content} className="flex flex-1 flex-col gap-4 p-4 pt-0">
             <Outlet />
           </div>

@@ -23,4 +23,5 @@ export const memberSession: AuthUser = { sub: member.identifier, name: member.fu
 export const signedInMember: Answer[] = [
   { method: 'GET', path: '/auth/me', body: memberSession },
   { method: 'GET', path: `/api/v1/users/by-identifier/${member.identifier}`, body: member },
+  { method: 'GET', path: '/api/v1/file-store/status', body: { canWrite: true } },
 ]

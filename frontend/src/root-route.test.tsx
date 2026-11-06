@@ -17,6 +17,7 @@ import { AuthKeys } from '@/domain/auth/apis/auth.keys'
 import { MembershipKeys } from '@/domain/membership/apis/membership.keys'
 import { Route as RootRoute } from '@/routes/__root'
 import { routeTree } from '@/routeTree.gen'
+import { FileStoreKeys } from '@/domain/file-store/apis/file-store.keys'
 import { member, memberSession } from '@/test/session'
 
 let showLateHeading = () => {}
@@ -87,6 +88,7 @@ async function renderLayoutAt(path: string) {
   // With staleTime Infinity, the seeded session and membership send no request.
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } })
   queryClient.setQueryData(AuthKeys.user(), memberSession)
+  queryClient.setQueryData(FileStoreKeys.status(), { canWrite: true })
   queryClient.setQueryData(MembershipKeys.of(member.identifier), member)
   const screen = await render(
     <QueryClientProvider client={queryClient}>
