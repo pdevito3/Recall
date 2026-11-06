@@ -20,7 +20,7 @@ export function isARowThatIsGone(error: unknown): boolean {
     && !conflictsThatPass.has(error.problemDetails.type ?? '')
 }
 
-function isFinalRefusal(error: unknown): error is ProblemDetailsError {
+export function isFinalRefusal(error: unknown): error is ProblemDetailsError {
   if (!isProblemDetailsError(error) || conflictsThatPass.has(error.problemDetails.type ?? '')) return false
   const status = error.status ?? 500
   return status >= 400 && status < 500 && !statusesThatCanChange.has(status)

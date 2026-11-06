@@ -1,7 +1,7 @@
 import { isProblemDetailsError, isStaleVersionError, type ProblemDetailsError } from '@/lib/problem-details'
 
 import type { Stamped } from './save-queue'
-import { SerialSaver } from './serial-saver'
+import { isFinalRefusal, SerialSaver } from './serial-saver'
 
 export interface FieldAsk<F> {
   field: keyof F & string
@@ -110,7 +110,11 @@ export class RowSaver<F extends object, R> {
       debounceMs: 0,
       resumedUnanswered: resumed?.change ?? undefined,
       mergeEdits: mergeFields,
-      send: ({ value }, signal) => this.send(value, signal),
+      send: ({ value }, signal) =>
+        this.send(value, signal).catch((error: unknown) => {
+          if (isFinalRefusal(error)) this.appliedWithNoAsk = []
+          throw error
+        }),
       onReply: (row) => this.options.onReply(row),
       refusalMessage: options.refusalMessage,
       onQueueChange: () => this.keep(),
@@ -185,7 +189,6 @@ export class RowSaver<F extends object, R> {
       } catch (error) {
         if (!isStaleVersionError(error)) {
           if (!isProblemDetailsError(error) || (error.status ?? 500) >= 500) this.attempt = { base, hadNoReply: true }
-          else this.appliedWithNoAsk = []
           throw error
         }
       }
@@ -193,7 +196,8 @@ export class RowSaver<F extends object, R> {
       if (this.isDisposed) throw new Error('This save stopped.')
       const plan = planAfterStale({ changed: fields, before: base.values, fresh: this.options.fieldsOf(fresh), hadNoReply, rules: this.options.rules })
       if (plan.asks.length > 0) this.addAsks(plan.asks)
-      this.appliedWithNoAsk.push(...plan.appliedWithNoAsk)
+      const pending = this.pendingFields()
+      this.appliedWithNoAsk.push(...plan.appliedWithNoAsk.filter((field) => !(field in pending) || isSame(pending[field], fields[field])))
       base = this.baseOf(fresh)
       hadNoReply = false
       fields = plan.apply

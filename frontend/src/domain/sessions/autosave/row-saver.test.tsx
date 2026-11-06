@@ -292,6 +292,78 @@ test('the note of a change with no ask comes once when the reply was lost, and n
   saver.dispose()
 })
 
+test('a person who takes the change back during the read of a stale round gets no note about it', async () => {
+  const api = server({ capture: true })
+  const { saver, told } = saverOn(api, { current: api.row.current })
+  api.otherClientSets({ zone: 'Africa/Cairo' })
+  const { read } = api
+  let answerRead = () => undefined as void
+  api.read = () =>
+    new Promise((resolve) => {
+      answerRead = () => resolve(read())
+    })
+
+  saver.edit({ capture: false })
+  await vi.advanceTimersByTimeAsync(0)
+  saver.edit({ capture: true })
+  answerRead()
+  await vi.advanceTimersByTimeAsync(60_000)
+
+  expect(api.row.current.capture).toBe(true)
+  expect(told).not.toHaveBeenCalled()
+  saver.dispose()
+})
+
+test('an answer that can change keeps the note of a change with no ask', async () => {
+  const api = server({ capture: true })
+  const { saver, told } = saverOn(api, { current: api.row.current })
+  api.otherClientSets({ zone: 'Africa/Cairo' })
+  const { put } = api
+  let puts = 0
+  api.put = (values, version) => {
+    puts += 1
+    return puts === 2 ? Promise.reject(new ProblemDetailsError({ type: 'about:blank', status: 429, title: 'Too many requests' })) : put(values, version)
+  }
+
+  saver.edit({ capture: false })
+  await vi.advanceTimersByTimeAsync(60_000)
+
+  expect(api.row.current.capture).toBe(false)
+  expect(told).toHaveBeenCalledWith(['capture'])
+  saver.dispose()
+})
+
+test('a refused read ends the note of a change with no ask', async () => {
+  const api = server({ capture: true })
+  const { saver, told } = saverOn(api, { current: api.row.current })
+  api.otherClientSets({ zone: 'Africa/Cairo' })
+  const { put, read } = api
+  let puts = 0
+  let reads = 0
+  api.put = (values, version) => {
+    puts += 1
+    if (puts === 2) {
+      api.otherClientSets({ zone: 'Asia/Tokyo' })
+      return Promise.reject(stale())
+    }
+    return put(values, version)
+  }
+  api.read = () => {
+    reads += 1
+    return reads === 2 ? Promise.reject(new ProblemDetailsError({ type: 'about:blank', status: 403, title: 'Refused' })) : read()
+  }
+
+  saver.edit({ capture: false })
+  await vi.advanceTimersByTimeAsync(0)
+  saver.edit({ topics: ['mine'] })
+  await vi.advanceTimersByTimeAsync(60_000)
+
+  expect(api.row.current.topics).toEqual(['mine'])
+  expect(api.row.current.capture).toBe(true)
+  expect(told).not.toHaveBeenCalled()
+  saver.dispose()
+})
+
 test('a person who takes the change back during a retry gets no note about it', async () => {
   const api = server({ capture: true })
   const { saver, told } = saverOn(api, { current: api.row.current })

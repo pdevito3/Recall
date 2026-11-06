@@ -235,6 +235,13 @@ const fullStorage = () =>
     throw new DOMException('full', 'QuotaExceededError')
   })
 
+function showsANotice(saver: DraftSaver) {
+  const setItem = fullStorage()
+  saver.edit('a write with no room')
+  setItem.mockRestore()
+  expect(saver.notice()).toMatchObject({ kind: 'onlyInMemory' })
+}
+
 test('two tabs that type different words during a hold both reach the entry, in each order of the keys', async () => {
   for (const [first, second] of [['aaa', 'bbb'], ['bbb', 'aaa']] as const) {
     localStorage.clear()
@@ -379,11 +386,24 @@ test('a discard in one tab leaves the words that another tab typed in its hold',
   secondTab.stop()
 })
 
+test('a discard leaves the words of a live tab that no notice of this tab showed', async () => {
+  writeHoldToOutbox(owner, held('words of a live tab'), 'live tab')
+  const saver = new DraftSaver(target, new QueryClient(), null, [held('words of a live tab')])
+  saver.takeHold()
+  await lockIsGiven()
+
+  expect(saver.notice()).toBeNull()
+  saver.discard()
+
+  expect(readHoldsFromOutbox(owner, key).map(({ entry }) => entry.change.value)).toEqual(['words of a live tab'])
+})
+
 test('a discard leaves a slot whose words only appear inside the words that this tab showed', async () => {
   writeHoldToOutbox(owner, held('went to the store with Sam'), 'closed tab')
   const saver = new DraftSaver(target, new QueryClient(), null, [held('went to the store with Sam')])
   saver.takeHold()
   await lockIsGiven()
+  showsANotice(saver)
   writeHoldToOutbox(owner, held('store'), 'another tab')
 
   saver.discard()
@@ -411,6 +431,7 @@ test('a discard removes the words that this tab showed, also from a closed tab',
   const saver = new DraftSaver(target, new QueryClient(), null, [held('words of a closed tab')])
   saver.takeHold()
   await lockIsGiven()
+  showsANotice(saver)
 
   saver.discard()
 
@@ -470,4 +491,35 @@ test('a move to a new entry on a full storage keeps the saved queue of the old e
 
   expect(readOutboxEntry(owner, key)?.change.value).toBe('saved words')
   saver.stop()
+})
+
+async function movedOnAFullStorage() {
+  const stored = { ...target, key, channel: 'raw' as const, change: { value: 'saved words', savedAt: '2026-11-06T15:31:00.000Z' } }
+  writeToOutbox(owner, stored)
+  const setItem = fullStorage()
+  vi.mocked(saveRawDraft).mockRejectedValueOnce(new ProblemDetailsError({ type: 'about:blank', title: 'Gone', status: 404 }))
+  vi.mocked(addSession).mockReturnValue(new Promise(() => undefined))
+  const saver = new DraftSaver(target, new QueryClient(), stored)
+  saver.flush()
+  await vi.waitFor(() => expect(saver.getSnapshot().movedFromDeletedEntry).toBe(true))
+  setItem.mockRestore()
+  return saver
+}
+
+test('the old copy left at a move on a full storage goes when a write works again', async () => {
+  const saver = await movedOnAFullStorage()
+
+  saver.edit('saved words and more')
+
+  expect(readOutboxEntry(owner, key)).toBeNull()
+  expect(readOutbox(owner).map((entry) => entry.change.value)).toEqual(['saved words and more'])
+  saver.stop()
+})
+
+test('a discard removes the old copy left at a move on a full storage', async () => {
+  const saver = await movedOnAFullStorage()
+
+  saver.discard()
+
+  expect(readOutbox(owner)).toEqual([])
 })

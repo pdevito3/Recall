@@ -70,6 +70,8 @@ export class DraftSaver {
   private wordsOnServer: string | null = null
   private heldWords: string | null = null
   private heldTexts: string[] = []
+  private textsShownInANotice: string[] = []
+  private copiesLeftAtAMove: { key: string; slots: HeldSlot[] }[] = []
   private readonly holdSlot = newUuid()
   private joinedSlots: HeldSlot[] | null = null
   private readonly isOnlyInMemory = { queue: false, hold: false }
@@ -245,13 +247,24 @@ export class DraftSaver {
   private removeJoinedHolds() {
     if (this.joinedSlots === null || this.isOnlyInMemory.queue) return
     // A tab can have typed more in its slot since the join, and those words are not in the queue.
-    const joined = this.joinedSlots
-    const unchanged = readHoldsFromOutbox(this.target.owner, draftKey(this.target)).filter(({ slot, entry }) =>
-      joined.some((old) => old.slot === slot && old.entry.change.value === entry.change.value),
-    )
-    removeHoldsFromOutbox(this.target.owner, draftKey(this.target), unchanged.map(({ slot }) => slot))
+    this.removeUnchangedSlots(draftKey(this.target), this.joinedSlots)
     this.joinedSlots = null
     this.letGoOfHold()
+  }
+
+  private removeUnchangedSlots(key: string, slots: HeldSlot[]) {
+    const unchanged = readHoldsFromOutbox(this.target.owner, key).filter(({ slot, entry }) =>
+      slots.some((old) => old.slot === slot && old.entry.change.value === entry.change.value),
+    )
+    removeHoldsFromOutbox(this.target.owner, key, unchanged.map(({ slot }) => slot))
+  }
+
+  private removeCopiesLeftAtAMove() {
+    for (const { key, slots } of this.copiesLeftAtAMove) {
+      removeFromOutbox(this.target.owner, key)
+      this.removeUnchangedSlots(key, slots)
+    }
+    this.copiesLeftAtAMove = []
   }
 
   dismissMovedNotice() {
@@ -264,6 +277,7 @@ export class DraftSaver {
     const { status, movedFromDeletedEntry, sessionId, isOnlyInMemory } = this.snapshot
     const unsent = [this.unsettledText(), this.heldWords].filter((text) => text !== null)
     const words = unsent.length > 0 ? wordsOfEachHold(unsent) : ''
+    if (isOnlyInMemory || ((status.kind === 'refused' || status.kind === 'waiting') && this.listeners.size === 0)) this.textsShownInANotice = this.heldTexts
     // An open page keeps its saver and its editor, so a discard there would leave a page that saves nothing.
     if (isOnlyInMemory) return { kind: 'onlyInMemory', saver: this, reason: status.kind === 'refused' ? status.message : null, canDiscard: this.listeners.size === 0, words }
     if (status.kind === 'refused' && this.listeners.size === 0) {
@@ -336,6 +350,7 @@ export class DraftSaver {
     this.isDiscarded = true
     this.stop()
     removeFromOutbox(this.target.owner, draftKey(this.target))
+    this.removeCopiesLeftAtAMove()
     this.removeHoldsThisTabKnows()
     for (const [key, saver] of savers) {
       if (saver === this) savers.delete(key)
@@ -414,21 +429,21 @@ export class DraftSaver {
     savers.set(draftKey(this.target), this)
     this.update({ sessionId: null, baseRevision: 0, latestRevision: 0, conflict: null, movedFromDeletedEntry: true })
     this.writeToOutbox(this.saver.newestUnsettled() ?? change, null)
-    // With no room for the new copy, the old copy is the only one that a crash leaves. A later load can then make a second entry, and no word goes.
-    if (!this.isOnlyInMemory.queue) removeFromOutbox(this.target.owner, oldKey)
-    const heldInOldEntry = readHoldsFromOutbox(this.target.owner, oldKey).map(({ entry }) => entry.change.value)
-    const held = [...(this.heldWords === null ? [] : [this.heldWords]), ...heldInOldEntry]
+    const slotsOfOldEntry = readHoldsFromOutbox(this.target.owner, oldKey)
+    const held = [...(this.heldWords === null ? [] : [this.heldWords]), ...slotsOfOldEntry.map(({ entry }) => entry.change.value)]
     if (held.length > 0) {
       this.joinedSlots = null
       this.letGoOfHold()
       this.holdInOutbox(wordsOfEachHold(held))
     }
-    if (!this.isOnlyInMemory.hold) removeHoldsFromOutbox(this.target.owner, oldKey, readHoldsFromOutbox(this.target.owner, oldKey).map(({ slot }) => slot))
+    // With no room for the new copy, the old copy is the only one that a crash leaves. A later load can then make a second entry, and no word goes.
+    this.copiesLeftAtAMove.push({ key: oldKey, slots: slotsOfOldEntry })
+    if (!this.snapshot.isOnlyInMemory) this.removeCopiesLeftAtAMove()
   }
 
-  /** A discard covers the exact texts that the person saw in this tab. A slot with other words belongs to a tab that still writes, and stays. */
+  /** A discard covers the exact texts that a notice of this tab showed, and those that this tab joined. A slot with other words can belong to a tab that still writes, and stays. */
   private removeHoldsThisTabKnows() {
-    const known = [...(this.heldWords === null ? [] : this.heldTexts), ...(this.joinedSlots ?? []).map(({ entry }) => entry.change.value)]
+    const known = [...(this.heldWords === null ? [] : this.textsShownInANotice), ...(this.joinedSlots ?? []).map(({ entry }) => entry.change.value)]
     const key = draftKey(this.target)
     const slots = readHoldsFromOutbox(this.target.owner, key).filter(({ slot, entry }) => slot === this.holdSlot || known.includes(entry.change.value))
     removeHoldsFromOutbox(this.target.owner, key, slots.map(({ slot }) => slot))
@@ -508,6 +523,7 @@ export class DraftSaver {
     if (this.snapshot.isOnlyInMemory !== isOnlyInMemory) this.update({ isOnlyInMemory })
     else if (isOnlyInMemory) refreshDraftNotices()
     if (store === 'queue' && isWritten) this.removeJoinedHolds()
+    if (!isOnlyInMemory) this.removeCopiesLeftAtAMove()
   }
 
   private outboxEntry(change: Stamped<string>, refusal: string | null): OutboxEntry {

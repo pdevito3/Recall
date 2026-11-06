@@ -22,6 +22,8 @@ export function refuseThePage() {
 function announceAChangeOfPerson(sub: string) {
   try {
     if (localStorage.getItem(lastPersonKey) === sub) return
+    // A refused write must not leave an earlier person here, or the return of that person sends no message.
+    localStorage.removeItem(lastPersonKey)
     localStorage.setItem(lastPersonKey, sub)
   } catch {
     // With no room to store the person, the message still goes.

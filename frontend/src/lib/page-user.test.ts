@@ -6,6 +6,7 @@ beforeEach(() => {
   vi.stubGlobal('localStorage', {
     getItem: (key: string) => stored.get(key) ?? null,
     setItem: (key: string, value: string) => stored.set(key, value),
+    removeItem: (key: string) => stored.delete(key),
   })
 })
 
@@ -82,4 +83,19 @@ test('the first page of another person tells the other tabs with no room in stor
   ;(await freshPage()).notePageUser('person-b')
 
   expect(messages).toHaveBeenCalledWith({ signedInAs: 'person-b' })
+})
+
+test('a refused write of a person does not hide the return of the earlier person', async () => {
+  const messages = countTheMessages()
+  ;(await freshPage()).notePageUser('person-a')
+  vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+    throw new DOMException('Full', 'QuotaExceededError')
+  })
+  vi.resetModules()
+  ;(await freshPage()).notePageUser('person-b')
+  vi.resetModules()
+
+  ;(await freshPage()).notePageUser('person-a')
+
+  expect(messages).toHaveBeenLastCalledWith({ signedInAs: 'person-a' })
 })

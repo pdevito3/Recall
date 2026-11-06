@@ -141,7 +141,7 @@ For interactive exploration, the Playwright MCP server in `.mcp.json` also works
 
 `browse.mjs` keeps the database of the stack the same across recipe runs:
 
-1. Before the recipe, it copies each table of the data file (`recall.db`) in `artifacts/verify/<RUN_ID>/data/` to `artifacts/verify/<RUN_ID>/db-snapshot.json`.
+1. Before the recipe, it copies each table of the data file (`recall.db`), with the exception of the `backwave_*` tables of the job engine, in `artifacts/verify/<RUN_ID>/data/` to `artifacts/verify/<RUN_ID>/db-snapshot.json`.
 2. After the recipe, also after a failed step or a page error, it deletes and inserts only the rows that differ from the copy. Then it reads the tables again. If one still differs, the run fails with `the restore left these tables different`.
 3. `result.json` gives the rows that the run wrote in `data.changes`, for example `"appdb.tenants": { "added": 1, "changed": 0, "deleted": 0 }`. If the restore failed, `data.restored` is `false`, and `data.changes` gives the rows that the run wrote. Some of them can still be in the database. If the restore failed before it read the rows, `data.changes` is `null` and `run-twice.sh` prints `unknown`.
 
