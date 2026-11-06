@@ -268,6 +268,74 @@ test('the note of a change with no ask also comes after a retry', async () => {
   saver.dispose()
 })
 
+test('the note of a change with no ask comes once when the reply was lost, and never with a later change', async () => {
+  const api = server({ capture: true })
+  const { saver, told } = saverOn(api, { current: api.row.current })
+  api.otherClientSets({ zone: 'Africa/Cairo' })
+  const { put } = api
+  let puts = 0
+  api.put = async (values, version) => {
+    puts += 1
+    const reply = await put(values, version)
+    if (puts === 2) throw new Error('Network Error')
+    return reply
+  }
+
+  saver.edit({ capture: false })
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect(told).toHaveBeenCalledTimes(1)
+
+  saver.edit({ capture: true })
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect(api.row.current.capture).toBe(true)
+  expect(told).toHaveBeenCalledTimes(1)
+  saver.dispose()
+})
+
+test('a person who takes the change back during a retry gets no note about it', async () => {
+  const api = server({ capture: true })
+  const { saver, told } = saverOn(api, { current: api.row.current })
+  api.otherClientSets({ zone: 'Africa/Cairo' })
+  const { put } = api
+  let puts = 0
+  api.put = (values, version) => {
+    puts += 1
+    return puts === 2 ? Promise.reject(new Error('Network Error')) : put(values, version)
+  }
+
+  saver.edit({ capture: false })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(puts).toBe(2)
+  saver.edit({ capture: true })
+  await vi.advanceTimersByTimeAsync(60_000)
+
+  expect(api.row.current.capture).toBe(true)
+  expect(told).not.toHaveBeenCalled()
+  saver.dispose()
+})
+
+test('a refused change gets no note, also when a later change of another field works', async () => {
+  const api = server({ capture: true })
+  const { saver, told } = saverOn(api, { current: api.row.current })
+  api.otherClientSets({ zone: 'Africa/Cairo' })
+  const { put } = api
+  let puts = 0
+  api.put = (values, version) => {
+    puts += 1
+    return puts === 2 ? Promise.reject(new ProblemDetailsError({ type: 'about:blank', title: 'Refused', status: 422 })) : put(values, version)
+  }
+
+  saver.edit({ capture: false })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(puts).toBe(2)
+  saver.edit({ zone: 'Europe/Athens' })
+  await vi.advanceTimersByTimeAsync(60_000)
+
+  expect(api.row.current.zone).toBe('Europe/Athens')
+  expect(told).not.toHaveBeenCalled()
+  saver.dispose()
+})
+
 test('an unsaved change counts as unsaved, and a stopped saver does not', () => {
   const api = server()
   const { saver } = saverOn(api, { current: api.row.current })

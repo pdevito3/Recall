@@ -8,7 +8,7 @@ import { ProblemDetailsError } from '@/lib/problem-details'
 
 import { plainWordsOf } from '../editor/content'
 import { DraftSaver, draftNotices, draftSaverFor, type DraftTarget } from './draft-saver'
-import { readHoldsFromOutbox, readOutbox, readOutboxEntry, writeHoldToOutbox } from './outbox'
+import { readHoldsFromOutbox, readOutbox, readOutboxEntry, writeHoldToOutbox, writeToOutbox } from './outbox'
 
 vi.mock('@/api/generated/sessions/clients/add-session')
 vi.mock('@/api/generated/sessions/clients/save-raw-draft')
@@ -379,6 +379,33 @@ test('a discard in one tab leaves the words that another tab typed in its hold',
   secondTab.stop()
 })
 
+test('a discard leaves a slot whose words only appear inside the words that this tab showed', async () => {
+  writeHoldToOutbox(owner, held('went to the store with Sam'), 'closed tab')
+  const saver = new DraftSaver(target, new QueryClient(), null, [held('went to the store with Sam')])
+  saver.takeHold()
+  await lockIsGiven()
+  writeHoldToOutbox(owner, held('store'), 'another tab')
+
+  saver.discard()
+
+  expect(readHoldsFromOutbox(owner, key).map(({ entry }) => entry.change.value)).toEqual(['store'])
+})
+
+test('a discard during a join that waits for room removes the words of that join', async () => {
+  vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
+  writeHoldToOutbox(owner, held('held words'), 'closed tab')
+  const saver = new DraftSaver(target, new QueryClient(), null, [held('held words')])
+  saver.takeHold()
+  await lockIsGiven()
+  const setItem = fullStorage()
+  saver.joinHoldInto('')
+  setItem.mockRestore()
+
+  saver.discard()
+
+  expect(readHoldsFromOutbox(owner, key)).toEqual([])
+})
+
 test('a discard removes the words that this tab showed, also from a closed tab', async () => {
   writeHoldToOutbox(owner, held('words of a closed tab'), 'closed tab')
   const saver = new DraftSaver(target, new QueryClient(), null, [held('words of a closed tab')])
@@ -427,5 +454,20 @@ test('a move to a new entry on a full storage keeps the saved holds of the old e
   await vi.waitFor(() => expect(saver.getSnapshot().movedFromDeletedEntry).toBe(true))
 
   expect(readHoldsFromOutbox(owner, key)[0]?.entry.change.value).toBe('held words')
+  saver.stop()
+})
+
+test('a move to a new entry on a full storage keeps the saved queue of the old entry', async () => {
+  const stored = { ...target, key, channel: 'raw' as const, change: { value: 'saved words', savedAt: '2026-11-06T15:31:00.000Z' } }
+  writeToOutbox(owner, stored)
+  fullStorage()
+  vi.mocked(saveRawDraft).mockRejectedValueOnce(new ProblemDetailsError({ type: 'about:blank', title: 'Gone', status: 404 }))
+  vi.mocked(addSession).mockReturnValue(new Promise(() => undefined))
+
+  const saver = new DraftSaver(target, new QueryClient(), stored)
+  saver.flush()
+  await vi.waitFor(() => expect(saver.getSnapshot().movedFromDeletedEntry).toBe(true))
+
+  expect(readOutboxEntry(owner, key)?.change.value).toBe('saved words')
   saver.stop()
 })

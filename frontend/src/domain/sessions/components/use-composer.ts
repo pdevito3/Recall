@@ -125,6 +125,7 @@ export function useComposer() {
           return
         }
         openWithNoRead()
+        clearTimeout(readRetry)
         readRetry = setTimeout(() => void read(), readRetryMs)
       })
     const stopWatching = onlineManager.subscribe((isOnline) => {

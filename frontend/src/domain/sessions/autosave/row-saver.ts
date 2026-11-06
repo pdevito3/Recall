@@ -120,6 +120,7 @@ export class RowSaver<F extends object, R> {
   edit(fields: Partial<F>) {
     this.currentAsks = this.currentAsks.filter((ask) => !(ask.field in fields))
     for (const field of fieldsIn(fields)) this.keptAsTheyAre.delete(field)
+    this.appliedWithNoAsk = this.appliedWithNoAsk.filter((field) => !(field in fields))
     this.saver.edit(fields)
     this.notify()
   }
@@ -179,12 +180,12 @@ export class RowSaver<F extends object, R> {
       try {
         const reply = await this.options.put({ ...base.values, ...fields }, base.version, signal)
         this.attempt = null
-        if (this.appliedWithNoAsk.length > 0) this.options.onAppliedWithNoAsk?.(this.appliedWithNoAsk)
-        this.appliedWithNoAsk = []
+        this.tellAppliedWithNoAsk()
         return reply
       } catch (error) {
         if (!isStaleVersionError(error)) {
           if (!isProblemDetailsError(error) || (error.status ?? 500) >= 500) this.attempt = { base, hadNoReply: true }
+          else this.appliedWithNoAsk = []
           throw error
         }
       }
@@ -199,10 +200,16 @@ export class RowSaver<F extends object, R> {
       this.attempt = { base, hadNoReply }
       if (fieldsIn(fields).length === 0) {
         this.attempt = null
+        this.tellAppliedWithNoAsk()
         return fresh
       }
     }
     throw new Error('The row changed again during each try.')
+  }
+
+  private tellAppliedWithNoAsk() {
+    if (this.appliedWithNoAsk.length > 0) this.options.onAppliedWithNoAsk?.(this.appliedWithNoAsk)
+    this.appliedWithNoAsk = []
   }
 
   /** The person can have changed the field again while the save ran, and the ask must offer that newest value. */

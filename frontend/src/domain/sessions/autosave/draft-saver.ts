@@ -69,6 +69,7 @@ export class DraftSaver {
   private wordsInHistory: string | null = null
   private wordsOnServer: string | null = null
   private heldWords: string | null = null
+  private heldTexts: string[] = []
   private readonly holdSlot = newUuid()
   private joinedSlots: HeldSlot[] | null = null
   private readonly isOnlyInMemory = { queue: false, hold: false }
@@ -103,7 +104,8 @@ export class DraftSaver {
     this.snapshot = { ...this.snapshot, status: this.saver.getStatus() }
     this.saver.subscribe(() => this.update({ status: this.saver.getStatus() }))
     if (resumedHolds.length > 0) {
-      this.heldWords = wordsOfEachHold(resumedHolds.map(({ change }) => change.value))
+      this.heldTexts = resumedHolds.map(({ change }) => change.value)
+      this.heldWords = wordsOfEachHold(this.heldTexts)
       this.claimTheHold()
     }
   }
@@ -209,7 +211,9 @@ export class DraftSaver {
       if (this.isStopped) return
       this.ownsHold = true
       // Another tab can have joined the words while this tab waited, or typed more of them.
-      this.heldWords = this.wordsHeldNow().words
+      const held = this.wordsHeldNow()
+      this.heldWords = held.words
+      this.heldTexts = held.slots.map(({ entry }) => entry.change.value)
       if (this.heldWords === null) this.letGoOfHold()
       else if (!this.isHoldReadByPage) void this.joinHoldWithNoPage()
     })
@@ -410,7 +414,8 @@ export class DraftSaver {
     savers.set(draftKey(this.target), this)
     this.update({ sessionId: null, baseRevision: 0, latestRevision: 0, conflict: null, movedFromDeletedEntry: true })
     this.writeToOutbox(this.saver.newestUnsettled() ?? change, null)
-    removeFromOutbox(this.target.owner, oldKey)
+    // With no room for the new copy, the old copy is the only one that a crash leaves. A later load can then make a second entry, and no word goes.
+    if (!this.isOnlyInMemory.queue) removeFromOutbox(this.target.owner, oldKey)
     const heldInOldEntry = readHoldsFromOutbox(this.target.owner, oldKey).map(({ entry }) => entry.change.value)
     const held = [...(this.heldWords === null ? [] : [this.heldWords]), ...heldInOldEntry]
     if (held.length > 0) {
@@ -421,11 +426,11 @@ export class DraftSaver {
     if (!this.isOnlyInMemory.hold) removeHoldsFromOutbox(this.target.owner, oldKey, readHoldsFromOutbox(this.target.owner, oldKey).map(({ slot }) => slot))
   }
 
-  /** A discard covers the words that the person saw in this tab. A slot with other words belongs to a tab that still writes, and stays. */
+  /** A discard covers the exact texts that the person saw in this tab. A slot with other words belongs to a tab that still writes, and stays. */
   private removeHoldsThisTabKnows() {
-    const known = plainWordsOf(this.heldWords ?? '')
+    const known = [...(this.heldWords === null ? [] : this.heldTexts), ...(this.joinedSlots ?? []).map(({ entry }) => entry.change.value)]
     const key = draftKey(this.target)
-    const slots = readHoldsFromOutbox(this.target.owner, key).filter(({ slot, entry }) => slot === this.holdSlot || known.includes(plainWordsOf(entry.change.value)))
+    const slots = readHoldsFromOutbox(this.target.owner, key).filter(({ slot, entry }) => slot === this.holdSlot || known.includes(entry.change.value))
     removeHoldsFromOutbox(this.target.owner, key, slots.map(({ slot }) => slot))
   }
 
