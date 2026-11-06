@@ -50,7 +50,7 @@ public static class JsonLine
         }
     }
 
-    /// <summary>JSON has no NaN and no Infinity, and the writer throws on them, which ends the export of the batch.</summary>
+    /// <summary>JSON has no NaN and no Infinity, and the writer throws on them. A throw on the thread of the span export ends the process.</summary>
     public static void WriteDouble(Utf8JsonWriter json, string key, double value)
     {
         if (double.IsFinite(value))
