@@ -130,6 +130,50 @@ export function sessionPage(page: Page) {
       await Promise.all([at.logout.click(), checked])
     },
 
+    /** Goes from a page with private text to another document, by address, so that the browser keeps the first page in the back-forward cache. */
+    async leavePrivatePageForAnotherDocument() {
+      await page.addInitScript(() => {
+        window.addEventListener('pageshow', (event) => {
+          ;(window as unknown as { wasRestored: boolean }).wasRestored = event.persisted
+        })
+      })
+      await page.goto('/')
+      await expect(at.signedInAs).toBeVisible()
+      await page.evaluate(() => {
+        ;(window as unknown as { firstLoadMark: boolean }).firstLoadMark = true
+      })
+      await page.goto('/about')
+      await expect(at.navigation).toBeVisible()
+    },
+
+    /** A Back with no restore proves nothing here, so this fails when the browser loads the page again. */
+    async goBackToTheCachedPage() {
+      await page.goBack({ waitUntil: 'commit' })
+      expect(await page.evaluate(() => (window as unknown as { wasRestored?: boolean }).wasRestored), 'the back-forward cache restored the page').toBe(true)
+    },
+
+    isStillTheFirstLoad() {
+      return page.evaluate(() => (window as unknown as { firstLoadMark?: boolean }).firstLoadMark === true)
+    },
+
+    async screenShowsOneColor() {
+      const screenshot = await page.screenshot()
+      const viewer = await page.context().newPage()
+      const colors = await viewer.evaluate(async (png) => {
+        const image = new Image()
+        image.src = `data:image/png;base64,${png}`
+        await image.decode()
+        const canvas = document.createElement('canvas')
+        canvas.width = image.width
+        canvas.height = image.height
+        const drawing = canvas.getContext('2d')!
+        drawing.drawImage(image, 0, 0)
+        return new Set(new Uint32Array(drawing.getImageData(0, 0, image.width, image.height).data.buffer)).size
+      }, screenshot.toString('base64'))
+      await viewer.close()
+      return colors === 1
+    },
+
     async openWhileTheCheckFails(path: string) {
       await page.goto(path)
       await expect(at.checkFailed).toBeVisible()

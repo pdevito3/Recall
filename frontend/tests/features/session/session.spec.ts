@@ -51,6 +51,40 @@ test.describe('a session that ends while the page is open', () => {
   })
 })
 
+test.describe('a sign-out in another tab', () => {
+  test('takes this tab to the signed-out page, with no action in this tab', async ({ page, context, api }) => {
+    const session = sessionPage(page)
+    await session.open('/')
+    const otherPage = await context.newPage()
+    const otherTab = sessionPage(otherPage)
+    await otherTab.open('/about')
+
+    api.mock(...authApi.logoutWorks(), { method: 'get', path: authPaths.me, status: 204 })
+    await session.at.logout.click()
+
+    await expect.poll(() => page.url()).toContain('signedOut=1')
+    await expect.poll(() => otherPage.url()).toContain('signedOut=1')
+    await expect(otherTab.at.navigation).toHaveCount(0)
+  })
+
+  test('leaves this tab as it is when the sign-out fails', async ({ page, context, api }) => {
+    const session = sessionPage(page)
+    await session.open('/')
+    const otherPage = await context.newPage()
+    const otherTab = sessionPage(otherPage)
+    await otherTab.open('/about')
+
+    api.mock(authApi.logoutFails())
+    const answered = page.waitForResponse((r) => new URL(r.url()).pathname === authPaths.logout)
+    await session.at.logout.click()
+    await answered
+
+    await expect(otherTab.at.navigation).toBeVisible()
+    expect(await otherTab.screenShowsOneColor()).toBe(false)
+    expect(new URL(otherPage.url()).pathname).toBe('/about')
+  })
+})
+
 test.describe('a sign-out with a call of the API that answers 401 after it', () => {
   test('opens the signed-out page, and starts no login with a return URL', async ({ page, api }) => {
     const session = sessionPage(page)

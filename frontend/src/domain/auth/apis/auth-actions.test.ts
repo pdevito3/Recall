@@ -1,3 +1,4 @@
+import { QueryClient } from '@tanstack/react-query'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { returnUrlOf } from './auth-actions'
@@ -144,5 +145,75 @@ describe('a login after a sign-out', () => {
     login('/about')
 
     expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?returnUrl=%2Fabout')
+  })
+
+  it('still waits for the second of two running logouts when the first one fails', async () => {
+    const { replace, login, logout, post } = await freshActions()
+    let failFirst!: (cause: Error) => void
+    let answerSecond!: (answer: unknown) => void
+    post.mockReturnValueOnce(new Promise((_, fail) => (failFirst = fail)))
+    post.mockReturnValueOnce(new Promise((settle) => (answerSecond = settle)))
+
+    const first = logout()
+    const second = logout()
+    failFirst(new Error('no answer'))
+    await expect(first).rejects.toThrow('no answer')
+    login('/about')
+    await new Promise((settled) => setTimeout(settled))
+    expect(replace).not.toHaveBeenCalled()
+
+    answerSecond({ status: 200, data: { provider_logout_url: providerLogoutUrl } })
+    await second
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(2))
+    expect(replace).toHaveBeenNthCalledWith(2, providerLogoutUrl)
+  })
+})
+
+describe('a sign-out in another tab', () => {
+  const channels: { postMessage: ReturnType<typeof vi.fn>; onmessage?: () => void }[] = []
+
+  const guardedActions = async () => {
+    channels.length = 0
+    const replace = vi.fn()
+    vi.stubGlobal('window', { location: { replace }, addEventListener: vi.fn() })
+    vi.stubGlobal('document', { documentElement: { style: {} } })
+    vi.stubGlobal('BroadcastChannel', function (this: (typeof channels)[number]) {
+      this.postMessage = vi.fn()
+      channels.push(this)
+    })
+    vi.resetModules()
+    const { apiClient } = await import('@/lib/api-client')
+    const post = vi.spyOn(apiClient, 'post').mockResolvedValue({ status: 204 })
+    const queryClient = new QueryClient()
+    const actions = await import('./auth-actions')
+    actions.guardPageAgainstEndedSession(queryClient)
+    return { replace, post, queryClient, channel: channels[0]!, ...actions }
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('hides the page, clears the data of this tab, and goes to the signed-out page', async () => {
+    const { replace, queryClient, channel } = await guardedActions()
+    queryClient.setQueryData(['private'], 'words of this person')
+
+    channel.onmessage!()
+
+    expect(document.documentElement.style.opacity).toBe('0')
+    expect(queryClient.getQueryCache().getAll()).toHaveLength(0)
+    expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?signedOut=1')
+  })
+
+  it('tells the other tabs only when the Server answered, because a failed sign-out leaves the session alive', async () => {
+    const { logout, post, channel } = await guardedActions()
+    post.mockRejectedValueOnce(new Error('no answer'))
+
+    await expect(logout()).rejects.toThrow('no answer')
+    expect(channel.postMessage).not.toHaveBeenCalled()
+
+    await logout()
+    expect(channel.postMessage).toHaveBeenCalledOnce()
   })
 })
