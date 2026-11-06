@@ -270,6 +270,32 @@ public partial class NoProviderBootTests
     }
 
     [Test]
+    public async Task each_answer_of_the_spa_has_the_content_security_policy_and_a_server_path_does_not()
+    {
+        // Arrange
+        await using var server = await ServerProcess.StartAsync();
+
+        // Act
+        using var root = await GetAsync(server, "/", "text/html");
+        using var deepLink = await GetAsync(server, "/users/1", "text/html");
+        using var file = await GetAsync(server, "/index.html", "text/html");
+        using var head = await server.Client.SendAsync(new HttpRequestMessage(HttpMethod.Head, "/about"));
+        using var health = await GetAsync(server, "/health", null);
+
+        // Assert
+        foreach (var answer in new[] { root, deepLink, file, head })
+        {
+            answer.StatusCode.ShouldBe(HttpStatusCode.OK);
+            var policy = answer.Headers.GetValues("Content-Security-Policy").ShouldHaveSingleItem();
+            policy.ShouldContain("frame-ancestors 'none'");
+            policy.ShouldContain("script-src 'self'");
+            policy.ShouldNotContain("unsafe");
+        }
+
+        health.Headers.Contains("Content-Security-Policy").ShouldBeFalse();
+    }
+
+    [Test]
     public async Task a_path_of_the_server_never_gets_the_spa()
     {
         // Arrange
