@@ -490,9 +490,9 @@ test.describe('the tags of an entry', () => {
 
     await unsent.logOut()
 
-    await expect(unsent.at.logoutDialog).toContainText('change of your tags', { timeout: 10_000 })
+    await expect(unsent.at.tagsLogoutDialog).toBeVisible({ timeout: 10_000 })
     await unsent.answerTheLogoutDialog('Stay signed in')
-    await expect(unsent.at.logoutDialog).toHaveCount(0)
+    await expect(unsent.at.tagsLogoutDialog).toHaveCount(0)
     expect(api.all('post', '/auth/logout')).toHaveLength(0)
   })
 

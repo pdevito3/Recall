@@ -80,6 +80,7 @@ export const unsent = (page: Page) => ({
   copyRefused: page.getByRole('alert', { name: 'Words not saved' }).getByRole('button', { name: 'Copy words' }),
   discardRefused: page.getByRole('alert', { name: 'Words not saved' }).getByRole('button', { name: 'Discard' }),
   logoutDialog: page.getByRole('alertdialog', { name: 'Some of your words did not reach the server' }),
+  tagsLogoutDialog: page.getByRole('alertdialog', { name: 'A change of your tags did not reach the server' }),
   logoutChoice: (name: string) => page.getByRole('button', { name }),
   userMenu: page.getByRole('button', { name: /^User menu for/ }),
   logout: page.getByRole('menuitem', { name: 'Logout' }),
