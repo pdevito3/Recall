@@ -68,6 +68,103 @@ public class ProviderLogoutTests
     }
 
     [Test]
+    [Arguments(null)]
+    [Arguments("rcl_ck_dead")]
+    public async Task a_browser_with_no_session_to_find_goes_through_the_logout_of_the_only_provider(string? cookie)
+    {
+        // Arrange
+        using var browser = await SignedInBrowserAsync(AuthHosts.Open);
+        browser.DropCookie(browser.SessionCookieName);
+        if (cookie is not null)
+            browser.SetCookie(browser.SessionCookieName, cookie);
+
+        // Act
+        var logout = await LogoutAsync(browser);
+        var page = await browser.GetAsync(SignedOutPage);
+        var plainVisit = await browser.GetAsync("/auth/login?returnUrl=%2Fentries");
+
+        // Assert
+        logout.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await ProviderLogoutUrlOf(logout)).ShouldStartWith(ProviderLogoutUrlBeforeItsState);
+        (await page.Content.ReadAsStringAsync()).ShouldContain("<h1>You are signed out</h1>");
+        plainVisit.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Test]
+    public async Task a_logout_with_the_header_and_a_token_of_a_phone_is_not_a_browser_logout()
+    {
+        // Arrange
+        using var phone = new AuthBrowser(AuthHosts.Open);
+        var tokens = await phone.LoginNativeAsync($"subject-{Guid.NewGuid():N}");
+        var linesBefore = phone.SetCookieLines.Count;
+
+        // Act
+        var byBearer = await phone.PostFormAsync("/auth/logout", [], csrf: true, authorization: $"Bearer {tokens.AccessToken}");
+        var byRefresh = await phone.PostFormAsync("/auth/logout", [("refresh_token", tokens.RefreshToken)], csrf: true);
+
+        // Assert
+        byBearer.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        byRefresh.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        phone.SetCookieLines.Skip(linesBefore).ShouldNotContain(line => line.StartsWith("recall_signed_out=", StringComparison.Ordinal));
+    }
+
+    [Test]
+    [Arguments(null)]
+    [Arguments("rcl_ck_dead")]
+    public async Task with_two_providers_a_logout_that_cannot_name_one_says_signed_out_and_starts_nothing(string? cookie)
+    {
+        // Arrange
+        using var browser = new AuthBrowser(AuthHosts.TwoProviders);
+        if (cookie is not null)
+            browser.SetCookie(browser.SessionCookieName, cookie);
+
+        // Act
+        var logout = await LogoutAsync(browser);
+        var mark = browser.SetCookieLines.Last();
+        var page = await browser.GetAsync(SignedOutPage);
+
+        // Assert
+        logout.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        mark.ShouldStartWith("recall_signed_out=1");
+        ShouldLiveFor(mark, 60);
+        var html = await page.Content.ReadAsStringAsync();
+        html.ShouldContain("<h1>You are signed out</h1>");
+        html.ShouldNotContain("Sign out of");
+        html.ShouldContain("/auth/oidc/stub/start?client=web");
+        html.ShouldContain("/auth/oidc/other/start?client=web");
+    }
+
+    [Test]
+    public async Task with_two_providers_a_logout_names_only_the_provider_of_the_session_and_the_person_chooses_the_next_sign_in()
+    {
+        // Arrange
+        using var browser = new AuthBrowser(AuthHosts.TwoProviders);
+        await browser.LoginWebAtOtherProviderAsync($"subject-{Guid.NewGuid():N}");
+
+        // Act
+        var logout = await LogoutAsync(browser);
+        var plainVisit = await browser.GetAsync("/auth/login?returnUrl=%2Fentries");
+        var url = (await ProviderLogoutUrlOf(logout))!;
+        var back = await browser.GetAsync($"/auth/signed-out?state={url[(url.IndexOf("&state=", StringComparison.Ordinal) + "&state=".Length)..]}");
+        var afterReturn = await browser.GetAsync(SignedOutPage);
+
+        // Assert
+        url.ShouldStartWith($"{AuthFlowFactory.OtherIssuer}/logout?");
+        plainVisit.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var html = await plainVisit.Content.ReadAsStringAsync();
+        html.ShouldContain("Other did not send you back to Recall");
+        html.ShouldContain("Sign out of Other");
+        html.ShouldNotContain("Sign out of Stub");
+        html.ShouldContain("/auth/oidc/stub/start?client=web");
+        html.ShouldContain("/auth/oidc/other/start?client=web");
+        back.Headers.Location!.OriginalString.ShouldBe(SignedOutPage);
+        var htmlAfterReturn = await afterReturn.Content.ReadAsStringAsync();
+        htmlAfterReturn.ShouldContain("<h1>You are signed out</h1>");
+        htmlAfterReturn.ShouldNotContain("did not send you back");
+        htmlAfterReturn.ShouldContain("/auth/oidc/other/start?client=web");
+    }
+
+    [Test]
     public async Task a_native_logout_answers_no_content_and_names_no_provider()
     {
         // Arrange
@@ -117,7 +214,7 @@ public class ProviderLogoutTests
             page.StatusCode.ShouldBe(HttpStatusCode.OK);
             var html = await page.Content.ReadAsStringAsync();
             html.ShouldContain("<h1>You are signed out</h1>");
-            html.ShouldContain("did not confirm the sign-out");
+            html.ShouldContain("did not send you back to Recall");
             html.ShouldContain($"<a href=\"{WebUtility.HtmlEncode(providerLogoutUrl)}\">Sign out of Stub</a>");
         }
     }
@@ -142,7 +239,7 @@ public class ProviderLogoutTests
         var html = await page.Content.ReadAsStringAsync();
         html.ShouldContain("<h1>You are signed out</h1>");
         html.ShouldNotContain("Your session at");
-        html.ShouldNotContain("did not confirm the sign-out");
+        html.ShouldNotContain("did not send you back to Recall");
         html.ShouldNotContain("Sign out of");
         html.ShouldContain("/auth/oidc/stub/start?client=web");
     }
@@ -178,7 +275,7 @@ public class ProviderLogoutTests
         // Assert
         back.Headers.Location!.OriginalString.ShouldBe(SignedOutPage);
         plainVisit.StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await plainVisit.Content.ReadAsStringAsync()).ShouldContain("did not confirm the sign-out");
+        (await plainVisit.Content.ReadAsStringAsync()).ShouldContain("did not send you back to Recall");
     }
 
     [Test]

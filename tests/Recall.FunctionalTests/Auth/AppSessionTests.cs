@@ -275,7 +275,7 @@ public class AppSessionTests
         var page = await browser.GetAsync("/auth/login?signedOut=1");
 
         // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
         browser.SessionCookie.ShouldBeNull();
         (await page.Content.ReadAsStringAsync()).ShouldContain("You are signed out");
     }
