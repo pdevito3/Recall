@@ -8,6 +8,7 @@
   "submitSelector": "role=button[name=\"Log in\" s]",
   "twoStepLogin": true,
   "secondStepSubmitSelector": "role=button[name=\"Continue\" s]",
+  "logoutStaysAtProvider": true,
   "capabilities": {
     "revocation": true,
     "issuerParameter": false,

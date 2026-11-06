@@ -258,13 +258,14 @@
 }
 
 /*
- * On a phone, the buttons of a bottom sheet or drawer are where the toasts show. While one is open, the toasts show
- * at the top, newest nearest the top edge, and enter from above.
+ * On a phone, the buttons of a bottom sheet or drawer, and the user menu of the open sidebar, are where the toasts
+ * show. While one is open, the toasts show at the top, newest nearest the top edge, and enter from above.
  */
 @media (width < 48rem) {
   :root:has(
       :is([data-slot="sheet-content"], [data-slot="responsive-dialog-content"])[data-side="bottom"],
-      [data-slot="drawer-content"][data-position="bottom"]
+      [data-slot="drawer-content"][data-position="bottom"],
+      [data-slot="sidebar"][data-mobile="true"]
     ) {
     /* Before any toast shows, keep room for one line, so that a short toast does not move the sheet. */
     --toast-reserve: calc(1rem + max(3rem, var(--toast-region-height, 0px)) + 0.5rem);

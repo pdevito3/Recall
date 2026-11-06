@@ -50,6 +50,9 @@
               "#{ENV.APP_FRONTEND_URL}/auth/oidc/callback",
               "#{ENV.APP_SERVER_URL}/auth/oidc/callback",
               "#{ENV.APP_SERVER_HTTP_URL}/auth/oidc/callback",
+              "#{ENV.APP_FRONTEND_URL}/auth/signed-out",
+              "#{ENV.APP_SERVER_URL}/auth/signed-out",
+              "#{ENV.APP_SERVER_HTTP_URL}/auth/signed-out",
               "#{ENV.APP_SERVER_URL}/swagger/oauth2-redirect.html",
               "#{ENV.APP_SERVER_HTTP_URL}/swagger/oauth2-redirect.html"
             ],

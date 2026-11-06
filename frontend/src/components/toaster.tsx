@@ -75,7 +75,7 @@ export function Toaster() {
   // Below 768px the region is centered and at most 500px wide, the width of a toast, so its focus ring fits the toast.
   // pointer-events-none lets a click beside or between the toasts reach the page. Each toast takes pointer events again,
   // so hover still pauses the timers.
-  // index.css moves the region to the top while a bottom sheet is open.
+  // index.css moves the region to the top while a bottom sheet or the sidebar of a phone is open.
   return (
     <ToastRegion
       queue={toastQueue}

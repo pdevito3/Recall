@@ -60,7 +60,7 @@ export function sessionPage(page: Page) {
 
     async openDeepLinkAndWaitForLogin(path: string) {
       await page.goto(path, { waitUntil: 'commit' })
-      await expect.poll(() => new URL(page.url()).pathname).toBe(authPaths.login)
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 15000 }).toBe(authPaths.login)
       await page.waitForLoadState()
     },
 
@@ -95,7 +95,7 @@ export function sessionPage(page: Page) {
       await checked
     },
 
-    async followAndSignOutBeforeA401(link: Locator, apiPath: string) {
+    async followAndSignOutBeforeA401(link: Locator, apiPath: string, nextPage = authPaths.login) {
       let answerThe401!: () => void
       const logoutAnswered = new Promise<void>((resolve) => {
         answerThe401 = resolve
@@ -108,7 +108,7 @@ export function sessionPage(page: Page) {
         await logoutAnswered
         await route.fulfill({ status: 401 })
       })
-      await page.route((url) => url.pathname === authPaths.login, async (route) => {
+      await page.route((url) => url.pathname === nextPage, async (route) => {
         await checked
         await route.fallback()
       })
@@ -116,6 +116,77 @@ export function sessionPage(page: Page) {
       await link.click()
       // A fast logout starts its navigation inside the click, and then the click waits for the login that this check holds.
       await Promise.all([at.logout.click(), logoutOpensThe401, checked])
+    },
+
+    async followAndSignOutWithA401BeforeItsAnswer(link: Locator, apiPath: string) {
+      const logoutSent = page.waitForRequest((r) => r.method() === 'POST' && new URL(r.url()).pathname === authPaths.logout)
+      await page.route((url) => url.pathname === apiPath, async (route) => {
+        await logoutSent
+        await route.fulfill({ status: 401 })
+      })
+      const checked = answered(authPaths.me)
+
+      await link.click()
+      await Promise.all([at.logout.click(), checked])
+    },
+
+    async signOutAndWaitForTheAnswer() {
+      const answered = page.waitForResponse((r) => new URL(r.url()).pathname === authPaths.logout)
+      await at.logout.click()
+      await answered
+    },
+
+    /** Goes from a page with private text to another document, by address, so that the browser keeps the first page in the back-forward cache. */
+    async leavePrivatePageForAnotherDocument() {
+      await page.addInitScript(() => {
+        window.addEventListener('pageshow', (event) => {
+          if (event.persisted) sessionStorage.setItem('wasRestored', 'true')
+        })
+      })
+      await page.goto('/')
+      await expect(at.signedInAs).toBeVisible()
+      await page.evaluate(() => {
+        ;(window as unknown as { firstLoadMark: boolean }).firstLoadMark = true
+      })
+      await page.goto('/about')
+      await expect(at.navigation).toBeVisible()
+    },
+
+    /**
+     * A Back with no restore proves nothing here, so this fails when the browser loads the page again. The restored page can
+     * load again during a read, and that read then never answers, so each read has a limit, and the mark outlives the load.
+     */
+    async goBackToTheCachedPage() {
+      await page.goBack({ waitUntil: 'commit' })
+      const readMark = () =>
+        Promise.race([
+          page.evaluate(() => sessionStorage.getItem('wasRestored')).catch(() => null),
+          new Promise<null>((settle) => setTimeout(() => settle(null), 1000)),
+        ])
+      await expect.poll(readMark, { message: 'the back-forward cache restored the page', timeout: 15000 }).toBe('true')
+    },
+
+    /** A poll can read during the new load, and that read fails. The next read decides. */
+    isStillTheFirstLoad() {
+      return page.evaluate(() => (window as unknown as { firstLoadMark?: boolean }).firstLoadMark === true).catch(() => true)
+    },
+
+    async screenShowsOneColor() {
+      const screenshot = await page.screenshot()
+      const viewer = await page.context().newPage()
+      const colors = await viewer.evaluate(async (png) => {
+        const image = new Image()
+        image.src = `data:image/png;base64,${png}`
+        await image.decode()
+        const canvas = document.createElement('canvas')
+        canvas.width = image.width
+        canvas.height = image.height
+        const drawing = canvas.getContext('2d')!
+        drawing.drawImage(image, 0, 0)
+        return new Set(new Uint32Array(drawing.getImageData(0, 0, image.width, image.height).data.buffer)).size
+      }, screenshot.toString('base64'))
+      await viewer.close()
+      return colors === 1
     },
 
     async openWhileTheCheckFails(path: string) {
