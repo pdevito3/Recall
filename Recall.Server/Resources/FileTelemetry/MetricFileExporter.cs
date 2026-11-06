@@ -44,20 +44,20 @@ public sealed class MetricFileExporter(JsonLinesFile file) : BaseExporter<Metric
                     json.WriteNumber("sum", point.GetSumLong());
                     break;
                 case MetricType.DoubleSum or MetricType.DoubleSumNonMonotonic:
-                    json.WriteNumber("sum", point.GetSumDouble());
+                    JsonLine.WriteDouble(json, "sum", point.GetSumDouble());
                     break;
                 case MetricType.LongGauge:
                     json.WriteNumber("value", point.GetGaugeLastValueLong());
                     break;
                 case MetricType.DoubleGauge:
-                    json.WriteNumber("value", point.GetGaugeLastValueDouble());
+                    JsonLine.WriteDouble(json, "value", point.GetGaugeLastValueDouble());
                     break;
                 case MetricType.Histogram:
                     WriteHistogram(json, point);
                     break;
                 default:
                     json.WriteNumber("count", point.GetHistogramCount());
-                    json.WriteNumber("sum", point.GetHistogramSum());
+                    JsonLine.WriteDouble(json, "sum", point.GetHistogramSum());
                     break;
             }
         });
@@ -66,7 +66,7 @@ public sealed class MetricFileExporter(JsonLinesFile file) : BaseExporter<Metric
     private static void WriteHistogram(Utf8JsonWriter json, MetricPoint point)
     {
         json.WriteNumber("count", point.GetHistogramCount());
-        json.WriteNumber("sum", point.GetHistogramSum());
+        JsonLine.WriteDouble(json, "sum", point.GetHistogramSum());
         json.WriteStartObject("buckets");
         foreach (var bucket in point.GetHistogramBuckets())
         {

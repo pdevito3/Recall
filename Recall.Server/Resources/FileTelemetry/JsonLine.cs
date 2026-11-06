@@ -42,11 +42,20 @@ public static class JsonLine
                 json.WriteNumber(key, Convert.ToInt64(value, CultureInfo.InvariantCulture));
                 break;
             case double or float:
-                json.WriteNumber(key, Convert.ToDouble(value, CultureInfo.InvariantCulture));
+                WriteDouble(json, key, Convert.ToDouble(value, CultureInfo.InvariantCulture));
                 break;
             default:
                 json.WriteString(key, Convert.ToString(value, CultureInfo.InvariantCulture));
                 break;
         }
+    }
+
+    /// <summary>JSON has no NaN and no Infinity, and the writer throws on them. A throw on the thread of the span export ends the process.</summary>
+    public static void WriteDouble(Utf8JsonWriter json, string key, double value)
+    {
+        if (double.IsFinite(value))
+            json.WriteNumber(key, value);
+        else
+            json.WriteString(key, value.ToString(CultureInfo.InvariantCulture));
     }
 }

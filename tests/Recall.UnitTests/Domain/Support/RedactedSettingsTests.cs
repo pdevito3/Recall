@@ -23,7 +23,7 @@ public class RedactedSettingsTests
             Setting("Serilog:WriteTo:0:Args:apiKey", "the-secret"),
             Setting("Kestrel:Endpoints:http:Url", "http://+:8080"),
             Setting("Kestrel:Endpoints:http:Certificate:Password", "the-secret"),
-            Setting("SOME_TOKEN", "the-secret"),
+            Setting("Mcp:PublicOrigin", "https://recall.example"),
         ];
 
         // Act
@@ -40,8 +40,27 @@ public class RedactedSettingsTests
         shown["Auth:ProviderApiKey"].ShouldBe(RedactedSettings.Hidden);
         shown["Serilog:WriteTo:0:Args:apiKey"].ShouldBe(RedactedSettings.Hidden);
         shown["Kestrel:Endpoints:http:Certificate:Password"].ShouldBe(RedactedSettings.Hidden);
-        shown["SOME_TOKEN"].ShouldBe(RedactedSettings.Hidden);
+        shown["Mcp:PublicOrigin"].ShouldBe(RedactedSettings.Hidden);
         shown.Values.ShouldNotContain("the-secret");
+    }
+
+    [Test]
+    public void a_variable_of_the_host_does_not_show_its_name()
+    {
+        // Arrange
+        KeyValuePair<string, string?>[] settings =
+        [
+            Setting("CLAUDE_CODE_MESSAGING_TOKEN", "the-secret"),
+            Setting("PATH", "/usr/bin"),
+            Setting("AuthToken", "the-secret"),
+            Setting("Auth:ClientId", "recall"),
+        ];
+
+        // Act
+        var shown = RedactedSettings.Of(settings);
+
+        // Assert
+        shown.Keys.ShouldBe(["Auth:ClientId"]);
     }
 
     [Test]

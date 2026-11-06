@@ -38,6 +38,7 @@ The server writes the cause to its console, and not to a file, because the data 
 | The line | The cause | What to do |
 |---|---|---|
 | `The data directory <path> is not writable...` | The account of the server cannot write to the data folder, or the volume is read-only. | Mount the volume for writing, and give its owner to the account of the server. Then start the server again. |
+| `The setting FileTelemetry:<name> is <value>, and its least value is <least>...` | A limit of the log and telemetry files is too small. | Correct the setting. Then start the server again. |
 
 ## The file store hangs
 
@@ -47,14 +48,23 @@ Check the disk. When the write finishes, the server logs `takes writes again`, a
 
 ## The disk is full
 
-The server keeps its logs and its telemetry to about 450 MiB, and a full disk does not stop a request by itself. The database and the file store still need room, so a save fails with an error at the caller. Do these steps:
+The server keeps its logs and its telemetry to about 460 MiB, and a full disk does not stop a request by itself. The database and the file store still need room, so a save fails with an error at the caller. Do these steps:
 
 1. Run `df -h /data` and `du -sh /data/*` to find what holds the space.
 2. Make room on the volume. You can delete old files in `/data/logs` and `/data/telemetry` while the server runs. Do not delete `recall.db`, its `-wal` file, or the `keys` folder.
 
+## The log files stop
+
+When a log or telemetry file cannot take a line, the console shows a warning with the text `A file sink failed`, and with the fields `File` and `Cause`. It shows one warning for each file in each 30 minutes. The console keeps each log during the fault, so `docker compose logs` stays complete, if Docker keeps its own logs on a volume with room. The file loses the lines of the fault.
+
+- A write that fails on a full disk stops when the disk has room again. The next line goes to the file.
+- A file that cannot open, for example at a roll or at the first line of a day, stays silent for up to 30 minutes from that failure. This is also true when the disk has room again before that time.
+
+To get the files back at once, start the server again. The server keeps each file that it wrote before the fault.
+
 ## Send a support bundle
 
-The support bundle is one zip with the log and telemetry files, the version, and the settings with the secrets hidden. It holds no journal text. Only the Owner can download it.
+The support bundle is one zip with the log and telemetry files, the version, and the settings with the secrets hidden. It holds no journal text. Only the Owner can download it. The Owner is the oldest linked Admin of the oldest live tenant. When that Admin loses the role, the next oldest linked Admin becomes the Owner.
 
 1. Sign in as the Owner.
 2. Open the **About** page.
@@ -64,9 +74,9 @@ The zip has these entries:
 
 | Entry | Content |
 |---|---|
-| `logs/` | Each log file |
-| `telemetry/` | Each trace file and metric file |
+| `logs/` | Each log file that holds a line |
+| `telemetry/` | Each trace file and metric file that holds a line |
 | `version.json` | The version, the runtime, the operating system, the environment, and each file or folder that the server could not read |
-| `settings.json` | The name of each setting. Only a value that cannot be a secret is shown, and each other value is `[redacted]` |
+| `settings.json` | The name of each setting that Recall reads. Only a value that cannot be a secret is shown, and each other value is `[redacted]` |
 
 Another Admin gets the message `Only the Owner of this install can download the support bundle.`

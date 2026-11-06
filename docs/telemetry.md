@@ -6,7 +6,16 @@ The server exports traces, metrics, and logs with OpenTelemetry. In development,
 
 A span, a log, a metric tag, and a telemetry file carry names, identifiers, and counts. They never carry user-entered content or personal data, such as names or email addresses. Journal text is the first example: Raw, Cleaned, a Revision, a Synopsis, a Summary, and the audio of a Session never reach a log, a span, or a support bundle. Every helper below takes its tags from the caller, so each call site must obey this rule.
 
-The rule also covers an exception. A client error can hold text from the caller in its message, so it never becomes a span event or a log with that message. Do not write a route or a query key that holds user text, because the request log and the span keep the path. They also keep the host and the scheme, because a reverse proxy fault shows there. Neither keeps the `User-Agent` header. A caller can put any text in the path, the host, the scheme, or a query key, and the server keeps that text. Journal text does not go there, because no client of Recall sends it there. `SupportBundleTests` sends a marker through the HTTP entrypoints, and searches the whole bundle and the captured logs for it. The test does not cover an MCP tool. When you add an entrypoint that takes user text, add it to that test.
+The rule also covers an exception. A client error can hold text from the caller in its message, so it never becomes a span event or a log with that message. Do not write a route or a query key that holds user text, because the request log and the span keep the path. They also keep the host and the scheme, because a reverse proxy fault shows there. Neither keeps the `User-Agent` header. A caller can put any text in the path, the host, the scheme, or a query key, and the server keeps that text. Journal text does not go there, because no client of Recall sends it there. `SupportBundleTests` sends a marker through the HTTP entrypoints and through each text argument of each MCP tool that the Owner sees, and searches the whole bundle and the captured logs for it. The test finds the tools with `tools/list`, so a new MCP tool that the Owner sees is in the test at once. The test does not reach `add_tenant`, because the Owner does not see it. An argument with a name that ends in `id` gets a real tenant id and no marker, so do not give a text argument such a name. When you add an HTTP entrypoint that takes user text, add it to that test.
+
+An MCP call also keeps some fields of the protocol, and a caller can put any text in these fields. No client of Recall sends journal text there, so they stay:
+
+| Field | Where the server keeps it |
+|---|---|
+| The `name` and `version` of `clientInfo` | `EndpointName` in the logs of the MCP SDK |
+| A method that does not exist | `Method` in the logs of the MCP SDK |
+| A tool name that does not exist | `gen_ai.tool.name` on the span of the HTTP request |
+| The `id` argument of `get_tenant` and `update_tenant` | `app.tenant_id` on the span of `GetTenant.Query` and `UpdateTenant.Command` |
 
 `SqlSpanInterceptor` makes a span for each SQL command of the Server, and it copies the SQL text into `db.query.text`. Thus a value from the caller must go to the database as a parameter, never as a literal in the SQL text. `CustomQueryKitConfiguration` sets `ParameterizeFilterValues`, so the SQL text of a list query has a parameter name in place of each filter value. The value of a QueryKit `CustomOperation` still goes into the SQL text as a literal.
 
@@ -233,15 +242,21 @@ A person who runs Recall on a NAS has no log service, so the server keeps its ow
 |---|---|---|---|---|
 | `logs/recall-<date>.jsonl` | One log in each line, in the Serilog compact JSON format, with the trace id in `@tr` and the span id in `@sp` | 10 MiB | 20 | 14 |
 | `telemetry/traces-<date>.jsonl` | One span in each line | 10 MiB | 20 | 14 |
-| `telemetry/metrics-<date>.jsonl` | One point of a metric in each line, each 60 seconds | 10 MiB | 5 | 14 |
+| `telemetry/metrics-<date>.jsonl` | One point of a metric in each line, each hour | 4 MiB | 15 | 14 |
 
-These limits hold about 450 MiB. The section `FileTelemetry` in `appsettings.json` sets them. Set `FileTelemetry__Logs__FilesKept`, for example, to change one in an environment variable. A value of 0 for `FileSizeBytes`, `FilesKept`, or `MetricExportSeconds` stops the server at startup, and a `DaysKept` of 0 does not. A file passes its size limit by at most one line, and then the next line opens a new file with a number after the date. The age limit acts when a file opens, so at a start, at the first line of each day, and when a file reaches its size limit.
+The most that these limits hold is about 460 MiB: 200 MiB of logs, 200 MiB of traces, and 60 MiB of metrics. The section `FileTelemetry` in `appsettings.json` sets them. Set `FileTelemetry__Logs__FilesKept`, for example, to change one in an environment variable. A file passes its size limit by at most one line, and then the next line opens a new file with a number after the date.
 
-The server makes these folders with owner-only modes. A logging call and a span give their data to a queue and return, so a slow or full disk does not hold a request. When the disk cannot take a line, the line goes. The console and OTLP do not change, and the two OTLP exports run beside the files.
+A `FileSizeBytes`, `FilesKept`, or `MetricExportSeconds` under 1, or a `DaysKept` under 0, stops the server at startup with one line that names the setting. A `DaysKept` of 0 keeps only the file that just opened, so each open removes each other file of that signal. The age limit acts when a file opens, so at a start, at the first line of each day, and when a file reaches its size limit.
+
+`Days kept` is the most that a file stays, and the number of files can remove a file sooner. A request costs about 10.8 KB of traces, so 20 files hold about 19,000 requests. A request costs about 590 bytes of logs, so 20 files hold about 350,000 requests. A flood of requests thus pushes out old logs and old traces, and 14 days holds only on a quiet server. The metrics do hold 14 days. Each day opens a new file, and 15 files hold each file of 14 days. One export is about 9 KB on an idle server and about 15 KB after traffic, so one day of exports uses about 360 KB of the 4 MiB of its file.
+
+A disk can sleep on an idle server. In 10 minutes with no request, one write reached a file: SQLite moved its write-ahead log into `recall.db` (196,608 bytes) when its last connection closed. An export each 60 seconds gave 10 more writes (91,494 bytes) in the same time, so `FileTelemetry:MetricExportSeconds` is 3600. The server exports metrics each hour, at a stop, and for a support bundle. A crash thus loses at most one hour of metric points. A probe of `/alive` writes to no file. A probe of `/health` proves that the file store takes a write, at most once in 30 seconds, so a host with a disk that must sleep probes `/alive`.
+
+The server makes these folders with owner-only modes. A logging call and a span give their data to a queue and return, so a slow or full disk does not hold a request. When the disk cannot take a line, or when the queue of 10,000 logs is full, the line goes, and the console shows one warning for each file in each 30 minutes. See [troubleshooting.md](troubleshooting.md#the-log-files-stop). The console and OTLP do not change, and the two OTLP exports run beside the files.
 
 No package fits these files, so `SpanFileExporter` and `MetricFileExporter` are ours. Each writes one JSON line through `JsonLinesFile`, and Serilog.Sinks.File does the rotation.
 
-The [support bundle](troubleshooting.md#send-a-support-bundle) gives these files to an Owner in one zip. Its `settings.json` shows each setting name and hides each value unless `RedactedSettings` lists the setting. A new setting thus starts hidden.
+The [support bundle](troubleshooting.md#send-a-support-bundle) gives these files to the Owner in one zip. The Owner is the oldest linked Admin of the oldest live tenant. When that Admin loses the role, the next oldest linked Admin becomes the Owner, and the former Owner gets a refusal. Its `settings.json` shows only the sections that `RedactedSettings` names as sections that Recall reads, so a variable of the host stays out. It hides each value unless `RedactedSettings` lists the setting. A new setting thus starts hidden.
 
 ## Background jobs
 

@@ -10,6 +10,7 @@ using Recall.FunctionalTests.Auth;
 using Recall.Server.Auth.Entities;
 using Recall.Server.Domain.Support;
 using Recall.Server.Domain.Support.Features;
+using Recall.Server.Resources.Entrypoints;
 using Shouldly;
 using TestUtilities;
 
@@ -47,6 +48,7 @@ public class SupportBundleTests
         var response = await browser.GetAsync($"/{ApiRoutes.SupportBundle}", csrf: true);
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         response.Content.Headers.ContentType?.MediaType.ShouldBe("application/zip");
+        response.Headers.CacheControl.ShouldNotBeNull().NoStore.ShouldBeTrue();
         await using var zip = new ZipArchive(await response.Content.ReadAsStreamAsync(), ZipArchiveMode.Read);
         var entries = new Dictionary<string, string>();
         foreach (var entry in zip.Entries)
@@ -57,6 +59,52 @@ public class SupportBundleTests
         }
 
         return entries;
+    }
+
+    private static async Task<JsonElement> McpResultAsync(AuthBrowser browser, string method, object parameters)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, EntrypointRegistration.McpPath)
+        {
+            Content = JsonContent.Create(new { jsonrpc = "2.0", id = 1, method, @params = parameters }),
+        };
+        request.Headers.Add("X-CSRF", "1");
+        request.Headers.Accept.ParseAdd("application/json");
+        request.Headers.Accept.ParseAdd("text/event-stream");
+        using var response = await browser.SendAsync(request);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var data = (await response.Content.ReadAsStringAsync()).Split('\n').Single(line => line.StartsWith("data: ", StringComparison.Ordinal))["data: ".Length..];
+        return JsonDocument.Parse(data).RootElement.GetProperty("result").Clone();
+    }
+
+    /// <summary>The schema of each tool gives its arguments, so a new tool gets the marker in each of its text arguments.</summary>
+    private static async Task<int> CallEachMcpToolAsync(AuthBrowser browser, string marker, string tenantId)
+    {
+        var tools = (await McpResultAsync(browser, "tools/list", new { })).GetProperty("tools").EnumerateArray().ToList();
+        foreach (var tool in tools)
+            await McpResultAsync(browser, "tools/call", new { name = tool.GetProperty("name").GetString(), arguments = McpArguments(tool.GetProperty("inputSchema"), marker, tenantId) });
+
+        return tools.Count;
+    }
+
+    private static Dictionary<string, object?> McpArguments(JsonElement schema, string marker, string tenantId) =>
+        schema.TryGetProperty("properties", out var properties)
+            ? properties.EnumerateObject().ToDictionary(item => item.Name, item => McpArgument(item.Name, item.Value, marker, tenantId))
+            : [];
+
+    private static object? McpArgument(string name, JsonElement schema, string marker, string tenantId)
+    {
+        var type = schema.TryGetProperty("type", out var property) && property.ValueKind == JsonValueKind.Array
+            ? property.EnumerateArray().First(item => item.GetString() != "null").GetString()
+            : property.ValueKind == JsonValueKind.String ? property.GetString() : null;
+        return type switch
+        {
+            "integer" or "number" => 1,
+            "boolean" => true,
+            "array" => new[] { McpArgument(name, schema.GetProperty("items"), marker, tenantId) },
+            "object" => McpArguments(schema, marker, tenantId),
+            // An ID is a protocol field that may reach a span. See the privacy rule in docs/telemetry.md.
+            _ => name.Equals("id", StringComparison.OrdinalIgnoreCase) || name.EndsWith("Id", StringComparison.Ordinal) ? tenantId : marker,
+        };
     }
 
     [Test]
@@ -103,6 +151,32 @@ public class SupportBundleTests
     }
 
     [Test]
+    public async Task a_demoted_owner_gets_a_403_and_the_next_oldest_admin_becomes_the_owner()
+    {
+        // Arrange
+        var host = AuthHosts.OwnerDemotion;
+        using var owner = new AuthBrowser(host);
+        await owner.LoginWebAsync("demoted-owner");
+        using var next = new AuthBrowser(host);
+        await next.LoginWebAsync("next-admin");
+        using var later = new AuthBrowser(host);
+        await later.LoginWebAsync("later-admin");
+        var ids = await host.WithDatabaseAsync(database => database.Set<ExternalLogin>().IgnoreQueryFilters().ToDictionaryAsync(login => login.Subject, login => login.UserId));
+        (await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Users.UpdateRole(ids["next-admin"]), new { role = "Admin" })).IsSuccessStatusCode.ShouldBeTrue();
+        (await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Users.UpdateRole(ids["later-admin"]), new { role = "Admin" })).IsSuccessStatusCode.ShouldBeTrue();
+        (await owner.GetAsync($"/{ApiRoutes.SupportBundle}", csrf: true)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Act
+        var demoted = await SendJsonAsync(next, HttpMethod.Put, ApiRoutes.Users.UpdateRole(ids["demoted-owner"]), new { role = "User" });
+
+        // Assert
+        demoted.IsSuccessStatusCode.ShouldBeTrue(await demoted.Content.ReadAsStringAsync());
+        (await owner.GetAsync($"/{ApiRoutes.SupportBundle}", csrf: true)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await next.GetAsync($"/{ApiRoutes.SupportBundle}", csrf: true)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await later.GetAsync($"/{ApiRoutes.SupportBundle}", csrf: true)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Test]
     public async Task text_from_a_caller_reaches_no_log_no_span_and_no_file_of_the_bundle()
     {
         // Arrange
@@ -124,12 +198,15 @@ public class SupportBundleTests
         using var withAgent = await owner.SendAsync(requestWithAgent);
         using var badBody = await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Users.Put(ownerId), new { firstName = new string('x', 5000) + marker, username = marker, email = marker, version });
         using var rename = await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Users.Put(ownerId), new { firstName = marker, lastName = marker, username = marker, email = $"{marker}@example.com", version });
+        var tenantId = await Host.WithDatabaseAsync(database => database.Users.IgnoreQueryFilters().Where(user => user.Id == ownerId).Select(user => user.TenantId).SingleAsync());
+        var toolsCalled = await CallEachMcpToolAsync(owner, marker, tenantId!);
         var entries = await EntriesOfBundleAsync(owner);
 
         // Assert
         badSort.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await badSort.Content.ReadAsStringAsync()).ShouldContain(marker);
         rename.IsSuccessStatusCode.ShouldBeTrue(await rename.Content.ReadAsStringAsync());
+        toolsCalled.ShouldBeGreaterThan(0);
         badFilter.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await badFilter.Content.ReadAsStringAsync());
         badBody.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity, await badBody.Content.ReadAsStringAsync());
         filter.StatusCode.ShouldBe(HttpStatusCode.OK, await filter.Content.ReadAsStringAsync());

@@ -29,6 +29,8 @@ public sealed class GetSupportBundleEndpoint : IEndpoint
         // The stream of a zip entry has no DisposeAsync, so its close writes synchronously
         httpContext.Features.GetRequiredFeature<IHttpBodyControlFeature>().AllowSynchronousIO = true;
 
+        httpContext.Response.Headers.CacheControl = "no-store";
+
         return TypedResults.Stream(output => bundle.WriteToAsync(output, cancellationToken), ZipContentType, bundle.FileName);
     }
 }
