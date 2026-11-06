@@ -68,7 +68,7 @@ After you see your journal in the folder, remove the old volume with `docker vol
 
 Do not set `PUID` or `PGID` with the Docker volume. The volume belongs to user `1654`, so another user cannot write to it. The Server then cannot start, and the log says `The data directory /data is not writable`.
 
-A value in your shell beats the same name in `.env`. If your shell exports `PUID`, for example from a profile, Compose uses that value. To use the value of `.env`, run `unset PUID PGID`, and run `docker compose up -d` again.
+A value in your shell beats the same name in `.env`. If your shell exports `PUID`, Compose uses that value. To use the value of `.env`, run `unset PUID PGID`, and run `docker compose up -d` again. If a shell profile exports these names, also remove them from the profile, because the next login sets them again.
 
 ## Connect a login provider
 
@@ -140,7 +140,7 @@ Port 8080 stays open on your LAN. To close it, add `RECALL_PORT=127.0.0.1:8080` 
    RECALL_TLS_ORIGIN=https://recall.example.com
    ```
 
-   **Keep `COMPOSE_FILE` in `.env`.** It makes each `docker compose` command in this doc use both files. So `up`, `down`, `stop`, and `start` also cover Caddy, and the plain HTTP port stays closed. With no `COMPOSE_FILE`, the next `docker compose up -d` makes `recall` again with port 8080 open.
+   **Keep `COMPOSE_FILE` in `.env`, and run each `docker compose` command in the Recall folder.** There, `COMPOSE_FILE` makes each command use both files. So `up`, `down`, `stop`, and `start` also cover Caddy, and the plain HTTP port stays closed. With no `COMPOSE_FILE`, or from a subfolder, where Compose ignores it, `docker compose up -d` makes `recall` again with port 8080 open.
 
 2. Add `https://recall.example.com/auth/oidc/callback` as a redirect URI at the provider.
 3. Start both containers:
@@ -153,7 +153,7 @@ If Compose stops with an error about the `!reset` tag in `compose.tls.yaml`, upd
 
 To stop using Caddy, run `docker compose down`, and then remove `COMPOSE_FILE` from `.env`.
 
-If another app has port 443, put the port in the address and set `RECALL_TLS_PORT` to the same port. For example, `RECALL_TLS_ORIGIN=https://recall.example.com:8443` and `RECALL_TLS_PORT=8443`. If another app has port 80, set `RECALL_TLS_HTTP_PORT`. A certificate still needs port 80 or port 443 open to the internet, so a port that the internet cannot reach gives no certificate.
+If another app has port 443, put the port in the address and set `RECALL_TLS_PORT` to the same port. For example, `RECALL_TLS_ORIGIN=https://recall.example.com:8443` and `RECALL_TLS_PORT=8443`. If another app has port 80, set `RECALL_TLS_HTTP_PORT`. If you move a port, the challenge still comes to port 80 or port 443 of the internet, so forward one of them from your router to the port of Caddy.
 
 ### Another proxy
 
@@ -183,13 +183,13 @@ docker compose exec recall /app/healthcheck.sh
 
 It prints the answer of `/health`. `Healthy` passes. `Degraded` means that the file store cannot take a write, and it fails. `Unhealthy` and `No answer from /health` also fail. A sleeping disk can give a slow answer, so the probe asks up to four times, 10 seconds apart, before it fails.
 
-**The status that `docker compose ps` shows can be up to one hour old.** It is the result of the last probe, and this command does not change it. After one failed probe, the status stays `unhealthy` until the next probe passes, up to one hour after you correct the cause. Run the command above to see the state now.
+**The status that `docker compose ps` shows can be as old as the probe interval, which is one hour by default.** It is the result of the last probe, and this command does not change it. After one failed probe, the status stays `unhealthy` until the next probe passes, up to one interval after you correct the cause. Run the command above to see the state now.
 
-Docker runs the probe each 5 seconds during the first 10 minutes, until a probe passes, and a failed probe does not count in that time. So a slow start shows `starting` and then `healthy`. After 10 minutes, a server that has not passed shows `starting` until the next probe, up to one hour later. Docker Engine 25 and later do this. An older engine shows `starting` until the first hour ends.
+During the first 10 minutes, Docker runs the probe again 5 seconds after the last probe ends, until a probe passes, and a failed probe does not count in that time. So a slow start shows `starting` and then `healthy`. After 10 minutes, a server that has not passed shows `starting` until the next probe, up to one interval later. Docker Engine 25 and later do this. An older engine shows `starting` until the first interval ends.
 
 A probe writes to `/data/files` and flushes it to the disk, at most one time in 30 seconds. In a test of 180 seconds on an idle server, `/data/files` changed at each probe with a probe each 30 seconds. So a short interval keeps a NAS disk awake. A probe each hour lets a disk with a shorter sleep timer sleep between two probes, and the probe wakes it one time each hour. To change this, set `RECALL_PROBE_INTERVAL` in `.env`, for example `RECALL_PROBE_INTERVAL=6h`.
 
-Other writes also wake a disk. In a test of 10 idle minutes after a start, with the default interval, one SQLite WAL checkpoint wrote to the database about 6 minutes after the start, and no other path in `/data` changed. A cleanup of old logins can also write to the database one time each hour.
+Other writes also wake a disk. In two tests of 10 idle minutes after a start, with the default interval, one SQLite WAL checkpoint wrote to the database 5 to 6 minutes after the start, and no other path in `/data` changed. A cleanup of old logins can also write to the database one time each hour.
 
 ## Back up and restore
 
@@ -246,8 +246,8 @@ After the first release, you can use the published image in place of a build. Ru
 | `docker compose ps` shows `Restarting`, and `docker compose logs` says `is on the mount` | `/data` is on a file system that the Server refuses. See [Keep your data](#keep-your-data) | Move `/data` to a local disk |
 | `docker compose ps` shows `Restarting`, and the log says `is not writable` | The user of the container cannot write to `/data` | With a folder, set `PUID` and `PGID` to its owner. With the Docker volume, remove `PUID` and `PGID` |
 | `docker compose ps` shows `Restarting`, and the log names `Auth:Providers:0` | A setting of the provider is missing or wrong | Correct the value in `.env`, and run `docker compose up -d` |
-| `docker compose ps` shows `unhealthy` | The last probe failed. This status can be up to one hour old | Run `docker compose exec recall /app/healthcheck.sh`. If it prints `Healthy`, the cause is gone, and the status changes at the next probe. If it prints another answer, read `docker compose logs recall` |
+| `docker compose ps` shows `unhealthy` | The last probe failed. This status can be as old as the probe interval | Run `docker compose exec recall /app/healthcheck.sh`. If it prints `Healthy`, the cause is gone, and the status changes at the next probe of Docker. If it prints another answer, read `docker compose logs recall` |
 | The probe prints `Degraded` | The database answers, but the file store cannot take a write | See the next row |
-| The log says `The file store root ... cannot take a write` | The Server cannot write to `/data/files`. The line gives the cause, for example a full disk, a disk mounted read-only, or the wrong owner. A new file fails until you correct this | Correct the cause. The next probe finds the change, in up to 30 seconds, and no restart is necessary |
+| The log says `The file store root ... cannot take a write`, or `did not finish a write` | The Server cannot write to `/data/files`. The first line gives the cause, for example a full disk, a disk mounted read-only, or the wrong owner. The second line means that the disk can be hanging. A new file fails until you correct this | Correct the cause. No restart is necessary. The probe command finds the change in up to 30 seconds, and the status of `docker compose ps` changes at the next probe of Docker |
 | The provider says that the redirect URI is not valid | The callback URL of this address is not registered, or a proxy changed `Host` | Register the URL from `/auth/status`, and see [Another proxy](#another-proxy) |
 | The page says `This server does not accept new people` | The journal has an Owner, and signup is closed | See [First login and the Owner](authentication.md#first-login-and-the-owner) |

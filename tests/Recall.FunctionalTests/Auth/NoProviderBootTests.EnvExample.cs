@@ -39,9 +39,10 @@ public partial class NoProviderBootTests
     {
         // Arrange
         var turnedOn = ExampleLines()
-            .Where(line => line.StartsWith($"#{ProviderLinePrefix}", StringComparison.Ordinal))
+            .Where(line => line.StartsWith($"#{ProviderLinePrefix}", StringComparison.Ordinal) && !line.Contains("AllowHttp", StringComparison.Ordinal))
             .Select(line => line[1..]);
         var settings = Settings(turnedOn);
+        settings.Keys.Select(key => key[ProviderLinePrefix.Length..]).ShouldBe(["Id", "DisplayName", "Issuer", "ClientId", "ClientSecret"], ignoreOrder: true);
         if (filled.Split('=', 2) is [var name, var value])
             settings[$"{ProviderLinePrefix}{name}"] = value;
         await using var server = await ServerProcess.LaunchAsync(null, settings);

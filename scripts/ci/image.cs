@@ -24,7 +24,7 @@ var build = args switch
 
 // The .env and the shell of a person can name a real data folder, and this job writes to its folder.
 Environment.SetEnvironmentVariable("COMPOSE_DISABLE_ENV_FILE", "true");
-foreach (var setting in new[] { "COMPOSE_FILE", "RECALL_DATA", "PUID", "PGID" })
+foreach (var setting in new[] { "COMPOSE_FILE", "COMPOSE_ENV_FILES", "RECALL_DATA", "PUID", "PGID" })
     Environment.SetEnvironmentVariable(setting, null);
 
 var port = FreePort();
