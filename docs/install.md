@@ -153,7 +153,7 @@ If Compose stops with an error about the `!reset` tag in `compose.tls.yaml`, upd
 
 To stop using Caddy, run `docker compose down`, and then remove `COMPOSE_FILE` from `.env`.
 
-If another app has port 443, put the port in the address and set `RECALL_TLS_PORT` to the same port. For example, `RECALL_TLS_ORIGIN=https://recall.example.com:8443` and `RECALL_TLS_PORT=8443`. If another app has port 80, set `RECALL_TLS_HTTP_PORT`. If you move a port, the challenge still comes to port 80 or port 443 of the internet, so forward one of them from your router to the port of Caddy.
+If another app has port 443, put the port in the address and set `RECALL_TLS_PORT` to the same port. For example, `RECALL_TLS_ORIGIN=https://recall.example.com:8443` and `RECALL_TLS_PORT=8443`. If another app has port 80, set `RECALL_TLS_HTTP_PORT`. If you move both ports, the challenge still comes to port 80 or port 443 of the internet. So at your router, forward port 80 to `RECALL_TLS_HTTP_PORT`.
 
 ### Another proxy
 
@@ -247,7 +247,8 @@ After the first release, you can use the published image in place of a build. Ru
 | `docker compose ps` shows `Restarting`, and the log says `is not writable` | The user of the container cannot write to `/data` | With a folder, set `PUID` and `PGID` to its owner. With the Docker volume, remove `PUID` and `PGID` |
 | `docker compose ps` shows `Restarting`, and the log names `Auth:Providers:0` | A setting of the provider is missing or wrong | Correct the value in `.env`, and run `docker compose up -d` |
 | `docker compose ps` shows `unhealthy` | The last probe failed. This status can be as old as the probe interval | Run `docker compose exec recall /app/healthcheck.sh`. If it prints `Healthy`, the cause is gone, and the status changes at the next probe of Docker. If it prints another answer, read `docker compose logs recall` |
-| The probe prints `Degraded` | The database answers, but the file store cannot take a write | See the next row |
-| The log says `The file store root ... cannot take a write`, or `did not finish a write` | The Server cannot write to `/data/files`. The first line gives the cause, for example a full disk, a disk mounted read-only, or the wrong owner. The second line means that the disk can be hanging. A new file fails until you correct this | Correct the cause. No restart is necessary. The probe command finds the change in up to 30 seconds, and the status of `docker compose ps` changes at the next probe of Docker |
+| The probe prints `Degraded` | The database answers, but the file store cannot take a write | See the next two rows |
+| The log says `The file store root ... cannot take a write` | The Server cannot write to `/data/files`. The line gives the cause, for example a full disk, a disk mounted read-only, or the wrong owner. A new file fails until you correct this | Correct the cause. No restart is necessary. The probe command finds the change in up to 30 seconds, and the status of `docker compose ps` changes at the next probe of Docker |
+| The log says `The file store root ... did not finish a write` | A write to `/data/files` took more than 5 seconds. A sleeping disk can do this when it wakes | Run the probe command. If it prints `Healthy`, the disk was only slow, and you do not need to do anything. If it continues to print `Degraded`, examine the disk. If a write stays stuck, restart Recall after you correct the disk |
 | The provider says that the redirect URI is not valid | The callback URL of this address is not registered, or a proxy changed `Host` | Register the URL from `/auth/status`, and see [Another proxy](#another-proxy) |
 | The page says `This server does not accept new people` | The journal has an Owner, and signup is closed | See [First login and the Owner](authentication.md#first-login-and-the-owner) |
