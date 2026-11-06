@@ -200,14 +200,15 @@ A changed issuer, a new provider, a provider restored with a new `sub`, or a del
 
 The Server links that identity to the oldest live Admin of the oldest live tenant whose identifier is its own ID, gives that Admin each Admin permission back, logs a warning with the user ID and the issuer, and removes the file. If the tenant has no such Admin, the Server adds a new Admin. This also recovers an install where the delete of a tenant left only a tenant with no Admin.
 
-The claim cannot bring back a deleted tenant, so `DELETE /tenants/{id}` gives 409 for the last live tenant. Only a change outside the API can leave an install with no live tenant. In that state, each login gets `signup_closed` and the Server still removes the file. Restore the data directory from a backup.
+The claim cannot bring back a deleted tenant, so `DELETE /tenants/{id}` gives 409 for the last live tenant. Only a change outside the API can leave an install with no live tenant. In that state, a login with no link gets `signup_closed`. A login with a link still signs in when only the tenant row changed and the user is live, and it gets `signup_closed` when the user is gone too. The Server removes the file in each case. Restore the data directory from a backup.
 
 The claim is also the recovery path for a missing permission. A release can add an Admin permission, and an Admin who exists does not get it. To give it to an Admin who can sign in, create the file and sign in with that login. The Server gives that Admin each Admin permission back, logs a warning that names the file and the user ID, and removes the file.
 
 The first login after you create the file always removes it, also when the claim changes nothing:
 
 - A login with a link to a person who is not an Admin, or to an Admin who holds each permission, signs in as usual and logs a warning that names the file. To claim the Owner, create the file again and sign in with the new identity.
-- If the Server cannot remove the file, the claim does nothing and the Server logs a warning that names the file. This can occur when the file is immutable or its folder is read-only. The login goes on as if no file exists, so a person with a link can sign in and a person with no link gets the usual answer. Make the file and its folder writable for the Server, remove the file, and create it again.
+- If the Server cannot remove the file, the claim does nothing and the Server logs a warning that names the file. This can occur when the file is immutable or its folder is read-only. The login adds no file and goes on as if no file exists, so a person with a link can sign in and a person with no link gets the usual answer. Make the file and its folder writable for the Server, remove the file, and create it again.
+- A symbolic link or a folder named `claim-owner` is not a claim, also when the link points to a new file. The Server does not follow the link. It logs a warning that names the entry at each login, leaves the entry in place, and the login goes on as if no file exists. Remove the entry and create a regular file.
 - A file with a write time more than 15 minutes from the current time, in either direction, does nothing. The Server logs a warning that names the file. The login goes on as if no file exists.
 
 The Server removes such a file and does not leave it, because a backup restore that does not keep the write time would make a file that stays new again.
@@ -291,7 +292,9 @@ The page also gives the callback URL to register. An API call gets 401.
 
 ### A provider that is down
 
-The Server asks a provider for its discovery document at most once in 2 seconds, with a 3 second limit. `/auth/status` then gives the mode the state `unreachable`, and `start` answers 503 with `idp_unreachable`. With each provider down, the login page answers 503 and offers `Try again`. Each session keeps working.
+The Server asks a provider for its discovery document at most once in 2 seconds, with a 3 second limit. `/auth/status` then gives the mode the state `unreachable`, and `start` answers 503 with `idp_unreachable`. With each provider down, the login page answers 503 and offers `Try again`. `Try again` on the page of a `start` repeats that `start`, so a native app keeps its flow. Each session keeps working.
+
+Each answer of a provider (discovery, token, keys, and userinfo) has a limit of 1 MiB of decoded bytes, so a compressed answer counts at its full size. An answer over the limit reads as a bad answer. Discovery shows the provider as `unreachable`, a token or key answer refuses the login, and a userinfo answer leaves the login on the ID token. Each failed answer logs one warning that names the provider, the answer, and the status or the cause. The warning holds no token and no body.
 
 ## File modes
 
