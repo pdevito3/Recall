@@ -1,5 +1,6 @@
 namespace Recall.UnitTests.Domain.Support;
 
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Runtime.Versioning;
 using System.Text.Json;
@@ -10,6 +11,35 @@ using Shouldly;
 [UnsupportedOSPlatform("windows")]
 public class SupportBundleTests
 {
+    [Test]
+    public async Task a_pipe_in_the_logs_folder_does_not_hold_the_zip_and_is_not_in_it()
+    {
+        // Arrange
+        var data = Directory.CreateTempSubdirectory("recall-bundle-").FullName;
+        var logs = Directory.CreateDirectory(Path.Combine(data, "logs")).FullName;
+        var telemetry = Directory.CreateDirectory(Path.Combine(data, "telemetry")).FullName;
+        await File.WriteAllTextAsync(Path.Combine(logs, "recall-1.jsonl"), "{}");
+        using (var makePipe = Process.Start("mkfifo", Path.Combine(logs, "pipe.jsonl")))
+            await makePipe.WaitForExitAsync();
+        var bundle = new SupportBundle(new FileTelemetryPlan(logs, telemetry, new FileTelemetryOptions()), [], "Production", DateTimeOffset.UnixEpoch);
+        using var output = new MemoryStream();
+
+        try
+        {
+            // Act
+            await Task.Run(() => bundle.WriteToAsync(output, CancellationToken.None)).WaitAsync(TimeSpan.FromSeconds(30));
+        }
+        finally
+        {
+            Directory.Delete(data, recursive: true);
+        }
+
+        // Assert
+        output.Position = 0;
+        await using var zip = new ZipArchive(output, ZipArchiveMode.Read);
+        zip.Entries.Select(entry => entry.FullName).ShouldBe(["settings.json", "logs/recall-1.jsonl", "version.json"]);
+    }
+
     [Test]
     public async Task a_folder_that_the_server_cannot_read_goes_in_the_skipped_list_and_the_rest_of_the_zip_still_arrives()
     {

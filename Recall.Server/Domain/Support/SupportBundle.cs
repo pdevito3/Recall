@@ -71,7 +71,8 @@ public sealed class SupportBundle(FileTelemetryPlan? files, IEnumerable<KeyValue
 
         try
         {
-            return Directory.GetFiles(directory).Where(file => new FileInfo(file).LinkTarget is null).ToArray();
+            // .NET does not name the type of a file. A pipe has a length of 0, and its open waits for a writer. An empty file adds no line.
+            return Directory.GetFiles(directory).Where(file => new FileInfo(file) is { Exists: true, LinkTarget: null, Length: > 0 }).ToArray();
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
