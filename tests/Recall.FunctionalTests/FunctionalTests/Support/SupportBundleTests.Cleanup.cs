@@ -69,6 +69,7 @@ public partial class SupportBundleTests
     }
 
     [Test]
+    [Property("Rule", "SES-38")]
     [Property("Rule", "SES-19")]
     public async Task an_echo_of_the_words_and_the_key_by_a_provider_reaches_no_log_no_span_no_file_and_no_bundle()
     {

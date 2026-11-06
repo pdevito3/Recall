@@ -1,5 +1,6 @@
 namespace Recall.Server.Domain.Sessions.Dtos;
 
+using System.ComponentModel.DataAnnotations;
 using People;
 using Resources;
 
@@ -23,5 +24,6 @@ public sealed record CleanupResultDto
     public IReadOnlyList<string> PeopleProposal { get; init; } = [];
 
     /// <summary>The Revision of Raw that the model read. A later Revision of Raw makes the Session Stale.</summary>
+    [Range(1, int.MaxValue)]
     public required int BaseRawRevision { get; init; }
 }

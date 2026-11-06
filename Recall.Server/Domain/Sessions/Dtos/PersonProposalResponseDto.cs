@@ -13,6 +13,7 @@ public sealed record PersonProposalResponseDto
     public required bool Approve { get; init; }
 
     /// <summary>The Person to tag. When this is null, the match of the proposal is the Person.</summary>
+    [SchemaMaxLength(typeof(EntityId), nameof(EntityId.MaxLength))]
     public string? BindToPersonId { get; init; }
 
     /// <summary>True adds a Person with this label, in place of a match.</summary>

@@ -127,6 +127,7 @@ public class SessionCleanupTests
     }
 
     [Test]
+    [Property("Rule", "SES-39")]
     public void an_accept_of_a_value_that_is_not_offered_changes_nothing()
     {
         // Arrange

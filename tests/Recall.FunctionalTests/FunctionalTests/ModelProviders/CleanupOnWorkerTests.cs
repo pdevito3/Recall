@@ -122,6 +122,7 @@ public class CleanupOnWorkerTests
     }
 
     [Test]
+    [Property("Rule", "SES-36")]
     public async Task a_person_leaves_during_the_run_and_later_finds_the_cleaned_words_with_raw_unchanged()
     {
         // Arrange
@@ -181,6 +182,7 @@ public class CleanupOnWorkerTests
     }
 
     [Test]
+    [Property("Rule", "SES-38")]
     [Property("Rule", "SES-19")]
     public async Task a_failed_claim_leaves_no_words_and_no_key_in_the_job_tables_or_on_the_dashboard()
     {
@@ -237,6 +239,7 @@ public class CleanupOnWorkerTests
     }
 
     [Test]
+    [Property("Rule", "SES-37")]
     public async Task a_job_on_the_dead_letter_list_ends_its_run_through_the_watch()
     {
         // Arrange

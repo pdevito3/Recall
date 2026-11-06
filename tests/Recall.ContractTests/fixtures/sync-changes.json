@@ -19,6 +19,9 @@
       "synopsis": null,
       "cleanupStatus": "NotRun",
       "lastCleanupRawRevision": null,
+      "cleanupFailure": "None",
+      "suggestions": [],
+      "peopleProposals": [],
       "activity": "Walking",
       "moods": [
         "Calm"
@@ -54,6 +57,9 @@
       "synopsis": null,
       "cleanupStatus": "NotRun",
       "lastCleanupRawRevision": null,
+      "cleanupFailure": "None",
+      "suggestions": [],
+      "peopleProposals": [],
       "activity": "None",
       "moods": [],
       "topics": [],

@@ -193,7 +193,7 @@ Other writes also wake a disk. In two tests of 10 idle minutes after a start, wi
 
 ## Back up and restore
 
-A backup is a copy of `/data` while Recall is stopped. The copy holds the journal and the keys, so keep it private. These commands use the Docker volume. They write `recall-backup.tar.gz` in the current folder, and only you can read that file. If the commands do not print `The backup is complete`, the backup failed. The file of the last backup then stays, and the failed backup stays as `recall-backup.new.tar.gz`.
+A backup is a copy of `/data` while Recall is stopped. The copy holds the journal and the keys, so keep it private. The API keys of a model provider are encrypted with the key ring in `keys/`, so restore `keys/` with the database that it belongs to. If you do not, each API key stops working, and the model providers page and `/health` say that the key ring changed. These commands use the Docker volume. They write `recall-backup.tar.gz` in the current folder, and only you can read that file. If the commands do not print `The backup is complete`, the backup failed. The file of the last backup then stays, and the failed backup stays as `recall-backup.new.tar.gz`.
 
 To back up:
 

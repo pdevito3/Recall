@@ -14,7 +14,8 @@ public sealed class TestModelProviderEndpoint : IEndpoint
         .MapToApiVersion(ApiVersions.V1)
         .RequireAuthorization()
         .ProducesProblem(StatusCodes.Status403Forbidden)
-        .ProducesProblem(StatusCodes.Status404NotFound);
+        .ProducesProblem(StatusCodes.Status404NotFound)
+        .ProducesValidationProblem(StatusCodes.Status422UnprocessableEntity);
 
     /// <summary>
     /// Asks the provider for its list of models. A refusal is a 200 with the words of the provider, because this server worked.

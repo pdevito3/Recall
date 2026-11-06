@@ -1,5 +1,6 @@
 namespace Recall.Server.Domain.Tenants.Features;
 
+using ModelProviders;
 using System.Diagnostics;
 using Databases;
 using Databases.Sqlite;
@@ -36,7 +37,10 @@ public static class DeleteTenant
 
                 var rows = await TenantOwnedRows.LoadAsync(dbContext, tenant.Id, ct);
                 foreach (var row in rows)
+                {
+                    (row as ModelProvider)?.ForgetKey();
                     dbContext.Remove(row is IDeletedWithEvent deletedWithEvent ? deletedWithEvent.Delete() : row);
+                }
 
                 dbContext.Tenants.Remove(tenant);
                 await dbContext.SaveChangesAsync(ct);

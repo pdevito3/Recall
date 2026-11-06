@@ -3,6 +3,7 @@ namespace Recall.IntegrationTests.FeatureTests.Tenancy;
 using System.Reflection;
 using Recall.Server.Databases;
 using Recall.Server.Domain;
+using Recall.Server.Domain.ModelProviders;
 using Recall.Server.Domain.Tenants;
 using Recall.Server.Domain.Tenants.Features;
 using Recall.Server.Domain.Users;
@@ -31,6 +32,13 @@ public class TenantDeleteOwnedRowsTests : TestBase
             .AddAgent(out _, a => a.Permissions = [Permission.Names.ReadAgents])
             // new-feature:tenant-owned-rows
             .BuildAsync();
+        var provider = ModelProvider.Connect(tenant.Id, ModelProviderKind.Anthropic, "Mine", null, "protected value", DateTimeOffset.UnixEpoch);
+        await scope.ExecuteDbContextAsync(async db =>
+        {
+            db.ModelProviders.Add(provider);
+            await db.SaveChangesAsync();
+            return true;
+        });
         scope.SetUserWithDefaults(identifier: admin.Identifier);
         var owned = await scope.ExecuteDbContextAsync(db => EachOwnedTypeAsync(db, type => Run(IdsOfTenant, type, db)));
         owned.ShouldNotBeEmpty();
@@ -44,6 +52,12 @@ public class TenantDeleteOwnedRowsTests : TestBase
         var stillLive = await new TestingServiceScope().ExecuteDbContextAsync(db =>
             EachOwnedTypeAsync(db, type => Run(LiveIds, type, db, owned[type.Name])));
         stillLive.Where(type => type.Value.Count > 0).ShouldBeEmpty();
+        var keyOfDeletedProvider = await new TestingServiceScope().ExecuteDbContextAsync(db => db.ModelProviders
+            .IgnoreQueryFilters()
+            .Where(row => row.Id == provider.Id)
+            .Select(row => row.ProtectedApiKey)
+            .SingleAsync());
+        keyOfDeletedProvider.ShouldBeNull();
     }
 
     private static async Task<Dictionary<string, List<string>>> EachOwnedTypeAsync(

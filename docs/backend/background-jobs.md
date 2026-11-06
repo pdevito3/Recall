@@ -29,15 +29,15 @@ A worker sees a job that this path committed at its next poll, not at once, beca
 
 Inside the callback, do no BackWave work other than the enqueuer. A BackWave call with its own connection waits for the write lock that this save holds, so each other save waits for up to 30 s. Only the code in `Resources/Jobs/` takes a `BackWaveClient`. `JobClientUseTests` fails on a field or a parameter of that type in other code, and it cannot see a call of `GetRequiredService<BackWaveClient>()`. The first use of the store migrates the job tables on its own connection, so `SaveAndEnqueueAsync` makes the store ready before it opens its transaction.
 
-If the job store has a fault, `SaveAndEnqueueAsync` throws before it saves, and the rows do not stay. A feature that must keep the text of a person when the jobs are off saves the text first with `SaveChangesAsync`, then enqueues in a second save. R9 and R11 make this choice.
+If the job store has a fault, `SaveAndEnqueueAsync` throws before it saves, and the rows do not stay. A feature that must keep the text of a person when the jobs are off saves the text first with `SaveChangesAsync`, then enqueues in a second save. A Cleanup keeps no text in its request, so it uses the transactional path. R11 makes this choice for its audio.
 
 ## The host
 
 | Setting | Value | Why |
 |---|---|---|
 | Store | The SQLite file of the app, tables `backwave_*`, `AutoMigrate` on, busy timeout 30 s | One file holds the rows and the jobs, so one transaction holds both. The busy timeout is the one that the app connections use. |
-| Worker group | One group named `system`, on the queue `system` | R9 and R11 add queues to this group. |
-| `Jobs__PollSeconds` | 5 | A transactional enqueue waits for one poll. An idle poll writes nothing: at 1 s, 5 s, and 30 s, an idle server wrote no byte to the database, the WAL, or the `-shm` file in 15 minutes. |
+| Worker group | One group named `system`, on the queues `system` and `cleanup` | R11 adds a queue to this group. |
+| `Jobs__PollSeconds` | 1 | A transactional enqueue waits for one poll, and a person waits for a Cleanup to begin. An idle poll writes nothing: at 1 s, 5 s, and 30 s, an idle server wrote no byte to the database, the WAL, or the `-shm` file in 15 minutes. |
 | `MaintenanceInterval` | 5 s, the BackWave default | The sweep that ends a lapsed lease writes nothing when no lease has lapsed. |
 | `LeaseDuration` | 60 s, the BackWave default | The job of a killed process runs again after its lease ends, the next sweep, its retry backoff, and the next poll. For the health job that took about 70 s. After a clean stop it runs at the next start. |
 | `HostOptions.ServicesStopConcurrently` | true | The web host waits for each open request. With a stop in series, the workers would stop after that and could give back no job. |
@@ -68,3 +68,16 @@ A browser that opens the page sends no `X-CSRF` header, so `AppSessionHandler` a
 ## The license
 
 BackWave is under the PolyForm Shield License 1.0.0, which needs each copy to carry the terms and the Required Notice. `Recall.Server/ThirdPartyNotices/BackWave/LICENSE.md` is the file of the package, byte for byte. `dotnet publish` copies it to `ThirdPartyNotices/BackWave/LICENSE.md` in its output, so the image has it at `/app/ThirdPartyNotices/BackWave/LICENSE.md`. Replace the file when the version of BackWave changes.
+
+## The Cleanup job
+
+`CleanupJob` is the job of a Cleanup. Its payload holds four IDs: the Session, its owner, its tenant, and the run. It reads the words at each claim with `CreateJournalScope`, which is the only way to read a Session with no signed-in owner.
+
+`CleanupAttempt` decides each step, and it reads no state outside its arguments:
+
+- A job whose run is not the current run of the Session does nothing. So a second claim after a result, or a job of an older run, stores nothing and calls no model provider.
+- A model provider that refuses, or an answer that the app cannot use, ends the run at once. The job then ends as a success, because a new claim cannot change the answer.
+- A model provider that is unavailable throws `JobSafeTextException`, which holds only safe text, and the job tries again by rule 7.
+- `CleanupAttempt.MaxProviderCalls` is 6. Claim 7 ends the run as `Interrupted` with no call. A job that makes the server exit counts one attempt at each claim, by rule 7, so this limit also ends a job that kills each worker, before the group limit of 10.
+
+`CleanupJobWatch` handles a job that stops with no result, such as one on the dead-letter list. It reads the job store each 30 s and writes nothing unless it finds such a job. It ends such a run with `FailCleanupRun`. It does not use a BackWave transition observer, because `ClaimObserverDeliveriesAsync` runs an UPDATE at each claim, and so an idle server would write to the disk.

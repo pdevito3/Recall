@@ -42,6 +42,7 @@ public class CleanupResultRoutesTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-39")]
     [Property("Rule", "SES-30")]
     public async Task an_accepted_topic_is_an_ai_topic_and_a_retry_changes_nothing()
     {
@@ -62,6 +63,7 @@ public class CleanupResultRoutesTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-39")]
     [Property("Rule", "SES-30")]
     public async Task the_ai_writer_adds_no_topic_that_the_user_holds()
     {
@@ -116,6 +118,7 @@ public class CleanupResultRoutesTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-40")]
     public async Task an_approved_proposal_adds_a_person_and_the_mention_in_cleaned_and_raw_stays()
     {
         // Arrange
@@ -195,6 +198,7 @@ public class CleanupResultRoutesTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-40")]
     public async Task with_approval_off_a_cleanup_tags_the_people_at_once()
     {
         // Arrange
@@ -213,6 +217,7 @@ public class CleanupResultRoutesTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-40")]
     public async Task a_name_that_is_not_in_cleaned_makes_no_proposal()
     {
         // Arrange
@@ -242,6 +247,7 @@ public class CleanupResultRoutesTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-41")]
     public async Task a_device_result_is_stored_as_a_revision_and_a_retry_adds_none()
     {
         // Arrange
@@ -262,6 +268,7 @@ public class CleanupResultRoutesTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-41")]
     public async Task a_device_result_while_a_job_runs_or_from_an_unknown_revision_gets_422()
     {
         // Arrange
@@ -277,7 +284,7 @@ public class CleanupResultRoutesTests : TestBase
 
         // Assert
         unknownBase.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        noBase.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        noBase.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         whileRunning.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
         blank.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }

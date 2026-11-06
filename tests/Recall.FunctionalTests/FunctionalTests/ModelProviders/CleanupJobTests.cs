@@ -72,6 +72,7 @@ public class CleanupJobTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-36")]
     public async Task a_job_payload_holds_no_words_and_no_key()
     {
         // Arrange
@@ -90,6 +91,7 @@ public class CleanupJobTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-36")]
     public async Task a_second_run_of_a_finished_job_changes_nothing_and_calls_no_provider()
     {
         // Arrange
@@ -109,6 +111,7 @@ public class CleanupJobTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-36")]
     public async Task a_job_of_an_older_run_cannot_end_the_newer_run()
     {
         // Arrange
@@ -125,6 +128,7 @@ public class CleanupJobTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-36")]
     public async Task two_starts_at_once_make_one_run_and_one_job()
     {
         // Arrange
@@ -188,6 +192,7 @@ public class CleanupJobTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-37")]
     public async Task the_last_call_to_an_unavailable_provider_ends_the_run()
     {
         // Arrange
@@ -206,6 +211,7 @@ public class CleanupJobTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-37")]
     public async Task a_claim_above_the_limit_ends_the_run_with_no_call()
     {
         // Arrange
@@ -277,6 +283,7 @@ public class CleanupJobTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-37")]
     public async Task a_stop_of_the_host_returns_the_lease_and_the_next_claim_stores_the_result()
     {
         // Arrange
@@ -300,6 +307,7 @@ public class CleanupJobTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-37")]
     [Arguments(JobState.DeadLettered)]
     [Arguments(JobState.Cancelled)]
     [Arguments(JobState.Quarantined)]

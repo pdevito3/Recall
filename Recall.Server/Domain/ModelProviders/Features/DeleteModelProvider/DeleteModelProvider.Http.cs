@@ -13,7 +13,8 @@ public sealed class DeleteModelProviderEndpoint : IEndpoint
         .MapToApiVersion(ApiVersions.V1)
         .RequireAuthorization()
         .ProducesProblem(StatusCodes.Status403Forbidden)
-        .ProducesProblem(StatusCodes.Status404NotFound);
+        .ProducesProblem(StatusCodes.Status404NotFound)
+        .ProducesValidationProblem(StatusCodes.Status422UnprocessableEntity);
 
     /// <summary>
     /// Removes a model provider and its key. The provider that was active before it becomes the active one.

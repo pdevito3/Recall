@@ -15,6 +15,9 @@
   "synopsis": null,
   "cleanupStatus": "NotRun",
   "lastCleanupRawRevision": null,
+  "cleanupFailure": "None",
+  "suggestions": [],
+  "peopleProposals": [],
   "activity": "Walking",
   "moods": [
     "Calm"

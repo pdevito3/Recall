@@ -972,6 +972,16 @@
               }
             }
           },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
           "401": {
             "description": "The request has no valid access token."
           }
@@ -1114,6 +1124,16 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
                 }
               }
             }
@@ -2581,7 +2601,7 @@
             "content": {
               "text/event-stream": {
                 "schema": {
-                  "$ref": "#/components/schemas/SseItemOfCleanupEventDto"
+                  "$ref": "#/components/schemas/CleanupEventDto"
                 }
               }
             }
@@ -4401,6 +4421,8 @@
             }
           },
           "baseRawRevision": {
+            "maximum": 2147483647,
+            "minimum": 1,
             "type": "integer",
             "description": "The Revision of Raw that the model read. A later Revision of Raw makes the Session Stale.",
             "format": "int32"
@@ -5000,6 +5022,7 @@
             "description": "False drops the proposal. True tags each place in Cleaned."
           },
           "bindToPersonId": {
+            "maxLength": 50,
             "type": [
               "null",
               "string"
@@ -5519,33 +5542,6 @@
             ],
             "type": "string",
             "description": "Who chose the Topic."
-          }
-        }
-      },
-      "SseItemOfCleanupEventDto": {
-        "type": "object",
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/CleanupEventDto"
-          },
-          "eventType": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "eventId": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "reconnectionInterval": {
-            "pattern": "^-?(\\d+\\.)?\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,7})?$",
-            "type": [
-              "null",
-              "string"
-            ]
           }
         }
       },

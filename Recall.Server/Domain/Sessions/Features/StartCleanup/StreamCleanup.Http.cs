@@ -3,7 +3,6 @@ namespace Recall.Server.Domain.Sessions.Features;
 using Cleanup;
 using Dtos;
 using MediatR;
-using Microsoft.AspNetCore.Http.HttpResults;
 using Resources.Entrypoints.Http;
 
 public sealed class StreamCleanupEndpoint : IEndpoint
@@ -14,6 +13,7 @@ public sealed class StreamCleanupEndpoint : IEndpoint
         .WithTags("Sessions")
         .MapToApiVersion(ApiVersions.V1)
         .RequireAuthorization()
+        .Produces<CleanupEventDto>(StatusCodes.Status200OK, "text/event-stream")
         .ProducesProblem(StatusCodes.Status404NotFound)
         .ProducesValidationProblem(StatusCodes.Status422UnprocessableEntity)
         .ProducesValidationProblem(StatusCodes.Status409Conflict);
@@ -22,7 +22,7 @@ public sealed class StreamCleanupEndpoint : IEndpoint
     /// Starts a Cleanup, or joins the one that runs, and sends its state as server-sent events. Each event holds the JSON
     /// <c>{ type, data: { message, stopReason } }</c>. Close the connection at any time. The Cleanup goes on, and its result stays on the Session.
     /// </summary>
-    public static async Task<ServerSentEventsResult<CleanupEventDto>> Handle(
+    public static async Task<IResult> Handle(
         string id,
         IMediator mediator,
         CleanupWatch watch,
