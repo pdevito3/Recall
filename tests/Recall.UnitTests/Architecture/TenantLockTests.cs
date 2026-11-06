@@ -25,7 +25,7 @@ public class TenantLockTests
 {
     private static readonly HashSet<string> AddMethods = new(StringComparer.Ordinal)
     {
-        "Add", "AddAsync", "AddRange", "AddRangeAsync", nameof(AppDbContext.BulkInsertAsync),
+        "Add", "AddAsync", "AddRange", "AddRangeAsync",
     };
 
     private static readonly HashSet<string> SaveMethods = new(StringComparer.Ordinal)
@@ -75,7 +75,6 @@ public class TenantLockTests
             "Recall.ArchitectureFixtures.Core.TenantLock.AddThroughTheContextWithNoLock saves outside the shared lock",
             "Recall.ArchitectureFixtures.Core.TenantLock.AddWithNoLock adds Agent",
             "Recall.ArchitectureFixtures.Core.TenantLock.AddWithNoLock saves outside the shared lock",
-            "Recall.ArchitectureFixtures.Core.TenantLock.BulkInsertWithNoLock adds Agent",
             "Recall.ArchitectureFixtures.Core.TenantLock.SaveAfterTheSharedWork saves outside the shared lock",
             "Recall.ArchitectureFixtures.Core.TenantLock.SaveSynchronouslyAfterTheSharedWork saves outside the shared lock",
         ]);

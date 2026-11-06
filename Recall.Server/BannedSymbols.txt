@@ -20,34 +20,15 @@ M:Microsoft.EntityFrameworkCore.RelationalQueryableExtensions.FromSql``1(Microso
 M:Microsoft.EntityFrameworkCore.RelationalQueryableExtensions.FromSqlRaw``1(Microsoft.EntityFrameworkCore.DbSet{``0},System.String,System.Object[]);Raw SQL can write with no audit entry. Read with LINQ.
 M:Microsoft.EntityFrameworkCore.RelationalQueryableExtensions.FromSqlInterpolated``1(Microsoft.EntityFrameworkCore.DbSet{``0},System.FormattableString);Raw SQL can write with no audit entry. Read with LINQ.
 M:Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.GetDbConnection(Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade);A command on the connection of the context skips the save and WriteGuard. Use the context.
-M:Npgsql.NpgsqlConnection.BeginBinaryImport(System.String);COPY writes no audit entry. Add the entities and call SaveChangesAsync.
-M:Npgsql.NpgsqlConnection.BeginBinaryImportAsync(System.String,System.Threading.CancellationToken);COPY writes no audit entry. Add the entities and call SaveChangesAsync.
-M:Npgsql.NpgsqlConnection.BeginTextImport(System.String);COPY writes no audit entry. Add the entities and call SaveChangesAsync.
-M:Npgsql.NpgsqlConnection.BeginTextImportAsync(System.String,System.Threading.CancellationToken);COPY writes no audit entry. Add the entities and call SaveChangesAsync.
-M:Npgsql.NpgsqlConnection.BeginRawBinaryCopy(System.String);COPY writes no audit entry. Add the entities and call SaveChangesAsync.
-M:Npgsql.NpgsqlConnection.BeginRawBinaryCopyAsync(System.String,System.Threading.CancellationToken);COPY writes no audit entry. Add the entities and call SaveChangesAsync.
 P:Microsoft.EntityFrameworkCore.Storage.IRelationalConnection.DbConnection;A command on the connection of the context skips the save and WriteGuard. Use the context.
 P:Microsoft.EntityFrameworkCore.Storage.RelationalConnection.DbConnection;A command on the connection of the context skips the save and WriteGuard. Use the context.
-M:Npgsql.NpgsqlConnection.#ctor;A command on a connection of its own skips the save and WriteGuard. Use the context.
-M:Npgsql.NpgsqlConnection.#ctor(System.String);A command on a connection of its own skips the save and WriteGuard. Use the context.
-M:Npgsql.NpgsqlDataSource.Create(System.String);A command on a connection of its own skips the save and WriteGuard. Use the context.
-M:Npgsql.NpgsqlDataSource.Create(Npgsql.NpgsqlConnectionStringBuilder);A command on a connection of its own skips the save and WriteGuard. Use the context.
-M:Npgsql.NpgsqlDataSource.CreateConnection;A command on a connection of its own skips the save and WriteGuard. Use the context.
-M:Npgsql.NpgsqlDataSource.CreateCommand(System.String);A command on a connection of its own skips the save and WriteGuard. Use the context.
-M:Npgsql.NpgsqlDataSource.CreateBatch;A command on a connection of its own skips the save and WriteGuard. Use the context.
-M:Npgsql.NpgsqlDataSource.OpenConnection;A command on a connection of its own skips the save and WriteGuard. Use the context.
-M:Npgsql.NpgsqlDataSource.OpenConnectionAsync(System.Threading.CancellationToken);A command on a connection of its own skips the save and WriteGuard. Use the context.
-M:Npgsql.NpgsqlDataSourceBuilder.Build;A command on a connection of its own skips the save and WriteGuard. Use the context.
-M:Npgsql.NpgsqlDataSourceBuilder.BuildMultiHost;A command on a connection of its own skips the save and WriteGuard. Use the context.
-M:Npgsql.NpgsqlSlimDataSourceBuilder.Build;A command on a connection of its own skips the save and WriteGuard. Use the context.
-M:Npgsql.NpgsqlSlimDataSourceBuilder.BuildMultiHost;A command on a connection of its own skips the save and WriteGuard. Use the context.
 P:System.Data.Common.DbTransaction.Connection;A command on the connection of the context skips the save and WriteGuard. Use the context.
-P:Npgsql.NpgsqlTransaction.Connection;A command on the connection of the context skips the save and WriteGuard. Use the context.
-M:Npgsql.NpgsqlConnection.CloneWith(System.String);A command on a connection of its own skips the save and WriteGuard. Use the context.
+P:Microsoft.Data.Sqlite.SqliteTransaction.Connection;A command on the connection of the context skips the save and WriteGuard. Use the context.
+M:Microsoft.Data.Sqlite.SqliteConnection.#ctor;A command on a connection of its own skips the save and WriteGuard. Use the context.
+M:Microsoft.Data.Sqlite.SqliteConnection.#ctor(System.String);A command on a connection of its own skips the save and WriteGuard. Use the context.
 
-// The two-argument Like and ILike send ESCAPE '', so a backslash in the pattern escapes nothing and % or _ of the caller stays a wildcard.
-M:Microsoft.EntityFrameworkCore.NpgsqlDbFunctionsExtensions.ILike(Microsoft.EntityFrameworkCore.DbFunctions,System.String,System.String);The two-argument ILike sends ESCAPE ''. Build the pattern with LikePattern and pass LikePattern.EscapeCharacter as the third argument.
-M:Microsoft.EntityFrameworkCore.DbFunctionsExtensions.Like(Microsoft.EntityFrameworkCore.DbFunctions,System.String,System.String);The two-argument Like sends ESCAPE ''. Build the pattern with LikePattern and pass LikePattern.EscapeCharacter as the third argument.
+// The two-argument Like has no escape character, so a backslash in the pattern escapes nothing and % or _ of the caller stays a wildcard.
+M:Microsoft.EntityFrameworkCore.DbFunctionsExtensions.Like(Microsoft.EntityFrameworkCore.DbFunctions,System.String,System.String);The two-argument Like has no escape character. Build the pattern with LikePattern and pass LikePattern.EscapeCharacter as the third argument.
 
 // A source generator does at build time what these APIs do at run time. See docs/backend/source-generators.md.
 M:System.Text.RegularExpressions.Regex.#ctor(System.String);Use [GeneratedRegex] on a static partial method.

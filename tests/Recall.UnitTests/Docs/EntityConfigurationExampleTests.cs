@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
-using Npgsql;
+using Microsoft.Data.Sqlite;
 using Shouldly;
 
 // The examples of docs/backend/entity-configurations.md that the Server does not have.
@@ -50,19 +50,6 @@ public sealed class AddUserEmailIndex : Migration
     }
 }
 
-public sealed class AddAppointmentOverlapConstraint : Migration
-{
-    protected override void Up(MigrationBuilder migrationBuilder)
-    {
-        migrationBuilder.Sql("CREATE EXTENSION IF NOT EXISTS btree_gist;");
-        migrationBuilder.Sql("""
-            ALTER TABLE appointments ADD CONSTRAINT ex_appointments_provider_time
-            EXCLUDE USING gist (provider_id WITH =, tstzrange(starts_at, ends_at) WITH &&)
-            WHERE (is_deleted = false);
-            """);
-    }
-}
-
 public class EntityConfigurationExampleTests
 {
     [Test]
@@ -71,9 +58,9 @@ public class EntityConfigurationExampleTests
         // Arrange
         using var context = new RevisionContext();
         var index = context.Model.FindEntityType(typeof(Revision))!.GetIndexes().ShouldHaveSingleItem();
+        var column = index.Properties.ShouldHaveSingleItem().GetColumnName();
         var failure = new DbUpdateException("An error occurred while saving the entity changes.",
-            new PostgresException("duplicate key value", "ERROR", "ERROR", PostgresErrorCodes.UniqueViolation,
-                constraintName: index.GetDatabaseName()));
+            new SqliteException($"SQLite Error 19: 'UNIQUE constraint failed: {index.DeclaringEntityType.GetTableName()}.{column}'.", 19, 2067));
 
         // Act
         var conflict = DatabaseConflict.From(failure, context.Model);
@@ -101,7 +88,7 @@ public class EntityConfigurationExampleTests
     private sealed class RevisionContext : DbContext
     {
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-            => optionsBuilder.UseNpgsql("Host=unused");
+            => optionsBuilder.UseSqlite("Data Source=unused.db");
 
         protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
             => configurationBuilder.MapConstraintErrors();

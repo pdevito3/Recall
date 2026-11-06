@@ -65,7 +65,7 @@ public sealed partial class BoundaryScanner(
     [
         _rootNamespace + ".Databases",
         "Microsoft.EntityFrameworkCore",
-        "Npgsql",
+        "Microsoft.Data.Sqlite",
     ];
 
     [GeneratedRegex(@"\.Grpc\.V\d+$")]

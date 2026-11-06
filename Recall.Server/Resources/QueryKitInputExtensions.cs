@@ -37,8 +37,7 @@ public static class QueryKitInputExtensions
         where T : class
         => Apply<T, IQueryable<T>>(FiltersParameter, () =>
         {
-            // Filter values go to Postgres as parameters, and Postgres refuses a parameter that it cannot store
-            if (!PostgresText.CanStore(filters))
+            if (!StorableText.CanStore(filters))
                 throw new QueryInputException(FiltersParameter, FilterCharacterMessage);
             var predicate = FilterParser.ParseFilter<T>(filters, config);
             RefuseFieldsOutsideTheQuery(FiltersParameter, predicate);
@@ -58,7 +57,6 @@ public static class QueryKitInputExtensions
             return query.ApplyQueryKitSort(sortOrder, config);
         });
 
-    // A version is opaque, and Postgres has no order for its xid, so a range or a sort fails with 500 when the query runs.
     // The handler adds AllowedActions after the page loads, so EF cannot translate a clause on it, and the query gives 500.
     // PreventFilter and PreventSort of QueryKit drop the clause and give 200 with the wrong rows, so this check gives 400.
     private static void RefuseFieldsOutsideTheQuery(string parameter, Expression? expression)

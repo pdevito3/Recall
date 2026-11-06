@@ -10,7 +10,7 @@ public static class EntityId
     public const int MaxLength = 50;
 
     /// <summary>The column collation for an ID and for each foreign key to an ID. IDs are opaque ASCII, so a byte compare is enough.</summary>
-    public const string Collation = "C";
+    public const string Collation = "BINARY";
 
     /// <summary>The longest prefix. The prefix, the <c>_</c>, and the 32 UUID characters fill <see cref="MaxLength"/>.</summary>
     public const int MaxPrefixLength = MaxLength - 1 - 32;

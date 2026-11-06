@@ -32,7 +32,7 @@ public sealed class ManageAllTenantsCapabilityTests : IDisposable
 
         // The access check runs before the handler uses the database, so the context never connects.
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql("Host=unused")
+            .UseSqlite("Data Source=unused.db")
             .UseSnakeCaseNamingConvention()
             .Options;
         _dbContext = new AppDbContext(options, TimeProvider.System, Substitute.For<ICurrentUserService>(),

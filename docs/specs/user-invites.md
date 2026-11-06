@@ -74,7 +74,7 @@ None. The invite features use `manage_users`, which exists.
 
 | Value | Stored as | Shown in the zone of |
 |---|---|---|
-| Invite expiry | `timestamptz` (UTC) | The browser of the user |
+| Invite expiry | Fixed-width UTC text | The browser of the user |
 
 ## 8. Open decisions
 

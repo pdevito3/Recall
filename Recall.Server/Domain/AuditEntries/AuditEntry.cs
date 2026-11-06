@@ -87,7 +87,6 @@ public sealed class AuditEntry : ITenantable
     /// <summary>The name of the action. Set only when <see cref="Kind"/> is <see cref="AuditEntryKind.Action"/>.</summary>
     public string? Action { get; private set; }
 
-    /// <summary>jsonb in the format of <see cref="AuditValues"/>. It holds personal data in full.</summary>
     public string Data { get; private set; } = null!;
 }
 

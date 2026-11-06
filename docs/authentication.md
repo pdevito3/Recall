@@ -60,21 +60,20 @@ The BFF accepts `X-Forwarded-For` and `X-Forwarded-Proto` from any source, becau
 
 ## BFF sessions
 
-The BFF keeps each BFF session as one row in the `bffdb` database. The row holds the tokens, encrypted with Data Protection. The Data Protection keys, the refresh locks, and the replay cache of the logout tokens are also in `bffdb`. Thus many BFF instances can share one `bffdb`, and a deploy does not log out the users.
+The BFF keeps each BFF session as one row in the `bffdb` database. The row holds the tokens, encrypted with Data Protection. The Data Protection keys and the replay cache of the logout tokens are also in `bffdb`. Thus a deploy does not log out the users.
 
-The AppHost adds `bffdb` on the same PostgreSQL server as `appdb`. The BFF applies its migrations at startup.
+The BFF keeps `bffdb` in the SQLite file `bff.db`, next to `recall.db` in the data directory. The BFF applies its migrations at startup.
 
 | Setting | Default | Content |
 |---|---|---|
 | `Bff:Session:SlidingExpiration` | 14 days | The BFF session ends after this time with no request. A request after half of this time renews it. |
 | `Bff:Session:AbsoluteLifetime` | 30 days | The BFF session ends after this time from the login. A renewal does not move this limit. |
-| `Bff:Session:CleanupInterval` | 10 minutes | The interval at which each BFF instance deletes the expired rows. |
-| `Bff:Refresh:LockTimeout` | 10 seconds | The longest wait for the refresh lock of a BFF session. |
-| `Bff:Refresh:TokenRequestTimeout` | 5 seconds | The longest refresh call to the token endpoint. It must be less than `Bff:Refresh:LockTimeout`. |
+| `Bff:Session:CleanupInterval` | 10 minutes | The interval at which the BFF deletes the expired rows. |
+| `Bff:Refresh:TokenRequestTimeout` | 5 seconds | The longest refresh call to the token endpoint. |
 
 ### Token refresh
 
-When the access token expires, the BFF refreshes it before it sends the API call. A PostgreSQL advisory lock for each BFF session makes sure that only one request on all the BFF instances refreshes the token. The other requests wait and then use the new token.
+When the access token expires, the BFF refreshes it before it sends the API call. One process owns the data file, so the refresh lock in the process makes sure that only one request refreshes the token. The other requests wait and then use the new token.
 
 - If the provider returns `invalid_grant`, or the refresh response has an ID token that fails the checks, the BFF ends the BFF session. The API call goes with no token.
 - If the refresh fails for another reason, the token endpoint does not answer in time, or the lock is not free in time, the BFF session stays. The call goes with the current token if it is still valid, or with no token. The next call tries the refresh again.

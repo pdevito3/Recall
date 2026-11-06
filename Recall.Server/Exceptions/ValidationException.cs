@@ -40,15 +40,14 @@ public class ValidationException : Exception
             throw new ValidationException(property, message);
     }
 
-    // Postgres counts the length of a varchar in code points, and a code point outside the Basic Multilingual Plane is two chars.
     public static void ThrowWhenLongerThan(string value, int maxLength, string property, string message)
     {
         if (value.EnumerateRunes().Count() > maxLength)
             throw new ValidationException(property, message);
     }
 
-    public static void ThrowWhenHasCharacterPostgresCannotStore(string value, string property, string message)
-        => Must(PostgresText.CanStore(value), property, message);
+    public static void ThrowWhenHasCharacterNotStorable(string value, string property, string message)
+        => Must(StorableText.CanStore(value), property, message);
 
     public static void Must(bool condition, string property, string message)
     {

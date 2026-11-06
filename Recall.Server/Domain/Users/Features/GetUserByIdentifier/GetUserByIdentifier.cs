@@ -20,8 +20,7 @@ public static class GetUserByIdentifier
         {
             var caller = await permissionGuard.GetCallerAsync(cancellationToken);
 
-            // Postgres cannot take a NUL or a lone surrogate as a parameter, and no stored identifier has one
-            var user = PostgresText.CanStore(request.Identifier)
+            var user = StorableText.CanStore(request.Identifier)
                 ? await dbContext.Users
                     .TagWithOperationCallSite("users.get_by_identifier")
                     .AsNoTracking()

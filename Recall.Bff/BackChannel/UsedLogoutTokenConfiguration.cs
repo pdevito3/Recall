@@ -15,7 +15,7 @@ public sealed class UsedLogoutTokenConfiguration : IEntityTypeConfiguration<Used
         builder.HasKey(e => e.Jti);
         builder.Property(e => e.Jti)
             .HasMaxLength(JtiMaxLength)
-            .UseCollation("C");
+            .UseCollation("BINARY");
 
         // The cleanup deletes on this column
         builder.HasIndex(e => e.Expires);

@@ -1,9 +1,8 @@
 namespace Recall.Bff.Sessions;
 
 /// <summary>
-/// The store of the BFF sessions. The EF Core adapter on Postgres is for production. The tests also have an
-/// in-memory adapter. Each write that changes a row is conditional on the <see cref="BffSession.Version"/> that
-/// the caller read, so that a late write cannot replace newer data or bring a deleted BFF session back.
+/// Each write that changes a row is conditional on the <see cref="BffSession.Version"/> that the caller read, so that
+/// a late write cannot replace newer data or bring a deleted BFF session back.
 /// </summary>
 public interface IBffSessionStore
 {

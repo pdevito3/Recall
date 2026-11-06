@@ -11,7 +11,7 @@ using Shouldly;
 
 public sealed class MigrationHostedServiceTests : IAsyncDisposable
 {
-    private readonly PostgresTestDatabase _database = new();
+    private readonly SqliteTestDatabase _database = new();
 
     public async ValueTask DisposeAsync() => await _database.DisposeAsync();
 
@@ -19,7 +19,6 @@ public sealed class MigrationHostedServiceTests : IAsyncDisposable
     public async Task startup_migration_on_a_missing_database_creates_it_and_logs_no_error()
     {
         // Arrange
-        await _database.StartAsync(createDatabase: false);
         var logs = new ErrorLogs();
         await using var services = TestFixture.BuildServiceProvider(
             s => s.AddLogging(logging => logging.AddProvider(logs)), _database.ConnectionString);

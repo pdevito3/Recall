@@ -15,7 +15,7 @@ public sealed class BffSessionConfiguration : IEntityTypeConfiguration<BffSessio
         builder.HasKey(e => e.Key);
         builder.Property(e => e.Key)
             .HasMaxLength(KeyLength)
-            .UseCollation("C");
+            .UseCollation("BINARY");
 
         builder.Property(e => e.SubjectId)
             .IsRequired()
@@ -27,11 +27,8 @@ public sealed class BffSessionConfiguration : IEntityTypeConfiguration<BffSessio
         builder.Property(e => e.Ticket)
             .IsRequired();
 
-        // The Postgres system column. A write with an old value changes no row.
         builder.Property(e => e.Version)
-            .HasColumnName("xmin")
-            .HasColumnType("xid")
-            .IsRowVersion();
+            .IsConcurrencyToken();
 
         builder.Ignore(e => e.EndsAt);
 

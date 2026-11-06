@@ -306,3 +306,6 @@ __pycache__/
 
 # Playwright MCP screenshots and snapshots
 .playwright-mcp/
+
+# The SQLite files of a local run
+.data/

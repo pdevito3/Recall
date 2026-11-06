@@ -1,6 +1,7 @@
 using Recall.Bff.BackChannel;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Recall.Server.Databases.Sqlite;
 
 namespace Recall.Bff.Sessions;
 
@@ -20,6 +21,12 @@ public sealed class BffDbContext(DbContextOptions<BffDbContext> options) : DbCon
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     public DbSet<UsedLogoutToken> UsedLogoutTokens => Set<UsedLogoutToken>();
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Properties<DateTimeOffset>().HaveConversion<UtcTextConverter>();
+        configurationBuilder.DefaultTypeMapping<DateTimeOffset>().HasConversion<UtcTextConverter>();
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

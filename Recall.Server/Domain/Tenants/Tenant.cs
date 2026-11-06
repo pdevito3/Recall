@@ -42,7 +42,7 @@ public class Tenant : BaseEntity
         Exceptions.ValidationException.ThrowWhenNullOrWhitespace(tenant.Name, "name", "Please provide a tenant name.");
         Exceptions.ValidationException.ThrowWhenLongerThan(tenant.Name, NameMaxLength, "name",
             $"A tenant name can have no more than {NameMaxLength} characters.");
-        Exceptions.ValidationException.ThrowWhenHasCharacterPostgresCannotStore(tenant.Name, "name",
+        Exceptions.ValidationException.ThrowWhenHasCharacterNotStorable(tenant.Name, "name",
             "A tenant name has a character that is not allowed.");
     }
 

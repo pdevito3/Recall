@@ -3,10 +3,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Recall.Bff.BackChannel;
 
-/// <summary>
-/// The replay cache of the logout tokens: a table in <c>bffdb</c>, keyed by <c>jti</c>, so that all BFF instances
-/// share it. The cleanup deletes a row after the token expires.
-/// </summary>
 public sealed class LogoutTokenReplayCache(BffDbContext dbContext)
 {
     /// <summary>

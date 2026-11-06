@@ -11,7 +11,8 @@ using Recall.SharedTestHelpers.Utilities;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Npgsql;
+using Microsoft.Data.Sqlite;
+using Recall.Server.Databases.Sqlite;
 using NSubstitute;
 
 public sealed class TestFixture : IAsyncDisposable
@@ -36,7 +37,7 @@ public sealed class TestFixture : IAsyncDisposable
     public static TestSeed Seed { get; private set; } = null!;
     public static Tenant DefaultTenant => Seed.Tenant;
     public static User DefaultUser => Seed.User;
-    private readonly PostgresTestDatabase _database = new();
+    private readonly SqliteTestDatabase _database = new();
 
     public static FlociTestStorage Storage { get; } = new();
 
@@ -47,7 +48,7 @@ public sealed class TestFixture : IAsyncDisposable
         // Tests never reload configuration. A file watcher on appsettings can hang on macOS when the system is busy.
         Environment.SetEnvironmentVariable("DOTNET_hostBuilder__reloadConfigOnChange", "false");
 
-        await Task.WhenAll(_database.StartAsync(), Storage.StartAsync());
+        await Storage.StartAsync();
         _connectionString = _database.ConnectionString;
         Storage.SetEnvironmentVariables();
 
@@ -76,17 +77,18 @@ public sealed class TestFixture : IAsyncDisposable
     /// </summary>
     public static async Task ExecuteOutOfBandAsync(string sql, params (string Name, object Value)[] parameters)
     {
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new SqliteConnection(UnpooledConnectionString);
         await connection.OpenAsync();
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
         foreach (var (name, value) in parameters)
-            command.Parameters.AddWithValue(name, value);
+            command.Parameters.AddWithValue(name, value is DateTimeOffset date ? UtcTextConverter.ToText(date) : value);
         await command.ExecuteNonQueryAsync();
     }
 
     /// <summary>The connection string of the test database, with no connection pool.</summary>
     public static string UnpooledConnectionString
-        => new NpgsqlConnectionStringBuilder(_connectionString) { Pooling = false }.ConnectionString;
+        => new SqliteConnectionStringBuilder(_connectionString) { Pooling = false }.ConnectionString;
 
     public static ServiceProvider BuildServiceProvider(Action<IServiceCollection> addTestServices, string? connectionString = null)
     {

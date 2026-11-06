@@ -5,18 +5,12 @@ using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 
-/// <summary>The <see cref="ConstraintError"/> of each unique index and each exclusion constraint of the schema.</summary>
 public static class ConstraintErrors
 {
     private const string RequestFieldAnnotation = "App:ConstraintError";
     private const string StaleVersionAnnotation = "App:StaleVersionConstraint";
     private const string ModelAnnotation = "App:ConstraintErrors";
 
-    /// <summary>
-    /// The exclusion constraints and the unique indexes that only a migration adds, such as an index on a column of a
-    /// value object. The EF model does not have them, so <see cref="ForRequestField"/> and <see cref="ForStaleVersion"/>
-    /// cannot name them.
-    /// </summary>
     private static readonly IReadOnlyDictionary<string, ConstraintError> NotInModel = new Dictionary<string, ConstraintError>();
 
     /// <summary>

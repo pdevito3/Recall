@@ -183,7 +183,7 @@ public class AuditModelTests
 
         // Assert
         generated.ShouldBeEmpty(
-            "The COPY of BulkInsertAsync sends the C# value of each column, and the audit entry records it, so a database default or an identity never applies. Set the value in the entity, and remove HasDefaultValueSql, HasDefaultValue, or the identity.");
+            "The audit entry records the C# value of each column, so it would miss a database default or an identity. Set the value in the entity, and remove HasDefaultValueSql, HasDefaultValue, or the identity.");
     }
 
     // An entity with an optional owner key is a root when the key is null, so it needs a tenant of its own.
@@ -231,7 +231,7 @@ public class AuditModelTests
     }
 
     private sealed class RestrictedChildContext() : AppDbContext(
-        new DbContextOptionsBuilder<AppDbContext>().UseNpgsql("Host=unused").UseSnakeCaseNamingConvention().Options,
+        new DbContextOptionsBuilder<AppDbContext>().UseSqlite("Data Source=unused.db").UseSnakeCaseNamingConvention().Options,
         TimeProvider.System, Substitute.For<ICurrentUserService>(), Substitute.For<ICallerIdentityResolver>(),
         Substitute.For<ITenantScopeProvider>(), new DomainEventDispatcher(new ServiceCollection().BuildServiceProvider()))
     {
@@ -250,7 +250,7 @@ public class AuditModelTests
     }
 
     private sealed class TreeContext<TNode>() : AppDbContext(
-        new DbContextOptionsBuilder<AppDbContext>().UseNpgsql("Host=unused").UseSnakeCaseNamingConvention().Options,
+        new DbContextOptionsBuilder<AppDbContext>().UseSqlite("Data Source=unused.db").UseSnakeCaseNamingConvention().Options,
         TimeProvider.System, Substitute.For<ICurrentUserService>(), Substitute.For<ICallerIdentityResolver>(),
         Substitute.For<ITenantScopeProvider>(), new DomainEventDispatcher(new ServiceCollection().BuildServiceProvider()))
         where TNode : BaseEntity

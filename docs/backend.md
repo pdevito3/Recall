@@ -1,6 +1,6 @@
 # Backend
 
-`Recall.Server` is the backend API. It uses .NET 10, CQRS with MediatR, and EF Core on PostgreSQL. The rules for each pattern are in `docs/backend/`.
+`Recall.Server` is the backend API. It uses .NET 10, CQRS with MediatR, and EF Core on SQLite. The rules for each pattern are in `docs/backend/`.
 
 ## Domain structure
 
@@ -119,18 +119,18 @@ All error responses use RFC 7807 problem details. The text of each message follo
 | `ValidationException`, `FluentValidation.ValidationException` | 422. `detail` has the message. `errors` has the messages for each named property |
 | `NotFoundException` | 404 |
 | `ForbiddenAccessException` | 403. `detail` has the message |
-| `ConflictException` from a duplicate check in a handler, and `ConstraintConflictException`, which `AppDbContext` throws when a unique index (Postgres `23505`) or an exclusion constraint (`23P01`) stops a save | 409 with the default `type`. `title` is "The request conflicts with a record that exists." `detail` has the message, and `errors` has it under the named field. A `ConstraintConflictException` has the field and the message of its constraint. It does not show the constraint or the values |
+| `ConflictException` from a duplicate check in a handler, and `ConstraintConflictException`, which `AppDbContext` throws when a unique index (SQLite error `2067`) stops a save | 409 with the default `type`. `title` is "The request conflicts with a record that exists." `detail` has the message, and `errors` has it under the named field. A `ConstraintConflictException` has the field and the message of its constraint. It does not show the constraint or the values |
 | `StaleVersionException`, which `GuardVersion` throws for an old version in the request, and `AppDbContext` throws when another save changed the row after the load, or when a unique index with `ForStaleVersion` stops a save | 409 with `type` `urn:recall:problem:stale-version`. `title` is "The record changed after you loaded it." `detail` has the message, and `errors` has it under `version` |
 | `ConcurrentChangeException`, which `RaceRetryBehavior` throws when a command with no version lost the race on each run | 409 with `type` `urn:recall:problem:concurrent-change`. `title` is "Other users changed the record at the same time." `detail` has the message, and `errors` is empty |
 | `RequestValidationException`, from a DataAnnotations rule in `RequestValidationBehavior` | 400. `errors` has the messages for each camelCase field |
-| `QueryInputException`, for a query value that the Server cannot apply: a `filters` or `sortOrder` value that QueryKit cannot apply, a value with a character that Postgres cannot take, or a malformed `cursor` | 400. `errors` has the message under the name of the parameter. For a `filters` or `sortOrder` value, `QueryKitInputExtensions` writes a message that tells the caller what to change: the character where the parse failed, the field that the list does not have with the fields that it has, the field that a value does not fit, the limit that the filter broke, the sounds-like operators that the list cannot run, the in operators with one value in place of a list, or a comparison with null that only `==` and `!=` can make. `QueryKitInputExtensions` refuses two forms of null that QueryKit parses and the query cannot run: a case-insensitive operator with null, such as `==* null`, and `== null` or `!= null` on a field that holds a list. A filter or a sort uses only the fields of the list. QueryKit reads a member of a field too, such as `startsAt.ticks`, and EF cannot translate most of them, so `QueryKitInputExtensions` refuses a part of a field. The message never holds the value of a comparison. The feature slice span gets the type of the exception, with the place of a parse fault or the limit that the filter broke. The span does not get the text of the filter or a field name, because a caller can type any text as a field name |
+| `QueryInputException`, for a query value that the Server cannot apply: a `filters` or `sortOrder` value that QueryKit cannot apply, a value with a character that SQLite text does not keep, or a malformed `cursor` | 400. `errors` has the message under the name of the parameter. For a `filters` or `sortOrder` value, `QueryKitInputExtensions` writes a message that tells the caller what to change: the character where the parse failed, the field that the list does not have with the fields that it has, the field that a value does not fit, the limit that the filter broke, the sounds-like operators that the list cannot run, the in operators with one value in place of a list, or a comparison with null that only `==` and `!=` can make. `QueryKitInputExtensions` refuses two forms of null that QueryKit parses and the query cannot run: a case-insensitive operator with null, such as `==* null`, and `== null` or `!= null` on a field that holds a list. A filter or a sort uses only the fields of the list. QueryKit reads a member of a field too, such as `startsAt.ticks`, and EF cannot translate most of them, so `QueryKitInputExtensions` refuses a part of a field. The message never holds the value of a comparison. The feature slice span gets the type of the exception, with the place of a parse fault or the limit that the filter broke. The span does not get the text of the filter or a field name, because a caller can type any text as a field name |
 | Any other exception | 500 |
 
 If a request value does not bind, or a DataAnnotations rule fails, the Server returns 400 with a `ValidationProblemDetails` body. This body has the `errors` field, keyed by the camelCase name of each field. Declare `.ProducesValidationProblem()` on each endpoint that can return 400, so that the OpenAPI document states this shape. This includes each list endpoint, because of the QueryKit row in the table.
 
 A 422 comes from a domain rule or a FluentValidation rule. Its body also has the `ValidationProblemDetails` shape. Declare `.ProducesValidationProblem(StatusCodes.Status422UnprocessableEntity)` on each write endpoint (POST, PUT, PATCH, and DELETE). Also declare it when the endpoint has no request body, because a domain rule can fail in any write.
 
-A 409 comes from a duplicate unique value, an overlap that an exclusion constraint stops, or a record that changed after the caller loaded it. Its body also has the `ValidationProblemDetails` shape. The `type` tells the cases apart. The type `urn:recall:problem:stale-version` (`DomainProblemDetails.StaleVersionType`) means that the caller must load the record again and repeat the change. The type `urn:recall:problem:concurrent-change` (`DomainProblemDetails.ConcurrentChangeType`) means that the caller can send the same request again. Any other type means that the caller must change the value of the field in `errors`.
+A 409 comes from a duplicate unique value or a record that changed after the caller loaded it. Its body also has the `ValidationProblemDetails` shape. The `type` tells the cases apart. The type `urn:recall:problem:stale-version` (`DomainProblemDetails.StaleVersionType`) means that the caller must load the record again and repeat the change. The type `urn:recall:problem:concurrent-change` (`DomainProblemDetails.ConcurrentChangeType`) means that the caller can send the same request again. Any other type means that the caller must change the value of the field in `errors`.
 
 Each entrypoint shows the three kinds differently:
 
@@ -146,7 +146,7 @@ In a list handler, call `ApplyFilters` and `ApplySortOrder` from `Resources/Quer
 
 Do not catch these exceptions in an endpoint. Throw them from the entity or the handler.
 
-Before you add a row with a unique value, check for the value in the handler and throw a `ConflictException` on the property. The check gives a clear message. The check must count the same rows as the unique index. If the index has a filter, such as `is_deleted = false`, keep the same filter in the check. Two requests can pass the check at the same time, so the unique index stops the second save, and the mapping above gives 409. Give each new unique index its request field and its message with `ForRequestField` in its entity configuration. An index that stops a save only when another user changed the record gets `ForStaleVersion` instead. Give an exclusion constraint, or an index that only a migration adds, its request field and its message in the `NotInModel` dictionary of `ConstraintErrors` (see [entity-configurations.md](backend/entity-configurations.md#unique-indexes)). For a stale-version index that only a migration adds, use `new ConstraintError.StaleVersion()` in place of the request field and the message. Put the message in a constant on the entity, for example `Tenant.NameInUseMessage`, and use the same constant in the check. Then the loser of the race gets the same message as a request that the check stops. A test fails if a constraint has no entry. EF Core 10 cannot index a column of a value object, so add such an index in a migration (see [entity-configurations.md](backend/entity-configurations.md#index-a-column-of-a-value-object)).
+Before you add a row with a unique value, check for the value in the handler and throw a `ConflictException` on the property. The check gives a clear message. The check must count the same rows as the unique index. If the index has a filter, such as `is_deleted = false`, keep the same filter in the check. Two requests can pass the check at the same time, so the unique index stops the second save, and the mapping above gives 409. Give each new unique index its request field and its message with `ForRequestField` in its entity configuration. An index that stops a save only when another user changed the record gets `ForStaleVersion` instead. Give an index that only a migration adds its request field and its message in the `NotInModel` dictionary of `ConstraintErrors` (see [entity-configurations.md](backend/entity-configurations.md#unique-indexes)). For a stale-version index that only a migration adds, use `new ConstraintError.StaleVersion()` in place of the request field and the message. Put the message in a constant on the entity, for example `Tenant.NameInUseMessage`, and use the same constant in the check. Then the loser of the race gets the same message as a request that the check stops. A test fails if a constraint has no entry. EF Core 10 cannot index a column of a value object, so add such an index in a migration (see [entity-configurations.md](backend/entity-configurations.md#index-a-column-of-a-value-object)).
 
 ## Permissions
 
@@ -209,12 +209,12 @@ To remove a permission, remove its value and add a migration that calls `DeleteP
 - **Last modified**: the context sets `LastModifiedOn` on each row that a save writes. The audit log records who made each change and when. `LastModifiedOn` stays because a save that changes an owned child writes it on the owner, so the owner row and its version change (see [Concurrency](#concurrency)).
 - **Tenant filter**: see [multi-tenancy.md](multi-tenancy.md).
 - **Domain events**: the context runs the handlers before it sends the SQL, so the handler changes commit with the save.
-- **Audit log**: the context adds the audit entries of the save before it sends the SQL. Only the save and `BulkInsertAsync` can write an audited table. See [audit-log.md](backend/audit-log.md).
+- **Audit log**: the context adds the audit entries of the save before it sends the SQL. Only the save can write an audited table. See [audit-log.md](backend/audit-log.md).
 - **Optimistic concurrency**: each update checks the version of the row. See [Concurrency](#concurrency).
 
 Entity configurations are in `Databases/EntityConfigurations/`. Database names use snake case.
 
-The context adds the soft delete filter, the `xmin` version, the ID field mapping, and the tenant filter with EF Core conventions. Thus a context that configures an entity after `base.OnModelCreating`, for example in a test, also gets them for that entity.
+The context adds the soft delete filter, the version token, the ID field mapping, and the tenant filter with EF Core conventions. Thus a context that configures an entity after `base.OnModelCreating`, for example in a test, also gets them for that entity.
 
 A paged list query must have a fixed sort order. Without one, a row can show on two pages or on no page. When the caller gives no sort, sort by a natural key and then by `Id`. After a custom sort, also sort by `Id`. Add an index on the default sort, so that the database can read the page in order. See `GetUserList.cs` and `UserConfiguration.cs` for an example.
 
@@ -229,9 +229,9 @@ dotnet ef migrations add MyMigration --project Recall.Server --startup-project R
 dotnet ef database update --project Recall.Server --startup-project Recall.Server
 ```
 
-The server applies migrations at startup, with a Postgres advisory lock.
+The server applies migrations at startup. Before them, `SqliteFile.PrepareAsync` makes the directory, refuses a network, FUSE, or shared folder mount, sets WAL, and removes a migration lock that a killed process left.
 
-`ModelSnapshotTests` fails when the committed model snapshot is not the snapshot that the next migration writes. This includes a model change with no DDL, such as a new navigation, which `dotnet ef migrations has-pending-model-changes` does not find. The test ignores the `using` lines and the `ProductVersion` annotation. To correct the failure, add a migration in the change that changed the model. For a change with no DDL, the `Up` and `Down` of the migration are empty. An update of EF Core or Npgsql that changes the generated code also fails the test. Correct it the same way.
+`ModelSnapshotTests` fails when the committed model snapshot is not the snapshot that the next migration writes. This includes a model change with no DDL, such as a new navigation, which `dotnet ef migrations has-pending-model-changes` does not find. The test ignores the `using` lines and the `ProductVersion` annotation. To correct the failure, add a migration in the change that changed the model. For a change with no DDL, the `Up` and `Down` of the migration are empty. An update of EF Core that changes the generated code also fails the test. Correct it the same way.
 
 ## Object storage
 
@@ -252,7 +252,7 @@ To keep the files of an entity in storage, follow [attachments.md](backend/attac
 | Project | Scope |
 |---------|-------|
 | `tests/Recall.UnitTests` | Domain logic and small units, with no database |
-| `tests/Recall.IntegrationTests` | Feature handlers against a real PostgreSQL container |
+| `tests/Recall.IntegrationTests` | Feature handlers against a real SQLite file |
 | `tests/Recall.FunctionalTests` | HTTP, gRPC, and MCP endpoints against one shared app and database |
 | `tests/Recall.SharedTestHelpers` | Fakes and builders for all test projects |
 
@@ -266,13 +266,13 @@ A test never takes today from the UTC date. Take it from the zone of the place i
 
 TUnit runs all tests in parallel, also the tests of one class. The integration and functional tests share one fixture for each assembly, which `AssemblyHooks.cs` starts and stops. Each test must create its own data and must not depend on rows from other tests. If a test reads state of the whole process, such as all exported spans, put `[NotInParallel]` on its class.
 
-A list has an integration test that filters its text field with `@=*` for `50%`, `a_b`, `c\d`, and text with a quote at an end, and finds only the row with that text. Build each filter value with `QueryKitText.Quote`. A raw `ILike` with `LikePattern` has the same test. See `tests/Recall.IntegrationTests/Databases/LikePatternTests.cs`.
+A list has an integration test that filters its text field with `@=*` for `50%`, `a_b`, `c\d`, and text with a quote at an end, and finds only the row with that text. Build each filter value with `QueryKitText.Quote`. A raw `Like` with `LikePattern` has the same test. See `tests/Recall.IntegrationTests/Databases/LikePatternTests.cs`.
 
 To run the tests in a web UI, open the **Labcoat UI** link of the `tests` resource in the Aspire dashboard. [Labcoat](https://github.com/eriklieben/labcoat) builds and runs the test projects, and shows each failure with its source.
 
 To use Labcoat without the stack, run `dotnet labcoat` from the repository root.
 
-Local runs reuse one Postgres container and create a new database for each run. If the `CI` variable is set, each run gets a new container.
+`SqliteTestDatabase` gives each test run its own data file in a new temp directory.
 
 ### Race tests
 

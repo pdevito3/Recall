@@ -67,7 +67,7 @@ public class DomainEventTenantTests
     private static AppDbContext CreateAppDbContext()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql("Host=unused")
+            .UseSqlite("Data Source=unused.db")
             .UseSnakeCaseNamingConvention()
             .Options;
         return new AppDbContext(options, TimeProvider.System, Substitute.For<ICurrentUserService>(),

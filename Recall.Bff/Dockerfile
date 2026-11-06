@@ -19,6 +19,7 @@ RUN dotnet restore Recall.Bff/Recall.Bff.csproj
 
 COPY Recall.Bff/ Recall.Bff/
 COPY Recall.Server/Resources/Extensions/CallerCancellationHealthCheck.cs Recall.Server/Resources/Extensions/
+COPY Recall.Server/Databases/Sqlite/ Recall.Server/Databases/Sqlite/
 WORKDIR /src/Recall.Bff
 RUN dotnet publish -c Release -o /app/publish
 

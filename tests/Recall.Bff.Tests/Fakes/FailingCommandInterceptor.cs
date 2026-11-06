@@ -2,13 +2,8 @@ namespace Recall.Bff.Tests.Fakes;
 
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Npgsql;
+using Microsoft.Data.Sqlite;
 
-/// <summary>
-/// Fails each command whose SQL holds the tag <paramref name="tag"/>, such as <c>bff_sessions.delete</c>, as a
-/// lost database connection does. The error is not transient, so the retries of the execution strategy do not
-/// run.
-/// </summary>
 public sealed class FailingCommandInterceptor(string tag) : DbCommandInterceptor
 {
     public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command,
@@ -28,6 +23,6 @@ public sealed class FailingCommandInterceptor(string tag) : DbCommandInterceptor
     private void FailIfTagged(DbCommand command)
     {
         if (command.CommandText.Contains($"-- {tag}", StringComparison.Ordinal))
-            throw new NpgsqlException($"A test failed the command {tag}.");
+            throw new SqliteException($"A test failed the command {tag}.", 1);
     }
 }

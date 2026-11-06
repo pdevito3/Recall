@@ -7,12 +7,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Domain.AuditEntries;
 
-/// <summary>
-/// The one owner of the jsonb format of <see cref="AuditEntry.Data"/>. A change is
-/// <c>{"FirstName":{"old":"Ann","new":"Anne"},"Email":{"old":"a@example.com","new":"b@example.com"}}</c>.
-/// A <see cref="AuditEntryKind.Created"/> change has no "old". An action is its properties, for example
-/// <c>{"Format":"Csv","Count":3}</c>.
-/// </summary>
 /// <summary>One stored value as display text. <c>Old</c> is null for a created value and for a property of an action.</summary>
 internal readonly record struct StoredValue(string Name, string? Old, string? New);
 

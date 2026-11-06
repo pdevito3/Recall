@@ -12,7 +12,7 @@ Each entity has one EF Core configuration class in `Databases/EntityConfiguratio
 6. Set `OnDelete` on each relationship. Use `ClientNoAction` for a link to another aggregate. The context turns a delete into a soft delete, so the delete of an entity must not change another aggregate. `Restrict`, `NoAction`, `SetNull`, and `ClientSetNull` set the foreign key of a loaded dependent to null. The save then fails, or it writes the null key, but the principal row stays. `DeleteBehaviorTests` fails on each of them. Use `Cascade` for a child that the entity owns. `Cascade` also tells the context that a change to the child updates the owner row, so that the version of the owner guards the child. It also makes the owner the aggregate root of the child in the audit log. Give a child one `Cascade` foreign key to an entity. A nullable `Cascade` foreign key makes an owner that is optional, and the child is a root when the key is null. See [concurrency.md](concurrency.md#versions) and [Trees](#trees).
 7. Add an index for each property that queries filter or sort on.
 8. After you change a configuration, add a migration. See [backend.md](../backend.md#migrations).
-9. Do not configure `Version`. `MapVersionToXmin` maps it to the `xmin` column of each entity.
+9. Do not configure `Version`. `MapVersionToConcurrencyToken` makes the `version` column of each entity a concurrency token.
 10. Map each `BaseEntity` to a table, with `Id` as its key. The model build fails for a `BaseEntity` whose key is not `Id` alone, and for a `BaseEntity` that maps to a view, a SQL query, or a function. To read a view, see [Read models](#read-models).
 
 ## Example
@@ -104,14 +104,13 @@ For a tree that is one aggregate, obey these rules:
 1. Implement `ITenantable` on the node, because a node with no parent is a root. Give each new node the tenant of its parent, and move a node only under a node of the same tenant. The save throws when a node that changes has a tenant that is not the tenant of its top node. `AuditModelTests` fails when the node has no tenant.
 2. Load each ancestor of a node before you change the node. The save throws when an ancestor is not tracked.
 3. To move a node, load its former parent and the ancestors of the former parent too. The save updates the rows of the former ancestors and of the new ancestors, so the version of each top node guards the move. The audit entry of the move names the new root and holds the old and the new parent key. The history of the former top node does not show the move, but its version changes.
-4. Do not bulk insert the nodes. `BulkInsertAsync` refuses a type with an owner key, also a key that is optional.
 5. Make the subject of an audit action from the top node, not from the node that the action is about. The save throws when the subject names a tracked node that has a parent. It does not see a node that you read with `AsNoTracking`.
 
 `EntityTreeTests` is the example.
 
 ## Read models
 
-A `BaseEntity` is a row of a table. Its ID, its `xmin` version, the soft delete filter, and the audit log need the table and the key. A query of a view selects `xmin`, and a view has no `xmin` column, so Postgres fails the query. Thus a read model of a view is a class that is not a `BaseEntity`:
+A `BaseEntity` is a row of a table. Its ID, its `version` column, the soft delete filter, and the audit log need the table and the key. A save writes the `version` column, and a view cannot take the write. Thus a read model of a view is a class that is not a `BaseEntity`:
 
 1. Give the class `[NotAudited(reason)]`, because the save does not write it.
 2. Implement `ITenantable` on the class, so that the tenant filter applies to its rows.
@@ -164,7 +163,7 @@ A save that the index stops then gives the stale-version 409, the same response 
 
 `ForRequestField` and `ForStaleVersion` each set an annotation on the index. The `MapConstraintErrors` convention of `AppDbContext` moves it to a runtime annotation of the model, and `DatabaseConflict` reads it from there. A runtime annotation is not in the design-time model, so neither method changes the model snapshot or needs a migration. The model build fails when an index that is not unique has one of the two, or when an index has both.
 
-`ConstraintErrorsTests` reads the unique indexes and the exclusion constraints of the database. It fails on a constraint that has neither a request field nor a stale version. This includes an index that only a migration adds.
+`ConstraintErrorsTests` reads the unique indexes of the database. It fails on an index that has neither a request field nor a stale version. This includes an index that only a migration adds.
 
 ### Index a column of a value object
 
@@ -193,22 +192,6 @@ EF Core 10 cannot put an index on a property of a complex type. `HasIndex(e => e
    }
    ```
 
-3. The model does not have the index, so `ForRequestField` cannot name it. Add the index to the `NotInModel` dictionary in `Databases/ConstraintErrors.cs`, for example `["ix_users_email"] = new ConstraintError.RequestField("email", User.EmailInUseMessage)`. For a stale-version index, use `new ConstraintError.StaleVersion()`.
+3. The model does not have the index, so `ForRequestField` cannot name it. A SQLite error names the columns of an index, and not the index. Add the columns to the `NotInModel` dictionary in `Databases/ConstraintErrors.cs`, for example `["users.email"] = new ConstraintError.RequestField("email", User.EmailInUseMessage)`. For a stale-version index, use `new ConstraintError.StaleVersion()`.
 
 The model and the model snapshot do not have the index. Thus a later migration does not drop it, and `dotnet ef migrations has-pending-model-changes` finds no change. A save that the index stops gives a 409 on the field, the same as for an index in the model.
-
-## Exclusion constraints
-
-An exclusion constraint stops two rows that overlap, for example two appointments of one provider at the same time. EF Core cannot configure one, so add it with SQL in the migration. A constraint with `=` on a scalar column in a `gist` index needs the `btree_gist` extension:
-
-<!-- code: tests/Recall.UnitTests/Docs/EntityConfigurationExampleTests.cs -->
-```csharp
-migrationBuilder.Sql("CREATE EXTENSION IF NOT EXISTS btree_gist;");
-migrationBuilder.Sql("""
-    ALTER TABLE appointments ADD CONSTRAINT ex_appointments_provider_time
-    EXCLUDE USING gist (provider_id WITH =, tstzrange(starts_at, ends_at) WITH &&)
-    WHERE (is_deleted = false);
-    """);
-```
-
-The model does not have the constraint. Give the constraint its request field and its message in the `NotInModel` dictionary in `Databases/ConstraintErrors.cs`, for example `["ex_appointments_provider_time"] = new ConstraintError.RequestField("startsAt", Appointment.TimeTakenMessage)`. A save that the constraint stops (Postgres `23P01`) then gives a 409 on that field with that message, the same as a unique index.

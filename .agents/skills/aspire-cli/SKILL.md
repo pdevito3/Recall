@@ -17,7 +17,8 @@ An isolated run (`--isolated`) gives the stack its own copy of everything that c
 |---|---|---|
 | Ports of the dashboard, the server, the BFF, Vite, and the auth containers | Fixed. See the port table in `README.md`. | Random |
 | User secrets | The AppHost secrets | A copy, deleted at the end of the run |
-| Postgres data (app and auth provider) | A volume for each checkout path | No volume. The data is empty at each start. |
+| Data files (`recall.db`, `bff.db`) | `.data` of the checkout, or `RECALL_DATA_DIR` | A new temp directory, or `RECALL_DATA_DIR`. The data is empty at each start. |
+| Postgres data of an auth provider with its own Postgres | A volume for each checkout path | No volume. The data is empty at each start. |
 
 Thus a worktree run never shares a port or a database with another run. The Docker images, the NuGet and pnpm caches, and the Duende demo identity server stay shared.
 
@@ -71,7 +72,7 @@ All rows need `--apphost Recall.AppHost` (see [Select the AppHost](#select-the-a
 | Rebuild a .NET project and restart it | `dotnet aspire resource <resource> rebuild` |
 | Stop the stack | `dotnet aspire stop` |
 
-The resource names are the names in `Recall.AppHost/AppHost.cs`: `server`, `bff`, `webfrontend`, `postgres`, `appdb`, and `tests` (the Labcoat test UI).
+The resource names are the names in `Recall.AppHost/AppHost.cs`: `server`, `bff`, `webfrontend`, and `tests` (the Labcoat test UI).
 
 ## Code changes
 

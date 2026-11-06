@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Web;
 using Recall.Bff.Sessions;
 using Recall.Bff.Tests.Fakes;
+using Recall.SharedTestHelpers.Utilities;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Hosting;
@@ -19,12 +20,6 @@ using Serilog.AspNetCore;
 using Serilog.Core;
 using Serilog.Extensions.Logging;
 
-/// <summary>
-/// The BFF on a test server, with the <see cref="FakeIdentityProvider"/> as its identity provider, the
-/// <see cref="EchoApi"/> as its server API, and a Postgres container for <c>bffdb</c>. One instance serves the
-/// whole assembly. Each test gets its own client, and thus its own cookies. A test that needs other settings, or
-/// a second BFF instance on the same <c>bffdb</c>, starts its own with <see cref="StartAnotherInstance"/>.
-/// </summary>
 public sealed class BffApp : WebApplicationFactory<Program>
 {
     /// <summary>
@@ -54,7 +49,7 @@ public sealed class BffApp : WebApplicationFactory<Program>
     /// </remarks>
     public static CapturedLogs Logs { get; } = new();
 
-    public static PostgresTestDatabase Database { get; private set; } = null!;
+    public static SqliteTestDatabase Database { get; private set; } = null!;
 
     // Program.cs assigns a new bootstrap logger to the static Log.Logger and the host freezes it. Two hosts that
     // start at the same time can freeze the same logger, which fails the second host.
@@ -72,8 +67,7 @@ public sealed class BffApp : WebApplicationFactory<Program>
 
     public static async Task StartAsync()
     {
-        var database = new PostgresTestDatabase();
-        await database.StartAsync();
+        var database = new SqliteTestDatabase();
         Database = database;
         var identityProvider = await FakeIdentityProvider.StartAsync();
         var api = await EchoApi.StartAsync();

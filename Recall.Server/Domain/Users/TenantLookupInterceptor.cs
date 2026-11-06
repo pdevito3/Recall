@@ -7,9 +7,6 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Resources;
 using Serilog;
 
-/// <summary>
-/// It applies the change after a failed or canceled save too, because a lost acknowledgment can hide a commit.
-/// </summary>
 public sealed class TenantLookupInterceptor(ITenantIdProvider tenantIdProvider) : SaveChangesInterceptor
 {
     private static readonly ILogger Logger = Log.ForContext<TenantLookupInterceptor>();

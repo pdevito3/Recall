@@ -1,5 +1,7 @@
 # Recall stores its data in one SQLite file
 
+> Changed by PR R1 of the plan: until R4 deletes the BFF, its sessions and its Data Protection keys are in a second file, `bff.db`, next to `recall.db`. A backup needs both files until then.
+
 The operator ruled on 2026-11-05: "agree sqlite". One container is the agent reading of that ruling, as [ADR 0013](0013-one-container-hosting.md) says. One file gives a simple backup, a smaller image, and no database upgrade across major versions. The audience is a person with a NAS. The POC also ran this way. The plan's R1 builds it.
 
 ## Evidence
@@ -19,6 +21,6 @@ These numbers come from a loaded Mac with Docker on arm64. No run was on a real 
 ## Consequences
 
 - The data layer forks from the template, and the program pays for that in R1 and in each later template fix. See [ADR 0017](0017-template-fixes-by-cherry-pick.md).
-- [ADR 0008](0008-optimistic-concurrency-with-xmin.md) stays true until R1 replaces `xmin` with an explicit version column. R1 also replaces the advisory locks with a process-local lock.
-- SQLite on a network mount can corrupt data or run a job twice, so R1 refuses a network file system at startup.
+- R1 replaced the `xmin` of [ADR 0008](0008-optimistic-concurrency-with-xmin.md) with an explicit version column, and the advisory locks with a process-local lock.
+- SQLite on a network mount can corrupt data or run a job twice, so the app refuses a network file system at startup.
 - A long write transaction stalls the job pumps. Appendix C of the plan records a max of 4.8 s during a drain in the prototype, with no raw output file. Watch the max, and not only the p95.

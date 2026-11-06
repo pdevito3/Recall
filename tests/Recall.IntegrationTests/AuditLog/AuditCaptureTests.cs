@@ -18,7 +18,7 @@ using Recall.SharedTestHelpers.Fakes.User;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Npgsql;
+using Microsoft.Data.Sqlite;
 using Shouldly;
 using static Recall.IntegrationTests.DomainEvents.DomainEventTestServices;
 
@@ -224,26 +224,6 @@ public class AuditCaptureTests : TestBase
     }
 
     [Test]
-    public async Task retried_save_records_its_changes_once()
-    {
-        // Arrange
-        var failFirstWrite = new FailFirstWrite();
-        await using var services = TestFixture.BuildServiceProvider(s => s
-            .ConfigureDbContext<AppDbContext>((_, options) => options.AddInterceptors(failFirstWrite)));
-        var scope = new TestingServiceScope(services);
-        var scenario = await scope.StartTenantScenarioAsync();
-        failFirstWrite.Arm();
-
-        // Act
-        await scope.SendAsync(new UpdateTenant.Command(scenario.Tenant.Id,
-            new TenantForUpdateDto { Name = $"renamed-{Guid.NewGuid()}", Version = scenario.Tenant.Version }));
-
-        // Assert
-        failFirstWrite.Failures.ShouldBe(1);
-        (await EntriesOfRootAsync(scenario.Tenant.Id)).Count(e => e.Kind == AuditEntryKind.Updated).ShouldBe(1);
-    }
-
-    [Test]
     public async Task system_work_records_no_actor_and_no_request()
     {
         // Arrange
@@ -337,7 +317,6 @@ public class AuditCaptureTests : TestBase
     [Test]
     [Arguments("UPDATE audit_entries SET kind = kind WHERE root_id = @rootId")]
     [Arguments("DELETE FROM audit_entries WHERE root_id = @rootId")]
-    [Arguments("TRUNCATE audit_entries")]
     public async Task audit_entries_refuse_a_change_of_a_written_row(string sql)
     {
         // Arrange
@@ -349,19 +328,19 @@ public class AuditCaptureTests : TestBase
             await db.SaveChangesAsync();
         }
 
-        await using var connection = new NpgsqlConnection(
+        await using var connection = new SqliteConnection(
             new TestingServiceScope().GetService<IConfiguration>().GetConnectionString(DatabaseConsts.DatabaseName));
         await connection.OpenAsync();
         // The rollback undoes the statement if the table ever lets it through.
-        await using var transaction = await connection.BeginTransactionAsync();
-        await using var command = new NpgsqlCommand(sql, connection, transaction);
+        await using var transaction = connection.BeginTransaction();
+        await using var command = new SqliteCommand(sql, connection, transaction);
         command.Parameters.AddWithValue("rootId", tenant.Id);
 
         // Act
         var act = () => command.ExecuteNonQueryAsync();
 
         // Assert
-        (await act.ShouldThrowAsync<PostgresException>()).MessageText.ShouldContain("append-only");
+        (await act.ShouldThrowAsync<SqliteException>()).Message.ShouldContain("append-only");
     }
 
     private static Task<List<AuditEntry>> EntriesOfRootAsync(string rootId)

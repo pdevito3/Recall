@@ -11,7 +11,7 @@ public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
     public AppDbContext CreateDbContext(string[] args)
     {
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
-        optionsBuilder.UseNpgsql("Host=localhost;Database=recall")
+        optionsBuilder.UseSqlite("Data Source=recall.db")
             .UseSnakeCaseNamingConvention();
 
         return new AppDbContext(

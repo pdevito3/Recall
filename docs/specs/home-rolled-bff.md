@@ -2,7 +2,7 @@
 
 This spec replaces `Duende.BFF` and `Duende.BFF.Yarp` in `Recall.Bff` with our own code. It is the hand-off of the map [Migrate the BFF off Duende BFF](https://github.com/pdevito3/FullstackTemplate/issues/6). Each decision in this spec links to the ticket that holds its reasons.
 
-> Status: Recall dropped the conformance run, and R4 deletes the BFF. Recall has no conformance suite, job, or provider, so each mention of them in this spec describes the template. See [Conformance](../authentication.md#conformance).
+> Status: R1 moved `bffdb` to the SQLite file `bff.db` with one BFF process, so each mention of Postgres, an advisory lock, or two BFF hosts in this spec describes the template. Recall dropped the conformance run, and R4 deletes the BFF. Recall has no conformance suite, job, or provider, so each mention of them in this spec describes the template. See [Conformance](../authentication.md#conformance).
 
 The terms **BFF session**, **IdP session**, and **Identity provider** have the meanings in [`CONTEXT.md`](../../CONTEXT.md).
 

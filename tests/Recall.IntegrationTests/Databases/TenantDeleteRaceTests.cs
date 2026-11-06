@@ -1,5 +1,6 @@
 namespace Recall.IntegrationTests.Databases;
 
+using Recall.Server.Databases;
 using Recall.Server.Domain.Agents.Features;
 using Recall.Server.Domain.Tenants.Features;
 using Recall.Server.Domain.Users.Features;
@@ -38,7 +39,7 @@ public class TenantDeleteRaceTests : TestBase
         var delete = underTest.SendAsync(new DeleteTenant.Command(tenant.Id));
         await pause.ReachedAsync();
         var add = rival.SendAsync(new AddAgent.Command(new FakeAgentForCreationDto().Generate()));
-        await pause.WaitUntilBlockedAsync(add);
+        await pause.WaitUntilBlockedAsync(add, () => RootLock.Tenant.HasWaiter(tenant.Id));
         pause.Release();
 
         // Assert
@@ -67,7 +68,7 @@ public class TenantDeleteRaceTests : TestBase
         var add = underTest.SendAsync(new AddAgent.Command(new FakeAgentForCreationDto().Generate()));
         await pause.ReachedAsync();
         var delete = rival.SendAsync(new DeleteTenant.Command(tenant.Id));
-        await pause.WaitUntilBlockedAsync(delete);
+        await pause.WaitUntilBlockedAsync(delete, () => RootLock.Tenant.HasWaiter(tenant.Id));
         pause.Release();
 
         // Assert
@@ -98,7 +99,7 @@ public class TenantDeleteRaceTests : TestBase
         var delete = underTest.SendAsync(new DeleteTenant.Command(tenant.Id));
         await pause.ReachedAsync();
         var add = rival.SendAsync(new AddUser.Command(newUser));
-        await pause.WaitUntilBlockedAsync(add);
+        await pause.WaitUntilBlockedAsync(add, () => RootLock.Tenant.HasWaiter(tenant.Id));
         pause.Release();
 
         // Assert
@@ -128,7 +129,7 @@ public class TenantDeleteRaceTests : TestBase
         var add = underTest.SendAsync(new AddUser.Command(newUser));
         await pause.ReachedAsync();
         var delete = rival.SendAsync(new DeleteTenant.Command(tenant.Id));
-        await pause.WaitUntilBlockedAsync(delete);
+        await pause.WaitUntilBlockedAsync(delete, () => RootLock.Tenant.HasWaiter(tenant.Id));
         pause.Release();
 
         // Assert

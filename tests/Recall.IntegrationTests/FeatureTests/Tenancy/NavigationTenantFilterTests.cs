@@ -18,7 +18,7 @@ using Shouldly;
 /// </summary>
 public sealed class NavigationTenantFilterTests : IAsyncDisposable
 {
-    private readonly PostgresTestDatabase _database = new();
+    private readonly SqliteTestDatabase _database = new();
 
     public async ValueTask DisposeAsync() => await _database.DisposeAsync();
 
@@ -26,7 +26,6 @@ public sealed class NavigationTenantFilterTests : IAsyncDisposable
     public async Task caller_of_one_tenant_sees_no_row_of_another_tenant_for_an_entity_tenanted_through_a_navigation()
     {
         // Arrange
-        await _database.StartAsync();
         var tenantA = Tenant.Create(new FakeTenantForCreation().Generate());
         var tenantB = Tenant.Create(new FakeTenantForCreation().Generate());
         var userA = User.Create(new FakeUserForCreation().RuleFor(u => u.TenantId, _ => tenantA.Id).Generate());
@@ -53,7 +52,7 @@ public sealed class NavigationTenantFilterTests : IAsyncDisposable
     private NoteContext CreateContext(TenantScope scope)
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(_database.ConnectionString)
+            .UseSqlite(_database.ConnectionString)
             .UseSnakeCaseNamingConvention()
             .Options;
         var scopeProvider = Substitute.For<ITenantScopeProvider>();

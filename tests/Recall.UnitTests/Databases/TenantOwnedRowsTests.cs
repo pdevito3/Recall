@@ -146,7 +146,7 @@ public class TenantOwnedRowsTests
     }
 
     private sealed class ShippingContext() : AppDbContext(
-        new DbContextOptionsBuilder<AppDbContext>().UseNpgsql("Host=unused").UseSnakeCaseNamingConvention().Options,
+        new DbContextOptionsBuilder<AppDbContext>().UseSqlite("Data Source=unused.db").UseSnakeCaseNamingConvention().Options,
         TimeProvider.System, Substitute.For<ICurrentUserService>(), Substitute.For<ICallerIdentityResolver>(),
         Substitute.For<ITenantScopeProvider>(), new DomainEventDispatcher(new ServiceCollection().BuildServiceProvider()))
     {

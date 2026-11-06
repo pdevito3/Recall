@@ -13,7 +13,7 @@ using Shouldly;
 
 public sealed class EntityTreeTests : IAsyncDisposable
 {
-    private readonly PostgresTestDatabase _database = new();
+    private readonly SqliteTestDatabase _database = new();
 
     public async ValueTask DisposeAsync() => await _database.DisposeAsync();
 
@@ -21,7 +21,6 @@ public sealed class EntityTreeTests : IAsyncDisposable
     public async Task top_node_with_no_parent_is_its_own_root_and_a_child_node_saves_under_it()
     {
         // Arrange
-        await _database.StartAsync();
         var top = Node.Top();
 
         // Act
@@ -61,7 +60,6 @@ public sealed class EntityTreeTests : IAsyncDisposable
     public async Task a_node_that_moves_out_of_its_parent_changes_the_version_of_its_former_parent(string move)
     {
         // Arrange
-        await _database.StartAsync();
         var former = Node.Top();
         var other = Node.TopIn(former.TenantId);
         var child = former.NewChild();
@@ -92,7 +90,6 @@ public sealed class EntityTreeTests : IAsyncDisposable
     public async Task a_node_that_moves_out_of_a_parent_that_is_not_loaded_fails_with_the_fix()
     {
         // Arrange
-        await _database.StartAsync();
         var former = Node.Top();
         var child = former.NewChild();
         await using (var writer = await CreateContextAsync())
@@ -117,7 +114,6 @@ public sealed class EntityTreeTests : IAsyncDisposable
     public async Task a_node_with_a_tenant_that_is_not_the_tenant_of_its_top_node_fails_with_the_fix()
     {
         // Arrange
-        await _database.StartAsync();
         var top = Node.Top();
         await using (var writer = await CreateContextAsync())
         {
@@ -143,7 +139,6 @@ public sealed class EntityTreeTests : IAsyncDisposable
     public async Task an_action_about_a_node_that_has_a_parent_fails_with_the_fix()
     {
         // Arrange
-        await _database.StartAsync();
         var top = Node.Top();
         var child = top.NewChild();
         await using (var writer = await CreateContextAsync())
@@ -167,7 +162,7 @@ public sealed class EntityTreeTests : IAsyncDisposable
     private async Task<AppDbContext> CreateContextAsync()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(_database.ConnectionString)
+            .UseSqlite(_database.ConnectionString)
             .UseSnakeCaseNamingConvention()
             .Options;
         var scopeProvider = Substitute.For<ITenantScopeProvider>();

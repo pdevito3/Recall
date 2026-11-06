@@ -99,7 +99,7 @@ public class AddAgentCommandTests : TestBase
         // Assert
         try
         {
-            (await Should.ThrowAsync<ForbiddenAccessException>(pause.WaitUntilBlockedAsync(add))).Message
+            (await Should.ThrowAsync<ForbiddenAccessException>(pause.WaitUntilBlockedAsync(add, () => RootLock.Tenant.HasWaiter(tenant.Id)))).Message
                 .ShouldBe("Only a client that can manage all tenants can do this.");
         }
         finally

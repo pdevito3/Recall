@@ -11,9 +11,7 @@ using Shouldly;
 using TestUtilities;
 
 /// <summary>
-/// Postgres text cannot hold U+0000, so a read input with a NUL must not get to a query. A list value gives 400 on its
-/// parameter, and an ID gives not found, the same as each other malformed ID, on each transport. An HTTP path cannot
-/// carry a NUL, because the URL decoder of ASP.NET Core refuses it before the Server.
+/// An HTTP path cannot carry a NUL, because the URL decoder of ASP.NET Core refuses it before the Server.
 /// </summary>
 public class NulInReadInputTests : TestBase
 {

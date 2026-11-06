@@ -31,9 +31,8 @@ public static class BaseEntityConventions
             idProperty.SetPropertyAccessMode(PropertyAccessMode.PreferFieldDuringConstruction);
         });
 
-    /// <summary>Postgres has the <c>xmin</c> system column on each table, so the migration has no DDL.</summary>
-    public static void MapVersionToXmin(this ModelConfigurationBuilder configurationBuilder)
-        => configurationBuilder.Conventions.Add(_ => new VersionToXminConvention());
+    public static void MapVersionToConcurrencyToken(this ModelConfigurationBuilder configurationBuilder)
+        => configurationBuilder.Conventions.Add(_ => new VersionTokenConvention());
 
     private static void ConfigureEachRootEntity(this ModelConfigurationBuilder configurationBuilder,
         Action<IConventionEntityType> configure)
@@ -52,7 +51,6 @@ public static class BaseEntityConventions
             }
         }
 
-        // The ID, the xmin version, the soft delete, and the audit log each need a row of a table with a key.
         private static void GuardRowOfATable(IConventionEntityType root)
         {
             const string readModelFix =
@@ -73,29 +71,28 @@ public static class BaseEntityConventions
                 is { } readsFromAView)
                 throw new InvalidOperationException(
                     $"{readsFromAView.ClrType.Name} is a BaseEntity that maps to a view, a SQL query, or a function. " +
-                    "A BaseEntity is a row of a table, and a query of it selects the xmin column of the table. " +
+                    "A BaseEntity is a row of a table, and a save of it writes the version column of the table. " +
                     $"Map it only with ToTable. {readModelFix}");
+
+            if (root.GetTableName() is { } table && root.Model.GetEntityTypes().FirstOrDefault(e =>
+                    e.GetTableName() == table && e.GetSchema() == root.GetSchema() && e.GetRootType() != root)
+                is { } sharesTheTable)
+                throw new InvalidOperationException(
+                    $"{sharesTheTable.ClrType.Name} shares the table {table} of the BaseEntity {root.ClrType.Name}. " +
+                    "A BaseEntity has the only type of its table, because each save of its row must check and increment the version. " +
+                    "Map a value object with ComplexProperty, or give the other type its own table.");
         }
     }
 
-    // Maps the property when EF adds it, because EF gives the token to the other types of a shared table while the
-    // model completes.
-    private sealed class VersionToXminConvention : IPropertyAddedConvention
+    private sealed class VersionTokenConvention : IPropertyAddedConvention
     {
         public void ProcessPropertyAdded(IConventionPropertyBuilder propertyBuilder,
             IConventionContext<IConventionPropertyBuilder> context)
         {
             var property = propertyBuilder.Metadata;
-            if (property.Name != nameof(BaseEntity.Version)
-                || !property.DeclaringType.ClrType.IsAssignableTo(typeof(BaseEntity)))
-                return;
-
-            property.SetColumnName("xmin");
-            property.SetColumnType("xid");
-            property.SetIsConcurrencyToken(true);
-            // A convention computes the value generation again when the table mapping changes. It does not change a value
-            // from a data annotation.
-            property.SetValueGenerated(ValueGenerated.OnAddOrUpdate, fromDataAnnotation: true);
+            if (property.Name == nameof(BaseEntity.Version)
+                && property.DeclaringType.ClrType.IsAssignableTo(typeof(BaseEntity)))
+                property.SetIsConcurrencyToken(true);
         }
     }
 }
