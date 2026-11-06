@@ -31,7 +31,13 @@ public static class JobHosting
         var pollSecondsAtRegistration = section.Get<JobOptions>()?.PollSeconds ?? new JobOptions().PollSeconds;
 
         builder.Services.Configure<JobOptions>(section);
-        builder.Services.Configure<HostOptions>(host => host.ShutdownTimeout = HostShutdownTimeout);
+        builder.Services.Configure<HostOptions>(host =>
+        {
+            host.ShutdownTimeout = HostShutdownTimeout;
+            // The web host waits for each open request, such as a live page of the dashboard, and a worker group that
+            // stops after it gets no time to give back its jobs.
+            host.ServicesStopConcurrently = true;
+        });
         builder.Services.AddBackWave(backwave =>
         {
             backwave.UseStore(services => new SqliteJobStore(new SqliteStoreOptions

@@ -192,12 +192,13 @@ public partial class JobDashboardTests
     public void the_host_stops_inside_the_docker_stop_grace()
     {
         // Act
-        var shutdownTimeout = AuthHosts.Jobs.Services.GetRequiredService<IOptions<HostOptions>>().Value.ShutdownTimeout;
+        var host = AuthHosts.Jobs.Services.GetRequiredService<IOptions<HostOptions>>().Value;
 
         // Assert
-        shutdownTimeout.ShouldBe(JobHosting.HostShutdownTimeout);
-        shutdownTimeout.ShouldBeLessThan(JobHosting.DockerStopGrace);
-        JobHosting.JobShutdownBudget.ShouldBeLessThanOrEqualTo(shutdownTimeout * 4 / 5);
+        host.ShutdownTimeout.ShouldBe(JobHosting.HostShutdownTimeout);
+        host.ShutdownTimeout.ShouldBeLessThan(JobHosting.DockerStopGrace);
+        host.ServicesStopConcurrently.ShouldBeTrue();
+        JobHosting.JobShutdownBudget.ShouldBeLessThanOrEqualTo(host.ShutdownTimeout * 4 / 5);
     }
 
     [Test]

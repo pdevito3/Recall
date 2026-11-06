@@ -8,7 +8,9 @@ using Microsoft.Extensions.Options;
 using Recall.Server.Databases;
 using Recall.Server.Domain.Tenants;
 using Recall.Server.Domain.Tenants.Models;
+using Recall.Server.Domain.Users;
 using Recall.Server.Resources.Jobs;
+using Recall.SharedTestHelpers.EntityGraphs;
 using Shouldly;
 
 public class SaveAndEnqueueTests : TestBase
@@ -113,6 +115,30 @@ public class SaveAndEnqueueTests : TestBase
 
         // Assert
         await act.ShouldThrowAsync<NotSupportedException>();
+    }
+
+    [Test]
+    public async Task a_lookup_during_the_enqueue_does_not_keep_a_deleted_user_live()
+    {
+        // Arrange
+        var testingServiceScope = new TestingServiceScope();
+        await testingServiceScope.StartGraph(out _)
+            .AddUser(out var user)
+            .BuildAsync();
+        var provider = testingServiceScope.GetService<ITenantIdProvider>();
+        await using var scope = TestFixture.BaseScopeFactory.CreateSystemScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var tracked = await db.Users.FirstAsync(u => u.Id == user.Id);
+        db.Users.Remove(tracked.Delete());
+        LiveUser? duringTheEnqueue = null;
+
+        // Act
+        await db.SaveAndEnqueueAsync(async (_, ct) => duringTheEnqueue = await provider.FindLiveUserAsync(user.Identifier, ct));
+        var afterTheCommit = await provider.FindLiveUserAsync(user.Identifier);
+
+        // Assert
+        duringTheEnqueue.ShouldBe(new LiveUser(user.Id, user.TenantId));
+        afterTheCommit.ShouldBeNull();
     }
 
     [Test]
