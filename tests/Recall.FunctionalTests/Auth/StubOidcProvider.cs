@@ -1,6 +1,7 @@
 namespace Recall.FunctionalTests.Auth;
 
 using System.Collections.Concurrent;
+using System.IO.Compression;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -30,6 +31,10 @@ public sealed record StubLogin(string Subject)
     public string? TokenBody { get; init; }
     public string? TokenCharset { get; init; }
     public string? UserinfoCharset { get; init; }
+    public string? UserinfoBody { get; init; }
+    public string? AccessToken { get; init; }
+    public bool TokenBodyIsCorrupt { get; init; }
+    public bool UserinfoBodyIsCorrupt { get; init; }
     public string[]? IdTokenAudiences { get; init; }
     public string? IdTokenAzp { get; init; }
     public TimeSpan IdTokenLifetime { get; init; } = TimeSpan.FromMinutes(5);
@@ -77,6 +82,10 @@ public sealed class StubOidcProvider : HttpMessageHandler
 
     public string? JwksCharset { get; set; }
 
+    public bool DiscoveryBodyIsCorrupt { get; set; }
+
+    public bool JwksBodyIsCorrupt { get; set; }
+
     public bool Down { get; set; }
 
     public string[]? PromptValues { get; init; }
@@ -121,7 +130,7 @@ public sealed class StubOidcProvider : HttpMessageHandler
         return request.RequestUri!.AbsolutePath switch
         {
             "/.well-known/openid-configuration" => Discovery(),
-            "/jwks" => WithCharset(JwksCharset, Json(new Dictionary<string, object> { ["keys"] = new[] { Jwk(), HmacJwk() } })),
+            "/jwks" => JwksBodyIsCorrupt ? CorruptAnswer() : WithCharset(JwksCharset, Json(new Dictionary<string, object> { ["keys"] = new[] { Jwk(), HmacJwk() } })),
             "/token" => await TokenAsync(request, cancellationToken),
             "/userinfo" => Userinfo(request),
             _ => new HttpResponseMessage(HttpStatusCode.NotFound),
@@ -130,6 +139,9 @@ public sealed class StubOidcProvider : HttpMessageHandler
 
     private HttpResponseMessage Discovery()
     {
+        if (DiscoveryBodyIsCorrupt)
+            return CorruptAnswer();
+
         var body = new Dictionary<string, object>
         {
             ["issuer"] = _issuer,
@@ -212,10 +224,13 @@ public sealed class StubOidcProvider : HttpMessageHandler
             return Refused("invalid_grant");
 
         var login = grant.Login;
+        if (login.TokenBodyIsCorrupt)
+            return CorruptAnswer();
+
         if (login.TokenBody is { } tokenBody)
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(tokenBody, Encoding.UTF8, "application/json") };
 
-        var accessToken = Secrets.New();
+        var accessToken = login.AccessToken ?? Secrets.New();
         _accessTokens[accessToken] = login;
         var idToken = IdTokenOf(login, login.Nonce ?? grant.Request.Nonce);
         _handedOut.Enqueue(accessToken);
@@ -233,12 +248,24 @@ public sealed class StubOidcProvider : HttpMessageHandler
         if (request.Headers.Authorization?.Parameter is not { } token || !_accessTokens.TryGetValue(token, out var login))
             return new HttpResponseMessage(HttpStatusCode.Unauthorized);
 
+        if (login.UserinfoBodyIsCorrupt)
+            return CorruptAnswer();
+
+        if (login.UserinfoBody is { } userinfoBody)
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(userinfoBody, Encoding.UTF8, "application/json") };
+
         var body = new Dictionary<string, object> { ["name"] = login.UserinfoName ?? login.Name };
         if (!login.UserinfoOmitsSubject)
             body["sub"] = login.UserinfoSubject ?? login.Subject;
 
         return WithCharset(login.UserinfoCharset, Json(body));
     }
+
+    /// <summary>The stream that the real handler makes for an answer with a gzip encoding, so that the buffer of HttpClient fails in the same way.</summary>
+    private static HttpResponseMessage CorruptAnswer() => new(HttpStatusCode.OK)
+    {
+        Content = new StreamContent(new GZipStream(new MemoryStream("this is not gzip at all"u8.ToArray()), CompressionMode.Decompress)),
+    };
 
     private static HttpResponseMessage WithCharset(string? charset, HttpResponseMessage response)
     {

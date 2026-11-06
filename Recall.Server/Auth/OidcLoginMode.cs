@@ -59,6 +59,8 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
 {
     private const string Scope = "openid profile email";
 
+    private const string SubjectClaim = "sub";
+
     private static readonly TimeSpan ProbeCache = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan CallTimeout = TimeSpan.FromSeconds(10);
@@ -176,10 +178,11 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
             if (tokens is not { IdToken: { } idToken })
                 return Refuse("the token endpoint refused the code");
 
-            using var jwks = await _http.GetAsync(discovery.JwksUri, cancellationToken);
+            using var jwksRequest = new HttpRequestMessage(HttpMethod.Get, discovery.JwksUri);
+            using var jwks = await SendAsync(jwksRequest, cancellationToken);
             jwks.EnsureSuccessStatusCode();
             var keys = await ReadAnswerAsync(jwks, text => new JsonWebKeySet(text).GetSigningKeys(), cancellationToken);
-            return await IdentityOfAsync(discovery, attempt, idToken, tokens.AccessToken, keys, cancellationToken);
+            return await IdentityOfAsync(discovery, attempt, idToken, tokens.Bearer, keys, cancellationToken);
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
         {
@@ -192,15 +195,22 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
         }
     }
 
+    private Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        => AsAnswerAsync(() => _http.SendAsync(request, cancellationToken));
+
+    private static Task<T> ReadAnswerAsync<T>(HttpResponseMessage response, Func<string, T> parse, CancellationToken cancellationToken)
+        => AsAnswerAsync(async () => parse(await response.Content.ReadAsStringAsync(cancellationToken)));
+
     /// <summary>
-    /// Each body of a provider comes through here. The provider chooses the charset and the bytes, and the read and the parsers fail
-    /// with many types, so each such failure leaves here as one type and no caller lists them.
+    /// Each answer of a provider comes through here, from the send, which reads and decompresses the body, to the last value that a
+    /// parser takes from it. The provider chooses the charset, the encoding, and the bytes, and these fail with many types. So each such
+    /// failure leaves here as one type and no caller lists them.
     /// </summary>
-    private static async Task<T> ReadAnswerAsync<T>(HttpResponseMessage response, Func<string, T> parse, CancellationToken cancellationToken)
+    private static async Task<T> AsAnswerAsync<T>(Func<Task<T>> read)
     {
         try
         {
-            return parse(await response.Content.ReadAsStringAsync(cancellationToken));
+            return await read();
         }
         catch (Exception exception) when (exception is not (HttpRequestException or OperationCanceledException))
         {
@@ -234,7 +244,8 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
                 _logger.Here().Warning("Provider {ModeId} sent a discovery document that this server does not accept", Id);
             return discovery;
         }
-        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or NotValidAnswerException)
+        // Each caller shares this probe and none owns it, so a fault here would take down the chooser for each provider.
+        catch (Exception exception)
         {
             _logger.Here().Warning("Provider {ModeId} did not answer discovery: {Failure}", Id, exception.GetBaseException().GetType().Name);
             return null;
@@ -280,8 +291,27 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
             ? text
             : null;
 
-    private sealed record ProviderTokens(string? IdToken, string? AccessToken)
+    private static Dictionary<string, string> TextsOf(string json, IEnumerable<string> names)
     {
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+        return names
+            .Select(name => (Name: name, Value: Text(root, name)))
+            .Where(field => field.Value is not null)
+            .ToDictionary(field => field.Name, field => field.Value!);
+    }
+
+    private sealed record ProviderTokens(string? IdToken, AuthenticationHeaderValue? Bearer)
+    {
+        // The header refuses a token that it cannot carry, so that token fails here with each other fault of the answer.
+        public static ProviderTokens Of(string json)
+        {
+            var texts = TextsOf(json, ["id_token", "access_token"]);
+            return new ProviderTokens(
+                texts.GetValueOrDefault("id_token"),
+                texts.TryGetValue("access_token", out var token) ? new AuthenticationHeaderValue("Bearer", token) : null);
+        }
+
         public override string ToString() => "[provider tokens]";
     }
 
@@ -312,19 +342,18 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
         }
 
         request.Content = new FormUrlEncodedContent(form);
-        using var response = await _http.SendAsync(request, cancellationToken);
+        using var response = await SendAsync(request, cancellationToken);
         if ((int)response.StatusCode >= 500)
             throw new HttpRequestException("The token endpoint failed.", null, response.StatusCode);
         // The body of a refusal can repeat what the request sent, so it is not read or logged.
         if (!response.IsSuccessStatusCode)
             return null;
 
-        using var body = await ReadAnswerAsync(response, text => JsonDocument.Parse(text), cancellationToken);
-        return new ProviderTokens(Text(body.RootElement, "id_token"), Text(body.RootElement, "access_token"));
+        return await ReadAnswerAsync(response, ProviderTokens.Of, cancellationToken);
     }
 
     private async Task<RedeemResult> IdentityOfAsync(
-        OidcDiscovery discovery, LoginAttempt attempt, string idToken, string? accessToken, IList<SecurityKey> keys, CancellationToken cancellationToken)
+        OidcDiscovery discovery, LoginAttempt attempt, string idToken, AuthenticationHeaderValue? bearer, IList<SecurityKey> keys, CancellationToken cancellationToken)
     {
         var validation = await new JsonWebTokenHandler().ValidateTokenAsync(idToken, new TokenValidationParameters
         {
@@ -359,8 +388,8 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
             ["preferred_username"] = ClaimOf(token, "preferred_username"),
         };
 
-        if (discovery.UserinfoEndpoint is { } endpoint && accessToken is not null
-            && await MergeUserinfoAsync(endpoint, accessToken, subject, claims, cancellationToken) == UserinfoSubject.Other)
+        if (discovery.UserinfoEndpoint is { } endpoint && bearer is not null
+            && await MergeUserinfoAsync(endpoint, bearer, subject, claims, cancellationToken) == UserinfoSubject.Other)
             return Refuse("the subject of userinfo is not the subject of the ID token");
 
         var profile = new Profile(claims["given_name"], claims["family_name"], claims["name"], claims["email"], claims["preferred_username"]);
@@ -377,30 +406,24 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
         => token.TryGetPayloadValue<string>(name, out var value) ? value : null;
 
     private async Task<UserinfoSubject> MergeUserinfoAsync(
-        string endpoint, string accessToken, string subject, Dictionary<string, string?> claims, CancellationToken cancellationToken)
+        string endpoint, AuthenticationHeaderValue bearer, string subject, Dictionary<string, string?> claims, CancellationToken cancellationToken)
     {
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-            using var response = await _http.SendAsync(request, cancellationToken);
+            request.Headers.Authorization = bearer;
+            using var response = await SendAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode)
                 return UserinfoSubject.NotDifferent;
 
-            using var body = await ReadAnswerAsync(response, text => JsonDocument.Parse(text), cancellationToken);
-            var root = body.RootElement;
-            if (root.ValueKind != JsonValueKind.Object)
-                return UserinfoSubject.NotDifferent;
-            if (Text(root, "sub") is not { } sub)
+            var texts = await ReadAnswerAsync(response, text => TextsOf(text, [SubjectClaim, .. claims.Keys]), cancellationToken);
+            if (!texts.TryGetValue(SubjectClaim, out var sub))
                 return UserinfoSubject.NotDifferent;
             if (sub != subject)
                 return UserinfoSubject.Other;
 
-            foreach (var name in claims.Keys.ToList())
-            {
-                if (Text(root, name) is { } value)
-                    claims[name] = value;
-            }
+            foreach (var name in claims.Keys.Where(texts.ContainsKey).ToList())
+                claims[name] = texts[name];
 
             return UserinfoSubject.NotDifferent;
         }

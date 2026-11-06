@@ -50,6 +50,58 @@ public class ProviderCharsetTests
     }
 
     [Test]
+    public async Task a_discovery_answer_that_cannot_be_decompressed_shows_that_provider_as_down_and_the_healthy_provider_still_signs_in()
+    {
+        // Arrange
+        Host.Provider.DiscoveryBodyIsCorrupt = true;
+        try
+        {
+            await WaitForCacheOfTheLastProbeAsync();
+            using var browser = new AuthBrowser(Host);
+
+            // Act
+            var login = await browser.GetAsync("/auth/login");
+            var status = await browser.GetAsync("/auth/status");
+            var startOfHealthy = await browser.GetAsync($"/auth/oidc/{AuthFlowFactory.OtherModeId}/start?client=web");
+
+            // Assert
+            login.StatusCode.ShouldBe(HttpStatusCode.OK);
+            (await login.Content.ReadAsStringAsync()).ShouldContain(">Sign in with Other</a>");
+            status.StatusCode.ShouldBe(HttpStatusCode.OK);
+            startOfHealthy.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        }
+        finally
+        {
+            Host.Provider.DiscoveryBodyIsCorrupt = false;
+            await WaitForCacheOfTheLastProbeAsync();
+        }
+    }
+
+    [Test]
+    public async Task a_key_answer_that_cannot_be_decompressed_is_refused()
+    {
+        // Arrange
+        await WaitForCacheOfTheLastProbeAsync();
+        using var browser = new AuthBrowser(Host);
+        var authorize = await browser.StartWebAsync();
+        Host.Provider.JwksBodyIsCorrupt = true;
+        try
+        {
+            // Act
+            var response = await browser.FinishAtProviderAsync(authorize, new StubLogin($"subject-{Guid.NewGuid():N}"));
+
+            // Assert
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+            (await response.Content.ReadAsStringAsync()).ShouldContain("<h1>Sign-in failed</h1>");
+            browser.SessionCookie.ShouldBeNull();
+        }
+        finally
+        {
+            Host.Provider.JwksBodyIsCorrupt = false;
+        }
+    }
+
+    [Test]
     public async Task a_key_answer_with_utf_7_is_refused()
     {
         // Arrange
