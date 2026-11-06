@@ -6,7 +6,7 @@ The server exports traces, metrics, and logs with OpenTelemetry. In development,
 
 A span, a log, a metric tag, and a telemetry file carry names, identifiers, and counts. They never carry user-entered content or personal data, such as names or email addresses. Journal text is the first example: Raw, Cleaned, a Revision, a Synopsis, a Summary, and the audio of a Session never reach a log, a span, or a support bundle. Every helper below takes its tags from the caller, so each call site must obey this rule.
 
-The rule also covers an exception. A client error can hold text from the caller in its message, so it never becomes a span event or a log with that message. Do not write a route or a query key that holds user text, because the request log and the span keep the path. `SupportBundleTests` sends a marker through the entrypoints and searches the whole bundle for it. When you add an entrypoint that takes user text, add it to that test.
+The rule also covers an exception. A client error can hold text from the caller in its message, so it never becomes a span event or a log with that message. Do not write a route or a query key that holds user text, because the request log and the span keep the path. `SupportBundleTests` sends a marker through the HTTP entrypoints, and searches the whole bundle and the captured logs for it. The test does not cover an MCP tool. When you add an entrypoint that takes user text, add it to that test.
 
 `SqlSpanInterceptor` makes a span for each SQL command of the Server, and it copies the SQL text into `db.query.text`. Thus a value from the caller must go to the database as a parameter, never as a literal in the SQL text. `CustomQueryKitConfiguration` sets `ParameterizeFilterValues`, so the SQL text of a list query has a parameter name in place of each filter value. The value of a QueryKit `CustomOperation` still goes into the SQL text as a literal.
 
@@ -193,7 +193,7 @@ using var trace = Telemetry.TraceRoot([], "work.run", links);
 
 ## Logs
 
-Serilog is the logging provider. The file sink writes each log to `logs/` beside the database. The OTLP sink also sends logs to the Aspire dashboard when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Each sink must stay inside the `AddSerilog` callback in `HostExtensions.cs`. The host replaces a logger that you assign to `Log.Logger` in a different location, so its sinks never run.
+Serilog is the logging provider. The file sink writes each log to `logs/` beside the database. The OTLP sink also sends logs to the Aspire dashboard when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Each sink must stay inside the `AddSerilog` callback in `HostExtensions.cs`. A logger that you assign to `Log.Logger` in a different location is replaced when the host resolves `ILoggerFactory`, so its sinks stop there.
 
 ### Call site
 
@@ -235,7 +235,7 @@ A person who runs Recall on a NAS has no log service, so the server keeps its ow
 | `telemetry/traces-<date>.jsonl` | One span in each line | 10 MiB | 20 | 14 |
 | `telemetry/metrics-<date>.jsonl` | One point of a metric in each line, each 60 seconds | 10 MiB | 5 | 14 |
 
-These limits hold at most 450 MiB. The section `FileTelemetry` in `appsettings.json` sets them. Set `FileTelemetry__Logs__FilesKept`, for example, to change one in an environment variable. A file passes its size limit by at most one line, and then the next line opens a new file with a number after the date. The age limit acts when a file opens, so at a start, at the first line of each day, and when a file reaches its size limit.
+These limits hold about 450 MiB. The section `FileTelemetry` in `appsettings.json` sets them. Set `FileTelemetry__Logs__FilesKept`, for example, to change one in an environment variable. A file passes its size limit by at most one line, and then the next line opens a new file with a number after the date. The age limit acts when a file opens, so at a start, at the first line of each day, and when a file reaches its size limit.
 
 The server makes these folders with owner-only modes. A logging call and a span give their data to a queue and return, so a slow or full disk does not hold a request. When the disk cannot take a line, the line goes. The console and OTLP do not change, and the two OTLP exports run beside the files.
 

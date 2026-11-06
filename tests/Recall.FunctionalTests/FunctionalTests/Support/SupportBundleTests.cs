@@ -13,9 +13,6 @@ using Recall.Server.Domain.Support.Features;
 using Shouldly;
 using TestUtilities;
 
-/// <summary>
-/// The host of these tests is their own, because the first login of an install makes its Owner.
-/// </summary>
 [NotInParallel(nameof(SupportBundleTests))]
 public class SupportBundleTests
 {
@@ -119,6 +116,7 @@ public class SupportBundleTests
         using var filter = await owner.GetAsync($"/{ApiRoutes.Users.GetList}?filters=firstName @=* \"{marker}\"", csrf: true);
         using var badFilter = await owner.GetAsync($"/{ApiRoutes.Users.GetList}?filters={marker}", csrf: true);
         using var badSort = await owner.GetAsync($"/{ApiRoutes.Users.GetList}?sortOrder={marker}", csrf: true);
+        using var queryWithNoValue = await owner.GetAsync($"/{ApiRoutes.Users.GetList}?{marker}", csrf: true);
         using var badBody = await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Users.Put(ownerId), new { firstName = new string('x', 5000) + marker, username = marker, email = marker, version });
         using var rename = await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Users.Put(ownerId), new { firstName = marker, lastName = marker, username = marker, email = $"{marker}@example.com", version });
         var entries = await EntriesOfBundleAsync(owner);
@@ -133,5 +131,7 @@ public class SupportBundleTests
         entries.Keys.Count(name => name.StartsWith("telemetry/traces-", StringComparison.Ordinal)).ShouldBeGreaterThan(0);
         foreach (var (name, content) in entries)
             content.ShouldNotContain(marker, customMessage: name);
+        Host.Logs.Holding(marker).ShouldBeEmpty();
+        TestingWebApplicationFactory.Instance.CapturedLogs.Holding(marker).ShouldBeEmpty();
     }
 }
