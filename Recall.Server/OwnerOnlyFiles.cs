@@ -44,7 +44,7 @@ public static partial class OwnerOnlyFiles
         if (KeysDirectory(configuration) is { } keys && Directory.Exists(keys))
         {
             directories.Add(keys);
-            files.AddRange(Directory.GetFiles(keys));
+            files.AddRange(FilesIn(keys));
         }
 
         if (configuration[$"{FileStoreOptions.SectionName}:{nameof(FileStoreOptions.Root)}"] is { Length: > 0 } fileRoot && Path.IsPathFullyQualified(fileRoot))
@@ -56,6 +56,18 @@ public static partial class OwnerOnlyFiles
             Log.ForContext(typeof(OwnerOnlyFiles)).Warning(
                 "The volume that holds {Paths} does not take owner-only modes, so other accounts on this machine may read these files. Set the owner of the volume, or use a volume that keeps modes",
                 refused);
+        }
+    }
+
+    private static string[] FilesIn(string directory)
+    {
+        try
+        {
+            return Directory.GetFiles(directory);
+        }
+        catch (Exception exception) when (exception is UnauthorizedAccessException or IOException)
+        {
+            return [];
         }
     }
 

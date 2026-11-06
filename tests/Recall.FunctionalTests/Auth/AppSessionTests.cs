@@ -281,6 +281,38 @@ public class AppSessionTests
     }
 
     [Test]
+    public async Task a_cookie_logout_with_no_header_and_a_second_credential_ends_nothing_and_does_not_say_so()
+    {
+        // Arrange
+        using var browser = await SignedInBrowserAsync();
+        using var phone = NewBrowser();
+        var tokens = await phone.LoginNativeAsync(NewSubject());
+
+        // Act
+        var withBearer = await browser.PostFormAsync("/auth/logout", [], authorization: BearerOf(tokens.AccessToken));
+        var withRefresh = await browser.PostFormAsync("/auth/logout", [("refresh_token", tokens.RefreshToken)]);
+
+        // Assert
+        withBearer.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        withRefresh.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await browser.GetAsync(Me, csrf: true)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await phone.GetAsync(Me, authorization: BearerOf(tokens.AccessToken))).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Test]
+    public async Task the_basic_header_of_a_proxy_leaves_a_visitor_on_the_way_to_the_login()
+    {
+        // Arrange
+        using var browser = NewBrowser();
+
+        // Act
+        var response = await browser.GetAsync(Me, authorization: "Basic dXNlcjpwYXNz");
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    [Test]
     public async Task logout_with_a_bearer_ends_that_native_session()
     {
         // Arrange

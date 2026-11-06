@@ -154,8 +154,8 @@ public static class AuthEndpoints
         var csrf = AppSessionHandler.HasCsrfHeader(request);
         var cookie = SessionCookie.Read(request);
 
-        // The cookie is the one credential here, and it needs the header. A 204 would say that this ended a session that it left alive.
-        if (cookie is not null && !csrf && bearer is null && refresh is null)
+        // A cookie needs the header. A 204 would say that this ended a session that it left alive.
+        if (cookie is not null && !csrf)
             return Results.Unauthorized();
 
         if (bearer is not null

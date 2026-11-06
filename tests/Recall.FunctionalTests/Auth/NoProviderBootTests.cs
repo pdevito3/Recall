@@ -347,6 +347,22 @@ public partial class NoProviderBootTests
     }
 
     [Test]
+    public async Task a_keys_directory_with_no_access_does_not_stop_the_boot()
+    {
+        // Arrange
+        var root = Path.Combine(Path.GetTempPath(), $"recall_boot_{Guid.NewGuid():N}");
+        var keys = Path.Combine(root, "data", "keys");
+        Directory.CreateDirectory(keys);
+        File.SetUnixFileMode(keys, UnixFileMode.None);
+
+        // Act
+        await using var server = await ServerProcess.StartAsync(root);
+
+        // Assert
+        File.GetUnixFileMode(keys).ShouldBe(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+    }
+
+    [Test]
     public async Task the_data_protection_keys_are_for_the_owner_only_and_survive_a_restart()
     {
         // Arrange

@@ -18,7 +18,7 @@ These routes are not in the OpenAPI document. This section is their contract.
 | `/auth/oidc/callback` | GET | none | The return from the provider |
 | `/auth/oidc/confirm` | POST | none | The form of the native confirm page |
 | `/auth/token` | POST | none | Gives the tokens of a native session |
-| `/auth/logout` | POST | optional | Ends the session that the request names, and answers 204. A cookie with no `X-CSRF: 1` and no other credential gets 401. |
+| `/auth/logout` | POST | optional | Ends the session that the request names, and answers 204. A cookie with no `X-CSRF: 1` gets 401, and nothing ends. |
 | `/auth/sessions/revoke-others` | POST | app session | Ends each other session of the user. It answers 204. |
 | `/auth/me` | GET | optional | The user of the session. See [The user of a session](#the-user-of-a-session). |
 
@@ -166,7 +166,7 @@ A response tells what happened:
 | Request | Answer |
 |---|---|
 | A cookie with `X-CSRF: 1` | Ends the session if it is live, deletes the cookie, and sets the mark. 204. |
-| A cookie with no `X-CSRF: 1`, and no other credential | 401. The session stays, and the cookie stays. |
+| A cookie with no `X-CSRF: 1`, with or without another credential | 401. Nothing ends, and the cookie stays. |
 | No cookie | Ends what a bearer token or a refresh token names. 204, with no mark. A cross-site page gets this, because `SameSite=Strict` holds the cookie back. |
 | `GET /auth/logout` | 405. A link cannot end a session. |
 
