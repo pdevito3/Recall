@@ -142,10 +142,13 @@ export default async ({ page, context, step, capture, expect, login }) => {
     expect((await api(page, 'GET', `/api/v1/sessions/${twoTabs}`)).status).toBe(404)
   })
 
+  const noNetwork = (route) => route.abort('internetdisconnected')
   await step('lane 9: an edit with no network says that the save waits, and the save ends after the network returns', async () => {
     const id = await addEntry(page, 'Words before the tunnel.')
     await page.goto(`/sessions/${id}`)
     await expect(editor(page)).toContainText('Words before the tunnel.')
+    // A sweep fetches each API reply from Node, where setOffline has no effect, so the route also stops the API.
+    await context.route('**/api/**', noNetwork)
     await context.setOffline(true)
     await typeAtEnd(page, editor(page), ' Words in the tunnel.')
     await expect(page.getByRole('status').filter({ hasText: 'The save waits for a connection' })).toBeVisible({ timeout: 15_000 })
@@ -153,6 +156,7 @@ export default async ({ page, context, step, capture, expect, login }) => {
   await capture('r12-offline')
   await step('lane 9: the save ends after the network returns', async () => {
     await context.setOffline(false)
+    await context.unroute('**/api/**', noNetwork)
     await expect(saved(page)).toBeVisible({ timeout: 35_000 })
     await page.reload()
     await expect(editor(page)).toContainText('Words before the tunnel. Words in the tunnel.')

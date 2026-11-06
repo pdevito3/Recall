@@ -35,10 +35,12 @@ const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
-// Only the mobile sidebar uses the sheet. Load it lazily, so that the modal
-// code is not in the entry chunk on desktop.
+// Only the mobile sidebar uses the sheet, so the modal code is not in the entry
+// chunk. It loads at the start, because a window can become narrow with no network.
+const loadSheet = () => import("@/components/ui/sheet")
+void loadSheet().catch(() => undefined)
 const Sheet = React.lazy(async () => {
-  const { Sheet } = await import("@/components/ui/sheet")
+  const { Sheet } = await loadSheet()
   return { default: Sheet }
 })
 

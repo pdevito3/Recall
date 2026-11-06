@@ -109,7 +109,7 @@ function LayoutContent() {
                 className="mr-2 aria-[orientation=vertical]:h-4 aria-[orientation=vertical]:self-center"
               />
               <Breadcrumb>
-                <BreadcrumbList>
+                <BreadcrumbList className="flex-nowrap">
                   {parent && (
                     <BreadcrumbItem>
                       <BreadcrumbLink to={parent.to}>{parent.title}</BreadcrumbLink>

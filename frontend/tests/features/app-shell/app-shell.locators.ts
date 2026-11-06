@@ -21,6 +21,8 @@ export const appShell = (page: Page) => ({
   wideContent: page.getByRole('region', { name: 'Wide content' }),
   notFoundHeading: page.getByRole('heading', { name: 'Page not found' }),
   homeLink: page.getByRole('link', { name: 'Go to the home page' }),
+  pageErrorHeading: page.getByRole('heading', { name: 'This page did not load' }),
+  loadPageAgainButton: page.getByRole('button', { name: 'Load the page again' }),
   composerHint: page.getByText('Type @ to tag a person', { exact: true }),
   pageAnnouncement: page.getByTestId('page-announcement'),
   fileStoreNotice: page.getByRole('alert').filter({ hasText: 'Recall cannot write to its file store' }),

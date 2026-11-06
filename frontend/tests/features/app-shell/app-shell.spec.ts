@@ -276,3 +276,35 @@ test.describe('the accessibility tree of the layout', () => {
     await expect(shell.at.sidebarRail).toHaveAttribute('aria-hidden', 'true')
   })
 })
+
+const sheetChunk = /(ui|assets)\/sheet/
+
+test('a window that becomes narrow with no network still opens the sidebar', async ({ page }) => {
+  const shell = appShellPage(page)
+  const sheetLoaded = page.waitForResponse(sheetChunk)
+
+  await shell.openAbout()
+  await sheetLoaded
+  await page.context().setOffline(true)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await shell.openMobileSidebar()
+
+  await expect(shell.at.journalNavigationLink).toBeVisible()
+})
+
+test.describe('a part of the app that cannot load', () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test('offers to load the page again, and that works after the network returns', async ({ page }) => {
+    const shell = appShellPage(page)
+    await page.route(sheetChunk, (route) => route.abort())
+
+    await page.goto('/about')
+    await expect(shell.at.pageErrorHeading).toBeVisible()
+
+    await page.unroute(sheetChunk)
+    await shell.at.loadPageAgainButton.click()
+
+    await expect(shell.at.aboutText).toBeVisible()
+  })
+})
