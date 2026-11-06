@@ -38,6 +38,7 @@ describe('a login after a sign-out', () => {
   const freshActions = async () => {
     const replace = vi.fn()
     vi.stubGlobal('window', { location: { replace } })
+    vi.stubGlobal('document', { documentElement: { style: {} } })
     vi.resetModules()
     const { apiClient } = await import('@/lib/api-client')
     const post = vi.spyOn(apiClient, 'post').mockResolvedValue({ status: 204 })
@@ -139,6 +140,24 @@ describe('a login after a sign-out', () => {
     expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?returnUrl=%2Fabout')
   })
 
+  it('hides the page before it leaves, because the next page can take long or the person can stop it', async () => {
+    const { logout } = await freshActions()
+
+    await logout()
+
+    expect(document.documentElement.style.opacity).toBe('0')
+    expect(document.documentElement.inert).toBe(true)
+  })
+
+  it('keeps the page when the logout fails', async () => {
+    const { logout, post } = await freshActions()
+    post.mockRejectedValue(new Error('no answer'))
+
+    await expect(logout()).rejects.toThrow('no answer')
+
+    expect(document.documentElement.style.opacity).toBeUndefined()
+  })
+
   it('keeps the return URL when nobody signed out', async () => {
     const { replace, login } = await freshActions()
 
@@ -175,7 +194,10 @@ describe('a sign-out in another tab', () => {
   const guardedActions = async () => {
     channels.length = 0
     const replace = vi.fn()
-    vi.stubGlobal('window', { location: { replace }, addEventListener: vi.fn() })
+    const reload = vi.fn()
+    const listeners = new Map<string, (event: { persisted: boolean }) => void>()
+    const addEventListener = (type: string, listener: (event: { persisted: boolean }) => void) => listeners.set(type, listener)
+    vi.stubGlobal('window', { location: { replace, reload }, addEventListener })
     vi.stubGlobal('document', { documentElement: { style: {} } })
     vi.stubGlobal('BroadcastChannel', function (this: (typeof channels)[number]) {
       this.postMessage = vi.fn()
@@ -184,11 +206,65 @@ describe('a sign-out in another tab', () => {
     vi.resetModules()
     const { apiClient } = await import('@/lib/api-client')
     const post = vi.spyOn(apiClient, 'post').mockResolvedValue({ status: 204 })
+    const get = vi.spyOn(apiClient, 'get')
     const queryClient = new QueryClient()
     const actions = await import('./auth-actions')
     actions.guardPageAgainstEndedSession(queryClient)
-    return { replace, post, queryClient, channel: channels[0]!, ...actions }
+    const userKey = (await import('./get-user')).authUserQuery.queryKey
+    const hidePage = () => listeners.get('pagehide')!({ persisted: true })
+    const restorePage = () => listeners.get('pageshow')!({ persisted: true })
+    return { replace, reload, post, get, queryClient, userKey, hidePage, restorePage, channel: channels[0]!, ...actions }
   }
+
+  const answerWithUser = (sid: string) => ({ status: 200, data: { sub: '1', name: 'A Person', sid, client_kind: 'web' } })
+  const opacityOfPage = () => document.documentElement.style.opacity
+
+  it('compares with the session at the time that the page was hidden, because a refetch can bring the session of the next person', async () => {
+    const { reload, get, queryClient, userKey, hidePage, restorePage } = await guardedActions()
+    queryClient.setQueryData(userKey, answerWithUser('first').data as never)
+    hidePage()
+    queryClient.setQueryData(userKey, answerWithUser('second').data as never)
+    get.mockResolvedValue(answerWithUser('second'))
+
+    restorePage()
+
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce())
+    expect(opacityOfPage()).toBe('0')
+  })
+
+  it('shows the page again when the session of the page lives', async () => {
+    const { reload, get, queryClient, userKey, hidePage, restorePage } = await guardedActions()
+    queryClient.setQueryData(userKey, answerWithUser('first').data as never)
+    hidePage()
+    expect(document.documentElement.inert).toBe(true)
+    get.mockResolvedValue(answerWithUser('first'))
+
+    restorePage()
+
+    await vi.waitFor(() => expect(opacityOfPage()).toBe(''))
+    expect(document.documentElement.inert).toBe(false)
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('ignores the answer of an earlier restore, because the session can have ended since then', async () => {
+    const { replace, get, queryClient, userKey, hidePage, restorePage } = await guardedActions()
+    queryClient.setQueryData(userKey, answerWithUser('first').data as never)
+    let answerFirst!: (answer: unknown) => void
+    let answerSecond!: (answer: unknown) => void
+    get.mockReturnValueOnce(new Promise((settle) => (answerFirst = settle)) as never)
+    get.mockReturnValueOnce(new Promise((settle) => (answerSecond = settle)) as never)
+    hidePage()
+    restorePage()
+    hidePage()
+    restorePage()
+
+    answerFirst(answerWithUser('first'))
+    await new Promise((settled) => setTimeout(settled))
+    expect(opacityOfPage()).toBe('0')
+
+    answerSecond({ status: 204 })
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?signedOut=1'))
+  })
 
   afterEach(() => {
     vi.restoreAllMocks()

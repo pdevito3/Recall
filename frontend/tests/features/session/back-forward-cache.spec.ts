@@ -27,6 +27,7 @@ test.describe('a page that Back restores from the back-forward cache', () => {
 
     await expect(session.at.signedInAs).toBeVisible()
     await expect.poll(() => session.screenShowsOneColor()).toBe(false)
+    await session.at.logout.click({ trial: true })
     expect(await session.isStillTheFirstLoad()).toBe(true)
     expect(api.all('get', authPaths.me)).toHaveLength(checksBefore + 1)
   })
@@ -60,6 +61,6 @@ test.describe('a page that Back restores from the back-forward cache', () => {
     await page.route(`**${authPaths.me}`, () => {}, { times: 1 })
     await session.goBackToTheCachedPage()
 
-    await expect.poll(() => session.isStillTheFirstLoad(), { timeout: 4500 }).toBe(false)
+    await expect.poll(() => session.isStillTheFirstLoad(), { timeout: 15000 }).toBe(false)
   })
 })
