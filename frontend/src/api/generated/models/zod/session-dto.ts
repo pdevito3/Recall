@@ -30,4 +30,5 @@ export const sessionDtoSchema = z.object({
   latitude: z.number().nullish(),
   longitude: z.number().nullish(),
   version: z.int().min(0).max(4294967295),
+  metadataVersion: z.int().min(0).max(4294967295).describe('Send it with the next metadata save. A save of a Draft does not change it.'),
 })

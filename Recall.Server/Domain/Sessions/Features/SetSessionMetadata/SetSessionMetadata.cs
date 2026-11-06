@@ -14,7 +14,7 @@ public static class SetSessionMetadata
 {
     public sealed record Command(string Id, SessionMetadataChangeDto Dto) : IRequest<SessionDto>, IRunsAgainWhenRaced;
 
-    public sealed class Handler(AppDbContext dbContext, TimeProvider timeProvider) : IRequestHandler<Command, SessionDto>
+    public sealed class Handler(AppDbContext dbContext) : IRequestHandler<Command, SessionDto>
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
 
@@ -25,7 +25,7 @@ public static class SetSessionMetadata
             var session = await dbContext.Sessions
                 .TagWithOperationCallSite("sessions.set_metadata.load")
                 .GetById(request.Id, cancellationToken);
-            var applied = session.SetMetadata(SessionMetadata.Of(request.Dto.Activity, request.Dto.Moods, request.Dto.UserTopics), request.Dto.SavedAt, timeProvider.GetUtcNow());
+            var applied = session.SetMetadata(SessionMetadata.Of(request.Dto.Activity, request.Dto.Moods, request.Dto.UserTopics), request.Dto.MetadataVersion);
             await dbContext.SaveChangesAsync(cancellationToken);
 
             _logger.Here().Information("Took a metadata change of session {SessionId}, applied {Applied}", session.Id, applied);

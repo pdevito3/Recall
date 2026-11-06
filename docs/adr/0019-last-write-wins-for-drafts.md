@@ -12,48 +12,29 @@ So a save of a Draft sends no `Version`. It sends a base Revision and the save t
 
 The server marks the save commands `IRunsAgainWhenRaced`, so the `Version` of the Session row still orders two saves at the same moment. The row version protects the server, and the save time decides between the words of the person.
 
-The metadata of a Session and the settings of a User follow the same save time rule, because a client also queues them offline. They have no Revisions, so the older change goes away. A change with the time of the stored change also goes away, so a retry cannot undo the change.
+## Settings and metadata use a base version
 
-A time in the future gets the time of the server, so a retry of it gets a later time and looks newer than the changes between them. So a row keeps each claimed time that is ahead of its save time, and a retry of one of them does nothing, for any count of newer changes. When the save time passes a claim, the row drops it, because the time compare now refuses it. One high-water mark cannot do this: under the mark, a late retry and a new change from a good clock look the same.
+The metadata of a Session and the settings of a User followed the same save time rule until issue 40. That was wrong for them. They have no Revisions, so a change that goes away is gone, and each save replaces the whole row. So a body from a stale copy of the row brings back the old value of each field that the person did not change. This needs no wrong clock. On the rule that this section replaces, a phone turned location capture off, a tablet with a stale copy then changed the zone, and the tablet got a 200. Capture was on again, and the next Session stored a location. A stale metadata body dropped a Topic in the same way. Location capture is a privacy setting, so a stale value must not turn it back on.
 
-A kept claim stops only a change with its exact time, at any distance from the server. So the time that one wrong clock can block a change with another time is zero. A claim from 2099 does not lock a row for years, and location capture off from a fast clock takes effect. The one exception is a client that reuses one time for each change. Each change after the first goes away, and a save time that passes that time does not end this. The row then drops the claim, but the time is not newer, so that time never applies again. Other clients are not stopped. While the server clock does not go back, a fast change that arrives first applies, so the server has no ignored first try that a later retry could apply.
+The rule also lost changes in other ways, each with a 200. A change with a time that is not newer went away. A different change with the exact time of a kept claim went away. A change that was made earlier on a fast clock and arrived later replaced the newer change, and two overlapping PUTs from one device reached this with no failed request (14 of 60 runs at +1 h ended with capture on at the base commit of this change). A server clock that went back lost a change. To limit this, each row kept a list of the times that fast clocks claimed, with no cap.
 
-The server could refuse a time far ahead with a 422 and keep no such claim. It does not, because a server with a slow clock would then refuse each client.
+So these saves now send a base version, with the rules in the [sessions spec](../specs/sessions.md), SES-31 to SES-35:
 
-A person can still lose a change with a 200 in these cases, and the reply shows the row that the server has. This list may not be full:
+- A settings save sends the `version` of the row, and the entity calls `GuardVersion`. This is the rule of [concurrency](../backend/concurrency.md) for a PUT that replaces the fields of a form.
+- A metadata save sends `metadataVersion`. The `version` of the Session row moves on each Draft save, so it cannot be the base. An offline queue that drains a Draft save first would get a refusal for each metadata save behind it. So `metadataVersion` moves only when a metadata change applies.
+- A save from another version gets 409 and changes nothing. A refused metadata save stays out of the Draft routes, so no words go away.
+- A save with the values that the row already holds does nothing at any version, and it gets 200. So a retry after a lost reply is safe. A retry after a newer change holds other values, so it gets 409.
+- A body with no version gives 400. The `required` keyword does this, as for each other form PUT.
+- The server ignores a `savedAt` on these two routes, so the columns of the save time and the list of claims are gone.
 
-- A change with a time that is not newer than the stored change goes away, as from a slow clock or a queue.
-- A different change with the exact time of a kept claim goes away, because the server cannot tell it from a retry.
-- The time of a change from a fast clock is later than its edit. While that time is ahead of the server, the change gets the time of the server, so the order of arrival decides. After that, it keeps its own time. Either way, a change that was made earlier and arrives after a newer change replaces the newer change. This needs no failed request and no second device, as the next section shows.
-- If the server clock goes back, a change with a time ahead of the server gets a save time below the stored one, and it goes away. The server does not remember it, so its retry applies after the server passes the stored save time, also over a newer change.
-- A settings change and a metadata change replace the whole row, so a body from a stale copy of the row brings back the old value of each field that the person did not change. This needs no wrong clock, because the stale body has a newer time. A tablet that changes only the zone and sends a stale capture true turns capture back on, and the next Session stores a location. A stale metadata body drops a Topic.
+A person sees a refusal, not a lost change. This costs a reload where the old rule let the later save win, for example when two devices change different settings. A client reloads the row after a 409 and applies again only the fields that the person changed. See [iOS API changes](../ios-api-changes.md#settings-and-metadata-saves).
 
-## Overlapping changes from one device
-
-Two overlapping PUTs from one device reach the third case above. No request fails. This table counts settings runs on localhost with no injected delay, at commit 429e5c6a. Each run sent capture on and then capture off, and the count is of the runs that ended with capture on:
-
-| Clock of the client | Time between the two PUTs | Ended with capture on |
-|---|---|---|
-| Right | 0, 1, and 5 ms | 0 of 240 |
-| +2 s | Started together | 28 of 60 |
-| +6 s | Started together | 30 of 60 |
-| +1 h | Started together | 22 of 60 |
-| 2099 | Started together | 23 of 60 |
-| +6 s | 5 ms | 0 of 80 |
-| +1 h | 5 ms | 0 of 80 |
-
-The 5 ms rows do not make a gap safe, because they come from localhost. Another run injected a delay. The PUT for off went 1 s after the PUT for on, and the PUT for on landed 2 s after the PUT for off. Capture ended on at each fast clock in the table, and the next Session stored a location. With a right clock, capture stayed off. For metadata, the older body also replaced the newer body at each fast clock when it landed second.
-
-So a client must send the settings or metadata changes of a row one at a time and in order, and wait for the reply to each change before it sends the next. After a failure with no reply, it sends that change again with the same time before it sends a newer change. A client that drained a queue in order at +1 h kept the newest change for metadata, and for settings with a lost reply and stalled duplicates.
-
-The POC `UserSettingsStore.execute` does not do this, because it starts a PUT for each edit and does not wait for the one before it. R14 must do this.
-
-This rule does not stop the case on a second device. A fast phone that edits first and lands second replaces the edit of a tablet when the phone clock is ahead by more than the time between the two edits. This happened at +6 s with 3 s between the edits, and at +1 h with 20 s. At +2 s with 3 s between the edits, and at +6 s with 8 s, the edit of the tablet stayed.
+These saves differ from a Draft save because of what a refusal costs. A refusal of a Draft tells a person that the words they spoke did not save. A refusal of a Topic or a setting costs a tap.
 
 ## Consequences
 
-- `GuardVersion` is not on these routes, and `SessionDto.Version` is only for a client that wants it. A later write command on a Session that has no save time must use `GuardVersion`.
+- `GuardVersion` is not on the Draft routes, and `SessionDto.Version` is only for a client that wants it. A later write command on a Session that has no save time must use `GuardVersion`, or a version of its own part of the row, as `metadataVersion` is.
 - The clock of a phone can decide a Draft. A slow clock can lose to an older save. The words of that save stay as a Revision, so a person can get them back.
 - Revisions grow with each losing save and each autosave, and nothing prunes them.
-- A row keeps one claim for each change from a fast clock until a save time of the row passes it, so a clock years ahead grows the row of its owner for that time. It has no cap, because a cap lets a retry undo a newer change again.
-- A 200 does not say that a change applied. A client that sees a reply that differs from what it sent must show the reply and must not send again with a new time, because that can undo a newer change.
+- On a settings save or a metadata save, a 200 means that the row holds the values that the client sent, and a 409 means that nothing changed. A client that is offline for a long time gets a 409 when another device changed the row, and it must ask the person or apply the change again on the new row.
+- A client that does not send a version gets 400 on these two routes. The POC client and any client of the body before this change fail this way until they send a version.

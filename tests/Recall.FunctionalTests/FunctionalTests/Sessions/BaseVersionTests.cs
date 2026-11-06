@@ -158,7 +158,7 @@ public class BaseVersionTests : TestBase
         (await SaveSettingsAsync(await SettingsAsync(), capture: false, zone: "UTC")).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // Act
-        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = "UTC", locationCaptureEnabled = true, requirePeopleProposalApproval = true, savedAt = DateTimeOffset.UtcNow });
+        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = "UTC", locationCaptureEnabled = true, requirePeopleProposalApproval = true });
         var stored = await SettingsAsync();
 
         // Assert
@@ -176,7 +176,7 @@ public class BaseVersionTests : TestBase
         (await SaveMetadataAsync(session, "None", Food)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // Act
-        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(IdOf(session)), new { userTopics = Travel, savedAt = DateTimeOffset.UtcNow });
+        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(IdOf(session)), new { userTopics = Travel });
         var stored = await SessionAsync(session);
 
         // Assert
@@ -265,6 +265,47 @@ public class BaseVersionTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-33")]
+    public async Task a_save_in_the_shape_of_an_older_client_gives_400_on_both_routes_and_says_what_is_missing()
+    {
+        // Arrange
+        await SignInAsync();
+        var session = await AddSessionAsync();
+
+        // Act
+        var settings = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = "UTC", locationCaptureEnabled = true, requirePeopleProposalApproval = true, savedAt = DateTimeOffset.UtcNow });
+        var metadata = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(IdOf(session)), new { activity = "Walking", moods = Array.Empty<string>(), userTopics = Food, savedAt = DateTimeOffset.UtcNow });
+        var settingsReason = await settings.Content.ReadAsStringAsync();
+        var metadataReason = await metadata.Content.ReadAsStringAsync();
+        var stored = await SessionAsync(session);
+
+        // Assert
+        settings.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        metadata.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        settingsReason.ShouldContain("version");
+        metadataReason.ShouldContain("metadataVersion");
+        TopicsOf(stored).ShouldBeEmpty();
+    }
+
+    [Test]
+    [Property("Rule", "SES-34")]
+    public async Task a_retry_with_a_stored_zone_that_this_host_does_not_know_does_nothing_at_an_old_version()
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        const string notOnThisHost = "Mars/Olympus_Mons";
+        (await SaveSettingsAsync(await SettingsAsync(), capture: true, zone: "UTC")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await JournalScenario.ExecuteOutOfBandAsync("UPDATE user_settings SET time_zone = @zone WHERE user_id = @id", ("@zone", notOnThisHost), ("@id", member.Id));
+
+        // Act
+        var retry = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = notOnThisHost, locationCaptureEnabled = true, requirePeopleProposalApproval = true, version = 0 });
+
+        // Assert
+        retry.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Test]
     [Property("Rule", "SES-35")]
     public async Task a_settings_save_from_the_current_version_applies_with_a_time_that_is_not_newer()
     {
@@ -316,7 +357,6 @@ public class BaseVersionTests : TestBase
             locationCaptureEnabled = capture,
             requirePeopleProposalApproval = true,
             version = read.GetProperty("version").GetUInt32(),
-            savedAt = DateTimeOffset.UtcNow,
         });
 
     private async Task<JsonElement> AddSessionAsync()
@@ -341,7 +381,6 @@ public class BaseVersionTests : TestBase
             activity,
             userTopics = topics,
             metadataVersion = read.TryGetProperty("metadataVersion", out var version) ? version.GetUInt32() : 0u,
-            savedAt = DateTimeOffset.UtcNow,
         });
 
     private static string IdOf(JsonElement session) => session.GetProperty("id").GetString()!;

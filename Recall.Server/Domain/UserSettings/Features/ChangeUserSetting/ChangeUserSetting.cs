@@ -11,9 +11,9 @@ using Serilog;
 
 public static class ChangeUserSetting
 {
-    public sealed record Command(UserSettingChangeDto Dto) : IRequest<UserSettingDto>, IRunsAgainWhenRaced;
+    public sealed record Command(UserSettingChangeDto Dto) : IRequest<UserSettingDto>;
 
-    public sealed class Handler(AppDbContext dbContext, TimeProvider timeProvider) : IRequestHandler<Command, UserSettingDto>
+    public sealed class Handler(AppDbContext dbContext) : IRequestHandler<Command, UserSettingDto>
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
 
@@ -35,7 +35,7 @@ public static class ChangeUserSetting
                     await dbContext.UserSettings.AddAsync(row, ct);
                 }
 
-                applied = row.Change(dto.TimeZone, dto.LocationCaptureEnabled, dto.RequirePeopleProposalApproval, dto.SavedAt, timeProvider.GetUtcNow());
+                applied = row.Change(dto.TimeZone, dto.LocationCaptureEnabled, dto.RequirePeopleProposalApproval, dto.Version);
                 await dbContext.SaveChangesAsync(ct);
                 return row;
             }, cancellationToken);

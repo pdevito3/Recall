@@ -57,10 +57,20 @@ public class JournalFixtureTests
             timeZone = "Europe/Tallinn",
             locationCaptureEnabled = true,
             requirePeopleProposalApproval = true,
-            savedAt = Morning,
+            version = 0,
         });
         settings.StatusCode.ShouldBe(HttpStatusCode.OK);
         await fixtures.CheckAsync("user-settings", settings);
+
+        var staleSettings = await client.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new
+        {
+            timeZone = "Europe/Paris",
+            locationCaptureEnabled = false,
+            requirePeopleProposalApproval = true,
+            version = 0,
+        });
+        staleSettings.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        await fixtures.CheckAsync("error-stale-settings", staleSettings);
 
         var create = new { clientSessionId = "client-session-1", startedAt = Morning, latitude = 59.437, longitude = 24.7536 };
         var created = await client.PostAsJsonAsync(ApiRoutes.Sessions.Root, create);
@@ -86,9 +96,13 @@ public class JournalFixtureTests
         cleaned.StatusCode.ShouldBe(HttpStatusCode.OK);
         await fixtures.CheckAsync("cleaned-save", cleaned);
 
-        var metadata = await client.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(sessionId), new { activity = "walking", moods = Moods, userTopics = Topics, savedAt = Morning.AddMinutes(7) });
+        var metadata = await client.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(sessionId), new { activity = "walking", moods = Moods, userTopics = Topics, metadataVersion = 0 });
         metadata.StatusCode.ShouldBe(HttpStatusCode.OK);
         await fixtures.CheckAsync("session-metadata", metadata);
+
+        var staleMetadata = await client.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(sessionId), new { activity = "walking", moods = Moods, userTopics = Array.Empty<string>(), metadataVersion = 0 });
+        staleMetadata.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        await fixtures.CheckAsync("error-stale-metadata", staleMetadata);
 
         await fixtures.CheckAsync("session", await GetOkAsync(client, ApiRoutes.Sessions.GetRecord(sessionId)));
         await fixtures.CheckAsync("raw-revision-page", await GetOkAsync(client, ApiRoutes.Sessions.RawRevisions(sessionId)));

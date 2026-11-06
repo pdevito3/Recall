@@ -22,6 +22,14 @@ Do not catch a `StaleVersionException` of a command that sends a version, and do
 
 A unique index can also tell that another user changed the record, for example an index that permits one current revision for each document. Give such an index `ForStaleVersion` (see [entity-configurations.md](entity-configurations.md#unique-indexes)). When the index stops a save, `AppDbContext` throws a `StaleVersionException`. The caller gets the same 409 as for an old version, with the same `type`, `title`, `detail`, and `errors`. Thus the SPA handles the two in the same way. A command with `IRunsAgainWhenRaced` runs again after such a save, the same as after a failed version check.
 
+### A version of part of a row
+
+A save can guard only part of a row when other writes move the `Version` of that row with no relation to that part. A Draft save moves the `Version` of its Session, and it does not make a metadata save stale. So a metadata save sends `metadataVersion`, a counter on the Session that only an applied metadata change moves (SES-32). A stale value throws `StaleMetadataVersionException`, which gives the same 409 as a stale version, with `metadataVersion` in `errors`. It is not a `StaleVersionException`, so `RaceRetryBehavior` does not catch it.
+
+`SetSessionMetadata` keeps `IRunsAgainWhenRaced`, because a lost race on the row with a Draft save says nothing about the metadata. The next run reads the row again and checks `metadataVersion` again, so a rival metadata save gives the 409 on that run.
+
+Add such a counter only when writes that do not conflict with the form must share the row. In other cases, send `Version`.
+
 ## Run again
 
 A command for one intent, such as a new permission, a role change, or a delete, sends no version. The version check of the owner row still stops its race between the load and the save. But the caller decided nothing on the old rows, so a 409 that says "Reload it" does not help the caller. Mark the command with `IRunsAgainWhenRaced` instead:
@@ -35,7 +43,7 @@ public sealed record Command(string Id, [property: RequiredField] string Permiss
 
 Obey these rules for a marked command. A test enforces the first two.
 
-1. The request has no `Version`, also in a DTO in it. With a version, a lost race is a stale version on each run. The behavior then runs the command 20 times, and the caller gets a concurrent change, not the stale version that it must get. `RunAgainRequestTests` fails on such a request.
+1. The request has no `Version`, also in a DTO in it. With a version, a lost race is a stale version on each run. The behavior then runs the command 20 times, and the caller gets a concurrent change, not the stale version that it must get. `RunAgainRequestTests` fails on such a request. The one exception is a version of part of a row, as in [A version of part of a row](#a-version-of-part-of-a-row), because its stale value does not throw a `StaleVersionException`.
 2. Send the command only from an entrypoint (HTTP or MCP), not from a handler or a domain event handler. `DiscardLostRace` clears each tracked change of the DI scope, also the changes of the handler that sent the command. `EntrypointBoundaryTests` fails when core code creates a marked command.
 3. Do the work that leaves the process, such as a log of the change, a metric, or a call to another service, after the save. The handler runs again from the start, so the work before the save runs one time for each run.
 4. The handler saves one time. A second run after a lost second save would apply the first save again.
@@ -43,7 +51,7 @@ Obey these rules for a marked command. A test enforces the first two.
 
 The tests do not see these breaks of the rules. Check them in the review:
 
-- A `Version` property with a different name, such as `RowVersion`. `RunAgainRequestTests` looks only for the name `Version`.
+- A `Version` property with a different name, such as `RowVersion`. `RunAgainRequestTests` looks only for the name `Version`. `metadataVersion` is the one allowed case, because it has its own exception.
 - A copy of a marked record with `with` in core code. `EntrypointBoundaryTests` does not count the copy method of a record.
 - A background job in the shared plumbing or the composition root that sends a marked command. `EntrypointBoundaryTests` reads only the core types. `DiscardLostRace` then clears the tracked changes of the job.
 

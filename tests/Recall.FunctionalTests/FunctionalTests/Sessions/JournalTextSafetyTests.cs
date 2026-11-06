@@ -28,7 +28,7 @@ public class JournalTextSafetyTests : TestBase
             await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Draft(session.Id), new { text = $"raw {marker}", baseRevision = 0, savedAt = JournalScenario.Morning }),
             await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Draft(session.Id), new { text = $"lost {marker}", baseRevision = 0, savedAt = JournalScenario.Morning.AddMinutes(-5) }),
             await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Cleaned(session.Id), new { text = $"cleaned {marker}", baseRevision = 0, savedAt = JournalScenario.Morning }),
-            await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { activity = marker, moods = new[] { marker }, userTopics = new[] { $"topic {marker}" }, savedAt = JournalScenario.Morning }),
+            await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { activity = marker, moods = new[] { marker }, userTopics = new[] { $"topic {marker}" }, metadataVersion = 0 }),
         };
         var person = await FactoryClient.PostAsJsonAsync(ApiRoutes.People.Root, new { label = $"Sam {marker}" });
         var personId = (await person.Content.ReadFromJsonAsync<PersonDto>())!.Id;
@@ -38,7 +38,7 @@ public class JournalTextSafetyTests : TestBase
         var added = (await correction.Content.ReadFromJsonAsync<CorrectionDto>())!;
         responses.Add(correction);
         responses.Add(await FactoryClient.PutAsJsonAsync(ApiRoutes.Corrections.GetRecord(added.Id), new { canonicalTerm = $"changed {marker}", mishearings = new[] { $"misheard {marker}" }, version = added.Version }));
-        responses.Add(await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new UserSettingChangeDto { TimeZone = "Europe/Tallinn", LocationCaptureEnabled = true, RequirePeopleProposalApproval = true, SavedAt = JournalScenario.Morning }));
+        responses.Add(await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new UserSettingChangeDto { TimeZone = "Europe/Tallinn", LocationCaptureEnabled = true, RequirePeopleProposalApproval = true, Version = 0 }));
         responses.Add(await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Draft(session.Id), new { text = new string('x', 1_000_001) + marker, baseRevision = 1, savedAt = JournalScenario.Morning }));
         responses.Add(await FactoryClient.DeleteAsync(ApiRoutes.Corrections.GetRecord(added.Id)));
         responses.Add(await FactoryClient.DeleteAsync(ApiRoutes.Sessions.GetRecord(session.Id)));

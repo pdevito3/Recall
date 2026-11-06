@@ -73,37 +73,6 @@ public class DirectoryRulesTests
     }
 
     [Test]
-    [Property("Rule", "SES-26")]
-    public void a_change_with_an_older_save_time_does_nothing()
-    {
-        // Arrange
-        var setting = UserSetting.DefaultsFor("ten_1", "usr_1");
-        setting.Change("Europe/Tallinn", true, true, Noon, Now);
-
-        // Act
-        setting.Change("America/Chicago", false, false, Noon.AddHours(-1), Now);
-
-        // Assert
-        setting.TimeZone.ShouldBe("Europe/Tallinn");
-        setting.LocationCaptureEnabled.ShouldBeTrue();
-        setting.SavedAt.ShouldBe(Noon);
-    }
-
-    [Test]
-    [Property("Rule", "SES-7")]
-    public void a_settings_change_with_a_save_time_in_the_future_gets_the_time_of_the_server()
-    {
-        // Arrange
-        var setting = UserSetting.DefaultsFor("ten_1", "usr_1");
-
-        // Act
-        setting.Change(null, true, true, Now.AddYears(1), Now);
-
-        // Assert
-        setting.SavedAt.ShouldBe(Now);
-    }
-
-    [Test]
     [Property("Rule", "SES-3")]
     public void a_user_with_no_zone_uses_utc()
     {
@@ -121,7 +90,7 @@ public class DirectoryRulesTests
         var setting = UserSetting.DefaultsFor("ten_1", "usr_1");
 
         // Act
-        Action change = () => setting.Change("Not/AZone", false, true, Noon, Now);
+        Action change = () => setting.Change("Not/AZone", false, true, 0u);
 
         // Assert
         change.ShouldThrow<ValidationException>().Property.ShouldBe("timeZone");

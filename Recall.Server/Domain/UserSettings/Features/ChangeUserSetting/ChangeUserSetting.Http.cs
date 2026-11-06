@@ -19,8 +19,8 @@ public sealed class ChangeUserSettingEndpoint : IEndpoint
         .ProducesValidationProblem(StatusCodes.Status409Conflict);
 
     /// <summary>
-    /// Changes the settings of the caller, with Last-write-wins on the save time. A change with a save time that is not newer than
-    /// the stored settings does nothing, and the response has the stored settings.
+    /// Changes the settings of the caller. A save from an older version gets 409 and changes nothing, unless the row already holds
+    /// these values. Then the response has the stored settings, so a retry of a save that reached the server gets 200.
     /// </summary>
     public static async Task<Ok<UserSettingDto>> Handle(
         UserSettingChangeDto dto,

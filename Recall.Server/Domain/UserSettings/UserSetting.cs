@@ -1,7 +1,6 @@
 namespace Recall.Server.Domain.UserSettings;
 
 using Exceptions;
-using Sessions;
 using TimeZones;
 
 public class UserSetting : BaseEntity, ITenantable, IJournalOwned
@@ -20,10 +19,6 @@ public class UserSetting : BaseEntity, ITenantable, IJournalOwned
 
     public bool RequirePeopleProposalApproval { get; private set; } = true;
 
-    [Sensitive] public DateTimeOffset? SavedAt { get; private set; }
-
-    [Sensitive] public IReadOnlyList<long> FastClaims { get; private set; } = [];
-
     public static UserSetting DefaultsFor(string tenantId, string userId) => new() { TenantId = tenantId, UserId = userId };
 
     public bool TimeZoneIsKnown => IsKnownZone(TimeZone);
@@ -32,21 +27,21 @@ public class UserSetting : BaseEntity, ITenantable, IJournalOwned
 
     public static TimeZoneId ZoneOf(string? timeZone) => TimeZoneId.TryOf(timeZone) ?? Utc;
 
-    /// <returns>False when the save time is not newer, and the change does nothing.</returns>
+    /// <returns>False when the row already holds these values, so a retry does nothing at any version.</returns>
+    /// <exception cref="StaleVersionException">The row changed after the version that the client read.</exception>
     /// <exception cref="ValidationException">The time zone is not an IANA zone, and it is not the stored zone.</exception>
-    public bool Change(string? timeZone, bool locationCaptureEnabled, bool requirePeopleProposalApproval, DateTimeOffset claimedSavedAt, DateTimeOffset now)
+    public bool Change(string? timeZone, bool locationCaptureEnabled, bool requirePeopleProposalApproval, uint version)
     {
-        if (!claimedSavedAt.IsNewer(SavedAt, FastClaims, now))
+        var zone = string.IsNullOrWhiteSpace(timeZone) ? null : timeZone;
+        if (zone == TimeZone && locationCaptureEnabled == LocationCaptureEnabled && requirePeopleProposalApproval == RequirePeopleProposalApproval)
             return false;
 
+        GuardVersion(version);
+
         // A client sends the whole row back, so a stored zone that this host does not know must not stop a change of the other settings.
-        var zone = string.IsNullOrWhiteSpace(timeZone) ? null : timeZone == TimeZone ? timeZone : TimeZoneId.Of(timeZone).Value;
-        var savedAt = FastClockClaims.SaveTimeOf(claimedSavedAt, now);
-        TimeZone = zone;
+        TimeZone = zone is null || zone == TimeZone ? zone : TimeZoneId.Of(zone).Value;
         LocationCaptureEnabled = locationCaptureEnabled;
         RequirePeopleProposalApproval = requirePeopleProposalApproval;
-        SavedAt = savedAt;
-        FastClaims = FastClaims.Remembering(claimedSavedAt, savedAt);
         return true;
     }
 

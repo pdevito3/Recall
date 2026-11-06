@@ -8,6 +8,5 @@ public sealed record UserSettingDto
     public bool TimeZoneIsKnown { get; init; }
     public bool LocationCaptureEnabled { get; init; }
     public bool RequirePeopleProposalApproval { get; init; }
-    public DateTimeOffset? SavedAt { get; init; }
     public uint Version { get; init; }
 }

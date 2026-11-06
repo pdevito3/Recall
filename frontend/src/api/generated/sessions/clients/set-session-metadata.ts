@@ -8,7 +8,9 @@ import type { SetSessionMetadataOptions, SetSessionMetadataResponses } from '../
 import { client, unwrapResult } from '../../.kubb/client'
 
 /**
- * @summary Replaces the activity, the moods, and the Topics that the caller chose for a Session.
+ * @summary Replaces the activity, the moods, and the Topics that the caller chose for a Session. A save from an older
+ * `metadataVersion` gets 409 and changes nothing, unless the Session already holds these values. Then the response has the
+ * stored Session, so a retry of a save that reached the server gets 200.
  * {@link /api/v1/sessions/:id/metadata}
  */
 export function setSessionMetadata<ThrowOnError extends boolean = true>(options: Options<SetSessionMetadataOptions, ThrowOnError>): Promise<UnwrappedResult<SetSessionMetadataResponses, ThrowOnError>> {

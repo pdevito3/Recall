@@ -43,6 +43,7 @@ public static class GetSessionPage
                     s.AiTopics,
                     s.MentionedPersonIds,
                     s.Version,
+                    s.MetadataVersion,
                 })
                 .ToKeysetPageAsync(request.Parameters.PageSize, cancellationToken);
 
@@ -63,6 +64,7 @@ public static class GetSessionPage
                     Topics = SessionMapper.TopicsOf(row.UserTopics, row.AiTopics),
                     PersonIds = row.MentionedPersonIds,
                     Version = row.Version,
+                    MetadataVersion = row.MetadataVersion,
                 }).ToList(),
                 NextCursor = hasMore ? new SessionCursor(page[^1].StartedAt, page[^1].Id).ToString() : null,
             };

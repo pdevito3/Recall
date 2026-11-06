@@ -1,0 +1,12 @@
+{
+  "type": "urn:recall:problem:stale-version",
+  "title": "The record changed after you loaded it.",
+  "status": 409,
+  "detail": "This record changed after you loaded it. Reload it, then make your change again.",
+  "traceId": "00000000000000000000000000000000",
+  "errors": {
+    "version": [
+      "This record changed after you loaded it. Reload it, then make your change again."
+    ]
+  }
+}

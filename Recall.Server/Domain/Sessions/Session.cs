@@ -46,9 +46,11 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
 
     public int? LastCleanupRawRevision { get; private set; }
 
-    [Sensitive] public DateTimeOffset? MetadataSavedAt { get; private set; }
-
-    [Sensitive] public IReadOnlyList<long> MetadataFastClaims { get; private set; } = [];
+    /// <summary>
+    /// Counts the changes of the activity, the Moods, and the User Topics. A save of a Draft also changes <see cref="BaseEntity.Version"/>,
+    /// so that number would refuse a metadata save that conflicts with nothing.
+    /// </summary>
+    public uint MetadataVersion { get; private set; }
 
     [Sensitive] public string Activity { get; private set; } = SessionActivity.None;
 
@@ -149,14 +151,17 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         RefreshFromDrafts();
     }
 
-    /// <returns>False when the save time is not newer, and the change does nothing.</returns>
-    public bool SetMetadata(SessionMetadata metadata, DateTimeOffset claimedSavedAt, DateTimeOffset now)
+    /// <returns>False when the Session already holds these values, so a retry does nothing at any version.</returns>
+    /// <exception cref="StaleMetadataVersionException">The metadata changed after the version that the client read.</exception>
+    public bool SetMetadata(SessionMetadata metadata, uint metadataVersion)
     {
-        if (!claimedSavedAt.IsNewer(MetadataSavedAt, MetadataFastClaims, now))
+        if (Activity == metadata.Activity && Moods.SequenceEqual(metadata.Moods) && UserTopics.SequenceEqual(metadata.UserTopics))
             return false;
 
-        MetadataSavedAt = FastClockClaims.SaveTimeOf(claimedSavedAt, now);
-        MetadataFastClaims = MetadataFastClaims.Remembering(claimedSavedAt, MetadataSavedAt.Value);
+        if (metadataVersion != MetadataVersion)
+            throw new StaleMetadataVersionException();
+
+        MetadataVersion++;
         Activity = metadata.Activity;
         Moods = metadata.Moods;
         UserTopics = metadata.UserTopics;
