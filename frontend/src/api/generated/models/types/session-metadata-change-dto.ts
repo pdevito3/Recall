@@ -12,10 +12,10 @@ export type SessionMetadataChangeDto = {
     moods: string[];
     userTopics: string[];
     /**
-     * @description The time of the edit on the client. A change with a time that is not newer than the stored change does nothing.
-     *
-     * Format: `date-time`
-     * @type string
+     * @description The `metadataVersion` of the Session that the client read. A save from another version gets 409, unless the Session already holds these values.
+     * @minLength 0
+     * @maxLength 4294967295
+     * @type integer
     */
-    savedAt: string;
+    metadataVersion: number;
 };

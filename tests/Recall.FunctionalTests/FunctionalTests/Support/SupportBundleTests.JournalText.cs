@@ -196,7 +196,7 @@ public partial class SupportBundleTests
             await SaveDraftAsync(owner, draft, $"a raw save that loses {marker}", 0, -5),
             await SaveDraftAsync(owner, cleaned, $"cleaned {marker}", 0, 1),
             await SaveDraftAsync(owner, cleaned, DocumentWith(Paragraph($"edited cleaned {marker}"), Mention(person.Id, $"Sam {marker}")), 1, 2),
-            await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Sessions.Metadata(session.Id), new { activity = marker, moods = new[] { marker }, userTopics = new[] { $"topic {marker}" }, savedAt = Morning }),
+            await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Sessions.Metadata(session.Id), new { activity = marker, moods = new[] { marker }, userTopics = new[] { $"topic {marker}" }, metadataVersion = 0 }),
             await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.People.GetRecord(person.Id), new { label = $"Samuel {marker}" }),
         };
         var correction = await AddCorrectionAsync(owner, $"term {marker}", $"heard {marker}");
@@ -307,8 +307,8 @@ public partial class SupportBundleTests
             await SaveDraftAsync(owner, cleaned, tooLong, revision, revision + 1),
             await SaveDraftAsync(owner, draft, $"\u0000{marker}", revision, revision + 1),
             await SaveDraftAsync(owner, cleaned, $"\u0000{marker}", revision, revision + 1),
-            await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Sessions.Metadata(session.Id), new { activity = marker + new string('x', Session.MetadataValueMaxLength + 1), moods = Array.Empty<string>(), userTopics = Array.Empty<string>(), savedAt = Morning }),
-            await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Sessions.Metadata(session.Id), new { activity = "None", moods = new[] { $"\u0000{marker}" }, userTopics = Array.Empty<string>(), savedAt = Morning }),
+            await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Sessions.Metadata(session.Id), new { activity = marker + new string('x', Session.MetadataValueMaxLength + 1), moods = Array.Empty<string>(), userTopics = Array.Empty<string>(), metadataVersion = 0 }),
+            await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Sessions.Metadata(session.Id), new { activity = "None", moods = new[] { $"\u0000{marker}" }, userTopics = Array.Empty<string>(), metadataVersion = 0 }),
             await SendJsonAsync(owner, HttpMethod.Post, ApiRoutes.Corrections.Root, new { canonicalTerm = marker + new string('x', Correction.CanonicalTermMaxLength + 1), mishearings = Array.Empty<string>() }),
             await SendJsonAsync(owner, HttpMethod.Post, ApiRoutes.Corrections.Root, new { canonicalTerm = "t", mishearings = new[] { marker + new string('x', Correction.MishearingMaxLength + 1) } }),
             await SendJsonAsync(owner, HttpMethod.Post, ApiRoutes.People.Root, new { label = marker + new string('x', Person.LabelMaxLength + 1) }),
@@ -321,7 +321,7 @@ public partial class SupportBundleTests
         {
             failed.Add(await SaveDraftAsync(owner, draft, $"raw {marker}", revision, revision + 1));
             failed.Add(await SaveDraftAsync(owner, cleaned, $"cleaned {marker}", revision, revision + 1));
-            failed.Add(await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Sessions.Metadata(session.Id), new { activity = marker, moods = new[] { marker }, userTopics = new[] { marker }, savedAt = Morning }));
+            failed.Add(await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Sessions.Metadata(session.Id), new { activity = marker, moods = new[] { marker }, userTopics = new[] { marker }, metadataVersion = 0 }));
             failed.Add(await SendJsonAsync(owner, HttpMethod.Post, ApiRoutes.Sessions.Root, new { clientSessionId = marker, startedAt = Morning }));
             failed.Add(await SendJsonAsync(owner, HttpMethod.Post, ApiRoutes.Corrections.Root, new { canonicalTerm = marker, mishearings = new[] { marker } }));
             failed.Add(await SendJsonAsync(owner, HttpMethod.Put, correctionRoute, new { canonicalTerm = marker, mishearings = new[] { marker }, version = correction.Version }));

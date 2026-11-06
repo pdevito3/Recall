@@ -27,7 +27,6 @@ public sealed class SessionConfiguration : IEntityTypeConfiguration<Session>
         builder.PrimitiveCollection(e => e.UserTopics).HasMaxLength(Session.MetadataListColumnMaxLength);
         builder.PrimitiveCollection(e => e.AiTopics).HasMaxLength(Session.MetadataListColumnMaxLength);
         builder.PrimitiveCollection(e => e.MentionedPersonIds).HasMaxLength(Session.MetadataListColumnMaxLength);
-        builder.PrimitiveCollection(e => e.MetadataFastClaims);
 
         builder.ComplexProperty(e => e.Raw, slot => ConfigureSlot(slot, "raw"));
         builder.ComplexProperty(e => e.Cleaned, slot => ConfigureSlot(slot, "cleaned"));

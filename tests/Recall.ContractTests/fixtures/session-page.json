@@ -12,7 +12,8 @@
       "moods": [],
       "topics": [],
       "personIds": [],
-      "version": 1
+      "version": 1,
+      "metadataVersion": 0
     },
     {
       "id": "ses_00000000000000000000000000000003",
@@ -35,7 +36,8 @@
       "personIds": [
         "per_00000000000000000000000000000001"
       ],
-      "version": 5
+      "version": 5,
+      "metadataVersion": 1
     }
   ],
   "nextCursor": null

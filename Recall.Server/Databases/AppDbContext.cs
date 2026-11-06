@@ -351,6 +351,9 @@ public class AppDbContext(
         }
     }
 
+    /// <summary>Makes the next save write the row of a tracked entity and move its version, also when no value changed.</summary>
+    public void MoveVersionOf(BaseEntity entity) => Entry(entity).Property(e => e.LastModifiedOn).IsModified = true;
+
     private void StampEntities(DateTimeOffset now)
     {
         foreach (var entry in ChangeTracker.Entries<BaseEntity>())
