@@ -257,6 +257,22 @@ public class AuthRefusalTests
     }
 
     [Test]
+    public async Task a_userinfo_answer_of_another_person_is_refused_also_with_a_claim_that_cannot_be_read()
+    {
+        // Arrange
+        using var browser = NewBrowser();
+        var authorize = await browser.StartWebAsync();
+
+        // Act
+        var response = await browser.FinishAtProviderAsync(authorize, new StubLogin(NewSubject()) { UserinfoBody = """{"sub":"another-person","name":"\ud800"}""" });
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).ShouldContain("<h1>Sign-in failed</h1>");
+        browser.SessionCookie.ShouldBeNull();
+    }
+
+    [Test]
     [Arguments("bogus")]
     [Arguments("utf-7")]
     public async Task a_token_answer_with_a_charset_that_cannot_be_read_is_refused(string charset)

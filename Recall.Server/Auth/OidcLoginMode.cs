@@ -189,9 +189,9 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
             _logger.Here().Warning("Provider {ModeId} stopped answering during a login", Id);
             return RedeemResult.Failed(LoginFailure.IdpUnreachable);
         }
-        catch (NotValidAnswerException)
+        catch (NotValidAnswerException exception)
         {
-            return Refuse("the provider sent a body that is not valid");
+            return Refuse($"the provider sent a body that is not valid ({exception.GetBaseException().GetType().Name})");
         }
     }
 
@@ -416,12 +416,14 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
             if (!response.IsSuccessStatusCode)
                 return UserinfoSubject.NotDifferent;
 
-            var texts = await ReadAnswerAsync(response, text => TextsOf(text, [SubjectClaim, .. claims.Keys]), cancellationToken);
-            if (!texts.TryGetValue(SubjectClaim, out var sub))
+            // The subject comes first and alone, so a claim that cannot be read cannot hide another person.
+            var subjects = await ReadAnswerAsync(response, text => TextsOf(text, [SubjectClaim]), cancellationToken);
+            if (!subjects.TryGetValue(SubjectClaim, out var sub))
                 return UserinfoSubject.NotDifferent;
             if (sub != subject)
                 return UserinfoSubject.Other;
 
+            var texts = await ReadAnswerAsync(response, text => TextsOf(text, claims.Keys), cancellationToken);
             foreach (var name in claims.Keys.Where(texts.ContainsKey).ToList())
                 claims[name] = texts[name];
 

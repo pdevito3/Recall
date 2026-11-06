@@ -62,12 +62,19 @@ public class ProviderCharsetTests
             // Act
             var login = await browser.GetAsync("/auth/login");
             var status = await browser.GetAsync("/auth/status");
+            var startOfBad = await browser.GetAsync($"/auth/oidc/{AuthFlowFactory.ModeId}/start?client=web");
             var startOfHealthy = await browser.GetAsync($"/auth/oidc/{AuthFlowFactory.OtherModeId}/start?client=web");
 
             // Assert
             login.StatusCode.ShouldBe(HttpStatusCode.OK);
-            (await login.Content.ReadAsStringAsync()).ShouldContain(">Sign in with Other</a>");
+            var page = await login.Content.ReadAsStringAsync();
+            page.ShouldContain("Stub is not available.");
+            page.ShouldContain(">Sign in with Other</a>");
             status.StatusCode.ShouldBe(HttpStatusCode.OK);
+            var modes = (await status.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("modes");
+            modes[0].GetProperty("state").GetString().ShouldBe("unreachable");
+            modes[1].GetProperty("state").GetString().ShouldBe("ready");
+            startOfBad.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
             startOfHealthy.StatusCode.ShouldBe(HttpStatusCode.Redirect);
         }
         finally
