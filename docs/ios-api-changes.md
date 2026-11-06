@@ -5,7 +5,7 @@ This document compares each of the 22 routes that the POC iOS client calls (`Jou
 ## Changes on each route
 
 - An ID is a text such as `ses_0199f0c1a2b37c4d8e9f0a1b2c3d4e5f`, not a UUID. Change `UUID` to `String` for each ID that the server makes.
-- A time is `savedAt`, not `clientSavedAt`.
+- A time is `savedAt`, not `clientSavedAt`. Send each time with its offset, such as `2026-06-01T08:00:00.000Z`. A time with no offset gives 400.
 - An error is a problem document (`status`, `title`, `detail`, `errors`). See `error-*.json`.
 
 ## Routes

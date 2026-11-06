@@ -1,5 +1,6 @@
 namespace Recall.Server.Domain.Sessions.Dtos;
 
+using System.Text.Json.Serialization;
 using Resources;
 
 public sealed record DraftSaveDto
@@ -13,5 +14,6 @@ public sealed record DraftSaveDto
     public required int BaseRevision { get; init; }
 
     /// <summary>When the person saved. A time in the future becomes the time of the server.</summary>
+    [JsonConverter(typeof(InstantWithOffsetConverter))]
     public required DateTimeOffset SavedAt { get; init; }
 }
