@@ -509,6 +509,7 @@ test.describe('the tags of an entry', () => {
     await unsent.logOut()
 
     await expect(unsent.at.logoutDialog).toContainText('A change of your tags also did not reach the server', { timeout: 10_000 })
+    await expect(unsent.at.logoutChoice('Discard words and sign out')).toBeInViewport({ ratio: 1 })
     await unsent.answerTheLogoutDialog('Stay signed in')
     await expect(unsent.at.logoutDialog).toHaveCount(0)
     expect(api.all('post', '/auth/logout')).toHaveLength(0)

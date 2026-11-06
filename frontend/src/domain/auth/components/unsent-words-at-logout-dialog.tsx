@@ -46,7 +46,7 @@ export function UnsentWordsAtLogoutDialog() {
           {isATagUnsavedToo && ' A change of your tags also did not reach the server, and a sign-out loses it.'}
         </ResponsiveDialogDescription>
       </ResponsiveDialogHeader>
-      <ResponsiveDialogFooter>
+      <ResponsiveDialogFooter className={canKeep && isATagUnsavedToo ? 'sm:flex-col-reverse' : undefined}>
         <ResponsiveDialogClose variant="destructive" onPress={() => answerAboutUnsentWords('discard')}>
           Discard words and sign out
         </ResponsiveDialogClose>
