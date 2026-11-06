@@ -7,6 +7,7 @@ using Recall.Server.Auth;
 using Serilog.Events;
 using Shouldly;
 
+[NotInParallel("owner-claim-file")]
 public class LoginSweepTests
 {
     [Test]
