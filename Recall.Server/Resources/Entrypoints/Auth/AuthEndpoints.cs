@@ -116,7 +116,6 @@ public static class AuthEndpoints
 
     private static async Task<IResult> TokenAsync(HttpContext http, SessionStore store, ITenantIdProvider tenants, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        http.Response.Headers.CacheControl = "no-store";
         var form = await AuthForm.ReadAsync(http.Request, cancellationToken);
         if (form is null)
             return TokenError("invalid_request");

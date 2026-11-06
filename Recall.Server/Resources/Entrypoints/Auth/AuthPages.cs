@@ -157,7 +157,6 @@ public static class AuthPages
             var response = httpContext.Response;
             response.StatusCode = status;
             response.ContentType = "text/html; charset=utf-8";
-            response.Headers.CacheControl = "no-store";
             response.Headers.ContentSecurityPolicy = policy;
             response.Headers.XContentTypeOptions = "nosniff";
             response.Headers["Referrer-Policy"] = "no-referrer";

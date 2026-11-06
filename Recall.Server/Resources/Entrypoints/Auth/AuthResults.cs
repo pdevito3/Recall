@@ -12,7 +12,6 @@ public sealed class AuthRedirect(string location) : IResult
     {
         httpContext.Response.StatusCode = StatusCodes.Status302Found;
         httpContext.Response.Headers.Location = location;
-        httpContext.Response.Headers.CacheControl = "no-store";
         return Task.CompletedTask;
     }
 }

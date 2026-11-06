@@ -40,7 +40,6 @@ public static class SpaHosting
 
             context.Response.ContentType = "text/html; charset=utf-8";
             context.Response.ContentLength = index.Length;
-            context.Response.Headers.CacheControl = "no-store";
             context.Response.Headers.ContentSecurityPolicy = ContentSecurityPolicy;
             if (HttpMethods.IsGet(context.Request.Method))
                 await context.Response.SendFileAsync(index, context.RequestAborted);
