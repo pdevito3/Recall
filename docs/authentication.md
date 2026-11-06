@@ -167,7 +167,7 @@ A response tells what happened:
 |---|---|
 | A cookie with `X-CSRF: 1`, and the provider of its session has an `end_session_endpoint` | Ends the session if it is live, deletes the cookie, and sets the mark. 200 with `{ "provider_logout_url": "..." }`. |
 | A cookie with `X-CSRF: 1`, in each other case | The same, and 204 with no body. |
-| `X-CSRF: 1` and no token, with no cookie or with a cookie of a session that Recall cannot find, on a Server with one provider | This browser can still have a session at the provider, so the Server treats that provider as the provider of the session. The first row or the second row then applies. |
+| `X-CSRF: 1` and no token (a value that is not a refresh token counts as no token), with no cookie or with a cookie of a session that Recall cannot find, on a Server with one provider | This browser can still have a session at the provider, so the Server treats that provider as the provider of the session. The first row or the second row then applies. |
 | The same, on a Server with no provider or with more than one | Sets the mark for 60 seconds, and 204 with no body. Recall does not know the provider, so the page has no note. The page with more than one provider does not start a login with no click. |
 | A cookie with no `X-CSRF: 1`, with or without another credential | 401. Nothing ends, and the cookie stays. |
 | No cookie, and no `X-CSRF: 1` or a bearer token or a refresh token | Ends what a bearer token or a refresh token names. 204, with no mark. A native app opens no browser, so its logout does not touch the provider. A cross-site page gets this too, because `SameSite=Strict` holds the cookie back. |
@@ -188,7 +188,7 @@ The browser can keep a page in its back-forward cache, and Back then shows this 
 | The session of this page | Shows itself again, with no new load |
 | No session | Goes to the signed-out page |
 | Another session, for example of the next person on this device | Loads again, so the words of this page stay hidden |
-| A failed call, or no answer in 3 seconds | Loads again, and shows the alert of the session check if the call still fails |
+| A failed call, or no answer in 3 seconds | Loads again, and shows the alert of the session check if the call still fails. With no network, the browser shows its own error page, because Recall has no offline page and the words of this page must stay hidden |
 
 So in a live session, Back from this cache costs one call of `/auth/me`.
 

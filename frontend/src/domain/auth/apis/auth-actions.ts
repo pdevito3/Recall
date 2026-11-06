@@ -20,6 +20,10 @@ let logoutInFlight: Promise<unknown> | undefined
 
 let otherTabs: BroadcastChannel | undefined
 
+let sessionOfHiddenPage: string | undefined
+
+let newestRestore = 0
+
 /**
  * The path, the query, and the hash of the page, as a return URL that the Server accepts. The Server refuses a path that
  * starts with `//` or `/\`. The browser percent-encodes each non-ASCII character of a location, so the length is the
@@ -47,15 +51,26 @@ export async function logout(): Promise<void> {
     const { data } = await answer
     afterSignOut = data?.provider_logout_url ?? afterSignOut ?? signedOutPage
     otherTabs?.postMessage('signed-out')
+    hidePage()
     window.location.replace(afterSignOut)
   } finally {
     if (logoutInFlight === running) logoutInFlight = undefined
   }
 }
 
-/** Opacity and not visibility: `visibility` inherits, and an element with `transition-all` would keep showing it for the time of its transition. */
+/**
+ * Opacity and not visibility: `visibility` inherits, and an element with `transition-all` would keep showing it for the
+ * time of its transition. Opacity leaves the text to a screen reader, to a search in the page, and to the keyboard, so
+ * `inert` closes those.
+ */
 function hidePage() {
   document.documentElement.style.opacity = '0'
+  document.documentElement.inert = true
+}
+
+function showPage() {
+  document.documentElement.style.opacity = ''
+  document.documentElement.inert = false
 }
 
 /**
@@ -74,12 +89,17 @@ function leaveAsSignedOut(queryClient: QueryClient) {
   window.location.replace(afterSignOut)
 }
 
-/** A page from the back-forward cache runs no first load, so nothing else checks that its session still lives. */
+/**
+ * A page from the back-forward cache runs no first load, so nothing else checks that its session still lives. A check
+ * can outlive its restore in a frozen page, so only the check of the newest restore acts.
+ */
 async function checkSessionOfRestoredPage(queryClient: QueryClient) {
+  const restore = ++newestRestore
   const noAnswer = new Promise<undefined>((settle) => setTimeout(settle, restoredPageCheckLimitMs))
   const user = await Promise.race([getUser().catch(() => undefined), noAnswer])
+  if (restore !== newestRestore) return
   if (user === null) leaveAsSignedOut(queryClient)
-  else if (user && user.sid === queryClient.getQueryData(authUserQuery.queryKey)?.sid) document.documentElement.style.opacity = ''
+  else if (user && user.sid === sessionOfHiddenPage) showPage()
   // A new load shows the alert of a failed check, or the pages of the session that lives now, and the words of this page stay hidden.
   else window.location.reload()
 }
@@ -93,7 +113,10 @@ export function guardPageAgainstEndedSession(queryClient: QueryClient) {
   otherTabs = new BroadcastChannel('recall.session')
   otherTabs.onmessage = () => leaveAsSignedOut(queryClient)
   window.addEventListener('pagehide', (event) => {
-    if (event.persisted) hidePage()
+    if (!event.persisted) return
+    hidePage()
+    // Read here, because a refetch during a restore can already hold the session of the next person.
+    sessionOfHiddenPage = queryClient.getQueryData(authUserQuery.queryKey)?.sid
   })
   window.addEventListener('pageshow', (event) => {
     if (event.persisted) void checkSessionOfRestoredPage(queryClient)
