@@ -20,12 +20,13 @@ A kept claim stops only a change with its exact time, at any distance from the s
 
 The server could refuse a time far ahead with a 422 and keep no such claim. It does not, because a server with a slow clock would then refuse each client.
 
-A person can still lose a change with a 200 in these cases, and the reply shows the row that the server has:
+A person can still lose a change with a 200 in these cases, and the reply shows the row that the server has. We cannot show that this list is full:
 
 - A change with a time that is not newer than the stored change goes away, as from a slow clock or a queue.
 - A different change with the exact time of a kept claim goes away, because the server cannot tell it from a retry.
 - The time of a change from a fast clock is later than its edit. While that time is ahead of the server, the change gets the time of the server, so the order of arrival decides. After that, it keeps its own time. Either way, a change that was made earlier and arrives after a newer change replaces the newer change. This needs no failed request and no second device, as the next section shows.
 - If the server clock goes back, a change with a time ahead of the server gets a save time below the stored one, and it goes away. The server does not remember it, so its retry applies after the server passes the stored save time, also over a newer change.
+- A settings change and a metadata change replace the whole row, so a body from a stale copy of the row brings back the old value of each field that the person did not change. This needs no wrong clock, because the stale body has a newer time. A tablet that changes only the zone and sends a stale capture true turns capture back on, and the next Session stores a location. A stale metadata body drops a Topic.
 
 ## Overlapping changes from one device
 
