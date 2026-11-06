@@ -1,6 +1,8 @@
 import { expect, type Locator, type Page } from '@playwright/test'
 import { appShell } from './app-shell.locators'
 
+export const sheetChunk = /(ui|assets)\/sheet/
+
 export function appShellPage(page: Page) {
   const at = appShell(page)
   const warnings: string[] = []
@@ -15,6 +17,13 @@ export function appShellPage(page: Page) {
     async openAbout() {
       await page.goto('/about')
       await expect(at.aboutText).toBeVisible()
+    },
+
+    async openAboutAndWaitForSheetChunk() {
+      const sheetLoaded = page.waitForResponse(sheetChunk)
+      await page.goto('/about')
+      await expect(at.aboutText).toBeVisible()
+      await sheetLoaded
     },
 
     async openMobileSidebar() {

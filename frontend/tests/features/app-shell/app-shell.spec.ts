@@ -3,7 +3,7 @@ import { usersApi } from '@tests/support/api/users-api'
 import { expect, test } from '@tests/support/fixtures'
 import { useDefaultFontSize } from '@tests/support/screen'
 import { homePage } from '../home/home.tasks'
-import { appShellPage } from './app-shell.tasks'
+import { appShellPage, sheetChunk } from './app-shell.tasks'
 
 for (const viewport of [
   { width: 1280, height: 800 },
@@ -277,14 +277,10 @@ test.describe('the accessibility tree of the layout', () => {
   })
 })
 
-const sheetChunk = /(ui|assets)\/sheet/
-
 test('a window that becomes narrow with no network still opens the sidebar', async ({ page }) => {
   const shell = appShellPage(page)
-  const sheetLoaded = page.waitForResponse(sheetChunk)
 
-  await shell.openAbout()
-  await sheetLoaded
+  await shell.openAboutAndWaitForSheetChunk()
   await page.context().setOffline(true)
   await page.setViewportSize({ width: 390, height: 844 })
   await shell.openMobileSidebar()
