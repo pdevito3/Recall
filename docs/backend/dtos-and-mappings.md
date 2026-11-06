@@ -64,7 +64,7 @@ public sealed record UserDto
 }
 ```
 
-The parameters DTO is a class that derives from `BasePaginationParameters`. It has no transport attributes. The HTTP endpoint binds each query value to a handler parameter with the camelCase name, and copies it to the DTO (see [endpoints.md](endpoints.md#http)). The gRPC and MCP adapters fill the DTO from their own inputs.
+The parameters DTO is a class that derives from `BasePaginationParameters`. It has no transport attributes. The HTTP endpoint binds each query value to a handler parameter with the camelCase name, and copies it to the DTO (see [endpoints.md](endpoints.md#http)). The MCP adapter fills the DTO from its own inputs.
 
 <!-- code: Recall.Server/Domain/Users/Dtos/UserParametersDto.cs -->
 ```csharp

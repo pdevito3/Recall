@@ -1,6 +1,6 @@
 ---
 name: writing-tests
-description: Picks the test suite for a change and writes the test there. Use when you add or change a test, when you ask which suite proves a behavior, or when you ask when to run `pnpm test:e2e` and when to run `pnpm test:e2e:stack`. Covers the Vitest unit and component tests, the Playwright functional suite against a mocked BFF, the Playwright stack suite against a real IdP, and points to the .NET tests.
+description: Picks the test suite for a change and writes the test there. Use when you add or change a test, when you ask which suite proves a behavior, or when you ask when to run `pnpm test:e2e` and when to run `pnpm test:e2e:stack`. Covers the Vitest unit and component tests, the Playwright functional suite against a mocked Server, the Playwright stack suite against a real IdP, and points to the .NET tests.
 ---
 
 # Writing tests
@@ -23,19 +23,19 @@ Run all frontend commands in `frontend/`.
 
 ## Access of a Server endpoint
 
-`EndpointAccessSweepTests` finds each HTTP endpoint, MCP tool, and gRPC method of the Server. It sends each one these calls:
+`EndpointAccessSweepTests` finds each HTTP endpoint and MCP tool of the Server. It sends each one these calls:
 
-- A call with no user, with unknown IDs. The answer must be 401, or `Unauthenticated` on gRPC. MCP gets no such call, because `/mcp` refuses a call with no token before a tool runs, and `TenantMcpToolTests` checks that 401.
+- A call with no user, with unknown IDs. The answer must be 401. MCP gets no such call, because `/mcp` refuses a call with no token before a tool runs, and `TenantMcpToolTests` checks that 401.
 - A member with no permissions, with the IDs of real records of the tenant. The answer must be 403.
 - The same member with unknown IDs. The answer must be 403, so that the answer does not tell which IDs exist.
 
-An entrypoint that names a record gets three more calls. It names a record when it has a route value `{id}` or `{identifier}`, a tool argument `id` or `identifier`, or a gRPC request field `id` or `identifier`:
+An entrypoint that names a record gets three more calls. It names a record when it has a route value `{id}` or `{identifier}`, or a tool argument `id` or `identifier`:
 
 - An admin with all permissions, with the IDs of records of another tenant. The answer must be 404.
 - The same admin with unknown IDs. The answer must be 404.
 - The control call, last: an admin with all permissions, with the IDs of records of the own tenant. The answer must be a success, or 409 for the stale version of the sample body. A 404 here shows that the entrypoint reads an ID of the wrong kind, so the two 404 calls prove nothing. The control call uses a new tenant of its own, so that a delete does not remove a record that the other calls need.
 
-The sweep does not check a reference to a record in a request body, a query value, or another tool argument or gRPC field, for example `tenantId`. For such a reference, write a cross-tenant test in the tests of the feature.
+The sweep does not check a reference to a record in a request body, a query value, or another tool argument, for example `tenantId`. For such a reference, write a cross-tenant test in the tests of the feature.
 
 Thus do not write the 403 test or the cross-tenant test of a route value `{id}` for each new endpoint. Do these steps:
 
@@ -59,7 +59,7 @@ The sweep checks the permission of each endpoint, not of each DTO field. For a f
 
 - Run it after a change to the login of the Server, the AppHost, an auth provider, the token check of the Server, `frontend/vite.config.ts`, or the login code of the SPA.
 - It needs a running stack. Start the stack and wait for `server` and `webfrontend` first. Use the `aspire-cli` skill.
-- It takes some minutes, and it tests the provider of the running stack only. CI runs it for each provider, but only when the `changes` job finds a change on the login path (the Server login, the AppHost, the SPA, or the stack suite). See the `bff` filter in `.github/workflows/ci.yml`.
+- It takes some minutes, and it tests the provider of the running stack only. CI runs it for each provider, but only when the `changes` job finds a change on the login path (the Server login, the AppHost, the SPA, or the stack suite). See the `stack` filter in `.github/workflows/ci.yml`.
 - For the full procedure and the variables, read the "E2E tests" section of `docs/authentication.md`.
 
 Examples:

@@ -1,26 +1,19 @@
 namespace Recall.UnitTests.Architecture;
 
-using System.CodeDom.Compiler;
 using System.Reflection;
-using System.Text.RegularExpressions;
 using Recall.Server.Resources;
 using Recall.Server.Resources.Entrypoints.Http;
-using global::Grpc.Core;
 using ModelContextProtocol.Server;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 
 /// <summary>
-/// Sorts the types of one assembly into core, adapters, the shared plumbing, and the gRPC contract, and finds the
-/// types that break a boundary rule. The rules read the IL with Mono.Cecil, so they see a dependency in a method
+/// Sorts the types of one assembly into core, adapters, and the shared plumbing, and finds the types that break a
+/// boundary rule. The rules read the IL with Mono.Cecil, so they see a dependency in a method
 /// body, an attribute argument, or a generic constraint, not only in a signature. A nested type, such as the state
 /// machine of an async method, belongs to its outermost type, so a result names only top-level types.
 /// <list type="bullet">
-/// <item>An adapter is an <see cref="IEndpoint"/>, an <see cref="McpServerToolTypeAttribute"/> class, a gRPC service
-/// (a class whose base has <see cref="BindServiceMethodAttribute"/>), or a hand-written type in a
-/// <c>Grpc.V{n}</c> namespace, such as a map from a DTO to a message.</item>
 /// <item>The shared plumbing is the <c>Resources.Entrypoints</c> namespaces under the root namespace.</item>
-/// <item>The gRPC contract is the code that protoc generates in a <c>Grpc.V{n}</c> namespace.</item>
 /// <item>The composition root wires the core to the entrypoints, so it sees both: <c>Program</c> in the global
 /// namespace, and the types that the scope names.</item>
 /// <item>Each other type under the root namespace is core.</item>
@@ -30,7 +23,7 @@ using Mono.Cecil.Cil;
 /// <param name="rootNamespace">The root namespace of the assembly. A type outside it is not core.</param>
 /// <param name="compositionRoot">The full names of the types that wire the host, outside the global namespace.</param>
 /// <param name="allowedTransportTypes">The full names of the transport types that core can use.</param>
-public sealed partial class BoundaryScanner(
+public sealed class BoundaryScanner(
     Assembly assembly,
     string rootNamespace,
     IEnumerable<string>? compositionRoot = null,
@@ -46,9 +39,6 @@ public sealed partial class BoundaryScanner(
         "Microsoft.OpenApi",
         "Asp.Versioning",
         "Swashbuckle",
-        "Grpc",
-        "Google.Protobuf",
-        "Google.Rpc",
         "ModelContextProtocol",
     ];
 
@@ -68,20 +58,13 @@ public sealed partial class BoundaryScanner(
         "Microsoft.Data.Sqlite",
     ];
 
-    [GeneratedRegex(@"\.Grpc\.V\d+$")]
-    private static partial Regex GrpcContractNamespace();
-
     /// <summary>Rule 1: the core types that use a transport library.</summary>
     public string[] CoreThatUsesATransport()
         => TypesWithDependencyOnAny(CoreTypes(), TransportNamespaces, _allowedTransportTypes);
 
-    /// <summary>Rule 2: the core types that use an adapter, the shared plumbing, or the gRPC contract.</summary>
     public string[] CoreThatUsesAnEntrypoint()
     {
-        var entrypoints = AdapterNames()
-            .Concat(GrpcContractNamespaces())
-            .Append(_sharedPlumbing)
-            .ToArray();
+        var entrypoints = AdapterNames().Append(_sharedPlumbing).ToArray();
         return TypesWithDependencyOnAny(CoreTypes(), entrypoints, []);
     }
 
@@ -121,47 +104,13 @@ public sealed partial class BoundaryScanner(
     public HashSet<string> CoreNames()
         => CoreTypes().Select(t => Outermost(t).FullName).ToHashSet(StringComparer.Ordinal);
 
-    /// <summary>The namespaces that hold the generated gRPC contract.</summary>
-    public string[] GrpcContractNamespaces()
-        => AllTypes()
-            .Where(t => t.DeclaringType is null && IsGrpcContract(t))
-            .Select(t => t.Namespace)
-            .Distinct()
-            .ToArray();
-
     private bool IsAdapter(TypeDefinition type)
     {
         var reflected = _assembly.GetType(type.FullName.Replace('/', '+'));
         if (reflected is null || !reflected.IsClass)
             return false;
         return typeof(IEndpoint).IsAssignableFrom(reflected)
-            || reflected.IsDefined(typeof(McpServerToolTypeAttribute))
-            || reflected.BaseType?.IsDefined(typeof(BindServiceMethodAttribute)) == true
-            || GrpcContractNamespace().IsMatch(type.Namespace) && !IsGrpcContract(type);
-    }
-
-    /// <summary>
-    /// protoc marks the members of the code that it generates with <see cref="GeneratedCodeAttribute"/>. The
-    /// reflection class of a proto file has no mark, but it holds the <c>FileDescriptor</c> of the file.
-    /// </summary>
-    private static bool IsGrpcContract(TypeDefinition type)
-    {
-        if (!GrpcContractNamespace().IsMatch(type.Namespace))
-            return false;
-        return HasGeneratedCode(type)
-            || type.Properties.Any(p => p.Name == "Descriptor"
-                && p.PropertyType.FullName == "Google.Protobuf.Reflection.FileDescriptor");
-    }
-
-    private static bool HasGeneratedCode(TypeDefinition type)
-    {
-        static bool Marked(Mono.Cecil.ICustomAttributeProvider provider)
-            => provider.CustomAttributes.Any(a => a.AttributeType.FullName == typeof(GeneratedCodeAttribute).FullName);
-        return Marked(type)
-            || type.Methods.Any(Marked)
-            || type.Fields.Any(Marked)
-            || type.Properties.Any(Marked)
-            || type.NestedTypes.Any(HasGeneratedCode);
+            || reflected.IsDefined(typeof(McpServerToolTypeAttribute));
     }
 
     // A struct is also built in place, with call .ctor or initobj. A class calls the .ctor of its base with call.
@@ -200,7 +149,6 @@ public sealed partial class BoundaryScanner(
             var outer = Outermost(type);
             return (outer.Namespace == _rootNamespace || outer.Namespace.StartsWith(_rootNamespace + ".", StringComparison.Ordinal))
                 && !IsSharedPlumbing(outer)
-                && !IsGrpcContract(outer)
                 && !adapterNames.Contains(outer.FullName)
                 && !_compositionRoot.Contains(outer.FullName);
         });

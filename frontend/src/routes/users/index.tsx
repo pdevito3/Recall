@@ -26,8 +26,7 @@ function UsersPage() {
   const { page = 1 } = Route.useSearch()
   const navigate = Route.useNavigate()
   const membership = useMembership().status
-  const hasNoTenant = membership === 'no-tenant'
-  const list = useUserList({ page }, { enabled: membership !== 'loading' && !hasNoTenant })
+  const list = useUserList({ page }, { enabled: membership !== 'loading' })
 
   const handlePageChange = (pageNumber: number) =>
     navigate({ search: (prev) => ({ ...prev, page: pageNumber === 1 ? undefined : pageNumber }) })
@@ -35,16 +34,7 @@ function UsersPage() {
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8">
       <PageHeading>Users</PageHeading>
-      {hasNoTenant ? (
-        <p className="text-muted-foreground">
-          <Link to="/start-tenant" className="underline underline-offset-4 hover:text-primary">
-            Start a tenant
-          </Link>{' '}
-          to manage its users.
-        </p>
-      ) : (
-        <UserRows list={list} page={page} onPageChange={handlePageChange} />
-      )}
+      <UserRows list={list} page={page} onPageChange={handlePageChange} />
     </div>
   )
 }

@@ -31,7 +31,6 @@ export interface IdpCapabilities {
   backChannelLogout: boolean
   endSession: boolean
   pushedAuthorization: boolean
-  dpop: boolean
 }
 
 const idpsDir = new URL('./idps/', import.meta.url)

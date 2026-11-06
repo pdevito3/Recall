@@ -732,7 +732,7 @@ public class UserMessageAnalyzerTests
     }
 
     [Test]
-    public async Task problem_details_validation_failures_and_grpc_status_details_are_user_messages()
+    public async Task problem_details_and_validation_failures_are_user_messages()
     {
         // Act
         var diagnostics = await Run("""
@@ -757,7 +757,7 @@ public class UserMessageAnalyzerTests
 
                     public static ValidationFailure Failure() => new("status", "Use CheckedIn.");
 
-                    public static Grpc.Core.Status Missing(string orderId) => new(Grpc.Core.StatusCode.NotFound, $"Order {orderId} was not found.");
+                    public static ValidationFailure Missing(string orderId) => new("order", $"Order {orderId} was not found.");
 
                     public static string Placeholder() => throw new ValidationException("status", "Status CheckedIn} is closed.");
                 }

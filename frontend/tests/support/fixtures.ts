@@ -1,5 +1,5 @@
 import { test as base, expect, type Request } from '@playwright/test'
-import { bffApi } from './api/bff-api'
+import { authApi } from './api/auth-api'
 import { membershipApi } from './api/membership-api'
 import { usersApi } from './api/users-api'
 import { isMockedPath, requestRecorder, type HttpMethod, type MockRoute, type ServedRequest } from './api/mock-route'
@@ -31,8 +31,7 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
   api: [
     async ({ page, actor, baseURL }, provide) => {
       const origin = new URL(baseURL!).origin
-      // The actor is the first mock, so a test can still answer /bff/user and the user record in another way.
-      const routes: MockRoute[] = [bffApi.userIs(actor), ...membershipApi.userIs(actor), ...usersApi.currentOf(actor)]
+      const routes: MockRoute[] = [authApi.userIs(actor), ...membershipApi.userIs(actor), ...usersApi.currentOf(actor)]
       const served = requestRecorder()
       const missed: string[] = []
 
@@ -41,24 +40,24 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
         async (route, request) => {
           const url = new URL(request.url())
           const method = request.method().toLowerCase()
-          const match = routes.findLast((r) => r.method === method && r.path === url.pathname)
+          const newestMock = routes.findLast((r) => r.method === method && r.path === url.pathname)
 
           // Playwright fails a test on a failed assertion, never on an HTTP status. So the 501 alone
           // proves nothing, and the miss is asserted at teardown.
-          if (!match) {
+          if (!newestMock) {
             missed.push(`${method.toUpperCase()} ${url.pathname}`)
             await route.fulfill({ status: 501, body: `No mock for ${method} ${url.pathname}` })
             return
           }
 
-          served.add(match.method, url, new Headers(await request.allHeaders()), postBody(request))
-          if (match.delayMs) await new Promise((resolve) => setTimeout(resolve, match.delayMs))
+          served.add(newestMock.method, url, new Headers(await request.allHeaders()), postBody(request))
+          if (newestMock.delayMs) await new Promise((resolve) => setTimeout(resolve, newestMock.delayMs))
           await route.fulfill({
-            status: match.status,
-            headers: match.headers,
-            ...(match.body === undefined
+            status: newestMock.status,
+            headers: newestMock.headers,
+            ...(newestMock.body === undefined
               ? {}
-              : { contentType: 'application/json', body: JSON.stringify(match.body) }),
+              : { contentType: 'application/json', body: JSON.stringify(newestMock.body) }),
           })
         },
       )

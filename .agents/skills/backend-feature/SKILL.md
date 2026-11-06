@@ -20,7 +20,7 @@ Read the rule doc of each area in `docs/backend/` before you change it.
 
 ### Run the script
 
-1. Ask the user for the properties and for the entrypoints of the entity: HTTP, gRPC, MCP, or none.
+1. Ask the user for the properties and for the entrypoints of the entity: HTTP, MCP, or none.
 2. Run the script from the root of the repo:
 
    ```bash
@@ -30,7 +30,7 @@ Read the rule doc of each area in `docs/backend/` before you change it.
      --fields "Title:text, SupplyItem:ref, DueOn:zoned-date"
    ```
 
-   Run it with no arguments to see the options. The first property must be required text: the list sorts by it. A text, date, zoned date, or instant value is `[Sensitive]`. Add `:public` when the value cannot hold personal data. Protobuf has no date type, so the script refuses `date` and `zoned-date` with `grpc`.
+   Run it with no arguments to see the options. The first property must be required text: the list sorts by it. A text, date, zoned date, or instant value is `[Sensitive]`. Add `:public` when the value cannot hold personal data.
 
    - `zoned-date` is a day at the place of the entity, such as a due date. The script adds the property `TimeZone`, an IANA ID that the add sets. To get the current day at the place, use `ZonedDate.TodayAt(TimeZone, now)`, not the date of the server.
    - `SupplyItem:ref` is the property `SupplyItemId`: the ID of a `SupplyItem` of the same tenant. Add the parent with the script first. The add loads the parent and refuses an ID that the caller cannot see. An update does not change the reference. An entity has at most one `ref`.
@@ -41,7 +41,7 @@ The script writes a tenant-owned root with add, get, list, update, and delete. I
 - The five features and their entrypoints. There is no MCP delete tool, because a tool returns the DTO.
 - The permission `manage_<plural>`, and a migration that gives it to each admin.
 - The entity graph blueprint, the rules of the fakes, and the unit, integration, and functional tests.
-- Lines in the shared files, at each `// new-feature:<slot>` marker: the `DbSet`, the permission, the gRPC map, `PermissionTests`, `StringColumnLengthTests`, `TenantDeleteOwnedRowsTests`, and `EndpointAccessSweepTests`.
+- Lines in the shared files, at each `// new-feature:<slot>` marker: the `DbSet`, the permission, `PermissionTests`, `StringColumnLengthTests`, `TenantDeleteOwnedRowsTests`, and `EndpointAccessSweepTests`.
 
 A second run with the same input changes nothing. When a file that the script writes exists with other content, the script stops before it writes. CI runs the script for two samples on each pull request, and then builds and tests them (the `new-feature` job). To run the same steps before you push a change to `scripts/new-feature.cs` or to a marker, run [scripts/ci/new-feature.cs](../../../scripts/ci/new-feature.cs): `dotnet run scripts/ci/new-feature.cs`. It works on a throwaway copy of the checkout, so it does not change your files. It needs buf.
 
@@ -72,7 +72,7 @@ Change each of these files:
 | `Dtos/<Entity>Dto.cs`, `<Entity>ForCreationDto.cs`, `<Entity>ForUpdateDto.cs` | The property. A text value has `[SchemaMaxLength]` |
 | `Mappings/<Entity>Mapper.cs` | A map for a value object |
 | `Databases/EntityConfigurations/<Entity>Configuration.cs` | `HasMaxLength`, or `ComplexProperty` for a value object |
-| Each MCP tool and gRPC method that makes a creation or an update DTO | A parameter or a field for the property |
+| Each MCP tool that makes a creation or an update DTO | A parameter for the property |
 | `SharedTestHelpers/EntityGraphs/<Entity>Input.cs`, `<Entity>Blueprints.cs`, and `<Entity>Rules` | The input property, the factory value, and a `Derive` for a required value |
 | `StringColumnLengthTests` | Each new text column, in `CallerColumns`, `FixedOptionColumns`, or `ServerWrittenColumns` |
 
@@ -81,7 +81,6 @@ Rules:
 - Each text, date, or time value has `[Sensitive]` or `[NotSensitive]`. A flag, an enum, a `Guid`, an integer, or a foreign key needs no mark.
 - Check a required text value with `ThrowWhenNullOrWhitespace` first. Check each text value with `ThrowWhenLongerThan` and `ThrowWhenHasCharacterNotStorable`. Put the checks of a nullable value in an `is not null` block.
 - A new required parameter of an MCP tool that exists needs a new tool name. To keep the name, add an optional parameter with the default `null` after `CancellationToken` ("MCP versions" in `docs/backend/endpoints.md`).
-- A gRPC field that can have no value is `optional`. Read `Has<Field>`, and set the response field only when the value is not null.
 - Give each new text value a rule in `<Entity>Rules` that fits the max length. Otherwise `AutoFaker` makes text that is too long, and unrelated tests fail at random.
 - Add a migration: `dotnet tool exec dotnet-ef@<version> --yes -- migrations add Add<Property>To<Entity> --project Recall.Server --startup-project Recall.Server --output-dir Databases/Migrations`. The version is the `Microsoft.EntityFrameworkCore.Design` version in `Directory.Packages.props`.
 - Regenerate and commit the API contract with the `api-contract` skill.
@@ -95,7 +94,7 @@ Rules:
 5. If the SPA shows a button for the action, add the action to the action value object of the entity, and call `GuardAllows` after the load (`docs/backend/domain-entities.md#allowed-actions`).
 6. Add one adapter file for each entrypoint that the callers need (`docs/backend/endpoints.md`). An MCP tool has exactly one `[ToolAccess]`, which matches the check of the handler.
 7. Add the telemetry with the `feature-telemetry` skill.
-8. Add the tests with the `writing-tests` skill. A command that runs again or takes a lock has a race test. `EndpointAccessSweepTests` must pass for each new endpoint, tool, and gRPC method.
+8. Add the tests with the `writing-tests` skill. A command that runs again or takes a lock has a race test. `EndpointAccessSweepTests` must pass for each new endpoint and tool.
 9. Regenerate and commit the API contract with the `api-contract` skill.
 
 A new permission needs a `Permission.Names` constant, a `PermissionEnum` entry, a factory method, its name in `PermissionTests`, and a migration that gives it to the admins. The script writes these lines for a new entity. Use them as the pattern.

@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Primitives;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
@@ -57,9 +58,7 @@ public sealed class StubOidcProvider : HttpMessageHandler
     public const string ClientId = "recall-test-client";
     public const string JwtAudience = "test-api";
 
-    private static readonly string[] AuthMethods = ["client_secret_basic"];
-
-    private readonly RsaSecurityKey _signingKey = new(RSA.Create(2048)) { KeyId = "stub-key" };
+    private RsaSecurityKey _signingKey = new(RSA.Create(2048)) { KeyId = "stub-key" };
     private readonly RsaSecurityKey _otherKey = new(RSA.Create(2048)) { KeyId = "stub-key" };
     private readonly SymmetricSecurityKey _hmacKey = new(RandomNumberGenerator.GetBytes(32)) { KeyId = "stub-hmac" };
     private readonly ConcurrentDictionary<string, (AuthorizeRequest Request, StubLogin Login)> _codes = new();
@@ -70,13 +69,16 @@ public sealed class StubOidcProvider : HttpMessageHandler
     public StubOidcProvider(string issuer = Issuer)
     {
         _issuer = issuer;
+        DiscoveryIssuer = issuer;
+        EndSessionEndpoint = $"{issuer}/logout";
 
         // RSA.Create makes the pair at its first use. On macOS two threads that race for that use can each make a pair.
         _ = _signingKey.Rsa.ExportParameters(false);
         _ = _otherKey.Rsa.ExportParameters(false);
     }
 
-    public string ClientSecret { get; } = Secrets.New();
+    // The characters that the Basic form must escape, so each login proves the escape.
+    public string ClientSecret { get; } = $"{Secrets.New()}:%&+";
 
     public string? DiscoveryCharset { get; set; }
 
@@ -90,6 +92,14 @@ public sealed class StubOidcProvider : HttpMessageHandler
 
     public string[]? PromptValues { get; init; }
 
+    public string DiscoveryIssuer { get; init; }
+
+    public string[] AuthMethods { get; init; } = ["client_secret_basic"];
+
+    public bool ListsIssParameter { get; init; } = true;
+
+    public string? EndSessionEndpoint { get; init; }
+
     /// <summary>Changes each answer on its way out, for a fault of a real provider. It gets the path and the answer that the stub would send.</summary>
     public Func<string, HttpResponseMessage, CancellationToken, Task<HttpResponseMessage>>? AnswerFault { get; set; }
 
@@ -102,6 +112,8 @@ public sealed class StubOidcProvider : HttpMessageHandler
         _handedOut.Enqueue(code);
         return code;
     }
+
+    public void RollSigningKey() => _signingKey = new RsaSecurityKey(RSA.Create(2048)) { KeyId = $"stub-key-{Guid.NewGuid():N}" };
 
     public OpenIdConnectConfiguration JwtConfiguration()
     {
@@ -149,16 +161,18 @@ public sealed class StubOidcProvider : HttpMessageHandler
 
         var body = new Dictionary<string, object>
         {
-            ["issuer"] = _issuer,
+            ["issuer"] = DiscoveryIssuer,
             ["authorization_endpoint"] = $"{_issuer}/authorize",
             ["token_endpoint"] = $"{_issuer}/token",
             ["jwks_uri"] = $"{_issuer}/jwks",
             ["userinfo_endpoint"] = $"{_issuer}/userinfo",
             ["token_endpoint_auth_methods_supported"] = AuthMethods,
-            ["authorization_response_iss_parameter_supported"] = true,
+            ["authorization_response_iss_parameter_supported"] = ListsIssParameter,
         };
         if (PromptValues is { } values)
             body["prompt_values_supported"] = values;
+        if (EndSessionEndpoint is { } endSession)
+            body["end_session_endpoint"] = endSession;
         return WithCharset(DiscoveryCharset, Json(body));
     }
 
@@ -217,11 +231,10 @@ public sealed class StubOidcProvider : HttpMessageHandler
 
     private async Task<HttpResponseMessage> TokenAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{Uri.EscapeDataString(ClientId)}:{Uri.EscapeDataString(ClientSecret)}"));
-        if (request.Headers.Authorization is not { Scheme: "Basic" } authorization || authorization.Parameter != basic)
+        var form = QueryHelpers.ParseQuery(await request.Content!.ReadAsStringAsync(cancellationToken));
+        if (!AuthenticatesTheClient(request, form))
             return Refused("invalid_client");
 
-        var form = QueryHelpers.ParseQuery(await request.Content!.ReadAsStringAsync(cancellationToken));
         if (!_codes.TryRemove(form["code"].ToString(), out var grant)
             || form["grant_type"] != "authorization_code"
             || form["redirect_uri"] != grant.Request.RedirectUri
@@ -246,6 +259,15 @@ public sealed class StubOidcProvider : HttpMessageHandler
             ["id_token"] = idToken,
             ["token_type"] = "Bearer",
         }));
+    }
+
+    private bool AuthenticatesTheClient(HttpRequestMessage request, Dictionary<string, StringValues> form)
+    {
+        if (AuthMethods.Contains("client_secret_post"))
+            return request.Headers.Authorization is null && form["client_id"] == ClientId && form["client_secret"] == ClientSecret;
+
+        var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{Uri.EscapeDataString(ClientId)}:{Uri.EscapeDataString(ClientSecret)}"));
+        return request.Headers.Authorization is { Scheme: "Basic" } authorization && authorization.Parameter == basic;
     }
 
     private HttpResponseMessage Userinfo(HttpRequestMessage request)

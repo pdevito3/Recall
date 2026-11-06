@@ -15,9 +15,7 @@ Recall.Server/Domain/
     │   └── [FeatureName]/           # One folder for each feature
     │       ├── [FeatureName].cs     # The CQRS command or query, and its handler
     │       ├── [FeatureName].Http.cs  # The HTTP endpoint, if the feature has one
-    │       ├── [FeatureName].Grpc.cs  # The gRPC method, if the feature has one
     │       └── [FeatureName].Mcp.cs   # The MCP tool, if the feature has one
-    ├── Grpc/v1/                     # The gRPC contract and service root, if the domain has gRPC
     ├── Mappings/                    # Mapperly mappers
     ├── Models/                      # Internal models
     └── DomainEvents/                # Domain events
@@ -31,7 +29,7 @@ Keep each C# file at 1000 lines or less. This rule covers all C# files in the so
 
 - **Rich domain entities** have private setters, factory methods, and their own business logic.
 - **CQRS with MediatR**: commands do the writes, and queries do the reads.
-- **Vertical slices**: each feature is one folder. Its core file has the request and the handler. Its adapter files expose the feature over HTTP, gRPC, and MCP.
+- **Vertical slices**: each feature is one folder. Its core file has the request and the handler. Its adapter files expose the feature over HTTP and MCP.
 - **Mapperly** generates the DTO mapping code at compile time.
 - **QueryKit** does the filters and sorts for list endpoints. They run on the DTO projection, so a caller can query only the fields that the contract shows. `CustomQueryKitConfiguration` limits the length and the nesting depth of a filter.
 - **Value objects** (`EmailAddress`, `UserRole`, and more) use SmartEnum when they have fixed options.
@@ -49,7 +47,7 @@ For another change, do these steps in sequence. Each step has a doc in `docs/bac
 2. Add the entity configuration, then add a migration ([entity-configurations.md](backend/entity-configurations.md)).
 3. Create the DTOs and the Mapperly mapper ([dtos-and-mappings.md](backend/dtos-and-mappings.md)).
 4. Add the commands and queries ([features-and-cqrs.md](backend/features-and-cqrs.md)). Give each command a permission check. Also give a permission check to each query that reads data that needs a permission. If no permission fits, add one (see [Permissions](#permissions)).
-5. Add the endpoint, and the gRPC method and the MCP tool if the feature needs them ([endpoints.md](backend/endpoints.md)).
+5. Add the endpoint, and the MCP tool if the feature needs one ([endpoints.md](backend/endpoints.md)).
 6. Add the domain events and their handlers ([domain-events.md](backend/domain-events.md)).
 7. Add the telemetry that production support needs: query tags, id tags on the feature span, logs, and metrics ([feature-telemetry.md](backend/feature-telemetry.md)).
 8. Regenerate the API contract with the `api-contract` skill (see [OpenAPI document](#openapi-document)).
@@ -111,7 +109,7 @@ To remove a version, remove it from `SupportedVersions`. Then delete its documen
 
 ## Error responses
 
-All error responses use RFC 7807 problem details. The text of each message follows [messages.md](messages.md). `Exceptions/DomainError.cs` classifies the domain exceptions, and `Resources/Entrypoints/DomainProblemDetails.cs` maps them to HTTP. gRPC and MCP map the same classes (see [endpoints.md](backend/endpoints.md)):
+All error responses use RFC 7807 problem details. The text of each message follows [messages.md](messages.md). `Exceptions/DomainError.cs` classifies the domain exceptions, and `Resources/Entrypoints/DomainProblemDetails.cs` maps them to HTTP. MCP maps the same classes (see [endpoints.md](backend/endpoints.md)):
 
 | Exception | Status |
 |-----------|--------|
@@ -133,11 +131,11 @@ A 409 comes from a duplicate unique value or a record that changed after the cal
 
 Each entrypoint shows the three kinds differently:
 
-| Kind | HTTP | gRPC | MCP `code` |
-|------|------|------|------------|
-| Conflict with a record that exists | 409 with the default `type` | `AlreadyExists` | `already_exists` |
-| Stale version | 409 with the stale version `type` | `Aborted` | `aborted` |
-| Concurrent change | 409 with the concurrent change `type` | `Aborted` | `aborted` |
+| Kind | HTTP | MCP `code` |
+|------|------|------------|
+| Conflict with a record that exists | 409 with the default `type` | `already_exists` |
+| Stale version | 409 with the stale version `type` | `aborted` |
+| Concurrent change | 409 with the concurrent change `type` | `aborted` |
 
 Declare `.ProducesValidationProblem(StatusCodes.Status409Conflict)` on each write endpoint that changes an existing record, because each one can lose a race with another save. Also declare it on each write endpoint that can add or change a unique value.
 
@@ -260,7 +258,7 @@ The store refuses each symlink that it finds below the root, in the key and in `
 |---------|-------|
 | `tests/Recall.UnitTests` | Domain logic and small units, with no database |
 | `tests/Recall.IntegrationTests` | Feature handlers against a real SQLite file |
-| `tests/Recall.FunctionalTests` | HTTP, gRPC, and MCP endpoints against one shared app and database |
+| `tests/Recall.FunctionalTests` | HTTP and MCP endpoints against one shared app and database |
 | `tests/Recall.SharedTestHelpers` | Fakes and builders for all test projects |
 
 The tests use [TUnit](https://tunit.dev) on Microsoft.Testing.Platform, with Shouldly for assertions. Write `[Test]` for each test, `[Arguments(...)]` for an inline case, and `[MethodDataSource(nameof(...))]` for cases from a method or property.
@@ -269,7 +267,7 @@ Mark the parts of each test with `// Arrange`, `// Act`, and `// Assert`, in thi
 
 The functional tests share one `TestingWebApplicationFactory`. Each test gets its own `FactoryClient`.
 
-A test never takes today from the UTC date. Take it from the zone of the place in the data, with `ZonedDate.TodayAt(zone, ctx.Now)`. From 00:00 UTC to local midnight in the Americas, the UTC date is one day after the local date. A test that takes today from the UTC date then fails for some hours each day, for example when the domain refuses its date as in the future. The unit, integration, functional, and shared helper projects ban `DateTime.Today`, `DateTime.Now`, `DateTimeOffset.Now`, and `DateOnly.FromDateTime` in `tests/BannedSymbols.txt` (RS0030). The Bff tests do not get the ban, because they cannot see `ZonedDate` and use a fake `TimeProvider`. For a fixed date, use `new DateOnly(year, month, day)`. For the date of a fixed instant, use `zone.ToLocal(instant).Date`. Suppress RS0030 only when neither fits, and give a reason.
+A test never takes today from the UTC date. Take it from the zone of the place in the data, with `ZonedDate.TodayAt(zone, ctx.Now)`. From 00:00 UTC to local midnight in the Americas, the UTC date is one day after the local date. A test that takes today from the UTC date then fails for some hours each day, for example when the domain refuses its date as in the future. The unit, integration, functional, and shared helper projects ban `DateTime.Today`, `DateTime.Now`, `DateTimeOffset.Now`, and `DateOnly.FromDateTime` in `tests/BannedSymbols.txt` (RS0030). For a fixed date, use `new DateOnly(year, month, day)`. For the date of a fixed instant, use `zone.ToLocal(instant).Date`. Suppress RS0030 only when neither fits, and give a reason.
 
 TUnit runs all tests in parallel, also the tests of one class. The integration and functional tests share one fixture for each assembly, which `AssemblyHooks.cs` starts and stops. Each test must create its own data and must not depend on rows from other tests. If a test reads state of the whole process, such as all exported spans, put `[NotInParallel]` on its class.
 

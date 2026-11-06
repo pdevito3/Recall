@@ -29,12 +29,11 @@ WORKDIR /app
 COPY --from=build /app/publish .
 COPY --from=frontend /app/dist ./wwwroot
 
-# Kestrel:Endpoints in appsettings.json binds 8080 (HTTP/1.1) and 8081 (HTTP/2 only, h2c, for gRPC).
 # The base image sets ASPNETCORE_HTTP_PORTS=8080. Kestrel ignores it and logs a warning, so clear it.
 ENV ASPNETCORE_ENVIRONMENT=Production \
     ASPNETCORE_HTTP_PORTS=
 
-EXPOSE 8080 8081
+EXPOSE 8080
 
 # The aspnet image has no curl, so the image has no HEALTHCHECK. The host probes /health itself.
 

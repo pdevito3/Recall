@@ -93,20 +93,20 @@ test.describe(`Auth Flows - ${currentIdp.name}`, () => {
 
       // Step 7: Click Logout. The 200 before the logout proves that the 204 after it comes from the logout
       const appOrigin = new URL(page.url()).origin
-      const bffUser = () => page.request.get(new URL('/bff/user', appOrigin).toString(), { headers: { 'X-CSRF': '1' } })
-      expect((await bffUser()).status(), 'the session before the logout').toBe(200)
+      const sessionUser = () => page.request.get(new URL('/auth/me', appOrigin).toString(), { headers: { 'X-CSRF': '1' } })
+      expect((await sessionUser()).status(), 'the session before the logout').toBe(200)
       await logoutButton.click()
 
       await page.waitForURL((url) => url.pathname === '/auth/login' && url.searchParams.get('signedOut') === '1', { timeout: 30000 })
       await expect(page.getByRole('heading', { name: 'You are signed out' })).toBeVisible()
       await expect(page).toHaveTitle('You are signed out - Recall')
       await expect(page.getByRole('link', { name: /^Sign in with / })).toBeVisible()
-      expect((await bffUser()).status(), 'the session after the logout').toBe(204)
+      expect((await sessionUser()).status(), 'the session after the logout').toBe(204)
     })
 
     test('should return to a deep link on the SPA origin, with its query, after a login from that link', async ({ page, baseURL }) => {
       const deepLink = '/about?tab=team&x=1'
-      const loginRequest = page.waitForRequest((request) => new URL(request.url()).pathname === '/bff/login')
+      const loginRequest = page.waitForRequest((request) => new URL(request.url()).pathname === '/auth/login')
 
       await page.goto(deepLink)
       expect(new URL((await loginRequest).url()).searchParams.get('returnUrl')).toBe(deepLink)
@@ -114,7 +114,7 @@ test.describe(`Auth Flows - ${currentIdp.name}`, () => {
 
       await page.waitForURL(new URL(deepLink, baseURL).toString(), { timeout: 30000 })
       await expect(page.getByRole('navigation', { name: 'breadcrumb' })).toHaveText('About')
-      const status = await page.evaluate(async () => (await fetch('/bff/user', { headers: { 'X-CSRF': '1' } })).status)
+      const status = await page.evaluate(async () => (await fetch('/auth/me', { headers: { 'X-CSRF': '1' } })).status)
       expect(status).toBe(200)
     })
   })
@@ -167,8 +167,6 @@ test.describe(`Session cookie - ${currentIdp.name}`, () => {
 
     await loginAtIdp(page, currentIdp)
 
-    // The first load after the redirect is cross-site, so its HTML has no session cookie. The SPA calls /bff/user
-    // same-site, with the cookie, and shows the signed-in user.
     await page.waitForURL('/', { timeout: 30000 })
     await expect(page.getByRole('button', { name: /logout/i })).toBeVisible({ timeout: 10000 })
 
@@ -180,9 +178,9 @@ test.describe(`Session cookie - ${currentIdp.name}`, () => {
   test('should show the signed-in user on a deep link from another site', async ({ page }) => {
     await signInThroughSpa(page)
     const deepLink = new URL('/about', page.url()).toString()
-    // The root layout of the SPA that the cross-site link loads calls /bff/user same-site, with the cookie
+    // The root layout of the SPA that the cross-site link loads calls /auth/me same-site, with the cookie
     const user = page.waitForResponse(
-      (response) => new URL(response.url()).pathname === '/bff/user' && page.url() === deepLink,
+      (response) => new URL(response.url()).pathname === '/auth/me' && page.url() === deepLink,
     )
 
     const navigation = await followLinkFromAnotherSite(page, deepLink)
@@ -366,7 +364,6 @@ test.describe(`Provider discovery - ${currentIdp.name}`, () => {
       backChannelLogout: discovery.backchannel_logout_supported === true,
       endSession: typeof discovery.end_session_endpoint === 'string',
       pushedAuthorization: typeof discovery.pushed_authorization_request_endpoint === 'string',
-      dpop: Array.isArray(discovery.dpop_signing_alg_values_supported) && discovery.dpop_signing_alg_values_supported.length > 0,
     }
     expect(live).toEqual(currentIdp.capabilities)
   })

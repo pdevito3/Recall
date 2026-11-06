@@ -240,9 +240,8 @@ async function login(user) {
   }
   await page.waitForURL((u) => u.origin === new URL(stack.urls.web).origin, { waitUntil: 'domcontentloaded', timeout: 60_000 })
   await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible({ timeout: 15_000 })
-  const claims = await page.evaluate(async () => (await fetch('/bff/user', { headers: { 'X-CSRF': '1' } })).json())
-  const name = claims.find((c) => c.type === 'name')?.value
-  if (!name) throw new Error(`The session from ${stack.authProvider} has no name claim.`)
+  const { name } = await page.evaluate(async () => (await fetch('/auth/me', { headers: { 'X-CSRF': '1' } })).json())
+  if (!name) throw new Error(`The session from ${stack.authProvider} has no name.`)
   return { name }
 }
 

@@ -12,7 +12,6 @@ A source generator writes code at build time. Reflection reads types at run time
 | `ValueObjectGenerator` | `Recall.SourceGenerators` | `Equals` and `GetHashCode` of each `partial` value object | `Recall.Server/Domain/EmailAddresses/EmailAddress.cs` |
 | `EntityIdPrefixAnalyzer` and `DuplicateEntityIdPrefixAnalyzer` | `Recall.SourceGenerators` | No code. They check the `IdPrefix` constant and the constructors of each entity at compile time. Only the check that each `IdPrefix` is unique waits for the end of the build | `Recall.SourceGenerators/EntityIdPrefixAnalyzer.cs` and `Recall.SourceGenerators/DuplicateEntityIdPrefixAnalyzer.cs` |
 | `GraphGraftGenerator` | `tests/Recall.EntityGraphs.Generators` | The `AddX` and `AddXs` methods of the test entity graph | `tests/Recall.SharedTestHelpers/EntityGraphs/Blueprints.cs` |
-| gRPC generator | `Grpc.Tools` | The service base classes from each `.proto` file. The functional tests make the clients | The `<Protobuf>` item in `Recall.Server/Recall.Server.csproj` |
 | OpenAPI XML comments | `Microsoft.AspNetCore.OpenApi` | The descriptions of the OpenAPI document from the XML doc comments | `GenerateDocumentationFile` in the Server project. The unit tests add `Microsoft.AspNetCore.OpenApi.Generated` to `InterceptorsNamespaces` |
 | OpenAPI document | `Microsoft.Extensions.ApiDescription.Server` | `Recall.Server/openapi/Recall.Server.json` in a Debug build. `pnpm generate:api` makes the SPA client from it | `OpenApiGenerateDocuments` in the Server project |
 
@@ -32,7 +31,7 @@ Reflection is allowed in these kinds of code only:
 
 | Kind | Why it is fine | The sites of today |
 |------|----------------|--------------------|
-| A test or an architecture check | It does not run in the app | `tests/Recall.UnitTests/Architecture/BoundaryScanner.cs` reads the IL with Mono.Cecil. `tests/Recall.FunctionalTests/FunctionalTests/Access/EndpointAccessSweepTests.cs` finds each MCP tool method and gRPC service of the Server, and the handler type of each HTTP endpoint |
+| A test or an architecture check | It does not run in the app | `tests/Recall.UnitTests/Architecture/BoundaryScanner.cs` reads the IL with Mono.Cecil. `tests/Recall.FunctionalTests/FunctionalTests/Access/EndpointAccessSweepTests.cs` finds each MCP tool method of the Server, and the handler type of each HTTP endpoint |
 | A startup scan | It runs one time | Scrutor in `Resources/Extensions/ServiceRegistrationExtension.cs` and `Databases/DomainEventRegistration.cs`. `RegisterServicesFromAssembly` of MediatR in `Resources/Extensions/WebAppServiceConfiguration.cs`. `WithToolsFromAssembly` of MCP in `Resources/Entrypoints/EntrypointRegistration.cs`. `ApplyConfigurationsFromAssembly` in `Databases/AppDbContext.cs`. `Resources/Entrypoints/Http/EndpointDiscovery.cs`. `Databases/Auditing/AuditModel.cs`, `AuditVocabulary.cs`, and `AuditSensitivity.cs`, and `Databases/TenantOwnedRows.cs`, which run one time for the EF model |
 | An OpenAPI transformer | It runs when the document is made, not for each API request | `Resources/Entrypoints/Http/OpenApi/FixedNamesTransformer.cs` reads `[NamesOf]` |
 | A per-type cache | It reads each type one time, then keeps the result | `RequestRules` in `Resources/RequestValidationBehavior.cs`. The runner of each event type in `Databases/DomainEventDispatcher.cs`. Its `HasHandlers` has no cache, and only the bulk insert calls it. `IdPrefix<TEntity>` in `Databases/QueryableExtensions.cs` |
@@ -72,7 +71,6 @@ These calls still use the reflection fallback:
 - The bodies of the minimal API endpoints. The endpoint DTOs are not in a context.
 - `AuditValues.WriteAction`. The app and the tests declare the action types, so the Server cannot list them.
 - `McpDomainErrors.Converts`. It reads the parameter type of a tool at run time, and it runs only after a tool call fails.
-- `Recall.Bff/User/UserEndpoint.cs`.
 
 Keep the fallback until the template aims at native AOT. At that time, add the DTOs to a context, and remove the fallback. Then ban the `JsonSerializer.Serialize` and `JsonSerializer.Deserialize` overloads that take no `JsonTypeInfo`.
 

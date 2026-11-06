@@ -2,8 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { Logout01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { useAuth } from '@/domain/auth/apis/get-user'
-import { useAuthActions } from '@/domain/auth/apis/auth-actions'
+import { useLogout } from '@/domain/auth/apis/auth-actions'
 import { useCurrentUser } from '@/domain/users/apis/get-current-user'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,8 +15,7 @@ export const Route = createFileRoute('/')({
 })
 
 function Home() {
-  const auth = useAuth()
-  const { logout } = useAuthActions()
+  const logout = useLogout()
 
   return (
     <div className="bg-background">
@@ -33,7 +31,7 @@ function Home() {
           </CardHeader>
           <CardContent className="flex flex-wrap items-center justify-between gap-4">
             <SignedInUser />
-            <Button variant="outline" onPress={() => auth.logoutUrl && logout(auth.logoutUrl)}>
+            <Button variant="outline" isPending={logout.isPending} onPress={() => logout.mutate()}>
               <HugeiconsIcon icon={Logout01Icon} className="size-4" />
               Logout
             </Button>
