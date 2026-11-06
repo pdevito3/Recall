@@ -3,8 +3,9 @@ namespace Recall.Server.Resources.Extensions;
 using System.Reflection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.Extensions.DependencyInjection;
+using Entrypoints.Http.OpenApi;
 using FileTelemetry;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
@@ -113,7 +114,7 @@ public static class HostExtensions
                 .Enrich.WithThreadId()
                 .Enrich.WithProperty("Application", builder.Environment.ApplicationName);
 
-            if (FileTelemetryPlan.For(services.GetRequiredService<IConfiguration>()) is { } files)
+            if (FilesOfThisProcess(services) is { } files)
                 lc.WriteTo.RollingFiles(new CompactJsonFormatter(), files.LogFilePath, files.Options.Logs);
 
             if (!string.IsNullOrWhiteSpace(otlpEndpoint))
@@ -190,17 +191,21 @@ public static class HostExtensions
     {
         builder.Services.ConfigureOpenTelemetryTracerProvider((services, tracing) =>
         {
-            if (FileTelemetryPlan.For(services.GetRequiredService<IConfiguration>()) is { } files)
+            if (FilesOfThisProcess(services) is { } files)
                 tracing.AddProcessor(new BatchActivityExportProcessor(new SpanFileExporter(files.NewTracesFile())));
         });
         builder.Services.ConfigureOpenTelemetryMeterProvider((services, metrics) =>
         {
-            if (FileTelemetryPlan.For(services.GetRequiredService<IConfiguration>()) is { } files)
+            if (FilesOfThisProcess(services) is { } files)
                 metrics.AddReader(new PeriodicExportingMetricReader(
                     new MetricFileExporter(files.NewMetricsFile()),
                     files.Options.MetricExportSeconds * 1000));
         });
     }
+
+    // The build that writes the OpenAPI document starts this host with the /data of appsettings.json, and it must not write there
+    private static FileTelemetryPlan? FilesOfThisProcess(IServiceProvider services)
+        => OpenApiBuildTime.IsActive ? null : FileTelemetryPlan.For(services.GetRequiredService<IConfiguration>());
 
     private static TBuilder AddDefaultHealthChecks<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
