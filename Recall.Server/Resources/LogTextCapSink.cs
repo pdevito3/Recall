@@ -8,8 +8,8 @@ using Serilog.Parsing;
 
 /// <summary>
 /// Gives each sink inside it a log event with each string under <see cref="TelemetryText.MaxLength"/>. The event is a copy,
-/// because two sinks can read one event at the same time. A scalar that is not a string is a built-in type of Serilog
-/// with a short text, or it is a string by the time that it comes here.
+/// because two sinks can read one event at the same time. A scalar that is not a string stays as it is, so a long
+/// <see cref="Uri"/> stays long. docs/telemetry.md names what is outside the cap.
 /// </summary>
 public sealed class LogTextCapSink(ILogEventSink next) : ILogEventSink
 {

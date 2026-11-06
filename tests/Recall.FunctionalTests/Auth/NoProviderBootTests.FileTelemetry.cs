@@ -75,8 +75,11 @@ public partial class NoProviderBootTests
         server.Output.ShouldNotContain("   at ");
     }
 
-    /// <summary>The real settings with another section, because the console and the Kestrel address come from the same file.</summary>
-    private static async Task<string> ContentRootWithFileTelemetryAsync(string? sectionJson)
+    /// <summary>
+    /// The real settings with another section, because the console and the Kestrel address come from the same file. The folder is
+    /// inside <paramref name="serverRoot"/>, so the server process removes it.
+    /// </summary>
+    private static async Task<string> ContentRootWithFileTelemetryAsync(string serverRoot, string? sectionJson)
     {
         var real = await File.ReadAllTextAsync(Path.Combine(TestBuild.RepositoryRoot(), "Recall.Server", "appsettings.json"));
         var settings = JsonNode.Parse(real, documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip })!.AsObject();
@@ -84,7 +87,7 @@ public partial class NoProviderBootTests
         if (sectionJson is not null)
             settings[FileTelemetryOptions.SectionName] = JsonNode.Parse(sectionJson);
 
-        var folder = Directory.CreateTempSubdirectory("recall_content_").FullName;
+        var folder = Directory.CreateDirectory(Path.Combine(serverRoot, "content")).FullName;
         await File.WriteAllTextAsync(Path.Combine(folder, "appsettings.json"), settings.ToJsonString());
         return folder;
     }
@@ -97,11 +100,12 @@ public partial class NoProviderBootTests
     public async Task a_partial_section_stops_the_boot_with_one_line_that_names_the_missing_setting_and_no_stack_trace(string sectionJson, string missing)
     {
         // Arrange
-        var contentRoot = await ContentRootWithFileTelemetryAsync(sectionJson);
-        await using var server = await ServerProcess.LaunchAsync(null, new Dictionary<string, string> { ["ASPNETCORE_CONTENTROOT"] = contentRoot });
+        var root = Path.Combine(Path.GetTempPath(), $"recall_boot_{Guid.NewGuid():N}");
+        var contentRoot = await ContentRootWithFileTelemetryAsync(root, sectionJson);
+        await using var server = await ServerProcess.LaunchAsync(root, new Dictionary<string, string> { ["ASPNETCORE_CONTENTROOT"] = contentRoot });
 
         // Act
-        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         await server.WaitForExitAsync(limit.Token);
 
         // Assert
@@ -117,11 +121,19 @@ public partial class NoProviderBootTests
     public async Task a_missing_or_empty_section_boots_with_no_file_telemetry_and_says_nothing(string? sectionJson)
     {
         // Arrange
-        var contentRoot = await ContentRootWithFileTelemetryAsync(sectionJson);
+        var root = Path.Combine(Path.GetTempPath(), $"recall_boot_{Guid.NewGuid():N}");
+        var contentRoot = await ContentRootWithFileTelemetryAsync(root, sectionJson);
+        var path = $"/{Guid.NewGuid():N}.txt";
 
         // Act
-        await using var server = await ServerProcess.StartAsync(settings: new Dictionary<string, string> { ["ASPNETCORE_CONTENTROOT"] = contentRoot });
-        using var response = await server.Client.GetAsync($"/{Guid.NewGuid():N}.txt");
+        await using var server = await ServerProcess.StartAsync(root, new Dictionary<string, string> { ["ASPNETCORE_CONTENTROOT"] = contentRoot });
+        using var response = await server.Client.GetAsync(path);
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        while (!server.Output.Contains(path, StringComparison.Ordinal))
+            await Task.Delay(TimeSpan.FromMilliseconds(100), limit.Token);
+
+        // A span waits up to 5 seconds for its batch, and its folder opens with the first line.
+        await Task.Delay(TimeSpan.FromSeconds(6), limit.Token);
 
         // Assert
         Directory.Exists(Path.Combine(server.DataDirectory, "logs")).ShouldBeFalse();

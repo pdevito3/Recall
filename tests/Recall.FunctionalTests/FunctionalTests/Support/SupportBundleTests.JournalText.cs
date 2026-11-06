@@ -72,11 +72,19 @@ public partial class SupportBundleTests
 
     private static object Mention(string personId, string label) => new { type = "mention", attrs = new { personId, label } };
 
+    /// <summary>Empty when retention removed the file after the list of the folder.</summary>
     private static string ReadShared(string file)
     {
-        using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        using var reader = new StreamReader(stream, Encoding.UTF8);
-        return reader.ReadToEnd();
+        try
+        {
+            using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+            return reader.ReadToEnd();
+        }
+        catch (FileNotFoundException)
+        {
+            return string.Empty;
+        }
     }
 
     private static (Dictionary<string, string> Logs, Dictionary<string, string> Telemetry) FilesOfHost()
@@ -195,8 +203,16 @@ public partial class SupportBundleTests
         saves.Add(await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Corrections.GetRecord(correction.Id), new { canonicalTerm = $"changed {marker}", mishearings = new[] { $"misheard {marker}" }, version = correction.Version }));
         using var rawRevision = await owner.GetAsync($"/{ApiRoutes.Sessions.RawRevision(session.Id, 2)}", csrf: true);
         using var cleanedRevision = await owner.GetAsync($"/{ApiRoutes.Sessions.CleanedRevision(session.Id, 2)}", csrf: true);
-        using var rawTooLong = await SaveDraftAsync(owner, draft, new string('x', Session.DraftMaxLength + 1) + marker, 3, 3);
-        using var cleanedTooLong = await SaveDraftAsync(owner, cleaned, new string('x', Session.DraftMaxLength + 1) + marker, 3, 3);
+        var reads = new List<HttpResponseMessage>();
+        foreach (var route in new[]
+        {
+            ApiRoutes.Sessions.Root, ApiRoutes.Sessions.GetRecord(session.Id), ApiRoutes.Sessions.RawRevisions(session.Id), ApiRoutes.Sessions.CleanedRevisions(session.Id),
+            ApiRoutes.People.Root, ApiRoutes.People.GetRecord(person.Id), ApiRoutes.Corrections.Root, ApiRoutes.Corrections.GetRecord(correction.Id),
+        })
+            reads.Add(await owner.GetAsync($"/{route}", csrf: true));
+
+        using var rawTooLong = await SaveDraftAsync(owner, draft, marker + new string('x', Session.DraftMaxLength + 1), 3, 3);
+        using var cleanedTooLong = await SaveDraftAsync(owner, cleaned, marker + new string('x', Session.DraftMaxLength + 1), 3, 3);
         HttpStatusCode rawFailed = default, cleanedFailed = default;
         await WhileEachJournalSaveFailsAsync(fault, async () =>
         {
@@ -213,6 +229,7 @@ public partial class SupportBundleTests
 
         // Assert
         StatusesOf(saves).ShouldBe(Enumerable.Repeat(HttpStatusCode.OK, saves.Count));
+        StatusesOf(reads).ShouldBe(Enumerable.Repeat(HttpStatusCode.OK, reads.Count));
         (await rawRevision.Content.ReadAsStringAsync()).ShouldContain(marker);
         (await cleanedRevision.Content.ReadAsStringAsync()).ShouldContain(marker);
         rawTooLong.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
@@ -240,7 +257,7 @@ public partial class SupportBundleTests
         var person = await AddPersonAsync(owner, "Sam");
         var correction = await AddCorrectionAsync(owner, "term", "heard");
         var correctionRoute = ApiRoutes.Corrections.GetRecord(correction.Id);
-        var tooLong = new string('x', Session.DraftMaxLength + 1) + marker;
+        var tooLong = marker + new string('x', Session.DraftMaxLength + 1);
         var deep = string.Concat(Enumerable.Repeat("""{"type":"doc","content":[""", 100)) + marker;
 
         // A reader of the JSON throws on each of these words, and the message of the throw can name them.
@@ -290,11 +307,11 @@ public partial class SupportBundleTests
             await SaveDraftAsync(owner, cleaned, tooLong, revision, revision + 1),
             await SaveDraftAsync(owner, draft, $"\u0000{marker}", revision, revision + 1),
             await SaveDraftAsync(owner, cleaned, $"\u0000{marker}", revision, revision + 1),
-            await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Sessions.Metadata(session.Id), new { activity = new string('x', Session.MetadataValueMaxLength + 1) + marker, moods = Array.Empty<string>(), userTopics = Array.Empty<string>(), savedAt = Morning }),
+            await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Sessions.Metadata(session.Id), new { activity = marker + new string('x', Session.MetadataValueMaxLength + 1), moods = Array.Empty<string>(), userTopics = Array.Empty<string>(), savedAt = Morning }),
             await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Sessions.Metadata(session.Id), new { activity = "None", moods = new[] { $"\u0000{marker}" }, userTopics = Array.Empty<string>(), savedAt = Morning }),
-            await SendJsonAsync(owner, HttpMethod.Post, ApiRoutes.Corrections.Root, new { canonicalTerm = new string('x', Correction.CanonicalTermMaxLength + 1) + marker, mishearings = Array.Empty<string>() }),
-            await SendJsonAsync(owner, HttpMethod.Post, ApiRoutes.Corrections.Root, new { canonicalTerm = "t", mishearings = new[] { new string('x', Correction.MishearingMaxLength + 1) + marker } }),
-            await SendJsonAsync(owner, HttpMethod.Post, ApiRoutes.People.Root, new { label = new string('x', Person.LabelMaxLength + 1) + marker }),
+            await SendJsonAsync(owner, HttpMethod.Post, ApiRoutes.Corrections.Root, new { canonicalTerm = marker + new string('x', Correction.CanonicalTermMaxLength + 1), mishearings = Array.Empty<string>() }),
+            await SendJsonAsync(owner, HttpMethod.Post, ApiRoutes.Corrections.Root, new { canonicalTerm = "t", mishearings = new[] { marker + new string('x', Correction.MishearingMaxLength + 1) } }),
+            await SendJsonAsync(owner, HttpMethod.Post, ApiRoutes.People.Root, new { label = marker + new string('x', Person.LabelMaxLength + 1) }),
         };
         using var stale = await SendJsonAsync(owner, HttpMethod.Put, correctionRoute, new { canonicalTerm = marker, mishearings = new[] { marker }, version = correction.Version + 99 });
 
@@ -324,7 +341,7 @@ public partial class SupportBundleTests
         stale.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         (await stale.Content.ReadAsStringAsync()).ShouldNotContain(marker);
         StatusesOf(failed).ShouldBe(Enumerable.Repeat(HttpStatusCode.InternalServerError, failed.Count));
-        Host.Logs.Holding(fault).Where(line => line.Exception is not null).Count().ShouldBeGreaterThanOrEqualTo(failed.Count);
+        Host.Logs.Holding(fault).Where(line => line.Exception is not null).Select(line => line.TraceId).Distinct().Count().ShouldBe(failed.Count);
         ShouldHoldNoMarker(marker, entries);
     }
 }

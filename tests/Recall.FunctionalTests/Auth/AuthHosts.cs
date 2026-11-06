@@ -50,14 +50,16 @@ public static class AuthHosts
             ["Auth:StartPermitsPerWindow"] = ManyStarts,
             ["OTEL_EXPORTER_OTLP_ENDPOINT"] = BundleExport.Endpoint,
 
-            // The most that an operator can turn on, so the privacy tests of this host see each line. Hosting.Diagnostics stays as
-            // shipped because it writes each query string at Information, and docs/telemetry.md says so.
+            // Debug in each category, so the privacy tests of this host see more than a shipped server writes. Hosting.Diagnostics
+            // stays as shipped, because it writes each query string at Information, and docs/telemetry.md says so.
             ["Serilog:MinimumLevel:Default"] = "Debug",
             ["Serilog:MinimumLevel:Override:Microsoft"] = "Debug",
             ["Serilog:MinimumLevel:Override:Microsoft.AspNetCore"] = "Debug",
             ["Serilog:MinimumLevel:Override:Microsoft.AspNetCore.Routing.EndpointMiddleware"] = "Debug",
             ["Serilog:MinimumLevel:Override:Microsoft.EntityFrameworkCore"] = "Debug",
+            ["Serilog:MinimumLevel:Override:Microsoft.Extensions.Diagnostics.HealthChecks"] = "Debug",
             ["Serilog:MinimumLevel:Override:System"] = "Debug",
+            ["Serilog:MinimumLevel:Override:ZiggyCreatures.Caching.Fusion"] = "Debug",
         });
         _ = Bundle.Services;
         var bundleLogger = Log.Logger;
@@ -84,9 +86,14 @@ public static class AuthHosts
             ClaimFilePath = Path.Combine(Directory.CreateTempSubdirectory("recall-claim-").FullName, OwnerClaim.FileName),
         };
         _ = Sweep.Services;
-        // A handler writes through the static logger, and one process has one. Without this, the files and the OTLP export of the
-        // Bundle host hold only the logs of the framework.
-        Log.Logger = new TeeLogger(new TeeLogger(main, bundleLogger), Log.Logger);
+        // A handler and a framework category write through the static logger, and one process has one. Without this, the files and
+        // the OTLP export of the Bundle host hold only the lines of its start. The filter keeps out the lines of the other hosts.
+        var bundleRequests = new LoggerConfiguration()
+            .MinimumLevel.Verbose()
+            .Filter.ByIncludingOnly(_ => Bundle.IsInRequest)
+            .WriteTo.Logger(bundleLogger)
+            .CreateLogger();
+        Log.Logger = new TeeLogger(new TeeLogger(main, bundleRequests), Log.Logger);
     }
 
     public static async Task StopAsync()
