@@ -134,8 +134,8 @@ public static class AuthPages
     public static IResult JobDashboardFault(string tryAgainPath) => Page(
         StatusCodes.Status500InternalServerError,
         "The job pages cannot open",
-        "<p>The server could not read the background jobs. The journal still works.</p>"
-            + "<p>To fix this, do the steps in the section The background jobs stopped in <code>docs/troubleshooting.md</code>.</p>"
+        "<p>The server could not read the background jobs.</p>"
+            + "<p>Open <code>/health</code>. If it says The background jobs stopped, do the steps in the section of that name in <code>docs/troubleshooting.md</code>. If it does not, try again in a minute.</p>"
             + Action("Try again", tryAgainPath)
             + "<p><a href=\"/\">Go to Recall</a></p>");
 

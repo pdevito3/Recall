@@ -144,9 +144,10 @@ public partial class JobDashboardTests
     public async Task a_refused_write_action_shows_the_refusal_page_with_a_way_back_and_does_not_load_again()
     {
         // Arrange
+        using var owner = await SignedInAsync(AuthHosts.Jobs);
         using var member = await SignedInAsync(AuthHosts.Jobs, $"jobs-member-{Guid.NewGuid():N}");
         using var nobody = new AuthBrowser(AuthHosts.Jobs);
-        var action = $"{JobDashboard.Path}/jobs/{Guid.NewGuid()}/requeue";
+        var action =$"{JobDashboard.Path}/jobs/{Guid.NewGuid()}/requeue";
         using var fromOtherSite = new HttpRequestMessage(HttpMethod.Post, action) { Content = new FormUrlEncodedContent([]) };
         fromOtherSite.Headers.Add("Sec-Fetch-Site", "cross-site");
 
@@ -173,6 +174,7 @@ public partial class JobDashboardTests
         using var before = await owner.GetAsync($"{JobDashboard.Path}/jobs");
         before.StatusCode.ShouldBe(HttpStatusCode.OK);
         await ExecuteAsync(host, "DROP TABLE backwave_jobs");
+        var asked = DateTimeOffset.UtcNow;
 
         // Act
         using var page = await owner.GetAsync($"{JobDashboard.Path}/jobs");
@@ -182,10 +184,12 @@ public partial class JobDashboardTests
         page.Content.Headers.ContentType!.MediaType.ShouldBe("text/html");
         var html = await page.Content.ReadAsStringAsync();
         html.ShouldContain("The job pages cannot open");
+        html.ShouldContain("/health");
         html.ShouldContain("docs/troubleshooting.md");
         html.ShouldContain("The background jobs stopped");
         html.ShouldNotContain("no such table");
         ShouldRefuseEachFrameAndStoreNothing(page, "fault page");
-        AllLogsOf(host).ShouldContain(entry => entry.Level == LogEventLevel.Error && entry.Exception is SqliteException);
+        // The logs of the hosts join here, and another test also drops this table, so the time ties the line to this request.
+        AllLogsOf(host).ShouldContain(entry => entry.Level == LogEventLevel.Error && entry.Timestamp >= asked && entry.Exception is SqliteException);
     }
 }
