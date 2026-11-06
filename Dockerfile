@@ -44,6 +44,6 @@ USER 1654:1654
 EXPOSE 8080
 VOLUME /data
 
-HEALTHCHECK --interval=1h --timeout=60s --start-period=2m --start-interval=5s --retries=1 CMD ["/app/healthcheck.sh"]
+HEALTHCHECK --interval=1h --timeout=60s --start-period=10m --start-interval=5s --retries=1 CMD ["/app/healthcheck.sh"]
 
 ENTRYPOINT ["dotnet", "Recall.Server.dll"]

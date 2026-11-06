@@ -41,6 +41,13 @@ On a Mac, keep the Docker volume. Docker Desktop shows a folder of the Mac as th
 
 The container runs as user `1654` and group `1654`, not as root. A new Docker volume gets the correct owner from the image. A folder of the machine keeps its own owner, so you must tell the container who owns the folder.
 
+**A new folder is an empty journal, and the first person who signs in becomes its Owner.** To keep the data of the Docker volume, copy it before step 3. Use your own folder and IDs in this command:
+
+```bash
+docker compose stop
+docker run --rm -v recall_recall-data:/data:ro -v /volume1/docker/recall:/new alpine sh -c 'cp -a /data/. /new/ && chown -R 1026:100 /new'
+```
+
 1. Make the folder. Give the IDs of the user and the group that own it. For example, for user `1026` and group `100`:
 
    ```bash
@@ -57,16 +64,11 @@ The container runs as user `1654` and group `1654`, not as root. A new Docker vo
 
 3. Run `docker compose up -d`.
 
-A new folder is an empty journal, and the first person who signs in becomes its Owner. To keep the data of the Docker volume, copy it before step 3. Use your own folder and IDs in this command:
-
-```bash
-docker compose stop
-docker run --rm -v recall_recall-data:/data:ro -v /volume1/docker/recall:/new alpine sh -c 'cp -a /data/. /new/ && chown -R 1026:100 /new'
-```
-
 After you see your journal in the folder, remove the old volume with `docker volume rm recall_recall-data`. Then no command can use the old copy by mistake.
 
 Do not set `PUID` or `PGID` with the Docker volume. The volume belongs to user `1654`, so another user cannot write to it. The Server then cannot start, and the log says `The data directory /data is not writable`.
+
+A value in your shell beats the same name in `.env`. If your shell exports `PUID`, for example from a profile, Compose uses that value. To use the value of `.env`, run `unset PUID PGID`, and run `docker compose up -d` again.
 
 ## Connect a login provider
 
@@ -74,11 +76,13 @@ Recall has no passwords. A person signs in with your OpenID Connect provider, fo
 
 1. At the provider, make a confidential client that uses the authorization code flow. In Keycloak, turn on **Client authentication** and **Standard flow**.
 2. Add the callback URL as a redirect URI of the client. The URL is `http://<address of this machine>:8080/auth/oidc/callback`, and the login page of Recall shows it. Do not use a wildcard.
-3. Make the file `.env`, and edit the values. If `.env` exists, this command keeps it, so copy the lines of the provider from `.env.example` into it.
+3. Make the file `.env`. If `.env` exists, this command keeps it, so copy the lines of the provider from `.env.example` into it.
 
    ```bash
    cp -n .env.example .env
    ```
+
+   In `.env`, remove the `#` in front of each `Auth__Providers__0__` line, except the `AllowHttp` line. Fill in the empty values of `Issuer`, `ClientId`, and `ClientSecret`. With no line turned on, Recall starts with no provider. If a value stays empty, Recall refuses to start, and the log names the setting.
 
    `Auth__Providers__0__Issuer` is the issuer URL. In Keycloak, it is `https://<keycloak address>/realms/<realm>`. The browser and the container must both reach the provider at this URL. So do not use `localhost`, because in the container `localhost` is the container. For an issuer on `http`, remove the `#` in front of `Auth__Providers__0__AllowHttp=true`. Put a value that has a `$` or a `#` in single quotes.
 
@@ -99,7 +103,7 @@ services:
       - ./ca.pem:/certs/ca.pem:ro
 ```
 
-Compose reads this file when you give no `-f` option. With `compose.tls.yaml`, also give `-f compose.override.yaml`.
+Compose reads this file when `COMPOSE_FILE` is not set. With Caddy, add the file to the end of `COMPOSE_FILE`: `COMPOSE_FILE=compose.yaml:compose.tls.yaml:compose.override.yaml`.
 
 ## Turn on HTTPS
 
@@ -111,7 +115,7 @@ Each address of Recall needs its own callback URL at the provider. `/auth/status
 
 This option needs no open port and no domain of your own. Tailscale gets a real certificate for the machine, and the devices of your tailnet can reach Recall through it.
 
-1. Install Tailscale on the machine, and turn on HTTPS for your tailnet in the Tailscale admin console.
+1. Install Tailscale on the machine. In the Tailscale admin console, turn on MagicDNS and HTTPS for your tailnet. HTTPS needs MagicDNS.
 2. Run this command on the machine:
 
    ```bash
@@ -127,24 +131,29 @@ Port 8080 stays open on your LAN. To close it, add `RECALL_PORT=127.0.0.1:8080` 
 
 ### Caddy
 
-`compose.tls.yaml` adds a Caddy container in front of Recall, and it closes the plain HTTP port of Recall. This option needs a domain name that points to the machine.
+`compose.tls.yaml` adds a Caddy container in front of Recall, and it closes the plain HTTP port of Recall. This option needs a domain name that points to the machine. To get a certificate, Caddy answers a challenge on port 80 or port 443, so the internet must reach Caddy on one of these two ports.
 
-1. Add the address to `.env`:
+1. Add these lines to `.env`:
 
    ```bash
+   COMPOSE_FILE=compose.yaml:compose.tls.yaml
    RECALL_TLS_ORIGIN=https://recall.example.com
    ```
+
+   **Keep `COMPOSE_FILE` in `.env`.** It makes each `docker compose` command in this doc use both files. So `up`, `down`, `stop`, and `start` also cover Caddy, and the plain HTTP port stays closed. With no `COMPOSE_FILE`, the next `docker compose up -d` makes `recall` again with port 8080 open.
 
 2. Add `https://recall.example.com/auth/oidc/callback` as a redirect URI at the provider.
 3. Start both containers:
 
    ```bash
-   docker compose -f compose.yaml -f compose.tls.yaml up -d
+   docker compose up -d
    ```
 
-Give both `-f` options in each later `docker compose` command. If Compose stops with an error about the `!reset` tag in `compose.tls.yaml`, update Docker Compose.
+If Compose stops with an error about the `!reset` tag in `compose.tls.yaml`, update Docker Compose.
 
-If another app has port 443, put the port in the address and set `RECALL_TLS_PORT` to the same port. For example, `RECALL_TLS_ORIGIN=https://recall.example.com:8443` and `RECALL_TLS_PORT=8443`. If another app has port 80, set `RECALL_TLS_HTTP_PORT`. Caddy proves the domain through port 80 or port 443 of the internet, so keep one of these two ports open to Caddy.
+To stop using Caddy, run `docker compose down`, and then remove `COMPOSE_FILE` from `.env`.
+
+If another app has port 443, put the port in the address and set `RECALL_TLS_PORT` to the same port. For example, `RECALL_TLS_ORIGIN=https://recall.example.com:8443` and `RECALL_TLS_PORT=8443`. If another app has port 80, set `RECALL_TLS_HTTP_PORT`. A certificate still needs port 80 or port 443 open to the internet, so a port that the internet cannot reach gives no certificate.
 
 ### Another proxy
 
@@ -172,9 +181,15 @@ Docker runs `/app/healthcheck.sh` each hour. Run it yourself to see the state no
 docker compose exec recall /app/healthcheck.sh
 ```
 
-It prints the answer of `/health`. `Healthy` passes. `Degraded` means that the file store cannot take a write, and it fails. `Unhealthy` and `No answer from /health` also fail. A sleeping disk can give a slow answer, so the probe asks up to four times, 10 seconds apart, before it fails. `docker compose ps` shows the result of the last probe. Docker runs the probe each 5 seconds during the first 2 minutes, until a probe passes. Docker Engine 25 and later do this. An older engine shows `starting` until the first hour ends.
+It prints the answer of `/health`. `Healthy` passes. `Degraded` means that the file store cannot take a write, and it fails. `Unhealthy` and `No answer from /health` also fail. A sleeping disk can give a slow answer, so the probe asks up to four times, 10 seconds apart, before it fails.
 
-A probe writes to `/data/files` and flushes it to the disk, at most one time in 30 seconds. In a test of 180 seconds on an idle server, `/data/files` changed at each probe with a probe each 30 seconds, and no path in `/data` changed with no probe. So a short interval keeps a NAS disk awake. A probe each hour lets a disk with a shorter sleep timer sleep between two probes, and the probe wakes it one time each hour. A cleanup of old logins can also write to the database one time each hour. To change this, set `RECALL_PROBE_INTERVAL` in `.env`, for example `RECALL_PROBE_INTERVAL=6h`.
+**The status that `docker compose ps` shows can be up to one hour old.** It is the result of the last probe, and this command does not change it. After one failed probe, the status stays `unhealthy` until the next probe passes, up to one hour after you correct the cause. Run the command above to see the state now.
+
+Docker runs the probe each 5 seconds during the first 10 minutes, until a probe passes, and a failed probe does not count in that time. So a slow start shows `starting` and then `healthy`. After 10 minutes, a server that has not passed shows `starting` until the next probe, up to one hour later. Docker Engine 25 and later do this. An older engine shows `starting` until the first hour ends.
+
+A probe writes to `/data/files` and flushes it to the disk, at most one time in 30 seconds. In a test of 180 seconds on an idle server, `/data/files` changed at each probe with a probe each 30 seconds. So a short interval keeps a NAS disk awake. A probe each hour lets a disk with a shorter sleep timer sleep between two probes, and the probe wakes it one time each hour. To change this, set `RECALL_PROBE_INTERVAL` in `.env`, for example `RECALL_PROBE_INTERVAL=6h`.
+
+Other writes also wake a disk. In a test of 10 idle minutes after a start, with the default interval, one SQLite WAL checkpoint wrote to the database about 6 minutes after the start, and no other path in `/data` changed. A cleanup of old logins can also write to the database one time each hour.
 
 ## Back up and restore
 
@@ -231,5 +246,8 @@ After the first release, you can use the published image in place of a build. Ru
 | `docker compose ps` shows `Restarting`, and `docker compose logs` says `is on the mount` | `/data` is on a file system that the Server refuses. See [Keep your data](#keep-your-data) | Move `/data` to a local disk |
 | `docker compose ps` shows `Restarting`, and the log says `is not writable` | The user of the container cannot write to `/data` | With a folder, set `PUID` and `PGID` to its owner. With the Docker volume, remove `PUID` and `PGID` |
 | `docker compose ps` shows `Restarting`, and the log names `Auth:Providers:0` | A setting of the provider is missing or wrong | Correct the value in `.env`, and run `docker compose up -d` |
+| `docker compose ps` shows `unhealthy` | The last probe failed. This status can be up to one hour old | Run `docker compose exec recall /app/healthcheck.sh`. If it prints `Healthy`, the cause is gone, and the status changes at the next probe. If it prints another answer, read `docker compose logs recall` |
+| The probe prints `Degraded` | The database answers, but the file store cannot take a write | See the next row |
+| The log says `The file store root ... cannot take a write` | The Server cannot write to `/data/files`. The line gives the cause, for example a full disk, a disk mounted read-only, or the wrong owner. A new file fails until you correct this | Correct the cause. The next probe finds the change, in up to 30 seconds, and no restart is necessary |
 | The provider says that the redirect URI is not valid | The callback URL of this address is not registered, or a proxy changed `Host` | Register the URL from `/auth/status`, and see [Another proxy](#another-proxy) |
 | The page says `This server does not accept new people` | The journal has an Owner, and signup is closed | See [First login and the Owner](authentication.md#first-login-and-the-owner) |
