@@ -12,7 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UsersIndexRouteImport } from './routes/users/index'
+import { Route as SettingsIndexRouteImport } from './routes/settings/index'
+import { Route as PeopleIndexRouteImport } from './routes/people/index'
 import { Route as UsersIdIndexRouteImport } from './routes/users/$id/index'
+import { Route as SessionsIdIndexRouteImport } from './routes/sessions/$id/index'
 
 const AboutRoute = AboutRouteImport.update({
   id: '/about',
@@ -29,43 +32,92 @@ const UsersIndexRoute = UsersIndexRouteImport.update({
   path: '/users/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsIndexRoute = SettingsIndexRouteImport.update({
+  id: '/settings/',
+  path: '/settings/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PeopleIndexRoute = PeopleIndexRouteImport.update({
+  id: '/people/',
+  path: '/people/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const UsersIdIndexRoute = UsersIdIndexRouteImport.update({
   id: '/users/$id/',
   path: '/users/$id/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SessionsIdIndexRoute = SessionsIdIndexRouteImport.update({
+  id: '/sessions/$id/',
+  path: '/sessions/$id/',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/people': typeof PeopleIndexRoute
+  '/settings': typeof SettingsIndexRoute
   '/users': typeof UsersIndexRoute
+  '/sessions/$id': typeof SessionsIdIndexRoute
   '/users/$id': typeof UsersIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/people': typeof PeopleIndexRoute
+  '/settings': typeof SettingsIndexRoute
   '/users': typeof UsersIndexRoute
+  '/sessions/$id': typeof SessionsIdIndexRoute
   '/users/$id': typeof UsersIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/people/': typeof PeopleIndexRoute
+  '/settings/': typeof SettingsIndexRoute
   '/users/': typeof UsersIndexRoute
+  '/sessions/$id/': typeof SessionsIdIndexRoute
   '/users/$id/': typeof UsersIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/users' | '/users/$id'
+  fullPaths:
+    | '/'
+    | '/about'
+    | '/people'
+    | '/settings'
+    | '/users'
+    | '/sessions/$id'
+    | '/users/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/users' | '/users/$id'
-  id: '__root__' | '/' | '/about' | '/users/' | '/users/$id/'
+  to:
+    | '/'
+    | '/about'
+    | '/people'
+    | '/settings'
+    | '/users'
+    | '/sessions/$id'
+    | '/users/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/about'
+    | '/people/'
+    | '/settings/'
+    | '/users/'
+    | '/sessions/$id/'
+    | '/users/$id/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
+  PeopleIndexRoute: typeof PeopleIndexRoute
+  SettingsIndexRoute: typeof SettingsIndexRoute
   UsersIndexRoute: typeof UsersIndexRoute
+  SessionsIdIndexRoute: typeof SessionsIdIndexRoute
   UsersIdIndexRoute: typeof UsersIdIndexRoute
 }
 
@@ -92,11 +144,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UsersIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/': {
+      id: '/settings/'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/people/': {
+      id: '/people/'
+      path: '/people'
+      fullPath: '/people'
+      preLoaderRoute: typeof PeopleIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/users/$id/': {
       id: '/users/$id/'
       path: '/users/$id'
       fullPath: '/users/$id'
       preLoaderRoute: typeof UsersIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sessions/$id/': {
+      id: '/sessions/$id/'
+      path: '/sessions/$id'
+      fullPath: '/sessions/$id'
+      preLoaderRoute: typeof SessionsIdIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -105,7 +178,10 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
+  PeopleIndexRoute: PeopleIndexRoute,
+  SettingsIndexRoute: SettingsIndexRoute,
   UsersIndexRoute: UsersIndexRoute,
+  SessionsIdIndexRoute: SessionsIdIndexRoute,
   UsersIdIndexRoute: UsersIdIndexRoute,
 }
 export const routeTree = rootRouteImport

@@ -8,6 +8,7 @@ import { Toaster } from '@/components/toaster'
 import { AuthKeys } from '@/domain/auth/apis/auth.keys'
 // Connects the generated API clients to apiClient before the first request.
 import { setSessionEndedCheck } from '@/lib/api-client'
+import { watchForNavigation } from '@/lib/first-page'
 import { createQueryClient } from '@/lib/query-client'
 import './index.css'
 
@@ -15,7 +16,8 @@ import './index.css'
 import { routeTree } from './routeTree.gen'
 
 // Create a new router instance
-const router = createRouter({ routeTree, defaultNotFoundComponent: NotFound })
+const router = createRouter({ routeTree, defaultNotFoundComponent: NotFound, scrollRestoration: true })
+watchForNavigation(router)
 
 // Register the router instance for type safety
 declare module '@tanstack/react-router' {

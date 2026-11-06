@@ -1,7 +1,9 @@
 import {
-  Home01Icon,
+  Book02Icon,
   InformationCircleIcon,
+  Settings01Icon,
   UserGroupIcon,
+  UserMultipleIcon,
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
@@ -33,9 +35,19 @@ const appInitials = appName
 
 const navItems = [
   {
-    title: "Home",
+    title: "Journal",
     url: "/",
-    icon: Home01Icon,
+    icon: Book02Icon,
+  },
+  {
+    title: "People",
+    url: "/people",
+    icon: UserMultipleIcon,
+  },
+  {
+    title: "Settings",
+    url: "/settings",
+    icon: Settings01Icon,
   },
   {
     title: "Users",
