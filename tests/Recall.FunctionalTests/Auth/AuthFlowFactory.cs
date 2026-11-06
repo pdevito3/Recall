@@ -43,6 +43,20 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
     /// <summary>True on the flow of a request to this host. Each host of the process logs through one static logger, so this tells their lines apart.</summary>
     public bool IsInRequest => _inRequest.Value;
 
+    /// <summary>Runs work that a request did not start, such as a job, so that its lines count as lines of this host.</summary>
+    public async Task InRequestFlowAsync(Func<Task> work)
+    {
+        _inRequest.Value = true;
+        try
+        {
+            await work();
+        }
+        finally
+        {
+            _inRequest.Value = false;
+        }
+    }
+
     public HttpClient NewClient()
     {
         lock (_clientLock)

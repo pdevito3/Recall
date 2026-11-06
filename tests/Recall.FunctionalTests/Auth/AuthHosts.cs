@@ -30,6 +30,8 @@ public static class AuthHosts
 
     public static AuthFlowFactory Jobs { get; private set; } = null!;
 
+    public static AuthFlowFactory Cleanups { get; private set; } = null!;
+
     public static AuthFlowFactory FailingJobs { get; private set; } = null!;
 
     public static AuthFlowFactory HaltedJobs { get; private set; } = null!;
@@ -82,6 +84,7 @@ public static class AuthHosts
         var bundleLogger = Log.Logger;
         Log.Logger = main;
         Jobs = StartWithWorker();
+        Cleanups = StartWithWorker();
         FailingJobs = Start(new Dictionary<string, string?>
         {
             ["Auth:OpenSignup"] = "true",
@@ -134,7 +137,7 @@ public static class AuthHosts
 
     public static async Task StopAsync()
     {
-        foreach (var host in new[] { LostJobTable, FrozenClock, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, Bundle, OwnerDemotion, Sweep, Jobs, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
+        foreach (var host in new[] { LostJobTable, FrozenClock, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, Bundle, OwnerDemotion, Sweep, Jobs, Cleanups, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
         {
             if (host is not null)
                 await host.DisposeAsync();

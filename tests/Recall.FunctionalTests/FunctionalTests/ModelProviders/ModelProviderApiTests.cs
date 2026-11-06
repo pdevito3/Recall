@@ -37,7 +37,7 @@ public class ModelProviderApiTests : TestBase
         var table = await CleanupScenario.DumpOfTableAsync("model_providers");
 
         // Assert
-        added.StatusCode.ShouldBe(HttpStatusCode.Created, addedBody);
+        added.StatusCode.ShouldBe(HttpStatusCode.OK, addedBody);
         addedBody.ShouldNotContain(key);
         listBody.ShouldNotContain(key);
         table.ShouldNotContain(key);

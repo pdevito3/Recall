@@ -96,6 +96,7 @@ public sealed class AnthropicModelClient(IHttpClientFactory httpClientFactory)
         AuthToken = null,
         BaseUrl = endpoint.BaseUrl ?? DefaultBaseUrl,
         MaxRetries = 0,
+        OpenTelemetry = false,
         Timeout = ModelProviderHttp.CallLimit,
         HttpClient = httpClientFactory.CreateClient(ModelProviderHttp.ClientName),
     };

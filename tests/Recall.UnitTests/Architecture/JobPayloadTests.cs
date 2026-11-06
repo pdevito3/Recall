@@ -63,7 +63,7 @@ public class JobPayloadTests
 
     private static bool IsIdOnly(Type type, string name)
     {
-        if (type == typeof(CancellationToken) || type == typeof(Guid) || type == typeof(int) || type == typeof(long)
+        if (type == typeof(CancellationToken) || type == typeof(JobContext) || type == typeof(Guid) || type == typeof(int) || type == typeof(long)
             || type == typeof(bool) || type.IsEnum)
             return true;
 

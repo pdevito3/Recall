@@ -5,15 +5,29 @@ using Databases;
 using Metadata;
 
 /// <summary>What a model or a device gives as the result of a Cleanup, after its checks.</summary>
-public sealed record CleanupOutput(
-    string CleanedMarkdown,
-    string Synopsis,
-    IReadOnlyList<string> TopicSuggestions,
-    IReadOnlyList<string> PersonNames,
-    IReadOnlyList<string> MoodSuggestions)
+public sealed class CleanupOutput
 {
     private const int MaxSuggestions = 10;
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+
+    private CleanupOutput(string cleanedMarkdown, string synopsis, IReadOnlyList<string> topics, IReadOnlyList<string> people, IReadOnlyList<string> moods)
+    {
+        CleanedMarkdown = cleanedMarkdown;
+        Synopsis = synopsis;
+        TopicSuggestions = topics;
+        PersonNames = people;
+        MoodSuggestions = moods;
+    }
+
+    public string CleanedMarkdown { get; }
+
+    public string Synopsis { get; }
+
+    public IReadOnlyList<string> TopicSuggestions { get; }
+
+    public IReadOnlyList<string> PersonNames { get; }
+
+    public IReadOnlyList<string> MoodSuggestions { get; }
 
     private sealed record Wire(string? CleanedMarkdown, string? Synopsis, string[]? TopicSuggestions, string[]? PeopleProposal, string[]? MoodSuggestions);
 

@@ -6,6 +6,7 @@ using Recall.Server.Databases;
 using Recall.Server.Domain.Agents;
 using Recall.Server.Domain.AuditEntries;
 using Recall.Server.Domain.Corrections;
+using Recall.Server.Domain.ModelProviders;
 using Recall.Server.Domain.People;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Metadata;
@@ -25,6 +26,10 @@ public class StringColumnLengthTests
     private static readonly string[] Characters = ["a", "\U0001F600"];
 
     private static string Text(string character, int length) => string.Concat(Enumerable.Repeat(character, length));
+
+    private const string ProviderAddress = "http://a/";
+
+    private static string AddressOfLength(string character, int length) => ProviderAddress + Text(character, length - ProviderAddress.Length);
 
     private static string Email(string character, int length) => Text(character, length - "@example.com".Length) + "@example.com";
 
@@ -46,12 +51,21 @@ public class StringColumnLengthTests
         ["sessions.cleaned_text"] = new("text", Text, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)),
         ["raw_revisions.text"] = new("text", Text, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)),
         ["cleaned_revisions.text"] = new("text", Text, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)),
+        ["model_providers.name"] = new("name", Text, v => ModelProvider.Connect("ten_1", ModelProviderKind.OpenAiCompatible, v, ProviderAddress, null, DateTimeOffset.UnixEpoch)),
+        ["model_providers.base_url"] = new("baseUrl", AddressOfLength, v => ModelProvider.Connect("ten_1", ModelProviderKind.OpenAiCompatible, "Mine", v, null, DateTimeOffset.UnixEpoch)),
+        ["model_providers.model"] = new("model", Text, v =>
+        {
+            var provider = ModelProvider.Connect("ten_1", ModelProviderKind.OpenAiCompatible, "Mine", ProviderAddress, null, DateTimeOffset.UnixEpoch);
+            provider.Update("Mine", ProviderAddress, null, v, provider.Version);
+        }),
         // new-feature:caller-columns
     };
 
     private static readonly Dictionary<string, IReadOnlyList<string>> FixedOptionColumns = new()
     {
         ["users.role"] = UserRole.ListNames(),
+        ["model_providers.kind"] = Enum.GetNames<ModelProviderKind>(),
+        ["sessions.cleanup_failure"] = Enum.GetNames<CleanupFailure>(),
         ["agents.mode"] = [AgentMode.Delegated().Value, AgentMode.Machine().Value],
         ["audit_entries.kind"] = Enum.GetNames<AuditEntryKind>(),
         ["user_permissions.permission"] = Permission.GetAll().Select(p => p.Value).ToList(),
@@ -95,9 +109,15 @@ public class StringColumnLengthTests
         "auth_sessions.refresh_family_hash",
         "auth_sessions.refresh_hash",
         "corrections.mishearings",
+        "key_ring_markers.protected_value",
+        "model_providers.protected_api_key",
         "sessions.ai_topics",
         "sessions.mentioned_person_ids",
+        "sessions.cleanup_run_id",
+        "sessions.mood_suggestions",
         "sessions.moods",
+        "sessions.people_proposals",
+        "sessions.topic_suggestions",
         "sessions.preview",
         "sessions.synopsis",
         "sessions.user_topics",

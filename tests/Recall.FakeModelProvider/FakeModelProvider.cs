@@ -98,6 +98,10 @@ public sealed class FakeModelProvider : IAsyncDisposable
     public static async Task<FakeModelProvider> StartAsync(string apiKey, string url = "http://127.0.0.1:0")
     {
         var builder = WebApplication.CreateSlimBuilder();
+
+        // The test folder holds the appsettings.json of the server, whose Kestrel section would take this port.
+        builder.Configuration.Sources.Clear();
+        builder.Configuration.AddInMemoryCollection();
         builder.WebHost.UseUrls(url);
         builder.Logging.ClearProviders();
         var app = builder.Build();
@@ -210,7 +214,7 @@ public sealed class FakeModelProvider : IAsyncDisposable
                 await WriteAnthropicErrorAsync(context, 400, "invalid_request_error", $"Cannot read this input: {text} with key {_apiKey}");
                 return;
             case FakeMode.Status:
-                await WriteAnthropicErrorAsync(context, Behavior.Status, "api_error", "The fake answers with this status.");
+                await WriteAnthropicErrorAsync(context, Behavior.Status, "api_error", $"The fake answers with this status while it reads: {text} with key {_apiKey}");
                 return;
             case FakeMode.Redirect:
                 context.Response.StatusCode = 307;
@@ -280,7 +284,8 @@ public sealed class FakeModelProvider : IAsyncDisposable
             return true;
         }
 
-        if (context.Request.Headers["x-api-key"] != _apiKey)
+        // The API takes "Authorization: Bearer", and "x-api-key" as its legacy form. The official SDK sends the first.
+        if (context.Request.Headers.Authorization != $"Bearer {_apiKey}" && context.Request.Headers["x-api-key"] != _apiKey)
         {
             await WriteAnthropicErrorAsync(context, 401, "authentication_error", "invalid x-api-key");
             return true;
@@ -328,7 +333,7 @@ public sealed class FakeModelProvider : IAsyncDisposable
                 await WriteCompatibleErrorAsync(context, 400, $"Cannot read this input: {text} with key {_apiKey}");
                 return;
             case FakeMode.Status:
-                await WriteCompatibleErrorAsync(context, Behavior.Status, "The fake answers with this status.");
+                await WriteCompatibleErrorAsync(context, Behavior.Status, $"The fake answers with this status while it reads: {text} with key {_apiKey}");
                 return;
             case FakeMode.Redirect:
                 context.Response.StatusCode = 307;

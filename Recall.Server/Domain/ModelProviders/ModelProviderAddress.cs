@@ -17,6 +17,7 @@ public static class ModelProviderAddress
 
         var trimmed = baseUrl.Trim();
         ValidationException.ThrowWhenLongerThan(trimmed, ModelProvider.BaseUrlMaxLength, BaseUrlField, $"The base URL must not have more than {ModelProvider.BaseUrlMaxLength} characters.");
+        ValidationException.ThrowWhenHasCharacterNotStorable(trimmed, BaseUrlField, "The base URL has a character that is not allowed.");
         var isUsable = Uri.TryCreate(trimmed, UriKind.Absolute, out var address)
             && address.Scheme is "http" or "https"
             && address.UserInfo.Length == 0

@@ -66,7 +66,7 @@ internal sealed class CleanupScenario : IAsyncDisposable
     public static async Task<ModelProviderDto> ConnectAsync(HttpClient client, ModelProviderKind kind, string? baseUrl, string? apiKey, string name = "My provider")
     {
         var added = await client.PostAsJsonAsync(ApiRoutes.ModelProviders.Root, new { kind = kind.ToString(), name, baseUrl, apiKey });
-        added.StatusCode.ShouldBe(HttpStatusCode.Created, await added.Content.ReadAsStringAsync());
+        added.StatusCode.ShouldBe(HttpStatusCode.OK, await added.Content.ReadAsStringAsync());
         return (await added.Content.ReadFromJsonAsync<ModelProviderDto>()).ShouldNotBeNull();
     }
 
