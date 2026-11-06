@@ -41,6 +41,39 @@ public class WordsThatAreNotADocumentTests
 
     [Test]
     [Property("Rule", "SES-29")]
+    public void a_rename_keeps_the_words_and_the_old_label_of_a_text_with_half_of_an_emoji()
+    {
+        // Arrange
+        var words = """{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"cut \ud83d"},{"type":"mention","attrs":{"personId":"per_01","label":"Old"}}]}]}""";
+        var session = NewSession();
+        session.SaveRaw(Save(words), false);
+
+        // Act
+        session.RenamePerson(PersonId, "New", Now);
+
+        // Assert
+        session.Raw.Text.ShouldBe(words);
+        session.Raw.DraftRevision.ShouldBe(1);
+    }
+
+    [Test]
+    [Property("Rule", "SES-29")]
+    public void a_rename_changes_a_label_that_is_half_of_an_emoji()
+    {
+        // Arrange
+        var words = """{"type":"doc","content":[{"type":"paragraph","content":[{"type":"mention","attrs":{"personId":"per_01","label":"\ud83d"}}]}]}""";
+        var session = NewSession();
+        session.SaveRaw(Save(words), false);
+
+        // Act
+        session.RenamePerson(PersonId, "New", Now);
+
+        // Assert
+        session.Raw.Text.ShouldContain("\"label\":\"New\"");
+    }
+
+    [Test]
+    [Property("Rule", "SES-29")]
     [Arguments("""{"type":"doc","content":[{"type":"paragraph","content":[{"type":"mention","attrs":[]}]}]}""")]
     [Arguments("""{"type":"doc","content":[{"type":"paragraph","content":[{"type":"mention","attrs":1}]}]}""")]
     public void a_mention_with_attributes_of_the_wrong_shape_does_not_stop_a_save(string words)

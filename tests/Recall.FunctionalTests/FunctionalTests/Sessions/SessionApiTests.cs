@@ -61,6 +61,27 @@ public class SessionApiTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-29")]
+    public async Task a_raw_nul_gives_422_and_a_raw_lone_surrogate_gives_400()
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        StringContent Body(string escape) => new($$"""{"text":"cut {{escape}} words","baseRevision":0,"savedAt":"2026-01-01T00:00:00Z"}""", Encoding.UTF8, "application/json");
+
+        // Act
+        var nul = await FactoryClient.PutAsync(ApiRoutes.Sessions.Draft(session.Id), Body("\\u0000"));
+        var surrogate = await FactoryClient.PutAsync(ApiRoutes.Sessions.Draft(session.Id), Body("\\ud83d"));
+        var read = await FactoryClient.GetFromJsonAsync<SessionDto>(ApiRoutes.Sessions.GetRecord(session.Id));
+
+        // Assert
+        nul.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        surrogate.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        read!.RawDraftRevision.ShouldBe(0);
+    }
+
+    [Test]
     [Property("Rule", "SES-26")]
     public async Task a_settings_change_with_only_the_zone_and_the_save_time_gives_400()
     {
