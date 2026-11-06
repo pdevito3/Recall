@@ -96,7 +96,7 @@ public partial class NoProviderBootTests
         {
             using var client = await listener.AcceptTcpClientAsync();
             await using var stream = client.GetStream();
-            await stream.ReadAsync(new byte[1024]);
+            (await stream.ReadAsync(new byte[1024])).ShouldBePositive();
             await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes($"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n{body}"));
         }
     }
