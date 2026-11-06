@@ -27,11 +27,12 @@ public static class DeleteTenant
 
             // The exclusive lock makes each add that takes the shared lock of the tenant wait, so no such row comes after
             // the load. A deleted user frees its identifier, so the same person can sign up again.
-            var deletedCounts = await RootLock.Tenant.RunExclusiveAsync(dbContext, request.Id, async ct =>
+            var deletedCounts = await LastTenant.RunWithLocksAsync(dbContext, request.Id, async ct =>
             {
                 var tenant = await dbContext.Tenants
                     .TagWithOperationCallSite("tenants.delete.load")
                     .GetById(request.Id, ct);
+                await LastTenant.GuardAsync(dbContext, tenant.Id, ct);
 
                 var rows = await TenantOwnedRows.LoadAsync(dbContext, tenant.Id, ct);
                 foreach (var row in rows)

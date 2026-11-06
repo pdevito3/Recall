@@ -8,7 +8,7 @@ A span carries names, identifiers, and counts. It never carries user-entered con
 
 `SqlSpanInterceptor` makes a span for each SQL command of the Server, and it copies the SQL text into `db.query.text`. Thus a value from the caller must go to the database as a parameter, never as a literal in the SQL text. `CustomQueryKitConfiguration` sets `ParameterizeFilterValues`, so the SQL text of a list query has a parameter name in place of each filter value. The value of a QueryKit `CustomOperation` still goes into the SQL text as a literal.
 
-The request spans of the server keep each query key in `url.query` and replace each value with `Redacted`, for example `?filters=Redacted&pageSize=Redacted`. The ASP.NET Core instrumentation does this by default, but Aspire turns it off in development. Thus `HostExtensions.cs` and the BFF `Extensions.cs` set `url.query` again.
+The request spans of the server keep each query key in `url.query` and replace each value with `Redacted`, for example `?filters=Redacted&pageSize=Redacted`. The ASP.NET Core instrumentation does this by default, but Aspire turns it off in development. Thus `HostExtensions.cs` sets `url.query` again.
 
 ## What a trace looks like
 
@@ -195,8 +195,6 @@ _logger.Here().Information("Created tenant {TenantId} for new user {UserId}", te
 - `code.function`, `code.file.path`, and `code.line.number` - the same names as on a span.
 
 Log only ids, names of operations, and counts. The privacy rule for spans also applies to logs.
-
-Grpc.AspNetCore.Server logs each error status at `Information`, with the detail of the status. The detail is the message for the caller, and it can hold text that the caller typed. `GrpcStatusDetailRedaction` keeps the status code in that log and puts a fixed text in place of the detail. The other logs of a failed call stay, such as a message that the Server cannot read, a content type that is not gRPC, and a method that the Server does not have. `GrpcLogTests` checks each of them.
 
 ### Console output
 

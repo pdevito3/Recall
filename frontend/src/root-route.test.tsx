@@ -17,7 +17,7 @@ import { AuthKeys } from '@/domain/auth/apis/auth.keys'
 import { MembershipKeys } from '@/domain/membership/apis/membership.keys'
 import { Route as RootRoute } from '@/routes/__root'
 import { routeTree } from '@/routeTree.gen'
-import { member, memberClaims } from '@/test/session'
+import { member, memberSession } from '@/test/session'
 
 let showLateHeading = () => {}
 
@@ -53,7 +53,7 @@ async function renderLayoutAt(path: string) {
       <>
         <h1>Links</h1>
         <Link to="/about">Open the page with a heading</Link>
-        <Link to="/start-tenant">Open the page with no heading</Link>
+        <Link to="/users">Open the page with no heading</Link>
       </>
     ),
   })
@@ -70,7 +70,7 @@ async function renderLayoutAt(path: string) {
   })
   const noHeadingRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: '/start-tenant',
+    path: '/users',
     staticData: { breadcrumb: 'No heading' },
     component: () => <p>A page with no heading</p>,
   })
@@ -86,7 +86,7 @@ async function renderLayoutAt(path: string) {
   })
   // With staleTime Infinity, the seeded session and membership send no request.
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } })
-  queryClient.setQueryData(AuthKeys.user(), memberClaims)
+  queryClient.setQueryData(AuthKeys.user(), memberSession)
   queryClient.setQueryData(MembershipKeys.of(member.identifier), member)
   const screen = await render(
     <QueryClientProvider client={queryClient}>
@@ -228,11 +228,11 @@ test('each page of the app declares the name that its breadcrumb shows', () => {
   expect(pagesWithoutBreadcrumb).toEqual([])
 })
 
-test('a session answer that is not a list of claims shows that the session check failed, and no page', async () => {
+test('a session answer that is not a user shows that the session check failed, and no page', async () => {
   await commands.answerRequests([
     {
       method: 'GET',
-      path: '/bff/user',
+      path: '/auth/me',
       contentType: 'text/html',
       body: '<!doctype html><html><body><div id="root"></div></body></html>',
     },

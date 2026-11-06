@@ -1,6 +1,8 @@
+> Changed by PR R4 of the plan: the DPoP code is gone, because it had no caller after the BFF left. A token with a cnf claim gets 401.
+
 # Our own DPoP proof validation on the server
 
-In phase 2, the server API validates DPoP proofs (RFC 9449) with our own code, on top of the Microsoft JWT bearer handler. The code checks the rules of RFC 9449 section 4.3: `typ`, an asymmetric `alg`, the signature with the header `jwk`, `htm`, `htu`, the `iat` window, `ath`, `cnf.jkt`, and the replay of `jti`. The replay cache is in `appdb`, so that all server instances share it. On the BFF side, `Duende.AccessTokenManagement` makes the proofs. The design is in [the home-rolled BFF spec](../specs/home-rolled-bff.md#9-phase-2-dpop).
+In phase 2, the server API validates DPoP proofs (RFC 9449) with our own code, on top of the Microsoft JWT bearer handler. The code checks the rules of RFC 9449 section 4.3: `typ`, an asymmetric `alg`, the signature with the header `jwk`, `htm`, `htu`, the `iat` window, `ath`, `cnf.jkt`, and the replay of `jti`. The replay cache is in `appdb`, so that all server instances share it. On the BFF side, `Duende.AccessTokenManagement` makes the proofs. The design was in the home-rolled BFF spec, which R4 deleted. `git log -- docs/specs/home-rolled-bff.md` finds it.
 
 ## Considered options
 

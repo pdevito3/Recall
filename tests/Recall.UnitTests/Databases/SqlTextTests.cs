@@ -23,7 +23,7 @@ public class SqlTextTests
     }
 
     [Test]
-    [Arguments("DELETE FROM used_dpop_proofs WHERE expires <= @now")]
+    [Arguments("DELETE FROM auth_login_attempts WHERE expires_at <= @now")]
     [Arguments("UPDATE users_archive SET first_name = 'x'")]
     [Arguments("-- users\nSELECT 1")]
     [Arguments("/* users /* no nesting in SQLite */ SELECT 1")]

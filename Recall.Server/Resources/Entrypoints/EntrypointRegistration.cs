@@ -1,10 +1,7 @@
 namespace Recall.Server.Resources.Entrypoints;
 
 using Auth;
-using Domain.Tenants.Grpc.V1;
-// new-feature:grpc-usings
 using Domain.Users;
-using Grpc;
 using Http;
 using Http.OpenApi;
 using Mcp;
@@ -31,9 +28,6 @@ public static class EntrypointRegistration
         // A value that does not bind throws, so that DomainProblemDetails gives a 400 with the errors, not an empty 400
         builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
         builder.Services.AddSwaggerExtension(builder.Configuration);
-
-        // gRPC
-        builder.Services.AddGrpc(options => options.Interceptors.Add<DomainErrorInterceptor>());
 
         // MCP. The transport is stateless, so each tool call runs in its own HTTP request. Then the
         // HttpContext, the caller, and the tenant scope are the ones of that request.
@@ -73,6 +67,7 @@ public static class EntrypointRegistration
         }
 
         app.UseSpaFallback();
+        app.UseApiNotFound();
         app.UseRateLimiter();
         app.UseAuthentication();
         app.UseAuthorization();
@@ -81,8 +76,6 @@ public static class EntrypointRegistration
     public static void MapEntrypoints(this WebApplication app)
     {
         app.MapVersionedEndpoints();
-        app.MapGrpcService<TenantsGrpcService>();
-        // new-feature:grpc-services
         McpToolAccess.Validate(app.Services.GetRequiredService<IOptions<McpServerOptions>>().Value.ToolCollection ?? []);
         app.MapMcp(McpPath).RequireAuthorization();
         if (AuthRegistration.JwtIsOn(app.Configuration))

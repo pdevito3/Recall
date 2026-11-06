@@ -6,7 +6,7 @@ The audience is a person with a NAS and one compose file. So `docker compose up 
 
 The prototype is the local branch `recall-sqlite-proto`, SHA `e6073f5a5995fbf6a981dda2f41821ebbdb6d7f6`, which is not in this repository. Its `deploy/Dockerfile` and `deploy/entrypoint.sh` boot the app in one container. Appendix B of the program plan, which is also not in this repository, records an idle memory of 164 MiB, against 197 MiB with a Postgres sidecar. The 197 MiB is inferred, because no run had a sidecar. No raw output file for those numbers exists, so `docs/evidence/` has no copy of them.
 
-The prototype ran two processes, the Server and the BFF, in the one container. It did not merge the hosts. The plan's R4 does that merge, so one process is a target and not a measured result. All numbers come from a loaded Mac with Docker on arm64, and no run was on a real NAS.
+The prototype ran two processes, the Server and the BFF, in the one container. It did not merge the hosts. The plan's R4 did that merge, so the numbers here are for two processes. All numbers come from a loaded Mac with Docker on arm64, and no run was on a real NAS.
 
 ## Considered options
 
@@ -16,6 +16,6 @@ The prototype ran two processes, the Server and the BFF, in the one container. I
 
 ## Consequences
 
-- ADRs 0003, 0005, and 0006 describe the BFF. They stay true until R4 deletes it.
+- ADRs 0003, 0005, and 0006 describe the BFF. R4 deleted it, and each of them says so.
 - [ADR 0004](0004-server-side-bff-sessions.md) becomes false at R1, because it puts `bffdb` and an advisory lock on Postgres. [ADR 0010](0010-domain-events-in-the-save-transaction.md) and [ADR 0012](0012-audit-log.md) also change at R1, because they name `xmin` and Postgres COPY.
 - The web mic needs HTTPS, and many homelab installs use plain HTTP. R5 must give a TLS path that a person can finish. The native iOS app does not have this limit.

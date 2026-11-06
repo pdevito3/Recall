@@ -74,7 +74,7 @@ public class TelemetryNameAnalyzerTests
 
     [Test]
     [Arguments("""using var activity = Telemetry.Trace([("app.bulk_insert.row_count", 1)], "database.bulk_insert");""")]
-    [Arguments("""using var trace = Telemetry.TraceRoot([("app.db_context", id)], "dpop.replay_cache.cleanup");""")]
+    [Arguments("""using var trace = Telemetry.TraceRoot([("app.db_context", id)], "auth.sweep");""")]
     [Arguments("""Telemetry.AddEvent([("app.race.run", 1)], "race.lost");""")]
     [Arguments("""Activity.Current?.AddEvent(new ActivityEvent("migration.lock_acquired"));""")]
     [Arguments("""var users = dbContext.Users.TagWithOperationCallSite("users.get_by_id").ToList();""")]

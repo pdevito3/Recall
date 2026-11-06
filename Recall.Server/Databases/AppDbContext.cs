@@ -110,7 +110,7 @@ public class AppDbContext(
 
     internal bool HasUnsavedActions => _recordedActions.Count > 0;
 
-    internal bool HoldsRootLock { get; set; }
+    internal RootLock? HeldRootLock { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

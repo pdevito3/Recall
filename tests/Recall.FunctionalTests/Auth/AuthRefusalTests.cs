@@ -179,6 +179,135 @@ public class AuthRefusalTests
     }
 
     [Test]
+    public async Task a_token_answer_that_cannot_be_decompressed_is_refused()
+    {
+        // Arrange
+        using var browser = NewBrowser();
+        var authorize = await browser.StartWebAsync();
+
+        // Act
+        var response = await browser.FinishAtProviderAsync(authorize, new StubLogin(NewSubject()) { TokenBodyIsCorrupt = true });
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).ShouldContain("<h1>Sign-in failed</h1>");
+        browser.SessionCookie.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task a_token_answer_with_a_lone_surrogate_in_the_id_token_is_refused()
+    {
+        // Arrange
+        using var browser = NewBrowser();
+        var authorize = await browser.StartWebAsync();
+
+        // Act
+        var response = await browser.FinishAtProviderAsync(authorize, new StubLogin(NewSubject()) { TokenBody = """{"id_token":"\ud800"}""" });
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).ShouldContain("<h1>Sign-in failed</h1>");
+        browser.SessionCookie.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task an_access_token_that_no_header_can_carry_is_refused()
+    {
+        // Arrange
+        using var browser = NewBrowser();
+        var authorize = await browser.StartWebAsync();
+
+        // Act
+        var response = await browser.FinishAtProviderAsync(authorize, new StubLogin(NewSubject()) { AccessToken = "two\nlines" });
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).ShouldContain("<h1>Sign-in failed</h1>");
+        browser.SessionCookie.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task a_userinfo_answer_that_cannot_be_decompressed_leaves_the_login_on_the_id_token()
+    {
+        // Arrange
+        using var browser = NewBrowser();
+        var authorize = await browser.StartWebAsync();
+
+        // Act
+        var response = await browser.FinishAtProviderAsync(authorize, new StubLogin(NewSubject()) { UserinfoBodyIsCorrupt = true });
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        browser.SessionCookie.ShouldNotBeNull();
+    }
+
+    [Test]
+    public async Task a_userinfo_answer_with_a_lone_surrogate_leaves_the_login_on_the_id_token()
+    {
+        // Arrange
+        using var browser = NewBrowser();
+        var authorize = await browser.StartWebAsync();
+
+        // Act
+        var response = await browser.FinishAtProviderAsync(authorize, new StubLogin(NewSubject()) { UserinfoBody = """{"sub":"\ud800"}""" });
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        browser.SessionCookie.ShouldNotBeNull();
+    }
+
+    [Test]
+    public async Task a_userinfo_answer_of_another_person_is_refused_also_with_a_claim_that_cannot_be_read()
+    {
+        // Arrange
+        using var browser = NewBrowser();
+        var authorize = await browser.StartWebAsync();
+
+        // Act
+        var response = await browser.FinishAtProviderAsync(authorize, new StubLogin(NewSubject()) { UserinfoBody = """{"sub":"another-person","name":"\ud800"}""" });
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).ShouldContain("<h1>Sign-in failed</h1>");
+        browser.SessionCookie.ShouldBeNull();
+    }
+
+    [Test]
+    [Arguments("bogus")]
+    [Arguments("utf-7")]
+    public async Task a_token_answer_with_a_charset_that_cannot_be_read_is_refused(string charset)
+    {
+        // Arrange
+        using var browser = NewBrowser();
+        var authorize = await browser.StartWebAsync();
+
+        // Act
+        var response = await browser.FinishAtProviderAsync(authorize, new StubLogin(NewSubject()) { TokenCharset = charset });
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).ShouldContain("<h1>Sign-in failed</h1>");
+        browser.SessionCookie.ShouldBeNull();
+    }
+
+    [Test]
+    [Arguments("bogus")]
+    [Arguments("utf-7")]
+    public async Task a_userinfo_answer_with_a_charset_that_cannot_be_read_leaves_the_login_on_the_id_token(string charset)
+    {
+        // Arrange
+        using var browser = NewBrowser();
+        var authorize = await browser.StartWebAsync();
+
+        // Act
+        var response = await browser.FinishAtProviderAsync(authorize, new StubLogin(NewSubject()) { UserinfoCharset = charset });
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        browser.SessionCookie.ShouldNotBeNull();
+    }
+
+    [Test]
     [Arguments("[]")]
     [Arguments("\"text\"")]
     [Arguments("{}")]
@@ -406,9 +535,8 @@ public class AuthRefusalTests
 
     [Test]
     [Arguments("/auth/login?returnUrl=https%3A%2F%2Fevil.test%2F", "/auth/oidc/stub/start?client=web&returnUrl=%2F")]
-    [Arguments("/bff/login?returnUrl=https%3A%2F%2Fevil.test%2F", "/auth/login?returnUrl=%2F")]
-    [Arguments("/bff/login?returnUrl=%2F%2Fevil.test", "/auth/login?returnUrl=%2F")]
-    public async Task an_open_redirect_in_the_login_routes_is_dropped(string url, string expected)
+    [Arguments("/auth/login?returnUrl=%2F%2Fevil.test", "/auth/oidc/stub/start?client=web&returnUrl=%2F")]
+    public async Task an_open_redirect_in_the_login_route_is_dropped(string url, string expected)
     {
         // Arrange
         using var browser = NewBrowser();

@@ -5,7 +5,7 @@ using Recall.Server.Exceptions;
 /// <summary>
 /// Each operator of QueryKit on each field of a list, with null, one value, and a list, and a sort on each field. The
 /// list runs the query, or it refuses the value with a <see cref="QueryInputException"/>, which the endpoints give as
-/// 400. Any other exception is a 500 on HTTP, an "An error occurred" result on MCP, and UNKNOWN on gRPC.
+/// 400.
 /// </summary>
 public static class ListFilterSweep
 {

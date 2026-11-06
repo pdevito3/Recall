@@ -13,4 +13,6 @@ public interface ILoginMode
     string Kind { get; }
 
     Task<LoginModeState> ProbeAsync(CancellationToken cancellationToken);
+
+    Task<string?> ProviderLogoutUrlAsync(CancellationToken cancellationToken);
 }

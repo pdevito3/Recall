@@ -15,10 +15,6 @@ using Recall.Server.Resources.Entrypoints.Auth;
 using Recall.Server.Resources.Entrypoints.Http;
 using Recall.Server.Resources.Entrypoints.Mcp;
 using Recall.SharedTestHelpers.EntityGraphs;
-using global::Grpc.AspNetCore.Server;
-using global::Grpc.Core;
-using global::Google.Protobuf;
-using global::Google.Protobuf.Reflection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -39,8 +35,6 @@ public class EndpointAccessSweepTests : TestBase
     {
         ["GetTenant"] = new("Each member reads the own tenant. The tenant filter hides each other tenant."),
         ["GetTenantList"] = new("Each member lists the own tenant. The tenant filter hides each other tenant."),
-        ["/recall.tenants.v1.TenantsService/GetTenant"] = new("The gRPC method of GetTenant."),
-        ["/recall.tenants.v1.TenantsService/ListTenants"] = new("The gRPC method of GetTenantList."),
         ["GetCurrentUser"] = new("Each signed-in caller reads the own identity. It takes no ID, and its one read is the own user row behind the tenant filter."),
         ["get_tenant"] = new("ToolAccessKind.Read. Each member reads the own tenant, and the tenant filter hides the others."),
         ["list_tenants"] = new("ToolAccessKind.Read. Each member lists the own tenant, and the tenant filter hides the others."),
@@ -84,19 +78,13 @@ public class EndpointAccessSweepTests : TestBase
         [AuthRoutes.Token] = "The code and PKCE verifier, or the refresh token, prove this request. AuthRefusalTests covers each refusal.",
         [AuthRoutes.Logout] = "Tolerant. It ends only a session that the request proves, and it shows no tenant data.",
         [AuthRoutes.RevokeOthers] = "Each session ends only the other sessions of its own user. AppSessionTests covers it.",
-        [AuthRoutes.Me] = "Each session reads its own identity. It takes no ID. AppSessionTests covers it.",
-        [AuthRoutes.BffLogin] = "Public. A redirect to the sign-in page. R4 deletes it.",
-        [AuthRoutes.BffUser] = "Each web session reads its own claims. It takes no ID. R4 deletes it.",
-        [AuthRoutes.BffLogout] = "The sid of the session proves this GET. AppSessionTests covers it. R4 deletes it.",
+        [AuthRoutes.Me] = "Each session reads its own identity, and a visitor with no session gets 204. It takes no ID. AppSessionTests covers it.",
     };
 
     // The sample body of an update sends version 0, so the control call of an update gets the stale-version code
     private static readonly SurfaceCodes HttpCodes = new("403", "404", "409", "401", code => code[0] == '2');
     // /mcp refuses a call with no token before a tool runs. TenantMcpToolTests checks that 401.
     private static readonly SurfaceCodes McpCodes = new("permission_denied", "not_found", "aborted", null, code => code == "ok");
-    private static readonly SurfaceCodes GrpcCodes = new(
-        nameof(StatusCode.PermissionDenied), nameof(StatusCode.NotFound), nameof(StatusCode.Aborted),
-        nameof(StatusCode.Unauthenticated), code => code == nameof(StatusCode.OK));
 
     private static Assembly ServerAssembly => typeof(EndpointDiscovery).Assembly;
 
@@ -110,7 +98,6 @@ public class EndpointAccessSweepTests : TestBase
         var document = await OpenApiDocumentTests.LoadDocumentAsync();
         var routes = Services.GetRequiredService<EndpointDataSource>().Endpoints
             .OfType<RouteEndpoint>()
-            .Where(e => !IsGrpcRoute(e))
             .ToList();
         var versioned = routes
             .Where(e => e.RoutePattern.RawText?.StartsWith(EndpointDiscovery.VersionedRoutePrefix, StringComparison.Ordinal) == true)
@@ -189,70 +176,12 @@ public class EndpointAccessSweepTests : TestBase
         report.ShouldHaveNoGaps();
     }
 
-    [Test]
-    public async Task each_grpc_method_denies_a_member_with_no_permission_and_hides_the_records_of_other_tenants()
-    {
-        // Arrange
-        var scenario = await SweepScenario.AddAsync();
-        // Reflection, a test: it finds the generated base class of each gRPC service of the Server, and reads the
-        // descriptor of the service from the static class that Grpc.Tools generates next to it.
-        var descriptors = ServerAssembly.GetTypes()
-            .Where(type => type is { IsClass: true, IsAbstract: false })
-            .Select(type => type.BaseType?.GetCustomAttribute<BindServiceMethodAttribute>())
-            .OfType<BindServiceMethodAttribute>()
-            .Select(binding => (Google.Protobuf.Reflection.ServiceDescriptor)binding.BindType.GetProperty("Descriptor")!.GetValue(null)!)
-            .DistinctBy(service => service.FullName)
-            .SelectMany(service => service.Methods)
-            .ToDictionary(method => $"/{method.Service.FullName}/{method.Name}");
-        var mapped = Services.GetRequiredService<EndpointDataSource>().Endpoints
-            .Where(e => e.Metadata.GetMetadata<GrpcMethodMetadata>() is not null)
-            .ToList();
-        var methods = mapped
-            .Where(e => descriptors.ContainsKey(GrpcEntrypoint.NameOf(e)))
-            .Select(e => GrpcEntrypoint.From(e, descriptors[GrpcEntrypoint.NameOf(e)]))
-            .OrderBy(m => m.Target.Key, StringComparer.Ordinal)
-            .ToList();
-        var mappedMethods = mapped.Select(GrpcEntrypoint.NameOf).ToHashSet();
-        var methodsWithNoDescriptor = mappedMethods
-            .Where(name => !descriptors.ContainsKey(name))
-            .Select(name => $"gRPC {name}: it is mapped, but no service of the Server implements it, so the sweep has no "
-                + "descriptor to build its request. Implement it in the Server, or sweep it in its own test.");
-        var unmappedMethods = descriptors.Keys
-            .Where(name => !mappedMethods.Contains(name))
-            .Select(name => $"gRPC {name}: the Server implements its service, but no endpoint maps it, so the sweep did not call it.");
-        using var channel = CreateGrpcChannel();
-        var invoker = channel.CreateCallInvoker();
-
-        // Act
-        var report = await SweepAsync(scenario, methods, m => m.Target, GrpcCodes, async (method, ids) =>
-        {
-            try
-            {
-                await invoker.AsyncUnaryCall(method.RawMethod, null, new CallOptions(), method.RequestFor(ids));
-                return new Outcome(nameof(StatusCode.OK), "");
-            }
-            catch (RpcException exception)
-            {
-                return new Outcome(exception.StatusCode.ToString(), exception.Status.Detail);
-            }
-        }, [.. unmappedMethods, .. methodsWithNoDescriptor]);
-
-        // Assert
-        report.WriteCoverageTable();
-        report.ShouldHaveNoGaps();
-    }
-
     // Reflection, a test: it walks the outer types of a nested type
     private static IEnumerable<Type> TypeAndOuterTypes(Type? type)
     {
         for (; type is not null; type = type.DeclaringType)
             yield return type;
     }
-
-    // gRPC also maps a route that answers Unimplemented for a method that no service has
-    private static bool IsGrpcRoute(RouteEndpoint endpoint)
-        => endpoint.Metadata.GetMetadata<GrpcMethodMetadata>() is not null
-            || endpoint.RoutePattern.Parameters.Any(p => p.ParameterPolicies.Any(policy => policy.Content == "grpcunimplemented"));
 
     private async Task<SweepReport> SweepAsync<T>(
         SweepScenario scenario,
@@ -344,10 +273,6 @@ public class EndpointAccessSweepTests : TestBase
         }
     }
 
-    /// <param name="IdsByKind">
-    /// One record ID for each kind. The kind is the first route segment, or the domain folder of a tool or a gRPC
-    /// service, for example <c>users</c>.
-    /// </param>
     private sealed record RecordIds(IReadOnlyDictionary<string, string> IdsByKind, string Identifier)
     {
         private static readonly string PermissionName = Permission.ListNames()[0];
@@ -545,43 +470,5 @@ public class EndpointAccessSweepTests : TestBase
                     ? JsonSerializer.SerializeToElement(value)
                     : (object?)JsonSerializer.SerializeToElement(
                         SchemaSample.Of(InputSchema["properties"]![name]!, InputSchema)));
-    }
-
-    private sealed record GrpcEntrypoint(
-        SweepTarget Target, MethodType Type, Method<byte[], byte[]> RawMethod, MessageDescriptor Request, string Kind)
-    {
-        private static readonly Marshaller<byte[]> Bytes = Marshallers.Create(bytes => bytes, bytes => bytes);
-
-        public static string NameOf(Endpoint endpoint) => endpoint.Metadata.GetRequiredMetadata<GrpcMethodMetadata>().Method.FullName;
-
-        public static GrpcEntrypoint From(Endpoint endpoint, MethodDescriptor descriptor)
-        {
-            // Reflection, a test: the kind comes from the namespace of the service type
-            var metadata = endpoint.Metadata.GetRequiredMetadata<GrpcMethodMetadata>();
-            var method = metadata.Method;
-            var request = descriptor.InputType;
-            var target = new SweepTarget(method.FullName, $"gRPC {method.FullName}",
-                request.Fields.InDeclarationOrder().Any(f => RecordIds.NamesARecord(f.Name)));
-            return new GrpcEntrypoint(target, method.Type,
-                new Method<byte[], byte[]>(MethodType.Unary, method.ServiceName, method.Name, Bytes, Bytes),
-                request,
-                KindOfNamespace(metadata.ServiceType.Namespace));
-        }
-
-        public byte[] RequestFor(RecordIds ids)
-        {
-            if (Type != MethodType.Unary)
-                throw new SweepSetupException($"It is a {Type} method, and the sweep sends only unary calls.");
-            var message = Request.Parser.ParseFrom(ByteString.Empty);
-            foreach (var field in message.Descriptor.Fields.InDeclarationOrder())
-            {
-                if (ids.ValueFor(field.Name, Kind) is not { } value)
-                    continue;
-                if (field.FieldType != FieldType.String)
-                    throw new SweepSetupException($"The field {field.Name} is {field.FieldType}, but the sweep sets it with a text.");
-                field.Accessor.SetValue(message, value);
-            }
-            return message.ToByteArray();
-        }
     }
 }

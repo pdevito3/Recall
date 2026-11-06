@@ -10,7 +10,7 @@ The pipeline gives each feature these signals:
 
 | Signal | From | Content |
 |---|---|---|
-| HTTP, gRPC, or MCP span | ASP.NET Core instrumentation | Route, status code, duration |
+| HTTP or MCP span | ASP.NET Core instrumentation | Route, status code, duration |
 | Tool tags on the MCP span | `McpCallTelemetry` | `gen_ai.tool.name`, the `app.caller.*` tags, and the `error.type` of a failed tool call. A call that fails before its feature runs has only this span. |
 | Feature slice span, for example `UpdateTenant.Command` | `RequestTracingBehavior` | Duration, `error.type`, the `Error` status for a server error |
 | Caller tags on the feature span | `CallerIdentityBehavior` | `app.caller.kind`, and the `app.caller.subject`, `app.caller.client_id`, `app.caller.agent_id`, and `app.caller.tenant_id` that the caller has |
@@ -94,12 +94,12 @@ Write telemetry to answer a question that a person asks during an incident. If n
    - Name it `app.[entities].[past-tense verb]`, for example `app.users.role_changed`. Give the unit in braces, for example `{user}`.
    - Give it tags from a small fixed set of values only, such as a role, a reason, or an outcome.
 9. Give background work its own trace with `Telemetry.TraceRoot`.
-   - Write one `Information` log with the result and the counts, for example "Deleted {Count} expired proofs".
+   - Write one `Information` log with the result and the counts, for example "Deleted {Count} expired login attempts".
    - Catch the exception at the top of the job. Call `Telemetry.RecordError` and write an `Error` log. A background job has no `RequestTracingBehavior` to record it.
-   - See `MigrationHostedService.cs` and the DPoP replay cache cleanup in `DPoPAuthentication.cs`.
+   - See `MigrationHostedService.cs` and `AuthSweepService.cs`.
 10. If a trace must cross a hop that has no `traceparent` header, carry it with `TraceContext`. Examples are a queued message, a stored job row, and a redirect.
     - If the work on the other side continues the same story, make the context the parent of the new span.
-    - If the work is a different story with a cause between the two, add the context as a link. `LoginTraceLink.cs` in the BFF uses a link.
+    - If the work is a different story with a cause between the two, add the context as a link.
 11. Obey the privacy rule. Telemetry carries ids, operation names, counts, and values from a fixed set.
     - Never put personal data or user-entered text in a tag, a log property, or a metric tag. Examples are names, email addresses, and free text.
     - If a log property comes from the caller, such as a path or a header, clean it with `LogValue.Clean`.
@@ -136,7 +136,7 @@ The build refuses a constant name that breaks this table (FSTTEL004) in these ca
 - The metric name of a `Meter.Create...` method, except the platform metrics `app.errors` and `app.request.duration` of `Telemetry`.
 - The property names of a Serilog message template.
 
-A tag key can also start with a namespace in `SemanticConventionNamespaces` of `Recall.SourceGenerators/TelemetryNameAnalyzer.cs`, such as `error.type` or `server.address`. The list is a selection: the OpenTelemetry semantic-convention namespaces and the .NET, gRPC, and MCP namespaces that the packages of the Server emit. A key in another namespace gets FSTTEL004. The list leaves out `user`, `enduser`, and `session`, because this app names those tags `app.user_id` and `app.user.role`.
+A tag key can also start with a namespace in `SemanticConventionNamespaces` of `Recall.SourceGenerators/TelemetryNameAnalyzer.cs`, such as `error.type` or `server.address`. The list is a selection: the OpenTelemetry semantic-convention namespaces and the .NET and MCP namespaces that the packages of the Server emit. A key in another namespace gets FSTTEL004. The list leaves out `user`, `enduser`, and `session`, because this app names those tags `app.user_id` and `app.user.role`.
 
 The build does not check a name in `ActivitySource.StartActivity`, in `Activity.AddTag`, in a metric tag in a `KeyValuePair` or a `TagList`, in a property from `PropertyEnricher`, `LogContext.PushProperty`, or `ForContext`, or in a Microsoft.Extensions.Logging template. Obey the table there yourself.
 
@@ -149,7 +149,7 @@ Before you add a tag name, search the code for a tag with the same meaning. Use 
 | `Error` | A server error that the code caught, or a failure that needs a person | "Could not apply the migrations of {DbContext}" |
 | `Warning` | A degraded path. The request succeeded, but not in the normal way. | "Skipped {Count} rows with no tenant" |
 | `Information` | A state change or a business decision | "Created tenant {TenantId} for new user {UserId}" |
-| `Debug` | Data for a developer only. The default minimum level drops it. | "Sent the request again with the DPoP nonce" |
+| `Debug` | Data for a developer only. The default minimum level drops it. | "Read the discovery document of {Issuer} from the cache" |
 
 Production keeps `Information` and higher (`appsettings.json`). Thus a `Debug` log is not available during an incident.
 
@@ -190,10 +190,15 @@ public async Task<UserDto> Handle(Command request, CancellationToken cancellatio
     var newRole = UserRole.Of(request.Role);
     Activity.Current?.SetTag("app.user.role", newRole.Value);
     // ...
-    var oldRole = user.Role;
-    user.UpdateRole(newRole);
-    // ...
-    await dbContext.SaveChangesAsync(cancellationToken);
+    var (user, oldRole) = await LastAdmin.RunWithTenantLockAsync(dbContext, request.Id, async ct =>
+    {
+        // ...
+        var oldRole = user.Role;
+        user.UpdateRole(newRole);
+        // ...
+        await dbContext.SaveChangesAsync(ct);
+        return (user, oldRole);
+    }, cancellationToken);
 
     if (newRole != oldRole)
     {

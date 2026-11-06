@@ -6,7 +6,6 @@
   </Configurations>
   <Folder Name="/tests/">
     <Project Path="tests/Recall.ArchitectureFixtures/Recall.ArchitectureFixtures.csproj" />
-    <Project Path="tests/Recall.Bff.Tests/Recall.Bff.Tests.csproj" />
     <Project Path="tests/Recall.ContractTests/Recall.ContractTests.csproj" />
     <Project Path="tests/Recall.EntityGraphs.Generators/Recall.EntityGraphs.Generators.csproj" />
     <Project Path="tests/Recall.FunctionalTests/Recall.FunctionalTests.csproj" />
@@ -18,7 +17,6 @@
     <Build Solution="*|Any CPU" />
   </Project>
   <Project Path="Recall.AppHost/Recall.AppHost.csproj" />
-  <Project Path="Recall.Bff/Recall.Bff.csproj" />
   <Project Path="Recall.Server/Recall.Server.csproj" />
   <Project Path="Recall.SourceGenerators/Recall.SourceGenerators.csproj" />
 </Solution>

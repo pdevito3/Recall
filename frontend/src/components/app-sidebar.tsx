@@ -21,6 +21,7 @@ import {
 import { useSidebar } from "@/components/ui/use-sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { useCurrentNavItem } from "@/components/current-nav-item"
+import { UserMenu } from "@/domain/auth/components/user-menu"
 
 const appName = "Recall"
 const appInitials = appName
@@ -104,6 +105,9 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
+          <SidebarMenuItem>
+            <UserMenu />
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <div className="flex items-center justify-center p-2 group-data-[collapsible=icon]:p-0">
               <ThemeToggle />

@@ -18,7 +18,6 @@ The stack today has:
 Recall/
 ├── Recall.AppHost/     # Aspire orchestration (start here)
 ├── Recall.Server/      # Backend API (.NET 10, CQRS, MediatR)
-├── Recall.Bff/         # The old BFF. Nothing runs it, and a later change deletes it
 ├── frontend/           # React SPA (React 19, TanStack, Tailwind)
 ├── tests/              # Test projects
 ├── docs/               # Development guides (backend, telemetry, auth, ...)
@@ -79,7 +78,6 @@ A normal run uses the same ports at each start. All of them are in the block 247
 | 24710 | `webfrontend` (the app URL) | http |
 | 24713 | `server` | https |
 | 24714 | `server` | http |
-| 24715 | `server` | grpc |
 | 24730 | `keycloak` | http |
 | 24731 | `keycloak-postgres` | tcp |
 | 24740 | `zerofactor` | http |
@@ -126,12 +124,12 @@ The first person who signs in becomes the Owner. To select the auth provider of 
                      └──────────┘
 ```
 
-1. The React app has no session, so it navigates to `/bff/login`
+1. The React app has no session, so it navigates to `/auth/login`
 2. The Server redirects to the identity provider
 3. The user authenticates with the provider
 4. The provider redirects back to `/auth/oidc/callback`
 5. The Server adds a session and sets the `recall` cookie, or `__Host-recall` on TLS
-6. The React app calls `/bff/user` to get the user
+6. The React app calls `/auth/me` to get the user
 7. API calls go to the Server at `/api/v1/*`
 
 A native app uses `/auth/status`, the system browser, and `/auth/token`. See [docs/authentication.md](docs/authentication.md).
@@ -142,7 +140,7 @@ The repository has these guides for Claude Code:
 
 - **`AGENTS.md`** - Main agent guide with the architecture and an index of `docs/`
 - **`docs/`** - Guides for the backend, telemetry, multi-tenancy, auth, and frontend
-- **`docs/backend/`** - Backend pattern rules: entities, features, DTOs, endpoints (HTTP, gRPC, MCP), domain events, and EF configurations
+- **`docs/backend/`** - Backend pattern rules: entities, features, DTOs, endpoints (HTTP, MCP), domain events, and EF configurations
 - **`docs/frontend/`** - Frontend pattern rules: server state, client state, and code style
 - **`.claude/skills/`** - Automated scaffolding skills
 

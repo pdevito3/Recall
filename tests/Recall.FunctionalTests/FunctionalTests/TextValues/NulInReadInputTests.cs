@@ -2,10 +2,7 @@ namespace Recall.FunctionalTests.FunctionalTests.TextValues;
 
 using System.Net;
 using System.Net.Http.Json;
-using Recall.Server.Domain.Tenants.Grpc.V1;
 using Recall.SharedTestHelpers.EntityGraphs;
-using global::Google.Rpc;
-using global::Grpc.Core;
 using Microsoft.AspNetCore.Mvc;
 using Shouldly;
 using TestUtilities;
@@ -45,44 +42,6 @@ public class NulInReadInputTests : TestBase
         result.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         var problem = (await result.Content.ReadFromJsonAsync<ValidationProblemDetails>()).ShouldNotBeNull();
         problem.Errors.ShouldHaveSingleItem().Key.ShouldBe(parameter);
-    }
-
-    [Test]
-    public async Task a_nul_in_the_tenant_id_of_a_grpc_get_is_not_found()
-    {
-        // Arrange
-        await SignInAsAdminAsync();
-        using var channel = CreateGrpcChannel();
-        var client = new TenantsService.TenantsServiceClient(channel);
-
-        // Act
-        var exception = await Should.ThrowAsync<RpcException>(
-            async () => await client.GetTenantAsync(new GetTenantRequest { Id = NulId }));
-
-        // Assert
-        exception.StatusCode.ShouldBe(StatusCode.NotFound);
-    }
-
-    [Test]
-    [Arguments("filters")]
-    [Arguments("sortOrder")]
-    public async Task a_nul_in_a_list_value_over_grpc_is_an_invalid_argument_on_the_field(string field)
-    {
-        // Arrange
-        await SignInAsAdminAsync();
-        using var channel = CreateGrpcChannel();
-        var client = new TenantsService.TenantsServiceClient(channel);
-        var request = field == "filters"
-            ? new ListTenantsRequest { Filters = $"Name == \"{Nul}\"" }
-            : new ListTenantsRequest { SortOrder = Nul };
-
-        // Act
-        var exception = await Should.ThrowAsync<RpcException>(async () => await client.ListTenantsAsync(request));
-
-        // Assert
-        exception.StatusCode.ShouldBe(StatusCode.InvalidArgument);
-        exception.GetRpcStatus().ShouldNotBeNull().GetDetail<BadRequest>().ShouldNotBeNull()
-            .FieldViolations.ShouldHaveSingleItem().Field.ShouldBe(field);
     }
 
     [Test]

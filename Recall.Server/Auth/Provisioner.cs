@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Resources;
 using Serilog;
+using Serilog.Events;
 
 public enum LoginFailure
 {
@@ -76,7 +77,20 @@ public sealed class Provisioner(
             .TagWithOperationCallSite("auth.provision.find_link")
             .FirstOrDefaultAsync(l => l.Issuer == identity.Issuer && l.Subject == identity.Subject, cancellationToken);
         if (link is not null)
+        {
+            // This closes the claim, so a file that the operator made and then used through an old link cannot wait for a stranger.
+            if (claim.Take())
+            {
+                // A rerun after a lost race finds nothing left to give, and that is not a claim that changed nothing.
+                claim.GaveBack |= await GiveBackToLinkedAdminAsync(dbContext, link.UserId, cancellationToken);
+                if (!claim.GaveBack)
+                    _logger.Here().Warning(
+                        "A login with a link removed the owner claim file {ClaimFile}, and the claim changed nothing. To claim the Owner, create the file again and sign in with the new identity",
+                        ownerClaim.FilePath);
+            }
+
             return await SignInLinkedAsync(dbContext, link, identity.Profile, cancellationToken);
+        }
 
         var tenants = await dbContext.Tenants
             .TagWithOperationCallSite("auth.provision.tenants_ever")
@@ -123,18 +137,61 @@ public sealed class Provisioner(
         AppDbContext dbContext, ExternalIdentity identity, string tenantId, CancellationToken cancellationToken)
     {
         var adminRole = UserRole.Admin().Value;
-        var admin = await dbContext.Users
-            .TagWithOperationCallSite("auth.provision.oldest_admin")
-            .Where(u => u.TenantId == tenantId && u.Role.Value == adminRole && u.Identifier == u.Id)
-            .OrderBy(u => u.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-        if (admin is null)
-            return await JoinAsync(dbContext, identity, tenantId, UserRole.Admin(), cancellationToken);
+        var linked = await RootLock.Tenant.RunSharedAsync<ProvisionOutcome?>(dbContext, tenantId, async ct =>
+        {
+            var admin = await dbContext.Users
+                .TagWithOperationCallSite("auth.provision.oldest_admin")
+                .Include(u => u.UserPermissions)
+                .Where(u => u.TenantId == tenantId && u.Role.Value == adminRole && u.Identifier == u.Id)
+                .OrderBy(u => u.Id)
+                .FirstOrDefaultAsync(ct);
+            if (admin is null)
+                return null;
 
-        dbContext.Set<ExternalLogin>().Add(LinkOf(identity, admin.Id));
-        await dbContext.SaveChangesAsync(cancellationToken);
-        _logger.Here().Warning("The owner claim file linked a login of issuer {Issuer} to user {UserId}", identity.Issuer, admin.Id);
-        return new ProvisionOutcome.Provisioned(admin.Id, admin.FullName);
+            GiveBackEachPermission(dbContext, admin);
+            dbContext.Set<ExternalLogin>().Add(LinkOf(identity, admin.Id));
+            await dbContext.SaveChangesAsync(ct);
+            _logger.Here().Warning("The owner claim file linked a login of issuer {Issuer} to user {UserId} and gave back each Admin permission", identity.Issuer, admin.Id);
+            return new ProvisionOutcome.Provisioned(admin.Id, admin.FullName);
+        }, cancellationToken);
+
+        return linked ?? await JoinAsync(dbContext, identity, tenantId, UserRole.Admin(), cancellationToken);
+    }
+
+    /// <summary>A permission that a later release adds reaches no Admin, and only a claim recovers that when no Admin holds each one.</summary>
+    private async Task<bool> GiveBackToLinkedAdminAsync(AppDbContext dbContext, string userId, CancellationToken cancellationToken)
+    {
+        var tenantId = await dbContext.Users
+            .TagWithOperationCallSite("auth.provision.linked_tenant")
+            .Where(u => u.Id == userId)
+            .Select(u => u.TenantId)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (tenantId is null)
+            return false;
+
+        var adminRole = UserRole.Admin().Value;
+        return await RootLock.Tenant.RunSharedAsync(dbContext, tenantId, async ct =>
+        {
+            var admin = await dbContext.Users
+                .TagWithOperationCallSite("auth.provision.linked_admin")
+                .Include(u => u.UserPermissions)
+                .FirstOrDefaultAsync(u => u.Id == userId && u.Role.Value == adminRole, ct);
+            if (admin is null || !GiveBackEachPermission(dbContext, admin))
+                return false;
+
+            await dbContext.SaveChangesAsync(ct);
+            _logger.Here().Warning("The owner claim file {ClaimFile} gave back each Admin permission to the linked user {UserId}", ownerClaim.FilePath, admin.Id);
+            return true;
+        }, cancellationToken);
+    }
+
+    private static bool GiveBackEachPermission(AppDbContext dbContext, User admin)
+    {
+        var held = admin.UserPermissions.ToList();
+        admin.AddPermissions(admin.Role.GetDefaultPermissions());
+        var given = admin.UserPermissions.Except(held).ToList();
+        dbContext.UserPermissions.AddRange(given);
+        return given.Count > 0;
     }
 
     private async Task<ProvisionOutcome> AddFirstOwnerAsync(
@@ -167,7 +224,9 @@ public sealed class Provisioner(
             dbContext.Set<ExternalLogin>().Add(LinkOf(identity, user.Id));
             await dbContext.SaveChangesAsync(ct);
 
-            _logger.Here().Information("A login added user {UserId} to tenant {TenantId} with role {Role}", user.Id, tenantId, role.Value);
+            // Only a claim adds an Admin here, and the operator must be able to find who got it.
+            var level = role.Value == UserRole.Admin().Value ? LogEventLevel.Warning : LogEventLevel.Information;
+            _logger.Here().Write(level, "A login added user {UserId} to tenant {TenantId} with role {Role}", user.Id, tenantId, role.Value);
             return new ProvisionOutcome.Provisioned(user.Id, user.FullName);
         }, cancellationToken);
     }
@@ -188,6 +247,8 @@ public sealed class Provisioner(
     private sealed class ClaimOfThisLogin(OwnerClaim ownerClaim)
     {
         private bool _won;
+
+        public bool GaveBack { get; set; }
 
         public bool Take() => _won = _won || ownerClaim.TryConsume();
     }

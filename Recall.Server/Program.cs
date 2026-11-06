@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Recall.Server;
 using Recall.Server.Databases;
@@ -29,6 +30,8 @@ try
     builder.AddServiceDefaults(); // OpenTelemetry, Serilog, health checks, resilience, service discovery
     builder.Services.AddHostedService<MigrationHostedService<AppDbContext>>();
     builder.ConfigureServices();
+    if (OwnerOnlyFiles.KeysDirectory(builder.Configuration) is { } keys)
+        builder.Services.AddDataProtection().SetApplicationName("Recall").PersistKeysToFileSystem(new DirectoryInfo(keys));
     builder.AddEntrypoints();
     OpenApiBuildTime.RemoveHostedServices(builder.Services);
 
@@ -43,11 +46,19 @@ try
     app.UseSerilogRequestLogging(options =>
     {
         options.GetLevel = HostExtensions.RequestLogLevel;
+        // The Serilog default, with the path from the browser cleaned of CR, LF, and the other control characters
+        options.GetMessageTemplateProperties = (httpContext, requestPath, elapsed, statusCode) =>
+        [
+            new LogEventProperty("RequestMethod", new ScalarValue(httpContext.Request.Method)),
+            new LogEventProperty("RequestPath", new ScalarValue(LogValue.Clean(requestPath))),
+            new LogEventProperty("StatusCode", new ScalarValue(statusCode)),
+            new LogEventProperty("Elapsed", new ScalarValue(elapsed)),
+        ];
         options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
         {
-            diagnosticContext.Set("RequestHost", httpContext.Request.Host.Value);
+            diagnosticContext.Set("RequestHost", LogValue.Clean(httpContext.Request.Host.Value));
             diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme);
-            diagnosticContext.Set("UserAgent", httpContext.Request.Headers.UserAgent.ToString());
+            diagnosticContext.Set("UserAgent", LogValue.Clean(httpContext.Request.Headers.UserAgent.ToString()));
         };
     });
 

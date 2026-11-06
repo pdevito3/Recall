@@ -5,10 +5,8 @@ name: CI
 # The job also builds, lints, and tests the frontend against the contract, and runs the functional suite of the frontend. The test job runs the .NET tests.
 # The line-endings job fails when a tracked text file has a CR. .gitattributes stores each text file with LF.
 # The template-name job fails when code or config has the template name. See docs/adr/0017-template-fixes-by-cherry-pick.md.
-# The grpc-contract job lints the .proto files and fails on a breaking change against main. See buf.yaml.
 # The new-feature job runs scripts/ci/new-feature.cs, which runs scripts/new-feature.cs for two sample entities, then lints, builds, and tests the result.
 # A job that calls a script under scripts/ci/ keeps its steps there, so that an agent can run them locally. The script works on a throwaway copy of the checkout.
-# There is no nightly run. See section 7 of docs/specs/home-rolled-bff.md.
 
 on:
   pull_request:
@@ -139,32 +137,6 @@ jobs:
             exit 1
           fi
 
-  grpc-contract:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          persist-credentials: false
-          # buf breaking reads the contract of main from the local clone
-          fetch-depth: 0
-
-      - uses: bufbuild/buf-action@85aebf73123b5c15fd5528aaecbf9129cddf7fa7 # v1.6.0
-        with:
-          version: 1.74.0
-          setup_only: true
-
-      - name: Lint the gRPC contract
-        run: buf lint
-
-      - name: Fail on a breaking change to the gRPC contract
-        run: |
-          if git ls-tree -r --name-only origin/main -- Recall.Server/Domain | grep -q '\.proto$'; then
-            buf breaking --against '.git#ref=refs/remotes/origin/main'
-          else
-            echo "main has no gRPC contract yet, so there is nothing to compare."
-          fi
-
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -184,9 +156,8 @@ jobs:
           restore-keys: nuget-${{ runner.os }}-
 
       # The api-contract job checks the OpenAPI document, so this build does not write it again.
-      # The bff-tests job runs the BFF tests, so this job skips them.
       - name: Run the tests
-        run: dotnet test --solution Recall.slnx -p:OpenApiGenerateDocuments=false -p:SkipBffTests=true
+        run: dotnet test --solution Recall.slnx -p:OpenApiGenerateDocuments=false
 
   new-feature:
     runs-on: ubuntu-latest
@@ -211,11 +182,6 @@ jobs:
           key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
           restore-keys: nuget-${{ runner.os }}-
 
-      - uses: bufbuild/buf-action@85aebf73123b5c15fd5528aaecbf9129cddf7fa7 # v1.6.0
-        with:
-          version: 1.74.0
-          setup_only: true
-
       - name: Run the steps of the job
         run: dotnet run scripts/ci/new-feature.cs -- --examples ${{ matrix.examples }}
 
@@ -227,7 +193,6 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      bff: ${{ steps.filter.outputs.bff }}
       stack: ${{ steps.filter.outputs.stack }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -240,24 +205,10 @@ jobs:
         if: github.event_name != 'workflow_dispatch'
         with:
           filters: |
-            bff:
-              - 'Recall.Bff/**'
-              - 'tests/Recall.Bff.Tests/**'
-              - 'tests/Recall.SharedTestHelpers/Utilities/PauseAtQuery.cs'
-              - 'tests/Recall.SharedTestHelpers/Utilities/SqliteTestDatabase.cs'
-              - 'Recall.Server/Resources/Extensions/CallerCancellationHealthCheck.cs'
-              - 'Recall.Server/Databases/Sqlite/NetworkMountCheck.cs'
-              - 'Recall.Server/Databases/Sqlite/SqliteConnectionSetup.cs'
-              - 'Recall.Server/Databases/Sqlite/SqliteFile.cs'
-              - 'Recall.Server/Databases/Sqlite/UtcTextConverter.cs'
-              - 'Recall.Server/Databases/Sqlite/UtcTextParameters.cs'
-              - 'Directory.Packages.props'
-              - 'Directory.Build.props'
-              - 'global.json'
             stack:
               - 'Recall.AppHost/**'
-              - 'Recall.Server/Auth/**'
-              - 'Recall.Server/Resources/Entrypoints/**'
+              - 'Recall.Server/**'
+              - 'Recall.SourceGenerators/**'
               - 'Directory.Packages.props'
               - 'Directory.Build.props'
               - 'global.json'
@@ -272,40 +223,6 @@ jobs:
               - '.github/workflows/ci.yml'
               - '.github/workflows/e2e.yml'
               - '.github/actions/install-chromium/**'
-
-  bff-tests:
-    needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.bff == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
-        with:
-          dotnet-version: 10.0.4xx # One SDK band. A new band can add style errors, so move to it in its own PR.
-
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
-          restore-keys: nuget-${{ runner.os }}-
-
-      # Without --results-directory, Microsoft.Testing.Platform writes the reports under bin/ of the test project.
-      - name: Run the BFF tests
-        run: >-
-          dotnet test --project tests/Recall.Bff.Tests/Recall.Bff.Tests.csproj
-          --report-trx --results-directory "$GITHUB_WORKSPACE/TestResults"
-
-      - name: Upload the test report
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: bff-tests
-          path: TestResults/
-          retention-days: 30
 
   e2e:
     needs: changes

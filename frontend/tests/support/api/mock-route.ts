@@ -2,7 +2,6 @@ export type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete'
 
 export interface MockRoute {
   method: HttpMethod
-  /** The full path, for example `/api/v1/users/me` or `/bff/user`. */
   path: string
   status: number
   body?: unknown
@@ -11,9 +10,9 @@ export interface MockRoute {
   delayMs?: number
 }
 
-// The SPA sends these paths to the BFF. The Vite dev server serves the source files of the app under /src,
+// The SPA sends these paths to the Server. The Vite dev server serves the source files of the app under /src,
 // so a source file such as /src/api/generated/... does not match.
-const mockedPrefixes = ['/api/', '/bff/']
+const mockedPrefixes = ['/api/', '/auth/']
 
 export const isMockedPath = (pathname: string) => mockedPrefixes.some((prefix) => pathname.startsWith(prefix))
 

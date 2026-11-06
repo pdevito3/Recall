@@ -4,7 +4,9 @@
 
 > Changed by PR R1 of the plan: `bffdb` is now the SQLite file `bff.db`, in the data directory next to `recall.db`. One process owns the file, so the refresh lock is in the process, and the text about a Postgres server, an advisory lock, and many BFF instances describes the state before R1.
 
-The BFF stores each BFF session on the server, in a new `bffdb` database on the same Postgres server as `appdb`. The cookie holds only an opaque key. A store seam has an EF Core adapter for production and an in-memory adapter for tests. The same `DbContext` holds the Data Protection keys and the replay cache of the logout tokens, and a Postgres advisory lock in `bffdb` stops two BFF instances from refreshing one refresh token at the same time. As a result, back-channel logout can end a BFF session with no browser present, and the BFF can run as many instances. The design is in [the home-rolled BFF spec](../specs/home-rolled-bff.md#31-bff-sessions-and-the-store).
+> Changed by PR R4 of the plan: the BFF, `bff.db`, and each BFF session are gone. An auth session is a row in `auth_sessions` ([ADR 0014](0014-app-owned-identity.md)), and the Data Protection keys are files in `/data/keys`. So a deploy still logs out no user, and the rest of this ADR is history.
+
+The BFF stores each BFF session on the server, in a new `bffdb` database on the same Postgres server as `appdb`. The cookie holds only an opaque key. A store seam has an EF Core adapter for production and an in-memory adapter for tests. The same `DbContext` holds the Data Protection keys and the replay cache of the logout tokens, and a Postgres advisory lock in `bffdb` stops two BFF instances from refreshing one refresh token at the same time. As a result, back-channel logout can end a BFF session with no browser present, and the BFF can run as many instances. The design was in the home-rolled BFF spec, which R4 deleted. `git log -- docs/specs/home-rolled-bff.md` finds it.
 
 ## Considered options
 

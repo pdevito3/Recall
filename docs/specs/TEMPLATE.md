@@ -68,9 +68,9 @@ The words are the text of a denial (see [messages.md](../messages.md)).
 
 ## 5. Endpoints and tools
 
-| Feature | HTTP | gRPC | MCP tool | Permission |
-|---|---|---|---|---|
-| `AddWorkOrder` | `POST /api/v1/work-orders` | | `add_work_order` | `manage_work_orders` |
+| Feature | HTTP | MCP tool | Permission |
+|---|---|---|---|
+| `AddWorkOrder` | `POST /api/v1/work-orders` | `add_work_order` | `manage_work_orders` |
 
 Add only the entrypoints that the callers of a feature need (see [endpoints.md](../backend/endpoints.md)).
 

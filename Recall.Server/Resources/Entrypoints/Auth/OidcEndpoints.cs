@@ -51,7 +51,8 @@ public static class OidcEndpoints
         }, cancellationToken);
 
         BindingCookie.Write(http.Response, http.Request, stateHash, binding, expiresAt);
-        return new AuthRedirect(mode.BuildAuthorizeUrl(discovery, state, nonce, verifier, redirectUri));
+        var promptLogin = OneValue(http.Request.Query, "prompt") == AuthPages.PromptLogin;
+        return new AuthRedirect(mode.BuildAuthorizeUrl(discovery, state, nonce, verifier, redirectUri, promptLogin));
     }
 
     private static async Task<IResult> CallbackAsync(
@@ -99,7 +100,8 @@ public static class OidcEndpoints
         var acceptsHtml = request.GetTypedHeaders().Accept
             .Any(accept => HtmlTypes.Contains(accept.MediaType.ToString(), StringComparer.OrdinalIgnoreCase));
         return acceptsHtml
-            ? AuthPages.ProviderIsDown(displayName)
+            // The same start, so that a native app keeps its flow and a web login keeps its return path.
+            ? AuthPages.ProviderIsDown(displayName, request.Path + request.QueryString)
             : Results.Json(new { error = "idp_unreachable", message = AuthPages.ProviderDown(displayName) }, statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 

@@ -65,7 +65,7 @@ Wrap the `cva` call of a `*-variants.ts` file in `withMergedClasses` from `@/lib
 - The `X-CSRF: 1` header is necessary for the CSRF protection of the Server.
 - An error response that has problem details becomes a `ProblemDetailsError`. The client shows it as a toast by default. To stop the toast, send `{ suppressErrorToast: true }` with the request.
 
-The generated API clients send each request through `apiClient`. `main.tsx` imports `lib/api-client.ts` to connect them before the first request. Use `apiClient` directly only for endpoints that are not in the OpenAPI document, such as `/bff/user`.
+The generated API clients send each request through `apiClient`. `main.tsx` imports `lib/api-client.ts` to connect them before the first request. Use `apiClient` directly only for endpoints that are not in the OpenAPI document, such as `/auth/me`.
 
 A generated client has two error modes. The `throwOnError` option selects the mode:
 
@@ -154,35 +154,37 @@ Each area keeps its hook and its query key factory in `domain/[area]/apis/`. The
 ```typescript
 import { useCurrentUser } from '@/domain/users/apis/get-current-user'
 import { useAuth } from '@/domain/auth/apis/get-user'
-import { useAuthActions } from '@/domain/auth/apis/auth-actions'
+import { useLogout } from '@/domain/auth/apis/auth-actions'
 
 const { data, isLoading, error } = useCurrentUser()
-const { isLoggedIn, username, logoutUrl } = useAuth()
-const { logout } = useAuthActions()
+const { isLoggedIn, username } = useAuth()
+const logout = useLogout()
 ```
 
 Never copy server state into local state. See [server-state.md](frontend/server-state.md).
 
 ## Session
 
-Each page needs a session. The root route (`routes/__root.tsx`) reads `authClaimsQuery` before it shows a page:
+Each page needs a session. The root route (`routes/__root.tsx`) reads `authUserQuery` before it shows a page:
 
 | State of the session query | The root route shows |
 |---|---|
 | Loading | Nothing |
-| No session (`null`) | Nothing. It goes to `/bff/login` with the path, the query, and the hash as `returnUrl`. |
+| No session (`null`) | Nothing. It goes to `/auth/login` with the path, the query, and the hash as `returnUrl`. |
 | Error, and no earlier answer | An alert and Try Again. It does not go to the login. While the check runs again, Try Again is pending and takes no press. |
-| Claims | The layout and the page |
+| A user | The layout and the page |
 
-The app does not poll the session. It finds an ended session at the next call to an endpoint that needs a user: the Server answers 401. A call to an endpoint that allows anonymous callers still answers 200. The Server also answers 401 while the BFF session lives, for example when a token refresh fails for a short time. So on a 401, `apiClient` checks the session again and waits for the answer (`onUnauthorized` in `main.tsx`):
+The app does not poll the session. It finds an ended session at the next call to an endpoint that needs a user: the Server answers 401. A call to an endpoint that allows anonymous callers still answers 200. The Server also answers 401 while the auth session lives, for example when a proxy strips the `X-CSRF` header. So on a 401, `apiClient` checks the session again and waits for the answer (`setSessionEndedCheck` in `main.tsx`):
 
 | The check gives | `apiClient` |
 |---|---|
 | `null` | Shows no toast. The root route goes to the login. |
-| Claims | Shows "The Server did not accept your sign-in for this request." unless the call sets `suppressErrorToast`. The page stays. |
-| An error | Shows the same toast as for claims. The root route keeps the last answer. |
+| A user | Shows "The Server did not accept your sign-in for this request." unless the call sets `suppressErrorToast`. The page stays. |
+| An error | Shows the same toast as for a user. The root route keeps the last answer. |
 
-A 401 of `/bff/user` is a failed check. It does not start a check again.
+A 401 of `/auth/me` is a failed check. It does not start a check again.
+
+After a logout, the login goes to the signed-out page and not to the provider. A call that answers 401 after the logout finds no session, and a login with a return URL would abort the navigation to that page.
 
 The session check shows no error toast. The alert is the only message for a failed check. A failed refetch shows no message of its own, because the page still works with the last answer.
 
@@ -266,7 +268,7 @@ import { Link } from '@/components/ui/link'
 
 ESLint does not let you import `Link` from `react-aria-components`, `@animate-ui/react/primitives/react-aria`, or `@tanstack/react-router`.
 
-Other React Aria components take a plain `href`, for example `MenuItem` and `Tab`. The root route wraps the app in `HrefRouterProvider` from `@/components/ui/link`, so the router goes to the `href` with no page load. TypeScript does not check a plain `href`, so for a link to a route, prefer a typed wrapper made with `createRouterLink`. An `href` that has no route in the SPA, such as `/bff/login`, loads the page from the server.
+Other React Aria components take a plain `href`, for example `MenuItem` and `Tab`. The root route wraps the app in `HrefRouterProvider` from `@/components/ui/link`, so the router goes to the `href` with no page load. TypeScript does not check a plain `href`, so for a link to a route, prefer a typed wrapper made with `createRouterLink`. An `href` that has no route in the SPA, such as `/auth/login`, loads the page from the server.
 
 ## Theme
 

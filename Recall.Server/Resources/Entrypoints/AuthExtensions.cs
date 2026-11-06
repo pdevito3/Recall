@@ -2,7 +2,6 @@ namespace Recall.Server.Resources.Entrypoints;
 
 using System.Security.Claims;
 using Domain.Users;
-using DPoP;
 using Mcp;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -56,6 +55,10 @@ public static class AuthExtensions
                         {
                             context.Fail("A provider token cannot name an app session.");
                         }
+                        else if (context.Principal?.HasClaim(c => c.Type == "cnf") == true)
+                        {
+                            context.Fail("The token has a cnf claim, and the Server does not check a proof of possession.");
+                        }
                         else if (!validatesAud && context.Principal?.FindFirst(audienceClaimType)?.Value != authAudience)
                         {
                             context.Fail($"The token has no '{audienceClaimType}' claim with the value '{authAudience}'.");
@@ -65,9 +68,6 @@ public static class AuthExtensions
                 };
             });
 
-        // DPoP (RFC 9449): the DPoP scheme, the proof check, and the rejection of a bound token sent as Bearer
-        services.AddDPoP(configuration);
-        // After AddDPoP, so that its challenge wraps the DPoP challenge and can put the Bearer challenge first
         services.AddMcpResourceMetadata(configuration);
 
         return services;

@@ -6,7 +6,6 @@ using System.Text.Json;
 
 public static class HttpClientExtensions
 {
-    /// <summary>Signs in as the user with <paramref name="subject"/>, through the first-party client (the BFF).</summary>
     public static void SignInAsAppUser(this HttpClient client, string subject)
         => client.SetFakeBearerToken(new Dictionary<string, object>
         {

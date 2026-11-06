@@ -158,8 +158,6 @@ public sealed class UserMessageAnalyzer : DiagnosticAnalyzer
 				return false;
 			if (IsIn(method.ContainingType, "FluentValidation"))
 				return method.Name == "WithMessage" || parameter.Name == "errorMessage";
-			if (method.MethodKind == MethodKind.Constructor && method.ContainingType is { Name: "Status" } status && IsIn(status, "Grpc.Core"))
-				return parameter.Name == "detail";
 			if (method.ContainingType is { Name: "TypedResults" or "Results" } results && IsIn(results, "Microsoft.AspNetCore.Http"))
 			{
 				return method.Name switch
