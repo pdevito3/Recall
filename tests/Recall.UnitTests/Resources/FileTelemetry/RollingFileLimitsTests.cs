@@ -227,4 +227,27 @@ public class RollingFileLimitsTests
             File.Delete(blocker);
         }
     }
+
+    [Test]
+    public void each_limit_above_its_largest_value_gets_a_refusal_that_names_the_setting()
+    {
+        // Arrange
+        var good = new RollingFileLimits { FileSizeBytes = 1024, FilesKept = 3, DaysKept = 3650 };
+        var options = new FileTelemetryOptions { Logs = good, Traces = good, Metrics = good, MetricExportSeconds = 86_400 };
+
+        // Act
+        var atTheEdge = options.Refusal();
+        var refusals = new[]
+        {
+            options with { Traces = good with { DaysKept = 3651 } },
+            options with { MetricExportSeconds = 86_401 },
+            options with { MetricExportSeconds = 4_294_968 },
+        }.Select(bad => bad.Refusal()).ToList();
+
+        // Assert
+        atTheEdge.ShouldBeNull();
+        refusals[0].ShouldNotBeNull().ShouldContain("FileTelemetry:Traces:DaysKept is 3651, and its largest value is 3650");
+        refusals[1].ShouldNotBeNull().ShouldContain("FileTelemetry:MetricExportSeconds is 86401, and its largest value is 86400");
+        refusals[2].ShouldNotBeNull().ShouldContain("FileTelemetry:MetricExportSeconds is 4294968");
+    }
 }
