@@ -47,9 +47,7 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
 
     public int? LastCleanupRawRevision { get; private set; }
 
-    [Sensitive] public DateTimeOffset? MetadataSavedAt { get; private set; }
-
-    [Sensitive] public IReadOnlyList<long> MetadataFastClaims { get; private set; } = [];
+    public uint MetadataVersion { get; private set; }
 
     [Sensitive] public string Activity { get; private set; } = SessionActivity.None;
 
@@ -150,14 +148,16 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         RefreshFromDrafts();
     }
 
-    /// <returns>False when the save time is not newer, and the change does nothing.</returns>
-    public bool SetMetadata(SessionMetadata metadata, DateTimeOffset claimedSavedAt, DateTimeOffset now)
+    public bool SetMetadata(SessionMetadata metadata, uint metadataVersion)
     {
-        if (!claimedSavedAt.IsNewer(MetadataSavedAt, MetadataFastClaims, now))
+        var isStored = Activity == metadata.Activity && Moods.SequenceEqual(metadata.Moods) && UserTopics.SequenceEqual(metadata.UserTopics);
+        if (isStored && metadataVersion != MetadataVersion)
             return false;
 
-        MetadataSavedAt = FastClockClaims.SaveTimeOf(claimedSavedAt, now);
-        MetadataFastClaims = MetadataFastClaims.Remembering(claimedSavedAt, MetadataSavedAt.Value);
+        if (metadataVersion != MetadataVersion)
+            throw new StaleMetadataVersionException();
+
+        MetadataVersion++;
         Activity = metadata.Activity;
         Moods = metadata.Moods;
         UserTopics = metadata.UserTopics;

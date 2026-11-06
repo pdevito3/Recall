@@ -184,7 +184,7 @@ The app does not poll the session. It finds an ended session at the next call to
 
 A 401 of `/auth/me` is a failed check. It does not start a check again.
 
-After a logout, the login goes to the signed-out page and not to the provider. A call that answers 401 after the logout finds no session, and a login with a return URL would abort the navigation to that page.
+After a logout, the login goes where the logout went: to the logout of the provider, or to the signed-out page. A call that answers 401 after the logout finds no session, and a login with a return URL would abort that navigation. While a logout runs, a login waits for its answer.
 
 The session check shows no error toast. The alert is the only message for a failed check. A failed refetch shows no message of its own, because the page still works with the last answer.
 

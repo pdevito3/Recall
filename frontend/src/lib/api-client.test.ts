@@ -69,6 +69,16 @@ describe('apiClient with a generated client', () => {
     expect(config.withCredentials).toBe(true)
   })
 
+  it('reads the Problem Details of a download that asked for a blob', async () => {
+    const problem = new Blob([JSON.stringify(validationProblem)], { type: 'application/problem+json' })
+    adapter.mockImplementation((config) => respond(config, 422, problem))
+
+    const error = await getTenant({ path: { id: tenantId }, responseType: 'blob' }).catch((e: unknown) => e)
+
+    expect(error).toBeInstanceOf(ProblemDetailsError)
+    expect(Notification.error).toHaveBeenCalledExactlyOnceWith('Please provide a name.')
+  })
+
   it('shows the detail of a 422 in a toast and rejects with a ProblemDetailsError', async () => {
     adapter.mockImplementation((config) => respond(config, 422, validationProblem))
 

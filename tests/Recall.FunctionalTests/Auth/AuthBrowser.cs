@@ -124,6 +124,14 @@ public sealed partial class AuthBrowser(AuthFlowFactory host, bool tls = false) 
         SessionCookie.ShouldNotBeNull();
     }
 
+    public async Task LoginWebAtOtherProviderAsync(string subject)
+    {
+        var authorize = ToProvider(await GetAsync($"/auth/oidc/{AuthFlowFactory.OtherModeId}/start?client=web"));
+        var response = await CallbackAsync(authorize.State, host.OtherProvider!.Approve(authorize, new StubLogin(subject)), AuthFlowFactory.OtherIssuer);
+        response.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        SessionCookie.ShouldNotBeNull();
+    }
+
     public async Task<string> PendingCodeAsync(NativeApp app, string subject)
     {
         var page = await FinishAtProviderAsync(await StartNativeAsync(app), new StubLogin(subject));

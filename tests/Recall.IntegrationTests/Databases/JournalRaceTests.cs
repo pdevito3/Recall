@@ -91,7 +91,8 @@ public class JournalRaceTests : TestBase
     }
 
     [Test]
-    public async Task a_metadata_change_that_a_rival_beat_after_the_load_runs_again_and_saves()
+    [Property("Rule", "SES-32")]
+    public async Task a_metadata_change_that_a_draft_save_beat_after_the_load_runs_again_and_saves()
     {
         // Arrange
         var owner = await AddOwnerAsync();
@@ -100,7 +101,7 @@ public class JournalRaceTests : TestBase
         await using var services = pause.BuildServices();
 
         // Act
-        var change = ScopeOf(owner, services).SendAsync(new SetSessionMetadata.Command(session.Id, new SessionMetadataChangeDto { Moods = ["calm"], SavedAt = Morning }));
+        var change = ScopeOf(owner, services).SendAsync(new SetSessionMetadata.Command(session.Id, new SessionMetadataChangeDto { Moods = ["calm"], MetadataVersion = 0 }));
         await pause.ReachedAsync();
         await ScopeOf(owner).SendAsync(new SaveRawDraft.Command(session.Id, Save("words", Morning)));
         pause.Release();
@@ -110,6 +111,98 @@ public class JournalRaceTests : TestBase
         var stored = await ScopeOf(owner).SendAsync(new GetSession.Query(session.Id));
         stored.Moods.ShouldBe(["Calm"]);
         stored.RawText.ShouldBe("words");
+    }
+
+    [Test]
+    [Property("Rule", "SES-32")]
+    public async Task a_metadata_change_that_a_rival_metadata_change_beat_after_the_load_is_refused()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var session = await AddSessionAsync(owner);
+        var pause = PauseAtQuery.After("sessions.set_metadata.load");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var change = ScopeOf(owner, services).SendAsync(new SetSessionMetadata.Command(session.Id, new SessionMetadataChangeDto { UserTopics = ["Food"], MetadataVersion = 0 }));
+        await pause.ReachedAsync();
+        await ScopeOf(owner).SendAsync(new SetSessionMetadata.Command(session.Id, new SessionMetadataChangeDto { UserTopics = ["Work"], MetadataVersion = 0 }));
+        pause.Release();
+
+        // Assert
+        (await Should.ThrowAsync<Exception>(change)).ShouldBeOfType<StaleMetadataVersionException>();
+        var stored = await ScopeOf(owner).SendAsync(new GetSession.Query(session.Id));
+        stored.Topics.ShouldHaveSingleItem().Name.ShouldBe("Work");
+        stored.MetadataVersion.ShouldBe(1u);
+    }
+
+    [Test]
+    [Property("Rule", "SES-34")]
+    public async Task a_save_of_the_stored_metadata_that_a_rival_beat_after_the_load_is_refused()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var session = await AddSessionAsync(owner);
+        await ScopeOf(owner).SendAsync(new SetSessionMetadata.Command(session.Id, new SessionMetadataChangeDto { UserTopics = ["Food"], MetadataVersion = 0 }));
+        var pause = PauseAtQuery.After("sessions.set_metadata.load");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var change = ScopeOf(owner, services).SendAsync(new SetSessionMetadata.Command(session.Id, new SessionMetadataChangeDto { UserTopics = ["Food"], MetadataVersion = 1 }));
+        await pause.ReachedAsync();
+        await ScopeOf(owner).SendAsync(new SetSessionMetadata.Command(session.Id, new SessionMetadataChangeDto { UserTopics = ["Work"], MetadataVersion = 1 }));
+        pause.Release();
+
+        // Assert
+        (await Should.ThrowAsync<Exception>(change)).ShouldBeOfType<StaleMetadataVersionException>();
+        var stored = await ScopeOf(owner).SendAsync(new GetSession.Query(session.Id));
+        stored.Topics.ShouldHaveSingleItem().Name.ShouldBe("Work");
+        stored.MetadataVersion.ShouldBe(2u);
+    }
+
+    [Test]
+    [Property("Rule", "SES-34")]
+    public async Task a_metadata_retry_that_overlaps_the_first_try_runs_again_and_gets_the_stored_row()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var session = await AddSessionAsync(owner);
+        var pause = PauseAtQuery.After("sessions.set_metadata.load");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var retry = ScopeOf(owner, services).SendAsync(new SetSessionMetadata.Command(session.Id, new SessionMetadataChangeDto { UserTopics = ["Food"], MetadataVersion = 0 }));
+        await pause.ReachedAsync();
+        await ScopeOf(owner).SendAsync(new SetSessionMetadata.Command(session.Id, new SessionMetadataChangeDto { UserTopics = ["Food"], MetadataVersion = 0 }));
+        pause.Release();
+        var reply = await retry;
+
+        // Assert
+        reply.Topics.ShouldHaveSingleItem().Name.ShouldBe("Food");
+        reply.MetadataVersion.ShouldBe(1u);
+    }
+
+    [Test]
+    [Property("Rule", "SES-34")]
+    public async Task a_settings_retry_that_overlaps_the_first_try_is_refused_and_the_row_holds_its_values()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        await ScopeOf(owner).SendAsync(new ChangeUserSetting.Command(Setting("Europe/Riga", 0)));
+        var pause = PauseAtQuery.After("user_settings.change.load");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var retry = ScopeOf(owner, services).SendAsync(new ChangeUserSetting.Command(Setting("Europe/Paris", 1)));
+        await pause.ReachedAsync();
+        await ScopeOf(owner).SendAsync(new ChangeUserSetting.Command(Setting("Europe/Paris", 1)));
+        pause.Release();
+
+        // Assert
+        (await Should.ThrowAsync<Exception>(retry)).ShouldBeOfType<StaleVersionException>();
+        var stored = await ScopeOf(owner).ExecuteDbContextAsync(db => db.UserSettings.SingleAsync());
+        stored.TimeZone.ShouldBe("Europe/Paris");
+        stored.Version.ShouldBe(2u);
     }
 
     [Test]
@@ -262,8 +355,8 @@ public class JournalRaceTests : TestBase
     }
 
     [Test]
-    [Property("Rule", "SES-26")]
-    public async Task two_first_settings_changes_make_one_row()
+    [Property("Rule", "SES-31")]
+    public async Task two_first_settings_changes_make_one_row_and_the_loser_is_refused()
     {
         // Arrange
         var owner = await AddOwnerAsync();
@@ -271,15 +364,59 @@ public class JournalRaceTests : TestBase
         await using var services = pause.BuildServices();
 
         // Act
-        var change = ScopeOf(owner, services).SendAsync(new ChangeUserSetting.Command(Setting("Europe/Tallinn", Morning.AddMinutes(2))));
+        var change = ScopeOf(owner, services).SendAsync(new ChangeUserSetting.Command(Setting("Europe/Tallinn", 0)));
         await pause.ReachedAsync();
-        await ScopeOf(owner).SendAsync(new ChangeUserSetting.Command(Setting("Europe/Paris", Morning.AddMinutes(1))));
+        await ScopeOf(owner).SendAsync(new ChangeUserSetting.Command(Setting("Europe/Paris", 0)));
         pause.Release();
 
         // Assert
-        (await change).TimeZone.ShouldBe("Europe/Tallinn");
-        var rows = await ScopeOf(owner).ExecuteDbContextAsync(db => db.UserSettings.CountAsync());
-        rows.ShouldBe(1);
+        (await Should.ThrowAsync<Exception>(change)).ShouldBeOfType<StaleVersionException>();
+        var stored = await ScopeOf(owner).ExecuteDbContextAsync(db => db.UserSettings.SingleAsync());
+        stored.TimeZone.ShouldBe("Europe/Paris");
+    }
+
+    [Test]
+    [Property("Rule", "SES-34")]
+    public async Task a_save_of_the_stored_settings_that_a_rival_beat_after_the_load_is_refused()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        await ScopeOf(owner).SendAsync(new ChangeUserSetting.Command(Setting("Europe/Riga", 0)));
+        var pause = PauseAtQuery.After("user_settings.change.load");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var change = ScopeOf(owner, services).SendAsync(new ChangeUserSetting.Command(Setting("Europe/Riga", 1)));
+        await pause.ReachedAsync();
+        await ScopeOf(owner).SendAsync(new ChangeUserSetting.Command(Setting("Europe/Paris", 1)));
+        pause.Release();
+
+        // Assert
+        (await Should.ThrowAsync<Exception>(change)).ShouldBeOfType<StaleVersionException>();
+        var stored = await ScopeOf(owner).ExecuteDbContextAsync(db => db.UserSettings.SingleAsync());
+        stored.TimeZone.ShouldBe("Europe/Paris");
+    }
+
+    [Test]
+    [Property("Rule", "SES-31")]
+    public async Task a_settings_change_that_a_rival_beat_after_the_load_is_refused()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        await ScopeOf(owner).SendAsync(new ChangeUserSetting.Command(Setting("Europe/Riga", 0)));
+        var pause = PauseAtQuery.After("user_settings.change.load");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var change = ScopeOf(owner, services).SendAsync(new ChangeUserSetting.Command(Setting("Europe/Tallinn", 1)));
+        await pause.ReachedAsync();
+        await ScopeOf(owner).SendAsync(new ChangeUserSetting.Command(Setting("Europe/Paris", 1)));
+        pause.Release();
+
+        // Assert
+        (await Should.ThrowAsync<Exception>(change)).ShouldBeOfType<StaleVersionException>();
+        var stored = await ScopeOf(owner).ExecuteDbContextAsync(db => db.UserSettings.SingleAsync());
+        stored.TimeZone.ShouldBe("Europe/Paris");
     }
 
     private static string Mention(string personId, string label, string words)
@@ -289,8 +426,8 @@ public class JournalRaceTests : TestBase
     private static DraftSaveDto Save(string text, DateTimeOffset savedAt)
         => new() { Text = text, BaseRevision = 0, SavedAt = savedAt };
 
-    private static UserSettingChangeDto Setting(string zone, DateTimeOffset savedAt)
-        => new() { TimeZone = zone, LocationCaptureEnabled = false, RequirePeopleProposalApproval = true, SavedAt = savedAt };
+    private static UserSettingChangeDto Setting(string zone, uint version)
+        => new() { TimeZone = zone, LocationCaptureEnabled = false, RequirePeopleProposalApproval = true, Version = version };
 
     private static async Task<User> AddOwnerAsync()
     {

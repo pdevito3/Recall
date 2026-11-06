@@ -5,6 +5,7 @@ public static class ApiRoutes
     public const string Base = "api/v1";
     public const string Health = "health";
     public const string Alive = "alive";
+    public const string SupportBundle = $"{Base}/support-bundle";
 
     public static class Users
     {

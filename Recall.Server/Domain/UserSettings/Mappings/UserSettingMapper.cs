@@ -9,7 +9,6 @@ public static partial class UserSettingMapper
     [MapperIgnoreSource(nameof(UserSetting.Id))]
     [MapperIgnoreSource(nameof(UserSetting.TenantId))]
     [MapperIgnoreSource(nameof(UserSetting.UserId))]
-    [MapperIgnoreSource(nameof(UserSetting.FastClaims))]
     [MapperIgnoreSource(nameof(UserSetting.LastModifiedOn))]
     [MapperIgnoreSource(nameof(UserSetting.IsDeleted))]
     [MapperIgnoreSource(nameof(UserSetting.DomainEvents))]

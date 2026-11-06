@@ -771,14 +771,9 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("mentioned_person_ids");
 
-                    b.PrimitiveCollection<string>("MetadataFastClaims")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("metadata_fast_claims");
-
-                    b.Property<string>("MetadataSavedAt")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("metadata_saved_at");
+                    b.Property<uint>("MetadataVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("metadata_version");
 
                     b.PrimitiveCollection<string>("Moods")
                         .IsRequired()
@@ -989,11 +984,6 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnName("id")
                         .UseCollation("BINARY");
 
-                    b.PrimitiveCollection<string>("FastClaims")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("fast_claims");
-
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("INTEGER")
                         .HasColumnName("is_deleted");
@@ -1009,10 +999,6 @@ namespace Recall.Server.Databases.Migrations
                     b.Property<bool>("RequirePeopleProposalApproval")
                         .HasColumnType("INTEGER")
                         .HasColumnName("require_people_proposal_approval");
-
-                    b.Property<string>("SavedAt")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("saved_at");
 
                     b.Property<string>("TenantId")
                         .IsRequired()

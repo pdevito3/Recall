@@ -22,6 +22,11 @@ public class OpenApiDocumentTests
     [
     ];
 
+    private static readonly Dictionary<string, string> NonJsonSuccessResponses = new()
+    {
+        ["GET /api/v1/support-bundle 200"] = "application/zip",
+    };
+
     [Test]
     public async Task tenant_list_documents_the_pagination_header()
     {
@@ -40,8 +45,6 @@ public class OpenApiDocumentTests
     [Test]
     [Arguments("SessionForCreationDto", "startedAt")]
     [Arguments("DraftSaveDto", "savedAt")]
-    [Arguments("SessionMetadataChangeDto", "savedAt")]
-    [Arguments("UserSettingChangeDto", "savedAt")]
     public async Task a_client_time_is_a_date_time_string(string dto, string property)
     {
         // Arrange
@@ -95,7 +98,7 @@ public class OpenApiDocumentTests
         // Assert
         contents.ShouldNotBeEmpty();
         foreach (var (name, content) in contents)
-            content.Select(c => c.Key).ShouldBe(["application/json"], name);
+            content.Select(c => c.Key).ShouldBe([NonJsonSuccessResponses.GetValueOrDefault(name, "application/json")], name);
     }
 
     // The keys of the errors of the problem are camelCase, so the parameter names must be camelCase too

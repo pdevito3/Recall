@@ -88,6 +88,11 @@ public sealed record DomainError(
             StaleVersionTitle,
             ex.Message,
             new() { [StaleVersionException.Field] = [ex.Message] }),
+        StaleMetadataVersionException ex => new(
+            DomainErrorKind.StaleVersion,
+            StaleVersionTitle,
+            ex.Message,
+            new() { [StaleMetadataVersionException.Field] = [ex.Message] }),
         // No request field is wrong, but a 409 has the ValidationProblemDetails shape, so the errors property stays
         ConcurrentChangeException ex => new(DomainErrorKind.ConcurrentChange, ConcurrentChangeTitle, ex.Message, []),
         // A conflict keeps the errors property when no field is known, because a 409 has the ValidationProblemDetails shape

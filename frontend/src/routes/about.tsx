@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { Page } from '@/components/page'
 import { PageHeading } from '@/components/page-heading'
+import { SupportBundleSection } from '@/domain/support/components/support-bundle-section'
 
 export const Route = createFileRoute('/about')({
   component: About,
@@ -20,6 +21,7 @@ function About() {
           <li>Each save keeps a version in the history of the entry, so you can read or restore an earlier version.</li>
           <li>The journal runs on a server that you control, and the data stays there. If you connect a cloud provider, the words or the audio that it works on go to that provider.</li>
         </ul>
+        <SupportBundleSection />
       </div>
     </Page>
   )

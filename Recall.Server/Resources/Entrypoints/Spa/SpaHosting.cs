@@ -47,7 +47,9 @@ public static class SpaHosting
             OnPrepareResponse = file =>
             {
                 var headers = file.Context.Response.Headers;
-                headers.CacheControl = file.Context.Request.Path.StartsWithSegments(HashedFilesFolder) ? HashedFileCacheControl : "no-cache";
+                headers.CacheControl = file.File.Name == IndexFile ? "no-store"
+                    : file.Context.Request.Path.StartsWithSegments(HashedFilesFolder) ? HashedFileCacheControl
+                    : "no-cache";
                 headers.ContentSecurityPolicy = ContentSecurityPolicy;
             },
         });
@@ -69,7 +71,6 @@ public static class SpaHosting
 
             context.Response.ContentType = "text/html; charset=utf-8";
             context.Response.ContentLength = index.Length;
-            context.Response.Headers.CacheControl = "no-cache";
             context.Response.Headers.ContentSecurityPolicy = ContentSecurityPolicy;
             if (HttpMethods.IsGet(context.Request.Method))
                 await context.Response.SendFileAsync(index, context.RequestAborted);

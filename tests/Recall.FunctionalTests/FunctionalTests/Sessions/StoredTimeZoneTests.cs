@@ -19,7 +19,7 @@ public class StoredTimeZoneTests : TestBase
     {
         var (_, member) = await JournalScenario.AddPeopleAsync();
         FactoryClient.SignInAsAppUser(member.Identifier);
-        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = "UTC", locationCaptureEnabled = false, requirePeopleProposalApproval = true, savedAt = JournalScenario.Morning });
+        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = "UTC", locationCaptureEnabled = false, requirePeopleProposalApproval = true, version = 0 });
         change.StatusCode.ShouldBe(HttpStatusCode.OK);
         await JournalScenario.ExecuteOutOfBandAsync("UPDATE user_settings SET time_zone = @zone WHERE user_id = @id", ("@zone", zone), ("@id", member.Id));
         return member.Id;
@@ -42,7 +42,7 @@ public class StoredTimeZoneTests : TestBase
         var list = await FactoryClient.GetAsync(ApiRoutes.Sessions.Root);
         var feed = await FactoryClient.GetAsync(ApiRoutes.Sync.Changes);
         var created = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.Root, new { clientSessionId = Guid.NewGuid().ToString(), startedAt = LateAtNight });
-        var metadata = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { activity = "Walking", savedAt = JournalScenario.Morning });
+        var metadata = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { activity = "Walking", metadataVersion = 0 });
 
         // Assert
         detail.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -102,9 +102,9 @@ public class StoredTimeZoneTests : TestBase
         await SignInWithStoredZoneAsync();
 
         // Act
-        var echo = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = NotOnThisHost, locationCaptureEnabled = true, requirePeopleProposalApproval = true, savedAt = JournalScenario.Morning.AddMinutes(1) });
-        var otherUnknown = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = "Mars/Elsewhere", locationCaptureEnabled = true, requirePeopleProposalApproval = true, savedAt = JournalScenario.Morning.AddMinutes(2) });
-        var corrected = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = "America/Chicago", locationCaptureEnabled = true, requirePeopleProposalApproval = true, savedAt = JournalScenario.Morning.AddMinutes(3) });
+        var echo = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = NotOnThisHost, locationCaptureEnabled = true, requirePeopleProposalApproval = true, version = 1 });
+        var otherUnknown = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = "Mars/Elsewhere", locationCaptureEnabled = true, requirePeopleProposalApproval = true, version = 2 });
+        var corrected = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = "America/Chicago", locationCaptureEnabled = true, requirePeopleProposalApproval = true, version = 2 });
 
         // Assert
         echo.StatusCode.ShouldBe(HttpStatusCode.OK);

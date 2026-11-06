@@ -13,12 +13,6 @@ export type UserSettingDto = {
     locationCaptureEnabled: boolean;
     requirePeopleProposalApproval: boolean;
     /**
-     * @description
-     * Format: `date-time`
-     * @type string | undefined
-    */
-    savedAt?: string | null;
-    /**
      * @minLength 0
      * @maxLength 4294967295
      * @type integer

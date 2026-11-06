@@ -136,7 +136,7 @@ _Avoid_: Superuser
 A User with full use of their own journal and no admin pages. The code names this role `User`.
 
 **Owner**:
-The person whose first login on a new install created its tenant. An Owner is an Admin. Control of the data directory can move this place to another identity.
+The person whose first login on a new install created its tenant. An Owner is an Admin. No row marks this place, so the server takes the oldest linked Admin of the oldest live tenant. When that Admin loses the role, the next oldest linked Admin becomes the Owner, and the former Owner gets a refusal. Control of the data directory can move this place to another identity.
 _Avoid_: Root, superadmin, first user
 
 **Privacy invariant**:
@@ -222,6 +222,12 @@ _Avoid_: Error code, failure reason
 **Proof type**:
 A type that only the decision makes, which the write method takes, so the write cannot run without the check.
 _Avoid_: Token, ticket, witness
+
+### Support
+
+**Support bundle**:
+The one zip that an Owner downloads to get help: the log and telemetry files, the version, and the settings with the secrets hidden. It holds no journal text.
+_Avoid_: Diagnostics dump, debug archive
 
 ### Files
 

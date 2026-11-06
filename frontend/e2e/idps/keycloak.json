@@ -6,6 +6,7 @@
   "usernameSelector": "#username",
   "passwordSelector": "#password",
   "submitSelector": "#kc-login",
+  "logoutConfirmSelector": "#kc-logout",
   "capabilities": {
     "revocation": true,
     "issuerParameter": true,

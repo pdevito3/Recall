@@ -56,9 +56,9 @@ public partial class NoProviderBootTests
 
         public string Output => string.Join('\n', _output);
 
-        public static async Task<ServerProcess> StartAsync(string? existingRoot = null)
+        public static async Task<ServerProcess> StartAsync(string? existingRoot = null, IReadOnlyDictionary<string, string>? settings = null)
         {
-            var server = await LaunchAsync(existingRoot, new Dictionary<string, string>());
+            var server = await LaunchAsync(existingRoot, settings ?? new Dictionary<string, string>());
             try
             {
                 await server.WaitUntilUpAsync();
@@ -84,6 +84,7 @@ public partial class NoProviderBootTests
             await File.WriteAllTextAsync(Path.Combine(web, "index.html"), "<html>recall spa</html>");
             Directory.CreateDirectory(Path.Combine(web, "assets"));
             await File.WriteAllTextAsync(Path.Combine(web, "assets", HashedFile), "console.log('recall spa')");
+            await File.WriteAllTextAsync(Path.Combine(web, "app.js"), "// recall spa");
 
             // The child would inherit the narrow umask of this process, and hide a Server that does not set its own
             var start = new ProcessStartInfo("/bin/sh", ["-c", "umask 022; exec dotnet \"$0\"", ServerDll()])
@@ -235,6 +236,36 @@ public partial class NoProviderBootTests
     }
 
     [Test]
+    public async Task a_data_directory_that_takes_no_write_stops_the_boot_with_one_line_that_does_not_blame_the_migrations()
+    {
+        // Arrange
+        var blocker = Path.Combine(Path.GetTempPath(), $"recall_blocker_{Guid.NewGuid():N}");
+        await File.WriteAllTextAsync(blocker, "");
+        var dataDirectory = Path.Combine(blocker, "data");
+
+        try
+        {
+            // Act
+            await using var server = await ServerProcess.LaunchAsync(null, new Dictionary<string, string>
+            {
+                ["ConnectionStrings__appdb"] = $"Data Source={Path.Combine(dataDirectory, "recall.db")}",
+            });
+            await server.WaitForExitAsync(new CancellationTokenSource(TimeSpan.FromSeconds(60)).Token);
+
+            // Assert
+            server.ExitCode.ShouldBe(1);
+            var lines = server.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            lines.Where(line => line.Contains(dataDirectory, StringComparison.Ordinal)).ShouldHaveSingleItem().ShouldContain("Mount it read-write");
+            lines.ShouldNotContain(line => line.Contains("migration", StringComparison.OrdinalIgnoreCase));
+            lines.ShouldNotContain(line => line.Contains("Hosting failed", StringComparison.Ordinal));
+        }
+        finally
+        {
+            File.Delete(blocker);
+        }
+    }
+
+    [Test]
     public async Task with_no_provider_the_server_stays_up_and_reports_no_login_method()
     {
         // Arrange
@@ -321,6 +352,39 @@ public partial class NoProviderBootTests
         head.Content.Headers.ContentLength.ShouldBe("<html>recall spa</html>".Length);
         post.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         delete.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Test]
+    public async Task the_html_of_the_app_tells_the_browser_to_store_nothing()
+    {
+        // Arrange
+        await using var server = await ServerProcess.StartAsync();
+
+        // Act
+        using var index = await server.Client.GetAsync("/");
+        using var route = await server.Client.GetAsync("/users");
+        using var fileName = await server.Client.GetAsync("/index.html");
+
+        // Assert
+        // With this header, Chromium did not restore a page after its cookies were removed. docs/authentication.md has the runs.
+        index.Headers.CacheControl!.NoStore.ShouldBeTrue();
+        route.Headers.CacheControl!.NoStore.ShouldBeTrue();
+        fileName.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (fileName.Headers.CacheControl?.NoStore == true).ShouldBeTrue("/index.html is the same page as /");
+    }
+
+    [Test]
+    public async Task a_static_file_of_the_app_has_no_private_data_so_the_browser_can_keep_it()
+    {
+        // Arrange
+        await using var server = await ServerProcess.StartAsync();
+
+        // Act
+        using var file = await server.Client.GetAsync("/app.js");
+
+        // Assert
+        file.StatusCode.ShouldBe(HttpStatusCode.OK);
+        file.Headers.CacheControl?.NoStore.ShouldNotBe(true);
     }
 
     [Test]

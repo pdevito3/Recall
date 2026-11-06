@@ -120,7 +120,7 @@ public class SyncFeedTests : TestBase
             timeZone = "Europe/Tallinn",
             locationCaptureEnabled = false,
             requirePeopleProposalApproval = true,
-            savedAt = JournalScenario.Morning,
+            version = 0,
         });
 
         // Act

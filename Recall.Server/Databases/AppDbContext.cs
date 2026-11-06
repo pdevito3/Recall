@@ -15,6 +15,8 @@ using Domain.UserSettings;
 // new-feature:db-usings
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Resources;
+using Serilog;
 using Sqlite;
 
 public class AppDbContext(
@@ -206,9 +208,12 @@ public class AppDbContext(
         catch (DbUpdateException exception)
         {
             // Not in a filter, because a filter loses an exception that it throws.
-            if (DatabaseConflict.From(exception, Model) is { } conflict)
-                throw conflict;
-            throw;
+            if (DatabaseConflict.From(exception, Model) is not { } conflict)
+                throw;
+
+            if (conflict is ConstraintConflictException { Constraint: var constraint })
+                Log.ForContext<AppDbContext>().Here().Information("The unique constraint {Constraint} stopped a save", constraint);
+            throw conflict;
         }
     }
 
@@ -312,6 +317,9 @@ public class AppDbContext(
             }
         }
     }
+
+    /// <summary>Makes the next save write the row of a tracked entity and move its version, also when no value changed.</summary>
+    public void MoveVersionOf(BaseEntity entity) => Entry(entity).Property(e => e.LastModifiedOn).IsModified = true;
 
     private void StampEntities(DateTimeOffset now)
     {

@@ -3,7 +3,6 @@ namespace Recall.FunctionalTests.FunctionalTests.Sessions;
 using System.Net;
 using System.Net.Http.Json;
 using Recall.Server.Domain.Sessions.Dtos;
-using Recall.Server.Domain.UserSettings.Dtos;
 using Shouldly;
 using TestUtilities;
 
@@ -30,20 +29,13 @@ public class ClientTimeTests : TestBase
         var create = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.Root, new { clientSessionId = Guid.NewGuid().ToString(), startedAt = time });
         var raw = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Draft(session.Id), new { text = "words", baseRevision = 0, savedAt = time });
         var cleaned = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Cleaned(session.Id), new { text = "words", baseRevision = 0, savedAt = time });
-        var metadata = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { activity = "Walking", savedAt = time });
-        var settings = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { locationCaptureEnabled = true, requirePeopleProposalApproval = true, savedAt = time });
         var read = await FactoryClient.GetFromJsonAsync<SessionDto>(ApiRoutes.Sessions.GetRecord(session.Id));
-        var stored = await FactoryClient.GetFromJsonAsync<UserSettingDto>(ApiRoutes.UserSettings.Root);
 
         // Assert
         create.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         raw.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         cleaned.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        metadata.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        settings.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         read!.RawDraftRevision.ShouldBe(0);
-        read.Activity.ShouldBe("None");
-        stored!.LocationCaptureEnabled.ShouldBeFalse();
     }
 
     [Test]

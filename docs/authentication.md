@@ -18,7 +18,7 @@ These routes are not in the OpenAPI document. This section is their contract.
 | `/auth/oidc/callback` | GET | none | The return from the provider |
 | `/auth/oidc/confirm` | POST | none | The form of the native confirm page |
 | `/auth/token` | POST | none | Gives the tokens of a native session |
-| `/auth/logout` | POST | optional | Ends the session that the request names, and answers 204. A cookie with no `X-CSRF: 1` gets 401, and nothing ends. |
+| `/auth/logout` | POST | optional | Ends the session that the request names. See [Logout](#logout) for each answer. A cookie with no `X-CSRF: 1` gets 401, and nothing ends. |
 | `/auth/sessions/revoke-others` | POST | app session | Ends each other session of the user. It answers 204. |
 | `/auth/me` | GET | optional | The user of the session. See [The user of a session](#the-user-of-a-session). |
 
@@ -146,8 +146,8 @@ A session makes no call to the provider. So a web or native session keeps workin
 | `recall`, on http | `HttpOnly`, `SameSite=Strict`, `Path=/` | The same |
 | `__Host-recall_login_{8 hex}`, on TLS | `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, 10 minutes | The binding of one login attempt |
 | `recall_login_{8 hex}`, on http | `HttpOnly`, `SameSite=Lax`, `Path=/auth/oidc`, 10 minutes | The same |
-| `__Host-recall_signed_out`, on TLS | `HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/`, 60 seconds | The mark of a sign-out that this browser finished |
-| `recall_signed_out`, on http | `HttpOnly`, `SameSite=Strict`, `Path=/`, 60 seconds | The same |
+| `__Host-recall_signed_out`, on TLS | `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, 30 days until the provider returns, then 60 seconds. 60 seconds with a provider that has no `end_session_endpoint` | The mark of a sign-out that this browser finished |
+| `recall_signed_out`, on http | `HttpOnly`, `SameSite=Lax`, `Path=/`, 30 days until the provider returns, then 60 seconds. 60 seconds with a provider that has no `end_session_endpoint` | The same |
 
 The binding cookie is `Lax` because the provider redirects with a cross-site GET. On https, the Server reads only `__Host-recall`, so a `recall` cookie from a plain http neighbor has no effect.
 
@@ -173,20 +173,97 @@ A cookie value works only as a cookie and only on a web session. A bearer value 
 
 ## Logout
 
-The SPA sends `POST /auth/logout` with `X-CSRF: 1`. The Server ends the session, deletes the cookie, sets the signed-out mark, and answers 204. Then the SPA goes to `/auth/login?signedOut=1`, which shows `You are signed out`. If the request fails, the SPA stays on the page and says that the person is still signed in.
+The SPA sends `POST /auth/logout` with `X-CSRF: 1`. The Server ends the session, deletes the cookie, and sets the signed-out mark. If the provider of the session has an `end_session_endpoint`, the answer names its logout URL, and the SPA goes there. The provider ends its session and returns to `/auth/signed-out`, which goes to `/auth/login?signedOut=1`. If the provider has no such endpoint, or does not answer, the SPA goes to `/auth/login?signedOut=1` at once. If the request fails, the SPA stays on the page and says that the person is still signed in.
 
 A response tells what happened:
 
 | Request | Answer |
 |---|---|
-| A cookie with `X-CSRF: 1` | Ends the session if it is live, deletes the cookie, and sets the mark. 204. |
+| A cookie with `X-CSRF: 1`, and the provider of its session has an `end_session_endpoint` | Ends the session if it is live, deletes the cookie, and sets the mark. 200 with `{ "provider_logout_url": "..." }`. |
+| A cookie with `X-CSRF: 1`, in each other case | The same, and 204 with no body. |
+| `X-CSRF: 1` and no token (a value that is not a refresh token counts as no token), with no cookie or with a cookie of a session that Recall cannot find, on a Server with one provider | This browser can still have a session at the provider, so the Server treats that provider as the provider of the session. The first row or the second row then applies. |
+| The same, on a Server with no provider or with more than one | Sets the mark for 60 seconds, and 204 with no body. Recall does not know the provider, so the page has no note. The page with more than one provider does not start a login with no click. |
 | A cookie with no `X-CSRF: 1`, with or without another credential | 401. Nothing ends, and the cookie stays. |
-| No cookie | Ends what a bearer token or a refresh token names. 204, with no mark. A cross-site page gets this, because `SameSite=Strict` holds the cookie back. |
+| No cookie, and no `X-CSRF: 1` or a bearer token or a refresh token | Ends what a bearer token or a refresh token names. 204, with no mark. A native app opens no browser, so its logout does not touch the provider. A cross-site page gets this too, because `SameSite=Strict` holds the cookie back. |
 | `GET /auth/logout` | 405. A link cannot end a session. |
 
 `/auth/login?signedOut=1` starts nothing with no click. It says `You are signed out` only with the mark, so a link from another site cannot make it say that. A live session at this URL goes to the return path.
 
-The session at the provider stays. So `Sign in with {provider}` can sign the same person in again with no click. On a shared computer, end the session at the provider too. When the discovery document of the provider has an `end_session_endpoint`, the signed-out page links to it as `Sign out of {provider}`.
+The mark is `SameSite=Lax`, because a provider on another site returns with a cross-site GET. It lives 30 days until the provider returns, so that a person who closes the confirm page of a provider does not sign in again with no click on a later visit. After the return, it lives 60 seconds. A provider with no `end_session_endpoint` cannot return, so its mark also lives 60 seconds. A new login deletes it, so a link cannot show the signed-out page next to a live session. The session cookie stays `Strict`.
+
+### Other tabs, Back, and other browsers
+
+A logout tells the other open tabs of this browser with a `BroadcastChannel` message. Each tab hides its page, clears its data, and goes to the signed-out page, with no wait and no prompt. While the provider of the first tab has not returned, this page has the note of the next section. If the logout fails, the other tabs stay as they are.
+
+The browser can keep a page in its back-forward cache, and Back then shows this page with no load. A page hides itself when it enters this cache. After a restore, it stays hidden until `/auth/me` answers:
+
+| The answer | The page |
+|---|---|
+| The session of this page | Shows itself again, with no new load |
+| No session | Goes to the signed-out page |
+| Another session, for example of the next person on this device | Loads again, so the words of this page stay hidden |
+| A failed call, or no answer in 3 seconds | Loads again, and shows the alert of the session check if the call still fails. With no network, the browser shows its own error page, because Recall has no offline page and the words of this page must stay hidden |
+
+So in a live session, Back from this cache costs one call of `/auth/me`.
+
+Each answer of the Server has `Cache-Control: no-store`, also an error answer and the HTML of the app at each address. `UseNoStoreAnswers` sets this in one place, and a new endpoint gets it with no code. Only two kinds of answer do not have it, and neither holds private data: a static file of the app other than `index.html`, and an error that Kestrel or the host filter answers before the pipeline starts. So after a logout, the HTTP cache of the browser has no private answer that a page can read.
+
+This header changes Back in Chromium. With it on each answer, Chromium does not restore a page, also in a live session, so it loads the page again on each Back. Input that was not saved can then be lost (inferred, not measured). Chromium reports three reasons: `MainResourceHasCacheControlNoStore`, `JsNetworkRequestReceivedCacheControlNoStoreResource`, and `BrowsingInstanceNotSwapped`. The build with `no-store` only on the HTML still restored the page, so the reason that decides is the one for the `fetch` of the page (inferred). Each page of the app calls `/auth/me`. WebKit does not do this: a WKWebView restored the page in a live session, so the hide above still acts there.
+
+These are local runs of 8 Backs in a live session, in Chromium with the cache on:
+
+| The answers | Chromium restored the page | Median time of Back | Requests of the page on one Back |
+|---|---|---|---|
+| `no-store` only on the HTML, over HTTP, 2 sets | 16 of 16 | 33 and 33 ms | 2 |
+| `no-store` on each answer, over HTTP, 2 sets | 0 of 16 | 67 and 63 ms | 20 |
+| `no-store` on each answer, over HTTPS, 1 set | 0 of 8 | 124 ms | 20 |
+
+These runs are on localhost. The page also counts a request that the HTTP cache of the browser answers. Over HTTP, 4 of the 20 reached the Server: the HTML, `/auth/me`, and two API calls. On a network, the time of Back is the time of a page load (inferred).
+
+Each count in the next table is the number of local runs in Chromium, with the cache on, that had private text on a frame after Back:
+
+| The case | No `no-store` | `no-store` only on the HTML | `no-store` on each answer |
+|---|---|---|---|
+| All cookies removed while the page waits, over HTTP | 2 of 8, and 3 of 8 in a second set. Chromium restored the page | 0 of 8. Chromium did not restore the page | 0 of 8. Chromium did not restore the page |
+| All cookies removed while the page waits, over HTTPS | 4 of 8. Chromium restored the page | 0 of 8. Chromium did not restore the page | 0 of 8. Chromium did not restore the page |
+| The session revoked on the Server, with the cookie still in the browser, over HTTP | 3 of 8. Chromium restored the page | 4 of 8. Chromium restored the page | 8 of 8, from a new session. Chromium did not restore the page |
+| The session revoked on the Server, over HTTPS | Not measured | Not measured | 8 of 8, from a new session. Chromium did not restore the page |
+| A logout in this browser, over HTTP | 0 of 8. The message of the logout removed the page from the cache (inferred) | 0 of 8. Chromium did not restore the page | 0 of 8. Chromium did not restore the page |
+
+- With `no-store` on each answer, a revoke shows no frame of the old page in Chromium, because Back does not restore it. The load then acts as a visit with no session. While the session at the provider lives, the person is signed in again with no click, and the private text in the table is from this new session. A plain visit and a reload do the same in this state: 4 of 4 runs each ended in a new session, on the build with `no-store` only on the HTML and on the build with it on each answer. Back on the build with `no-store` only on the HTML went to the signed-out page in 4 of 4 runs. Back on the build with it on each answer ended in a new session in 4 of 4 runs.
+- The expiry of a real cookie is not measured, so the table does not say what Chromium does at that expiry.
+- With the cookies gone, Back loads the page again, and this load acts as a visit with no session. In the runs, it ended at the sign-in page of the provider, not at the signed-out page, because the removal also took the cookies of the provider. If the session at the provider still lives, this load can sign the person in with no click (inferred from the visit rules of the next section, not measured).
+- After a logout in this browser, Back loads the page again with no session. In the runs, the provider returned at once and had no session, so it asked who the person is. While the provider has not returned, the mark of the next section holds the no-click login. With a provider that has no endpoint, this load can sign the person in again with no password, as the next section says (inferred, not measured).
+- A WKWebView run of each case over HTTP: in a live session it restored the page. After a logout, and after the cookies were removed, it restored the page and went to the signed-out page. The snapshots after the logout and the removal had no private text. A snapshot can draw a new frame, so it does not prove what the screen showed in this time.
+
+Other browsers and other devices stay signed in. Recall has no back-channel logout, so a logout at the provider does not end their Recall sessions. `/auth/sessions/revoke-others` ends them, and they end at their own expiry.
+
+### The session at the provider
+
+The mark holds the login mode and a new random `state` until the provider returns to `/auth/signed-out` with that `state`. A link from another site does not know it, so it cannot end the note or start a login with no click. A provider that does not send `state` back gets the row for `did not return`. What the signed-out page says depends on this:
+
+| The state | The signed-out page | A visit with no click |
+|---|---|---|
+| The provider returned | `You are signed out`, with no note | Goes to the provider, which has no session and asks for a password |
+| The provider has the endpoint and did not return, for example the person left its confirm page, the provider stays on its own page after the logout, the provider refused the return URL, or the first tab is still at the provider | `You are signed out`, says that Recall cannot tell if the session there ended, and links to `Sign out of {provider}`. The note does not say that the provider failed, because a second tab reads it while the first tab is still at the provider | Shows the same page and starts nothing, until the mark ends or the next login. A provider that never returns shows this note after each logout, also to a person who did sign out there |
+| The provider did not answer | `You are signed out`, says that the session there can still be open, and `Wait a few minutes, then try again`. | Shows the same page. `Try again` finds the link when the provider is back. If another provider is ready, the page has its button and no `Try again`, and a reload finds the link |
+| The provider has no endpoint | `You are signed out`, says that the session there stays open, and tells the person to sign out on the site of the provider or to delete the cookies of this browser | Goes to the provider, which signs the same person in again with no password. With more than one provider, the page shows the note until the mark ends, then the usual sign-in page |
+
+`/auth/signed-out` redirects only to the signed-out page, and the return URL that the Server sends to the provider is the origin of the request plus that path. So neither is an open redirect. Most providers also check the URL against their own list, but ZeroFactor does not.
+
+Recall keeps no provider token, so the logout URL has `client_id`, `post_logout_redirect_uri`, and `state`, and no `id_token_hint`. OpenID Connect tells a provider to ask the person to confirm in this case. These are the results with each provider of the lab:
+
+| Provider | `end_session_endpoint` | With no `id_token_hint` |
+|---|---|---|
+| ZeroFactor | Yes | Ends the session and returns at once, with `state`. It accepts any return URL. |
+| Keycloak 26 | Yes | Shows `Do you want to log out?`, then returns, with `state`. Back from the signed-out page shows this page again, with no session behind it, and a second Back shows its sign-in page. With a return URL that is not registered, it shows `Invalid redirect uri`, and its session stays. |
+| FusionAuth 1.69 | Yes | Ends the session and returns at once, with `state`. The return URL must be an authorized redirect URL of the application. |
+| Authentik 2026.8.5 | Yes | Ends the session and stays on its own page, because it needs an `id_token_hint` to return. When it has a registered post-logout URI, it refuses a return URL with no hint, so do not register one for Recall. The next visit to Recall shows the note. |
+| Duende demo | Yes | Asks the person to confirm. After `Yes`, it ends the session and stays on its own page, with no way back to Recall. The next visit to Recall shows the note. |
+| Authelia 4.39 | No | Its session stays, and the signed-out page says so. |
+| Cognito | No | Its session stays, and the signed-out page says so. The stack runs Cognito in the Floci emulator, whose discovery document has no such endpoint. |
+
+These results come from a run with Recall.
 
 ## The user of a session
 
@@ -260,6 +337,8 @@ The redirect URI is that origin plus `/auth/oidc/callback`. The Server stores it
 ### Register the callback URLs
 
 Register the callback URL of each origin at the provider. `/auth/status` gives the URL of the origin that you call.
+
+If the provider has an `end_session_endpoint`, also register `/auth/signed-out` of each origin as a post-logout redirect URI, for example `https://recall.example.com/auth/signed-out`. In Keycloak, this is `Valid post logout redirect URIs` of the client. Without it, Keycloak refuses the logout. The Recall session ends, the session at Keycloak stays, and the person sees the error page of Keycloak. This is a dead end for each logout until you register the URL. The error page has no way back to Recall, and `Sign out of Keycloak` on the signed-out page goes to the same error. Recall cannot see the answer that the provider gives to the browser, so it cannot warn you. Register the URL before you upgrade from a version with no provider logout. If a person is already at this dead end, register the URL, and then tell the person to open Recall and select `Sign out of Keycloak`. The Server does not need a restart. Authentik is the exception: do not register a return URL there, as [The session at the provider](#the-session-at-the-provider) says.
 
 Do not register a wildcard redirect. The Server holds the verifier and the client secret, so the Server can redeem a stolen code. A wildcard at the provider and a forged `Host` then give an attacker a session. An exact match at the provider stops that. To stop it also at the Server, set `AllowedHosts` to your host names. A request with another `Host` then gets a 400.
 

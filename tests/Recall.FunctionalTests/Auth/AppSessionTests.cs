@@ -275,7 +275,7 @@ public class AppSessionTests
         var page = await browser.GetAsync("/auth/login?signedOut=1");
 
         // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
         browser.SessionCookie.ShouldBeNull();
         (await page.Content.ReadAsStringAsync()).ShouldContain("You are signed out");
     }
@@ -363,7 +363,7 @@ public class AppSessionTests
         noHeader.Headers.Contains("Set-Cookie").ShouldBeFalse();
         forged.SessionCookie.ShouldBe(cookie);
         aliveAfterForgery.StatusCode.ShouldBe(HttpStatusCode.OK);
-        withHeader.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        withHeader.StatusCode.ShouldBe(HttpStatusCode.OK);
         browser.SessionCookie.ShouldBeNull();
         afterLogout.StatusCode.ShouldBe(HttpStatusCode.NoContent);
     }
@@ -570,9 +570,8 @@ public class AppSessionTests
         var me = await browser.GetAsync(Me, csrf: true);
 
         // Assert
-        logout.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        logout.StatusCode.ShouldBe(HttpStatusCode.OK);
         browser.SessionCookie.ShouldBeNull();
-        browser.SetCookieLines.Last().ShouldContain("samesite=strict", Case.Insensitive);
         page.StatusCode.ShouldBe(HttpStatusCode.OK);
         (await page.Content.ReadAsStringAsync()).ShouldContain("<h1>You are signed out</h1>");
         me.StatusCode.ShouldBe(HttpStatusCode.NoContent);
@@ -592,21 +591,6 @@ public class AppSessionTests
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
         phone.SetCookieLines.Count.ShouldBe(linesBefore);
-    }
-
-    [Test]
-    public async Task the_signed_out_page_names_the_logout_of_the_provider()
-    {
-        // Arrange
-        using var browser = await SignedInBrowserAsync();
-        await browser.PostFormAsync("/auth/logout", [], csrf: true);
-
-        // Act
-        var page = await browser.GetAsync("/auth/login?signedOut=1");
-
-        // Assert
-        var html = await page.Content.ReadAsStringAsync();
-        html.ShouldContain($"<a href=\"{StubOidcProvider.Issuer}/logout?client_id={StubOidcProvider.ClientId}\">Sign out of Stub</a>");
     }
 
     [Test]

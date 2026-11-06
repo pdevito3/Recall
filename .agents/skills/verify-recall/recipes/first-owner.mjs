@@ -25,7 +25,7 @@ export default async ({ page, context, step, capture, expect, login, logout }) =
     expect(users.body[0].role).toBe('Admin')
   })
 
-  await step('log out, and leave the session of the IdP', async () => {
+  await step('log out, and clear the cookies of the browser', async () => {
     await logout()
     await context.clearCookies()
   })

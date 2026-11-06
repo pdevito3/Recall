@@ -26,7 +26,6 @@ public static class GetAuditEntryPage
         public async Task<AuditEntryPageDto> Handle(Query request, CancellationToken cancellationToken)
         {
             var parameters = request.Parameters;
-            Activity.Current?.SetTag("app.audit.entity_id", parameters.EntityId);
 
             var caller = await permissionGuard.GetCallerAsync(cancellationToken);
             caller.Require(Permission.ReadAuditLog());

@@ -2,6 +2,7 @@ import { authApi, authPaths } from '@tests/support/api/auth-api'
 import { usersApi } from '@tests/support/api/users-api'
 import { as } from '@tests/support/auth/actors'
 import { expect, test } from '@tests/support/fixtures'
+import { appShellPage } from '../app-shell/app-shell.tasks'
 import { homePage } from './home.tasks'
 
 test.describe('the mic message on the journal page', () => {
@@ -64,5 +65,25 @@ test.describe('the user menu of a signed-in user', () => {
     await home.at.userMenu('Bob Smith').click()
 
     await expect(home.at.userMenuName('Bob Smith')).toBeVisible()
+  })
+})
+
+test.describe('a logout that fails on a phone', () => {
+  test.use({ actor: as.user('Bob Smith'), viewport: { width: 390, height: 844 } })
+
+  test('leaves the user menu free at once, so that the person can try again, and breaks no word of its message', async ({ page, api }) => {
+    api.mock(usersApi.currentIs({ identifier: '1', name: 'Robert Smith' }), authApi.logoutFails())
+    const home = homePage(page)
+    await home.open()
+    await appShellPage(page).openMobileSidebar()
+    await home.at.userMenu('Bob Smith').click()
+
+    await home.at.userMenuLogout.click()
+
+    await expect(home.at.logoutFailed).toBeVisible()
+    expect(await home.wordsBrokenInTheLogoutMessage()).toEqual([])
+    // A toast over the button would take this click, and it closes only after 6 seconds.
+    await home.at.userMenu('Bob Smith').click({ timeout: 2000 })
+    await expect(home.at.userMenuLogout).toBeVisible()
   })
 })

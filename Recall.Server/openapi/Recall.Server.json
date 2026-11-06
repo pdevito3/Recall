@@ -1902,7 +1902,7 @@
         "tags": [
           "Sessions"
         ],
-        "summary": "Replaces the activity, the moods, and the Topics that the caller chose for a Session.",
+        "summary": "Replaces the activity, the moods, and the Topics that the caller chose for a Session. A save from another\n`metadataVersion` gets 409 and changes nothing, unless the Session already holds these values. Then the response has the\nstored Session, so a retry of a save that reached the server gets 200.",
         "operationId": "SetSessionMetadata",
         "parameters": [
           {
@@ -1979,6 +1979,40 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/support-bundle": {
+      "get": {
+        "tags": [
+          "Support"
+        ],
+        "summary": "Gets one zip with the log and telemetry files, the version, and the settings with the secrets hidden. Only the Owner\nof the install can call this.",
+        "operationId": "GetSupportBundle",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stream"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -2453,7 +2487,7 @@
         "tags": [
           "UserSettings"
         ],
-        "summary": "Changes the settings of the caller, with Last-write-wins on the save time. A change with a save time that is not newer than\nthe stored settings does nothing, and the response has the stored settings.",
+        "summary": "Changes the settings of the caller. A save from another version gets 409 and changes nothing, unless the row already holds\nthese values. Then the response has the stored settings, so a retry of a save that reached the server gets 200.",
         "operationId": "ChangeUserSetting",
         "parameters": [
           {
@@ -4221,7 +4255,8 @@
           "moods",
           "topics",
           "personIds",
-          "version"
+          "version",
+          "metadataVersion"
         ],
         "type": "object",
         "properties": {
@@ -4341,6 +4376,12 @@
             "maximum": 4294967295,
             "minimum": 0,
             "type": "integer"
+          },
+          "metadataVersion": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "description": "Send it with the next metadata save. A save of a Draft does not change it."
           }
         }
       },
@@ -4380,7 +4421,7 @@
       },
       "SessionMetadataChangeDto": {
         "required": [
-          "savedAt",
+          "metadataVersion",
           "moods",
           "userTopics"
         ],
@@ -4407,10 +4448,11 @@
               "type": "string"
             }
           },
-          "savedAt": {
-            "type": "string",
-            "description": "The time of the edit on the client. A change with a time that is not newer than the stored change does nothing.",
-            "format": "date-time"
+          "metadataVersion": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "description": "The `metadataVersion` of the Session that the client read. A save from another version gets 409, unless the Session already holds these values."
           }
         }
       },
@@ -4448,7 +4490,8 @@
           "moods",
           "topics",
           "personIds",
-          "version"
+          "version",
+          "metadataVersion"
         ],
         "type": "object",
         "properties": {
@@ -4510,6 +4553,12 @@
             "maximum": 4294967295,
             "minimum": 0,
             "type": "integer"
+          },
+          "metadataVersion": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "description": "Send it with the next metadata save. A save of a Draft does not change it."
           }
         },
         "description": "One row of the timeline. It has no Draft, so a page costs the same whatever the length of the text."
@@ -4533,6 +4582,10 @@
             "description": "Who chose the Topic."
           }
         }
+      },
+      "Stream": {
+        "type": "string",
+        "format": "binary"
       },
       "SyncChangePageDto": {
         "required": [
@@ -4888,7 +4941,7 @@
         "required": [
           "locationCaptureEnabled",
           "requirePeopleProposalApproval",
-          "savedAt"
+          "version"
         ],
         "type": "object",
         "properties": {
@@ -4906,10 +4959,11 @@
           "requirePeopleProposalApproval": {
             "type": "boolean"
           },
-          "savedAt": {
-            "type": "string",
-            "description": "When the person made the change. A change with a save time that is not newer than the stored settings does nothing.",
-            "format": "date-time"
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "description": "The `version` of the settings that the client read. A save from another version gets 409, unless the row already holds these values."
           }
         }
       },
@@ -4937,13 +4991,6 @@
           },
           "requirePeopleProposalApproval": {
             "type": "boolean"
-          },
-          "savedAt": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "format": "date-time"
           },
           "version": {
             "maximum": 4294967295,
@@ -5017,6 +5064,9 @@
     },
     {
       "name": "Sessions"
+    },
+    {
+      "name": "Support"
     },
     {
       "name": "Sync"
