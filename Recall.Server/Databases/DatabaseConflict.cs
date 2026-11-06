@@ -1,11 +1,11 @@
 namespace Recall.Server.Databases;
 
 using System.Diagnostics;
+using Domain.Sessions;
 using Exceptions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Resources;
 
 public static class DatabaseConflict
 {
@@ -43,11 +43,11 @@ public static class DatabaseConflict
         };
     }
 
-    // A journal row is hard-deleted, and a Revision inserts before the version check of its Session. So a save that lost
-    // to a delete fails on the key of its parent, and the next run finds no row.
+    // A Session is hard-deleted, and a Revision inserts before the version check of its Session. So a save that lost to a
+    // delete fails on the key of its parent, and the next run finds no row. A foreign key of any other row is a server fault.
     private static bool LostToAHardDelete(DbUpdateException exception)
         => exception.InnerException is SqliteException { SqliteExtendedErrorCode: ForeignKeyViolation }
-            && exception.Entries.Any(entry => entry.Metadata.FindDeclaredQueryFilter(QueryFilterNames.JournalOwner) is not null);
+            && exception.Entries.Any(entry => entry.Entity is RawRevision or CleanedRevision);
 
     /// <summary>
     /// SQLite names the columns of the violated index, as <c>UNIQUE constraint failed: users.tenant_id, users.email</c>,

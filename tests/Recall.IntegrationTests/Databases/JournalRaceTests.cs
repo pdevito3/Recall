@@ -156,6 +156,21 @@ public class JournalRaceTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-12")]
+    public async Task a_session_with_an_owner_that_never_existed_is_a_server_fault_and_not_a_lost_race()
+    {
+        // Arrange
+        var scope = new TestingServiceScope();
+        var session = Session.Create(TestFixture.DefaultTenant.Id, "usr_00000000000000000000000000000000", Guid.NewGuid().ToString(), Morning, null, Morning);
+
+        // Act
+        var save = () => scope.AddAsync(session);
+
+        // Assert
+        (await Should.ThrowAsync<Exception>(save)).ShouldBeOfType<DbUpdateException>();
+    }
+
+    [Test]
     [Property("Rule", "SES-13")]
     public async Task an_add_that_a_delete_of_its_owner_beat_saves_no_row()
     {
