@@ -4,8 +4,10 @@ using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Recall.FunctionalTests.TestUtilities;
+using Recall.Server.Auth;
 using Recall.Server.Auth.Entities;
 using Recall.Server.Domain.Tenants;
+using Recall.Server.Domain.Tenants.Models;
 using Recall.Server.Domain.Users;
 using Shouldly;
 
@@ -62,6 +64,49 @@ public class LastTenantTests
         (await DetailOf(response)).ShouldBe(LastTenant.RefusedMessage);
         (await host.WithDatabaseAsync(db => db.Tenants.CountAsync(t => t.Id == tenant))).ShouldBe(1);
     }
+
+    [Test]
+    public async Task a_member_of_a_second_tenant_deletes_it_and_then_the_first_tenant_is_the_last()
+    {
+        // Arrange
+        var host = AuthHosts.TwoTenants;
+        using var owner = new AuthBrowser(host);
+        await owner.LoginWebAsync("first-owner");
+        var first = await TenantOfAsync(host, "first-owner");
+        var subject = $"second-{Guid.NewGuid():N}";
+        var second = await AddTenantWithMemberAsync(host, subject);
+        using var member = new AuthBrowser(host);
+        await member.LoginWebAsync(subject);
+
+        // Act
+        var deleted = await DeleteAsync(member, second);
+        var refused = await DeleteAsync(owner, first);
+
+        // Assert
+        deleted.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        refused.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await host.WithDatabaseAsync(db => db.Tenants.Select(t => t.Id).ToListAsync())).ShouldBe([first]);
+        using var again = new AuthBrowser(host);
+        await again.LoginWebAsync("first-owner");
+        again.SessionCookie.ShouldNotBeNull();
+    }
+
+    private static Task<string> AddTenantWithMemberAsync(AuthFlowFactory host, string subject)
+        => host.WithDatabaseAsync(async db =>
+        {
+            var tenant = Tenant.Create(new TenantForCreation { Name = $"Second {subject}" });
+            var person = NewPerson.FromClaims(new Profile("Grace", "Hopper", "Grace Hopper", null, subject[..20]));
+            var user = User.CreateFromLogin(person, tenant.Id, UserRole.User());
+            var held = user.UserPermissions.ToList();
+            user.AddPermission(Permission.ManageTenant());
+            db.Tenants.Add(tenant);
+            db.Users.Add(user);
+            db.UserPermissions.AddRange(user.UserPermissions.Except(held));
+            var now = TimeProvider.System.GetUtcNow();
+            db.Set<ExternalLogin>().Add(new ExternalLogin { Issuer = StubOidcProvider.Issuer, Subject = subject, UserId = user.Id, CreatedAt = now, LastLoginAt = now });
+            await db.SaveChangesAsync();
+            return tenant.Id;
+        });
 
     private static Task<HttpResponseMessage> DeleteAsync(AuthBrowser browser, string tenantId)
     {

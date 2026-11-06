@@ -19,12 +19,15 @@ public static class AuthHosts
 
     public static AuthFlowFactory TwoProviders { get; private set; } = null!;
 
+    public static AuthFlowFactory TwoTenants { get; private set; } = null!;
+
     public static void Start()
     {
         Open = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
         Closed = Start(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts });
         Limited = Start(new Dictionary<string, string?> { ["AllowedHosts"] = "localhost" });
         Failing = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
+        TwoTenants = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
         TwoProviders = Start(new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts })
         {
             OtherProvider = new StubOidcProvider(AuthFlowFactory.OtherIssuer),
@@ -51,7 +54,7 @@ public static class AuthHosts
 
     public static async Task StopAsync()
     {
-        foreach (var host in new[] { Open, Closed, Limited, Failing, TwoProviders, Sweep })
+        foreach (var host in new[] { Open, Closed, Limited, Failing, TwoProviders, TwoTenants, Sweep })
         {
             if (host is not null)
                 await host.DisposeAsync();
