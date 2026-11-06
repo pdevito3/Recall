@@ -38,12 +38,13 @@ setSessionEndedCheck(async () => {
 
 setPageUserMismatchHandler(() => leaveThePageOfAnotherPerson(queryClient))
 
-// A page whose code is not here yet cannot open with no network, and the status line tells a person to keep the page open.
+function preloadEachPageForNoNetwork() {
+  for (const route of Object.values(router.routesById)) void router.loadRouteChunk(route).catch(() => undefined)
+}
+
 window.addEventListener('load', () => {
   const whenIdle = 'requestIdleCallback' in window ? window.requestIdleCallback : (load: () => void) => setTimeout(load, 1000)
-  whenIdle(() => {
-    for (const route of Object.values(router.routesById)) void router.loadRouteChunk(route).catch(() => undefined)
-  })
+  whenIdle(preloadEachPageForNoNetwork)
 }, { once: true })
 
 createRoot(document.getElementById('root')!).render(

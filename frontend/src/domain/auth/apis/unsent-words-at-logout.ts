@@ -33,11 +33,6 @@ export function answerAboutUnsentWords(choice: Choice) {
 const withinLimit = (settled: Promise<boolean>) =>
   Promise.race([settled, new Promise<boolean>((resolve) => setTimeout(() => resolve(false), settleLimitMs))])
 
-/**
- * Sends the unsent words before a logout. When a word stays unsent, the person chooses to keep or discard the words.
- * Kept words stay in the outbox under the key of this person, and they go out at the next sign-in of this person.
- * The answer runs after the Server ends the session. A logout that fails keeps each saver running.
- */
 export async function settleUnsentWords(): Promise<() => void> {
   const [areWordsSent] = await Promise.all([withinLimit(settleDraftSavers()), withinLimit(settleSettingSaver())])
   const choice = areWordsSent ? 'keep' : await new Promise<Choice>((resolve) => setAnswer(resolve))

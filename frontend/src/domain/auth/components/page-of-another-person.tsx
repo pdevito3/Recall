@@ -1,6 +1,5 @@
 import { signInForAnotherPersonPage } from '../apis/page-of-another-person'
 
-/** The browser leaves this page at once. A person sees it only when that navigation fails, for example with no connection. */
 export function PageOfAnotherPerson() {
   return (
     <main className="flex min-h-svh items-center justify-center p-4">

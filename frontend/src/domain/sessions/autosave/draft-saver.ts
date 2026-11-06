@@ -101,10 +101,12 @@ export class DraftSaver {
     this.saver.dispose()
   }
 
-  /** Words typed before the read of the entry ends wait here, so that a reload does not lose them. Nothing goes to the Server. */
-  holdInOutbox(text: string | null) {
-    if (text === null) removeFromOutbox(this.target.owner, draftKey(this.target))
-    else this.writeToOutbox({ value: text, savedAt: new Date().toISOString() }, null)
+  holdInOutbox(text: string) {
+    this.writeToOutbox({ value: text, savedAt: new Date().toISOString() }, null)
+  }
+
+  releaseFromOutbox() {
+    removeFromOutbox(this.target.owner, draftKey(this.target))
   }
 
   dismissMovedNotice() {
@@ -241,7 +243,6 @@ export class DraftSaver {
       : saveCleanedDraft({ path: { id }, body, signal, options })
   }
 
-  /** The entry was deleted in another tab or device. The words stay: they become a new entry, and the person gets a notice. */
   private moveToNewEntry(change: Stamped<string>) {
     const oldKey = draftKey(this.target)
     const clientSessionId = newUuid()
@@ -402,13 +403,11 @@ export function subscribeToDraftNotices(listener: () => void) {
 
 const everySaver = () => [...new Set(savers.values())]
 
-/** True when the Server holds each word, and false when a word stays unsent or refused. */
 export async function settleDraftSavers() {
   const settled = await Promise.all(everySaver().map((saver) => saver.settle()))
   return settled.every(Boolean)
 }
 
-/** The savers stay in the map, so that a render on the way out finds a stopped saver and does not start a new one from the outbox. */
 export function stopDraftSavers() {
   for (const saver of everySaver()) saver.stop()
 }

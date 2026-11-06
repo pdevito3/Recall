@@ -1,5 +1,6 @@
 namespace Recall.Server.Resources.Entrypoints.Spa;
 
+using System.IO.Compression;
 using Microsoft.AspNetCore.ResponseCompression;
 
 public static class SpaHosting
@@ -16,14 +17,20 @@ public static class SpaHosting
 
     public static bool IsPresent(WebApplication app) => app.Environment.WebRootFileProvider.GetFileInfo(IndexFile).Exists;
 
-    public static void AddSpaCompression(this IServiceCollection services) => services.AddResponseCompression(options =>
+    public static void AddSpaCompression(this IServiceCollection services)
     {
-        // Only the files of the app use this middleware, and they hold no secret. An API answer is not compressed, because of BREACH.
-        options.EnableForHttps = true;
-        options.MimeTypes = TextAssetTypes;
-        options.Providers.Add<BrotliCompressionProvider>();
-        options.Providers.Add<GzipCompressionProvider>();
-    });
+        // The default level is the fastest one, and at that level Brotli sends more bytes than gzip.
+        services.Configure<BrotliCompressionProviderOptions>(options => options.Level = CompressionLevel.Optimal);
+        services.Configure<GzipCompressionProviderOptions>(options => options.Level = CompressionLevel.Optimal);
+        services.AddResponseCompression(options =>
+        {
+            // Only the files of the app use this middleware, and they hold no secret. An API answer is not compressed, because of BREACH.
+            options.EnableForHttps = true;
+            options.MimeTypes = TextAssetTypes;
+            options.Providers.Add<BrotliCompressionProvider>();
+            options.Providers.Add<GzipCompressionProvider>();
+        });
+    }
 
     public static void UseSpaStaticFiles(this WebApplication app)
     {

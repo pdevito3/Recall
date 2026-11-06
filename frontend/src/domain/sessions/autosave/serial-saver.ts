@@ -81,7 +81,6 @@ export class SerialSaver<T, R> {
     this.answerSettleWaiters()
   }
 
-  /** Sends now. True when the Server holds the newest value, and false when the next try failed. */
   settle(): Promise<boolean> {
     this.flush()
     return new Promise((resolve) => {
@@ -136,7 +135,6 @@ export class SerialSaver<T, R> {
     const change = nextToSend(this.queue)
     if (!change || this.isDisposed) return
     this.apply({ type: 'sent' })
-    // A hung request must end, so that the retry and a true status follow. A retry has the same save time, so a request that did arrive changes nothing.
     const limit = new AbortController()
     const limitTimer = setTimeout(() => limit.abort(), requestLimitMs)
     this.options.send(change, limit.signal).then(

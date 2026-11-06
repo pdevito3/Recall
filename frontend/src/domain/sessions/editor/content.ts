@@ -33,7 +33,6 @@ export function plainPreviewOf(text: string, length: number): string {
   return plain.replace(/\s+/g, ' ').trim().slice(0, length)
 }
 
-/** The words as a person reads them, with a line for each block, for a copy to another place. */
 export function plainWordsOf(text: string): string {
   const document = parseDocument(text)
   if (!document) return text
@@ -45,7 +44,6 @@ export function plainWordsOf(text: string): string {
 const asDocument = (text: string): JSONContent =>
   parseDocument(text) ?? { type: 'doc', content: text ? [{ type: 'paragraph', content: [{ type: 'text', text }] }] : [] }
 
-/** The second text comes after the first, as in a person who types at the end. */
 export function joinWords(first: string, second: string): string {
   const [one, two] = [asDocument(first), asDocument(second)]
   return JSON.stringify({ type: 'doc', content: [...childrenOf(one), ...childrenOf(two)] })

@@ -5,10 +5,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
 
-/// <summary>
-/// Documents the header of <see cref="PageUserCheck"/> on each operation that writes. A read checks a name that it gets, but
-/// needs none, so this document names the header only where a browser must send it.
-/// </summary>
 public sealed class PageUserHeaderTransformer : IOpenApiOperationTransformer
 {
     public Task TransformAsync(
@@ -18,7 +14,7 @@ public sealed class PageUserHeaderTransformer : IOpenApiOperationTransformer
     {
         var metadata = context.Description.ActionDescriptor.EndpointMetadata;
         var requiresAuthentication = metadata.OfType<IAuthorizeData>().Any() && !metadata.OfType<IAllowAnonymous>().Any();
-        if (!requiresAuthentication || HttpMethods.IsGet(context.Description.HttpMethod ?? HttpMethods.Get))
+        if (!requiresAuthentication || PageUserCheck.MayOmitTheName(context.Description.HttpMethod ?? HttpMethods.Get))
             return Task.CompletedTask;
 
         operation.Parameters ??= [];

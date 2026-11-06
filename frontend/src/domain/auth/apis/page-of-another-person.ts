@@ -20,10 +20,6 @@ const subscribe = (listener: () => void) => {
 
 export const useHasLeftThePage = () => useSyncExternalStore(subscribe, () => hasLeft)
 
-/**
- * Another person signed in on this browser, so nothing more of this page may reach the Server or stay on the screen.
- * The unsent words stay in the outbox under the key of the person who wrote them, and they go out at the next sign-in of that person.
- */
 export function leaveThePageOfAnotherPerson(queryClient: QueryClient) {
   if (hasLeft) return
   hasLeft = true

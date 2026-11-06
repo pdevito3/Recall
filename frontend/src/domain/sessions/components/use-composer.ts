@@ -118,7 +118,6 @@ export function useComposer() {
       if (!isOnline) openWithNoRead()
     })
     const giveUp = setTimeout(openWithNoRead, readWaitMs)
-    // A read that hangs must end, so that the next read can answer. Keys wait in the editor until then, and no second entry starts.
     const readLimit = setInterval(() => void queryClient.cancelQueries({ queryKey: SessionKeys.detail(resumedSessionId), exact: true }), readLimitMs)
     let readRetry: ReturnType<typeof setTimeout> | undefined
     const read = (): Promise<void> =>
@@ -173,7 +172,8 @@ export function useComposer() {
       currentWords.current = text
       if (isReading) {
         typedWhileReading.current = isEmpty ? null : text
-        latestSaver.current?.holdInOutbox(typedWhileReading.current)
+        if (isEmpty) latestSaver.current?.releaseFromOutbox()
+        else latestSaver.current?.holdInOutbox(text)
         return
       }
       const composing = latestSaver.current

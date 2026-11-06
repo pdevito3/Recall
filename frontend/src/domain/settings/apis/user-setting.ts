@@ -60,7 +60,6 @@ function keepUnsentSetting(owner: string, queue: SaveQueue<SettingChange>) {
   }
 }
 
-/** A setting that did not reach the Server goes out on the next load. Location capture is a privacy choice, and it must not stay unsaved with no sign. */
 export function resumeUnsentSetting(owner: string, queryClient: QueryClient) {
   if (readUnsentSetting(owner)) settingSaver(queryClient)
 }

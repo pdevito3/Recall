@@ -63,7 +63,6 @@ function RefusedNotice({ notice }: { notice: Extract<DraftNotice, { kind: 'refus
   )
 }
 
-/** On each page, because the words of a saver with no page open have no other place to show. */
 export function DraftNotices() {
   const notices = useSyncExternalStore(subscribeToDraftNotices, draftNotices)
   return notices.map((notice, index) =>

@@ -9,20 +9,19 @@ export interface OutboxEntry {
   baseRevision: number
   latestRevision: number
   change: Stamped<string>
-  /** Why the Server refused these words. A refused entry waits for the person, and it does not go out again on the next load. */
   refusal?: string | null
   movedFromDeletedEntry?: boolean
 }
 
-// A dot ends the owner, so a dot in the name of an owner must not look like that end.
-const prefixOf = (owner: string) => `recall.unsent.${encodeURIComponent(owner).replaceAll('.', '%2E')}.`
+const ownerWithNoDot = (owner: string) => encodeURIComponent(owner).replaceAll('.', '%2E')
+
+const prefixOf = (owner: string) => `recall.unsent.${ownerWithNoDot(owner)}.`
 
 const isStamped = (value: unknown): value is Stamped<string> => {
   const change = value as Stamped<string> | null
   return typeof change?.value === 'string' && typeof change.savedAt === 'string'
 }
 
-// The outbox outlives the code that wrote it, and another tab or a person with dev tools can change it.
 function parseEntry(stored: string | null): OutboxEntry | null {
   try {
     const entry = JSON.parse(stored ?? 'null') as Partial<OutboxEntry> | null
@@ -65,7 +64,6 @@ export function readOutboxEntry(owner: string, key: string): OutboxEntry | null 
   }
 }
 
-/** Reads each entry alone. An entry that cannot be read stays in storage, and it does not hide the others. */
 export function readOutbox(owner: string): OutboxEntry[] {
   try {
     return Object.keys(localStorage)

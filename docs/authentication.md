@@ -495,6 +495,8 @@ The script `frontend/e2e/run-against-stack.ts` reads the stack from `dotnet aspi
 
 Extra arguments go to Playwright, for example `pnpm test:e2e:stack --repeat-each=5`.
 
+`frontend/e2e/two-people.spec.ts` signs in two people on one browser, as in [One browser, two people](#one-browser-two-people). It needs an IdP file with `secondPersonEmail`, which only ZeroFactor has now, and a stack with `Auth__OpenSignup=true`. On another IdP it does not run, and the report says so.
+
 ## Conformance
 
 Recall dropped the OpenID Foundation conformance run. The results of the template were for its BFF, which Recall deleted, so they say nothing about the login of the Server. No run in this repository tests the Server against that suite.
