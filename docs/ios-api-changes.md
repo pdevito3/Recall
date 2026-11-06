@@ -49,4 +49,5 @@ A change of the time zone moves a Session to a new day, but the sync feed does n
 - `DELETE /api/v1/sessions/{id}` removes a Session. The feed then has a tombstone. See [ADR 0020](adr/0020-journal-rules-in-the-database.md).
 - `POST`, `GET /api/v1/people`, and `GET`, `PUT /api/v1/people/{id}`. A rename changes each mention. Fixtures: `person`, `people`.
 - `POST`, `GET /api/v1/corrections`, and `GET`, `PUT`, `DELETE /api/v1/corrections/{id}`. Fixtures: `correction`, `corrections`.
+- `PUT /api/v1/sessions/{id}/draft` counts the characters that a person sees, with a limit of 1,000,000. An editor document can have up to 4,000,000 characters with its formatting.
 - `GET /api/v1/file-store/status` gives `{ canWrite }`. When it is false, tell the person before you record audio. The web journal shows this message.

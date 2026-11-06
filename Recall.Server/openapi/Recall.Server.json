@@ -3454,16 +3454,6 @@
               }
             }
           },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
           "401": {
             "description": "The request has no valid access token."
           }
@@ -3889,7 +3879,7 @@
         "type": "object",
         "properties": {
           "text": {
-            "maxLength": 1000000,
+            "maxLength": 4000000,
             "type": "string"
           },
           "baseRevision": {

@@ -9,7 +9,11 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
 {
     public const string IdPrefix = "ses";
     public const int ClientSessionIdMaxLength = 100;
+    /// <summary>The most characters that a person sees in a Draft.</summary>
     public const int DraftMaxLength = 1_000_000;
+
+    /// <summary>The most characters of a Draft as stored. An editor document holds its formatting next to the words.</summary>
+    public const int DraftMaxStoredLength = 4_000_000;
     public const int PreviewMaxLength = 200;
     public const int SynopsisMaxLength = 10_000;
     public const int MetadataValueMaxLength = 100;

@@ -4,13 +4,10 @@
 */
 
 import type { FileStoreStatusDto } from '../../models/types/file-store-status-dto'
-import type { ProblemDetails } from '../../models/types/problem-details'
 
 export type GetFileStoreStatusStatus200 = FileStoreStatusDto;
 
 export type GetFileStoreStatusStatus401 = unknown;
-
-export type GetFileStoreStatusStatus403 = ProblemDetails;
 
 export type GetFileStoreStatusOptions = {
     body?: never;
@@ -22,7 +19,6 @@ export type GetFileStoreStatusOptions = {
 export type GetFileStoreStatusResponses = {
     "200": GetFileStoreStatusStatus200;
     "401": GetFileStoreStatusStatus401;
-    "403": GetFileStoreStatusStatus403;
 };
 
 /**

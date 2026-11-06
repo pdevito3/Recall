@@ -1,18 +1,41 @@
 namespace Recall.Server.Resources.Entrypoints.Spa;
 
+using Microsoft.AspNetCore.ResponseCompression;
+
 public static class SpaHosting
 {
     private const string IndexFile = "index.html";
+    private const string HashedFilesFolder = "/assets";
+    private const string HashedFileCacheControl = "public, max-age=31536000, immutable";
+
+    private static readonly string[] TextAssetTypes =
+        ["text/html", "text/css", "text/javascript", "application/javascript", "application/json", "image/svg+xml", "application/manifest+json"];
 
     private static readonly PathString[] ReservedPrefixes =
         ["/api", "/auth", "/mcp", "/swagger", "/openapi", "/health", "/alive", "/.well-known"];
 
     public static bool IsPresent(WebApplication app) => app.Environment.WebRootFileProvider.GetFileInfo(IndexFile).Exists;
 
+    public static void AddSpaCompression(this IServiceCollection services) => services.AddResponseCompression(options =>
+    {
+        // Only the files of the app use this middleware, and they hold no secret. An API answer is not compressed, because of BREACH.
+        options.EnableForHttps = true;
+        options.MimeTypes = TextAssetTypes;
+        options.Providers.Add<BrotliCompressionProvider>();
+        options.Providers.Add<GzipCompressionProvider>();
+    });
+
     public static void UseSpaStaticFiles(this WebApplication app)
     {
-        if (IsPresent(app))
-            app.UseStaticFiles();
+        if (!IsPresent(app))
+            return;
+
+        app.UseWhen(context => !IsReserved(context.Request.Path), branch => branch.UseResponseCompression());
+        app.UseStaticFiles(new StaticFileOptions
+        {
+            OnPrepareResponse = file =>
+                file.Context.Response.Headers.CacheControl = file.Context.Request.Path.StartsWithSegments(HashedFilesFolder) ? HashedFileCacheControl : "no-cache",
+        });
     }
 
     public static void UseSpaFallback(this WebApplication app)
@@ -54,8 +77,10 @@ public static class SpaHosting
         return (HttpMethods.IsGet(request.Method) || HttpMethods.IsHead(request.Method))
             && context.GetEndpoint() is null
             && (!Path.HasExtension(request.Path.Value) || AsksForAPage(request))
-            && !ReservedPrefixes.Any(prefix => request.Path.StartsWithSegments(prefix));
+            && !IsReserved(request.Path);
     }
+
+    private static bool IsReserved(PathString path) => ReservedPrefixes.Any(prefix => path.StartsWithSegments(prefix));
 
     // A path with a dot can be a missing file, and a script tag must then get a 404 and no HTML. A person who opens the path asks for a page.
     private static bool AsksForAPage(HttpRequest request)

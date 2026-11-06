@@ -12,8 +12,7 @@ public sealed class GetFileStoreStatusEndpoint : IEndpoint
         .WithName("GetFileStoreStatus")
         .WithTags("FileStore")
         .MapToApiVersion(ApiVersions.V1)
-        .RequireAuthorization()
-        .ProducesProblem(StatusCodes.Status403Forbidden);
+        .RequireAuthorization();
 
     /// <summary>
     /// Tells a client whether the file store takes writes, so a person sees the fault before a recording is at risk.

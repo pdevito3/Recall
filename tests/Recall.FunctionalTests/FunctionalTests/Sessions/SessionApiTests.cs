@@ -18,6 +18,36 @@ public class SessionApiTests : TestBase
     private static readonly string[] ShoutedTopic = [" WORK "];
 
     [Test]
+    public async Task the_limit_of_a_draft_counts_the_characters_that_a_person_sees_and_not_the_document_around_them()
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        var document = (int length) => JsonSerializer.Serialize(new
+        {
+            type = "doc",
+            content = Enumerable.Range(0, length / 100).Select(_ => new
+            {
+                type = "paragraph",
+                content = new[] { new { type = "text", text = new string('x', 100), marks = new[] { new { type = "bold" } } } },
+            }),
+        });
+
+        // Act
+        var justUnderTheLimit = await FactoryClient.SaveDraftAsync(session.Id, document(990_000), 0);
+        var overTheLimit = await FactoryClient.SaveDraftAsync(session.Id, document(1_000_100), 1);
+        var overTheLimitPlain = await FactoryClient.SaveDraftAsync(session.Id, new string('x', 1_000_001), 1);
+
+        // Assert
+        document(990_000).Length.ShouldBeGreaterThan(1_000_000);
+        justUnderTheLimit.StatusCode.ShouldBe(HttpStatusCode.OK);
+        overTheLimit.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await overTheLimit.Content.ReadAsStringAsync()).ShouldContain("1,000,000 characters");
+        overTheLimitPlain.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Test]
     public async Task a_saved_text_comes_back_exactly()
     {
         // Arrange

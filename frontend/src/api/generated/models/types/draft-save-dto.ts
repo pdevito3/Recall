@@ -5,7 +5,7 @@
 
 export type DraftSaveDto = {
     /**
-     * @maxLength 1000000
+     * @maxLength 4000000
      * @type string
     */
     text: string;

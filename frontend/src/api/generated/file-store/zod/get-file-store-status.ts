@@ -5,14 +5,11 @@
 
 import * as z from 'zod'
 import { fileStoreStatusDtoSchema } from '../../models/zod/file-store-status-dto'
-import { problemDetailsSchema } from '../../models/zod/problem-details'
 
 export const getFileStoreStatusStatus200Schema = fileStoreStatusDtoSchema
 
 export const getFileStoreStatusStatus401Schema = z.unknown()
 
-export const getFileStoreStatusStatus403Schema = problemDetailsSchema
-
 export const getFileStoreStatusResponseSchema = getFileStoreStatusStatus200Schema
 
-export const getFileStoreStatusErrorSchema = z.union([getFileStoreStatusStatus401Schema, getFileStoreStatusStatus403Schema])
+export const getFileStoreStatusErrorSchema = getFileStoreStatusStatus401Schema

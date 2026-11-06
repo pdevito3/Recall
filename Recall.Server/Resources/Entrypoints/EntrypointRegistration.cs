@@ -19,6 +19,7 @@ public static class EntrypointRegistration
     {
         builder.Services.AddRecallAuthentication(builder.Configuration, builder.Environment);
         builder.Services.AddHttpContextAccessor();
+        builder.Services.AddSpaCompression();
         builder.Services.AddScoped<ICurrentPrincipalAccessor, HttpContextPrincipalAccessor>();
 
         // HTTP
