@@ -60,6 +60,50 @@ public class SessionPageTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-28")]
+    public async Task a_session_with_the_start_of_the_anchor_sorts_ahead_so_only_a_read_from_the_start_gives_it()
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var start = JournalScenario.Morning.AddHours(-1);
+        var older = await FactoryClient.AddSessionAsync(start.AddHours(-1));
+        var anchor = await FactoryClient.AddSessionAsync(start);
+        var first = (await FactoryClient.GetFromJsonAsync<SessionPageDto>($"{ApiRoutes.Sessions.Root}?pageSize=1"))!;
+
+        // Act
+        var arrived = await FactoryClient.AddSessionAsync(start);
+        var second = (await FactoryClient.GetFromJsonAsync<SessionPageDto>($"{ApiRoutes.Sessions.Root}?pageSize=1&cursor={first.NextCursor}"))!;
+        var fromTheStart = (await FactoryClient.GetFromJsonAsync<SessionPageDto>($"{ApiRoutes.Sessions.Root}?pageSize=10"))!;
+
+        // Assert
+        first.Items.ShouldHaveSingleItem().Id.ShouldBe(anchor.Id);
+        second.Items.ShouldHaveSingleItem().Id.ShouldBe(older.Id);
+        second.NextCursor.ShouldBeNull();
+        fromTheStart.Items.Select(i => i.Id).ShouldContain(arrived.Id);
+    }
+
+    [Test]
+    [Property("Rule", "SES-28")]
+    public async Task a_session_that_arrives_and_sorts_after_the_cursor_comes_in_a_later_page()
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var start = JournalScenario.Morning.AddHours(-1);
+        await FactoryClient.AddSessionAsync(start);
+        await FactoryClient.AddSessionAsync(start.AddHours(-2));
+        var first = (await FactoryClient.GetFromJsonAsync<SessionPageDto>($"{ApiRoutes.Sessions.Root}?pageSize=1"))!;
+
+        // Act
+        var arrived = await FactoryClient.AddSessionAsync(start.AddHours(-1));
+        var second = (await FactoryClient.GetFromJsonAsync<SessionPageDto>($"{ApiRoutes.Sessions.Root}?pageSize=1&cursor={first.NextCursor}"))!;
+
+        // Assert
+        second.Items.ShouldHaveSingleItem().Id.ShouldBe(arrived.Id);
+    }
+
+    [Test]
     [Property("Rule", "SES-23")]
     public async Task a_timeline_row_has_the_preview_and_no_draft()
     {
