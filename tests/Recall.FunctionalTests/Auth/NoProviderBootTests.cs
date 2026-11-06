@@ -378,6 +378,78 @@ public partial class NoProviderBootTests
     }
 
     [Test]
+    [Arguments("maybe")]
+    [Arguments("yes")]
+    [Arguments("1")]
+    [Arguments("")]
+    public async Task a_provider_setting_that_cannot_convert_stops_the_server_and_names_the_setting(string allowHttp)
+    {
+        // Arrange
+        const string secret = "a-secret-that-no-log-shows";
+        Dictionary<string, string> provider = new()
+        {
+            ["Auth__Providers__0__Id"] = "stub",
+            ["Auth__Providers__0__Issuer"] = "https://provider.test",
+            ["Auth__Providers__0__ClientId"] = "recall",
+            ["Auth__Providers__0__ClientSecret"] = secret,
+            ["Auth__Providers__0__AllowHttp"] = allowHttp,
+        };
+        await using var server = await ServerProcess.LaunchAsync(null, provider);
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+        // Act
+        await server.WaitForExitAsync(limit.Token);
+
+        // Assert
+        server.ExitCode.ShouldBe(1);
+        server.Output.ShouldContain("Auth:Providers:0:AllowHttp");
+        server.Output.ShouldNotContain(secret);
+    }
+
+    [Test]
+    public async Task a_bad_setting_of_a_later_provider_does_not_leave_the_first_provider_alone_on_the_login_page()
+    {
+        // Arrange
+        Dictionary<string, string> providers = new()
+        {
+            ["Auth__Providers__0__Id"] = "first",
+            ["Auth__Providers__0__Issuer"] = "https://first.test",
+            ["Auth__Providers__0__ClientId"] = "recall",
+            ["Auth__Providers__0__ClientSecret"] = "secret",
+            ["Auth__Providers__1__Id"] = "second",
+            ["Auth__Providers__1__Issuer"] = "https://second.test",
+            ["Auth__Providers__1__ClientId"] = "recall",
+            ["Auth__Providers__1__ClientSecret"] = "secret",
+            ["Auth__Providers__1__AllowHttp"] = "maybe",
+        };
+        await using var server = await ServerProcess.LaunchAsync(null, providers);
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+        // Act
+        await server.WaitForExitAsync(limit.Token);
+
+        // Assert
+        server.ExitCode.ShouldBe(1);
+        server.Output.ShouldContain("Auth:Providers:1:AllowHttp");
+    }
+
+    [Test]
+    public async Task a_provider_with_a_text_value_in_place_of_its_settings_stops_the_server_and_names_the_provider()
+    {
+        // Arrange
+        Dictionary<string, string> provider = new() { ["Auth__Providers__0"] = "keycloak" };
+        await using var server = await ServerProcess.LaunchAsync(null, provider);
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+        // Act
+        await server.WaitForExitAsync(limit.Token);
+
+        // Assert
+        server.ExitCode.ShouldBe(1);
+        server.Output.ShouldContain("Auth:Providers:0:ClientId is missing");
+    }
+
+    [Test]
     public async Task a_keys_directory_with_no_access_does_not_stop_the_boot()
     {
         // Arrange
