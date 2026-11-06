@@ -208,10 +208,8 @@ jobs:
           filters: |
             stack:
               - 'Recall.AppHost/**'
-              - 'Recall.Server/Auth/**'
-              - 'Recall.Server/Databases/**'
-              - 'Recall.Server/Domain/**'
-              - 'Recall.Server/Resources/Entrypoints/**'
+              - 'Recall.Server/**'
+              - 'Recall.SourceGenerators/**'
               - 'Directory.Packages.props'
               - 'Directory.Build.props'
               - 'global.json'

@@ -18,7 +18,7 @@ public static class AuthPages
         + "@media (prefers-color-scheme:dark){:root{--background:oklch(0.1363 0.0364 259.2010);--foreground:oklch(0.9842 0.0034 247.8575);--primary:oklch(0.6231 0.1880 259.8145);--border:oklch(0.2795 0.0368 260.0310)}}"
         + "body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--background);color:var(--foreground);font:16px/1.5 system-ui,sans-serif}"
         + "main{box-sizing:border-box;width:100%;max-width:28rem;padding:2rem}h1{font-size:1.5rem;margin:0 0 1rem}p{margin:0 0 1rem}code{overflow-wrap:anywhere}"
-        + "ul{list-style:none;margin:1rem 0 0;padding:0}li{margin:.5rem 0}ul+p{margin-top:1rem}form{margin:1rem 0 0}"
+        + "ul{list-style:none;margin:1rem 0 0;padding:0}li{margin:.5rem 0}li.note{margin:1rem 0}ul+p{margin-top:1rem}form{margin:1rem 0 0}"
         + "a.button,button{display:block;box-sizing:border-box;width:100%;padding:.75rem 1rem;border:0;border-radius:.5rem;background:var(--primary);color:var(--primary-foreground);font:inherit;text-align:center;text-decoration:none;cursor:pointer}";
 
     private static readonly string StyleHash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(Style)));
@@ -27,20 +27,25 @@ public static class AuthPages
     private static readonly string BasePolicy = $"default-src 'none'; style-src 'sha256-{StyleHash}'; base-uri 'none'; frame-ancestors 'none'";
     private static readonly string StrictPolicy = BasePolicy + "; form-action 'self'";
 
+    private static readonly string[] NoMethodNames =
+        ["Auth__Providers__0__Issuer", "Auth__Providers__0__ClientId", "Auth__Providers__0__ClientSecret", "docs/authentication.md"];
+
     public const string PromptLogin = "login";
 
     public sealed record ChooserMode(string Id, string DisplayName, LoginModeState State, string? ProviderLogoutUrl);
 
-    public static IResult NoMethod(string callbackUrl) => Page(
+    public static IResult NoMethod(string callbackUrl, string returnPath) => Page(
         StatusCodes.Status503ServiceUnavailable,
         "Sign-in is not set up",
-        $"<p>{E(NoMethodMessage)}</p><p>Register this callback URL at the provider: <code>{E(callbackUrl)}</code></p>");
+        $"<p>{NoMethodNames.Aggregate(E(NoMethodMessage), (html, name) => html.Replace(name, $"<code>{name}</code>", StringComparison.Ordinal))}</p>"
+            + $"<p>Register this callback URL at the provider:</p><p><code>{BreakableUrl(callbackUrl)}</code></p>"
+            + TryAgainTo(returnPath));
 
     public static IResult Chooser(IReadOnlyList<ChooserMode> modes, string returnPath, bool signedOut, string? message)
     {
         var items = modes.Select(mode => mode.State == LoginModeState.Ready
             ? $"<li><a class=\"button\" href=\"{E(StartUrl(mode.Id, returnPath))}\">Sign in with {E(mode.DisplayName)}</a></li>"
-            : $"<li>{E(NotAvailable(mode.DisplayName))}</li>");
+            : $"<li class=\"note\">{E(NotAvailable(mode.DisplayName))}</li>");
         var note = message is null ? "" : $"<p>{E(message)}</p>";
         var providerLogouts = modes.Where(mode => mode.ProviderLogoutUrl is not null).Select(mode =>
             $"<p>Your session at {E(mode.DisplayName)} did not end. <a href=\"{E(mode.ProviderLogoutUrl!)}\">Sign out of {E(mode.DisplayName)}</a></p>");
@@ -50,15 +55,14 @@ public static class AuthPages
             ? Page(
                 StatusCodes.Status503ServiceUnavailable,
                 heading,
-                $"{note}<ul>{string.Concat(items)}</ul><p>Wait a few minutes, then try again.</p>"
-                    + Action("Try again", $"{AuthRoutes.Login}?returnUrl={Uri.EscapeDataString(returnPath)}"))
+                $"{note}<ul>{string.Concat(items)}</ul><p>Wait a few minutes, then try again.</p>" + TryAgainTo(returnPath))
             : Page(StatusCodes.Status200OK, heading, $"{note}<ul>{string.Concat(items)}</ul>{string.Concat(providerLogouts)}");
     }
 
-    public static IResult ProviderIsDown(string displayName) => Page(
+    public static IResult ProviderIsDown(string displayName, string tryAgainUrl) => Page(
         StatusCodes.Status503ServiceUnavailable,
         "Sign-in is not available",
-        $"<p>{E(NotAvailable(displayName))} Wait a few minutes, then try again.</p>" + TryAgain);
+        $"<p>{E(NotAvailable(displayName))} Wait a few minutes, then try again.</p>" + Action("Try again", tryAgainUrl));
 
     public static IResult SignupClosed(IReadOnlyList<ILoginMode> modes, string returnPath)
     {
@@ -99,8 +103,8 @@ public static class AuthPages
     /// <summary>The step of RFC 8252 section 8.6. An app that starts this flow on a silent provider session gets nothing until the person taps Continue.</summary>
     public static IResult ConfirmNative(string displayName, string code) => Page(
         StatusCodes.Status200OK,
-        "Sign in the Recall app?",
-        $"<p>Sign in the Recall app on this device as {E(displayName)}?</p>"
+        "Sign in to the Recall app?",
+        $"<p>You are signing in on this device as {E(displayName)}.</p>"
             + "<p>If you did not start this from the app, close this page.</p>"
             + $"<form method=\"post\" action=\"{AuthRoutes.Confirm}\"><input type=\"hidden\" name=\"code\" value=\"{E(code)}\"><button type=\"submit\">Continue</button></form>",
         BasePolicy);
@@ -111,12 +115,21 @@ public static class AuthPages
 
     private static readonly string TryAgain = Action("Try again", AuthRoutes.Login);
 
+    private static string TryAgainTo(string returnPath) => Action("Try again", $"{AuthRoutes.Login}?returnUrl={Uri.EscapeDataString(returnPath)}");
+
     private static string Action(string label, string url) => $"<ul><li><a class=\"button\" href=\"{E(url)}\">{E(label)}</a></li></ul>";
 
     private static string StartUrl(string id, string returnPath)
         => $"/auth/oidc/{Uri.EscapeDataString(id)}/start?client=web&returnUrl={Uri.EscapeDataString(returnPath)}";
 
     private static string E(string text) => WebUtility.HtmlEncode(text);
+
+    /// <summary>A person copies this URL, so it can wrap before a slash of its path. The browser can also wrap at a hyphen of the host, and anywhere in a part that is wider than the page.</summary>
+    private static string BreakableUrl(string url)
+    {
+        var path = url.IndexOf('/', url.IndexOf("://", StringComparison.Ordinal) + 3);
+        return E(url[..path]) + E(url[path..]).Replace("/", "<wbr>/", StringComparison.Ordinal);
+    }
 
     private static PageResult Page(int status, string heading, string body, string? policy = null)
         => new(status, policy ?? StrictPolicy,

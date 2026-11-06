@@ -1,6 +1,7 @@
 namespace Recall.FunctionalTests.Auth;
 
 using System.Collections.Concurrent;
+using System.IO.Compression;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -31,6 +32,10 @@ public sealed record StubLogin(string Subject)
     public string? TokenBody { get; init; }
     public string? TokenCharset { get; init; }
     public string? UserinfoCharset { get; init; }
+    public string? UserinfoBody { get; init; }
+    public string? AccessToken { get; init; }
+    public bool TokenBodyIsCorrupt { get; init; }
+    public bool UserinfoBodyIsCorrupt { get; init; }
     public string[]? IdTokenAudiences { get; init; }
     public string? IdTokenAzp { get; init; }
     public TimeSpan IdTokenLifetime { get; init; } = TimeSpan.FromMinutes(5);
@@ -59,21 +64,44 @@ public sealed class StubOidcProvider : HttpMessageHandler
     private readonly ConcurrentDictionary<string, (AuthorizeRequest Request, StubLogin Login)> _codes = new();
     private readonly ConcurrentDictionary<string, StubLogin> _accessTokens = new();
     private readonly ConcurrentQueue<string> _handedOut = new();
+    private readonly string _issuer;
+
+    public StubOidcProvider(string issuer = Issuer)
+    {
+        _issuer = issuer;
+        DiscoveryIssuer = issuer;
+        EndSessionEndpoint = $"{issuer}/logout";
+
+        // RSA.Create makes the pair at its first use. On macOS two threads that race for that use can each make a pair.
+        _ = _signingKey.Rsa.ExportParameters(false);
+        _ = _otherKey.Rsa.ExportParameters(false);
+    }
 
     // The characters that the Basic form must escape, so each login proves the escape.
     public string ClientSecret { get; } = $"{Secrets.New()}:%&+";
+
+    public string? DiscoveryCharset { get; set; }
+
+    public string? JwksCharset { get; set; }
+
+    public bool DiscoveryBodyIsCorrupt { get; set; }
+
+    public bool JwksBodyIsCorrupt { get; set; }
 
     public bool Down { get; set; }
 
     public string[]? PromptValues { get; init; }
 
-    public string DiscoveryIssuer { get; init; } = Issuer;
+    public string DiscoveryIssuer { get; init; }
 
     public string[] AuthMethods { get; init; } = ["client_secret_basic"];
 
     public bool ListsIssParameter { get; init; } = true;
 
-    public string? EndSessionEndpoint { get; init; } = $"{Issuer}/logout";
+    public string? EndSessionEndpoint { get; init; }
+
+    /// <summary>Changes each answer on its way out, for a fault of a real provider. It gets the path and the answer that the stub would send.</summary>
+    public Func<string, HttpResponseMessage, CancellationToken, Task<HttpResponseMessage>>? AnswerFault { get; set; }
 
     public IReadOnlyCollection<string> HandedOut => _handedOut;
 
@@ -114,25 +142,30 @@ public sealed class StubOidcProvider : HttpMessageHandler
         if (Down)
             throw new HttpRequestException("The stub provider is down.");
 
-        return request.RequestUri!.AbsolutePath switch
+        var path = request.RequestUri!.AbsolutePath;
+        var answer = path switch
         {
             "/.well-known/openid-configuration" => Discovery(),
-            "/jwks" => Json(new Dictionary<string, object> { ["keys"] = new[] { Jwk(), HmacJwk() } }),
+            "/jwks" => JwksBodyIsCorrupt ? CorruptAnswer() : WithCharset(JwksCharset, Json(new Dictionary<string, object> { ["keys"] = new[] { Jwk(), HmacJwk() } })),
             "/token" => await TokenAsync(request, cancellationToken),
             "/userinfo" => Userinfo(request),
             _ => new HttpResponseMessage(HttpStatusCode.NotFound),
         };
+        return AnswerFault is { } fault ? await fault(path, answer, cancellationToken) : answer;
     }
 
     private HttpResponseMessage Discovery()
     {
+        if (DiscoveryBodyIsCorrupt)
+            return CorruptAnswer();
+
         var body = new Dictionary<string, object>
         {
             ["issuer"] = DiscoveryIssuer,
-            ["authorization_endpoint"] = $"{Issuer}/authorize",
-            ["token_endpoint"] = $"{Issuer}/token",
-            ["jwks_uri"] = $"{Issuer}/jwks",
-            ["userinfo_endpoint"] = $"{Issuer}/userinfo",
+            ["authorization_endpoint"] = $"{_issuer}/authorize",
+            ["token_endpoint"] = $"{_issuer}/token",
+            ["jwks_uri"] = $"{_issuer}/jwks",
+            ["userinfo_endpoint"] = $"{_issuer}/userinfo",
             ["token_endpoint_auth_methods_supported"] = AuthMethods,
             ["authorization_response_iss_parameter_supported"] = ListsIssParameter,
         };
@@ -140,7 +173,7 @@ public sealed class StubOidcProvider : HttpMessageHandler
             body["prompt_values_supported"] = values;
         if (EndSessionEndpoint is { } endSession)
             body["end_session_endpoint"] = endSession;
-        return Json(body);
+        return WithCharset(DiscoveryCharset, Json(body));
     }
 
     private Dictionary<string, string> Jwk()
@@ -180,7 +213,7 @@ public sealed class StubOidcProvider : HttpMessageHandler
         var issuedAt = expires < now ? expires.AddMinutes(-5) : now;
         return new JsonWebTokenHandler { SetDefaultTimesOnTokenCreation = false }.CreateToken(new SecurityTokenDescriptor
         {
-            Issuer = login.IdTokenIssuer ?? Issuer,
+            Issuer = login.IdTokenIssuer ?? _issuer,
             Audience = login.IdTokenAudiences is null ? ClientId : null,
             IssuedAt = issuedAt,
             NotBefore = issuedAt,
@@ -209,10 +242,13 @@ public sealed class StubOidcProvider : HttpMessageHandler
             return Refused("invalid_grant");
 
         var login = grant.Login;
+        if (login.TokenBodyIsCorrupt)
+            return CorruptAnswer();
+
         if (login.TokenBody is { } tokenBody)
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(tokenBody, Encoding.UTF8, "application/json") };
 
-        var accessToken = Secrets.New();
+        var accessToken = login.AccessToken ?? Secrets.New();
         _accessTokens[accessToken] = login;
         var idToken = IdTokenOf(login, login.Nonce ?? grant.Request.Nonce);
         _handedOut.Enqueue(accessToken);
@@ -239,12 +275,24 @@ public sealed class StubOidcProvider : HttpMessageHandler
         if (request.Headers.Authorization?.Parameter is not { } token || !_accessTokens.TryGetValue(token, out var login))
             return new HttpResponseMessage(HttpStatusCode.Unauthorized);
 
+        if (login.UserinfoBodyIsCorrupt)
+            return CorruptAnswer();
+
+        if (login.UserinfoBody is { } userinfoBody)
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(userinfoBody, Encoding.UTF8, "application/json") };
+
         var body = new Dictionary<string, object> { ["name"] = login.UserinfoName ?? login.Name };
         if (!login.UserinfoOmitsSubject)
             body["sub"] = login.UserinfoSubject ?? login.Subject;
 
         return WithCharset(login.UserinfoCharset, Json(body));
     }
+
+    /// <summary>The stream that the real handler makes for an answer with a gzip encoding, so that the buffer of HttpClient fails in the same way.</summary>
+    private static HttpResponseMessage CorruptAnswer() => new(HttpStatusCode.OK)
+    {
+        Content = new StreamContent(new GZipStream(new MemoryStream("this is not gzip at all"u8.ToArray()), CompressionMode.Decompress)),
+    };
 
     private static HttpResponseMessage WithCharset(string? charset, HttpResponseMessage response)
     {

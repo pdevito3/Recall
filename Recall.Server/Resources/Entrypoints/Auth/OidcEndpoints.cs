@@ -100,7 +100,8 @@ public static class OidcEndpoints
         var acceptsHtml = request.GetTypedHeaders().Accept
             .Any(accept => HtmlTypes.Contains(accept.MediaType.ToString(), StringComparer.OrdinalIgnoreCase));
         return acceptsHtml
-            ? AuthPages.ProviderIsDown(displayName)
+            // The same start, so that a native app keeps its flow and a web login keeps its return path.
+            ? AuthPages.ProviderIsDown(displayName, request.Path + request.QueryString)
             : Results.Json(new { error = "idp_unreachable", message = AuthPages.ProviderDown(displayName) }, statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 

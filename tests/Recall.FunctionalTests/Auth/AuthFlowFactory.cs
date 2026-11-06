@@ -19,6 +19,8 @@ using Serilog.Core;
 public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> settings, StubOidcProvider? provider = null) : WebApplicationFactory<Program>
 {
     public const string ModeId = "stub";
+    public const string OtherModeId = "other";
+    public const string OtherIssuer = "https://other-idp.test";
     public const string ConnectionAddressHeader = "X-Test-Connection-Address";
 
     private readonly SqliteTestDatabase _database = new();
@@ -27,6 +29,12 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
     public StubOidcProvider Provider { get; } = provider ?? new();
 
     public CapturedLogs Logs { get; } = new();
+
+    /// <summary>A second provider with the mode ID <see cref="OtherModeId"/>, for a test of one provider that fails next to one that works.</summary>
+    public StubOidcProvider? OtherProvider { get; init; }
+
+    /// <summary>A place for the claim file outside the folder of the database, so a test can refuse a rename there and the database still works.</summary>
+    public string? ClaimFilePath { get; init; }
 
     public HttpClient NewClient()
     {
@@ -55,13 +63,24 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
         builder.UseSetting("Auth:Providers:0:Issuer", StubOidcProvider.Issuer);
         builder.UseSetting("Auth:Providers:0:ClientId", StubOidcProvider.ClientId);
         builder.UseSetting("Auth:Providers:0:ClientSecret", Provider.ClientSecret);
+        if (OtherProvider is not null)
+        {
+            builder.UseSetting("Auth:Providers:1:Id", OtherModeId);
+            builder.UseSetting("Auth:Providers:1:DisplayName", "Other");
+            builder.UseSetting("Auth:Providers:1:Issuer", OtherIssuer);
+            builder.UseSetting("Auth:Providers:1:ClientId", StubOidcProvider.ClientId);
+            builder.UseSetting("Auth:Providers:1:ClientSecret", OtherProvider.ClientSecret);
+        }
+
         foreach (var (key, value) in settings)
             builder.UseSetting(key, value);
 
         builder.ConfigureLogging(logging => logging.ClearProviders());
         builder.ConfigureServices(services =>
         {
-            services.AddSingleton<OidcHandlerFactory>(_ => Provider);
+            services.AddSingleton<OidcHandlerFactory>(options => options.Id == OtherModeId ? OtherProvider! : Provider);
+            if (ClaimFilePath is { } claimFile)
+                services.AddSingleton(provider => new OwnerClaim(claimFile, provider.GetRequiredService<TimeProvider>()));
             services.AddSingleton<ILogEventSink>(Logs);
             services.AddSingleton<IStartupFilter, ConnectionAddressFilter>();
             services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
@@ -73,6 +92,8 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
     {
         await base.DisposeAsync();
         await _database.DisposeAsync();
+        if (ClaimFilePath is { } claimFile)
+            Directory.Delete(Path.GetDirectoryName(claimFile)!, recursive: true);
     }
 
     /// <summary>The test server has no socket, so this is how a test stands at a connection address.</summary>

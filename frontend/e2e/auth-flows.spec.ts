@@ -422,7 +422,7 @@ test.describe(`Native app login - ${currentIdp.name}`, () => {
 
       await page.goto(`${origin}${await readStartUrl(origin)}&${parameters}`)
       await loginAtIdp(page, currentIdp)
-      await expect(page.getByRole('heading', { name: 'Sign in the Recall app?' })).toBeVisible({ timeout: 30000 })
+      await expect(page.getByRole('heading', { name: 'Sign in to the Recall app?' })).toBeVisible({ timeout: 30000 })
       await page.getByRole('button', { name: 'Continue' }).click()
 
       const callbackUrl = await callback
