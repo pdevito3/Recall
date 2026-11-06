@@ -51,12 +51,14 @@ export default async ({ page, context, stack, step, capture, expect, login, logo
     await expect(page.getByRole('heading', { name: 'You are signed out' })).toBeVisible()
     await expect(page).toHaveTitle('You are signed out - Recall')
     await expect(page.getByText(`Signed in as ${name}`)).toHaveCount(0)
-    await expect(page.getByRole('link', { name: /^Sign out of / })).toHaveAttribute('href', /client_id=/)
+    await expect(page.getByRole('link', { name: /^Sign in with / })).toBeVisible()
+    await expect(page.getByRole('link', { name: /^Sign out of / })).toHaveCount(0)
   })
   await capture('logged-out')
 
-  await step('sign in again from the signed-out page: the session of the IdP gives the same user a session', async () => {
+  await step('sign in from the signed-out page: the IdP has no session, so it asks again and starts no silent sign-in', async () => {
     await page.getByRole('link', { name: /^Sign in with / }).click()
-    await expect(page.getByText(`Signed in as ${name}`)).toBeVisible({ timeout: 30_000 })
+    await page.waitForURL((u) => u.origin !== new URL(stack.urls.web).origin, { waitUntil: 'domcontentloaded' })
+    expect(await appStatus(page, '/auth/me')).toBe(204)
   })
 }

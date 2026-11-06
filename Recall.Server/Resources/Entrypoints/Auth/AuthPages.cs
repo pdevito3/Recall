@@ -32,7 +32,10 @@ public static class AuthPages
 
     public const string PromptLogin = "login";
 
-    public sealed record ChooserMode(string Id, string DisplayName, LoginModeState State, string? ProviderLogoutUrl);
+    public sealed record ChooserMode(string Id, string DisplayName, LoginModeState State);
+
+    /// <summary>The provider session of a sign-out that Recall cannot show as ended.</summary>
+    public sealed record OpenProviderSession(string DisplayName, LoginModeState State, string? LogoutUrl);
 
     public static IResult NoMethod(string callbackUrl, string returnPath) => Page(
         StatusCodes.Status503ServiceUnavailable,
@@ -41,22 +44,35 @@ public static class AuthPages
             + $"<p>Register this callback URL at the provider:</p><p><code>{BreakableUrl(callbackUrl)}</code></p>"
             + TryAgainTo(returnPath));
 
-    public static IResult Chooser(IReadOnlyList<ChooserMode> modes, string returnPath, bool signedOut, string? message)
+    public static IResult Chooser(IReadOnlyList<ChooserMode> modes, string returnPath, bool signedOut, string? message, OpenProviderSession? providerSession = null)
     {
         var items = modes.Select(mode => mode.State == LoginModeState.Ready
             ? $"<li><a class=\"button\" href=\"{E(StartUrl(mode.Id, returnPath))}\">Sign in with {E(mode.DisplayName)}</a></li>"
             : $"<li class=\"note\">{E(NotAvailable(mode.DisplayName))}</li>");
         var note = message is null ? "" : $"<p>{E(message)}</p>";
-        var providerLogouts = modes.Where(mode => mode.ProviderLogoutUrl is not null).Select(mode =>
-            $"<p>Your session at {E(mode.DisplayName)} did not end. <a href=\"{E(mode.ProviderLogoutUrl!)}\">Sign out of {E(mode.DisplayName)}</a></p>");
+        var sessionNote = providerSession is null ? "" : OpenSessionNote(providerSession);
         var noneReady = modes.All(mode => mode.State != LoginModeState.Ready);
         var heading = signedOut ? "You are signed out" : noneReady ? "Sign-in is not available" : "Sign in to Recall";
         return noneReady
             ? Page(
                 StatusCodes.Status503ServiceUnavailable,
                 heading,
-                $"{note}<ul>{string.Concat(items)}</ul><p>Wait a few minutes, then try again.</p>" + TryAgainTo(returnPath))
-            : Page(StatusCodes.Status200OK, heading, $"{note}<ul>{string.Concat(items)}</ul>{string.Concat(providerLogouts)}");
+                $"{note}<ul>{string.Concat(items)}</ul>{sessionNote}<p>Wait a few minutes, then try again.</p>" + TryAgainTo(returnPath))
+            : Page(StatusCodes.Status200OK, heading, $"{note}<ul>{string.Concat(items)}</ul>{sessionNote}");
+    }
+
+    private static string OpenSessionNote(OpenProviderSession session)
+    {
+        var name = E(session.DisplayName);
+        return session switch
+        {
+            { LogoutUrl: { } url } =>
+                $"<p>{name} did not send you back, so your session there can still be open. Until it ends, anyone on this device can sign in to Recall as you with no password. <a href=\"{E(url)}\">Sign out of {name}</a></p>",
+            { State: LoginModeState.Unreachable } =>
+                $"<p>{name} did not answer, so your session there can still be open. Until it ends, anyone on this device can sign in to Recall as you with no password.</p>",
+            _ =>
+                $"<p>Your session at {name} stays open, because {name} does not let Recall end it. Anyone on this device can sign in to Recall as you with no password. To stop this, sign out on the site of {name}, or delete the cookies of this browser.</p>",
+        };
     }
 
     public static IResult ProviderIsDown(string displayName, string tryAgainUrl) => Page(

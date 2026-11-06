@@ -147,7 +147,7 @@ A session makes no call to the provider. So a web or native session keeps workin
 | `__Host-recall_login_{8 hex}`, on TLS | `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, 10 minutes | The binding of one login attempt |
 | `recall_login_{8 hex}`, on http | `HttpOnly`, `SameSite=Lax`, `Path=/auth/oidc`, 10 minutes | The same |
 | `__Host-recall_signed_out`, on TLS | `HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/`, 60 seconds | The mark of a sign-out that this browser finished |
-| `recall_signed_out`, on http | `HttpOnly`, `SameSite=Strict`, `Path=/`, 60 seconds | The same |
+| `recall_signed_out`, on http | `HttpOnly`, `SameSite=Lax`, `Path=/`, 10 minutes | The same |
 
 The binding cookie is `Lax` because the provider redirects with a cross-site GET. On https, the Server reads only `__Host-recall`, so a `recall` cookie from a plain http neighbor has no effect.
 
@@ -159,20 +159,42 @@ A cookie value works only as a cookie and only on a web session. A bearer value 
 
 ## Logout
 
-The SPA sends `POST /auth/logout` with `X-CSRF: 1`. The Server ends the session, deletes the cookie, sets the signed-out mark, and answers 204. Then the SPA goes to `/auth/login?signedOut=1`, which shows `You are signed out`. If the request fails, the SPA stays on the page and says that the person is still signed in.
+The SPA sends `POST /auth/logout` with `X-CSRF: 1`. The Server ends the session, deletes the cookie, and sets the signed-out mark. If the provider of the session has an `end_session_endpoint`, the answer names its logout URL, and the SPA goes there. The provider ends its session and returns to `/auth/signed-out`, which goes to `/auth/login?signedOut=1`. If the provider has no such endpoint, or does not answer, the SPA goes to `/auth/login?signedOut=1` at once. If the request fails, the SPA stays on the page and says that the person is still signed in.
 
 A response tells what happened:
 
 | Request | Answer |
 |---|---|
-| A cookie with `X-CSRF: 1` | Ends the session if it is live, deletes the cookie, and sets the mark. 204. |
+| A cookie with `X-CSRF: 1`, and the provider of its session has an `end_session_endpoint` | Ends the session if it is live, deletes the cookie, and sets the mark. 200 with `{ "provider_logout_url": "..." }`. |
+| A cookie with `X-CSRF: 1`, in each other case | The same, and 204 with no body. |
 | A cookie with no `X-CSRF: 1`, with or without another credential | 401. Nothing ends, and the cookie stays. |
-| No cookie | Ends what a bearer token or a refresh token names. 204, with no mark. A cross-site page gets this, because `SameSite=Strict` holds the cookie back. |
+| No cookie | Ends what a bearer token or a refresh token names. 204, with no mark. A native app opens no browser, so its logout does not touch the provider. A cross-site page gets this too, because `SameSite=Strict` holds the cookie back. |
 | `GET /auth/logout` | 405. A link cannot end a session. |
 
 `/auth/login?signedOut=1` starts nothing with no click. It says `You are signed out` only with the mark, so a link from another site cannot make it say that. A live session at this URL goes to the return path.
 
-The session at the provider stays. So `Sign in with {provider}` can sign the same person in again with no click. On a shared computer, end the session at the provider too. When the discovery document of the provider has an `end_session_endpoint`, the signed-out page links to it as `Sign out of {provider}`.
+The mark is `SameSite=Lax`, because a provider on another site returns with a cross-site GET. It lives 10 minutes, so that a person can answer the confirm page of a provider. A new login deletes it, so a link cannot show the signed-out page next to a live session. The session cookie stays `Strict`.
+
+### The session at the provider
+
+The mark names the login mode until the provider returns to `/auth/signed-out`. What the signed-out page says depends on this:
+
+| The state | The signed-out page | A visit with no click |
+|---|---|---|
+| The provider returned | `You are signed out`, with no note | Goes to the provider, which has no session and asks for a password |
+| The provider has the endpoint and did not return, for example the person left its confirm page, or the provider refused the return URL | `You are signed out`, says that the session there can still be open, and links to `Sign out of {provider}` | Shows the same page and starts nothing, until the mark ends |
+| The provider did not answer | `You are signed out`, says that the session there can still be open, and `Wait a few minutes, then try again`. | Shows the same page. `Try again` finds the link when the provider is back |
+| The provider has no endpoint | `You are signed out`, says that the session there stays open, and tells the person to sign out on the site of the provider or to delete the cookies of this browser | Goes to the provider, which signs the same person in again with no password |
+
+The return URL takes no value from a request. `/auth/signed-out` redirects only to the signed-out page, and the URL that the Server sends to the provider is the origin of the request plus that path. So neither is an open redirect. The provider also checks the URL against its own list.
+
+Recall keeps no provider token, so the logout URL has `client_id` and `post_logout_redirect_uri`, and no `id_token_hint`. OpenID Connect lets a provider ask the person to confirm in this case. These are the results with each provider of the lab:
+
+| Provider | `end_session_endpoint` | With no `id_token_hint` |
+|---|---|---|
+| ZeroFactor | Yes | Ends the session and returns at once. It accepts any return URL. |
+| Keycloak 26 | Yes | Shows `Do you want to log out?`, then returns. With a return URL that is not registered, it shows `Invalid redirect uri`, and its session stays. |
+| Authelia 4.39 | No | Recall keeps its session, and the page says so. |
 
 ## The user of a session
 
@@ -246,6 +268,8 @@ The redirect URI is that origin plus `/auth/oidc/callback`. The Server stores it
 ### Register the callback URLs
 
 Register the callback URL of each origin at the provider. `/auth/status` gives the URL of the origin that you call.
+
+If the provider has an `end_session_endpoint`, also register `/auth/signed-out` of each origin as a post-logout redirect URI, for example `https://recall.example.com/auth/signed-out`. In Keycloak, this is `Valid post logout redirect URIs` of the client. Without it, Keycloak refuses the logout: the Recall session ends, the session at Keycloak stays, and the person sees the error page of Keycloak.
 
 Do not register a wildcard redirect. The Server holds the verifier and the client secret, so the Server can redeem a stolen code. A wildcard at the provider and a forged `Host` then give an attacker a session. An exact match at the provider stops that. To stop it also at the Server, set `AllowedHosts` to your host names. A request with another `Host` then gets a 400.
 

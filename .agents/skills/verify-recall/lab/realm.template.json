@@ -1,7 +1,7 @@
 {"realm":"__REALM__","enabled":true,"sslRequired":"none","registrationAllowed":false,
  "clients":[{"clientId":"recall","enabled":true,"secret":"__SECRET__","publicClient":false,"standardFlowEnabled":true,"directAccessGrantsEnabled":false,
    "redirectUris":["http://localhost:24000/auth/oidc/callback","http://__LAN_IP__:24000/auth/oidc/callback","https://recall.localhost:24443/auth/oidc/callback"],
-   "attributes":{"pkce.code.challenge.method":"S256"}}],
+   "attributes":{"pkce.code.challenge.method":"S256","post.logout.redirect.uris":"http://localhost:24000/auth/signed-out##http://__LAN_IP__:24000/auth/signed-out##https://recall.localhost:24443/auth/signed-out"}}],
  "users":[
   {"id":"00000000-0000-4000-8000-000000000001","username":"alice","enabled":true,"email":"alice-__REALM__@example.com","emailVerified":true,"firstName":"Alice","lastName":"__REALM__","credentials":[{"type":"password","value":"__PASSWORD__","temporary":false}]},
   {"id":"00000000-0000-4000-8000-000000000002","username":"bob","enabled":true,"email":"bob-__REALM__@example.com","emailVerified":true,"firstName":"Bob","lastName":"__REALM__","credentials":[{"type":"password","value":"__PASSWORD__","temporary":false}]}]}

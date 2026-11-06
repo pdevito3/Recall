@@ -20,6 +20,7 @@ public sealed class LoginCompletion(SessionStore store, LoginModes modes)
     {
         var session = await store.StartWebAsync(user.UserId, modeId, cancellationToken);
         SessionCookie.Write(http.Response, http.Request, session.CookieValue, session.ExpiresAt);
+        SessionCookie.ClearSignedOutMark(http.Response, http.Request);
         return new AuthRedirect(web.ReturnPath);
     }
 

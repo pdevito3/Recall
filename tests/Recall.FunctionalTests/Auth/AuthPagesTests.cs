@@ -94,8 +94,8 @@ public partial class AuthPagesTests
 
     [Test]
     [Arguments(null, null)]
-    [Arguments("https://idp.test/logout", "https://idp.test/logout?client_id=recall-test-client")]
-    [Arguments("https://idp.test/logout?realm=a", "https://idp.test/logout?realm=a&client_id=recall-test-client")]
+    [Arguments("https://idp.test/logout", "https://idp.test/logout?client_id=recall-test-client&post_logout_redirect_uri=https%3A%2F%2Frecall.test%2Fauth%2Fsigned-out")]
+    [Arguments("https://idp.test/logout?realm=a", "https://idp.test/logout?realm=a&client_id=recall-test-client&post_logout_redirect_uri=https%3A%2F%2Frecall.test%2Fauth%2Fsigned-out")]
     [Arguments("http://idp.test/logout", null)]
     [Arguments("javascript:alert(1)", null)]
     public async Task the_logout_url_of_a_provider_comes_only_from_an_allowed_end_session_endpoint(string? endpoint, string? expected)
@@ -109,7 +109,7 @@ public partial class AuthPagesTests
             TimeProvider.System);
 
         // Act
-        var url = await mode.ProviderLogoutUrlAsync(CancellationToken.None);
+        var url = await mode.ProviderLogoutUrlAsync("https://recall.test/auth/signed-out", CancellationToken.None);
 
         // Assert
         url.ShouldBe(expected);

@@ -58,6 +58,36 @@ describe('a login after a sign-out', () => {
     expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?signedOut=1')
   })
 
+  const providerLogoutUrl = 'https://idp.test/logout?client_id=recall&post_logout_redirect_uri=https%3A%2F%2Frecall.test%2Fauth%2Fsigned-out'
+
+  it('goes to the logout of the provider when the Server names one', async () => {
+    const { replace, logout, post } = await freshActions()
+    post.mockResolvedValue({ status: 200, data: { provider_logout_url: providerLogoutUrl } })
+
+    await logout()
+
+    expect(replace).toHaveBeenCalledExactlyOnceWith(providerLogoutUrl)
+  })
+
+  it('goes to the signed-out page when the Server names no logout of a provider', async () => {
+    const { replace, logout } = await freshActions()
+
+    await logout()
+
+    expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?signedOut=1')
+  })
+
+  it('keeps the way to the logout of the provider, because a login there would sign the same person in again', async () => {
+    const { replace, login, logout, post } = await freshActions()
+    post.mockResolvedValue({ status: 200, data: { provider_logout_url: providerLogoutUrl } })
+
+    await logout()
+    replace.mockClear()
+    login('/about')
+
+    expect(replace).toHaveBeenCalledExactlyOnceWith(providerLogoutUrl)
+  })
+
   it('keeps the return URL when the logout fails, because the session may still live', async () => {
     const { replace, login, logout, post } = await freshActions()
     post.mockRejectedValue(new Error('no answer'))

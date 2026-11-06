@@ -66,6 +66,23 @@ test.describe('a sign-out with a call of the API that answers 401 after it', () 
     await expect.poll(() => page.url(), { timeout: 10000 }).toContain('signedOut=1')
     expect(api.all('get', authPaths.login).filter((request) => request.query.has('returnUrl'))).toHaveLength(0)
   })
+
+  test('goes to the logout of the provider when the provider has one, and starts no login', async ({ page, api }) => {
+    const providerLogout = 'https://provider.test/logout'
+    await page.route(`${providerLogout}*`, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: 'provider' }))
+    const session = sessionPage(page)
+    await session.open('/about')
+
+    api.mock(
+      authApi.loginOpens(),
+      { method: 'post', path: authPaths.logout, status: 200, body: { provider_logout_url: `${providerLogout}?client_id=recall` } },
+      { method: 'get', path: authPaths.me, status: 204 },
+    )
+    await session.followAndSignOutBeforeA401(session.at.homeLink, usersPaths.current, '/logout')
+
+    await expect.poll(() => page.url(), { timeout: 10000 }).toBe(`${providerLogout}?client_id=recall`)
+    expect(api.all('get', authPaths.login)).toHaveLength(0)
+  })
 })
 
 test.describe('a call of the API that answers 401 while the session lives', () => {

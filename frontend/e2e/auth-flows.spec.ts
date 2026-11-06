@@ -97,6 +97,7 @@ test.describe(`Auth Flows - ${currentIdp.name}`, () => {
       expect((await sessionUser()).status(), 'the session before the logout').toBe(200)
       await logoutButton.click()
 
+      if (currentIdp.logoutConfirmSelector) await page.locator(currentIdp.logoutConfirmSelector).click({ timeout: 30000 })
       await page.waitForURL((url) => url.pathname === '/auth/login' && url.searchParams.get('signedOut') === '1', { timeout: 30000 })
       await expect(page.getByRole('heading', { name: 'You are signed out' })).toBeVisible()
       await expect(page).toHaveTitle('You are signed out - Recall')

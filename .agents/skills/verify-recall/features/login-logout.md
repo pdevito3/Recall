@@ -1,13 +1,13 @@
 # Login and logout
 
-Each page of the SPA needs a session. A visitor with no session goes to the login at once: the SPA sends the browser to `/auth/login` with the page as `returnUrl`, and shows no page first. The Server sends the browser to the IdP and back to that page, then keeps the session in the `recall` cookie, or `__Host-recall` on TLS. The home page then shows the name of the user, which proves the path of the session: browser cookie, session row, and user row. `Logout` ends the session in the Server and shows the signed-out page of the Server. The session of the IdP stays, and that page has a link to the logout of the IdP when the IdP has one.
+Each page of the SPA needs a session. A visitor with no session goes to the login at once: the SPA sends the browser to `/auth/login` with the page as `returnUrl`, and shows no page first. The Server sends the browser to the IdP and back to that page, then keeps the session in the `recall` cookie, or `__Host-recall` on TLS. The home page then shows the name of the user, which proves the path of the session: browser cookie, session row, and user row. `Logout` ends the session in the Server. When the IdP has an `end_session_endpoint`, it also ends the session of the IdP. Then it shows the signed-out page of the Server. When the IdP has no such endpoint, the session of the IdP stays, and that page says so.
 
 ## Sub-features
 
 - `auth-anonymous` goes to `/auth/login` at once, with the page as `returnUrl`. `GET /auth/me` is 204, and `GET /api/v1/users/me` is the 401 of the Server.
 - `auth-login` goes through `/auth/login`, `/auth/oidc/<id>/start`, the login page of the IdP, and `/auth/oidc/callback`, back to the page that the visitor opened.
 - `auth-session` shows `Signed in as <name>` and `Logout`, and the user menu in the sidebar shows the same name. `GET /api/v1/users/me` is 200 with the same name. The session survives a reload.
-- `auth-logout` sends `POST /auth/logout` with `X-CSRF: 1`, then goes to `/auth/login?signedOut=1`. The page says `You are signed out`, and has the links `Sign in with <provider>` and `Sign out of <provider>`.
+- `auth-logout` sends `POST /auth/logout` with `X-CSRF: 1`, then goes to the logout of the IdP, then through `/auth/signed-out` to `/auth/login?signedOut=1`. The page says `You are signed out`, and has the link `Sign in with <provider>`. Back, a plain visit, and a second tab reach the login page of the IdP or the signed-out page, and do not sign in with no click.
 
 ## How to get to it (user POV)
 
@@ -27,13 +27,14 @@ Preconditions:
 - **Reload.** Run `page.reload()`. The name is visible again.
 - **User menu.** Click the button `User menu for <name>` in the sidebar. The menu shows the name.
 - **Log out.** Run `logout()`. The helper clicks `Logout` and waits for `/auth/login?signedOut=1`.
-- **Logged-out state.** Run `page.request.get('/auth/me', { headers: { 'X-CSRF': '1' } })`. The status is 204. The heading is `You are signed out`, and the title is `You are signed out - Recall`. The link `Sign out of <provider>` goes to the `end_session_endpoint` of the provider.
-- **Sign in again.** Choose the link `Sign in with <provider>`. The IdP still has its session, so the same user is back with no click at the IdP.
+- **Logged-out state.** Run `page.request.get('/auth/me', { headers: { 'X-CSRF': '1' } })`. The status is 204. The heading is `You are signed out`, and the title is `You are signed out - Recall`. The page has no note about the provider, because the provider returned.
+- **Back.** Run `page.goBack()`. The page is the login page of the IdP, and `/auth/me` is 204.
+- **Sign in again.** Open `/`, and sign in at the IdP. The IdP has no session, so it asks again.
 - **Proof.** Run `node $S/scripts/browse.mjs $S/recipes/login-logout.mjs`. The captures `anonymous`, `logged-in`, and `logged-out` show the three states.
 
 ## Gotchas
 
-- With DuendeDemo, the IdP is a public server. If it is down, login fails. The doctor examines it.
+- With DuendeDemo, the IdP is a public server. If it is down, login fails. The doctor examines it. Its logout does not return to Recall, so the `logout()` helper fails there. Use a recipe that does not log out.
 - The Duende demo server sometimes sends its CSS and scripts very slowly (17 to 29 s were seen). Thus the page `load` event can take more than 30 s. In a new login script, wait for `domcontentloaded` and for `#Input_Username`, never for `load`. `login()` does this.
 - Each call to `/auth/*` and `/api/*` with the cookie needs the header `X-CSRF: 1`. Without it, the Server answers 401 even with a valid session.
 - An anonymous visitor is a normal state. `/auth/me` answers 204, so `network.log` and `console.log` get no line for it.

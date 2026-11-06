@@ -123,13 +123,14 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
     public async Task<LoginModeState> ProbeAsync(CancellationToken cancellationToken)
         => await DiscoverAsync(cancellationToken) is null ? LoginModeState.Unreachable : LoginModeState.Ready;
 
-    public async Task<string?> ProviderLogoutUrlAsync(CancellationToken cancellationToken)
+    /// <summary>Recall keeps no provider token, so this URL has no <c>id_token_hint</c>. OpenID Connect then needs the <c>client_id</c>, and the provider can ask the person to confirm.</summary>
+    public async Task<string?> ProviderLogoutUrlAsync(string returnUrl, CancellationToken cancellationToken)
     {
         if ((await DiscoverAsync(cancellationToken))?.EndSessionEndpoint is not { } endpoint)
             return null;
 
         var separator = endpoint.Contains('?', StringComparison.Ordinal) ? '&' : '?';
-        return $"{endpoint}{separator}client_id={Uri.EscapeDataString(_provider.ClientId!)}";
+        return $"{endpoint}{separator}client_id={Uri.EscapeDataString(_provider.ClientId!)}&post_logout_redirect_uri={Uri.EscapeDataString(returnUrl)}";
     }
 
     public Task<OidcDiscovery?> DiscoverAsync(CancellationToken cancellationToken)

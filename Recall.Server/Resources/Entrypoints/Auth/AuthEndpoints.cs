@@ -30,6 +30,8 @@ public static class AuthEndpoints
         public override string ToString() => "[token answer]";
     }
 
+    public sealed record LogoutAnswer([property: JsonPropertyName("provider_logout_url")] string ProviderLogoutUrl);
+
     private const string NoProviderDetail = "The provider did not answer.";
 
     public static readonly AuthorizeAttribute AppSessionOnly = new() { AuthenticationSchemes = AppSessionHandler.SchemeName };
@@ -40,6 +42,7 @@ public static class AuthEndpoints
         endpoints.MapGet(AuthRoutes.Login, LoginAsync).AllowAnonymous().ExcludeFromDescription();
         endpoints.MapPost(AuthRoutes.Token, TokenAsync).AllowAnonymous().ExcludeFromDescription();
         endpoints.MapPost(AuthRoutes.Logout, LogoutAsync).AllowAnonymous().ExcludeFromDescription();
+        endpoints.MapGet(AuthRoutes.SignedOut, SignedOutReturn).AllowAnonymous().ExcludeFromDescription();
         endpoints.MapPost(AuthRoutes.RevokeOthers, RevokeOthersAsync).RequireAuthorization(AppSessionOnly).ExcludeFromDescription();
         endpoints.MapGet(AuthRoutes.Me, MeAsync).AllowAnonymous().ExcludeFromDescription();
     }
@@ -86,14 +89,30 @@ public static class AuthEndpoints
             return AuthPages.NoMethod(AuthRoutes.OriginOf(http.Request) + AuthRoutes.Callback, returnPath);
 
         var states = await Task.WhenAll(modes.All.Select(mode => mode.ProbeAsync(cancellationToken)));
-        if (modes.All.Count == 1 && states[0] == LoginModeState.Ready && !signedOut && !hasError)
+        var openSession = modes.FindOidc(SessionCookie.OpenProviderSessionModeOf(http.Request));
+        var openSessionLogoutUrl = openSession is null ? null : await openSession.ProviderLogoutUrlAsync(SignedOutUrlOf(http.Request), cancellationToken);
+
+        // While a sign-out at the provider has not finished, a login with no click would sign the same person in again.
+        if (modes.All.Count == 1 && states[0] == LoginModeState.Ready && !signedOut && !hasError && openSessionLogoutUrl is null)
             return new AuthRedirect($"/auth/oidc/{Uri.EscapeDataString(modes.All[0].Id)}/start?client=web&returnUrl={Uri.EscapeDataString(returnPath)}");
 
-        var isSignedOut = signedOut && SessionCookie.IsMarkedSignedOut(http.Request);
-        var chooser = await Task.WhenAll(modes.All.Zip(states, async (mode, state) => new AuthPages.ChooserMode(
-            mode.Id, mode.DisplayName, state, isSignedOut ? await mode.ProviderLogoutUrlAsync(cancellationToken) : null)));
-        return AuthPages.Chooser(chooser, returnPath, isSignedOut, hasError ? "The last sign-in did not finish." : null);
+        var isSignedOut = (signedOut || openSessionLogoutUrl is not null) && SessionCookie.IsMarkedSignedOut(http.Request);
+        var providerSession = isSignedOut && openSession is not null
+            ? new AuthPages.OpenProviderSession(openSession.DisplayName, await openSession.ProbeAsync(cancellationToken), openSessionLogoutUrl)
+            : null;
+        var chooser = modes.All.Zip(states, (mode, state) => new AuthPages.ChooserMode(mode.Id, mode.DisplayName, state)).ToList();
+        return AuthPages.Chooser(chooser, returnPath, isSignedOut, hasError ? "The last sign-in did not finish." : null, providerSession);
     }
+
+    /// <summary>The provider comes back here when its session has ended. The address has no value that a caller chooses, so it cannot redirect to another site.</summary>
+    private static AuthRedirect SignedOutReturn(HttpContext http)
+    {
+        if (SessionCookie.IsMarkedSignedOut(http.Request))
+            SessionCookie.MarkSignedOut(http.Response, http.Request, openProviderSessionMode: null);
+        return new AuthRedirect($"{AuthRoutes.Login}?signedOut=1");
+    }
+
+    private static string SignedOutUrlOf(HttpRequest request) => AuthRoutes.OriginOf(request) + AuthRoutes.SignedOut;
 
     private static async Task<IResult> TokenAsync(HttpContext http, SessionStore store, ITenantIdProvider tenants, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
@@ -145,7 +164,7 @@ public static class AuthEndpoints
         return new TokenOutcome(result.Pair, result.Pair is null ? "invalid_grant" : null);
     }
 
-    private static async Task<IResult> LogoutAsync(HttpContext http, SessionStore store, CancellationToken cancellationToken)
+    private static async Task<IResult> LogoutAsync(HttpContext http, SessionStore store, LoginModes modes, CancellationToken cancellationToken)
     {
         var request = http.Request;
         var bearer = AppSessionHandler.CredentialOf(request.Headers.Authorization.ToString());
@@ -171,10 +190,14 @@ public static class AuthEndpoints
 
         if (csrf)
             SessionCookie.Clear(http.Response, request);
-        if (cookie is not null)
-            SessionCookie.MarkSignedOut(http.Response, request);
+        if (cookie is null)
+            return Results.NoContent();
 
-        return Results.NoContent();
+        var mode = modes.FindOidc(await store.LoginModeOfWebAsync(TokenHash.Of(cookie), cancellationToken));
+        SessionCookie.MarkSignedOut(http.Response, request, mode?.Id);
+        return mode is not null && await mode.ProviderLogoutUrlAsync(SignedOutUrlOf(request), cancellationToken) is { } providerLogoutUrl
+            ? Results.Json(new LogoutAnswer(providerLogoutUrl))
+            : Results.NoContent();
     }
 
     private static async Task<IResult> RevokeOthersAsync(HttpContext http, SessionStore store, CancellationToken cancellationToken)

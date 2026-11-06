@@ -22,6 +22,8 @@ export interface IdpConfig {
   twoStepLogin?: boolean
   // Second step submit selector for two-step login (if different from submitSelector)
   secondStepSubmitSelector?: string
+  // The button of a page that asks the person to confirm a logout with no id_token_hint
+  logoutConfirmSelector?: string
   capabilities: IdpCapabilities
 }
 

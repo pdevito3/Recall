@@ -9,6 +9,7 @@ public static class AuthRoutes
     public const string Confirm = "/auth/oidc/confirm";
     public const string Token = "/auth/token";
     public const string Logout = "/auth/logout";
+    public const string SignedOut = "/auth/signed-out";
     public const string RevokeOthers = "/auth/sessions/revoke-others";
     public const string Me = "/auth/me";
 

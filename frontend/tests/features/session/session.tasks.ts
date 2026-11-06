@@ -95,7 +95,7 @@ export function sessionPage(page: Page) {
       await checked
     },
 
-    async followAndSignOutBeforeA401(link: Locator, apiPath: string) {
+    async followAndSignOutBeforeA401(link: Locator, apiPath: string, nextPage = authPaths.login) {
       let answerThe401!: () => void
       const logoutAnswered = new Promise<void>((resolve) => {
         answerThe401 = resolve
@@ -108,7 +108,7 @@ export function sessionPage(page: Page) {
         await logoutAnswered
         await route.fulfill({ status: 401 })
       })
-      await page.route((url) => url.pathname === authPaths.login, async (route) => {
+      await page.route((url) => url.pathname === nextPage, async (route) => {
         await checked
         await route.fallback()
       })
