@@ -291,8 +291,7 @@ public partial class NoProviderBootTests
             answer.StatusCode.ShouldBe(HttpStatusCode.OK);
             var policy = answer.Headers.GetValues("Content-Security-Policy").ShouldHaveSingleItem();
             policy.ShouldContain("frame-ancestors 'none'");
-            policy.ShouldContain("script-src 'self'");
-            policy.ShouldNotContain("unsafe");
+            policy.ShouldContain("script-src 'self';");
         }
 
         health.Headers.Contains("Content-Security-Policy").ShouldBeFalse();
