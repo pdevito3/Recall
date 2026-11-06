@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Entrypoints.Http.OpenApi;
 using FileTelemetry;
+using Jobs;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OpenTelemetry;
@@ -65,6 +66,7 @@ public static class HostExtensions
                 metrics
                     .AddMeter(Telemetry.Meter.Name)
                     .AddMeter(FrameworkMeters)
+                    .AddBackWaveInstrumentation()
                     .AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
                     .AddRuntimeInstrumentation();
@@ -74,6 +76,8 @@ public static class HostExtensions
                 tracing
                     .AddSource(Telemetry.Source.Name)
                     .AddSource(serviceName)
+                    .AddBackWaveInstrumentation()
+                    .AddProcessor(new EmptyClaimSpanFilter())
                     .AddAspNetCoreInstrumentation(opts =>
                     {
                         opts.Filter = ctx => !IsHealthProbe(ctx.Request.Path);

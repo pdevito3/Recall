@@ -1,11 +1,13 @@
 namespace Recall.Server.Resources.Entrypoints.Spa;
 
+using Jobs;
+
 public static class SpaHosting
 {
     private const string IndexFile = "index.html";
 
     private static readonly PathString[] ReservedPrefixes =
-        ["/api", "/auth", "/mcp", "/swagger", "/openapi", "/health", "/alive", "/.well-known"];
+        ["/api", "/auth", "/mcp", "/swagger", "/openapi", "/health", "/alive", "/.well-known", JobDashboard.Path];
 
     public static bool IsPresent(WebApplication app) => app.Environment.WebRootFileProvider.GetFileInfo(IndexFile).Exists;
 

@@ -8,6 +8,7 @@ using Recall.Server.Resources;
 using Recall.Server.Resources.Entrypoints;
 using Recall.Server.Resources.Entrypoints.Http.OpenApi;
 using Recall.Server.Resources.Extensions;
+using Recall.Server.Resources.Jobs;
 using Serilog;
 using Serilog.Events;
 
@@ -72,6 +73,7 @@ try
     });
 
     app.UseEntrypoints();
+    app.UseJobDashboard();
     app.MapEntrypoints();
 
     app.MapDefaultEndpoints();

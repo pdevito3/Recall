@@ -1,5 +1,6 @@
 namespace Recall.Server.Databases;
 
+using System.Data.Common;
 using System.Diagnostics;
 using Auditing;
 using Domain;
@@ -10,6 +11,7 @@ using Domain.Users;
 // new-feature:db-usings
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Storage;
 using Resources;
 using Serilog;
 using Sqlite;
@@ -145,7 +147,19 @@ public class AppDbContext(
         CancellationToken cancellationToken = default)
     {
         RefuseSave();
-        return EndOnFailure(SaveInStages(acceptAllChangesOnSuccess, cancellationToken));
+        return EndOnFailure(SaveInStages(acceptAllChangesOnSuccess, enqueue: null, cancellationToken));
+    }
+
+    /// <summary>
+    /// Saves the changes and runs <paramref name="enqueue"/> in one transaction, so neither the rows nor the jobs stay
+    /// if the save or the enqueue fails. Give the transaction to <c>BackWaveClient.EnqueueAsync</c>. It is the only
+    /// save inside a transaction. The worker sees the job at its next poll, not at once.
+    /// </summary>
+    public Task<int> SaveAndEnqueueAsync(Func<DbTransaction, CancellationToken, Task> enqueue,
+        CancellationToken cancellationToken = default)
+    {
+        RefuseSave();
+        return EndOnFailure(SaveInStages(acceptAllChangesOnSuccess: true, enqueue, cancellationToken));
     }
 
     // The tracker of a failed write can hold the stamps and the audit entries of a write that did not commit.
@@ -179,7 +193,8 @@ public class AppDbContext(
         _saveStage = SaveStage.Idle;
     }
 
-    private async Task<int> SaveInStages(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+    private async Task<int> SaveInStages(bool acceptAllChangesOnSuccess,
+        Func<DbTransaction, CancellationToken, Task>? enqueue, CancellationToken cancellationToken)
     {
         _saveStage = SaveStage.Dispatching;
         await RunDomainEventHandlers(cancellationToken);
@@ -188,7 +203,10 @@ public class AppDbContext(
         var auditEntries = PrepareWrite(await callerIdentityResolver.GetAsync(cancellationToken));
         try
         {
-            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken) - auditEntries.Count;
+            var written = enqueue is null
+                ? await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken)
+                : await WriteWithJobsAsync(acceptAllChangesOnSuccess, enqueue, cancellationToken);
+            return written - auditEntries.Count;
         }
         catch (DbUpdateException exception)
         {
@@ -200,6 +218,16 @@ public class AppDbContext(
                 Log.ForContext<AppDbContext>().Here().Information("The unique constraint {Constraint} stopped a save", constraint);
             throw conflict;
         }
+    }
+
+    private async Task<int> WriteWithJobsAsync(bool acceptAllChangesOnSuccess,
+        Func<DbTransaction, CancellationToken, Task> enqueue, CancellationToken cancellationToken)
+    {
+        await using var transaction = await Database.BeginTransactionAsync(cancellationToken);
+        var written = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        await enqueue(transaction.GetDbTransaction(), cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return written;
     }
 
     private void RefuseSave()

@@ -39,6 +39,11 @@
 
   <ItemGroup>
     <PackageReference Include="Asp.Versioning.Http" />
+    <PackageReference Include="BackWave" />
+    <PackageReference Include="BackWave.Dashboard" />
+    <PackageReference Include="BackWave.Hosting" />
+    <PackageReference Include="BackWave.OpenTelemetry" />
+    <PackageReference Include="BackWave.Sqlite" />
     <PackageReference Include="ModelContextProtocol.AspNetCore" />
     <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" />
     <PackageReference Include="EFCore.NamingConventions" />
@@ -81,5 +86,9 @@
     <PackageReference Include="Serilog.Sinks.Async" />
     <PackageReference Include="Serilog.Sinks.File" />
     <PackageReference Include="Serilog.Sinks.OpenTelemetry" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="ThirdPartyNotices/**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
