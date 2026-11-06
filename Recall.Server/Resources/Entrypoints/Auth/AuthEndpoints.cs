@@ -163,7 +163,7 @@ public static class AuthEndpoints
             && await store.FindByAccessAsync(TokenHash.Of(bearer), SessionKind.Native, cancellationToken) is { } nativeSession)
             await store.RevokeAsync(nativeSession.SessionId, RevokeReason.Logout, cancellationToken);
 
-        if (csrf && cookie is not null
+        if (cookie is not null
             && await store.FindByAccessAsync(TokenHash.Of(cookie), SessionKind.Web, cancellationToken) is { } webSession)
             await store.RevokeAsync(webSession.SessionId, RevokeReason.Logout, cancellationToken);
 
@@ -172,7 +172,7 @@ public static class AuthEndpoints
 
         if (csrf)
             SessionCookie.Clear(http.Response, request);
-        if (csrf && cookie is not null)
+        if (cookie is not null)
             SessionCookie.MarkSignedOut(http.Response, request);
 
         return Results.NoContent();

@@ -356,6 +356,9 @@ public partial class NoProviderBootTests
         var root = Path.Combine(Path.GetTempPath(), $"recall_boot_{Guid.NewGuid():N}");
         var keys = Path.Combine(root, "data", "keys");
         Directory.CreateDirectory(keys);
+        var key = Path.Combine(keys, "key-loose.xml");
+        await File.WriteAllTextAsync(key, "<key />");
+        File.SetUnixFileMode(key, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
         File.SetUnixFileMode(keys, UnixFileMode.None);
 
         // Act
@@ -363,6 +366,7 @@ public partial class NoProviderBootTests
 
         // Assert
         File.GetUnixFileMode(keys).ShouldBe(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        File.GetUnixFileMode(key).ShouldBe(UnixFileMode.UserRead | UnixFileMode.UserWrite);
     }
 
     [Test]

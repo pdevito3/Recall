@@ -41,16 +41,17 @@ public static partial class OwnerOnlyFiles
             files.AddRange(DatabaseFileSuffixes.Select(suffix => fullPath + suffix));
         }
 
-        if (KeysDirectory(configuration) is { } keys && Directory.Exists(keys))
-        {
+        var keys = KeysDirectory(configuration);
+        if (keys is not null && Directory.Exists(keys))
             directories.Add(keys);
-            files.AddRange(FilesIn(keys));
-        }
 
         if (configuration[$"{FileStoreOptions.SectionName}:{nameof(FileStoreOptions.Root)}"] is { Length: > 0 } fileRoot && Path.IsPathFullyQualified(fileRoot))
             directories.Add(fileRoot);
 
-        var refused = Tighten(directories, files, ModeAccess.Real);
+        var refused = Tighten(directories, [], ModeAccess.Real).ToList();
+        if (keys is not null && Directory.Exists(keys))
+            files.AddRange(FilesIn(keys));
+        refused.AddRange(Tighten([], files, ModeAccess.Real));
         if (refused.Count > 0)
         {
             Log.ForContext(typeof(OwnerOnlyFiles)).Warning(
