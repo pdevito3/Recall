@@ -205,6 +205,7 @@ The claim cannot bring back a deleted tenant, so `DELETE /tenants/{id}` gives 40
 The first login after you create the file always removes it, also when the claim changes nothing:
 
 - A login with a link signs in as usual and logs a warning that names the file. Create the file again and sign in with the new identity.
+- If the Server cannot remove the file, the claim does nothing and the Server logs a warning that names the file. This can occur when the file is immutable or its folder is read-only. The login goes on as if no file exists, so a person with a link can sign in and a person with no link gets the usual answer. Make the file and its folder writable for the Server, remove the file, and create it again.
 - A file with a write time more than 15 minutes from the current time, in either direction, does nothing. The Server logs a warning that names the file. The login goes on as if no file exists.
 
 The Server removes such a file and does not leave it, because a backup restore that does not keep the write time would make a file that stays new again.

@@ -1,5 +1,6 @@
 namespace Recall.FunctionalTests.Auth;
 
+using Recall.Server.Auth;
 using Serilog;
 
 public static class AuthHosts
@@ -40,7 +41,10 @@ public static class AuthHosts
             ["Serilog:MinimumLevel:Override:Microsoft.AspNetCore.Routing.EndpointMiddleware"] = "Debug",
             ["Serilog:MinimumLevel:Override:Microsoft.EntityFrameworkCore"] = "Debug",
             ["Serilog:MinimumLevel:Override:System"] = "Debug",
-        });
+        })
+        {
+            ClaimFilePath = Path.Combine(Directory.CreateTempSubdirectory("recall-claim-").FullName, OwnerClaim.FileName),
+        };
         _ = Sweep.Services;
         Log.Logger = new TeeLogger(main, Log.Logger);
     }

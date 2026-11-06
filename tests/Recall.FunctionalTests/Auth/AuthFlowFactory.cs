@@ -33,6 +33,9 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
     /// <summary>A second provider with the mode ID <see cref="OtherModeId"/>, for a test of one provider that fails next to one that works.</summary>
     public StubOidcProvider? OtherProvider { get; init; }
 
+    /// <summary>A place for the claim file outside the folder of the database, so a test can refuse a rename there and the database still works.</summary>
+    public string? ClaimFilePath { get; init; }
+
     public HttpClient NewClient()
     {
         lock (_clientLock)
@@ -76,6 +79,8 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
         builder.ConfigureServices(services =>
         {
             services.AddSingleton<OidcHandlerFactory>(options => options.Id == OtherModeId ? OtherProvider! : Provider);
+            if (ClaimFilePath is { } claimFile)
+                services.AddSingleton(provider => new OwnerClaim(claimFile, provider.GetRequiredService<TimeProvider>()));
             services.AddSingleton<ILogEventSink>(Logs);
             services.AddSingleton<IStartupFilter, ConnectionAddressFilter>();
             services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
@@ -87,6 +92,8 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
     {
         await base.DisposeAsync();
         await _database.DisposeAsync();
+        if (ClaimFilePath is { } claimFile)
+            Directory.Delete(Path.GetDirectoryName(claimFile)!, recursive: true);
     }
 
     /// <summary>The test server has no socket, so this is how a test stands at a connection address.</summary>
