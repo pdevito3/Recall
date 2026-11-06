@@ -66,7 +66,7 @@ public static class AuthPages
         return session switch
         {
             { LogoutUrl: { } url } =>
-                $"<p>{name} did not send you back to Recall, so Recall cannot tell if your session there ended. If you did not sign out there, anyone on this device can sign in to Recall as you with no password. <a href=\"{E(url)}\">Sign out of {name}</a></p>",
+                $"<p>Recall cannot tell if your session at {name} ended. If you did not sign out there, anyone on this device can sign in to Recall as you with no password.</p><p><a href=\"{E(url)}\">Sign out of {name}</a></p>",
             { State: LoginModeState.Unreachable } =>
                 $"<p>{name} did not answer, so your session there can still be open. Until it ends, anyone on this device can sign in to Recall as you with no password.</p>",
             _ =>

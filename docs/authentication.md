@@ -192,7 +192,9 @@ The browser can keep a page in its back-forward cache, and Back then shows this 
 
 So in a live session, Back from this cache costs one call of `/auth/me`.
 
-The HTML of the app has `Cache-Control: no-store`. In the runs below, Chromium did not restore a page with this header after the cookies were gone, and it did restore the page while the cookies stayed.
+Each answer of the Server has `Cache-Control: no-store`, also an error answer. Only a static file of the app does not, because it holds no private data. So after a logout, the HTTP cache of the browser has no private answer that a page can read. `UseNoStoreAnswers` sets this in one place, and a new endpoint gets it with no code.
+
+The HTML of the app is one of these answers. In the runs below, Chromium did not restore a page with this header after the cookies were gone, and it did restore the page while the cookies stayed.
 
 This hide and this header have limits. Each count in this table is the number of local runs in Chromium, with the cache on, that had private text on a frame:
 
@@ -218,7 +220,7 @@ The mark holds the login mode and a new random `state` until the provider return
 | The state | The signed-out page | A visit with no click |
 |---|---|---|
 | The provider returned | `You are signed out`, with no note | Goes to the provider, which has no session and asks for a password |
-| The provider has the endpoint and did not return, for example the person left its confirm page, the provider stays on its own page after the logout, or the provider refused the return URL | `You are signed out`, says that the provider did not send the person back, so Recall cannot tell if the session there ended, and links to `Sign out of {provider}` | Shows the same page and starts nothing, until the mark ends or the next login. A provider that never returns shows this note after each logout, also to a person who did sign out there |
+| The provider has the endpoint and did not return, for example the person left its confirm page, the provider stays on its own page after the logout, the provider refused the return URL, or the first tab is still at the provider | `You are signed out`, says that Recall cannot tell if the session there ended, and links to `Sign out of {provider}`. The note does not say that the provider failed, because a second tab reads it while the first tab is still at the provider | Shows the same page and starts nothing, until the mark ends or the next login. A provider that never returns shows this note after each logout, also to a person who did sign out there |
 | The provider did not answer | `You are signed out`, says that the session there can still be open, and `Wait a few minutes, then try again`. | Shows the same page. `Try again` finds the link when the provider is back. If another provider is ready, the page has its button and no `Try again`, and a reload finds the link |
 | The provider has no endpoint | `You are signed out`, says that the session there stays open, and tells the person to sign out on the site of the provider or to delete the cookies of this browser | Goes to the provider, which signs the same person in again with no password. With more than one provider, the page shows the note until the mark ends, then the usual sign-in page |
 
