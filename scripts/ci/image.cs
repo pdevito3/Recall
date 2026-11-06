@@ -22,6 +22,11 @@ var build = args switch
     _ => throw new ArgumentException("Usage: dotnet run scripts/ci/image.cs -- [--no-build]"),
 };
 
+// The .env and the shell of a person can name a real data folder, and this job writes to its folder.
+Environment.SetEnvironmentVariable("COMPOSE_DISABLE_ENV_FILE", "true");
+foreach (var setting in new[] { "COMPOSE_FILE", "RECALL_DATA", "PUID", "PGID" })
+    Environment.SetEnvironmentVariable(setting, null);
+
 var port = FreePort();
 Environment.SetEnvironmentVariable("COMPOSE_PROJECT_NAME", Project);
 Environment.SetEnvironmentVariable("RECALL_TAG", Tag);
