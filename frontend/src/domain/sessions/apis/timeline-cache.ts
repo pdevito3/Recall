@@ -31,16 +31,22 @@ export function withFirstPageOnly(data: TimelineData): TimelineData {
   return { pages: data.pages.slice(0, 1), pageParams: data.pageParams.slice(0, 1) }
 }
 
-export function patchTimelineRow(queryClient: QueryClient, id: string, patch: Partial<SessionSummaryDto>) {
-  queryClient.setQueryData<TimelineData>(SessionKeys.timeline(), (data) => data && withRowPatched(data, id, patch))
-  // A read that left before this change would put the old row back, so it reads again.
-  if (queryClient.isFetching({ queryKey: SessionKeys.timeline() }) > 0) {
-    void queryClient.invalidateQueries({ queryKey: SessionKeys.timeline() })
+function changeTimeline(queryClient: QueryClient, change: (data: TimelineData) => TimelineData) {
+  const key = SessionKeys.timeline()
+  const wasWaitingForARead = queryClient.getQueryState(key)?.isInvalidated ?? false
+  queryClient.setQueryData<TimelineData>(key, (data) => data && change(data))
+  // A write clears the mark that a read is due, and a read that left before this change would put the old row back.
+  if (wasWaitingForARead || queryClient.isFetching({ queryKey: key }) > 0) {
+    void queryClient.invalidateQueries({ queryKey: key })
   }
 }
 
+export function patchTimelineRow(queryClient: QueryClient, id: string, patch: Partial<SessionSummaryDto>) {
+  changeTimeline(queryClient, (data) => withRowPatched(data, id, patch))
+}
+
 export function removeTimelineRow(queryClient: QueryClient, id: string) {
-  queryClient.setQueryData<TimelineData>(SessionKeys.timeline(), (data) => data && withRowRemoved(data, id))
+  changeTimeline(queryClient, (data) => withRowRemoved(data, id))
 }
 
 /** A new entry sorts first. A refetch of each page of a long list costs one request for each page, so only the first page reads again. */

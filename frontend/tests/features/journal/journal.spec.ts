@@ -209,10 +209,12 @@ test.describe('writing a new entry', () => {
     await expect.poll(() => api.all('put', sessionsPaths.rawDraft(created.id)).length).toBe(1)
 
     const saved = { ...aSession().saying('Words before a move').build(), id: created.id, clientSessionId: created.clientSessionId }
-    api.mock(sessionsApi.oneIs(saved))
+    api.mock(sessionsApi.oneIs(saved), sessionsApi.timelineIs([{ ...aSession().summary('Words before a move'), id: created.id }]))
     await journal.goToTheJournalFromTheSidebar()
 
     await expect(journal.at.composer).toHaveText('Words before a move')
+    await journal.finish()
+    await expect(journal.at.entryLink('Words before a move')).toBeVisible()
   })
 
   test('a return to the journal with a read that fails opens the last known words and keeps the entry', async ({ page, api }) => {
