@@ -27,7 +27,7 @@ public static class JobDashboard
         app.UseBackWaveDashboard(Path, DashboardOptions);
     }
 
-    private static readonly BackWaveDashboardOptions DashboardOptions = new()
+    public static readonly BackWaveDashboardOptions DashboardOptions = new()
     {
         AuthorizeView = CallerIsOwnerAsync,
         AuthorizeRequeue = CallerIsOwnerAsync,
