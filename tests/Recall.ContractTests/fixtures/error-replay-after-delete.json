@@ -1,0 +1,12 @@
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+  "title": "The request conflicts with a record that exists.",
+  "status": 409,
+  "detail": "This Session was deleted, so it cannot come back. Drop the local copy.",
+  "traceId": "00000000000000000000000000000000",
+  "errors": {
+    "clientSessionId": [
+      "This Session was deleted, so it cannot come back. Drop the local copy."
+    ]
+  }
+}

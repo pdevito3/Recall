@@ -9,9 +9,10 @@ using Microsoft.OpenApi;
 /// <summary>
 /// Gives each property with a <see cref="SchemaMaxLengthAttribute"/> its <c>maxLength</c>, each property with a
 /// <see cref="SchemaMinimumAttribute"/> its <c>minimum</c>, and each property with a
-/// <see cref="SchemaMaximumAttribute"/> its <c>maximum</c>. The generated Zod schema of the SPA then has the limit, so a
-/// form reads it from the contract and not from a copy that can go stale. A max length on a schema that is not a string,
-/// or a minimum or a maximum on a schema that is not a number, fails the Debug build, so that no mark is silently lost.
+/// <see cref="SchemaMaximumAttribute"/> its <c>maximum</c>. A list of strings gets the max length on its items. The
+/// generated Zod schema of the SPA then has the limit, so a form reads it from the contract and not from a copy that can
+/// go stale. A max length on a schema that is not a string or a list of strings, or a minimum or a maximum on a schema
+/// that is not a number, fails the Debug build, so that no mark is silently lost.
 /// </summary>
 public sealed class SchemaLimitsTransformer : IOpenApiSchemaTransformer
 {
@@ -28,9 +29,10 @@ public sealed class SchemaLimitsTransformer : IOpenApiSchemaTransformer
         if (attributes.GetCustomAttributes(typeof(SchemaMaxLengthAttribute), false)
             is [SchemaMaxLengthAttribute maxLength])
         {
-            if (type != JsonSchemaType.String)
-                throw WrongSchemaType(property, "SchemaMaxLength", schema, "a string");
-            schema.MaxLength = maxLength.MaxLength;
+            var text = type == JsonSchemaType.Array ? schema.Items as OpenApiSchema : schema;
+            if (text is null || (text.Type & ~JsonSchemaType.Null) != JsonSchemaType.String)
+                throw WrongSchemaType(property, "SchemaMaxLength", schema, "a string or a list of strings");
+            text.MaxLength = maxLength.MaxLength;
         }
 
         if (attributes.GetCustomAttributes(typeof(SchemaMinimumAttribute), false)

@@ -22,6 +22,7 @@ public class NetworkMountCheckTests
     [Arguments("fuse")]
     [Arguments("vboxsf")]
     [Arguments("virtiofs")]
+    [Arguments("fakeowner")]
     [Arguments("macfuse")]
     [Arguments("osxfuse")]
     [Arguments("prl_fs")]
