@@ -26,8 +26,8 @@ public sealed class JsonLinesFile(string path, RollingFileLimits limits, FileSin
         [new LogEventProperty(LineProperty, new ScalarValue(line))]));
 
     /// <summary>
-    /// The export thread has no caller, so a throw from here ends the process. The heap can be full when this runs, and
-    /// then the notice can throw too.
+    /// A throw from here would end the process on the thread of a span export, and would lose the batch on the thread of a
+    /// metric export. The heap can be full when this runs, and then the notice can throw too.
     /// </summary>
     public void ReportLostLine(Exception exception)
     {

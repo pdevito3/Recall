@@ -73,7 +73,7 @@ public sealed record FileTelemetryPlan(string LogsDirectory, string TelemetryDir
         }
         catch (InvalidOperationException notANumber)
         {
-            return $"{notANumber.Message} Correct it, and start the server again.";
+            return $"{TelemetryText.Cap(notANumber.Message)} Correct it, and start the server again.";
         }
     }
 

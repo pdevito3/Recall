@@ -37,11 +37,21 @@ public sealed class FileSinkFailureNotice(string file, TimeProvider clock, TextW
         WriteLine(now, Text + " for {File}. The console keeps each log, and the file can lose lines. The cause: {Cause}", exception?.Message ?? message);
     }
 
-    /// <summary>Each file closes once, so this line has no interval.</summary>
-    public void OnCloseFailed(Exception exception) => WriteLine(
-        clock.GetUtcNow(),
-        "The file {File} did not close at the stop. The lines that it still held are lost, and the console keeps each log. The cause: {Cause}",
-        exception.Message);
+    /// <summary>A failed close gives this line once for each file, so it has no interval. The console can be on the same full disk, and a throw here would end the stop with a crash.</summary>
+    public void OnCloseFailed(Exception exception)
+    {
+        try
+        {
+            WriteLine(
+                clock.GetUtcNow(),
+                "The file {File} did not close at the stop. The lines that it still held are lost, and the console keeps each log. The cause: {Cause}",
+                exception.Message);
+        }
+        catch (Exception)
+        {
+            // Nothing is left to report to
+        }
+    }
 
     private void WriteLine(DateTimeOffset now, string template, string cause) => console.WriteLine(JsonLine.Of(json =>
     {

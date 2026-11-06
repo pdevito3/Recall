@@ -1,6 +1,8 @@
 namespace Recall.UnitTests.Resources.FileTelemetry;
 
 using System.Globalization;
+using Microsoft.Extensions.Configuration;
+using Recall.Server.Resources;
 using Recall.Server.Resources.FileTelemetry;
 using Serilog;
 using Serilog.Events;
@@ -226,6 +228,24 @@ public class RollingFileLimitsTests
         {
             File.Delete(blocker);
         }
+    }
+
+    [Test]
+    public void a_very_long_limit_that_is_not_a_number_gets_a_refusal_inside_the_cap()
+    {
+        // Arrange
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:appdb"] = "Data Source=/data/recall.db",
+            ["FileTelemetry:Logs:DaysKept"] = new string('x', 100_000),
+        }).Build();
+
+        // Act
+        var refusal = FileTelemetryPlan.RefusalFor(configuration);
+
+        // Assert
+        refusal.ShouldNotBeNull().ShouldContain(TelemetryText.CutMarker);
+        refusal.Length.ShouldBeLessThan(TelemetryText.MaxLength + 100);
     }
 
     [Test]
