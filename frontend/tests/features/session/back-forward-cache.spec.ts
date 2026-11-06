@@ -4,6 +4,7 @@ import { expect, test } from '@tests/support/fixtures'
 import { sessionPage } from './session.tasks'
 
 // Playwright turns this cache off, and only the full Chromium build has it on in a headless run.
+// The mocks of this spec send no no-store, so Chromium restores the page here. The real Server sends it, and Chromium then loads the page again. docs/authentication.md has the runs.
 test.use({ channel: 'chromium', launchOptions: { ignoreDefaultArgs: ['--disable-back-forward-cache'] } })
 
 test.describe('a page that Back restores from the back-forward cache', () => {

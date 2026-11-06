@@ -19,7 +19,12 @@ public static class SpaHosting
         {
             app.UseStaticFiles(new StaticFileOptions
             {
-                OnPrepareResponse = file => file.Context.Response.Headers.ContentSecurityPolicy = ContentSecurityPolicy,
+                OnPrepareResponse = file =>
+                {
+                    file.Context.Response.Headers.ContentSecurityPolicy = ContentSecurityPolicy;
+                    if (file.File.Name == IndexFile)
+                        file.Context.Response.Headers.CacheControl = "no-store";
+                },
             });
         }
     }

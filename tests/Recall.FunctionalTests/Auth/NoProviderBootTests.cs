@@ -329,11 +329,14 @@ public partial class NoProviderBootTests
         // Act
         using var index = await server.Client.GetAsync("/");
         using var route = await server.Client.GetAsync("/users");
+        using var fileName = await server.Client.GetAsync("/index.html");
 
         // Assert
         // With this header, Chromium did not restore a page after its cookies were removed. docs/authentication.md has the runs.
         index.Headers.CacheControl!.NoStore.ShouldBeTrue();
         route.Headers.CacheControl!.NoStore.ShouldBeTrue();
+        fileName.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (fileName.Headers.CacheControl?.NoStore == true).ShouldBeTrue("/index.html is the same page as /");
     }
 
     [Test]
