@@ -28,3 +28,14 @@ export function plainPreviewOf(text: string, length: number): string {
   const plain = document ? plainTextOf(document) : text
   return plain.replace(/\s+/g, ' ').trim().slice(0, length)
 }
+
+function personIdsIn(node: JSONContent): string[] {
+  const personId: unknown = node.type === 'mention' ? node.attrs?.personId : null
+  const own = typeof personId === 'string' && personId ? [personId] : []
+  return [...own, ...(node.content ?? []).flatMap(personIdsIn)]
+}
+
+export function mentionedPersonIds(raw: string | null, cleaned: string | null): string[] {
+  const documents = [raw, cleaned].flatMap((text) => (text && parseDocument(text)) || [])
+  return [...new Set(documents.flatMap(personIdsIn))].sort()
+}

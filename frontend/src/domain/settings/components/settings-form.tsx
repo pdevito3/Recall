@@ -11,8 +11,10 @@ import { journalZoneOf, settingSaver, useUserSetting, type SettingChange } from 
 import { useCurrentUser } from '@/domain/users/apis/get-current-user'
 import { parseTimeZone, timeZoneLabel, type TimeZone } from '@/lib/zoned-time'
 
-function zoneOptions(): { id: string; label: string }[] {
-  return Intl.supportedValuesOf('timeZone').map((id) => ({ id, label: `${id.replaceAll('/', ' / ')} (${timeZoneLabel(id as TimeZone)})` }))
+// The list of the browser leaves out UTC and the new name of a renamed zone, such as Asia/Kolkata.
+function zoneOptions(savedZone: TimeZone): { id: string; label: string }[] {
+  const ids = new Set(['UTC', savedZone, ...Intl.supportedValuesOf('timeZone')])
+  return [...ids].sort().map((id) => ({ id, label: `${id.replaceAll('/', ' / ')} (${timeZoneLabel(id as TimeZone)})` }))
 }
 
 export function SettingsForm() {
@@ -20,7 +22,8 @@ export function SettingsForm() {
   const queryClient = useQueryClient()
   const saver = settingSaver(queryClient)
   const status = useSyncExternalStore(saver.subscribe, saver.getStatus)
-  const zones = useMemo(zoneOptions, [])
+  const zone = journalZoneOf(setting.data)
+  const zones = useMemo(() => zoneOptions(zone), [zone])
 
   if (setting.isPending) {
     return <p role="status" aria-label="Loading your settings" className="text-muted-foreground">Loading your settings</p>
@@ -37,8 +40,6 @@ export function SettingsForm() {
       requirePeopleProposalApproval: values.requirePeopleProposalApproval,
       ...patch,
     })
-
-  const zone = journalZoneOf(setting.data)
 
   return (
     <div className="flex flex-col gap-8">

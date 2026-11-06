@@ -90,7 +90,7 @@ export const sessionsApi = {
     return { method: 'put', path: sessionsPaths.metadata(session.id), status: 200, body: session }
   },
 
-  revisionsAre(session: SessionDto, revisions: RevisionDto[]): MockRoute[] {
+  revisionsAre(session: SessionDto, revisions: RevisionDto[], nextCursor: string | null = null): MockRoute[] {
     return [
       {
         method: 'get',
@@ -98,7 +98,7 @@ export const sessionsApi = {
         status: 200,
         body: {
           items: revisions.map(({ number, savedAt, text }) => ({ number, savedAt, length: text.length })),
-          nextCursor: null,
+          nextCursor,
         },
       },
       ...revisions.map(

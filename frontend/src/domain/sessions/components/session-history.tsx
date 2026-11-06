@@ -64,7 +64,7 @@ export function SessionHistory({ sessionId, channel, currentRevision, onRestore 
           ))}
         </ul>
       )}
-      {pages.hasNextPage && (
+      {isOpen && pages.hasNextPage && (
         <Button variant="outline" isPending={pages.isFetchingNextPage} onPress={() => pages.fetchNextPage()}>
           Show older versions
         </Button>

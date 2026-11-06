@@ -403,6 +403,22 @@ test.describe('the history of an entry', () => {
     await expect(entry.at.words('First words')).toBeVisible()
     expect((api.last('put', sessionsPaths.rawDraft(session.id))?.body as { text: string }).text).toContain('First words')
   })
+
+  test('a closed history shows no button for older versions', async ({ page, api }) => {
+    const session = aSession().atRevision(2).saying('Second words').build()
+    api.mock(
+      sessionsApi.oneIs(session),
+      ...sessionsApi.revisionsAre(session, [{ number: 1, savedAt: '2026-11-06T15:00:00+00:00', text: documentWith('First words') }], 'more'),
+    )
+    const entry = entryPage(page)
+    await entry.open(session.id)
+
+    await entry.at.showHistory.click()
+    await expect(entry.at.olderVersions).toBeVisible()
+    await entry.at.closeHistory.click()
+
+    await expect(entry.at.olderVersions).toHaveCount(0)
+  })
 })
 
 test.describe('deleting an entry', () => {

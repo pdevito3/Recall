@@ -10,7 +10,8 @@ import { Notification } from '@/components/notification'
 import { sessionQueryOptions } from '../apis/get-session'
 import { SessionKeys, type DraftChannel } from '../apis/session.keys'
 import { patchTimelineRow, refreshTimelineHead } from '../apis/timeline-cache'
-import { plainPreviewOf } from '../editor/content'
+import { mentionedPersonIds, plainPreviewOf } from '../editor/content'
+import { pointAtCreatedSession } from './composer-pointer'
 import { readOutbox, readOutboxEntry, removeFromOutbox, writeToOutbox, type OutboxEntry } from './outbox'
 import { queueWithUnanswered, newestUnsettled, type SaveQueue, type SaveStatus, type Stamped } from './save-queue'
 import { SerialSaver } from './serial-saver'
@@ -154,7 +155,9 @@ export class DraftSaver {
   }
 
   private afterCreate(created: SessionDto) {
-    this.update({ sessionId: created.id, baseRevision: created.rawDraftRevision, latestRevision: created.rawLatestRevision })
+    pointAtCreatedSession(this.target.clientSessionId, created.id)
+    // A replay of the create can bring words that this page never showed. A next save over them must raise the notice.
+    this.update({ sessionId: created.id, baseRevision: created.rawDraftRevision })
     this.queryClient.setQueryData(SessionKeys.detail(created.id), created)
     void refreshTimelineHead(this.queryClient)
   }
@@ -196,8 +199,8 @@ export class DraftSaver {
       const draft = words === null
         ? {}
         : isRaw
-          ? { rawDraftRevision: reply.draftRevision, rawText: words, rawSavedAt: reply.savedAt }
-          : { cleanedDraftRevision: reply.draftRevision, cleanedText: words, cleanedSavedAt: reply.savedAt }
+          ? { rawDraftRevision: reply.draftRevision, rawText: words, rawSavedAt: reply.savedAt, personIds: mentionedPersonIds(words, session.cleanedText) }
+          : { cleanedDraftRevision: reply.draftRevision, cleanedText: words, cleanedSavedAt: reply.savedAt, personIds: mentionedPersonIds(session.rawText, words) }
       return { ...session, ...latest, ...draft, cleanupStatus: reply.cleanupStatus, version: reply.version }
     })
     if (words !== null && this.target.channel === 'raw') this.patchRow(id, words, reply)
@@ -209,8 +212,10 @@ export class DraftSaver {
   }
 
   private patchRow(id: string, words: string, current: Pick<SessionDto, 'cleanupStatus' | 'version'>) {
+    const cleaned = this.queryClient.getQueryData<SessionDto>(SessionKeys.detail(id))?.cleanedText ?? null
     patchTimelineRow(this.queryClient, id, {
       preview: plainPreviewOf(words, previewLength),
+      personIds: mentionedPersonIds(words, cleaned),
       cleanupStatus: current.cleanupStatus,
       version: current.version,
     })

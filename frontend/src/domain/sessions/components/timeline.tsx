@@ -108,12 +108,12 @@ function sameDaySection(a: DaySectionProps, b: DaySectionProps) {
 function TimelineRow({ row, zone, labels }: { row: SessionSummaryDto; zone: TimeZone; labels: Map<string, string> }) {
   const time = formatInstant(new Date(row.startedAt), zone, { hour: 'numeric', minute: '2-digit' })
   const people = row.personIds.flatMap((id) => labels.get(id) ?? [])
-  const tags = [
+  const tags = new Set([
     ...(row.activity && row.activity !== activityNone ? [row.activity] : []),
     ...row.moods,
     ...row.topics.map((topic) => topic.name),
     ...people.map((label) => `@${label}`),
-  ]
+  ])
   return (
     <li className="[contain-intrinsic-size:auto_5.5rem] [content-visibility:auto]">
       <Link
@@ -125,9 +125,9 @@ function TimelineRow({ row, zone, labels }: { row: SessionSummaryDto; zone: Time
         <span className="line-clamp-3 wrap-anywhere">
           {row.preview || <span className="text-muted-foreground">No words yet</span>}
         </span>
-        {tags.length > 0 && (
+        {tags.size > 0 && (
           <span className="flex flex-wrap gap-1 pt-1">
-            {tags.map((tag) => (
+            {[...tags].map((tag) => (
               <Badge key={tag} variant="secondary" className="max-w-full">
                 <span className="truncate">{tag}</span>
               </Badge>

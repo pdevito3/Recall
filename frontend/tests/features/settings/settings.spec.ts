@@ -46,6 +46,17 @@ test.describe('the settings of a person', () => {
     await expect(settings.at.saved).toBeVisible()
   })
 
+  for (const [saved, shown] of [['UTC', /^UTC \(/], ['Asia/Kolkata', /^Asia \/ Kolkata \(/]] as const) {
+    test(`shows the saved zone ${saved}, which the list of the browser can leave out`, async ({ page, api }) => {
+      api.mock(settingsApi.are(aSetting({ timeZone: saved })))
+      const settings = settingsPage(page)
+
+      await settings.open()
+
+      await expect(settings.at.zone).toHaveValue(shown)
+    })
+  }
+
   test('says so when the Server does not know the saved zone', async ({ page, api }) => {
     api.mock(settingsApi.are(aSetting({ timeZone: 'Mars/Olympus', timeZoneIsKnown: false })))
     const settings = settingsPage(page)

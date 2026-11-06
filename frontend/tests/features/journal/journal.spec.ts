@@ -217,6 +217,34 @@ test.describe('writing a new entry', () => {
     await expect(journal.at.entryLink('Words before a move')).toBeVisible()
   })
 
+  test('a person who leaves just after the first words and reloads finds them on the way back', async ({ page, api }) => {
+    api.mock({ ...sessionsApi.creates(created), delayMs: 300 }, sessionsApi.draftSaveWins(created, 1))
+    const journal = journalPage(page)
+    await journal.open()
+    await journal.typeWithoutWaiting('Words before a reload')
+    await journal.goToSettings()
+    await expect.poll(() => api.all('put', sessionsPaths.rawDraft(created.id)).length).toBe(1)
+    await journal.letAnAnswerHeldForHalfASecondLand()
+
+    const saved = { ...aSession().saying('Words before a reload').build(), id: created.id, clientSessionId: created.clientSessionId }
+    api.mock(sessionsApi.oneIs(saved), sessionsApi.timelineIs([{ ...aSession().summary('Words before a reload'), id: created.id }]))
+    await journal.reloadOnSettings()
+    await journal.goToTheJournalFromTheSidebar()
+
+    await expect(journal.at.composer).toHaveText('Words before a reload')
+  })
+
+  test('a save over words that the create found on the Server shows the notice', async ({ page, api }) => {
+    const replayed = aSession().atRevision(1).saying('Words from another tab').build()
+    api.mock(sessionsApi.creates(replayed), sessionsApi.draftSaveWins(replayed, 2))
+    const journal = journalPage(page)
+    await journal.open()
+
+    await journal.write('Words from this tab')
+
+    await expect(journal.at.conflict('The other save is safe in History.')).toBeVisible()
+  })
+
   test('a return to the journal with a read that fails opens the last known words and keeps the entry', async ({ page, api }) => {
     const saved = aSession().saying('Morning coffee').build()
     api.mock(sessionsApi.creates(saved), sessionsApi.draftSaveWins(saved, 2), sessionsApi.oneIs(saved))
@@ -319,6 +347,27 @@ test.describe('writing a new entry', () => {
     await expect.poll(() => JSON.stringify(api.last('put', sessionsPaths.rawDraft(created.id))?.body)).toContain('per_1')
   })
 
+  test('a mention shows as a tag on the row after Done, with no new read of the list', async ({ page, api }) => {
+    api.mock(
+      peopleApi.listIs([aPerson('per_1', 'Ana Reyes')]),
+      sessionsApi.creates(created),
+      sessionsApi.draftSaveWins(created, 2),
+      sessionsApi.timelineIs([{ ...aSession().summary('Lunch with'), id: created.id }]),
+    )
+    const journal = journalPage(page)
+    await journal.open()
+    await expect.poll(() => api.all('get', peoplePaths.list).length).toBeGreaterThan(0)
+
+    await journal.typeWithoutWaiting('Lunch with @Ana')
+    await expect(journal.at.mentionOption('Ana Reyes')).toBeVisible()
+    await journal.pickFromTheMentionList()
+    await expect.poll(() => JSON.stringify(api.last('put', sessionsPaths.rawDraft(created.id))?.body)).toContain('per_1')
+    await expect(journal.at.status('Saved at')).toBeVisible()
+    await journal.finish()
+
+    await expect(journal.at.tag('@Ana Reyes')).toBeVisible()
+  })
+
   test('a mention of a new name adds the person first', async ({ page, api }) => {
     api.mock(peopleApi.adds(aPerson('per_9', 'Zed')), sessionsApi.creates(created), sessionsApi.draftSaveWins(created, 2))
     const journal = journalPage(page)
@@ -346,6 +395,16 @@ test.describe('the time zone of a new user', () => {
 })
 
 test.describe('the timeline', () => {
+  test('a mood and a topic with one name show one tag', async ({ page, api }) => {
+    api.mock(sessionsApi.timelineIs([aSession().tagged({ moods: ['Calm'], topics: ['Calm'] }).summary('A quiet day')]))
+    const journal = journalPage(page)
+
+    await journal.open()
+
+    await expect(journal.at.entryLink('A quiet day')).toBeVisible()
+    await expect(journal.at.tag('Calm')).toHaveCount(1)
+  })
+
   test('groups rows by day and names the day, with the tags of each entry', async ({ page, api }) => {
     const today = new Date().toISOString().slice(0, 10)
     const rows = [

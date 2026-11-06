@@ -49,6 +49,8 @@ export const entry = (page: Page) => ({
   removeTopic: (name: string) => page.getByRole('button', { name: `Remove topic ${name}`, exact: true }),
   suggested: page.getByText('Suggested topics', { exact: true }),
   showHistory: page.getByRole('button', { name: 'Show history', exact: true }),
+  closeHistory: page.getByRole('button', { name: 'Close history', exact: true }),
+  olderVersions: page.getByRole('button', { name: 'Show older versions', exact: true }),
   versionView: page.getByRole('button', { name: /^View version from/ }),
   versionWords: (text: string) => page.getByRole('dialog').getByText(text),
   restore: page.getByRole('button', { name: 'Restore this version', exact: true }),

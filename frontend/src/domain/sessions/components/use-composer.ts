@@ -9,38 +9,11 @@ import { newUuid } from '@/lib/new-uuid'
 
 import { sessionQueryOptions } from '../apis/get-session'
 import { SessionKeys } from '../apis/session.keys'
+import { readPointer, writePointer } from '../autosave/composer-pointer'
 import { draftSaverFor, shownStatusOf, type DraftSaver, type DraftSnapshot } from '../autosave/draft-saver'
 import { useOwner } from '../autosave/use-draft-saver'
 
 const locationWaitMs = 3_000
-const resumeWithinMs = 60 * 60 * 1000
-const pointerKey = 'recall.composer'
-
-interface ComposerPointer {
-  owner: string
-  clientSessionId: string
-  startedAt: string
-  sessionId: string | null
-  touchedAt: number
-}
-
-function readPointer(owner: string): ComposerPointer | null {
-  try {
-    const pointer = JSON.parse(sessionStorage.getItem(pointerKey) ?? 'null') as ComposerPointer | null
-    return pointer?.owner === owner && Date.now() - pointer.touchedAt < resumeWithinMs ? pointer : null
-  } catch {
-    return null
-  }
-}
-
-function writePointer(pointer: ComposerPointer | null) {
-  try {
-    if (pointer) sessionStorage.setItem(pointerKey, JSON.stringify(pointer))
-    else sessionStorage.removeItem(pointerKey)
-  } catch {
-    return
-  }
-}
 
 function captureLocation(): Promise<{ latitude: number; longitude: number } | null> {
   return new Promise((resolve) => {
@@ -126,10 +99,6 @@ export function useComposer() {
   const snapshot = useSyncExternalStore(shown?.subscribe ?? noSubscription, shown?.getSnapshot ?? (() => idleSnapshot))
 
   const sessionId = saver ? snapshot.sessionId : null
-  useEffect(() => {
-    const current = readPointer(owner)
-    if (sessionId && current) writePointer({ ...current, sessionId })
-  }, [sessionId, owner])
 
   const beginEntry = useCallback(
     (text: string) => {

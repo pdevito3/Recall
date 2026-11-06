@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 
-import { plainPreviewOf } from './content'
+import { mentionedPersonIds, plainPreviewOf } from './content'
 import { contentOf } from './content-of'
 
 const doc = (...content: object[]) => JSON.stringify({ type: 'doc', content })
@@ -35,4 +35,16 @@ test('a document with a node that the editor does not know shows its text, so th
   const text = JSON.stringify({ type: 'doc', content: [{ type: 'hologram', content: [{ type: 'text', text: 'Words' }] }] })
 
   expect(contentOf(text)).toEqual({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] })
+})
+
+test('the people of an entry are the mentions of each text, once each, in the order of the Server', () => {
+  const mention = (personId: string) => ({ type: 'mention', attrs: { personId, label: personId } })
+  const raw = doc({ type: 'paragraph', content: [mention('b'), mention('a')] })
+  const cleaned = doc({ type: 'blockquote', content: [{ type: 'paragraph', content: [mention('a'), mention('c')] }] })
+
+  expect(mentionedPersonIds(raw, cleaned)).toEqual(['a', 'b', 'c'])
+})
+
+test.each([['plain words'], ['{not json'], [null]])('the text %s mentions no one', (text) => {
+  expect(mentionedPersonIds(text, null)).toEqual([])
 })

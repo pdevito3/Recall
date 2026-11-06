@@ -55,6 +55,11 @@ export function journalPage(page: Page) {
       await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Journal', exact: true }).click()
     },
 
+    async reloadOnSettings() {
+      await page.reload()
+      await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible()
+    },
+
     async letAnAnswerHeldForHalfASecondLand() {
       await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 700)))
     },
@@ -145,6 +150,11 @@ export function entryPage(page: Page) {
       const read = page.waitForRequest((r) => r.method() === 'GET' && new URL(r.url()).pathname === sessionsPaths.one(id))
       await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')))
       await read
+    },
+
+    async reloadOnSettings() {
+      await page.reload()
+      await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible()
     },
 
     async letAnAnswerHeldForHalfASecondLand() {
