@@ -31,6 +31,21 @@ public class SessionTests
         return session;
     }
 
+    private static Session SessionAt(CleanupRunState state)
+    {
+        var session = NewSession();
+        session.SaveRaw(Save("raw words", 0), false);
+        if (state == CleanupRunState.NotRun)
+            return session;
+
+        session.BeginCleanup();
+        if (state == CleanupRunState.Clean)
+            session.CompleteCleanup("clean words", "A recap", session.Raw.DraftRevision, Noon);
+        else
+            session.FailCleanup();
+        return session;
+    }
+
     [Test]
     [Property("Rule", "SES-2")]
     public void a_start_time_in_the_future_becomes_the_time_of_the_server()
@@ -109,6 +124,77 @@ public class SessionTests
         // Assert
         session.CleanupStatus.ShouldBe(CleanupStatus.Clean);
         session.CleanedHasHandEdits.ShouldBeTrue();
+    }
+
+    [Test]
+    [Property("Rule", "SES-30")]
+    public void a_cleanup_that_runs_refuses_a_second_begin()
+    {
+        // Arrange
+        var session = NewSession();
+        session.BeginCleanup();
+
+        // Act
+        var begin = () => session.BeginCleanup();
+
+        // Assert
+        begin.ShouldThrow<ValidationException>();
+        session.CleanupStatus.ShouldBe(CleanupStatus.Running);
+    }
+
+    [Test]
+    [Property("Rule", "SES-30")]
+    [Arguments(CleanupRunState.NotRun)]
+    [Arguments(CleanupRunState.Clean)]
+    [Arguments(CleanupRunState.Failed)]
+    public void a_cleanup_that_does_not_run_refuses_a_complete_and_keeps_the_words(CleanupRunState state)
+    {
+        // Arrange
+        var session = SessionAt(state);
+        var cleaned = session.Cleaned;
+
+        // Act
+        var complete = () => session.CompleteCleanup("late words", "A late recap", session.Raw.DraftRevision, Now);
+
+        // Assert
+        complete.ShouldThrow<ValidationException>();
+        session.Cleaned.ShouldBe(cleaned);
+        session.CleanupRun.ShouldBe(state);
+    }
+
+    [Test]
+    [Property("Rule", "SES-30")]
+    [Arguments(CleanupRunState.NotRun)]
+    [Arguments(CleanupRunState.Clean)]
+    [Arguments(CleanupRunState.Failed)]
+    public void a_cleanup_that_does_not_run_refuses_a_failure(CleanupRunState state)
+    {
+        // Arrange
+        var session = SessionAt(state);
+
+        // Act
+        var fail = () => session.FailCleanup();
+
+        // Assert
+        fail.ShouldThrow<ValidationException>();
+        session.CleanupRun.ShouldBe(state);
+    }
+
+    [Test]
+    [Property("Rule", "SES-30")]
+    [Arguments(CleanupRunState.NotRun)]
+    [Arguments(CleanupRunState.Clean)]
+    [Arguments(CleanupRunState.Failed)]
+    public void a_cleanup_can_begin_from_each_state_with_no_run(CleanupRunState state)
+    {
+        // Arrange
+        var session = SessionAt(state);
+
+        // Act
+        session.BeginCleanup();
+
+        // Assert
+        session.CleanupRun.ShouldBe(CleanupRunState.Running);
     }
 
     [Test]

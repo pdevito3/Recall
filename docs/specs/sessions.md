@@ -26,6 +26,8 @@ This spec leaves out Cleanup, Summaries, audio, and each screen. Later units bui
 | Running | Clean | `Session.CompleteCleanup` | Cleanup |
 | Running | Failed | `Session.FailCleanup` | Cleanup |
 
+Each other step is refused, and the Session does not change. A job that stops with no result ends a run with `Session.FailCleanup`.
+
 A `Session` shows `Stale` when its Raw Draft is at a newer Revision than the Revision that the last successful Cleanup read, and no Cleanup runs.
 
 ## 3. Rules
@@ -61,3 +63,4 @@ A `Session` shows `Stale` when its Raw Draft is at a newer Revision than the Rev
 | SES-27 | After a delete of a Session, a Correction, a User, or a tenant with no long reader, its words are not in the database file or in the WAL. A reader that holds on past the wait of the truncate can keep the old pages in the database file or the WAL until a later checkpoint passes the delete. | `PRAGMA secure_delete`, `WalScrub`, `DeleteSession`, `DeleteCorrection`, `DeleteUser`, `DeleteTenant` | |
 | SES-28 | A timeline page gives no row twice and misses no row, also when two Sessions have the same start time and a Session arrives between two pages. | `GetSessionPage`, `SessionCursor` | Index on `sessions.user_id, started_at, id` |
 | SES-29 | Any text saves and comes back exactly, also a text that is not a good ProseMirror document. Its preview is the text, it mentions no Person, and a rename does not stop on it. | `ProseMirrorNode.TryRead`, `Session.PreviewOf` | |
+| SES-30 | A Cleanup begins only when no Cleanup runs. A Cleanup completes or fails only while it runs. A refused step changes nothing. | `Session.BeginCleanup`, `Session.CompleteCleanup`, `Session.FailCleanup` | |

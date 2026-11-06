@@ -19,6 +19,7 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
     public const int MetadataListColumnMaxLength = MetadataListMaxCount * (MetadataValueMaxLength * 6 + 3);
 
     private const string ClientSessionIdField = "clientSessionId";
+    private const string CleanupField = "cleanup";
 
     private readonly List<RawRevision> _appendedRawRevisions = [];
     private readonly List<CleanedRevision> _appendedCleanedRevisions = [];
@@ -160,10 +161,15 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         UserTopics = metadata.UserTopics.Where(t => !AiTopics.Contains(t, StringComparer.OrdinalIgnoreCase)).ToList();
     }
 
-    public void BeginCleanup() => CleanupRun = CleanupRunState.Running;
+    public void BeginCleanup()
+    {
+        ValidationException.MustNot(CleanupRun == CleanupRunState.Running, CleanupField, "A Cleanup of this Session already runs.");
+        CleanupRun = CleanupRunState.Running;
+    }
 
     public void CompleteCleanup(string cleanedText, string synopsis, int rawRevisionRead, DateTimeOffset now)
     {
+        RequireRunningCleanup();
         Cleaned = new DraftSlot(cleanedText, Cleaned.LatestRevision + 1, Cleaned.LatestRevision + 1, now);
         _appendedCleanedRevisions.Add(new CleanedRevision(Id, Cleaned.DraftRevision, now, now, cleanedText));
         Synopsis = synopsis;
@@ -173,7 +179,14 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         RefreshFromDrafts();
     }
 
-    public void FailCleanup() => CleanupRun = CleanupRunState.Failed;
+    public void FailCleanup()
+    {
+        RequireRunningCleanup();
+        CleanupRun = CleanupRunState.Failed;
+    }
+
+    private void RequireRunningCleanup()
+        => ValidationException.Must(CleanupRun == CleanupRunState.Running, CleanupField, "No Cleanup of this Session runs.");
 
     private static DateTimeOffset StoredInstantOf(DateTimeOffset instant)
         => new(instant.UtcTicks - instant.UtcTicks % TimeSpan.TicksPerMicrosecond, TimeSpan.Zero);
