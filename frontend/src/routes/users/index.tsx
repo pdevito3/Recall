@@ -71,7 +71,7 @@ function UserRows({ list, page, onPageChange }: UserRowsProps) {
   }
 
   if (users.length === 0) {
-    return <p className="text-muted-foreground">This tenant has no users.</p>
+    return <p className="text-muted-foreground">There are no users.</p>
   }
 
   return (

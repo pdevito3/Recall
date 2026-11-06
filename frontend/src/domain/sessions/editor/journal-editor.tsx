@@ -56,6 +56,7 @@ export function JournalEditor({ initialText, label, placeholder, autoFocus, onCh
         role: 'textbox',
         'aria-multiline': 'true',
         'aria-label': label,
+        dir: 'auto',
         class: 'journal-prose min-h-32 px-3 py-2 outline-none',
       },
     },
@@ -101,7 +102,7 @@ export function JournalText({ text, label }: { text: string; label: string }) {
     editable: false,
     content: contentOf(text),
     extensions: [...textExtensions, PersonMention],
-    editorProps: { attributes: { 'aria-label': label, class: 'journal-prose outline-none' } },
+    editorProps: { attributes: { 'aria-label': label, dir: 'auto', class: 'journal-prose outline-none' } },
   })
   return <EditorContent editor={editor} />
 }

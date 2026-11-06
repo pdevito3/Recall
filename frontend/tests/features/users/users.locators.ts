@@ -8,6 +8,7 @@ export const users = (page: Page) => {
 
   return {
     listHeading: page.getByRole('heading', { name: 'Users', exact: true }),
+    journalNavLink: page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Journal', exact: true }),
     usersNavLink: page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Users', exact: true }),
     grid,
     row: (name: string) => grid.getByRole('row', { name: new RegExp(`^${name}`) }),

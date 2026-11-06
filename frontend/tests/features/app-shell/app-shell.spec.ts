@@ -288,6 +288,19 @@ test('a window that becomes narrow with no network still opens the sidebar', asy
   await expect(shell.at.journalNavigationLink).toBeVisible()
 })
 
+test('a page that the person did not open yet still opens with no network', async ({ page }) => {
+  const shell = appShellPage(page)
+
+  await shell.openAboutAndWaitForTheCodeOfEachPage()
+  await page.context().setOffline(true)
+
+  await shell.at.peopleNavigationLink.click()
+  await expect(shell.at.pageHeading).toHaveText('People')
+  await shell.at.settingsNavigationLink.click()
+  await expect(shell.at.pageHeading).toHaveText('Settings')
+  await expect(shell.at.pageErrorHeading).toHaveCount(0)
+})
+
 test.describe('a part of the app that cannot load', () => {
   test.use({ viewport: { width: 390, height: 844 } })
 

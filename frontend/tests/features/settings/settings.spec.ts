@@ -14,6 +14,18 @@ test.describe('the settings of a person', () => {
     await expect(settings.at.signedInAs('Robert Smith')).toBeVisible()
   })
 
+  test('a long name stays in the page on a phone', async ({ page, api }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    const name = 'n'.repeat(200)
+    api.mock(usersApi.currentIs({ identifier: '1', name }))
+    const settings = settingsPage(page)
+
+    await settings.open()
+
+    await expect(settings.at.signedInAs(name)).toBeVisible()
+    expect(await settings.sideScrollRange()).toBe(0)
+  })
+
   test('sees the identifier when the token has no name', async ({ page, api }) => {
     api.mock(usersApi.currentIs({ identifier: 'user-1', name: null }))
     const settings = settingsPage(page)

@@ -10,6 +10,7 @@ import { formatInstant, todayAt, type TimeZone } from '@/lib/zoned-time'
 
 import { useSessionTimeline } from '../apis/get-session-timeline'
 import { activityNone } from '../tags'
+import { shownPreviewOf } from '../preview'
 import { dayHeading, groupByDay, type DayGroup } from '../timeline-days'
 
 const loadAheadPx = 1200
@@ -122,8 +123,8 @@ function TimelineRow({ row, zone, labels }: { row: SessionSummaryDto; zone: Time
         className="flex min-h-11 flex-col gap-1 rounded-lg border bg-card p-3 outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
         <span className="text-xs text-muted-foreground">{time}</span>
-        <span className="line-clamp-3 wrap-anywhere">
-          {row.preview || <span className="text-muted-foreground">No words yet</span>}
+        <span dir="auto" className="line-clamp-3 wrap-anywhere">
+          {shownPreviewOf(row.preview) || <span className="text-muted-foreground">No words yet</span>}
         </span>
         {tags.size > 0 && (
           <span className="flex flex-wrap gap-1 pt-1">

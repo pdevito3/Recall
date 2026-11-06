@@ -13,6 +13,8 @@ export function peoplePage(page: Page) {
       await expect(at.heading).toBeVisible()
     },
 
+    sideScrollRange: () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
+
     async add(name: string) {
       const added = page.waitForResponse((r) => r.request().method() === 'POST' && new URL(r.url()).pathname === peoplePaths.list)
       await at.newPerson.fill(name)

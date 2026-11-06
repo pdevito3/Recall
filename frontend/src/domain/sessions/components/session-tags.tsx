@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useState, useSyncExternalStore, type FormEvent } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react'
 import { ToggleButton } from 'react-aria-components'
 
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
@@ -53,7 +53,7 @@ function TagLine({ label, tags }: { label: string; tags: string[] }) {
       <span className="text-muted-foreground">{label}</span>
       {tags.map((tag) => (
         <Badge key={tag} variant="secondary" className="max-w-full">
-          <span className="truncate">{tag}</span>
+          <span dir="auto" className="truncate">{tag}</span>
         </Badge>
       ))}
     </div>
@@ -81,6 +81,23 @@ interface TagEditorProps {
 
 function TagEditor({ values, onChange }: TagEditorProps) {
   const [topic, setTopic] = useState('')
+  const topicList = useRef<HTMLUListElement>(null)
+  const newTopic = useRef<HTMLInputElement>(null)
+  const removedAt = useRef<number | null>(null)
+
+  // The button that had the focus is gone, and with no new target the focus falls to the body of the page.
+  useEffect(() => {
+    if (removedAt.current === null) return
+    const removeButtons = topicList.current?.querySelectorAll('button') ?? []
+    const next = removeButtons[Math.min(removedAt.current, removeButtons.length - 1)] ?? newTopic.current
+    next?.focus()
+    removedAt.current = null
+  }, [values.userTopics])
+
+  const removeTopic = (name: string) => {
+    removedAt.current = values.userTopics.indexOf(name)
+    onChange({ ...values, userTopics: values.userTopics.filter((t) => t !== name) })
+  }
 
   const toggleMood = (mood: string) =>
     onChange({
@@ -121,18 +138,19 @@ function TagEditor({ values, onChange }: TagEditorProps) {
           ))}
         </div>
       </fieldset>
-      <fieldset className="flex flex-col gap-2">
+      <fieldset className="flex min-w-0 flex-col gap-2">
         <legend className="mb-2 text-sm font-medium">Topics</legend>
         {values.userTopics.length > 0 && (
-          <ul aria-label="Your topics" className="flex flex-wrap gap-1.5">
+          <ul ref={topicList} aria-label="Your topics" className="flex flex-wrap gap-1.5">
             {values.userTopics.map((name) => (
               <li key={name} className="flex max-w-full items-center gap-1 rounded-full border pl-3 text-sm">
-                <span className="truncate">{name}</span>
+                <span dir="auto" className="min-w-0 truncate">{name}</span>
                 <Button
                   variant="ghost"
-                  size="icon-sm"
+                  size="icon"
+                  className="shrink-0 rounded-full max-md:size-11"
                   aria-label={`Remove topic ${name}`}
-                  onPress={() => onChange({ ...values, userTopics: values.userTopics.filter((t) => t !== name) })}
+                  onPress={() => removeTopic(name)}
                 >
                   x
                 </Button>
@@ -142,6 +160,7 @@ function TagEditor({ values, onChange }: TagEditorProps) {
         )}
         <form onSubmit={addTopic} className="flex gap-2">
           <Input
+            ref={newTopic}
             aria-label="New topic"
             placeholder="Add a topic"
             value={topic}

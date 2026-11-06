@@ -385,12 +385,44 @@ test.describe('an entry', () => {
   })
 
   test('a failed load shows the message of the Server in the page', async ({ page, api }) => {
-    api.mock(sessionsApi.oneFails('ses_gone', aProblem().notFound('This entry is gone.')))
+    api.mock(sessionsApi.oneFails('ses_1', aProblem().saying('The database is not there.')))
+    const entry = entryPage(page)
+
+    await page.goto('/sessions/ses_1')
+
+    await expect(entry.at.loadFailure).toContainText('The database is not there.')
+  })
+
+  test('an entry that does not exist says so, offers the journal, and offers no pointless retry', async ({ page, api }) => {
+    api.mock(sessionsApi.oneFails('ses_gone', aProblem().notFound('Session was not found.')))
     const entry = entryPage(page)
 
     await page.goto('/sessions/ses_gone')
 
-    await expect(entry.at.loadFailure).toContainText('This entry is gone.')
+    await expect(entry.at.doesNotExist).toBeVisible()
+    await expect(entry.at.tryAgain).toHaveCount(0)
+    await entry.leaveForTheJournal()
+  })
+
+  test('the question before a delete is an alert dialog', async ({ page, api }) => {
+    const session = aSession().build()
+    api.mock(sessionsApi.oneIs(session))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+
+    await entry.at.deleteButton.click()
+
+    await expect(entry.at.deleteDialog).toBeVisible()
+  })
+
+  test('words in a script from right to left read from right to left', async ({ page, api }) => {
+    const session = aSession().saying('\u05e9\u05dc\u05d5\u05dd').build()
+    api.mock(sessionsApi.oneIs(session))
+    const entry = entryPage(page)
+
+    await entry.open(session.id)
+
+    await expect(entry.at.editor).toHaveAttribute('dir', 'auto')
   })
 })
 
@@ -426,6 +458,22 @@ test.describe('the tags of an entry', () => {
     await expect(entry.at.moodChip('Tired')).toHaveAttribute('aria-pressed', 'true')
   })
 
+  test('a topic is a target of 32 pixels with a mouse, and its removal moves the focus to the next topic and then to the field', async ({ page, api }) => {
+    const session = aSession().tagged({ topics: ['work', 'home'] }).build()
+    api.mock(sessionsApi.oneIs(session), sessionsApi.metadataSaves({ ...session, topics: session.topics.slice(1) }))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+    await entry.at.editTags.click()
+
+    expect((await entry.at.removeTopic('work').boundingBox())?.width).toBe(32)
+    await entry.removeTopic(session.id, 'work')
+    await expect(entry.at.removeTopic('home')).toBeFocused()
+
+    api.mock(sessionsApi.metadataSaves({ ...session, topics: [] }))
+    await entry.removeTopic(session.id, 'home')
+    await expect(entry.at.newTopic).toBeFocused()
+  })
+
   test('a topic adds and removes, and an AI topic is not in the set of the person', async ({ page, api }) => {
     const session = aSession().tagged({ topics: ['work'] }).withSuggestedTopic('travel').build()
     api.mock(sessionsApi.oneIs(session), sessionsApi.metadataSaves(session))
@@ -438,6 +486,26 @@ test.describe('the tags of an entry', () => {
     const body = api.last('put', sessionsPaths.metadata(session.id))?.body as { userTopics: string[] }
     expect(body.userTopics).toEqual(['work', 'home'])
     await expect(entry.at.suggested).toBeVisible()
+  })
+})
+
+test.describe('the topics of an entry on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test('a long topic does not push the page to the side or clip Add', async ({ page, api }) => {
+    const topic = 't'.repeat(100)
+    const session = aSession().tagged({ topics: [topic, 'short topic'] }).build()
+    api.mock(sessionsApi.oneIs(session))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+
+    await entry.at.editTags.click()
+
+    await entry.at.addTopic.scrollIntoViewIfNeeded()
+    await expect(entry.at.addTopic).toBeInViewport({ ratio: 1 })
+    await expect(entry.at.removeTopic(topic)).toBeInViewport({ ratio: 1 })
+    expect(await entry.sideScrollRange()).toBe(0)
+    expect((await entry.at.removeTopic(topic).boundingBox())?.width).toBe(44)
   })
 })
 

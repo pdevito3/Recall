@@ -13,6 +13,20 @@ test.describe('the people of a journal', () => {
     await expect(people.at.person('Ben Stone')).toBeVisible()
   })
 
+  test('a long name in another script stays in the page on a phone', async ({ page, api }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    const name = '\u05e9'.repeat(100)
+    api.mock(peopleApi.listIs([aPerson('per_1', name)]))
+    const people = peoplePage(page)
+
+    await people.open()
+
+    await expect(people.at.person(name)).toHaveAttribute('dir', 'auto')
+    await expect(people.at.rename(name)).toBeInViewport({ ratio: 1 })
+    await expect(people.at.add).toBeInViewport({ ratio: 1 })
+    expect(await people.sideScrollRange()).toBe(0)
+  })
+
   test('says that the list is empty', async ({ page }) => {
     const people = peoplePage(page)
 

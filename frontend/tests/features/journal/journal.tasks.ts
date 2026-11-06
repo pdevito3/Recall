@@ -171,6 +171,19 @@ export function entryPage(page: Page) {
       await saved
     },
 
+    sideScrollRange: () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
+
+    async leaveForTheJournal() {
+      await at.goToJournal.click()
+      await page.waitForURL('/')
+    },
+
+    async removeTopic(id: string, topic: string) {
+      const saved = putTo(sessionsPaths.metadata(id))
+      await at.removeTopic(topic).click()
+      await saved
+    },
+
     async addTopic(id: string, topic: string) {
       const saved = putTo(sessionsPaths.metadata(id))
       await at.newTopic.fill(topic)

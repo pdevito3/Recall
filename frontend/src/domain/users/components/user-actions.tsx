@@ -141,7 +141,7 @@ function ConfirmDelete({ user, pendingAction, onDelete }: UserActionsProps) {
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>Delete {user.fullName}?</ResponsiveDialogTitle>
           <ResponsiveDialogDescription>
-            The user loses access to this tenant. You cannot undo a delete.
+            The user loses access to Recall. You cannot undo a delete.
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
         <ResponsiveDialogFooter>

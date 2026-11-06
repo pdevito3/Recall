@@ -11,6 +11,8 @@ export const appShell = (page: Page) => ({
   mobileSidebar: page.locator('[data-slot="sidebar"][data-mobile="true"]'),
   mobileSidebarAppName: page.locator('[data-slot="sidebar"][data-mobile="true"]').getByText('Recall', { exact: true }),
   journalNavigationLink: page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Journal' }),
+  peopleNavigationLink: page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'People' }),
+  settingsNavigationLink: page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Settings' }),
   aboutNavigationLink: page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'About' }),
   currentNavigationItems: page.getByRole('navigation', { name: 'Main' }).locator('[aria-current]'),
   sidebarTrigger: page.getByRole('main').getByRole('button', { name: 'Toggle Sidebar' }),

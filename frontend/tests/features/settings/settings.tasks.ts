@@ -8,6 +8,8 @@ export function settingsPage(page: Page) {
   return {
     at,
 
+    sideScrollRange: () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
+
     async open() {
       await page.goto('/settings')
       await expect(at.heading).toBeVisible()

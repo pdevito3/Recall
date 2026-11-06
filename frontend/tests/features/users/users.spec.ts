@@ -1,3 +1,4 @@
+import { membershipApi } from '@tests/support/api/membership-api'
 import { usersApi, usersPaths } from '@tests/support/api/users-api'
 import { as } from '@tests/support/auth/actors'
 import { aProblem } from '@tests/support/builders/problem-details-builder'
@@ -12,7 +13,7 @@ test.describe('the users of a tenant', () => {
     const grace = aUser().named('Grace Hopper').seenByAdmin()
     const alan = aUser().named('Alan Turing').inRole('Admin').seenByAdmin()
     const { id } = grace.build()
-    api.mock(usersApi.listReturns([grace, alan]), usersApi.oneIs(grace))
+    api.mock(membershipApi.userMayReadUsers(), usersApi.listReturns([grace, alan]), usersApi.oneIs(grace))
     const users = usersPage(page)
 
     await users.openList()
@@ -28,6 +29,16 @@ test.describe('the users of a tenant', () => {
     await expect(users.at.detail('grace')).toBeVisible()
     await expect(users.at.detail('User')).toBeVisible()
     await expect(users.at.usersNavLink).toHaveAttribute('aria-current', 'true')
+  })
+
+  test('a member who may not read the users has no link to them', async ({ page, api }) => {
+    api.mock(usersApi.listReturns([aUser().named('Grace Hopper')]))
+    const users = usersPage(page)
+
+    await users.openList()
+
+    await expect(users.at.journalNavLink).toBeVisible()
+    await expect(users.at.usersNavLink).toHaveCount(0)
   })
 
   test('puts the page in the URL, and sends it to the API', { tag: '@UM-1' }, async ({ page, api }) => {

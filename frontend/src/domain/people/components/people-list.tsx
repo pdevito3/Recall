@@ -41,7 +41,7 @@ export function PeopleList() {
         <ul aria-label="Your people" className="flex flex-col divide-y rounded-lg border">
           {directory.data.map((person) => (
             <li key={person.id} className="flex items-center justify-between gap-3 p-2 pl-3">
-              <span className="min-w-0 wrap-anywhere">{person.label}</span>
+              <span dir="auto" className="min-w-0 wrap-anywhere">{person.label}</span>
               <RenamePerson person={person} />
             </li>
           ))}

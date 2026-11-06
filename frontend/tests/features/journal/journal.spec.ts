@@ -435,6 +435,19 @@ test.describe('the time zone of a new user', () => {
   })
 })
 
+test.describe('a row of the journal', () => {
+  test('a preview that the Server cut ends at a word and shows the cut, and reads in its own direction', async ({ page, api }) => {
+    const journal = journalPage(page)
+    api.mock(sessionsApi.timelineIs([aSession().summary(`${'word '.repeat(39)}inter`)]))
+
+    await journal.open()
+
+    const row = journal.at.previewOfARow(`${'word '.repeat(38)}word\u2026`)
+    await expect(row).toBeVisible()
+    await expect(row).toHaveAttribute('dir', 'auto')
+  })
+})
+
 test.describe('the timeline', () => {
   test('a mood and a topic with one name show one tag', async ({ page, api }) => {
     api.mock(sessionsApi.timelineIs([aSession().tagged({ moods: ['Calm'], topics: ['Calm'] }).summary('A quiet day')]))

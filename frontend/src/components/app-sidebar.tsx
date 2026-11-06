@@ -24,6 +24,7 @@ import { useSidebar } from "@/components/ui/use-sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { useCurrentNavItem } from "@/components/current-nav-item"
 import { UserMenu } from "@/domain/auth/components/user-menu"
+import { useMembership } from "@/domain/membership/apis/get-membership"
 
 const appName = "Recall"
 const appInitials = appName
@@ -68,6 +69,8 @@ const navUrls = [
 export function AppSidebar() {
   const current = useCurrentNavItem(navUrls)
   const { setOpenMobile } = useSidebar()
+  const membership = useMembership()
+  const canReadUsers = membership.status === "member" && membership.user.permissions.includes("read_users")
 
   // On mobile the sidebar is a sheet over the page. Close it when a link is
   // pressed, so the user sees the new page. On desktop the sheet is not used.
@@ -96,6 +99,7 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 {navItems.map((item) => {
+                  if (item.url === "/users" && !canReadUsers) return null
                   return (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuLink
