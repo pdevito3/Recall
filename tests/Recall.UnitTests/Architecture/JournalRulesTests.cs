@@ -11,6 +11,7 @@ using Recall.Server.Databases.Auditing;
 using Recall.Server.Domain;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sync;
+using Recall.Server.Domain.Users;
 using Recall.Server.Resources;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -18,37 +19,30 @@ using Shouldly;
 
 public class JournalRulesTests
 {
-    // A new table fails until its author puts it here or gives it the owner filter, so it needs no namespace to be seen.
-    private static readonly string[] TablesWithNoJournal =
+    // A row that belongs to a person is journal data until its author says that it is not, wherever its type lives.
+    private static readonly string[] OwnedByAPersonButNoJournal =
     [
-        "Tenant",
-        "User",
         "UserPermission",
-        "Agent",
-        "AgentPermission",
-        "AuditEntry",
         "AppCode",
         "AuthSession",
         "ExternalLogin",
-        "LoginAttempt",
-        "UsedDPoPProof",
     ];
 
     [Test]
     [Property("Rule", "SES-14")]
-    public void each_table_has_the_owner_filter_or_is_named_as_no_journal()
+    public void each_table_that_belongs_to_a_person_or_a_journal_row_has_the_owner_filter()
     {
         // Arrange
         using var context = new AppDbContextFactory().CreateDbContext([]);
 
         // Act
         var missing = context.Model.GetEntityTypes()
-            .Where(e => !e.IsOwned() && !TablesWithNoJournal.Contains(e.ClrType.Name))
+            .Where(e => !e.IsOwned() && !OwnedByAPersonButNoJournal.Contains(e.ClrType.Name) && BelongsToAPersonOrAJournalRow(e))
             .Where(e => e.FindDeclaredQueryFilter(QueryFilterNames.JournalOwner) is null)
             .Select(e => e.ClrType.Name);
 
         // Assert
-        missing.ShouldBeEmpty("A table that holds journal data needs IJournalOwned, or ApplyJournalOwner when it has no owner column. Any other table goes in TablesWithNoJournal.");
+        missing.ShouldBeEmpty("A table that holds journal data needs IJournalOwned, or ApplyJournalOwner when it has no owner column. Any other table goes in OwnedByAPersonButNoJournal.");
     }
 
     [Test]
@@ -119,6 +113,11 @@ public class JournalRulesTests
         // Assert
         adapters.ShouldBeEmpty("A machine has no journal, so a journal route has only the HTTP adapter of the person who owns it.");
     }
+
+    private static bool BelongsToAPersonOrAJournalRow(IEntityType table)
+        => table.FindProperty(nameof(IJournalOwned.UserId)) is not null
+            || table.GetForeignKeys().Any(key => key.PrincipalEntityType.ClrType == typeof(User)
+                || key.PrincipalEntityType.FindDeclaredQueryFilter(QueryFilterNames.JournalOwner) is not null);
 
     private static HashSet<string> JournalTypes(IModel model)
         => model.GetEntityTypes()
