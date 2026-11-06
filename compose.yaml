@@ -1,0 +1,20 @@
+# docs/install.md explains this file. Put your settings in .env, and see .env.example.
+name: recall
+
+services:
+  recall:
+    image: ghcr.io/pdevito3/recall:${RECALL_TAG:-latest}
+    # Compose builds from this checkout when it cannot pull the image.
+    build: .
+    restart: unless-stopped
+    user: ${PUID:-1654}:${PGID:-1654}
+    ports:
+      - ${RECALL_PORT:-8080}:8080
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ${RECALL_DATA:-recall-data}:/data
+
+volumes:
+  recall-data:

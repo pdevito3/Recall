@@ -1,4 +1,4 @@
-FROM node:22-alpine AS frontend
+FROM --platform=$BUILDPLATFORM node:24-alpine AS frontend
 WORKDIR /app
 # Corepack uses the pnpm version of packageManager in package.json
 RUN corepack enable
