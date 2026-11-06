@@ -9,6 +9,7 @@ using Recall.Server.Auth.Entities;
 using Recall.Server.Domain.Tenants;
 using Recall.Server.Domain.Tenants.Models;
 using Recall.Server.Domain.Users;
+using Recall.Server.Resources.Entrypoints.Auth;
 using Shouldly;
 
 public class LastTenantTests
@@ -108,11 +109,12 @@ public class LastTenantTests
             return tenant.Id;
         });
 
-    private static Task<HttpResponseMessage> DeleteAsync(AuthBrowser browser, string tenantId)
+    private static async Task<HttpResponseMessage> DeleteAsync(AuthBrowser browser, string tenantId)
     {
         var request = new HttpRequestMessage(HttpMethod.Delete, $"/{ApiRoutes.Tenants.Delete(tenantId)}");
         request.Headers.Add("X-CSRF", "1");
-        return browser.SendAsync(request);
+        request.Headers.Add(PageUserCheck.Header, await browser.UserOfSessionAsync());
+        return await browser.SendAsync(request);
     }
 
     private static Task<string> TenantOfAsync(AuthFlowFactory host, string subject)

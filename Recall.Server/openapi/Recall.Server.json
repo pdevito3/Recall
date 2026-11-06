@@ -13,6 +13,16 @@
         ],
         "summary": "Registers an OAuth client as an agent of a tenant, with its first grant.",
         "operationId": "AddAgent",
+        "parameters": [
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -190,6 +200,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -271,6 +289,14 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
             "schema": {
               "type": "string"
             }
@@ -388,6 +414,14 @@
             "name": "permission",
             "in": "path",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
             "schema": {
               "type": "string"
             }
@@ -517,6 +551,16 @@
         ],
         "summary": "Adds a Correction of the caller.",
         "operationId": "AddCorrection",
+        "parameters": [
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -669,6 +713,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -766,6 +818,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -842,6 +902,16 @@
         ],
         "summary": "Adds a Person to the directory of the caller.",
         "operationId": "AddPerson",
+        "parameters": [
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1036,6 +1106,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -1112,6 +1190,16 @@
         ],
         "summary": "Adds a Session, or returns the Session that already has this client session ID. The first create gives 201 and a\nreplay gives 200, so a device can send it again after a lost response. A replay of a deleted Session gives 409.",
         "operationId": "AddSession",
+        "parameters": [
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1262,6 +1350,14 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
             "schema": {
               "type": "string"
             }
@@ -1632,6 +1728,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -1716,6 +1820,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -1797,6 +1909,14 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
             "schema": {
               "type": "string"
             }
@@ -1949,6 +2069,16 @@
         ],
         "summary": "Creates a new Tenant.",
         "operationId": "AddTenant",
+        "parameters": [
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -2116,6 +2246,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2223,6 +2361,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -2309,6 +2455,16 @@
         ],
         "summary": "Changes the settings of the caller, with Last-write-wins on the save time. A change with a save time that is not newer than\nthe stored settings does nothing, and the response has the stored settings.",
         "operationId": "ChangeUserSetting",
+        "parameters": [
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -2415,6 +2571,16 @@
         ],
         "summary": "Creates a new User.",
         "operationId": "AddUser",
+        "parameters": [
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -2592,6 +2758,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -2683,6 +2857,14 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
             "schema": {
               "type": "string"
             }
@@ -2800,6 +2982,14 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
             "schema": {
               "type": "string"
             }
@@ -2977,6 +3167,16 @@
         ],
         "summary": "Creates a new Tenant and User together in a single transaction.\nUse this to onboard a new organization with its first admin user.",
         "operationId": "InitiateUserAndTenant",
+        "parameters": [
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -3067,6 +3267,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3138,6 +3346,14 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
             "schema": {
               "type": "string"
             }

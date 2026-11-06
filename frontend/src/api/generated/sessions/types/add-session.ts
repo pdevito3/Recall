@@ -8,6 +8,14 @@ import type { SessionDto } from '../../models/types/session-dto'
 import type { SessionForCreationDto } from '../../models/types/session-for-creation-dto'
 import type { ValidationProblemDetails } from '../../models/types/validation-problem-details'
 
+export type AddSessionHeaders = {
+    /**
+     * @description The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.
+     * @type string | undefined
+    */
+    "X-Recall-User"?: string;
+};
+
 export type AddSessionStatus200 = SessionDto;
 
 export type AddSessionStatus201 = SessionDto;
@@ -28,7 +36,7 @@ export type AddSessionOptions = {
     body: AddSessionBody;
     path?: never;
     query?: never;
-    headers?: never;
+    headers?: AddSessionHeaders;
 };
 
 export type AddSessionResponses = {

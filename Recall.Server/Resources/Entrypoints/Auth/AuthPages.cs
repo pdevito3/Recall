@@ -32,6 +32,8 @@ public static class AuthPages
 
     public const string PromptLogin = "login";
 
+    public const string AnotherPersonMessage = "Another person signed in on this browser, so the page that you had open closed. Your unsent words wait on this device. They go to your journal when you sign in here again.";
+
     public sealed record ChooserMode(string Id, string DisplayName, LoginModeState State, string? ProviderLogoutUrl);
 
     public static IResult NoMethod(string callbackUrl, string returnPath) => Page(

@@ -10,6 +10,14 @@ export type DeleteSessionPath = {
     id: string;
 };
 
+export type DeleteSessionHeaders = {
+    /**
+     * @description The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.
+     * @type string | undefined
+    */
+    "X-Recall-User"?: string;
+};
+
 export type DeleteSessionStatus204 = unknown;
 
 export type DeleteSessionStatus401 = unknown;
@@ -24,7 +32,7 @@ export type DeleteSessionOptions = {
     body?: never;
     path: DeleteSessionPath;
     query?: never;
-    headers?: never;
+    headers?: DeleteSessionHeaders;
 };
 
 export type DeleteSessionResponses = {

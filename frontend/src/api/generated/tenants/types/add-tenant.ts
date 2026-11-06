@@ -8,6 +8,14 @@ import type { TenantDto } from '../../models/types/tenant-dto'
 import type { TenantForCreationDto } from '../../models/types/tenant-for-creation-dto'
 import type { ValidationProblemDetails } from '../../models/types/validation-problem-details'
 
+export type AddTenantHeaders = {
+    /**
+     * @description The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.
+     * @type string | undefined
+    */
+    "X-Recall-User"?: string;
+};
+
 export type AddTenantStatus201 = TenantDto;
 
 export type AddTenantStatus400 = ValidationProblemDetails;
@@ -26,7 +34,7 @@ export type AddTenantOptions = {
     body: AddTenantBody;
     path?: never;
     query?: never;
-    headers?: never;
+    headers?: AddTenantHeaders;
 };
 
 export type AddTenantResponses = {

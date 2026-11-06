@@ -12,6 +12,14 @@ export type SaveRawDraftPath = {
     id: string;
 };
 
+export type SaveRawDraftHeaders = {
+    /**
+     * @description The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.
+     * @type string | undefined
+    */
+    "X-Recall-User"?: string;
+};
+
 export type SaveRawDraftStatus200 = DraftSaveResultDto;
 
 export type SaveRawDraftStatus400 = ValidationProblemDetails;
@@ -30,7 +38,7 @@ export type SaveRawDraftOptions = {
     body: SaveRawDraftBody;
     path: SaveRawDraftPath;
     query?: never;
-    headers?: never;
+    headers?: SaveRawDraftHeaders;
 };
 
 export type SaveRawDraftResponses = {

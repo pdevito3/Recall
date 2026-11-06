@@ -7,6 +7,7 @@ This document compares each of the 22 routes that the POC iOS client calls (`Jou
 - An ID is a text such as `ses_0199f0c1a2b37c4d8e9f0a1b2c3d4e5f`, not a UUID. Change `UUID` to `String` for each ID that the server makes.
 - A time is `savedAt`, not `clientSavedAt`. Send each time with its offset, such as `2026-06-01T08:00:00.000Z`. A time with no offset gives 400.
 - An error is a problem document (`status`, `title`, `detail`, `errors`). See `error-*.json`.
+- A request with a bearer token does not send `X-Recall-User`. A browser sends this header with the session cookie, so that a tab of one person cannot save into the account of the next person who signs in on that browser. A write with the cookie and with no header, or with the `sub` of another person, gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A read with the cookie gets the same refusal only when it names another person. The OpenAPI document lists the header on each operation that writes.
 
 ## Routes
 

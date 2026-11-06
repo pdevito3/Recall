@@ -12,6 +12,14 @@ export type RemoveAgentPermissionPath = {
     permission: string;
 };
 
+export type RemoveAgentPermissionHeaders = {
+    /**
+     * @description The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.
+     * @type string | undefined
+    */
+    "X-Recall-User"?: string;
+};
+
 export type RemoveAgentPermissionStatus200 = AgentDto;
 
 export type RemoveAgentPermissionStatus401 = unknown;
@@ -26,7 +34,7 @@ export type RemoveAgentPermissionOptions = {
     body?: never;
     path: RemoveAgentPermissionPath;
     query?: never;
-    headers?: never;
+    headers?: RemoveAgentPermissionHeaders;
 };
 
 export type RemoveAgentPermissionResponses = {

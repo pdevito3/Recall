@@ -12,6 +12,14 @@ export type UpdateUserPath = {
     id: string;
 };
 
+export type UpdateUserHeaders = {
+    /**
+     * @description The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.
+     * @type string | undefined
+    */
+    "X-Recall-User"?: string;
+};
+
 export type UpdateUserStatus200 = UserDto;
 
 export type UpdateUserStatus400 = ValidationProblemDetails;
@@ -32,7 +40,7 @@ export type UpdateUserOptions = {
     body: UpdateUserBody;
     path: UpdateUserPath;
     query?: never;
-    headers?: never;
+    headers?: UpdateUserHeaders;
 };
 
 export type UpdateUserResponses = {

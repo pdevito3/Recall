@@ -155,6 +155,20 @@ The binding cookie is `Lax` because the provider redirects with a cross-site GET
 
 A cookie with no `X-CSRF: 1` header fails with 401 on each method, also at `/auth/logout`. A cross-site page cannot set that header without a CORS grant, and the Server gives none. A bearer token needs no header.
 
+### One browser, two people
+
+All tabs of a browser share one session cookie. A tab that a person left open sends the cookie of the next person who signs in on that browser. So each request of the SPA to `/api/*` names the user that its page belongs to, in the `X-Recall-User` header. The value is the `sub` of the first `GET /auth/me` of the page.
+
+| Request | Answer |
+|---------|--------|
+| A cookie, a write, and the `sub` of the session | The request runs. |
+| A cookie, a write, and any other value or no header | 409 problem with the type `urn:recall:problem:page-user-mismatch`. Nothing changes. |
+| A cookie, a read, and another `sub` | The same 409. |
+| A cookie and a read with no header | The request runs. |
+| A bearer token | The Server does not read the header. |
+
+The check is in the Server, because a check in the SPA alone leaves a race: the cookie can change while a save is on its way. When the SPA gets this refusal, or when `GET /auth/me` names another person, it stops each save, clears the private data from the page, keeps the unsent words under the key of the first person, and goes to `/auth/login?anotherPerson=1`. That page shows the sign-in choices and a message, and it does not go to the journal of the person who is signed in. See `docs/frontend.md`.
+
 A cookie value works only as a cookie and only on a web session. A bearer value works only in the header and only on a native session. So a stolen cookie value cannot skip this rule.
 
 ## Logout

@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Recall.FunctionalTests.TestUtilities;
 using Recall.Server.Auth.Entities;
 using Recall.Server.Domain.Users;
+using Recall.Server.Resources.Entrypoints.Auth;
 using Shouldly;
 
 public class LastAdminTests
@@ -22,7 +23,7 @@ public class LastAdminTests
         var ownerId = await OwnerIdAsync();
 
         // Act
-        var response = await browser.SendAsync(WithCsrf(HttpMethod.Delete, $"/{ApiRoutes.Users.Delete(ownerId)}"));
+        var response = await browser.SendAsync(await AsThePageOfAsync(browser, HttpMethod.Delete, $"/{ApiRoutes.Users.Delete(ownerId)}"));
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
@@ -37,7 +38,7 @@ public class LastAdminTests
         using var browser = new AuthBrowser(AuthHosts.Closed);
         await browser.LoginWebAsync("owner");
         var ownerId = await OwnerIdAsync();
-        var request = WithCsrf(HttpMethod.Put, $"/{ApiRoutes.Users.UpdateRole(ownerId)}");
+        var request = await AsThePageOfAsync(browser, HttpMethod.Put, $"/{ApiRoutes.Users.UpdateRole(ownerId)}");
         request.Content = JsonContent.Create(new { role = "User" });
 
         // Act
@@ -58,7 +59,7 @@ public class LastAdminTests
         var ownerId = await OwnerIdAsync();
 
         // Act
-        var response = await browser.SendAsync(WithCsrf(HttpMethod.Delete, $"/{ApiRoutes.Users.RemovePermission(ownerId, "manage_user_access")}"));
+        var response = await browser.SendAsync(await AsThePageOfAsync(browser, HttpMethod.Delete, $"/{ApiRoutes.Users.RemovePermission(ownerId, "manage_user_access")}"));
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
@@ -74,7 +75,7 @@ public class LastAdminTests
         var ownerId = await OwnerIdAsync();
 
         // Act
-        var response = await browser.SendAsync(WithCsrf(HttpMethod.Delete, $"/{ApiRoutes.Users.RemovePermission(ownerId, "read_users")}"));
+        var response = await browser.SendAsync(await AsThePageOfAsync(browser, HttpMethod.Delete, $"/{ApiRoutes.Users.RemovePermission(ownerId, "read_users")}"));
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
@@ -88,10 +89,11 @@ public class LastAdminTests
             .Select(link => link.UserId)
             .SingleAsync());
 
-    private static HttpRequestMessage WithCsrf(HttpMethod method, string url)
+    private static async Task<HttpRequestMessage> AsThePageOfAsync(AuthBrowser browser, HttpMethod method, string url)
     {
         var request = new HttpRequestMessage(method, url);
         request.Headers.Add("X-CSRF", "1");
+        request.Headers.Add(PageUserCheck.Header, await browser.UserOfSessionAsync());
         return request;
     }
 

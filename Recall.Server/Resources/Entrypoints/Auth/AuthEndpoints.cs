@@ -77,8 +77,10 @@ public static class AuthEndpoints
         var returnPath = LocalReturnPath.Of(query["returnUrl"].Count == 1 ? query["returnUrl"][0] : null);
         var signedOut = query.ContainsKey("signedOut");
         var hasError = query.ContainsKey("error");
+        var isForPageOfAnotherPerson = query.ContainsKey("anotherPerson");
 
-        if (SessionCookie.Read(http.Request) is { } cookie
+        if (!isForPageOfAnotherPerson
+            && SessionCookie.Read(http.Request) is { } cookie
             && await store.FindByAccessAsync(TokenHash.Of(cookie), SessionKind.Web, cancellationToken) is not null)
             return new AuthRedirect(returnPath);
 
@@ -86,13 +88,14 @@ public static class AuthEndpoints
             return AuthPages.NoMethod(AuthRoutes.OriginOf(http.Request) + AuthRoutes.Callback, returnPath);
 
         var states = await Task.WhenAll(modes.All.Select(mode => mode.ProbeAsync(cancellationToken)));
-        if (modes.All.Count == 1 && states[0] == LoginModeState.Ready && !signedOut && !hasError)
+        if (modes.All.Count == 1 && states[0] == LoginModeState.Ready && !signedOut && !hasError && !isForPageOfAnotherPerson)
             return new AuthRedirect($"/auth/oidc/{Uri.EscapeDataString(modes.All[0].Id)}/start?client=web&returnUrl={Uri.EscapeDataString(returnPath)}");
 
         var isSignedOut = signedOut && SessionCookie.IsMarkedSignedOut(http.Request);
         var chooser = await Task.WhenAll(modes.All.Zip(states, async (mode, state) => new AuthPages.ChooserMode(
-            mode.Id, mode.DisplayName, state, isSignedOut ? await mode.ProviderLogoutUrlAsync(cancellationToken) : null)));
-        return AuthPages.Chooser(chooser, returnPath, isSignedOut, hasError ? "The last sign-in did not finish." : null);
+            mode.Id, mode.DisplayName, state, isSignedOut || isForPageOfAnotherPerson ? await mode.ProviderLogoutUrlAsync(cancellationToken) : null)));
+        var message = isForPageOfAnotherPerson ? AuthPages.AnotherPersonMessage : hasError ? "The last sign-in did not finish." : null;
+        return AuthPages.Chooser(chooser, returnPath, isSignedOut, message);
     }
 
     private static async Task<IResult> TokenAsync(HttpContext http, SessionStore store, ITenantIdProvider tenants, TimeProvider timeProvider, CancellationToken cancellationToken)

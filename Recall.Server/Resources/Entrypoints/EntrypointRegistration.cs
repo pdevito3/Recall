@@ -70,6 +70,7 @@ public static class EntrypointRegistration
         app.UseApiNotFound();
         app.UseRateLimiter();
         app.UseAuthentication();
+        app.UsePageUserCheck();
         app.UseAuthorization();
     }
 
