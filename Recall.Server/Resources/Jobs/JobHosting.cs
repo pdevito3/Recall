@@ -1,6 +1,7 @@
 namespace Recall.Server.Resources.Jobs;
 
 using BackWave.Core;
+using BackWave.Dashboard;
 using BackWave.Generated;
 using BackWave.Hosting;
 using BackWave.Sqlite;
@@ -12,12 +13,8 @@ public static class JobHosting
 
     public const string HealthCheckName = "backwave";
 
-    /// <summary>The time that <c>docker stop</c> waits before it kills the process.</summary>
-    public static readonly TimeSpan DockerStopGrace = TimeSpan.FromSeconds(10);
-
-    private static readonly TimeSpan TelemetryFlushMargin = TimeSpan.FromSeconds(2);
-
-    public static readonly TimeSpan HostShutdownTimeout = DockerStopGrace - TelemetryFlushMargin;
+    /// <summary>Inside the 10 s that <c>docker stop</c> waits by default. The telemetry files flush after the host stops.</summary>
+    private static readonly TimeSpan HostShutdownTimeout = TimeSpan.FromSeconds(8);
 
     /// <summary>A job that does not stop in this time gets a lease that ends, so a later start runs it again.</summary>
     public static readonly TimeSpan JobShutdownBudget = TimeSpan.FromSeconds(6);
@@ -27,12 +24,17 @@ public static class JobHosting
 
     private static readonly TimeSpan StoreBusyTimeout = TimeSpan.FromSeconds(30);
 
+    private static readonly string[] DevelopmentAndTestEnvironments = [Environments.Development, "FunctionalTesting", "IntegrationTesting"];
+
     public static void AddJobs(this WebApplicationBuilder builder)
     {
         var section = builder.Configuration.GetSection(JobOptions.SectionName);
-        var pollSecondsAtRegistration = section.Get<JobOptions>()?.PollSeconds ?? new JobOptions().PollSeconds;
+        var settingsAtRegistration = section.Get<JobOptions>() ?? new JobOptions();
+        var inDevelopmentOrTest = DevelopmentAndTestEnvironments.Contains(builder.Environment.EnvironmentName);
 
         builder.Services.Configure<JobOptions>(section);
+        if (!inDevelopmentOrTest)
+            builder.Services.PostConfigure<JobOptions>(options => options.HealthJob = new HealthJobOptions());
         builder.Services.Configure<HostOptions>(host =>
         {
             host.ShutdownTimeout = HostShutdownTimeout;
@@ -49,17 +51,23 @@ public static class JobHosting
                 TablePrefix = "backwave",
                 BusyTimeout = StoreBusyTimeout,
                 LoggerFactory = services.GetRequiredService<ILoggerFactory>(),
-            })).UseJobs(BackWaveJobs.Module);
-            backwave.AddWorkerGroup(new WorkerGroupOptions
+            })).UseJobs(JobFailureFilter.Applied(BackWaveJobs.Module));
+            if (settingsAtRegistration.RunWorkers || !inDevelopmentOrTest)
             {
-                Name = "system",
-                Policy = new DispatchPolicy.Strict([SystemQueue]),
-                PollInterval = TimeSpan.FromSeconds(pollSecondsAtRegistration),
-                ShutdownBudget = JobShutdownBudget,
-                Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
-            });
+                backwave.AddWorkerGroup(new WorkerGroupOptions
+                {
+                    Name = "system",
+                    Policy = new DispatchPolicy.Strict([SystemQueue]),
+                    PollInterval = TimeSpan.FromSeconds(settingsAtRegistration.PollSeconds),
+                    ShutdownBudget = JobShutdownBudget,
+                    Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
+                });
+                builder.Services.AddHostedService<JobHostWatch>();
+            }
         });
-        builder.Services.AddHealthChecks().AddCheck<BackWaveHealthCheck>(HealthCheckName);
-        builder.Services.AddHostedService<HealthJobOnStart>();
+        builder.Services.AddBackWaveDashboardMetrics();
+        builder.Services.AddSingleton<JobHostStatus>();
+        builder.Services.AddSingleton<SaveJobs>();
+        builder.Services.AddHealthChecks().AddCheck<JobHostHealthCheck>(HealthCheckName);
     }
 }

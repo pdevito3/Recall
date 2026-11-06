@@ -72,6 +72,7 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
             builder.UseSetting("Auth:Providers:1:ClientSecret", OtherProvider.ClientSecret);
         }
 
+        builder.UseSetting("Jobs:RunWorkers", "false");
         foreach (var (key, value) in settings)
             builder.UseSetting(key, value);
 

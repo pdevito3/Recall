@@ -1,6 +1,6 @@
 namespace Recall.IntegrationTests.Jobs;
 
-using BackWave;
+using System.Diagnostics;
 using BackWave.Monitor;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,20 +11,11 @@ using Recall.Server.Domain.Tenants.Models;
 using Recall.Server.Domain.Users;
 using Recall.Server.Resources.Jobs;
 using Recall.SharedTestHelpers.EntityGraphs;
+using Recall.SharedTestHelpers.Utilities;
 using Shouldly;
 
 public class SaveAndEnqueueTests : TestBase
 {
-    // A host migrates the job tables when it starts, and no worker runs here. The first use of the store migrates them,
-    // and that needs the write lock, so it cannot run inside a transaction of this test.
-    [Before(Test)]
-    public async Task MigrateTheJobTablesAsync()
-    {
-        await using var scope = TestFixture.BaseScopeFactory.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<BackWaveClient>()
-            .EnqueueAsync(new SystemHealth(), dueTime: DateTimeOffset.UtcNow.AddDays(1));
-    }
-
     private static Tenant NewTenant() => Tenant.Create(new TenantForCreation { Name = $"jobs-{Guid.NewGuid():N}" });
 
     private static async Task<bool> TenantExistsAsync(string tenantId)
@@ -45,15 +36,14 @@ public class SaveAndEnqueueTests : TestBase
         // Arrange
         await using var scope = TestFixture.BaseScopeFactory.CreateSystemScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var client = scope.ServiceProvider.GetRequiredService<BackWaveClient>();
         var tenant = NewTenant();
         db.Tenants.Add(tenant);
         var jobId = Guid.Empty;
 
         // Act
-        var act = () => db.SaveAndEnqueueAsync(async (transaction, ct) =>
+        var act = () => db.SaveAndEnqueueAsync(async (jobs, ct) =>
         {
-            jobId = await client.EnqueueAsync(new SystemHealth(), dueTime: DateTimeOffset.UtcNow.AddDays(1), transaction: transaction, cancellationToken: ct);
+            jobId = await jobs.EnqueueAsync(new SystemHealth(), DateTimeOffset.UtcNow.AddDays(1), ct);
             throw new InvalidOperationException("The work after the enqueue fails.");
         });
 
@@ -65,19 +55,42 @@ public class SaveAndEnqueueTests : TestBase
     }
 
     [Test]
+    public async Task the_first_save_with_a_job_on_a_new_store_does_not_wait_for_its_own_write_lock()
+    {
+        // Arrange
+        await using var database = new SqliteTestDatabase();
+        await using var provider = TestFixture.BuildServiceProvider(_ => { }, database.ConnectionString);
+        await using var scope = provider.GetRequiredService<IServiceScopeFactory>().CreateSystemScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.Database.MigrateAsync();
+        var tenant = NewTenant();
+        db.Tenants.Add(tenant);
+        var jobId = Guid.Empty;
+        var clock = Stopwatch.StartNew();
+
+        // Act
+        await db.SaveAndEnqueueAsync(async (jobs, ct) =>
+            jobId = await jobs.EnqueueAsync(new SystemHealth(), DateTimeOffset.UtcNow.AddDays(1), ct));
+
+        // Assert
+        clock.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(15));
+        var monitor = scope.ServiceProvider.GetRequiredService<BackWaveMonitor>();
+        (await monitor.GetJobAsync(jobId)).ShouldNotBeNull();
+    }
+
+    [Test]
     public async Task a_commit_keeps_the_row_and_the_job()
     {
         // Arrange
         await using var scope = TestFixture.BaseScopeFactory.CreateSystemScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var client = scope.ServiceProvider.GetRequiredService<BackWaveClient>();
         var tenant = NewTenant();
         db.Tenants.Add(tenant);
         var jobId = Guid.Empty;
 
         // Act
-        await db.SaveAndEnqueueAsync(async (transaction, ct) =>
-            jobId = await client.EnqueueAsync(new SystemHealth(), dueTime: DateTimeOffset.UtcNow.AddDays(1), transaction: transaction, cancellationToken: ct));
+        await db.SaveAndEnqueueAsync(async (jobs, ct) =>
+            jobId = await jobs.EnqueueAsync(new SystemHealth(), DateTimeOffset.UtcNow.AddDays(1), ct));
 
         // Assert
         (await TenantExistsAsync(tenant.Id)).ShouldBeTrue();

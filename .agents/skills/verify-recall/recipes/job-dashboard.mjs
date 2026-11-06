@@ -12,11 +12,13 @@ export default async ({ page, step, capture, settle, expect, login }) => {
     await capture('owner-jobs')
   })
 
-  await step('a request with no session gets a 403 with an empty body', async () => {
+  await step('a request with no session gets a 403 with a way back and no job data', async () => {
     const status = await page.evaluate(async () => {
       const response = await fetch('/backwave', { credentials: 'omit' })
       return { status: response.status, body: await response.text() }
     })
-    expect(status).toEqual({ status: 403, body: '' })
+    expect(status.status).toBe(403)
+    expect(status.body).toContain('/auth/login?returnUrl=%2Fbackwave')
+    expect(status.body).not.toContain('system-health')
   })
 }

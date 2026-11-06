@@ -1,6 +1,5 @@
 namespace Recall.Server.Resources.Jobs;
 
-using BackWave;
 using BackWave.Jobs;
 using Databases;
 using Domain.Tenants;
@@ -10,6 +9,8 @@ using Serilog;
 
 public sealed class SystemHealthJobs(IServiceScopeFactory scopeFactory, IOptions<JobOptions> options)
 {
+    public const string FailOnPurposeText = "The health job fails on purpose.";
+
     private readonly ILogger _logger = Log.ForContext<SystemHealthJobs>();
 
     [Job("system-health", Queue = JobHosting.SystemQueue)]
@@ -21,7 +22,7 @@ public sealed class SystemHealthJobs(IServiceScopeFactory scopeFactory, IOptions
         var settings = options.Value.HealthJob;
         await Task.Delay(TimeSpan.FromSeconds(settings.HoldSeconds), cancellationToken);
         if (settings.FailOnPurpose)
-            throw new InvalidOperationException("The health job fails on purpose, because Jobs:HealthJob:FailOnPurpose is true.");
+            throw new InvalidOperationException(FailOnPurposeText);
 
         _logger.Here().Information("The health job can see {TenantCount} tenants", tenantCount);
     }
@@ -34,12 +35,4 @@ public sealed class SystemHealthJobs(IServiceScopeFactory scopeFactory, IOptions
             .TagWithOperationCallSite("jobs.system_health.tenants")
             .CountAsync(cancellationToken);
     }
-}
-
-public sealed class HealthJobOnStart(BackWaveClient client, TimeProvider timeProvider) : IHostedService
-{
-    public async Task StartAsync(CancellationToken cancellationToken) =>
-        await client.EnqueueAsync(new SystemHealth(), dueTime: timeProvider.GetUtcNow(), cancellationToken: cancellationToken);
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

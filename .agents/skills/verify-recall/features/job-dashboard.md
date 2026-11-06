@@ -1,6 +1,6 @@
 # Job dashboard
 
-The Owner opens `/backwave` and sees the BackWave console, which shows the health job of each start of the host. Each other caller gets a 403 with an empty body.
+The Owner opens `/backwave` and sees the BackWave console, which shows the health job of each start of the host. Each other caller gets a 403 with a short page that has a link to sign in.
 
 ## Sub-features
 

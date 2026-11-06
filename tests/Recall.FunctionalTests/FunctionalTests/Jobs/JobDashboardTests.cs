@@ -1,5 +1,8 @@
 namespace Recall.FunctionalTests.FunctionalTests.Jobs;
 
+using System.Diagnostics;
+using System.Globalization;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
@@ -9,11 +12,12 @@ using BackWave.Storage;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Recall.FunctionalTests.Auth;
 using Recall.Server.Auth.Entities;
+using Recall.Server.Resources.Entrypoints.Auth;
+using Serilog.Events;
 using TestUtilities;
 using Recall.Server.Resources.Entrypoints.Jobs;
 using Recall.Server.Resources.Jobs;
@@ -47,6 +51,145 @@ public partial class JobDashboardTests
                 throw new TimeoutException($"No health job reached {state} in {WaitLimit}.");
 
             await Task.Delay(100);
+        }
+    }
+
+    private static readonly string[] DatabaseFiles = ["test.db", "test.db-wal"];
+
+    private static async Task<HttpResponseMessage> SendRoleAsync(AuthBrowser browser, string userId, string role)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Put, $"/{ApiRoutes.Users.UpdateRole(userId)}") { Content = JsonContent.Create(new { role }) };
+        request.Headers.Add("X-CSRF", "1");
+        return await browser.SendAsync(request);
+    }
+
+    private static void ShouldBeTheRefusalPage(string page)
+    {
+        page.ShouldContain("Only the Owner can see the jobs");
+        page.ShouldContain($"{AuthRoutes.Login}?returnUrl=%2Fbackwave");
+        page.ShouldNotContain("system-health");
+    }
+
+    private static AuthFlowFactory NewHostWithWorker()
+    {
+        var host = new AuthFlowFactory(new Dictionary<string, string?>
+        {
+            ["Auth:OpenSignup"] = "true",
+            ["Auth:StartPermitsPerWindow"] = "100000",
+            ["Jobs:RunWorkers"] = "true",
+        });
+        _ = host.Services;
+        return host;
+    }
+
+    private static async Task ExecuteAsync(AuthFlowFactory host, string sql)
+    {
+        var connectionString = await host.WithDatabaseAsync(database => Task.FromResult(database.Database.GetConnectionString()!));
+        await using var connection = new SqliteConnection(connectionString);
+        await connection.OpenAsync();
+        await using var command = new SqliteCommand(sql, connection);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task<List<string>> TextsAsync(AuthFlowFactory host, string sql, Guid jobId)
+    {
+        var connectionString = await host.WithDatabaseAsync(database => Task.FromResult(database.Database.GetConnectionString()!));
+        await using var connection = new SqliteConnection(connectionString);
+        await connection.OpenAsync();
+        await using var command = new SqliteCommand(sql, connection);
+        command.Parameters.AddWithValue("$id", jobId.ToString());
+        await using var reader = await command.ExecuteReaderAsync();
+        var texts = new List<string>();
+        while (await reader.ReadAsync())
+            texts.Add(reader.GetString(0));
+        return texts;
+    }
+
+    private static async Task<byte[]> ReadSharedAsync(string path)
+    {
+        await using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var bytes = new MemoryStream();
+        await file.CopyToAsync(bytes);
+        return bytes.ToArray();
+    }
+
+    private static async Task<HttpResponseMessage> HealthThatStoppedAsync(HttpClient client)
+    {
+        var deadline = DateTimeOffset.UtcNow + WaitLimit;
+        while (true)
+        {
+            var health = await client.GetAsync($"/{ApiRoutes.Health}");
+            if (health.StatusCode != HttpStatusCode.OK || DateTimeOffset.UtcNow > deadline)
+                return health;
+
+            health.Dispose();
+            await Task.Delay(100);
+        }
+    }
+
+    private static async Task<List<string>> FatalLinesAboutStoppedJobsAsync(AuthFlowFactory host)
+    {
+        var deadline = DateTimeOffset.UtcNow + WaitLimit;
+        while (true)
+        {
+            var lines = host.Logs.All
+                .Where(entry => entry.Level == LogEventLevel.Fatal)
+                .Select(entry => entry.RenderMessage(CultureInfo.InvariantCulture))
+                .Where(text => text.Contains("The background jobs stopped"))
+                .ToList();
+            if (lines.Count > 0 || DateTimeOffset.UtcNow > deadline)
+                return lines;
+
+            await Task.Delay(100);
+        }
+    }
+
+    private static string SpanText(Activity span) => string.Join('\n', new[] { span.StatusDescription ?? "" }
+        .Concat(span.TagObjects.Select(tag => $"{tag.Value}"))
+        .Concat(span.Events.SelectMany(spanEvent => spanEvent.Tags.Select(tag => $"{tag.Value}"))));
+
+    private static bool IsFailedHealthJobSpan(Activity span) => span.Source.Name == "BackWave"
+        && span.Status == ActivityStatusCode.Error
+        && span.GetTagItem("messaging.destination.template") is "system-health";
+
+    private static async Task<List<Activity>> FailedHealthJobSpansAsync()
+    {
+        var factory = TestingWebApplicationFactory.Instance;
+        var deadline = DateTimeOffset.UtcNow + WaitLimit;
+        while (true)
+        {
+            var spans = factory.ExportedActivities.Snapshot().Where(IsFailedHealthJobSpan).ToList();
+            if (spans.Count > 0 || DateTimeOffset.UtcNow > deadline)
+                return spans;
+
+            await Task.Delay(100);
+        }
+    }
+
+    private static async Task<string> BundleWithFailedHealthJobSpanAsync(AuthBrowser owner)
+    {
+        var deadline = DateTimeOffset.UtcNow + WaitLimit;
+        while (true)
+        {
+            using var response = await owner.GetAsync($"/{ApiRoutes.SupportBundle}", csrf: true);
+            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+            await using var zip = new ZipArchive(await response.Content.ReadAsStreamAsync(), ZipArchiveMode.Read);
+            var text = new StringBuilder();
+            foreach (var entry in zip.Entries)
+            {
+                await using var content = await entry.OpenAsync();
+                using var reader = new StreamReader(content, Encoding.UTF8);
+                text.Append(await reader.ReadToEndAsync());
+            }
+
+            var bundle = text.ToString();
+            if (bundle.Contains("\"status\":\"Error\"") && bundle.Contains("system-health"))
+                return bundle;
+
+            if (DateTimeOffset.UtcNow > deadline)
+                throw new TimeoutException("The support bundle has no span of a failed health job.");
+
+            await Task.Delay(500);
         }
     }
 
@@ -104,9 +247,9 @@ public partial class JobDashboardTests
 
         // Assert
         byMember.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        (await byMember.Content.ReadAsStringAsync()).ShouldBeEmpty();
+        ShouldBeTheRefusalPage(await byMember.Content.ReadAsStringAsync());
         byAdmin.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        (await byAdmin.Content.ReadAsStringAsync()).ShouldBeEmpty();
+        ShouldBeTheRefusalPage(await byAdmin.Content.ReadAsStringAsync());
     }
 
     [Test]
@@ -122,7 +265,70 @@ public partial class JobDashboardTests
         // Assert
         overview.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         jobs.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        (await jobs.Content.ReadAsStringAsync()).ShouldBeEmpty();
+        ShouldBeTheRefusalPage(await jobs.Content.ReadAsStringAsync());
+    }
+
+    [Test]
+    public async Task the_overview_shows_the_throughput_panel()
+    {
+        // Arrange
+        using var owner = await SignedInAsync(AuthHosts.Jobs);
+
+        // Act
+        using var overview = await owner.GetAsync(JobDashboard.Path);
+
+        // Assert
+        overview.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await overview.Content.ReadAsStringAsync()).ShouldNotContain("AddBackWaveDashboardMetrics");
+    }
+
+    [Test]
+    public async Task a_live_stream_ends_at_its_limit_and_its_next_request_refuses_a_demoted_owner()
+    {
+        // Arrange
+        await using var host = NewHostWithWorker();
+        using var owner = await SignedInAsync(host);
+        using var next = await SignedInAsync(host, "jobs-next-admin");
+        var ids = await host.WithDatabaseAsync(database => database.Set<ExternalLogin>().IgnoreQueryFilters().ToDictionaryAsync(login => login.Subject, login => login.UserId));
+        using var promoted = await SendRoleAsync(owner, ids["jobs-next-admin"], "Admin");
+        promoted.IsSuccessStatusCode.ShouldBeTrue();
+        var clock = Stopwatch.StartNew();
+
+        // Act
+        var stream = owner.GetAsync($"{JobDashboard.Path}?live=1");
+        await Task.Delay(TimeSpan.FromSeconds(1));
+        using var demoted = await SendRoleAsync(next, ids[OwnerSubject], "User");
+        using var ended = await stream;
+        var streamed = clock.Elapsed;
+        using var afterDemotion = await owner.GetAsync($"{JobDashboard.Path}?live=1");
+
+        // Assert
+        demoted.IsSuccessStatusCode.ShouldBeTrue();
+        ended.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await ended.Content.ReadAsStringAsync()).ShouldContain("event:");
+        streamed.ShouldBeInRange(JobDashboard.LiveStreamLimit, JobDashboard.LiveStreamLimit + TimeSpan.FromSeconds(10));
+        afterDemotion.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        host.Logs.All.ShouldNotContain(entry => entry.Level >= LogEventLevel.Error);
+    }
+
+    [Test]
+    public async Task a_stop_of_the_host_ends_a_live_stream_at_once()
+    {
+        // Arrange
+        await using var host = NewHostWithWorker();
+        using var owner = await SignedInAsync(host);
+        var stream = owner.GetAsync($"{JobDashboard.Path}?live=1");
+        await Task.Delay(TimeSpan.FromSeconds(1));
+        stream.IsCompleted.ShouldBeFalse();
+        var clock = Stopwatch.StartNew();
+
+        // Act
+        host.Services.GetRequiredService<IHostApplicationLifetime>().StopApplication();
+        using var ended = await stream.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Assert
+        ended.StatusCode.ShouldBe(HttpStatusCode.OK);
+        clock.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(5));
     }
 
     [Test]
@@ -189,14 +395,12 @@ public partial class JobDashboardTests
     }
 
     [Test]
-    public void the_host_stops_inside_the_docker_stop_grace()
+    public void the_host_gives_the_workers_their_stop_budget_next_to_the_web_host()
     {
         // Act
         var host = AuthHosts.Jobs.Services.GetRequiredService<IOptions<HostOptions>>().Value;
 
         // Assert
-        host.ShutdownTimeout.ShouldBe(JobHosting.HostShutdownTimeout);
-        host.ShutdownTimeout.ShouldBeLessThan(JobHosting.DockerStopGrace);
         host.ServicesStopConcurrently.ShouldBeTrue();
         JobHosting.JobShutdownBudget.ShouldBeLessThanOrEqualTo(host.ShutdownTimeout * 4 / 5);
     }
@@ -233,13 +437,90 @@ public partial class JobDashboardTests
     }
 
     [Test]
-    public void the_health_endpoint_reports_a_halted_worker_group()
+    public async Task a_halted_worker_group_answers_503_and_says_to_restart_and_the_journal_still_answers()
     {
+        // Arrange
+        await using var host = NewHostWithWorker();
+        await OnlyHealthJobInStateAsync(host, JobState.Succeeded);
+        using var client = host.NewClient();
+
         // Act
-        var checks = AuthHosts.Jobs.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations;
+        await ExecuteAsync(host, "DROP TABLE backwave_jobs");
+        var health = await HealthThatStoppedAsync(client);
 
         // Assert
-        checks.ShouldContain(check => check.Name == JobHosting.HealthCheckName);
+        health.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
+        var body = await health.Content.ReadAsStringAsync();
+        body.ShouldStartWith("Unhealthy");
+        body.ShouldContain("The background jobs stopped (worker group system: Microsoft.Data.Sqlite.SqliteException)");
+        body.ShouldContain("restart the server");
+        body.ShouldNotContain("no such table");
+        using var journal = await client.GetAsync(AuthRoutes.Status);
+        journal.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var fatal = await FatalLinesAboutStoppedJobsAsync(host);
+        fatal.ShouldHaveSingleItem().ShouldContain("restart the server");
+    }
+
+    [Test]
+    public async Task a_thrown_message_reaches_no_store_and_the_type_and_the_frames_do()
+    {
+        // Arrange
+        var host = AuthHosts.FailingJobs;
+        using var owner = await SignedInAsync(host);
+        var dead = await OnlyHealthJobInStateAsync(host, JobState.DeadLettered);
+        var marker = SystemHealthJobs.FailOnPurposeText;
+        var thrownType = typeof(InvalidOperationException).FullName!;
+
+        // Act
+        var row = await TextsAsync(host, "SELECT terminal_cause FROM backwave_jobs WHERE job_id = $id", dead.JobId);
+        var history = await TextsAsync(host, "SELECT failure_detail FROM backwave_job_transitions WHERE job_id = $id AND failure_detail IS NOT NULL", dead.JobId);
+        var databaseFolder = await host.WithDatabaseAsync(database => Task.FromResult(Path.GetDirectoryName(new SqliteConnectionStringBuilder(database.Database.GetConnectionString()).DataSource)!));
+        var databaseBytes = await Task.WhenAll(DatabaseFiles
+            .Select(async file => Encoding.Latin1.GetString(await ReadSharedAsync(Path.Combine(databaseFolder, file)))));
+        using var jobPage = await owner.GetAsync($"{JobDashboard.Path}/jobs/{dead.JobId}");
+        using var failuresPage = await owner.GetAsync($"{JobDashboard.Path}/failures");
+        var spans = await FailedHealthJobSpansAsync();
+        var bundle = await BundleWithFailedHealthJobSpanAsync(owner);
+
+        // Assert
+        row.ShouldHaveSingleItem().ShouldBe(thrownType);
+        history.ShouldNotBeEmpty();
+        history.ShouldAllBe(detail => detail.Contains(nameof(SystemHealthJobs.SystemHealthAsync)) && detail.Contains(thrownType) && !detail.Contains(marker));
+        databaseBytes.ShouldAllBe(bytes => !bytes.Contains(marker));
+        (await jobPage.Content.ReadAsStringAsync()).ShouldContain(thrownType);
+        (await jobPage.Content.ReadAsStringAsync()).ShouldNotContain(marker);
+        (await failuresPage.Content.ReadAsStringAsync()).ShouldNotContain(marker);
+        spans.ShouldAllBe(span => !SpanText(span).Contains(marker));
+        spans.ShouldContain(span => SpanText(span).Contains(thrownType));
+        bundle.ShouldNotContain(marker);
+        host.Logs.All.ShouldAllBe(entry => !entry.RenderMessage(CultureInfo.InvariantCulture).Contains(marker) && (entry.Exception == null || !entry.Exception.ToString().Contains(marker)));
+    }
+
+    [Test]
+    public async Task a_write_action_of_the_dashboard_is_only_for_the_owner()
+    {
+        // Arrange
+        using var owner = await SignedInAsync(AuthHosts.Jobs);
+        using var member = await SignedInAsync(AuthHosts.Jobs, $"jobs-member-{Guid.NewGuid():N}");
+        using var nobody = new AuthBrowser(AuthHosts.Jobs);
+        var actions = new[]
+        {
+            $"{JobDashboard.Path}/jobs/{Guid.NewGuid()}/cancel",
+            $"{JobDashboard.Path}/queues/{JobHosting.SystemQueue}/pause",
+            $"{JobDashboard.Path}/queues/{JobHosting.SystemQueue}/resume",
+            $"{JobDashboard.Path}/schedules/no-such-schedule/trigger",
+        };
+
+        foreach (var action in actions)
+        {
+            // Act
+            using var byMember = await member.PostFormAsync(action, []);
+            using var byNobody = await nobody.PostFormAsync(action, []);
+
+            // Assert
+            byMember.StatusCode.ShouldBe(HttpStatusCode.Forbidden, action);
+            byNobody.StatusCode.ShouldBe(HttpStatusCode.Forbidden, action);
+        }
     }
 
     private static bool HasHealthJobSpan(TestingWebApplicationFactory factory) => factory.ExportedActivities.Snapshot()

@@ -49,6 +49,8 @@ public partial class NoProviderBootTests
 
         public int ExitCode => _process.ExitCode;
 
+        public bool HasExited => _process.HasExited;
+
         public string Output => string.Join('\n', _output);
 
         public static async Task<ServerProcess> StartAsync(string? existingRoot = null, IReadOnlyDictionary<string, string>? settings = null)

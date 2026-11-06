@@ -7,10 +7,16 @@ public sealed class JobOptions
     /// <summary>How long a committed job can wait for a worker, because a transactional enqueue wakes no worker.</summary>
     public int PollSeconds { get; init; } = 5;
 
-    public HealthJobOptions HealthJob { get; init; } = new();
+    /// <summary>A test host with no use for a worker runs none. It works only in Development and in the test environments.</summary>
+    public bool RunWorkers { get; init; } = true;
+
+    public HealthJobOptions HealthJob { get; set; } = new();
 }
 
-/// <summary>Settings that let a check of the host stop a health job in its run, or make it fail.</summary>
+/// <summary>
+/// Settings that let a check of the host stop a health job in its run, or make it fail. They work only in Development
+/// and in the test environments. <see cref="JobHosting"/> clears them in each other environment.
+/// </summary>
 public sealed class HealthJobOptions
 {
     public int HoldSeconds { get; init; }

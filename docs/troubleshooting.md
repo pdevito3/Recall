@@ -52,6 +52,20 @@ The server keeps its logs and its telemetry to about 460 MiB, and a full disk do
 
 1. Run `df -h /data` and `du -sh /data/*` to find what holds the space.
 2. Make room on the volume. You can delete old files in `/data/logs` and `/data/telemetry` while the server runs. Do not delete `recall.db`, its `-wal` file, or the `keys` folder.
+3. If `/health` answers 503 and says `The background jobs stopped`, restart the server. The journal does not need a restart, but no background job runs until then. See [The background jobs stopped](#the-background-jobs-stopped).
+
+## The background jobs stopped
+
+A store fault that is not transient, such as a full disk, stops the background jobs and leaves the journal up. `/health` answers 503, and its body starts with `Unhealthy` and says `The background jobs stopped`. The log has one line at the level `Fatal` with the same text. A person can still read and write in the journal. Text that waits for a job, such as a transcript, waits until the jobs run again.
+
+The server cannot restart the jobs by itself. Do these steps:
+
+1. Fix the cause. For a full disk, see [The disk is full](#the-disk-is-full).
+2. Restart the server with `docker compose restart`. A job that was running runs again.
+3. Open `/health`. It answers 200 when the jobs run.
+4. If `/health` answers 503 again and names `SqliteException` or `InvalidOperationException`, the job tables are damaged. Stop the server, copy `recall.db`, run `sqlite3 /data/recall.db "DELETE FROM backwave_schema_version"`, and start the server. BackWave makes each missing job table again and keeps the rows of the journal.
+
+A restart during a long job costs one attempt of that job. A job at its last attempt goes to the dead letters. The Owner requeues it at `/backwave/failures`.
 
 ## The log files stop
 
@@ -64,7 +78,7 @@ To get the files back at once, start the server again. The server keeps each fil
 
 ## Send a support bundle
 
-The support bundle is one zip with the log and telemetry files, the version, and the settings with the secrets hidden. It holds no journal text. Only the Owner can download it. The Owner is the oldest linked Admin of the oldest live tenant. When that Admin loses the role, the next oldest linked Admin becomes the Owner.
+The support bundle is one zip with the log and telemetry files, the version, and the settings with the secrets hidden. It holds no journal text: a job records the type and the stack frames of a thrown exception and no message, unless the type states that its text is safe. Only the Owner can download it. The Owner is the oldest linked Admin of the oldest live tenant. When that Admin loses the role, the next oldest linked Admin becomes the Owner.
 
 1. Sign in as the Owner.
 2. Open the **About** page.

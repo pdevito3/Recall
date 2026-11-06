@@ -11,8 +11,10 @@ using Domain.Users;
 // new-feature:db-usings
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 using Resources;
+using Resources.Jobs;
 using Serilog;
 using Sqlite;
 
@@ -152,14 +154,17 @@ public class AppDbContext(
 
     /// <summary>
     /// Saves the changes and runs <paramref name="enqueue"/> in one transaction, so neither the rows nor the jobs stay
-    /// if the save or the enqueue fails. Give the transaction to <c>BackWaveClient.EnqueueAsync</c>. The worker sees the
-    /// job at its next poll, not at once.
+    /// if the save or the enqueue fails. <paramref name="enqueue"/> gets a <see cref="JobEnqueuer"/> that is bound to the
+    /// transaction. The worker sees the job at its next poll, not at once.
     /// </summary>
-    public Task<int> SaveAndEnqueueAsync(Func<DbTransaction, CancellationToken, Task> enqueue,
+    public async Task<int> SaveAndEnqueueAsync(Func<JobEnqueuer, CancellationToken, Task> enqueue,
         CancellationToken cancellationToken = default)
     {
         RefuseSave();
-        return EndOnFailure(SaveInStages(acceptAllChangesOnSuccess: true, enqueue, cancellationToken));
+        var jobs = this.GetService<SaveJobs>();
+        await jobs.MakeStoreReadyAsync(cancellationToken);
+        return await EndOnFailure(SaveInStages(acceptAllChangesOnSuccess: true,
+            (transaction, ct) => enqueue(jobs.EnqueuerIn(transaction), ct), cancellationToken));
     }
 
     // The tracker of a failed write can hold the stamps and the audit entries of a write that did not commit.
