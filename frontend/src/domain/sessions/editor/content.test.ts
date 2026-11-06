@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 
-import { mentionedPersonIds, plainPreviewOf } from './content'
+import { joinWords, mentionedPersonIds, plainPreviewOf, plainWordsOf } from './content'
 import { contentOf } from './content-of'
 
 const doc = (...content: object[]) => JSON.stringify({ type: 'doc', content })
@@ -52,4 +52,15 @@ test.each([['plain words'], ['{not json'], [null]])('the text %s mentions no one
 test.each(['{"type":"doc","content":"x"}', '{"type":"doc","content":[null]}'])('the document %s reads as no words and no people', (text) => {
   expect(plainPreviewOf(text, 200)).toBe('')
   expect(mentionedPersonIds(text, null)).toEqual([])
+})
+
+test('words for a copy have a line for each block, and words that are not a document stay as they are', () => {
+  expect(plainWordsOf(doc(paragraph('First'), paragraph('Second')))).toBe('First\nSecond')
+  expect(plainWordsOf('Plain words')).toBe('Plain words')
+})
+
+test('joined words keep the first words and then the second', () => {
+  expect(joinWords(doc(paragraph('Before')), doc(paragraph('After')))).toBe(doc(paragraph('Before'), paragraph('After')))
+  expect(joinWords('Plain', doc(paragraph('After')))).toBe(doc(paragraph('Plain'), paragraph('After')))
+  expect(joinWords('', doc(paragraph('After')))).toBe(doc(paragraph('After')))
 })

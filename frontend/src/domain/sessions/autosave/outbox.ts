@@ -14,7 +14,8 @@ export interface OutboxEntry {
   movedFromDeletedEntry?: boolean
 }
 
-const prefixOf = (owner: string) => `recall.unsent.${owner}.`
+// A dot ends the owner, so a dot in the name of an owner must not look like that end.
+const prefixOf = (owner: string) => `recall.unsent.${encodeURIComponent(owner).replaceAll('.', '%2E')}.`
 
 const isStamped = (value: unknown): value is Stamped<string> => {
   const change = value as Stamped<string> | null

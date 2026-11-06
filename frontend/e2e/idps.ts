@@ -9,6 +9,8 @@ export interface IdpConfig {
   // The Aspire resource of the IdP. A provider outside the stack, such as the Duende demo, has none.
   resource?: string
   email?: string
+  // A second person of the seed files, for the tests of two people on one browser
+  secondPersonEmail?: string
   username?: string
   // A passwordless IdP, such as 0factor, has no password and no password field
   password?: string

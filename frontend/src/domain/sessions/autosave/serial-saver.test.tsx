@@ -148,3 +148,82 @@ test('a page can read the newest words that have no reply', async () => {
   expect(saver.newestUnsettledValue()).toBeNull()
   saver.dispose()
 })
+
+test('a request that hangs ends at the limit, says it is waiting, and goes again', async () => {
+  const signals: AbortSignal[] = []
+  const send = vi.fn((_change: { value: string; savedAt: string }, signal: AbortSignal) => {
+    signals.push(signal)
+    return new Promise<string>((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new Error('Aborted')))
+    })
+  })
+  const saver = new SerialSaver<string, string>({ debounceMs: 0, send, onReply: vi.fn() })
+
+  saver.edit('a')
+  await vi.advanceTimersByTimeAsync(29_000)
+  expect(saver.getStatus().kind).toBe('saving')
+  expect(signals[0].aborted).toBe(false)
+
+  await vi.advanceTimersByTimeAsync(1_000)
+  expect(signals[0].aborted).toBe(true)
+  expect(saver.getStatus()).toEqual({ kind: 'waiting' })
+
+  await vi.advanceTimersByTimeAsync(2_000)
+  expect(send).toHaveBeenCalledTimes(2)
+  saver.dispose()
+})
+
+test('a request that answers in time is not aborted later', async () => {
+  const signals: AbortSignal[] = []
+  const send = vi.fn((_change: { value: string; savedAt: string }, signal: AbortSignal) => {
+    signals.push(signal)
+    return Promise.resolve('ok')
+  })
+  const saver = new SerialSaver<string, string>({ debounceMs: 0, send, onReply: vi.fn() })
+
+  saver.edit('a')
+  await vi.advanceTimersByTimeAsync(60_000)
+
+  expect(signals[0].aborted).toBe(false)
+  saver.dispose()
+})
+
+test('settle sends a change that waits for the pause in typing, and answers true when the Server holds it', async () => {
+  const send = vi.fn<Send>(() => Promise.resolve('ok'))
+  const { saver } = saverWith(send, 800)
+
+  saver.edit('a')
+  const isSettled = saver.settle()
+  await vi.advanceTimersByTimeAsync(0)
+
+  await expect(isSettled).resolves.toBe(true)
+  expect(send).toHaveBeenCalledTimes(1)
+  saver.dispose()
+})
+
+test('settle answers false when the next try fails, and the words wait for a retry', async () => {
+  const send = vi.fn<Send>(() => Promise.reject(new Error('Network Error')))
+  const { saver } = saverWith(send)
+
+  saver.edit('a')
+  await vi.advanceTimersByTimeAsync(0)
+  const isSettled = saver.settle()
+  await vi.advanceTimersByTimeAsync(0)
+
+  await expect(isSettled).resolves.toBe(false)
+  expect(saver.newestUnsettledValue()).toBe('a')
+  saver.dispose()
+})
+
+test('settle answers false for words that the Server refused', async () => {
+  const send = vi.fn<Send>(() => Promise.reject(refused(422, 'Too long.')))
+  const { saver } = saverWith(send)
+
+  saver.edit('a')
+  const isSettled = saver.settle()
+  await vi.advanceTimersByTimeAsync(0)
+
+  await expect(isSettled).resolves.toBe(false)
+  expect(saver.refusalMessage()).toBe('Too long.')
+  saver.dispose()
+})

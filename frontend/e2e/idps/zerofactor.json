@@ -2,6 +2,7 @@
   "name": "ZeroFactor",
   "resource": "zerofactor",
   "email": "admin@example.com",
+  "secondPersonEmail": "user@example.com",
   "usernameSelector": "#email",
   "submitSelector": "#continue",
   "capabilities": {
