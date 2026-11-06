@@ -109,6 +109,7 @@ public class ProviderLogoutTests
     }
 
     [Test]
+    [NotInParallel("two-providers")]
     [Arguments(null)]
     [Arguments("rcl_ck_dead")]
     public async Task with_two_providers_a_logout_that_cannot_name_one_says_signed_out_and_starts_nothing(string? cookie)
@@ -135,6 +136,7 @@ public class ProviderLogoutTests
     }
 
     [Test]
+    [NotInParallel("two-providers")]
     public async Task with_two_providers_a_logout_names_only_the_provider_of_the_session_and_the_person_chooses_the_next_sign_in()
     {
         // Arrange
