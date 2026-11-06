@@ -6,6 +6,7 @@ using Databases.Sqlite;
 using Domain.Tenants;
 using Domain.Users;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using Storage;
 using ZiggyCreatures.Caching.Fusion;
@@ -52,6 +53,11 @@ public static class WebAppServiceConfiguration
 
             options.UseSqlite(connectionString)
                 .UseSnakeCaseNamingConvention()
+                // Each of these failures also reaches the caller of the command. A unique conflict is an expected
+                // answer that the caller handles, and a server fault gets its one Error log from that caller.
+                .ConfigureWarnings(warnings => warnings.Log(
+                    (RelationalEventId.CommandError, LogLevel.Debug),
+                    (CoreEventId.SaveChangesFailed, LogLevel.Debug)))
                 .AddInterceptors(
                     SqliteConnectionSetup.Instance,
                     UtcTextParameters.Instance,

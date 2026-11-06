@@ -10,6 +10,8 @@ using Domain.Users;
 // new-feature:db-usings
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Resources;
+using Serilog;
 using Sqlite;
 
 public class AppDbContext(
@@ -191,9 +193,12 @@ public class AppDbContext(
         catch (DbUpdateException exception)
         {
             // Not in a filter, because a filter loses an exception that it throws.
-            if (DatabaseConflict.From(exception, Model) is { } conflict)
-                throw conflict;
-            throw;
+            if (DatabaseConflict.From(exception, Model) is not { } conflict)
+                throw;
+
+            if (conflict is ConstraintConflictException { Constraint: var constraint })
+                Log.ForContext<AppDbContext>().Here().Information("The unique constraint {Constraint} stopped a save", constraint);
+            throw conflict;
         }
     }
 
