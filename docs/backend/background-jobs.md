@@ -34,7 +34,7 @@ A worker sees a job that this path committed at its next poll, not at once, beca
 | Worker group | One group named `system`, on the queue `system` | R9 and R11 add queues to this group. |
 | `Jobs__PollSeconds` | 5 | A transactional enqueue waits for one poll. An idle poll writes nothing: at 1 s, 5 s, and 30 s, an idle server wrote no byte to the database, the WAL, or the `-shm` file in 15 minutes. |
 | `MaintenanceInterval` | 5 s, the BackWave default | The sweep that ends a lapsed lease writes nothing when no lease has lapsed. |
-| `LeaseDuration` | 60 s, the BackWave default | The job of a killed process runs again after its lease ends, the next sweep, its retry backoff, and the next poll. For the health job that took 72 s. After a clean stop it runs at the next start. |
+| `LeaseDuration` | 60 s, the BackWave default | The job of a killed process runs again after its lease ends, the next sweep, its retry backoff, and the next poll. For the health job that took about 70 s. After a clean stop it runs at the next start. |
 | `HostOptions.ServicesStopConcurrently` | true | The web host waits for each open request. A live page of the dashboard is open until the host timeout. With a stop in series, the workers would stop after that and give back no job. |
 | `HostOptions.ShutdownTimeout` | 8 s | `docker stop` kills the process after 10 s. The telemetry files flush after the host stops. |
 | `ShutdownBudget` | 6 s | BackWave clamps it to 4/5 of the host timeout. |
