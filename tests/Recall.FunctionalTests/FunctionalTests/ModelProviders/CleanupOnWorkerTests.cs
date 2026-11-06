@@ -19,7 +19,10 @@ using Recall.Server.Resources.Entrypoints.Jobs;
 using Shouldly;
 using TestUtilities;
 
-/// <summary>The whole path on a host with a real worker. Each test connects its own fake as the newest provider, so they run one at a time.</summary>
+/// <summary>
+/// The whole path on a host with a real worker. Each test connects its own fake as the newest provider, so they run one at a time.
+/// A job that an earlier test left to try again calls the newest fake too, so a test counts only the calls that hold its own words.
+/// </summary>
 [NotInParallel(nameof(CleanupOnWorkerTests))]
 public class CleanupOnWorkerTests
 {
@@ -150,7 +153,7 @@ public class CleanupOnWorkerTests
         finished.CleanupStatus.ShouldBe(nameof(CleanupStatus.Clean));
         finished.CleanedText.ShouldContain("teh market (cleaned)");
         finished.RawText.ShouldBe(raw);
-        fake.CompletionCalls.ShouldBe(1);
+        fake.RequestBodies.Count(body => body.Contains("teh market", StringComparison.Ordinal)).ShouldBe(1);
     }
 
     [Test]
