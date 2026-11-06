@@ -11,6 +11,7 @@ export interface OutboxEntry {
   change: Stamped<string>
   refusal?: string | null
   movedFromDeletedEntry?: boolean
+  isHold?: boolean
 }
 
 const ownerWithNoDot = (owner: string) => encodeURIComponent(owner).replaceAll('.', '%2E')

@@ -11,7 +11,7 @@ import { newUuid } from '@/lib/new-uuid'
 import { sessionQueryOptions } from '../apis/get-session'
 import { SessionKeys, type DraftChannel } from '../apis/session.keys'
 import { patchTimelineRow, refreshTimelineHead } from '../apis/timeline-cache'
-import { mentionedPersonIds, plainPreviewOf } from '../editor/content'
+import { joinWords, mentionedPersonIds, plainPreviewOf } from '../editor/content'
 import { pointAtCreatedSession, pointAtNewEntry } from './composer-pointer'
 import { readOutbox, readOutboxEntry, removeFromOutbox, writeToOutbox, type OutboxEntry } from './outbox'
 import { queueWithRefusal, queueWithUnanswered, newestUnsettled, type SaveQueue, type SaveStatus, type Stamped } from './save-queue'
@@ -50,6 +50,8 @@ export interface DraftTarget {
 }
 
 const pauseInTypingMs = 800
+const holdReadLimitMs = 30_000
+const holdReadRetryMs = 2_000
 const previewLength = 200
 
 export class DraftSaver {
@@ -62,8 +64,11 @@ export class DraftSaver {
   private conflictIsUnseen = false
   private wordsInHistory: string | null = null
   private wordsOnServer: string | null = null
-  private isHoldingWords = false
-  private mayMoveToNewEntry = true
+  private heldWords: string | null = null
+  private holdRun = 0
+  private isStopped = false
+  private isDiscarded = false
+  private isBeingDeleted = false
 
   constructor(target: DraftTarget, queryClient: QueryClient, resumed?: OutboxEntry) {
     this.target = target
@@ -81,14 +86,18 @@ export class DraftSaver {
       send: (change, signal) => this.send(change, signal),
       onReply: (reply, change) => this.handleReply(reply, change),
       onQueueChange: (queue) => this.keepInOutbox(queue),
-      initialQueue: resumed && (resumed.refusal ? queueWithRefusal(resumed.change, resumed.refusal) : queueWithUnanswered(resumed.change)),
+      initialQueue: resumed && !resumed.isHold ? (resumed.refusal ? queueWithRefusal(resumed.change, resumed.refusal) : queueWithUnanswered(resumed.change)) : undefined,
     })
     this.snapshot = { ...this.snapshot, status: this.saver.getStatus() }
     this.saver.subscribe(() => this.update({ status: this.saver.getStatus() }))
+    if (resumed?.isHold) {
+      this.heldWords = resumed.change.value
+      void this.joinHoldWithNoPage()
+    }
   }
 
   edit(text: string) {
-    this.isHoldingWords = false
+    this.heldWords = null
     this.saver.edit(text)
   }
 
@@ -98,26 +107,57 @@ export class DraftSaver {
 
   async settle() {
     const isSent = await this.saver.settle()
-    return isSent && !this.isHoldingWords
+    return isSent && this.heldWords === null
   }
 
   stop() {
-    this.mayMoveToNewEntry = false
+    this.isStopped = true
     this.saver.dispose()
   }
 
   noteDelete(isRunning: boolean) {
-    this.mayMoveToNewEntry = !isRunning
+    this.isBeingDeleted = isRunning
+  }
+
+  wordsInHold() {
+    return this.heldWords
   }
 
   holdInOutbox(text: string) {
-    this.isHoldingWords = true
+    this.heldWords = text
     this.writeToOutbox({ value: text, savedAt: new Date().toISOString() }, null)
   }
 
   releaseFromOutbox() {
-    this.isHoldingWords = false
+    this.heldWords = null
     removeFromOutbox(this.target.owner, draftKey(this.target))
+  }
+
+  /** A page that reads the entry joins the held words itself, so the read of the saver stops. */
+  takeHold() {
+    this.holdRun += 1
+  }
+
+  /** Held words were typed before a read answered. They join the words of the entry and must not replace them, also with no page open. */
+  async joinHoldWithNoPage() {
+    const run = ++this.holdRun
+    const isCurrent = () => run === this.holdRun && !this.isStopped
+    const id = this.snapshot.sessionId
+    while (isCurrent() && this.heldWords !== null) {
+      const key = SessionKeys.detail(id ?? '')
+      const limit = setTimeout(() => void this.queryClient.cancelQueries({ queryKey: key, exact: true }), holdReadLimitMs)
+      const session = id === null
+        ? null
+        : await this.queryClient.fetchQuery({ ...sessionQueryOptions(id), staleTime: 0 }).catch((error: unknown) => (isARowThatIsGone(error) ? null : undefined))
+      clearTimeout(limit)
+      if (!isCurrent()) return
+      if (session === undefined) {
+        await new Promise((resolve) => setTimeout(resolve, holdReadRetryMs))
+        continue
+      }
+      if (session) this.moveBaseTo(session.rawDraftRevision, session.rawLatestRevision)
+      if (this.heldWords !== null) this.edit(joinWords(session?.rawText ?? '', this.heldWords))
+    }
   }
 
   dismissMovedNotice() {
@@ -184,6 +224,7 @@ export class DraftSaver {
   }
 
   discard() {
+    this.isDiscarded = true
     this.stop()
     removeFromOutbox(this.target.owner, draftKey(this.target))
     for (const [key, saver] of savers) {
@@ -240,7 +281,7 @@ export class DraftSaver {
       return await this.saveWords(change, signal)
     } catch (error) {
       // The delete of this tab, or a discard at logout, is the wish of the person. The words must not come back as a new entry.
-      if (!isARowThatIsGone(error) || !this.mayMoveToNewEntry) throw error
+      if (!isARowThatIsGone(error) || this.isStopped || this.isBeingDeleted) throw error
       this.moveToNewEntry(change)
       return this.saveWords(change, signal)
     }
@@ -330,6 +371,7 @@ export class DraftSaver {
   }
 
   private writeToOutbox(change: Stamped<string>, refusal: string | null) {
+    if (this.isDiscarded) return
     writeToOutbox(this.target.owner, {
       key: draftKey(this.target),
       channel: this.target.channel,
@@ -341,6 +383,7 @@ export class DraftSaver {
       change,
       refusal,
       movedFromDeletedEntry: this.snapshot.movedFromDeletedEntry,
+      isHold: this.heldWords !== null,
     })
   }
 }

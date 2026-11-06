@@ -44,6 +44,7 @@ const openingWords = (saver: DraftSaver | null, sessionId: string | null, cached
   const kept = saver?.wordsToOpen() ?? null
   if (kept !== null) return kept
   if (!sessionId) return ''
+  if (saver?.wordsInHold() != null) return null
   return onlineManager.isOnline() ? null : (cached?.rawText ?? null)
 }
 
@@ -65,7 +66,9 @@ export function useComposer() {
     return { key: 0, words: openingWords(saver, resumedSessionId, cached), takesFocus: false }
   })
   const currentWords = useRef(editor.words ?? '')
-  const typedWhileReading = useRef<string | null>(null)
+  const heldAtOpen = useRef(saver?.wordsInHold() ?? null)
+  const typedWhileReading = useRef(heldAtOpen.current)
+  const wordsFromRead = useRef('')
   const latestSaver = useRef(saver)
 
   // A second keystroke can come before React renders the first, and it must reach the same entry.
@@ -91,6 +94,7 @@ export function useComposer() {
     let isCurrent = true
     const openWords = (words: string) => {
       if (!opensAConflict) saver?.dismissConflict()
+      wordsFromRead.current = words
       const typed = typedWhileReading.current
       typedWhileReading.current = null
       const opened = typed === null ? words : joinWords(words, typed)
@@ -142,10 +146,24 @@ export function useComposer() {
     }
   }, [isReading, resumedSessionId, saver, opensAConflict, queryClient, startOver])
 
-  // A person who leaves during the read takes the page with these words. The saver sends them, and if they lose, the Server keeps them in History.
-  useEffect(() => () => {
-    if (typedWhileReading.current !== null) latestSaver.current?.edit(typedWhileReading.current)
+  useEffect(() => {
+    latestSaver.current?.takeHold()
+    if (latestSaver.current?.wordsInHold() == null) {
+      heldAtOpen.current = null
+      typedWhileReading.current = null
+    }
+    return () => void latestSaver.current?.joinHoldWithNoPage()
   }, [])
+
+  // A key can land after the read answered and before the editor opened with its words.
+  useEffect(() => {
+    const late = typedWhileReading.current
+    if (isReading || late === null) return
+    typedWhileReading.current = null
+    const joined = joinWords(wordsFromRead.current, late)
+    openEditorWith(joined)
+    latestSaver.current?.edit(joined)
+  }, [isReading, openEditorWith])
 
   const shown = saver ?? finished?.saver ?? null
   const snapshot = useSyncExternalStore(shown?.subscribe ?? noSubscription, shown?.getSnapshot ?? (() => idleSnapshot))
@@ -176,9 +194,11 @@ export function useComposer() {
     (text: string, isEmpty: boolean) => {
       currentWords.current = text
       if (isReading) {
-        typedWhileReading.current = isEmpty ? null : text
-        if (isEmpty) latestSaver.current?.releaseFromOutbox()
-        else latestSaver.current?.holdInOutbox(text)
+        const held = heldAtOpen.current
+        const typed = isEmpty ? held : held === null ? text : joinWords(held, text)
+        typedWhileReading.current = typed
+        if (typed === null) latestSaver.current?.releaseFromOutbox()
+        else latestSaver.current?.holdInOutbox(typed)
         return
       }
       const composing = latestSaver.current

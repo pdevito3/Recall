@@ -336,21 +336,71 @@ test.describe('a return to an entry whose read is slow', () => {
     await expect(journal.at.loadingEntry).toHaveCount(0)
     await journal.goToTheJournalFromTheSidebar()
     await expect(journal.at.loadingEntry).toBeVisible()
-    await journal.typeWithoutWaiting('Words typed early')
   }
 
-  test('a person who leaves during the read does not lose the keys', async ({ page, api }) => {
+  // A move away cancels a read that takes long, and a cancelled call cannot have a mocked answer. So this read fails at once and tries again.
+  const aReturnDuringAFailingRead = async (journal: ReturnType<typeof journalPage>, page: Page, api: Api, session: SessionDto) => {
+    let savedEntry: SessionDto | undefined
+    await aReturnDuringASlowRead(journal, page, api, session, (saved) => {
+      savedEntry = saved
+      return sessionsApi.oneFails(saved.id, aProblem().saying('The Server is busy.'))
+    })
+    return savedEntry!
+  }
+
+  test('a person who leaves during the read does not lose the keys, and the keys do not replace the entry', async ({ page, api }) => {
+    const unsent = unsentWords(page)
     const session = aSession().build()
     const journal = journalPage(page)
-    // A move away cancels a read that takes long, and a cancelled call cannot have a mocked answer. So this read fails at once and tries again.
-    await aReturnDuringASlowRead(journal, page, api, session, (saved) => sessionsApi.oneFails(saved.id, aProblem().saying('The Server is busy.')))
-
+    const saved = await aReturnDuringAFailingRead(journal, page, api, session)
+    await journal.typeWithoutWaiting('Words typed early')
     api.mock({ ...sessionsApi.draftSaveWins(session, 2), delayMs: 3_000 })
+
     await journal.goToSettings()
-    await expect.poll(() => wordsOf(api.last('put', sessionsPaths.rawDraft(session.id)))).toContain('Words typed early')
+    await unsent.letAnAnswerLand()
+    expect(api.all('put', sessionsPaths.rawDraft(session.id))).toHaveLength(1)
+    api.mock(sessionsApi.oneIs(saved))
+    await expect.poll(() => wordsOf(api.last('put', sessionsPaths.rawDraft(session.id))), { timeout: 10_000 }).toContain('Words typed early')
+    expect(wordsOf(api.last('put', sessionsPaths.rawDraft(session.id)))).toContain('Words from before')
 
     await journal.goToTheJournalFromTheSidebar()
+    await expect(journal.at.composer).toContainText('Words from before')
     await expect(journal.at.composer).toContainText('Words typed early')
+  })
+
+  test('a person who comes back before the read answered finds the keys, and can add more', async ({ page, api }) => {
+    const unsent = unsentWords(page)
+    const session = aSession().build()
+    const journal = journalPage(page)
+    const saved = await aReturnDuringAFailingRead(journal, page, api, session)
+    await journal.typeWithoutWaiting('Words typed early')
+
+    await journal.goToSettings()
+    await unsent.letAnAnswerLand()
+    await journal.goToTheJournalFromTheSidebar()
+    await expect(journal.at.loadingEntry).toBeVisible()
+    await journal.typeWithoutWaiting('Words typed later')
+    api.mock(sessionsApi.oneIs(saved), sessionsApi.draftSaveWins(session, 2))
+
+    await expect(journal.at.composer).toContainText('Words typed early', { timeout: 10_000 })
+    await expect(journal.at.composer).toContainText('Words from before')
+    await expect(journal.at.composer).toContainText('Words typed later')
+    await expect.poll(() => wordsOf(api.last('put', sessionsPaths.rawDraft(session.id)))).toContain('Words typed later')
+    expect(wordsOf(api.last('put', sessionsPaths.rawDraft(session.id)))).toContain('Words from before')
+    expect(wordsOf(api.last('put', sessionsPaths.rawDraft(session.id)))).toContain('Words typed early')
+  })
+
+  test('a reload during the read joins the keys to the entry, and does not replace it', async ({ page, api }) => {
+    const session = aSession().build()
+    const journal = journalPage(page)
+    const saved = await aReturnDuringAFailingRead(journal, page, api, session)
+    await journal.typeWithoutWaiting('Words typed early')
+    api.mock(sessionsApi.oneIs(saved), sessionsApi.draftSaveWins(session, 2))
+
+    await page.reload()
+
+    await expect.poll(() => wordsOf(api.last('put', sessionsPaths.rawDraft(session.id))), { timeout: 10_000 }).toContain('Words typed early')
+    expect(wordsOf(api.last('put', sessionsPaths.rawDraft(session.id)))).toContain('Words from before')
   })
 
   test('a logout during the read asks about the keys', async ({ page, api }) => {
@@ -359,6 +409,7 @@ test.describe('a return to an entry whose read is slow', () => {
     api.mock(signInPage, logoutWorks)
     const journal = journalPage(page)
     await aReturnDuringASlowRead(journal, page, api, session, (saved) => ({ ...sessionsApi.oneIs(saved), delayMs: 10_000 }))
+    await journal.typeWithoutWaiting('Words typed early')
 
     await unsent.logOut()
 

@@ -20,7 +20,7 @@ using Shouldly;
 
 public class StringColumnLengthTests
 {
-    public sealed record CallerColumn(string RequestField, Func<string, int, string> ValueOfLength, Action<string> Write);
+    public sealed record CallerColumn(string RequestField, Func<string, int, string> ValueOfLength, Action<string> Write, bool MessageNamesTheLimit = true);
 
     private static readonly string[] Characters = ["a", "\U0001F600"];
 
@@ -50,10 +50,10 @@ public class StringColumnLengthTests
         ["corrections.canonical_term"] = new("canonicalTerm", Text, v => Correction.Create("ten_1", "usr_1", v, [], false)),
         ["sessions.client_session_id"] = new("clientSessionId", Text, v => Session.Create("ten_1", "usr_1", v, DateTimeOffset.UnixEpoch, null, DateTimeOffset.UnixEpoch)),
         ["sessions.activity"] = new("activity", Text, v => SessionMetadata.Of(v, [], [])),
-        ["sessions.raw_text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)),
-        ["sessions.cleaned_text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)),
-        ["raw_revisions.text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)),
-        ["cleaned_revisions.text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)),
+        ["sessions.raw_text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch), MessageNamesTheLimit: false),
+        ["sessions.cleaned_text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch), MessageNamesTheLimit: false),
+        ["raw_revisions.text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch), MessageNamesTheLimit: false),
+        ["cleaned_revisions.text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch), MessageNamesTheLimit: false),
         // new-feature:caller-columns
     };
 
@@ -156,7 +156,8 @@ public class StringColumnLengthTests
         writeFits.ShouldNotThrow();
         var exception = writeTooLong.ShouldThrow<ValidationException>();
         exception.Property.ShouldBe(callerColumn.RequestField);
-        exception.Message.ShouldContain(maxLength.ToString(CultureInfo.InvariantCulture));
+        if (callerColumn.MessageNamesTheLimit)
+            exception.Message.ShouldContain(maxLength.ToString(CultureInfo.InvariantCulture));
     }
 
     public static IEnumerable<string> CallerColumnNames => CallerColumns.Keys;

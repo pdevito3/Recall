@@ -83,6 +83,8 @@ export function settingSaver(queryClient: QueryClient) {
       changeUserSetting({ body: { ...value, savedAt }, signal, options: { suppressErrorToast: true } }),
     onReply: (reply) => {
       const zoneChanged = queryClient.getQueryData<UserSettingDto>(SettingKeys.mine())?.timeZone !== reply.timeZone
+      // A read that started before this save holds the old setting, and it must not answer over this reply.
+      void queryClient.cancelQueries({ queryKey: SettingKeys.mine(), exact: true })
       queryClient.setQueryData(SettingKeys.mine(), reply)
       if (zoneChanged) void refreshTimelineHead(queryClient)
     },
