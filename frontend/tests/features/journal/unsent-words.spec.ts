@@ -499,8 +499,9 @@ test.describe('a setting that did not reach the Server', () => {
     const unsent = unsentWords(page)
     api.mock(settingsApi.are(aSetting({ timeZone: null })), { method: 'put', path: settingsPaths.mine, status: 503 })
     await unsent.leftInStorage(`recall.unsent-setting.${actorSubject}`, JSON.stringify({
-      value: { timeZone: null, locationCaptureEnabled: true, requirePeopleProposalApproval: false },
-      savedAt: '2026-11-06T15:31:00.000Z',
+      change: { value: { locationCaptureEnabled: true }, savedAt: '2026-11-06T15:31:00.000Z' },
+      attempt: null,
+      asks: [],
     }))
 
     await unsent.openSettings()

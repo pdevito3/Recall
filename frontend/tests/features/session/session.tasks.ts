@@ -131,11 +131,13 @@ export function sessionPage(page: Page) {
       const checked = answered(authPaths.me)
 
       await link.click()
+      await at.userMenu.click()
       await Promise.all([at.logout.click(), checked])
     },
 
     async signOutAndWaitForTheAnswer() {
       const answered = page.waitForResponse((r) => new URL(r.url()).pathname === authPaths.logout)
+      await at.userMenu.click()
       await at.logout.click()
       await answered
     },
@@ -148,7 +150,7 @@ export function sessionPage(page: Page) {
         })
       })
       await page.goto('/')
-      await expect(at.signedInAs).toBeVisible()
+      await expect(at.navigation).toBeVisible()
       await page.evaluate(() => {
         ;(window as unknown as { firstLoadMark: boolean }).firstLoadMark = true
       })

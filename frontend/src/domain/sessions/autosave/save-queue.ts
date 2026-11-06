@@ -14,6 +14,7 @@ export interface SaveQueue<T> {
 
 export type SaveEvent<T> =
   | { type: 'edited'; change: Stamped<T> }
+  | { type: 'merged'; change: Stamped<T> }
   | { type: 'sent' }
   | { type: 'replied'; savedAt: string }
   | { type: 'noReply' }
@@ -47,10 +48,16 @@ export function newestUnsettled<T>(queue: SaveQueue<T>): Stamped<T> | null {
   return queue.unsent ?? queue.unanswered ?? queue.sending ?? queue.refusal?.change ?? null
 }
 
+export function unsettledChanges<T>(queue: SaveQueue<T>): Stamped<T>[] {
+  return [queue.refusal?.change ?? null, queue.sending, queue.unanswered, queue.unsent].filter((change) => change !== null)
+}
+
 export function step<T>(queue: SaveQueue<T>, event: SaveEvent<T>): SaveQueue<T> {
   switch (event.type) {
     case 'edited':
       return { ...queue, unsent: event.change, refusal: null }
+    case 'merged':
+      return { ...queue, unanswered: null, unsent: event.change, refusal: null }
     case 'sent': {
       const next = nextToSend(queue)
       if (!next) return queue

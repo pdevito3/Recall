@@ -43,6 +43,7 @@ class SessionBuilder {
       latitude: null,
       longitude: null,
       version: 1,
+      metadataVersion: 1,
     })
   }
 
@@ -91,9 +92,9 @@ class SessionBuilder {
   }
 
   summary(preview: string): SessionSummaryDto {
-    const { id, clientSessionId, startedAt, journalingDay, synopsis, cleanupStatus, activity, moods, topics, personIds, version } =
+    const { id, clientSessionId, startedAt, journalingDay, synopsis, cleanupStatus, activity, moods, topics, personIds, version, metadataVersion } =
       this.session
-    return { id, clientSessionId, startedAt, journalingDay, preview, synopsis, cleanupStatus, activity, moods, topics, personIds, version }
+    return { id, clientSessionId, startedAt, journalingDay, preview, synopsis, cleanupStatus, activity, moods, topics, personIds, version, metadataVersion }
   }
 }
 

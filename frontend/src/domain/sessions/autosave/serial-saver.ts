@@ -6,7 +6,7 @@ import {
   type ProblemDetailsError,
 } from '@/lib/problem-details'
 
-import { emptyQueue, newestUnsettled, nextToSend, statusOf, step, type SaveEvent, type SaveQueue, type SaveStatus, type Stamped } from './save-queue'
+import { emptyQueue, newestUnsettled, nextToSend, queueWithUnanswered, statusOf, step, unsettledChanges, type SaveEvent, type SaveQueue, type SaveStatus, type Stamped } from './save-queue'
 
 const firstRetryMs = 2_000
 const longestRetryMs = 30_000
@@ -32,6 +32,9 @@ interface SerialSaverOptions<T, R> {
   onReply: (reply: R, change: Stamped<T>) => void
   refusalMessage?: (error: ProblemDetailsError) => string
   initialQueue?: SaveQueue<T>
+  resumedUnanswered?: Stamped<T>
+  /** A queue of partial changes keeps only the last change of a field, also when an older change had no reply. */
+  mergeEdits?: (older: T, newer: T) => T
   onQueueChange?: (queue: SaveQueue<T>) => void
 }
 
@@ -48,14 +51,16 @@ export class SerialSaver<T, R> {
 
   constructor(options: SerialSaverOptions<T, R>) {
     this.options = options
-    this.queue = options.initialQueue ?? emptyQueue<T>()
+    this.queue = options.initialQueue ?? (options.resumedUnanswered ? queueWithUnanswered(options.resumedUnanswered) : emptyQueue<T>())
     this.status = statusOf(this.queue)
     window.addEventListener('online', this.retryNow)
     if (this.queue.unanswered) this.sendAfterThisRender()
   }
 
   edit(value: T) {
-    this.apply({ type: 'edited', change: { value, savedAt: new Date().toISOString() } })
+    const change = { value, savedAt: new Date().toISOString() }
+    if (this.options.mergeEdits) this.apply({ type: 'merged', change: this.mergedWithWaiting(change) })
+    else this.apply({ type: 'edited', change })
     this.cancelDebounce()
     if (this.options.debounceMs === 0) {
       this.pump()
@@ -97,6 +102,10 @@ export class SerialSaver<T, R> {
     return newestUnsettled(this.queue)
   }
 
+  unsettled() {
+    return unsettledChanges(this.queue)
+  }
+
   refusalMessage() {
     return this.queue.refusal?.change === newestUnsettled(this.queue) ? (this.queue.refusal?.message ?? null) : null
   }
@@ -109,6 +118,13 @@ export class SerialSaver<T, R> {
   }
 
   getStatus = () => this.status
+
+  private mergedWithWaiting(change: Stamped<T>): Stamped<T> {
+    const { mergeEdits } = this.options
+    const waiting = [this.queue.unanswered, this.queue.unsent].filter((older) => older !== null)
+    if (!mergeEdits || waiting.length === 0) return change
+    return { ...change, value: mergeEdits(waiting.reduce((older, newer) => ({ ...newer, value: mergeEdits(older.value, newer.value) })).value, change.value) }
+  }
 
   private sendAfterThisRender() {
     this.retry = setTimeout(this.retryNow, 0)
@@ -168,6 +184,7 @@ export class SerialSaver<T, R> {
       return
     }
     this.apply({ type: 'noReply' })
+    if (this.options.mergeEdits && this.queue.unsent) this.apply({ type: 'merged', change: this.mergedWithWaiting({ ...this.queue.unsent, value: this.queue.unsent.value }) })
     clearTimeout(this.retry)
     this.retry = setTimeout(this.retryNow, this.retryMs)
     this.retryMs = Math.min(this.retryMs * 2, longestRetryMs)

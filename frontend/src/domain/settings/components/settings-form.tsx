@@ -7,6 +7,7 @@ import { Combobox, ComboboxContent, ComboboxInput, ComboboxItem, ComboboxList } 
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SaveStatusLine } from '@/domain/sessions/components/save-status'
+import { StaleChangePrompts } from '@/domain/sessions/components/stale-change-prompts'
 import { journalZoneOf, settingSaver, useUserSetting, type SettingChange } from '@/domain/settings/apis/user-setting'
 import { useCurrentUser } from '@/domain/users/apis/get-current-user'
 import { parseTimeZone, timeZoneLabel, type TimeZone } from '@/lib/zoned-time'
@@ -27,11 +28,18 @@ function zoneOptions(savedZone: TimeZone): ZoneOption[] {
   return [...listedZones, zoneOption(savedZone)].sort((a, b) => (a.id < b.id ? -1 : 1))
 }
 
+const settingLabels: Record<keyof SettingChange, string> = {
+  timeZone: 'Time zone',
+  locationCaptureEnabled: 'Save my location with each new entry',
+  requirePeopleProposalApproval: 'Ask me before AI adds a person to an entry',
+}
+
 export function SettingsForm() {
   const setting = useUserSetting()
   const queryClient = useQueryClient()
   const saver = settingSaver(queryClient)
   const status = useSyncExternalStore(saver.subscribe, saver.getStatus)
+  const asks = useSyncExternalStore(saver.subscribe, saver.asks)
   const zone = journalZoneOf(setting.data)
   const zones = useMemo(() => zoneOptions(zone), [zone])
 
@@ -42,17 +50,12 @@ export function SettingsForm() {
     return <QueryError title="Your settings did not load." error={setting.error} onRetry={() => setting.refetch()} />
   }
 
-  const values: SettingChange = saver.newestUnsettledValue() ?? setting.data
-  const change = (patch: Partial<SettingChange>) =>
-    saver.edit({
-      timeZone: values.timeZone,
-      locationCaptureEnabled: values.locationCaptureEnabled,
-      requirePeopleProposalApproval: values.requirePeopleProposalApproval,
-      ...patch,
-    })
+  const values: SettingChange = { ...setting.data, ...saver.pendingFields() }
+  const change = (patch: Partial<SettingChange>) => saver.edit(patch)
 
   return (
     <div className="flex flex-col gap-8">
+      <StaleChangePrompts asks={asks} labelOf={(field) => settingLabels[field]} onAnswer={(ask, usesYours) => saver.answerAsk(ask, usesYours)} />
       <section className="flex flex-col gap-2" aria-labelledby="settings-zone">
         <h2 id="settings-zone" className="text-lg font-semibold">Time zone</h2>
         <p className="text-sm text-muted-foreground">Your time zone decides the day that each entry belongs to.</p>

@@ -14,18 +14,22 @@ import { useJournalZone } from '@/domain/settings/apis/user-setting'
 import { metadataSaverFor } from '../autosave/metadata-saver'
 import { activityNone, knownActivities, knownMoods, tagValuesOf, withTopicAdded, type SessionTagValues } from '../tags'
 import { SaveStatusLine } from './save-status'
+import { StaleChangePrompts } from './stale-change-prompts'
 
 const chipClass =
   'inline-flex min-h-8 items-center rounded-full border px-3 text-sm outline-none hover:bg-muted data-[focus-visible]:ring-[3px] data-[focus-visible]:ring-ring/50 data-[selected]:border-primary data-[selected]:bg-primary data-[selected]:text-primary-foreground max-md:min-h-11'
+
+const tagLabels: Record<keyof SessionTagValues, string> = { activity: 'Activity', moods: 'Moods', userTopics: 'Topics' }
 
 export function SessionTags({ session }: { session: SessionDto }) {
   const queryClient = useQueryClient()
   const zone = useJournalZone()
   const saver = metadataSaverFor(session.id, queryClient)
   const status = useSyncExternalStore(saver.subscribe, saver.getStatus)
+  const asks = useSyncExternalStore(saver.subscribe, saver.asks)
   const [isEditing, setIsEditing] = useState(false)
   const directory = usePeopleDirectory().data
-  const values = saver.newestUnsettledValue() ?? tagValuesOf(session)
+  const values: SessionTagValues = { ...tagValuesOf(session), ...saver.pendingFields() }
   const aiTopics = session.topics.filter((topic) => topic.provenance === 'AiSuggested').map((topic) => topic.name)
   const people = session.personIds.flatMap((id) => directory?.find((person) => person.id === id)?.label ?? [])
 
@@ -37,6 +41,7 @@ export function SessionTags({ session }: { session: SessionDto }) {
           {isEditing ? 'Close tags' : 'Edit tags'}
         </Button>
       </div>
+      <StaleChangePrompts asks={asks} labelOf={(field) => tagLabels[field]} onAnswer={(ask, usesYours) => saver.answerAsk(ask, usesYours)} />
       {isEditing ? (
         <TagEditor values={values} onChange={(next) => saver.edit(next)} />
       ) : (
@@ -78,7 +83,7 @@ function TagSummary({ values }: { values: SessionTagValues }) {
 
 interface TagEditorProps {
   values: SessionTagValues
-  onChange: (values: SessionTagValues) => void
+  onChange: (changed: Partial<SessionTagValues>) => void
 }
 
 function TagEditor({ values, onChange }: TagEditorProps) {
@@ -98,18 +103,15 @@ function TagEditor({ values, onChange }: TagEditorProps) {
 
   const removeTopic = (name: string) => {
     removedAt.current = values.userTopics.indexOf(name)
-    onChange({ ...values, userTopics: values.userTopics.filter((t) => t !== name) })
+    onChange({ userTopics: values.userTopics.filter((t) => t !== name) })
   }
 
   const toggleMood = (mood: string) =>
-    onChange({
-      ...values,
-      moods: values.moods.includes(mood) ? values.moods.filter((m) => m !== mood) : [...values.moods, mood],
-    })
+    onChange({ moods: values.moods.includes(mood) ? values.moods.filter((m) => m !== mood) : [...values.moods, mood] })
 
   const addTopic = (event: FormEvent) => {
     event.preventDefault()
-    onChange({ ...values, userTopics: withTopicAdded(values.userTopics, topic) })
+    onChange({ userTopics: withTopicAdded(values.userTopics, topic) })
     setTopic('')
   }
 
@@ -133,7 +135,7 @@ function TagEditor({ values, onChange }: TagEditorProps) {
               key={activity}
               className={chipClass}
               isSelected={values.activity === activity}
-              onChange={(isSelected) => onChange({ ...values, activity: isSelected ? activity : null })}
+              onChange={(isSelected) => onChange({ activity: isSelected ? activity : null })}
             >
               {activity}
             </ToggleButton>

@@ -8,7 +8,6 @@ export const aSetting = (patch: Partial<UserSettingDto> = {}): UserSettingDto =>
   timeZoneIsKnown: true,
   locationCaptureEnabled: false,
   requirePeopleProposalApproval: false,
-  savedAt: '2026-11-01T00:00:00+00:00',
   version: 1,
   ...patch,
 })

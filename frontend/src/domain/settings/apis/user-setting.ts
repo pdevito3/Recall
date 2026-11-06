@@ -4,8 +4,8 @@ import type { UserSettingDto } from '@/api/generated/models/types/user-setting-d
 import { changeUserSetting } from '@/api/generated/user-settings/clients/change-user-setting'
 import { getUserSetting } from '@/api/generated/user-settings/clients/get-user-setting'
 import { refreshTimelineHead } from '@/domain/sessions/apis/timeline-cache'
-import { newestUnsettled, queueWithUnanswered, type SaveQueue, type Stamped } from '@/domain/sessions/autosave/save-queue'
-import { SerialSaver } from '@/domain/sessions/autosave/serial-saver'
+import { Notification } from '@/components/notification'
+import { RowSaver, type RowSaverState } from '@/domain/sessions/autosave/row-saver'
 import { pageUserOf } from '@/lib/page-user'
 import { retryUnlessRefused } from '@/lib/problem-details'
 import { parseTimeZone, type TimeZone } from '@/lib/zoned-time'
@@ -37,23 +37,28 @@ export function useJournalZone(): TimeZone {
 
 export type SettingChange = Pick<UserSettingDto, 'timeZone' | 'locationCaptureEnabled' | 'requirePeopleProposalApproval'>
 
-let saver: SerialSaver<SettingChange, UserSettingDto> | undefined
+let saver: RowSaver<SettingChange, UserSettingDto> | undefined
 
 const unsentKeyOf = (owner: string) => `recall.unsent-setting.${owner}`
 
-function readUnsentSetting(owner: string): Stamped<SettingChange> | null {
+const settingFieldsOf = ({ timeZone, locationCaptureEnabled, requirePeopleProposalApproval }: SettingChange): SettingChange => ({
+  timeZone,
+  locationCaptureEnabled,
+  requirePeopleProposalApproval,
+})
+
+function readUnsentSetting(owner: string): RowSaverState<SettingChange> | null {
   try {
-    const stored = JSON.parse(localStorage.getItem(unsentKeyOf(owner)) ?? 'null') as Stamped<SettingChange> | null
-    return typeof stored?.savedAt === 'string' && typeof stored.value.locationCaptureEnabled === 'boolean' ? stored : null
+    const stored = JSON.parse(localStorage.getItem(unsentKeyOf(owner)) ?? 'null') as RowSaverState<SettingChange> | null
+    return Array.isArray(stored?.asks) ? stored : null
   } catch {
     return null
   }
 }
 
-function keepUnsentSetting(owner: string, queue: SaveQueue<SettingChange>) {
-  const change = queue.refusal ? null : newestUnsettled(queue)
+function keepUnsentSetting(owner: string, state: RowSaverState<SettingChange> | null) {
   try {
-    if (change) localStorage.setItem(unsentKeyOf(owner), JSON.stringify(change))
+    if (state) localStorage.setItem(unsentKeyOf(owner), JSON.stringify(state))
     else localStorage.removeItem(unsentKeyOf(owner))
   } catch {
     return
@@ -72,15 +77,21 @@ export function stopSettingSaver() {
 
 export function settingSaver(queryClient: QueryClient) {
   const owner = pageUserOf()
-  const unsent = owner ? readUnsentSetting(owner) : null
-  saver ??= new SerialSaver<SettingChange, UserSettingDto>({
-    debounceMs: 0,
-    initialQueue: unsent ? queueWithUnanswered(unsent) : undefined,
-    onQueueChange: (queue) => {
-      if (owner) keepUnsentSetting(owner, queue)
+  saver ??= new RowSaver<SettingChange, UserSettingDto>({
+    copyOf: () => queryClient.getQueryData<UserSettingDto>(SettingKeys.mine()),
+    read: () => queryClient.fetchQuery({ ...userSettingOptions, staleTime: 0 }),
+    fieldsOf: settingFieldsOf,
+    versionOf: (setting) => setting.version,
+    put: (values, version, signal) => changeUserSetting({ body: { ...values, version }, signal, options: { suppressErrorToast: true } }),
+    rules: {
+      asksFirst: (field, value) => field === 'locationCaptureEnabled' && value === true,
+      neverAsks: (field, value) => field === 'locationCaptureEnabled' && value === false,
     },
-    send: ({ value, savedAt }, signal) =>
-      changeUserSetting({ body: { ...value, savedAt }, signal, options: { suppressErrorToast: true } }),
+    onAppliedWithNoAsk: () => Notification.info('Your location is no longer saved with new entries. Your settings changed elsewhere first, and this change still applied.'),
+    resumed: owner ? readUnsentSetting(owner) : null,
+    onStateChange: (state) => {
+      if (owner) keepUnsentSetting(owner, state)
+    },
     onReply: (reply) => {
       const zoneChanged = queryClient.getQueryData<UserSettingDto>(SettingKeys.mine())?.timeZone !== reply.timeZone
       // A read that started before this save holds the old setting, and it must not answer over this reply.

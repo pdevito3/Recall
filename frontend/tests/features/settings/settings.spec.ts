@@ -51,10 +51,11 @@ test.describe('the settings of a person', () => {
 
     await settings.turnOnLocation()
 
-    const body = api.last('put', settingsPaths.mine)?.body as { timeZone: string; locationCaptureEnabled: boolean; savedAt: string }
+    const body = api.last('put', settingsPaths.mine)?.body as { timeZone: string; locationCaptureEnabled: boolean; version: number; savedAt?: string }
     expect(body.timeZone).toBe('America/Chicago')
     expect(body.locationCaptureEnabled).toBe(true)
-    expect(new Date(body.savedAt).getTime()).not.toBeNaN()
+    expect(body.version).toBe(aSetting().version)
+    expect(body.savedAt).toBeUndefined()
     await expect(settings.at.saved).toBeVisible()
   })
 

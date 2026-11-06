@@ -429,7 +429,7 @@ public partial class NoProviderBootTests
         answer.StatusCode.ShouldBe(HttpStatusCode.OK);
         answer.Content.Headers.ContentEncoding.ShouldHaveSingleItem().ShouldBe("br");
         answer.Headers.GetValues("Content-Security-Policy").ShouldHaveSingleItem().ShouldContain("script-src 'self';");
-        answer.Headers.CacheControl!.NoCache.ShouldBe(!hashed);
+        answer.Headers.CacheControl!.NoStore.ShouldBe(!hashed);
         answer.Headers.CacheControl.Public.ShouldBe(hashed);
         answer.Headers.CacheControl.ToString().Contains("immutable").ShouldBe(hashed);
     }

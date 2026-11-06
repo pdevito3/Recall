@@ -60,6 +60,7 @@ test.describe('a sign-out in another tab', () => {
     await otherTab.open('/about')
 
     api.mock(...authApi.logoutWorks(), { method: 'get', path: authPaths.me, status: 204 })
+    await session.at.userMenu.click()
     await session.at.logout.click()
 
     await expect.poll(() => page.url()).toContain('signedOut=1')
@@ -110,7 +111,7 @@ test.describe('a sign-out with a call of the API that answers 401 after it', () 
       { method: 'post', path: authPaths.logout, status: 200, body: { provider_logout_url: `${providerLogout}?client_id=recall` } },
       { method: 'get', path: authPaths.me, status: 204 },
     )
-    await session.followAndSignOutBeforeA401(session.at.homeLink, usersPaths.current, '/logout')
+    await session.followAndSignOutBeforeA401(session.at.settingsLink, usersPaths.current, '/logout')
 
     await expect.poll(() => page.url(), { timeout: 10000 }).toBe(`${providerLogout}?client_id=recall`)
     expect(api.all('get', authPaths.login)).toHaveLength(0)
@@ -129,7 +130,7 @@ test.describe('a sign-out with a call of the API that answers 401 before its ans
       { method: 'post', path: authPaths.logout, status: 200, body: { provider_logout_url: `${providerLogout}?client_id=recall` }, delayMs: 1500 },
       { method: 'get', path: authPaths.me, status: 204 },
     )
-    await session.followAndSignOutWithA401BeforeItsAnswer(session.at.homeLink, usersPaths.current)
+    await session.followAndSignOutWithA401BeforeItsAnswer(session.at.settingsLink, usersPaths.current)
 
     await expect.poll(() => page.url(), { timeout: 10000 }).toBe(`${providerLogout}?client_id=recall`)
     expect(api.all('get', authPaths.login)).toHaveLength(0)

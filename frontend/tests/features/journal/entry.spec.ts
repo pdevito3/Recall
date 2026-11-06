@@ -458,10 +458,11 @@ test.describe('the tags of an entry', () => {
     await entry.at.editTags.click()
     await entry.pressMood(session.id, 'Tired')
 
-    const body = api.last('put', sessionsPaths.metadata(session.id))?.body as { moods: string[]; userTopics: string[]; savedAt: string }
+    const body = api.last('put', sessionsPaths.metadata(session.id))?.body as { moods: string[]; userTopics: string[]; metadataVersion: number; savedAt?: string }
     expect(body.moods).toEqual(['Calm', 'Tired'])
     expect(body.userTopics).toEqual(['work'])
-    expect(new Date(body.savedAt).getTime()).not.toBeNaN()
+    expect(body.metadataVersion).toBe(session.metadataVersion)
+    expect(body.savedAt).toBeUndefined()
     await expect(entry.at.moodChip('Tired')).toHaveAttribute('aria-pressed', 'true')
   })
 

@@ -46,20 +46,24 @@ export function login(returnUrl: string = '/'): void {
 }
 
 export async function logout(): Promise<void> {
-  const leaveNoSign = await settleUnsentWords()
-  const answer = apiClient.post<LogoutAnswer>('/auth/logout', undefined, { suppressErrorToast: true })
-  const running = Promise.allSettled([logoutInFlight, answer])
+  const signingOut = settleUnsentWordsAndSignOut()
+  const running = Promise.allSettled([logoutInFlight, signingOut])
   logoutInFlight = running
   try {
-    const { data } = await answer
-    leaveNoSign()
-    afterSignOut = data?.provider_logout_url ?? afterSignOut ?? signedOutPage
-    otherTabs?.postMessage('signed-out')
-    hidePage()
-    window.location.replace(afterSignOut)
+    await signingOut
   } finally {
     if (logoutInFlight === running) logoutInFlight = undefined
   }
+}
+
+async function settleUnsentWordsAndSignOut() {
+  const leaveNoSign = await settleUnsentWords()
+  const { data } = await apiClient.post<LogoutAnswer>('/auth/logout', undefined, { suppressErrorToast: true })
+  leaveNoSign()
+  afterSignOut = data?.provider_logout_url ?? afterSignOut ?? signedOutPage
+  otherTabs?.postMessage('signed-out')
+  hidePage()
+  window.location.replace(afterSignOut)
 }
 
 /**
