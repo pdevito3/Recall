@@ -30,7 +30,7 @@ So these saves now send a base version, with the rules in the [sessions spec](..
 
 A person sees a refusal, not a lost change. This costs a reload where the old rule let the later save win, for example when two devices change different settings. A client reloads the row after a 409 and applies again only the fields that the person changed. See [iOS API changes](../ios-api-changes.md#settings-and-metadata-saves).
 
-These saves differ from a Draft save because of what a refusal costs. A refusal of a Draft tells a person that the words they spoke did not save. A refusal of a Topic or a setting costs a tap.
+These saves differ from a Draft save because of what a refusal costs. A refusal of a Draft tells a person that the words they spoke did not save. A refusal of a Topic or a setting costs a tap. A refused change that turns location capture off costs more, because capture stays on until the change applies, so the client applies it again with no prompt.
 
 ## Consequences
 

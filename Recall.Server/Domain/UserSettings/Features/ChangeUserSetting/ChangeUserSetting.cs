@@ -26,17 +26,18 @@ public static class ChangeUserSetting
             var applied = false;
             var setting = await RootLock.Tenant.RunSharedAsync(dbContext, owner.TenantId, async ct =>
             {
-                var row = await dbContext.UserSettings
+                var stored = await dbContext.UserSettings
                     .TagWithOperationCallSite("user_settings.change.load")
                     .FirstOrDefaultAsync(ct);
-                if (row is null)
-                {
-                    row = UserSetting.DefaultsFor(owner.TenantId, owner.UserId);
-                    await dbContext.UserSettings.AddAsync(row, ct);
-                }
+                var row = stored ?? UserSetting.DefaultsFor(owner.TenantId, owner.UserId);
 
                 applied = row.Change(dto.TimeZone, dto.LocationCaptureEnabled, dto.RequirePeopleProposalApproval, dto.Version);
-                if (applied)
+                if (!applied)
+                    return row;
+
+                if (stored is null)
+                    await dbContext.UserSettings.AddAsync(row, ct);
+                else
                     dbContext.MoveVersionOf(row);
 
                 await dbContext.SaveChangesAsync(ct);

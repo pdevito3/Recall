@@ -137,6 +137,76 @@ public class JournalRaceTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-34")]
+    public async Task a_save_of_the_stored_metadata_that_a_rival_beat_after_the_load_is_refused()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var session = await AddSessionAsync(owner);
+        await ScopeOf(owner).SendAsync(new SetSessionMetadata.Command(session.Id, new SessionMetadataChangeDto { UserTopics = ["Food"], MetadataVersion = 0 }));
+        var pause = PauseAtQuery.After("sessions.set_metadata.load");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var change = ScopeOf(owner, services).SendAsync(new SetSessionMetadata.Command(session.Id, new SessionMetadataChangeDto { UserTopics = ["Food"], MetadataVersion = 1 }));
+        await pause.ReachedAsync();
+        await ScopeOf(owner).SendAsync(new SetSessionMetadata.Command(session.Id, new SessionMetadataChangeDto { UserTopics = ["Work"], MetadataVersion = 1 }));
+        pause.Release();
+
+        // Assert
+        (await Should.ThrowAsync<Exception>(change)).ShouldBeOfType<StaleMetadataVersionException>();
+        var stored = await ScopeOf(owner).SendAsync(new GetSession.Query(session.Id));
+        stored.Topics.ShouldHaveSingleItem().Name.ShouldBe("Work");
+        stored.MetadataVersion.ShouldBe(2u);
+    }
+
+    [Test]
+    [Property("Rule", "SES-34")]
+    public async Task a_metadata_retry_that_overlaps_the_first_try_runs_again_and_gets_the_stored_row()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var session = await AddSessionAsync(owner);
+        var pause = PauseAtQuery.After("sessions.set_metadata.load");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var retry = ScopeOf(owner, services).SendAsync(new SetSessionMetadata.Command(session.Id, new SessionMetadataChangeDto { UserTopics = ["Food"], MetadataVersion = 0 }));
+        await pause.ReachedAsync();
+        await ScopeOf(owner).SendAsync(new SetSessionMetadata.Command(session.Id, new SessionMetadataChangeDto { UserTopics = ["Food"], MetadataVersion = 0 }));
+        pause.Release();
+        await retry;
+
+        // Assert
+        var stored = await ScopeOf(owner).SendAsync(new GetSession.Query(session.Id));
+        stored.Topics.ShouldHaveSingleItem().Name.ShouldBe("Food");
+        stored.MetadataVersion.ShouldBe(1u);
+    }
+
+    [Test]
+    [Property("Rule", "SES-34")]
+    public async Task a_settings_retry_that_overlaps_the_first_try_is_refused_and_the_row_holds_its_values()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        await ScopeOf(owner).SendAsync(new ChangeUserSetting.Command(Setting("Europe/Riga", 0)));
+        var pause = PauseAtQuery.After("user_settings.change.load");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var retry = ScopeOf(owner, services).SendAsync(new ChangeUserSetting.Command(Setting("Europe/Paris", 1)));
+        await pause.ReachedAsync();
+        await ScopeOf(owner).SendAsync(new ChangeUserSetting.Command(Setting("Europe/Paris", 1)));
+        pause.Release();
+
+        // Assert
+        (await Should.ThrowAsync<Exception>(retry)).ShouldBeOfType<StaleVersionException>();
+        var stored = await ScopeOf(owner).ExecuteDbContextAsync(db => db.UserSettings.SingleAsync());
+        stored.TimeZone.ShouldBe("Europe/Paris");
+        stored.Version.ShouldBe(2u);
+    }
+
+    [Test]
     [Property("Rule", "SES-12")]
     public async Task a_delete_that_a_save_beat_after_the_load_runs_again_and_removes_the_session()
     {

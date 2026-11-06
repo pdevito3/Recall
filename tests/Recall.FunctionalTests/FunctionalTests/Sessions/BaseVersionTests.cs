@@ -345,6 +345,31 @@ public class BaseVersionTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-34")]
+    public async Task a_save_of_the_defaults_from_another_version_makes_no_row_for_a_user_with_no_row()
+    {
+        // Arrange
+        await SignInAsync();
+        var defaults = await SettingsAsync();
+
+        // Act
+        var retry = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new
+        {
+            timeZone = defaults.GetProperty("timeZone").GetString(),
+            locationCaptureEnabled = defaults.GetProperty("locationCaptureEnabled").GetBoolean(),
+            requirePeopleProposalApproval = defaults.GetProperty("requirePeopleProposalApproval").GetBoolean(),
+            version = 5,
+        });
+        var reply = await retry.Content.ReadFromJsonAsync<JsonElement>();
+        var stored = await SettingsAsync();
+
+        // Assert
+        retry.StatusCode.ShouldBe(HttpStatusCode.OK);
+        reply.GetProperty("version").GetUInt32().ShouldBe(0u);
+        stored.GetProperty("version").GetUInt32().ShouldBe(0u);
+    }
+
+    [Test]
     [Property("Rule", "SES-35")]
     public async Task a_settings_save_from_the_current_version_applies_with_a_time_that_is_not_newer()
     {
