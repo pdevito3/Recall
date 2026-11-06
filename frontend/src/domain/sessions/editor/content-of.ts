@@ -17,7 +17,8 @@ function fitsTheEditor(document: JSONContent): boolean {
 export function contentOf(text: string): JSONContent {
   const document = parseDocument(text)
   // A document with no words that the app can read shows its text, so that the words stay on the screen.
-  const words = plainWordsOf(text).trim() ? plainWordsOf(text) : text
+  const isEmptyDocument = document?.content?.length === 0 && Object.keys(document).length === 2
+  const words = plainWordsOf(text).trim() || isEmptyDocument ? plainWordsOf(text) : text
   return document && fitsTheEditor(document) ? document : {
     type: 'doc',
     content: words.split('\n').map((line) => (line ? { type: 'paragraph', content: [{ type: 'text', text: line }] } : { type: 'paragraph' })),

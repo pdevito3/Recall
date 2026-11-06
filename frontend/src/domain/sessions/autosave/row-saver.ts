@@ -97,6 +97,7 @@ export class RowSaver<F extends object, R> {
   private attempt: Attempt<F> | null
   private currentAsks: FieldAsk<F>[]
   private readonly keptAsTheyAre = new Set<string>()
+  private appliedWithNoAsk: (keyof F & string)[] = []
   private readonly listeners = new Set<() => void>()
   private isDisposed = false
 
@@ -171,7 +172,6 @@ export class RowSaver<F extends object, R> {
   private async send(queued: Partial<F>, signal: AbortSignal): Promise<R> {
     let fields = withoutFields(queued, [...this.currentAsks.map((ask) => ask.field), ...this.keptAsTheyAre])
     if (fieldsIn(fields).length === 0) return this.options.copyOf() ?? this.options.read(signal)
-    const appliedWithNoAsk: (keyof F & string)[] = []
     this.attempt ??= { base: this.baseOf(this.options.copyOf() ?? (await this.options.read(signal))), hadNoReply: false }
     let { base, hadNoReply } = this.attempt
     this.keep()
@@ -179,7 +179,8 @@ export class RowSaver<F extends object, R> {
       try {
         const reply = await this.options.put({ ...base.values, ...fields }, base.version, signal)
         this.attempt = null
-        if (appliedWithNoAsk.length > 0) this.options.onAppliedWithNoAsk?.(appliedWithNoAsk)
+        if (this.appliedWithNoAsk.length > 0) this.options.onAppliedWithNoAsk?.(this.appliedWithNoAsk)
+        this.appliedWithNoAsk = []
         return reply
       } catch (error) {
         if (!isStaleVersionError(error)) {
@@ -191,7 +192,7 @@ export class RowSaver<F extends object, R> {
       if (this.isDisposed) throw new Error('This save stopped.')
       const plan = planAfterStale({ changed: fields, before: base.values, fresh: this.options.fieldsOf(fresh), hadNoReply, rules: this.options.rules })
       if (plan.asks.length > 0) this.addAsks(plan.asks)
-      appliedWithNoAsk.push(...plan.appliedWithNoAsk)
+      this.appliedWithNoAsk.push(...plan.appliedWithNoAsk)
       base = this.baseOf(fresh)
       hadNoReply = false
       fields = plan.apply

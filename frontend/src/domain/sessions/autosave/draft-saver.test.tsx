@@ -364,3 +364,68 @@ test('an open page offers no discard of its words, because the page would stop s
   stop()
   saver.stop()
 })
+
+test('a discard in one tab leaves the words that another tab typed in its hold', async () => {
+  const firstTab = aSaver()
+  const secondTab = aSaver()
+  secondTab.takeHold()
+  secondTab.holdInOutbox('words of the second tab')
+  await lockIsGiven()
+
+  firstTab.discard()
+
+  expect(readHoldsFromOutbox(owner, key)[0]?.entry.change.value).toBe('words of the second tab')
+  expect(plainWordsOf(secondTab.joinHoldInto(''))).toContain('words of the second tab')
+  secondTab.stop()
+})
+
+test('a discard removes the words that this tab showed, also from a closed tab', async () => {
+  writeHoldToOutbox(owner, held('words of a closed tab'), 'closed tab')
+  const saver = new DraftSaver(target, new QueryClient(), null, [held('words of a closed tab')])
+  saver.takeHold()
+  await lockIsGiven()
+
+  saver.discard()
+
+  expect(readHoldsFromOutbox(owner, key)).toEqual([])
+})
+
+test('a late removal of joined holds leaves the words that a tab typed after the join', async () => {
+  vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
+  const firstTab = aSaver()
+  const secondTab = aSaver()
+  firstTab.takeHold()
+  secondTab.takeHold()
+  firstTab.holdInOutbox('first')
+  await lockIsGiven()
+  secondTab.holdInOutbox('second')
+  const setItem = fullStorage()
+  firstTab.joinHoldInto('')
+  setItem.mockRestore()
+
+  secondTab.holdInOutbox('second and more')
+  firstTab.edit('a write that works')
+
+  await vi.waitFor(() => expect(plainWordsOf(readHoldsFromOutbox(owner, key)[0]?.entry.change.value ?? '')).toBe('second and more'))
+  await lockIsGiven()
+  expect(plainWordsOf(secondTab.joinHoldInto(''))).toContain('second and more')
+  firstTab.stop()
+  secondTab.stop()
+})
+
+test('a move to a new entry on a full storage keeps the saved holds of the old entry', async () => {
+  writeHoldToOutbox(owner, held('held words'), 'closed tab')
+  const saver = new DraftSaver(target, new QueryClient(), null, [held('held words')])
+  saver.takeHold()
+  await lockIsGiven()
+  fullStorage()
+  vi.mocked(saveRawDraft).mockRejectedValueOnce(new ProblemDetailsError({ type: 'about:blank', title: 'Gone', status: 404 }))
+  vi.mocked(addSession).mockReturnValue(new Promise(() => undefined))
+
+  saver.edit('words on a deleted entry')
+  saver.flush()
+  await vi.waitFor(() => expect(saver.getSnapshot().movedFromDeletedEntry).toBe(true))
+
+  expect(readHoldsFromOutbox(owner, key)[0]?.entry.change.value).toBe('held words')
+  saver.stop()
+})

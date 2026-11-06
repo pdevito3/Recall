@@ -479,6 +479,23 @@ test.describe('the tags of an entry', () => {
     expect(await unsentWords(page).warnsAtAClose()).toBe(true)
   })
 
+  test('a change of a tag that did not reach the Server asks at a sign-out', async ({ page, api }) => {
+    const session = aSession().tagged({ moods: ['Calm'], topics: [] }).build()
+    api.mock(sessionsApi.oneIs(session), { method: 'put', path: sessionsPaths.metadata(session.id), status: 503 })
+    const entry = entryPage(page)
+    const unsent = unsentWords(page)
+    await entry.open(session.id)
+    await entry.at.editTags.click()
+    await entry.at.moodChip('Tired').click()
+
+    await unsent.logOut()
+
+    await expect(unsent.at.logoutDialog).toContainText('change of your tags', { timeout: 10_000 })
+    await unsent.answerTheLogoutDialog('Stay signed in')
+    await expect(unsent.at.logoutDialog).toHaveCount(0)
+    expect(api.all('post', '/auth/logout')).toHaveLength(0)
+  })
+
   test('a question about one tag leaves the status of a failed save in view', async ({ page, api }) => {
     const session = aSession().tagged({ moods: [], topics: [] }).build()
     api.mock(sessionsApi.oneIs(session))

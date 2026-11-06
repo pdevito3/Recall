@@ -249,6 +249,25 @@ test('the note of a change with no ask comes after the Server took the change', 
   saver.dispose()
 })
 
+test('the note of a change with no ask also comes after a retry', async () => {
+  const api = server({ capture: true })
+  const { saver, told } = saverOn(api, { current: api.row.current })
+  api.otherClientSets({ zone: 'Africa/Cairo' })
+  const { put } = api
+  let puts = 0
+  api.put = (values, version) => {
+    puts += 1
+    return puts === 2 ? Promise.reject(new Error('Network Error')) : put(values, version)
+  }
+
+  saver.edit({ capture: false })
+  await vi.advanceTimersByTimeAsync(60_000)
+
+  expect(api.row.current.capture).toBe(false)
+  expect(told).toHaveBeenCalledWith(['capture'])
+  saver.dispose()
+})
+
 test('an unsaved change counts as unsaved, and a stopped saver does not', () => {
   const api = server()
   const { saver } = saverOn(api, { current: api.row.current })

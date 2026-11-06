@@ -9,10 +9,29 @@ import {
 
 import { isAnyWordOnlyInMemory } from '@/domain/sessions/autosave/draft-saver'
 
-import { answerAboutUnsentWords, useIsAskingAboutUnsentWords } from '../apis/unsent-words-at-logout'
+import { answerAboutUnsentWords, useIsAskingAboutUnsentWords, useIsAskingOnlyAboutTags } from '../apis/unsent-words-at-logout'
+
+function UnsavedTagsDialog() {
+  return (
+    <ResponsiveDialog role="alertdialog" isOpen isDismissable={false} isKeyboardDismissDisabled showCloseButton={false}>
+      <ResponsiveDialogHeader>
+        <ResponsiveDialogTitle>A change of your tags did not reach the server</ResponsiveDialogTitle>
+        <ResponsiveDialogDescription>A sign-out loses this change. Stay signed in to answer the question on the entry or to let the save try again.</ResponsiveDialogDescription>
+      </ResponsiveDialogHeader>
+      <ResponsiveDialogFooter>
+        <ResponsiveDialogClose variant="destructive" onPress={() => answerAboutUnsentWords('keep')}>
+          Sign out without this change
+        </ResponsiveDialogClose>
+        <ResponsiveDialogClose onPress={() => answerAboutUnsentWords('stay')}>Stay signed in</ResponsiveDialogClose>
+      </ResponsiveDialogFooter>
+    </ResponsiveDialog>
+  )
+}
 
 export function UnsentWordsAtLogoutDialog() {
   const isOpen = useIsAskingAboutUnsentWords()
+  const isOnlyTags = useIsAskingOnlyAboutTags()
+  if (isOnlyTags) return <UnsavedTagsDialog />
   const canKeep = !isOpen || !isAnyWordOnlyInMemory()
   return (
     <ResponsiveDialog role="alertdialog" isOpen={isOpen} isDismissable={false} isKeyboardDismissDisabled showCloseButton={false}>

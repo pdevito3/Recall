@@ -38,6 +38,7 @@ for (const [name, stored] of [
   ['null', 'null'],
   ['a number', '42'],
   ['an entry with no change', JSON.stringify({ ...entryWith('x'), change: undefined })],
+  ['an unknown entry with no words', JSON.stringify({ ...entryWith('x'), channel: 'other', change: { value: '', savedAt: '2026-11-06T15:31:00.000Z' } })],
 ] as const) {
   test(`${name} does not hide the other words, and it goes from storage`, () => {
     writeToOutbox('person-a', entryWith('good words'))

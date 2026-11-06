@@ -14,7 +14,7 @@ import { patchTimelineRow, refreshTimelineHead } from '../apis/timeline-cache'
 import { joinWords, mentionedPersonIds, plainPreviewOf, plainWordsOf } from '../editor/content'
 import { pointAtCreatedSession, pointAtNewEntry } from './composer-pointer'
 import { claimHold } from './hold-lock'
-import { readHoldsFromOutbox, readOutbox, readOutboxEntry, removeFromOutbox, removeHoldsFromOutbox, writeHoldToOutbox, writeToOutbox, type OutboxEntry } from './outbox'
+import { readHoldsFromOutbox, readOutbox, readOutboxEntry, removeFromOutbox, removeHoldsFromOutbox, writeHoldToOutbox, writeToOutbox, type HeldSlot, type OutboxEntry } from './outbox'
 import { queueWithRefusal, queueWithUnanswered, newestUnsettled, type SaveQueue, type SaveStatus, type Stamped } from './save-queue'
 import { isARowThatIsGone, SerialSaver } from './serial-saver'
 
@@ -70,7 +70,7 @@ export class DraftSaver {
   private wordsOnServer: string | null = null
   private heldWords: string | null = null
   private readonly holdSlot = newUuid()
-  private joinedSlots: string[] | null = null
+  private joinedSlots: HeldSlot[] | null = null
   private readonly isOnlyInMemory = { queue: false, hold: false }
   private holdRun = 0
   private releaseHold: (() => void) | null = null
@@ -226,21 +226,26 @@ export class DraftSaver {
     const held = readHoldsFromOutbox(this.target.owner, draftKey(this.target))
     const own = this.isOnlyInMemory.hold && this.heldWords !== null ? [this.heldWords] : []
     const texts = [...own, ...held.map(({ entry }) => entry.change.value)]
-    return { words: texts.length > 0 ? wordsOfEachHold(texts) : null, slots: held.map(({ slot }) => slot) }
+    return { words: texts.length > 0 ? wordsOfEachHold(texts) : null, slots: held }
   }
 
   /** The joined words go out of the hold after they are in the queue of the outbox, so a close between the two can show the words twice and cannot lose them. */
-  private saveJoined(joined: string, slots: string[]) {
+  private saveJoined(joined: string, slots: HeldSlot[]) {
     this.saver.edit(joined)
     this.heldWords = null
-    this.isOnlyInMemory.hold = false
+    this.noteOutboxWrite('hold', true)
     this.joinedSlots = slots
     this.removeJoinedHolds()
   }
 
   private removeJoinedHolds() {
     if (this.joinedSlots === null || this.isOnlyInMemory.queue) return
-    removeHoldsFromOutbox(this.target.owner, draftKey(this.target), this.joinedSlots)
+    // A tab can have typed more in its slot since the join, and those words are not in the queue.
+    const joined = this.joinedSlots
+    const unchanged = readHoldsFromOutbox(this.target.owner, draftKey(this.target)).filter(({ slot, entry }) =>
+      joined.some((old) => old.slot === slot && old.entry.change.value === entry.change.value),
+    )
+    removeHoldsFromOutbox(this.target.owner, draftKey(this.target), unchanged.map(({ slot }) => slot))
     this.joinedSlots = null
     this.letGoOfHold()
   }
@@ -266,6 +271,11 @@ export class DraftSaver {
 
   unsettledText() {
     return this.saver.newestUnsettledValue()
+  }
+
+  /** A hold can have joined the entry after Done, so these words can be newer than the words at Done. */
+  newestWords() {
+    return this.unsettledText() ?? (this.snapshot.conflict === 'wordsMovedToHistory' ? this.wordsInHistory : this.wordsOnServer)
   }
 
   /** The words a page must open with: those not yet settled, or those that lost a save while no page showed them. */
@@ -322,7 +332,7 @@ export class DraftSaver {
     this.isDiscarded = true
     this.stop()
     removeFromOutbox(this.target.owner, draftKey(this.target))
-    this.removeEveryHoldOf(draftKey(this.target))
+    this.removeHoldsThisTabKnows()
     for (const [key, saver] of savers) {
       if (saver === this) savers.delete(key)
     }
@@ -403,12 +413,20 @@ export class DraftSaver {
     removeFromOutbox(this.target.owner, oldKey)
     const heldInOldEntry = readHoldsFromOutbox(this.target.owner, oldKey).map(({ entry }) => entry.change.value)
     const held = [...(this.heldWords === null ? [] : [this.heldWords]), ...heldInOldEntry]
-    if (held.length > 0) this.holdInOutbox(wordsOfEachHold(held))
-    this.removeEveryHoldOf(oldKey)
+    if (held.length > 0) {
+      this.joinedSlots = null
+      this.letGoOfHold()
+      this.holdInOutbox(wordsOfEachHold(held))
+    }
+    if (!this.isOnlyInMemory.hold) removeHoldsFromOutbox(this.target.owner, oldKey, readHoldsFromOutbox(this.target.owner, oldKey).map(({ slot }) => slot))
   }
 
-  private removeEveryHoldOf(key: string) {
-    removeHoldsFromOutbox(this.target.owner, key, readHoldsFromOutbox(this.target.owner, key).map(({ slot }) => slot))
+  /** A discard covers the words that the person saw in this tab. A slot with other words belongs to a tab that still writes, and stays. */
+  private removeHoldsThisTabKnows() {
+    const known = plainWordsOf(this.heldWords ?? '')
+    const key = draftKey(this.target)
+    const slots = readHoldsFromOutbox(this.target.owner, key).filter(({ slot, entry }) => slot === this.holdSlot || known.includes(plainWordsOf(entry.change.value)))
+    removeHoldsFromOutbox(this.target.owner, key, slots.map(({ slot }) => slot))
   }
 
   private handleReply(reply: DraftSaveResultDto, change: Stamped<string>) {

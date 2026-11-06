@@ -138,7 +138,7 @@ export function readOutbox(owner: string): OutboxEntry[] {
         const entry = parseEntry(stored)
         if (entry) return entry
         const repaired = entryFromWordsOf(owner, stored)
-        if (repaired || changeIn(stored) === null) localStorage.removeItem(key)
+        if (repaired || !changeIn(stored)?.value) localStorage.removeItem(key)
         return repaired ?? []
       })
   } catch {

@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 
 import { writePointer } from '@/domain/sessions/autosave/composer-pointer'
 import { discardUnsentDrafts, settleDraftSavers, stopDraftSavers } from '@/domain/sessions/autosave/draft-saver'
-import { settleMetadataSavers, stopMetadataSavers } from '@/domain/sessions/autosave/tag-savers'
+import { isAnyTagChangeUnsaved, settleMetadataSavers, stopMetadataSavers } from '@/domain/sessions/autosave/tag-savers'
 import { settleSettingSaver, stopSettingSaver } from '@/domain/settings/apis/user-setting'
 
 type Choice = 'keep' | 'discard' | 'stay'
@@ -10,6 +10,7 @@ type Choice = 'keep' | 'discard' | 'stay'
 const settleLimitMs = 5_000
 
 let answer: ((choice: Choice) => void) | null = null
+let isOnlyAboutTags = false
 const listeners = new Set<() => void>()
 
 const subscribe = (listener: () => void) => {
@@ -25,6 +26,8 @@ const setAnswer = (next: typeof answer) => {
 }
 
 export const useIsAskingAboutUnsentWords = () => useSyncExternalStore(subscribe, () => answer !== null)
+
+export const useIsAskingOnlyAboutTags = () => useSyncExternalStore(subscribe, () => answer !== null && isOnlyAboutTags)
 
 export function answerAboutUnsentWords(choice: Choice) {
   answer?.(choice)
@@ -46,7 +49,9 @@ export function stopSaversBeforeLeaving() {
 
 export async function settleUnsentWords(): Promise<() => void> {
   const [areWordsSent] = await Promise.all([withinLimit(settleDraftSavers()), withinLimit(settleSettingSaver()), withinLimit(settleMetadataSavers())])
-  const choice = areWordsSent ? 'keep' : await new Promise<Choice>((resolve) => setAnswer(resolve))
+  // Tags have no outbox, so a sign-out loses a change of a tag that the Server did not take.
+  isOnlyAboutTags = areWordsSent
+  const choice = areWordsSent && !isAnyTagChangeUnsaved() ? 'keep' : await new Promise<Choice>((resolve) => setAnswer(resolve))
   if (choice === 'stay') throw new StayedSignedIn()
   return () => {
     stopSaversBeforeLeaving()

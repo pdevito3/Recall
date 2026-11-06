@@ -37,6 +37,12 @@ test('a document with a node that the editor does not know shows its text, so th
   expect(contentOf(text)).toEqual({ type: 'doc', content: [paragraph('First'), paragraph('Words')] })
 })
 
+test('an empty document opens with no words', () => {
+  const text = JSON.stringify({ type: 'doc', content: [] })
+
+  expect(JSON.stringify(contentOf(text))).not.toContain('content\\"')
+})
+
 test('a document with words only in fields that the app does not read shows its text, so the page is not blank', () => {
   const text = JSON.stringify({ type: 'doc', blocks: [{ words: 'kept words' }] })
 
