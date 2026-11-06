@@ -54,9 +54,9 @@ public partial class NoProviderBootTests
 
         public string Output => string.Join('\n', _output);
 
-        public static async Task<ServerProcess> StartAsync(string? existingRoot = null)
+        public static async Task<ServerProcess> StartAsync(string? existingRoot = null, IReadOnlyDictionary<string, string>? settings = null)
         {
-            var server = await LaunchAsync(existingRoot, new Dictionary<string, string>());
+            var server = await LaunchAsync(existingRoot, settings ?? new Dictionary<string, string>());
             try
             {
                 await server.WaitUntilUpAsync();
@@ -229,6 +229,36 @@ public partial class NoProviderBootTests
         command.CommandText = "PRAGMA secure_delete = ON; CREATE TABLE kill_test (words TEXT NOT NULL); INSERT INTO kill_test VALUES (@words); DELETE FROM kill_test;";
         command.Parameters.AddWithValue("@words", words);
         await command.ExecuteNonQueryAsync();
+    }
+
+    [Test]
+    public async Task a_data_directory_that_takes_no_write_stops_the_boot_with_one_line_that_does_not_blame_the_migrations()
+    {
+        // Arrange
+        var blocker = Path.Combine(Path.GetTempPath(), $"recall_blocker_{Guid.NewGuid():N}");
+        await File.WriteAllTextAsync(blocker, "");
+        var dataDirectory = Path.Combine(blocker, "data");
+
+        try
+        {
+            // Act
+            await using var server = await ServerProcess.LaunchAsync(null, new Dictionary<string, string>
+            {
+                ["ConnectionStrings__appdb"] = $"Data Source={Path.Combine(dataDirectory, "recall.db")}",
+            });
+            await server.WaitForExitAsync(new CancellationTokenSource(TimeSpan.FromSeconds(60)).Token);
+
+            // Assert
+            server.ExitCode.ShouldBe(1);
+            var lines = server.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            lines.Where(line => line.Contains(dataDirectory, StringComparison.Ordinal)).ShouldHaveSingleItem().ShouldContain("Mount it read-write");
+            lines.ShouldNotContain(line => line.Contains("migration", StringComparison.OrdinalIgnoreCase));
+            lines.ShouldNotContain(line => line.Contains("Hosting failed", StringComparison.Ordinal));
+        }
+        finally
+        {
+            File.Delete(blocker);
+        }
     }
 
     [Test]

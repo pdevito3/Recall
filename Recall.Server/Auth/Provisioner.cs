@@ -136,14 +136,12 @@ public sealed class Provisioner(
     private async Task<ProvisionOutcome> ClaimOwnerAsync(
         AppDbContext dbContext, ExternalIdentity identity, string tenantId, CancellationToken cancellationToken)
     {
-        var adminRole = UserRole.Admin().Value;
         var linked = await RootLock.Tenant.RunSharedAsync<ProvisionOutcome?>(dbContext, tenantId, async ct =>
         {
             var admin = await dbContext.Users
                 .TagWithOperationCallSite("auth.provision.oldest_admin")
                 .Include(u => u.UserPermissions)
-                .Where(u => u.TenantId == tenantId && u.Role.Value == adminRole && u.Identifier == u.Id)
-                .OrderBy(u => u.Id)
+                .OwnerFirstIn(tenantId)
                 .FirstOrDefaultAsync(ct);
             if (admin is null)
                 return null;

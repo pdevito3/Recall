@@ -90,6 +90,87 @@ public class FileStoreProofLogTests : TestBase
     }
 
     [Test]
+    public async Task a_proof_that_hangs_and_then_finishes_its_write_logs_one_recovery_line()
+    {
+        // Arrange
+        var logs = TestingWebApplicationFactory.Instance.CapturedLogs;
+        var root = $"/hanging-root-{Guid.NewGuid():N}";
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        using var release = new ManualResetEventSlim();
+        var check = new FileStoreHealthCheck(
+            () =>
+            {
+                release.Wait();
+                return null;
+            },
+            root,
+            clock);
+
+        try
+        {
+            // Act
+            var probe = check.CheckHealthAsync(ContextOf(check));
+            clock.Advance(FileStoreHealthCheck.LongestWaitForAProof);
+            await probe.WaitAsync(RegressionLimit);
+            await EventuallyAsync(() => logs.Holding(root).Count > 0);
+            release.Set();
+            await EventuallyAsync(() => logs.Holding(root).Count > 1);
+
+            // Assert
+            var lines = logs.Holding(root);
+            lines.Count.ShouldBe(2);
+            lines[0].Level.ShouldBe(LogEventLevel.Error);
+            lines[1].Level.ShouldBe(LogEventLevel.Information);
+            lines[1].Exception.ShouldBeNull();
+            lines[1].RenderMessage(CultureInfo.InvariantCulture).ShouldContain("takes writes again");
+        }
+        finally
+        {
+            release.Set();
+        }
+    }
+
+    [Test]
+    public async Task a_proof_that_hangs_and_then_fails_logs_no_recovery_line()
+    {
+        // Arrange
+        var logs = TestingWebApplicationFactory.Instance.CapturedLogs;
+        var root = $"/hanging-root-{Guid.NewGuid():N}";
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        using var release = new ManualResetEventSlim();
+        var proofFinished = new TaskCompletionSource();
+        var check = new FileStoreHealthCheck(
+            () =>
+            {
+                release.Wait();
+                proofFinished.SetResult();
+                return "The disk is full.";
+            },
+            root,
+            clock);
+
+        try
+        {
+            // Act
+            var probe = check.CheckHealthAsync(ContextOf(check));
+            clock.Advance(FileStoreHealthCheck.LongestWaitForAProof);
+            await probe.WaitAsync(RegressionLimit);
+            await EventuallyAsync(() => logs.Holding(root).Count > 0);
+            release.Set();
+            await proofFinished.Task.WaitAsync(RegressionLimit);
+            var afterTheFailure = await check.CheckHealthAsync(ContextOf(check)).WaitAsync(RegressionLimit);
+
+            // Assert
+            afterTheFailure.Status.ShouldBe(HealthStatus.Degraded);
+            logs.Holding(root).ShouldHaveSingleItem().Level.ShouldBe(LogEventLevel.Error);
+        }
+        finally
+        {
+            release.Set();
+        }
+    }
+
+    [Test]
     public async Task a_proof_that_hangs_logs_its_error_when_the_prober_leaves_before_the_time_limit()
     {
         // Arrange

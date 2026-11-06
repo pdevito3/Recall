@@ -178,7 +178,7 @@ public static class Telemetry
     {
         var result = new List<KeyValuePair<string, object?>>(tags.Length + 3);
         foreach (var (key, value) in tags)
-            result.Add(new KeyValuePair<string, object?>(key, value));
+            result.Add(new KeyValuePair<string, object?>(key, TelemetryText.Cap(value)));
 
         // Same attribute names the query-tag enrichment writes, so one call-site filter finds both.
         result.Add(new KeyValuePair<string, object?>("code.function", memberName));
