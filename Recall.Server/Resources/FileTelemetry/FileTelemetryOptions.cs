@@ -34,6 +34,20 @@ public sealed record FileTelemetryOptions
 
     public int MetricExportSeconds { get; init; }
 
+    /// <summary>The binder leaves a value that the section does not have at 0, and a <see cref="RollingFileLimits.DaysKept"/> of 0 removes each older file.</summary>
+    public static string? RefusalOfAMissingSetting(IConfigurationSection section)
+    {
+        string[] names =
+        [
+            .. new[] { nameof(Logs), nameof(Traces), nameof(Metrics) }.SelectMany(signal => new RollingFileLimits().Rules(signal)).Select(rule => rule.Name),
+            nameof(MetricExportSeconds),
+        ];
+
+        return names.FirstOrDefault(name => section[name] is null) is { } missing
+            ? $"The setting {SectionName}:{missing} is missing. Correct it, and start the server again."
+            : null;
+    }
+
     public string? Refusal()
     {
         (string Name, long Value, long Least, long Most)[] rules =
@@ -64,12 +78,14 @@ public sealed record FileTelemetryPlan(string LogsDirectory, string TelemetryDir
         return new(logs, telemetry, options);
     }
 
-    /// <summary>The refusal of a limit that is out of its range, or that is not a whole number in the range of its type.</summary>
+    /// <summary>The refusal of a limit that is missing, that is out of its range, or that is not a whole number in the range of its type.</summary>
     public static string? RefusalFor(IConfiguration configuration)
     {
         try
         {
-            return For(configuration)?.Options.Refusal();
+            return For(configuration) is { } plan
+                ? FileTelemetryOptions.RefusalOfAMissingSetting(configuration.GetSection(FileTelemetryOptions.SectionName)) ?? plan.Options.Refusal()
+                : null;
         }
         catch (InvalidOperationException notANumber)
         {

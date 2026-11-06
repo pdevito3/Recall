@@ -1,6 +1,7 @@
 namespace Recall.FunctionalTests.Auth;
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Recall.Server.Resources.FileTelemetry;
 using Shouldly;
 
@@ -72,6 +73,60 @@ public partial class NoProviderBootTests
         server.Output.ShouldContain(named);
         server.Output.ShouldContain("Correct it, and start the server again.");
         server.Output.ShouldNotContain("   at ");
+    }
+
+    /// <summary>The real settings with another section, because the console and the Kestrel address come from the same file.</summary>
+    private static async Task<string> ContentRootWithFileTelemetryAsync(string? sectionJson)
+    {
+        var real = await File.ReadAllTextAsync(Path.Combine(TestBuild.RepositoryRoot(), "Recall.Server", "appsettings.json"));
+        var settings = JsonNode.Parse(real, documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip })!.AsObject();
+        settings.Remove(FileTelemetryOptions.SectionName);
+        if (sectionJson is not null)
+            settings[FileTelemetryOptions.SectionName] = JsonNode.Parse(sectionJson);
+
+        var folder = Directory.CreateTempSubdirectory("recall_content_").FullName;
+        await File.WriteAllTextAsync(Path.Combine(folder, "appsettings.json"), settings.ToJsonString());
+        return folder;
+    }
+
+    [Test]
+    [Arguments("""{ "MetricExportSeconds": 60 }""", "FileTelemetry:Logs:FileSizeBytes")]
+    [Arguments("""{ "Logs": { "FileSizeBytes": 1024, "FilesKept": 3, "DaysKept": 14 }, "MetricExportSeconds": 60 }""", "FileTelemetry:Traces:FileSizeBytes")]
+    [Arguments("""{ "Logs": { "FileSizeBytes": 1024, "FilesKept": 3 }, "Traces": { "FileSizeBytes": 1024, "FilesKept": 3, "DaysKept": 14 }, "Metrics": { "FileSizeBytes": 1024, "FilesKept": 3, "DaysKept": 14 }, "MetricExportSeconds": 60 }""", "FileTelemetry:Logs:DaysKept")]
+    [Arguments("""{ "Logs": { "FileSizeBytes": 1024, "FilesKept": 3, "DaysKept": 14 }, "Traces": { "FileSizeBytes": 1024, "FilesKept": 3, "DaysKept": 14 }, "Metrics": { "FileSizeBytes": 1024, "FilesKept": 3, "DaysKept": 14 } }""", "FileTelemetry:MetricExportSeconds")]
+    public async Task a_partial_section_stops_the_boot_with_one_line_that_names_the_missing_setting_and_no_stack_trace(string sectionJson, string missing)
+    {
+        // Arrange
+        var contentRoot = await ContentRootWithFileTelemetryAsync(sectionJson);
+        await using var server = await ServerProcess.LaunchAsync(null, new Dictionary<string, string> { ["ASPNETCORE_CONTENTROOT"] = contentRoot });
+
+        // Act
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await server.WaitForExitAsync(limit.Token);
+
+        // Assert
+        server.ExitCode.ShouldBe(1);
+        server.Output.Split('\n').Where(line => line.Contains(FileTelemetryOptions.SectionName, StringComparison.Ordinal)).ShouldHaveSingleItem().ShouldContain($"{missing} is missing");
+        server.Output.ShouldContain("Correct it, and start the server again.");
+        server.Output.ShouldNotContain("   at ");
+    }
+
+    [Test]
+    [Arguments(null)]
+    [Arguments("{}")]
+    public async Task a_missing_or_empty_section_boots_with_no_file_telemetry_and_says_nothing(string? sectionJson)
+    {
+        // Arrange
+        var contentRoot = await ContentRootWithFileTelemetryAsync(sectionJson);
+
+        // Act
+        await using var server = await ServerProcess.StartAsync(settings: new Dictionary<string, string> { ["ASPNETCORE_CONTENTROOT"] = contentRoot });
+        using var response = await server.Client.GetAsync($"/{Guid.NewGuid():N}.txt");
+
+        // Assert
+        Directory.Exists(Path.Combine(server.DataDirectory, "logs")).ShouldBeFalse();
+        Directory.Exists(Path.Combine(server.DataDirectory, "telemetry")).ShouldBeFalse();
+        server.Output.ShouldNotContain(FileTelemetryOptions.SectionName);
     }
 
     [Test]
