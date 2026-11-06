@@ -58,6 +58,5 @@ public static class AuthRegistration
     {
         endpoints.MapAuthEndpoints();
         endpoints.MapOidcEndpoints();
-        endpoints.MapBffShim();
     }
 }

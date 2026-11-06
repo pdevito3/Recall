@@ -30,6 +30,21 @@ public class IdTokenCheckTests
     }
 
     [Test]
+    public async Task an_id_token_with_one_audience_and_the_azp_of_another_client_is_refused()
+    {
+        // Arrange
+        using var browser = new AuthBrowser(AuthHosts.Open);
+        var authorize = await browser.StartWebAsync();
+        var login = new StubLogin(NewSubject()) { IdTokenAzp = "another-client" };
+
+        // Act
+        var response = await browser.FinishAtProviderAsync(authorize, login);
+
+        // Assert
+        await ShouldBeRefusedAsync(browser, response);
+    }
+
+    [Test]
     public async Task an_id_token_with_many_audiences_and_the_azp_of_another_client_is_refused()
     {
         // Arrange

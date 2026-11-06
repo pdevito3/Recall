@@ -1,4 +1,4 @@
-import { bffApi, bffPaths } from '@tests/support/api/bff-api'
+import { authApi, authPaths } from '@tests/support/api/auth-api'
 import { usersApi } from '@tests/support/api/users-api'
 import { as } from '@tests/support/auth/actors'
 import { aProblem } from '@tests/support/builders/problem-details-builder'
@@ -35,13 +35,37 @@ test.describe('a signed-in user on the home page', () => {
     await expect(home.at.userFailed).toBeVisible()
   })
 
-  test('goes to the logout of the session', async ({ page, api }) => {
-    api.mock(usersApi.currentIs({ identifier: '1', name: 'Robert Smith' }), bffApi.logoutOpens())
+  test('ends the session with the CSRF header, then goes to the signed-out page', async ({ page, api }) => {
+    api.mock(usersApi.currentIs({ identifier: '1', name: 'Robert Smith' }), ...authApi.logoutWorks())
     const home = homePage(page)
     await home.open()
 
     await home.logOut()
 
-    expect(api.last('get', bffPaths.logout)?.query.get('sid')).toBe('test-session')
+    expect(api.last('post', authPaths.logout)?.headers.get('x-csrf')).toBe('1')
+  })
+
+  test('stays on the page and says that the person is still signed in when the logout fails', async ({ page, api }) => {
+    api.mock(usersApi.currentIs({ identifier: '1', name: 'Robert Smith' }), authApi.logoutFails())
+    const home = homePage(page)
+    await home.open()
+
+    await home.at.logout.click()
+
+    await expect(home.at.logoutFailed).toBeVisible()
+    expect(new URL(page.url()).pathname).toBe('/')
+    expect(api.all('get', authPaths.login)).toHaveLength(0)
+  })
+
+  test('shows the name of the session in the user menu, and logs out from it', async ({ page, api }) => {
+    api.mock(usersApi.currentIs({ identifier: '1', name: 'Robert Smith' }), ...authApi.logoutWorks())
+    const home = homePage(page)
+    await home.open()
+
+    await home.at.userMenu('Bob Smith').click()
+
+    await expect(home.at.userMenuName('Bob Smith')).toBeVisible()
+    await home.logOutFromTheUserMenu()
+    expect(api.last('post', authPaths.logout)?.headers.get('x-csrf')).toBe('1')
   })
 })

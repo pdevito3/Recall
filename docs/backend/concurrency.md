@@ -36,7 +36,7 @@ public sealed record Command(string Id, [property: RequiredField] string Permiss
 Obey these rules for a marked command. A test enforces the first two.
 
 1. The request has no `Version`, also in a DTO in it. With a version, a lost race is a stale version on each run. The behavior then runs the command 20 times, and the caller gets a concurrent change, not the stale version that it must get. `RunAgainRequestTests` fails on such a request.
-2. Send the command only from an entrypoint (HTTP, gRPC, or MCP), not from a handler or a domain event handler. `DiscardLostRace` clears each tracked change of the DI scope, also the changes of the handler that sent the command. `EntrypointBoundaryTests` fails when core code creates a marked command.
+2. Send the command only from an entrypoint (HTTP or MCP), not from a handler or a domain event handler. `DiscardLostRace` clears each tracked change of the DI scope, also the changes of the handler that sent the command. `EntrypointBoundaryTests` fails when core code creates a marked command.
 3. Do the work that leaves the process, such as a log of the change, a metric, or a call to another service, after the save. The handler runs again from the start, so the work before the save runs one time for each run.
 4. The handler saves one time. A second run after a lost second save would apply the first save again.
 5. Do not mark a command that adds to a value, such as an increment.

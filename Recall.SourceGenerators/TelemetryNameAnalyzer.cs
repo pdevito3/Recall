@@ -34,7 +34,7 @@ public sealed class TelemetryNameAnalyzer : DiagnosticAnalyzer
 	internal static readonly ImmutableArray<string> SemanticConventionNamespaces =
 	[
 		"aspnetcore", "aws", "client", "cloud", "code", "container", "cpu", "db", "deployment", "dns", "dotnet",
-		"error", "exception", "faas", "gen_ai", "grpc", "host", "http", "jsonrpc", "k8s", "kestrel", "mcp",
+		"error", "exception", "faas", "gen_ai", "host", "http", "jsonrpc", "k8s", "kestrel", "mcp",
 		"messaging", "network", "otel", "peer", "process", "rpc", "server", "service", "telemetry", "thread",
 		"tls", "url", "user_agent",
 	];

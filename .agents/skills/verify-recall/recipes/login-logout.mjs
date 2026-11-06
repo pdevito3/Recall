@@ -6,9 +6,9 @@ const appStatus = async (page, path) => (await page.request.get(path, { headers:
 const sessionCookieName = (stack) => (new URL(stack.urls.web).protocol === 'https:' ? '__Host-recall' : 'recall')
 
 export default async ({ page, context, stack, step, capture, expect, login, logout }) => {
-  await step('anonymous: /bff/user is 204, the SPA goes to the login at once with / as the return URL, and the Server answers 401', async () => {
-    const res = page.waitForResponse((r) => r.url().endsWith('/bff/user'))
-    const loginRequest = page.waitForRequest((r) => new URL(r.url()).pathname === '/bff/login')
+  await step('anonymous: /auth/me is 204, the SPA goes to the login at once with / as the return URL, and the Server answers 401', async () => {
+    const res = page.waitForResponse((r) => new URL(r.url()).pathname === '/auth/me')
+    const loginRequest = page.waitForRequest((r) => new URL(r.url()).pathname === '/auth/login')
     await page.goto('/', { waitUntil: 'commit' })
     expect((await res).status()).toBe(204)
     expect(new URL((await loginRequest).url()).searchParams.get('returnUrl')).toBe('/')
@@ -37,13 +37,21 @@ export default async ({ page, context, stack, step, capture, expect, login, logo
     await expect(page.getByText(`Signed in as ${name}`)).toBeVisible()
   })
 
+  await step('the user menu shows the name of the session', async () => {
+    await page.getByRole('button', { name: `User menu for ${name}`, exact: true }).click()
+    await expect(page.getByRole('menu', { name: 'User menu' }).getByText(name, { exact: true })).toBeVisible()
+  })
+  await capture('user-menu')
+  await page.keyboard.press('Escape')
+
   await step('log out', () => logout())
 
-  await step('logged out: /bff/user is 204 again, and the page is the signed-out page of the Server', async () => {
-    expect(await appStatus(page, '/bff/user')).toBe(204)
+  await step('logged out: /auth/me is 204 again, and the page is the signed-out page of the Server', async () => {
+    expect(await appStatus(page, '/auth/me')).toBe(204)
     await expect(page.getByRole('heading', { name: 'You are signed out' })).toBeVisible()
     await expect(page).toHaveTitle('You are signed out - Recall')
     await expect(page.getByText(`Signed in as ${name}`)).toHaveCount(0)
+    await expect(page.getByRole('link', { name: /^Sign out of / })).toHaveAttribute('href', /client_id=/)
   })
   await capture('logged-out')
 

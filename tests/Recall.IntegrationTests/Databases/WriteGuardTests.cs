@@ -2,7 +2,7 @@ namespace Recall.IntegrationTests.Databases;
 
 using Recall.IntegrationTests.DomainEvents;
 using Recall.Server.Databases;
-using Recall.Server.Domain.DPoPProofs;
+using Recall.Server.Auth.Entities;
 using Recall.Server.Domain.Tenants;
 using Recall.Server.Domain.Tenants.DomainEvents;
 using Recall.Server.Domain.Tenants.Models;
@@ -103,14 +103,14 @@ public class WriteGuardTests : TestBase
         var scope = new TestingServiceScope();
         var scenario = await scope.StartTenantScenarioAsync();
         var db = scope.GetService<AppDbContext>();
-        var proofId = $"probe-{Guid.NewGuid():N}";
+        var stateHash = $"probe-{Guid.NewGuid():N}";
 
         // Act
         var firstNames = await db.Database.SqlQuery<string>(
             $"SELECT first_name AS \"Value\" FROM users WHERE id = {scenario.FirstUser.Id}").ToListAsync();
         var inserted = await db.Database.ExecuteSqlAsync(
-            $"INSERT INTO used_dpop_proofs (id, expires) VALUES ({proofId}, {DateTimeOffset.UtcNow}) ON CONFLICT (id) DO NOTHING");
-        var deleted = await db.Set<UsedDPoPProof>().Where(p => p.Id == proofId).ExecuteDeleteAsync();
+            $"INSERT INTO auth_login_attempts (state_hash, binding_hash, mode_id, nonce, pkce_verifier, redirect_uri, client_kind, expires_at) VALUES ({stateHash}, 'binding', 'mode', 'nonce', 'verifier', 'https://recall.test/callback', 'web', {DateTimeOffset.UtcNow.AddHours(1)}) ON CONFLICT (state_hash) DO NOTHING");
+        var deleted = await db.Set<LoginAttempt>().Where(a => a.StateHash == stateHash).ExecuteDeleteAsync();
 
         // Assert
         firstNames.ShouldBe([scenario.FirstUser.FirstName]);

@@ -11,9 +11,6 @@ public static class AuthRoutes
     public const string Logout = "/auth/logout";
     public const string RevokeOthers = "/auth/sessions/revoke-others";
     public const string Me = "/auth/me";
-    public const string BffLogin = "/bff/login";
-    public const string BffUser = "/bff/user";
-    public const string BffLogout = "/bff/logout";
 
     public static string OriginOf(HttpRequest request) => $"{request.Scheme}://{request.Host}";
 }

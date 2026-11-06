@@ -46,7 +46,7 @@ export const releaseRequests: BrowserCommand<[path: string]> = async ({ page }, 
   await page.unroute(hold.matcher, hold.handler)
 }
 
-const isBffRequest = (url: URL) => url.pathname.startsWith('/api/') || url.pathname.startsWith('/bff/')
+const isServerRequest = (url: URL) => url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/')
 
 interface Answering {
   answers: Answer[]
@@ -77,7 +77,7 @@ export const answerRequests: BrowserCommand<[answers: Answer[]]> = async ({ page
   }
   const state: Answering = { answers, unanswered: new Set() }
   answering.set(page, state)
-  await page.route(isBffRequest, async (route) => {
+  await page.route(isServerRequest, async (route) => {
     const request = route.request()
     const answer = state.answers.findLast(isAnswerFor(request))
     if (!answer) {

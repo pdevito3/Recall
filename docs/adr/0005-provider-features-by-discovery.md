@@ -2,7 +2,9 @@
 
 > Superseded in part by [ADR 0007](0007-regular-repo-instead-of-template.md): `AuthProviders.cs` is now one folder for each provider in `AuthProviders/`, and the repo is no longer a template.
 
-The BFF reads the discovery document of the identity provider to decide which optional features it uses. Each feature has a setting with three values: `Auto` uses the feature if discovery lists it, `Require` stops the BFF at startup if discovery does not list it, and `Disable` never uses it. The features are revocation, the RFC 9207 `iss` parameter, back-channel logout, the `end_session_endpoint`, PAR, and (in phase 2) DPoP. A missing feature under `Auto` gets a safe fallback and a startup warning. As a result, "compliant" is a property of the BFF: the BFF obeys each rule whenever the identity provider offers the feature, and it never uses an unsafe fallback. The design is in [the home-rolled BFF spec](../specs/home-rolled-bff.md#33-provider-features-and-settings).
+> Changed by PR R4 of the plan: the BFF is deleted, so these settings and this `Auto`, `Require`, and `Disable` choice are gone. The Server reads discovery in `OidcLoginMode`, and it uses only what a login needs ([docs/authentication.md](../authentication.md)). The `end_session_endpoint` is now only a link on the signed-out page. A session does not depend on it.
+
+The BFF reads the discovery document of the identity provider to decide which optional features it uses. Each feature has a setting with three values: `Auto` uses the feature if discovery lists it, `Require` stops the BFF at startup if discovery does not list it, and `Disable` never uses it. The features are revocation, the RFC 9207 `iss` parameter, back-channel logout, the `end_session_endpoint`, PAR, and (in phase 2) DPoP. A missing feature under `Auto` gets a safe fallback and a startup warning. As a result, "compliant" is a property of the BFF: the BFF obeys each rule whenever the identity provider offers the feature, and it never uses an unsafe fallback. The design was in the home-rolled BFF spec, which R4 deleted. `git log -- docs/specs/home-rolled-bff.md` finds it.
 
 ## Considered options
 

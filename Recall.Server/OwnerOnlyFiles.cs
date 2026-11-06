@@ -35,24 +35,50 @@ public static partial class OwnerOnlyFiles
 
         var directories = new List<string>();
         var files = new List<string>();
-        var dataFile = new SqliteConnectionStringBuilder(configuration.GetConnectionString(DatabaseConsts.DatabaseName)).DataSource;
-        if (!string.IsNullOrWhiteSpace(dataFile) && dataFile != ":memory:")
+        if (DatabaseFile(configuration) is { } fullPath)
         {
-            var fullPath = Path.GetFullPath(dataFile);
             directories.Add(Path.GetDirectoryName(fullPath)!);
             files.AddRange(DatabaseFileSuffixes.Select(suffix => fullPath + suffix));
         }
 
+        var keys = KeysDirectory(configuration);
+        if (keys is not null && Directory.Exists(keys))
+            directories.Add(keys);
+
         if (configuration[$"{FileStoreOptions.SectionName}:{nameof(FileStoreOptions.Root)}"] is { Length: > 0 } fileRoot && Path.IsPathFullyQualified(fileRoot))
             directories.Add(fileRoot);
 
-        var refused = Tighten(directories, files, ModeAccess.Real);
+        var refused = Tighten(directories, [], ModeAccess.Real).ToList();
+        if (keys is not null && Directory.Exists(keys))
+            files.AddRange(FilesIn(keys));
+        refused.AddRange(Tighten([], files, ModeAccess.Real));
         if (refused.Count > 0)
         {
             Log.ForContext(typeof(OwnerOnlyFiles)).Warning(
                 "The volume that holds {Paths} does not take owner-only modes, so other accounts on this machine may read these files. Set the owner of the volume, or use a volume that keeps modes",
                 refused);
         }
+    }
+
+    private static string[] FilesIn(string directory)
+    {
+        try
+        {
+            return Directory.GetFiles(directory);
+        }
+        catch (Exception exception) when (exception is UnauthorizedAccessException or IOException)
+        {
+            return [];
+        }
+    }
+
+    public static string? KeysDirectory(IConfiguration configuration)
+        => DatabaseFile(configuration) is { } file ? Path.Combine(Path.GetDirectoryName(file)!, "keys") : null;
+
+    private static string? DatabaseFile(IConfiguration configuration)
+    {
+        var dataFile = new SqliteConnectionStringBuilder(configuration.GetConnectionString(DatabaseConsts.DatabaseName)).DataSource;
+        return string.IsNullOrWhiteSpace(dataFile) || dataFile == ":memory:" ? null : Path.GetFullPath(dataFile);
     }
 
     public static IReadOnlyList<string> Tighten(IEnumerable<string> directories, IEnumerable<string> files, ModeAccess modes)

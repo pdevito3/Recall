@@ -135,9 +135,8 @@ public class OpenApiTransformerTests
     {
         // Arrange
         var builder = WebApplication.CreateSlimBuilder();
-        // The Server appsettings.json in the test output sets Kestrel endpoints on 8080 and 8081, and they win over UseUrls
+        // The Server appsettings.json in the test output sets a Kestrel endpoint on 8080, and it wins over UseUrls
         builder.Configuration["Kestrel:Endpoints:http:Url"] = "http://127.0.0.1:0";
-        builder.Configuration["Kestrel:Endpoints:grpc:Url"] = "http://127.0.0.1:0";
         builder.Services.AddOpenApi(options => options.AddSchemaTransformer<RequireNonNullablePropertiesTransformer>());
         await using var app = builder.Build();
         app.MapGet("/shipments", () => new ShipmentDto());
@@ -465,9 +464,8 @@ public class OpenApiTransformerTests
         Delegate handler, IOpenApiSchemaTransformer? transformerBefore = null)
     {
         var builder = WebApplication.CreateSlimBuilder();
-        // The Server appsettings.json in the test output sets Kestrel endpoints on 8080 and 8081, and they win over UseUrls
+        // The Server appsettings.json in the test output sets a Kestrel endpoint on 8080, and it wins over UseUrls
         builder.Configuration["Kestrel:Endpoints:http:Url"] = "http://127.0.0.1:0";
-        builder.Configuration["Kestrel:Endpoints:grpc:Url"] = "http://127.0.0.1:0";
         // The Server removes the string type from numbers and gives a uint its range first, as SwaggerExtension orders
         // the transformers
         builder.Services.AddOpenApi(options =>

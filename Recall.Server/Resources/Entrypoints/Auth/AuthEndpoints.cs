@@ -2,6 +2,7 @@ namespace Recall.Server.Resources.Entrypoints.Auth;
 
 using System.Text.Json.Serialization;
 using MediatR;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Recall.Server.Auth;
 using Recall.Server.Auth.Entities;
@@ -40,7 +41,7 @@ public static class AuthEndpoints
         endpoints.MapPost(AuthRoutes.Token, TokenAsync).AllowAnonymous().ExcludeFromDescription();
         endpoints.MapPost(AuthRoutes.Logout, LogoutAsync).AllowAnonymous().ExcludeFromDescription();
         endpoints.MapPost(AuthRoutes.RevokeOthers, RevokeOthersAsync).RequireAuthorization(AppSessionOnly).ExcludeFromDescription();
-        endpoints.MapGet(AuthRoutes.Me, MeAsync).RequireAuthorization(AppSessionOnly).ExcludeFromDescription();
+        endpoints.MapGet(AuthRoutes.Me, MeAsync).AllowAnonymous().ExcludeFromDescription();
     }
 
     public static async Task SlideAsync(HttpContext http, SessionStore store, string sessionId, CancellationToken cancellationToken)
@@ -88,8 +89,10 @@ public static class AuthEndpoints
         if (modes.All.Count == 1 && states[0] == LoginModeState.Ready && !signedOut && !hasError)
             return new AuthRedirect($"/auth/oidc/{Uri.EscapeDataString(modes.All[0].Id)}/start?client=web&returnUrl={Uri.EscapeDataString(returnPath)}");
 
-        var chooser = modes.All.Zip(states, (mode, state) => new AuthPages.ChooserMode(mode.Id, mode.DisplayName, state)).ToList();
-        return AuthPages.Chooser(chooser, returnPath, signedOut && SessionCookie.IsMarkedSignedOut(http.Request), hasError ? "The last sign-in did not finish." : null);
+        var isSignedOut = signedOut && SessionCookie.IsMarkedSignedOut(http.Request);
+        var chooser = await Task.WhenAll(modes.All.Zip(states, async (mode, state) => new AuthPages.ChooserMode(
+            mode.Id, mode.DisplayName, state, isSignedOut ? await mode.ProviderLogoutUrlAsync(cancellationToken) : null)));
+        return AuthPages.Chooser(chooser, returnPath, isSignedOut, hasError ? "The last sign-in did not finish." : null);
     }
 
     private static async Task<IResult> TokenAsync(HttpContext http, SessionStore store, ITenantIdProvider tenants, TimeProvider timeProvider, CancellationToken cancellationToken)
@@ -151,8 +154,7 @@ public static class AuthEndpoints
         var csrf = AppSessionHandler.HasCsrfHeader(request);
         var cookie = SessionCookie.Read(request);
 
-        // The cookie is the one credential here, and it needs the header. A 204 would say that this ended a session that it left alive.
-        if (cookie is not null && !csrf && bearer is null && refresh is null)
+        if (cookie is not null && !csrf)
             return Results.Unauthorized();
 
         if (bearer is not null
@@ -160,7 +162,7 @@ public static class AuthEndpoints
             && await store.FindByAccessAsync(TokenHash.Of(bearer), SessionKind.Native, cancellationToken) is { } nativeSession)
             await store.RevokeAsync(nativeSession.SessionId, RevokeReason.Logout, cancellationToken);
 
-        if (csrf && cookie is not null
+        if (cookie is not null
             && await store.FindByAccessAsync(TokenHash.Of(cookie), SessionKind.Web, cancellationToken) is { } webSession)
             await store.RevokeAsync(webSession.SessionId, RevokeReason.Logout, cancellationToken);
 
@@ -169,6 +171,8 @@ public static class AuthEndpoints
 
         if (csrf)
             SessionCookie.Clear(http.Response, request);
+        if (cookie is not null)
+            SessionCookie.MarkSignedOut(http.Response, request);
 
         return Results.NoContent();
     }
@@ -179,8 +183,19 @@ public static class AuthEndpoints
         return Results.NoContent();
     }
 
+    private static bool IsPlainVisitor(HttpRequest request)
+        => AppSessionHandler.CredentialOf(request.Headers.Authorization.ToString()) is null
+            && (SessionCookie.Read(request) is null || AppSessionHandler.HasCsrfHeader(request));
+
     private static async Task<IResult> MeAsync(HttpContext http, ISender sender, SessionStore store, CancellationToken cancellationToken)
     {
+        var session = await http.AuthenticateAsync(AppSessionHandler.SchemeName);
+        if (!session.Succeeded)
+        {
+            return IsPlainVisitor(http.Request) ? Results.NoContent() : Results.Challenge(authenticationSchemes: [AppSessionHandler.SchemeName]);
+        }
+
+        http.User = session.Principal;
         var sessionId = http.User.FindFirst(AppSessionHandler.SessionIdClaim)!.Value;
         var kind = http.User.FindFirst(AppSessionHandler.ClientKindClaim)!.Value;
         var current = await sender.Send(new GetCurrentUser.Query(), cancellationToken);

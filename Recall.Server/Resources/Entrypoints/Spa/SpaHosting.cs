@@ -5,7 +5,7 @@ public static class SpaHosting
     private const string IndexFile = "index.html";
 
     private static readonly PathString[] ReservedPrefixes =
-        ["/api", "/auth", "/bff", "/mcp", "/swagger", "/openapi", "/health", "/alive", "/.well-known"];
+        ["/api", "/auth", "/mcp", "/swagger", "/openapi", "/health", "/alive", "/.well-known"];
 
     public static bool IsPresent(WebApplication app) => app.Environment.WebRootFileProvider.GetFileInfo(IndexFile).Exists;
 
@@ -36,6 +36,17 @@ public static class SpaHosting
                 await context.Response.SendFileAsync(index, context.RequestAborted);
         });
     }
+
+    public static void UseApiNotFound(this WebApplication app) => app.Use(async (context, next) =>
+    {
+        if (context.GetEndpoint() is null && context.Request.Path.StartsWithSegments("/api"))
+        {
+            await Results.Problem(statusCode: StatusCodes.Status404NotFound).ExecuteAsync(context);
+            return;
+        }
+
+        await next(context);
+    });
 
     public static bool ServesIndex(HttpContext context)
     {

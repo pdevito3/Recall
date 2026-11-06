@@ -36,7 +36,7 @@ The key is `(occurred_at, record_id, ordinal)`. One index serves the history of 
 4. Map each value object with `ComplexProperty`, not `OwnsOne`. A complex property can hold only simple properties, not a collection and not another complex property.
 5. Give each aggregate root a tenant of its own. A root implements `ITenantable`, or it is `Tenant`. A child gets its owner through one `Cascade` foreign key, and it does not implement `ITenantable`. An entity with a nullable `Cascade` owner key is a root when the key is null, so it implements `ITenantable`, as the node of a tree does. See [multi-tenancy.md](../multi-tenancy.md#make-a-child-entity-multi-tenant) and [entity-configurations.md](entity-configurations.md#trees).
 6. Give each entity class a name that no other entity class has. An entry stores the class name.
-7. Make each entity a `BaseEntity`. An entity type that is not a `BaseEntity` has no audit. It must have `[NotAudited(reason)]` with the reason that its rows need no audit, for example `UsedDPoPProof`.
+7. Make each entity a `BaseEntity`. An entity type that is not a `BaseEntity` has no audit. It must have `[NotAudited(reason)]` with the reason that its rows need no audit, for example `LoginAttempt`.
 8. Give each action a name with `[AuditActionName("snake_case")]`. Do not change the name after a release. A stored entry finds its action type by this name.
 9. After a handler records an action, call `SaveChangesAsync`, also when the handler changes no data.
 
@@ -74,7 +74,7 @@ await dbContext.SaveChangesAsync(cancellationToken);
 
 The checks catch mistakes, not code that wants to skip them. The guard does not see the writes of a function that a `SELECT` calls. Reflection or a suppressed ban gets past the build.
 
-To write a `[NotAudited]` table with a banned API, suppress RS0030 on the method with a justification. `BannedApiSuppressionTests` pins the files that suppress the ban, so add the file to its list. The DPoP replay cache is the example. The same list has the suppressions of the regex and reflection bans (see [source-generators.md](source-generators.md)).
+To write a `[NotAudited]` table with a banned API, suppress RS0030 on the method with a justification. `BannedApiSuppressionTests` pins the files that suppress the ban, so add the file to its list. `SessionStore.cs` is the example. The same list has the suppressions of the regex and reflection bans (see [source-generators.md](source-generators.md)).
 
 The migration helpers `GrantPermissionToRole`, `GrantPermissionToHoldersOf`, and `DeletePermission` write the permission tables with SQL and no audit entry. `GrantPermissionToRole` writes `user_permissions`. `GrantPermissionToHoldersOf` and `DeletePermission` write `user_permissions` and `agent_permissions`. The migration history is their record.
 

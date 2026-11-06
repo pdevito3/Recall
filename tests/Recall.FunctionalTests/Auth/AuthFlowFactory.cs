@@ -16,7 +16,7 @@ using Recall.Server.Domain.Tenants;
 using Recall.SharedTestHelpers.Utilities;
 using Serilog.Core;
 
-public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> settings) : WebApplicationFactory<Program>
+public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> settings, StubOidcProvider? provider = null) : WebApplicationFactory<Program>
 {
     public const string ModeId = "stub";
     public const string OtherModeId = "other";
@@ -26,7 +26,7 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
     private readonly SqliteTestDatabase _database = new();
     private readonly Lock _clientLock = new();
 
-    public StubOidcProvider Provider { get; } = new();
+    public StubOidcProvider Provider { get; } = provider ?? new();
 
     public CapturedLogs Logs { get; } = new();
 

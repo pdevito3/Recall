@@ -535,9 +535,8 @@ public class AuthRefusalTests
 
     [Test]
     [Arguments("/auth/login?returnUrl=https%3A%2F%2Fevil.test%2F", "/auth/oidc/stub/start?client=web&returnUrl=%2F")]
-    [Arguments("/bff/login?returnUrl=https%3A%2F%2Fevil.test%2F", "/auth/login?returnUrl=%2F")]
-    [Arguments("/bff/login?returnUrl=%2F%2Fevil.test", "/auth/login?returnUrl=%2F")]
-    public async Task an_open_redirect_in_the_login_routes_is_dropped(string url, string expected)
+    [Arguments("/auth/login?returnUrl=%2F%2Fevil.test", "/auth/oidc/stub/start?client=web&returnUrl=%2F")]
+    public async Task an_open_redirect_in_the_login_route_is_dropped(string url, string expected)
     {
         // Arrange
         using var browser = NewBrowser();

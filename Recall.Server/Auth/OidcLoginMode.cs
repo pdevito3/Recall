@@ -24,7 +24,8 @@ public sealed record OidcDiscovery(
     string? UserinfoEndpoint,
     IReadOnlyList<string> TokenEndpointAuthMethods,
     bool AdvertisesIssParameter,
-    bool AcceptsPromptLogin);
+    bool AcceptsPromptLogin,
+    string? EndSessionEndpoint);
 
 public sealed record OidcCallback(string? Code, string? Iss, string? Error)
 {
@@ -121,6 +122,15 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
 
     public async Task<LoginModeState> ProbeAsync(CancellationToken cancellationToken)
         => await DiscoverAsync(cancellationToken) is null ? LoginModeState.Unreachable : LoginModeState.Ready;
+
+    public async Task<string?> ProviderLogoutUrlAsync(CancellationToken cancellationToken)
+    {
+        if ((await DiscoverAsync(cancellationToken))?.EndSessionEndpoint is not { } endpoint)
+            return null;
+
+        var separator = endpoint.Contains('?', StringComparison.Ordinal) ? '&' : '?';
+        return $"{endpoint}{separator}client_id={Uri.EscapeDataString(_provider.ClientId!)}";
+    }
 
     public Task<OidcDiscovery?> DiscoverAsync(CancellationToken cancellationToken)
     {
@@ -297,7 +307,13 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
         var acceptsPromptLogin = !root.TryGetProperty("prompt_values_supported", out var prompts)
             || prompts.ValueKind != JsonValueKind.Array
             || prompts.EnumerateArray().Any(p => p.ValueKind == JsonValueKind.String && p.GetString() == "login");
-        return new OidcDiscovery(issuer, authorization!, token!, jwks!, userinfo, methods, advertisesIss, acceptsPromptLogin);
+        return new OidcDiscovery(issuer, authorization!, token!, jwks!, userinfo, methods, advertisesIss, acceptsPromptLogin, EndSessionEndpointOrNoLink(root));
+    }
+
+    private string? EndSessionEndpointOrNoLink(JsonElement root)
+    {
+        var endSession = Text(root, "end_session_endpoint");
+        return IsAllowedUrl(endSession) ? endSession : null;
     }
 
     private bool IsAllowedUrl(string? url)
@@ -387,9 +403,9 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
         if (!validation.IsValid || validation.SecurityToken is not JsonWebToken token)
             return Refuse($"the ID token failed its check ({validation.Exception?.GetType().Name})");
 
-        var audiences = token.Audiences.ToList();
-        if (audiences.Count > 1 && !(token.TryGetPayloadValue<string>("azp", out var azp) && azp == _provider.ClientId))
-            return Refuse("the ID token has several audiences and no azp of this client");
+        var hasAzp = token.TryGetPayloadValue<string>("azp", out var azp);
+        if (hasAzp ? azp != _provider.ClientId : token.Audiences.Skip(1).Any())
+            return Refuse("the ID token has several audiences and no azp of this client, or the azp of another client");
 
         if (!token.TryGetPayloadValue<string>("nonce", out var nonce) || !SameText(nonce, attempt.Nonce))
             return Refuse("the nonce of the ID token does not match");

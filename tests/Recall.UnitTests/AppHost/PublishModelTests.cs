@@ -46,7 +46,7 @@ public class PublishModelTests
     }
 
     [Test]
-    public async Task the_stack_starts_no_bff()
+    public async Task the_stack_starts_no_second_host()
     {
         // Act
         await using var builder = await DistributedApplicationTestingBuilder.CreateAsync(

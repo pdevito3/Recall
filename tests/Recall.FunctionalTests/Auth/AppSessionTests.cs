@@ -41,6 +41,69 @@ public class AppSessionTests
     }
 
     [Test]
+    [Arguments("0")]
+    [Arguments("true")]
+    [Arguments("")]
+    [Arguments("2", "1")]
+    [Arguments("1", "1")]
+    public async Task a_cookie_with_another_value_of_the_csrf_header_is_refused(params string[] values)
+    {
+        // Arrange
+        using var browser = await SignedInBrowserAsync();
+        var request = new HttpRequestMessage(HttpMethod.Get, Me);
+        request.Headers.TryAddWithoutValidation("X-CSRF", values);
+
+        // Act
+        var response = await browser.SendAsync(request);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Test]
+    [Arguments("/auth/sessions/revoke-others")]
+    [Arguments("/api/v1/tenants")]
+    public async Task a_write_with_a_cookie_and_no_csrf_header_is_refused_and_changes_nothing(string path)
+    {
+        // Arrange
+        var subject = NewSubject();
+        using var browser = await SignedInBrowserAsync(subject);
+        using var other = await SignedInBrowserAsync(subject);
+
+        // Act
+        var response = await browser.SendAsync(new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(new { }) });
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await other.GetAsync(Me, csrf: true)).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Test]
+    public async Task a_cross_origin_page_gets_no_cors_answer_so_it_cannot_send_the_csrf_header()
+    {
+        // Arrange
+        using var browser = await SignedInBrowserAsync();
+        var preflight = new HttpRequestMessage(HttpMethod.Options, Me);
+        preflight.Headers.Add("Origin", "https://evil.example");
+        preflight.Headers.Add("Access-Control-Request-Method", "GET");
+        preflight.Headers.Add("Access-Control-Request-Headers", "x-csrf");
+        var read = new HttpRequestMessage(HttpMethod.Get, Me);
+        read.Headers.Add("Origin", "https://evil.example");
+        read.Headers.Add("X-CSRF", "1");
+
+        // Act
+        var preflightAnswer = await browser.SendAsync(preflight);
+        var readAnswer = await browser.SendAsync(read);
+
+        // Assert
+        foreach (var answer in new[] { preflightAnswer, readAnswer })
+        {
+            answer.Headers.Contains("Access-Control-Allow-Origin").ShouldBeFalse();
+            answer.Headers.Contains("Access-Control-Allow-Credentials").ShouldBeFalse();
+        }
+    }
+
+    [Test]
     public async Task a_cookie_value_used_as_a_bearer_is_refused()
     {
         // Arrange
@@ -68,7 +131,7 @@ public class AppSessionTests
         var asBearer = await browser.GetAsync(Me, authorization: BearerOf(tokens.AccessToken));
 
         // Assert
-        asCookie.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        asCookie.StatusCode.ShouldBe(HttpStatusCode.NoContent);
         asBearer.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
@@ -163,7 +226,7 @@ public class AppSessionTests
         response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
         (await kept.GetAsync(Me, csrf: true)).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await stranger.GetAsync(Me, csrf: true)).StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await other.GetAsync(Me, csrf: true)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await other.GetAsync(Me, csrf: true)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
         (await phone.GetAsync(Me, authorization: BearerOf(tokens.AccessToken))).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         (await AuthBrowser.ErrorOf(await phone.RefreshAsync(tokens.RefreshToken))).ShouldBe("invalid_grant");
     }
@@ -198,6 +261,55 @@ public class AppSessionTests
         deadRefresh.StatusCode.ShouldBe(HttpStatusCode.NoContent);
         deadBearer.StatusCode.ShouldBe(HttpStatusCode.NoContent);
         notAToken.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    [Test]
+    public async Task a_logout_with_the_cookie_of_an_ended_session_clears_it_and_says_signed_out()
+    {
+        // Arrange
+        using var browser = NewBrowser();
+        browser.SetCookie(browser.SessionCookieName, "rcl_ck_dead");
+
+        // Act
+        var response = await browser.PostFormAsync("/auth/logout", [], csrf: true);
+        var page = await browser.GetAsync("/auth/login?signedOut=1");
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        browser.SessionCookie.ShouldBeNull();
+        (await page.Content.ReadAsStringAsync()).ShouldContain("You are signed out");
+    }
+
+    [Test]
+    public async Task a_cookie_logout_with_no_header_and_a_second_credential_ends_nothing_and_does_not_say_so()
+    {
+        // Arrange
+        using var browser = await SignedInBrowserAsync();
+        using var phone = NewBrowser();
+        var tokens = await phone.LoginNativeAsync(NewSubject());
+
+        // Act
+        var withBearer = await browser.PostFormAsync("/auth/logout", [], authorization: BearerOf(tokens.AccessToken));
+        var withRefresh = await browser.PostFormAsync("/auth/logout", [("refresh_token", tokens.RefreshToken)]);
+
+        // Assert
+        withBearer.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        withRefresh.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await browser.GetAsync(Me, csrf: true)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await phone.GetAsync(Me, authorization: BearerOf(tokens.AccessToken))).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Test]
+    public async Task the_basic_header_of_a_proxy_leaves_a_visitor_on_the_way_to_the_login()
+    {
+        // Arrange
+        using var browser = NewBrowser();
+
+        // Act
+        var response = await browser.GetAsync(Me, authorization: "Basic dXNlcjpwYXNz");
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
     }
 
     [Test]
@@ -253,7 +365,7 @@ public class AppSessionTests
         aliveAfterForgery.StatusCode.ShouldBe(HttpStatusCode.OK);
         withHeader.StatusCode.ShouldBe(HttpStatusCode.NoContent);
         browser.SessionCookie.ShouldBeNull();
-        afterLogout.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        afterLogout.StatusCode.ShouldBe(HttpStatusCode.NoContent);
     }
 
     [Test]
@@ -352,86 +464,98 @@ public class AppSessionTests
     }
 
     [Test]
-    public async Task bff_user_has_the_shape_the_spa_reads()
+    public async Task me_has_the_shape_the_spa_and_the_phone_read()
     {
         // Arrange
         using var browser = await SignedInBrowserAsync();
 
         // Act
-        var response = await browser.GetAsync("/bff/user", csrf: true);
-        var claims = (await response.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray()
-            .ToDictionary(claim => claim.GetProperty("type").GetString()!, claim => claim.GetProperty("value"));
+        var response = await browser.GetAsync(Me, csrf: true);
+        var me = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        claims["sub"].GetString().ShouldStartWith("usr_");
-        claims["name"].GetString().ShouldBe("Ada Lovelace");
-        claims["bff:logout_url"].GetString().ShouldBe($"/bff/logout?sid={claims["sid"].GetString()}");
-        claims["bff:session_expires_in"].ValueKind.ShouldBe(JsonValueKind.Number);
-        claims["bff:session_expires_in"].GetDouble().ShouldBeGreaterThan(0);
+        me.EnumerateObject().Select(property => property.Name).ShouldBe(["sub", "name", "sid", "client_kind"], ignoreOrder: true);
+        me.GetProperty("sub").GetString().ShouldStartWith("usr_");
+        me.GetProperty("name").GetString().ShouldBe("Ada Lovelace");
+        me.GetProperty("sid").GetString().ShouldNotBeNullOrEmpty();
+        me.GetProperty("client_kind").GetString().ShouldBe("web");
     }
 
     [Test]
-    public async Task bff_user_needs_the_csrf_header_and_answers_no_content_with_no_web_session()
+    public async Task me_says_no_content_to_a_visitor_with_no_session_and_401_to_a_credential_that_failed()
     {
         // Arrange
         using var signedIn = await SignedInBrowserAsync();
         using var anonymous = NewBrowser();
+        using var expired = NewBrowser();
+        expired.SetCookie(expired.SessionCookieName, "rcl_ck_dead");
         using var phone = NewBrowser();
-        var tokens = await phone.LoginNativeAsync(NewSubject());
 
         // Act
-        var noHeader = await signedIn.GetAsync("/bff/user");
-        var noSession = await anonymous.GetAsync("/bff/user", csrf: true);
-        var native = await phone.GetAsync("/bff/user", csrf: true, authorization: BearerOf(tokens.AccessToken));
+        var cookieWithNoHeader = await signedIn.GetAsync(Me);
+        var noSession = await anonymous.GetAsync(Me, csrf: true);
+        var noSessionNoHeader = await anonymous.GetAsync(Me);
+        var deadCookie = await expired.GetAsync(Me, csrf: true);
+        var deadBearer = await phone.GetAsync(Me, authorization: BearerOf("rcl_at_dead"));
+        var notOurs = await phone.GetAsync(Me, authorization: BearerOf("a.provider.token"));
 
         // Assert
-        noHeader.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        cookieWithNoHeader.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         noSession.StatusCode.ShouldBe(HttpStatusCode.NoContent);
-        native.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        noSessionNoHeader.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        deadCookie.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        deadBearer.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        deadBearer.Headers.WwwAuthenticate.ToString().ShouldBe("Bearer");
+        notOurs.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     [Test]
-    public async Task bff_logout_with_no_cookie_clears_nothing_and_ends_nothing()
+    public async Task a_logout_with_no_cookie_clears_nothing_and_ends_nothing()
     {
         // Arrange
         using var browser = await SignedInBrowserAsync();
         using var crossSite = NewBrowser();
 
         // Act
-        var response = await crossSite.GetAsync("/bff/logout");
+        var response = await crossSite.PostFormAsync("/auth/logout", []);
         var alive = await browser.GetAsync(Me, csrf: true);
 
         // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
         response.Headers.Contains("Set-Cookie").ShouldBeFalse();
         alive.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Test]
-    public async Task bff_logout_needs_the_session_id_and_then_ends_the_session()
+    public async Task a_cookie_logout_with_no_header_keeps_the_session_and_does_not_say_signed_out()
     {
         // Arrange
         using var browser = await SignedInBrowserAsync();
-        var me = await (await browser.GetAsync(Me, csrf: true)).Content.ReadFromJsonAsync<JsonElement>();
-        var sid = me.GetProperty("sid").GetString()!;
 
         // Act
-        var wrong = await browser.GetAsync("/bff/logout?sid=other");
+        var response = await browser.PostFormAsync("/auth/logout", []);
         var alive = await browser.GetAsync(Me, csrf: true);
-        var right = await browser.GetAsync($"/bff/logout?sid={sid}");
 
         // Assert
-        wrong.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        var wrongPage = await wrong.Content.ReadAsStringAsync();
-        wrongPage.ShouldContain("<h1>This sign-out link is not valid</h1>");
-        wrongPage.ShouldContain("choose Logout there");
-        wrongPage.ShouldNotContain("sign-in request");
-        wrongPage.ShouldContain(">Back to Recall</a>");
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        response.Headers.Contains("Set-Cookie").ShouldBeFalse();
         alive.StatusCode.ShouldBe(HttpStatusCode.OK);
-        right.StatusCode.ShouldBe(HttpStatusCode.Redirect);
-        right.Headers.Location!.OriginalString.ShouldBe("/auth/login?signedOut=1");
-        browser.SessionCookie.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task a_get_cannot_end_a_session()
+    {
+        // Arrange
+        using var browser = await SignedInBrowserAsync();
+
+        // Act
+        var response = await browser.GetAsync("/auth/logout", csrf: true);
+        var alive = await browser.GetAsync(Me, csrf: true);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.MethodNotAllowed);
+        alive.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Test]
@@ -439,39 +563,50 @@ public class AppSessionTests
     {
         // Arrange
         using var browser = await SignedInBrowserAsync();
-        var sid = (await (await browser.GetAsync(Me, csrf: true)).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("sid").GetString()!;
 
         // Act
-        var logout = await browser.GetAsync($"/bff/logout?sid={sid}");
-        var page = await browser.GetAsync(logout.Headers.Location!.OriginalString);
+        var logout = await browser.PostFormAsync("/auth/logout", [], csrf: true);
+        var page = await browser.GetAsync("/auth/login?signedOut=1");
+        var me = await browser.GetAsync(Me, csrf: true);
 
         // Assert
+        logout.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        browser.SessionCookie.ShouldBeNull();
         browser.SetCookieLines.Last().ShouldContain("samesite=strict", Case.Insensitive);
         page.StatusCode.ShouldBe(HttpStatusCode.OK);
         (await page.Content.ReadAsStringAsync()).ShouldContain("<h1>You are signed out</h1>");
+        me.StatusCode.ShouldBe(HttpStatusCode.NoContent);
     }
 
     [Test]
-    public async Task a_sign_out_from_another_site_with_the_real_sid_says_that_the_session_stays()
+    public async Task a_phone_logout_sets_no_mark_of_a_browser_sign_out()
+    {
+        // Arrange
+        using var phone = NewBrowser();
+        var tokens = await phone.LoginNativeAsync(NewSubject());
+        var linesBefore = phone.SetCookieLines.Count;
+
+        // Act
+        var response = await phone.PostFormAsync("/auth/logout", [], authorization: BearerOf(tokens.AccessToken));
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        phone.SetCookieLines.Count.ShouldBe(linesBefore);
+    }
+
+    [Test]
+    public async Task the_signed_out_page_names_the_logout_of_the_provider()
     {
         // Arrange
         using var browser = await SignedInBrowserAsync();
-        var sid = (await (await browser.GetAsync(Me, csrf: true)).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("sid").GetString()!;
-        using var crossSite = NewBrowser();
+        await browser.PostFormAsync("/auth/logout", [], csrf: true);
 
         // Act
-        var response = await crossSite.GetAsync($"/bff/logout?sid={sid}");
-        var alive = await browser.GetAsync(Me, csrf: true);
+        var page = await browser.GetAsync("/auth/login?signedOut=1");
 
         // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        response.Headers.Contains("Set-Cookie").ShouldBeFalse();
-        var page = await response.Content.ReadAsStringAsync();
-        page.ShouldContain("<h1>Sign-out did not finish</h1>");
-        page.ShouldContain("choose Logout there");
-        page.ShouldContain("This request ended no session");
-        page.ShouldContain(">Back to Recall</a>");
-        alive.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var html = await page.Content.ReadAsStringAsync();
+        html.ShouldContain($"<a href=\"{StubOidcProvider.Issuer}/logout?client_id={StubOidcProvider.ClientId}\">Sign out of Stub</a>");
     }
 
     [Test]
@@ -507,23 +642,6 @@ public class AppSessionTests
     }
 
     [Test]
-    public async Task a_sign_out_from_another_site_for_a_session_that_ended_says_nothing_false()
-    {
-        // Arrange
-        using var browser = await SignedInBrowserAsync();
-        var sid = (await (await browser.GetAsync(Me, csrf: true)).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("sid").GetString()!;
-        await browser.GetAsync($"/bff/logout?sid={sid}");
-        using var crossSite = NewBrowser();
-
-        // Act
-        var response = await crossSite.GetAsync($"/bff/logout?sid={sid}");
-
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.Redirect);
-        response.Headers.Contains("Set-Cookie").ShouldBeFalse();
-    }
-
-    [Test]
     public async Task an_unknown_cookie_at_the_login_route_starts_a_new_login()
     {
         // Arrange
@@ -536,18 +654,5 @@ public class AppSessionTests
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Redirect);
         response.Headers.Location!.OriginalString.ShouldStartWith("/auth/oidc/stub/start?client=web");
-    }
-
-    [Test]
-    public async Task me_with_no_session_is_refused()
-    {
-        // Arrange
-        using var browser = NewBrowser();
-
-        // Act
-        var response = await browser.GetAsync(Me);
-
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 }

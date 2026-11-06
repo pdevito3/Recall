@@ -31,10 +31,9 @@ public class McpJwtBearerChallengeTests : TestBase
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-        var challenges = response.Headers.WwwAuthenticate.ToList();
-        challenges.Select(c => c.Scheme).ShouldBe(["Bearer", "DPoP"]);
-        challenges[0].Parameter.ShouldBe(ResourceMetadata);
-        challenges[1].Parameter.ShouldNotBeNull().ShouldStartWith("algs=\"ES256");
+        var challenge = response.Headers.WwwAuthenticate.ShouldHaveSingleItem();
+        challenge.Scheme.ShouldBe("Bearer");
+        challenge.Parameter.ShouldBe(ResourceMetadata);
     }
 
     [Test]
@@ -50,28 +49,9 @@ public class McpJwtBearerChallengeTests : TestBase
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-        var challenges = response.Headers.WwwAuthenticate.ToList();
-        challenges.Select(c => c.Scheme).ShouldBe(["Bearer", "DPoP"]);
-        var bearer = challenges[0].Parameter.ShouldNotBeNull();
-        bearer.ShouldStartWith($"{ResourceMetadata}, error=\"invalid_token\", error_description=\"");
-    }
-
-    [Test]
-    public async Task a_request_to_mcp_that_fails_a_dpop_check_keeps_only_the_dpop_challenge()
-    {
-        // Arrange
-        await using var app = await StartAsync();
-        using var request = new HttpRequestMessage(HttpMethod.Post, EntrypointRegistration.McpPath);
-        request.Headers.Authorization = new("DPoP", TokenWithUnknownKey());
-
-        // Act
-        using var response = await app.GetTestClient().SendAsync(request);
-
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         var challenge = response.Headers.WwwAuthenticate.ShouldHaveSingleItem();
-        challenge.Scheme.ShouldBe("DPoP");
-        challenge.Parameter.ShouldNotBeNull().ShouldStartWith("error=\"invalid_token\"");
+        challenge.Scheme.ShouldBe("Bearer");
+        challenge.Parameter.ShouldNotBeNull().ShouldStartWith($"{ResourceMetadata}, error=\"invalid_token\", error_description=\"");
     }
 
     [Test]
@@ -85,9 +65,9 @@ public class McpJwtBearerChallengeTests : TestBase
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-        var challenges = response.Headers.WwwAuthenticate.ToList();
-        challenges.Select(c => c.Scheme).ShouldBe(["DPoP", "Bearer"], ignoreOrder: true);
-        challenges.ShouldAllBe(c => c.Parameter == null || !c.Parameter.Contains("resource_metadata"));
+        var challenge = response.Headers.WwwAuthenticate.ShouldHaveSingleItem();
+        challenge.Scheme.ShouldBe("Bearer");
+        challenge.Parameter.ShouldBeNull();
     }
 
     private static async Task<WebApplication> StartAsync()

@@ -1,5 +1,5 @@
 import type { UserDto } from '@/api/generated/models/types/user-dto'
-import type { BffClaim } from '@/domain/auth/types'
+import type { AuthUser } from '@/domain/auth/types'
 
 import type { Answer } from './answer'
 
@@ -18,9 +18,9 @@ export const member: UserDto = {
   version: 1,
 }
 
-export const memberClaims: BffClaim[] = [{ type: 'sub', value: member.identifier }]
+export const memberSession: AuthUser = { sub: member.identifier, name: member.fullName, sid: 'test-session', client_kind: 'web' }
 
 export const signedInMember: Answer[] = [
-  { method: 'GET', path: '/bff/user', body: memberClaims },
+  { method: 'GET', path: '/auth/me', body: memberSession },
   { method: 'GET', path: `/api/v1/users/by-identifier/${member.identifier}`, body: member },
 ]

@@ -32,7 +32,6 @@ public class LoginSweepTests
         (await browser.FinishAtProviderAsync(authorizeWeb, new StubLogin($"sweep-{Guid.NewGuid():N}"))).Headers.Location.ShouldNotBeNull();
         var cookie = browser.SessionCookie.ShouldNotBeNull();
         await browser.GetAsync("/auth/me", csrf: true);
-        await browser.GetAsync("/bff/user", csrf: true);
 
         using var phone = new AuthBrowser(host);
         var app = NativeApp.New();
