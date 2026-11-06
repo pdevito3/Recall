@@ -146,8 +146,8 @@ A session makes no call to the provider. So a web or native session keeps workin
 | `recall`, on http | `HttpOnly`, `SameSite=Strict`, `Path=/` | The same |
 | `__Host-recall_login_{8 hex}`, on TLS | `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, 10 minutes | The binding of one login attempt |
 | `recall_login_{8 hex}`, on http | `HttpOnly`, `SameSite=Lax`, `Path=/auth/oidc`, 10 minutes | The same |
-| `__Host-recall_signed_out`, on TLS | `HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/`, 60 seconds | The mark of a sign-out that this browser finished |
-| `recall_signed_out`, on http | `HttpOnly`, `SameSite=Lax`, `Path=/`, 10 minutes | The same |
+| `__Host-recall_signed_out`, on TLS | `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, 30 days until the provider returns, then 60 seconds | The mark of a sign-out that this browser finished |
+| `recall_signed_out`, on http | `HttpOnly`, `SameSite=Lax`, `Path=/`, 30 days until the provider returns, then 60 seconds | The same |
 
 The binding cookie is `Lax` because the provider redirects with a cross-site GET. On https, the Server reads only `__Host-recall`, so a `recall` cookie from a plain http neighbor has no effect.
 
@@ -173,7 +173,7 @@ A response tells what happened:
 
 `/auth/login?signedOut=1` starts nothing with no click. It says `You are signed out` only with the mark, so a link from another site cannot make it say that. A live session at this URL goes to the return path.
 
-The mark is `SameSite=Lax`, because a provider on another site returns with a cross-site GET. It lives 10 minutes, so that a person can answer the confirm page of a provider. A new login deletes it, so a link cannot show the signed-out page next to a live session. The session cookie stays `Strict`.
+The mark is `SameSite=Lax`, because a provider on another site returns with a cross-site GET. It lives 30 days until the provider returns, so that a person who closes the confirm page of a provider does not sign in again with no click on a later visit. After the return, it lives 60 seconds. A new login deletes it, so a link cannot show the signed-out page next to a live session. The session cookie stays `Strict`.
 
 ### The session at the provider
 
@@ -195,6 +195,8 @@ Recall keeps no provider token, so the logout URL has `client_id`, `post_logout_
 | ZeroFactor | Yes | Ends the session and returns at once, with `state`. It accepts any return URL. |
 | Keycloak 26 | Yes | Shows `Do you want to log out?`, then returns, with `state`. Back from the signed-out page shows this page again, with no session behind it, and a second Back shows its sign-in page. With a return URL that is not registered, it shows `Invalid redirect uri`, and its session stays. |
 | Authelia 4.39 | No | Its session stays, and the signed-out page says so. |
+
+These results come from a run with Recall. For Authentik 2026.8.5, the result comes from its code, and not from a run. It stays on its own page after the logout, because it needs an `id_token_hint` to return. When it has a registered post-logout URI, it refuses a return URL with no hint, so do not register one for Recall. The next visit to Recall shows the note.
 
 ## The user of a session
 
@@ -269,7 +271,7 @@ The redirect URI is that origin plus `/auth/oidc/callback`. The Server stores it
 
 Register the callback URL of each origin at the provider. `/auth/status` gives the URL of the origin that you call.
 
-If the provider has an `end_session_endpoint`, also register `/auth/signed-out` of each origin as a post-logout redirect URI, for example `https://recall.example.com/auth/signed-out`. In Keycloak, this is `Valid post logout redirect URIs` of the client. Without it, Keycloak refuses the logout: the Recall session ends, the session at Keycloak stays, and the person sees the error page of Keycloak.
+If the provider has an `end_session_endpoint`, also register `/auth/signed-out` of each origin as a post-logout redirect URI, for example `https://recall.example.com/auth/signed-out`. In Keycloak, this is `Valid post logout redirect URIs` of the client. Without it, Keycloak refuses the logout: the Recall session ends, the session at Keycloak stays, and the person sees the error page of Keycloak. So do this before you upgrade from a version with no provider logout. Recall cannot see the answer that the provider gives to the browser.
 
 Do not register a wildcard redirect. The Server holds the verifier and the client secret, so the Server can redeem a stolen code. A wildcard at the provider and a forged `Host` then give an attacker a session. An exact match at the provider stops that. To stop it also at the Server, set `AllowedHosts` to your host names. A request with another `Host` then gets a 400.
 

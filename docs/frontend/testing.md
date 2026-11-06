@@ -84,7 +84,7 @@ test.use({ actor: as.user('Ada Lovelace') })
 
 For an anonymous visitor, use `as.anonymous()`. Then `/auth/me` answers 204, and the SPA goes to the login before it shows a page. Thus a spec of a page needs a signed-in actor. The session spec (`tests/features/session/session.spec.ts`) covers the anonymous visitor and a failed check of the session.
 
-Login leaves the SPA, because the browser goes to `/auth/login`. Mock it with `authApi.loginOpens()`, and read the query of the request back. Logout is a `POST /auth/logout`, then the browser goes to `/auth/login?signedOut=1`. Mock both with `authApi.logoutWorks()`, or mock a failed logout with `authApi.logoutFails()`.
+Login leaves the SPA, because the browser goes to `/auth/login`. Mock it with `authApi.loginOpens()`, and read the query of the request back. Logout is a `POST /auth/logout`, then the browser goes to `/auth/login?signedOut=1`, or to the URL in `provider_logout_url` when the answer has one. Mock both with `authApi.logoutWorks()`, or mock a failed logout with `authApi.logoutFails()`.
 
 ### Builders
 

@@ -34,7 +34,7 @@ Preconditions:
 
 ## Gotchas
 
-- With DuendeDemo, the IdP is a public server. If it is down, login fails. The doctor examines it. Its logout does not return to Recall, so the `logout()` helper fails there. Use a recipe that does not log out.
+- With DuendeDemo, the IdP is a public server. If it is down, login fails. The doctor examines it. Its logout does not return to Recall, so the `logout()` helper fails there. It also fails on Authentik, which does not return, and on Keycloak, which asks the person to confirm. Use a recipe that does not log out.
 - The Duende demo server sometimes sends its CSS and scripts very slowly (17 to 29 s were seen). Thus the page `load` event can take more than 30 s. In a new login script, wait for `domcontentloaded` and for `#Input_Username`, never for `load`. `login()` does this.
 - Each call to `/auth/*` and `/api/*` with the cookie needs the header `X-CSRF: 1`. Without it, the Server answers 401 even with a valid session.
 - An anonymous visitor is a normal state. `/auth/me` answers 204, so `network.log` and `console.log` get no line for it.

@@ -13,7 +13,8 @@ public static class SessionCookie
     private const string ProviderSessionFinished = "1";
     private const string ProviderSessionOpenPrefix = "open:";
 
-    private static readonly TimeSpan TimeToAnswerAProviderConfirmPage = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan FinishedMarkLifetime = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan UnfinishedProviderLogoutMarkLifetime = TimeSpan.FromDays(30);
 
     public static string NameFor(HttpRequest request) => request.IsHttps ? SecureName : PlainName;
 
@@ -28,7 +29,7 @@ public static class SessionCookie
     public static void MarkSignedOut(HttpResponse response, HttpRequest request, PendingProviderLogout? pending)
     {
         var options = Options(request, null);
-        options.MaxAge = TimeToAnswerAProviderConfirmPage;
+        options.MaxAge = pending is null ? FinishedMarkLifetime : UnfinishedProviderLogoutMarkLifetime;
         // A provider returns with a cross-site GET, so this mark is Lax where the session cookie is Strict.
         options.SameSite = SameSiteMode.Lax;
         var value = pending is null ? ProviderSessionFinished : $"{ProviderSessionOpenPrefix}{pending.State}:{pending.ModeId}";

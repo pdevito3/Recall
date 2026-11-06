@@ -97,7 +97,7 @@ public static class AuthEndpoints
         if (mayStartWithNoClick)
             return new AuthRedirect($"/auth/oidc/{Uri.EscapeDataString(modes.All[0].Id)}/start?client=web&returnUrl={Uri.EscapeDataString(returnPath)}");
 
-        var isSignedOut = (signedOut || openSessionLogoutUrl is not null) && SessionCookie.IsMarkedSignedOut(http.Request);
+        var isSignedOut = (signedOut || openSession is not null) && SessionCookie.IsMarkedSignedOut(http.Request);
         var providerSession = isSignedOut && openSession is not null
             ? new AuthPages.OpenProviderSession(openSession.DisplayName, await openSession.ProbeAsync(cancellationToken), openSessionLogoutUrl)
             : null;

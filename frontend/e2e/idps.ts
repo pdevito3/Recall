@@ -24,6 +24,8 @@ export interface IdpConfig {
   secondStepSubmitSelector?: string
   // The button of a page that asks the person to confirm a logout with no id_token_hint
   logoutConfirmSelector?: string
+  // A provider that stays on its own page after a logout with no id_token_hint
+  logoutStaysAtProvider?: boolean
   capabilities: IdpCapabilities
 }
 

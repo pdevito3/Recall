@@ -5,6 +5,7 @@
   "usernameSelector": "#Input_Username",
   "passwordSelector": "#Input_Password",
   "submitSelector": "button[value=\"login\"]",
+  "logoutStaysAtProvider": true,
   "capabilities": {
     "revocation": true,
     "issuerParameter": true,

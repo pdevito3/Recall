@@ -66,7 +66,7 @@ public static class AuthPages
         return session switch
         {
             { LogoutUrl: { } url } =>
-                $"<p>{name} did not send you back, so your session there can still be open. Until it ends, anyone on this device can sign in to Recall as you with no password. <a href=\"{E(url)}\">Sign out of {name}</a></p>",
+                $"<p>{name} did not confirm the sign-out, so your session there can still be open. Until it ends, anyone on this device can sign in to Recall as you with no password. <a href=\"{E(url)}\">Sign out of {name}</a></p>",
             { State: LoginModeState.Unreachable } =>
                 $"<p>{name} did not answer, so your session there can still be open. Until it ends, anyone on this device can sign in to Recall as you with no password.</p>",
             _ =>

@@ -92,7 +92,7 @@ public class ProviderLogoutTests
         var mark = browser.SetCookieLines.Last();
         mark.ShouldStartWith("recall_signed_out=");
         mark.ShouldContain("samesite=lax", Case.Insensitive);
-        mark.ShouldContain("max-age=600", Case.Insensitive);
+        mark.ShouldContain("max-age=2592000", Case.Insensitive);
         mark.ShouldContain("httponly", Case.Insensitive);
     }
 
@@ -114,7 +114,7 @@ public class ProviderLogoutTests
             page.StatusCode.ShouldBe(HttpStatusCode.OK);
             var html = await page.Content.ReadAsStringAsync();
             html.ShouldContain("<h1>You are signed out</h1>");
-            html.ShouldContain("did not send you back");
+            html.ShouldContain("did not confirm the sign-out");
             html.ShouldContain($"<a href=\"{WebUtility.HtmlEncode(providerLogoutUrl)}\">Sign out of Stub</a>");
         }
     }
@@ -128,16 +128,18 @@ public class ProviderLogoutTests
 
         // Act
         var back = await ReturnFromProviderAsync(browser, logout);
+        var finishedMark = browser.SetCookieLines.Last();
         var page = await browser.GetAsync(back.Headers.Location!.OriginalString);
 
         // Assert
+        finishedMark.ShouldContain("max-age=60", Case.Insensitive);
         back.StatusCode.ShouldBe(HttpStatusCode.Redirect);
         back.Headers.Location!.OriginalString.ShouldBe(SignedOutPage);
         page.StatusCode.ShouldBe(HttpStatusCode.OK);
         var html = await page.Content.ReadAsStringAsync();
         html.ShouldContain("<h1>You are signed out</h1>");
         html.ShouldNotContain("Your session at");
-        html.ShouldNotContain("did not send you back");
+        html.ShouldNotContain("did not confirm the sign-out");
         html.ShouldNotContain("Sign out of");
         html.ShouldContain("/auth/oidc/stub/start?client=web");
     }
@@ -173,7 +175,7 @@ public class ProviderLogoutTests
         // Assert
         back.Headers.Location!.OriginalString.ShouldBe(SignedOutPage);
         plainVisit.StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await plainVisit.Content.ReadAsStringAsync()).ShouldContain("did not send you back");
+        (await plainVisit.Content.ReadAsStringAsync()).ShouldContain("did not confirm the sign-out");
     }
 
     [Test]
@@ -299,6 +301,7 @@ public class ProviderLogoutTests
             // Act
             var logout = await LogoutAsync(browser);
             var page = await browser.GetAsync(SignedOutPage);
+            var tryAgain = await browser.GetAsync("/auth/login?returnUrl=%2F");
             browser.SetCookie(browser.SessionCookieName, session);
             var me = await browser.GetAsync("/auth/me", csrf: true);
 
@@ -310,6 +313,9 @@ public class ProviderLogoutTests
             html.ShouldContain("<h1>You are signed out</h1>");
             html.ShouldContain("Stub did not answer, so your session there can still be open.");
             html.ShouldContain("Wait a few minutes, then try again.");
+            var tryAgainHtml = await tryAgain.Content.ReadAsStringAsync();
+            tryAgainHtml.ShouldContain("<h1>You are signed out</h1>");
+            tryAgainHtml.ShouldContain("Stub did not answer, so your session there can still be open.");
         }
         finally
         {
