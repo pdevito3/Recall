@@ -15,13 +15,13 @@ export type PersonProposalResponseDto = {
     */
     approve: boolean;
     /**
-     * @description The Person to tag. When this is null, the match of the proposal is the Person.
+     * @description The Person to tag. When this is null, the Person is the match of the proposal, then the Person of this label, then a new Person.
      * @maxLength 50
      * @type string | undefined
     */
     bindToPersonId?: string | null;
     /**
-     * @description True adds a Person with this label, in place of a match.
+     * @description True adds a Person with this label, also when one has that label. Send it only when a person asks for a second one.
      * @type boolean
     */
     createNew: boolean;

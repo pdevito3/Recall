@@ -267,9 +267,11 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
     /// <summary>Approval adds the mention to Cleaned, and the words before it stay as a Revision. Raw does not change.</summary>
     public void ApprovePersonProposal(PersonProposal proposal, string personId, string personLabel, DateTimeOffset now)
     {
-        DropPersonProposal(proposal);
         var plain = ProseMirrorToPlainText.Render(Cleaned.Text);
         var cleaned = MentionInsertion.Insert(Cleaned.Text, PeopleTagSpans.Spans(plain, proposal.Label, personId, personLabel));
+        ValidationException.Must(cleaned.Length <= DraftMaxLength, "label", "A tag of this name makes Cleaned too long. Shorten Cleaned, then try again.");
+
+        DropPersonProposal(proposal);
         if (cleaned != Cleaned.Text)
         {
             Cleaned = Cleaned.RewrittenKeepingSavedAt(cleaned);

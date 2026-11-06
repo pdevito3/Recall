@@ -7,7 +7,7 @@ export type PersonProposalDto = {
     label: string;
     matchedPersonId?: string | null;
     /**
-     * @description True when the directory has no match, so an approval adds a Person.
+     * @description True when the directory had no match when the Cleanup ran. An approval still looks at the directory of that moment.
      * @type boolean
     */
     isNew: boolean;

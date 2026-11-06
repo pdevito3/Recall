@@ -219,6 +219,26 @@ public class CleanupResultRoutesTests : TestBase
     }
 
     [Test]
+    public async Task an_approval_that_makes_cleaned_too_long_gets_422_and_adds_no_person()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        var words = string.Concat(Enumerable.Repeat("Quinn. ", Session.DraftMaxLength / 100));
+        var session = await CleanedSessionAsync(scenario, ReplyWith(words, people: ["Quinn"]));
+
+        // Act
+        var answer = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.RespondToPersonProposal(session.Id), new { label = "Quinn", approve = true });
+        var people = await ExecuteDbContextAsync(db => db.People.IgnoreQueryFilters().CountAsync(person => person.Label == "Quinn" && person.UserId == scenario.Member.Id));
+        var after = await scenario.ReadAsync(session.Id);
+
+        // Assert
+        session.CleanupFailure.ShouldBe(nameof(CleanupFailure.None));
+        answer.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        people.ShouldBe(0);
+        after.PeopleProposals.ShouldHaveSingleItem();
+    }
+
+    [Test]
     public async Task a_proposal_whose_match_was_deleted_can_still_be_approved()
     {
         // Arrange

@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Recall.Server.Databases;
 using Recall.Server.Domain.ModelProviders;
+using Recall.Server.Exceptions;
 using Recall.Server.Domain.Tenants;
 using Recall.SharedTestHelpers.EntityGraphs;
 using Recall.SharedTestHelpers.Utilities;
@@ -140,11 +141,14 @@ public class KeyRingWatchTests
         var keys = folder.CreateSubdirectory("keys");
         File.SetUnixFileMode(keys.FullName, UnixFileMode.UserRead | UnixFileMode.UserExecute);
         KeyRingStatus status;
+        var ring = DataProtectionProvider.Create(keys);
+        Action save = () => new ApiKeyProtector(ring).Protect("a-key");
 
         // Act: the ring of the server lives in this folder, so it holds no key and cannot make one.
         try
         {
-            status = await StartWatchAsync(services, folder, DataProtectionProvider.Create(keys));
+            status = await StartWatchAsync(services, folder, ring);
+            save.ShouldThrow<ValidationException>();
         }
         finally
         {

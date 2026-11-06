@@ -15,7 +15,7 @@ export type ModelProviderForUpdateDto = {
     */
     baseUrl?: string | null;
     /**
-     * @description A blank value keeps the stored key.
+     * @description A blank value keeps the stored key. A new base URL needs the key again.
      * @maxLength 1000
      * @type string | undefined
     */

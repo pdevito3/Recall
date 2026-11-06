@@ -1,6 +1,7 @@
 namespace Recall.Server.Domain.ModelProviders;
 
 using System.Security.Cryptography;
+using Exceptions;
 using Microsoft.AspNetCore.DataProtection;
 
 /// <summary>The only code that reads or writes a key of a model provider. The database holds only the protected form.</summary>
@@ -8,7 +9,20 @@ public sealed class ApiKeyProtector(IDataProtectionProvider dataProtection)
 {
     private readonly IDataProtector _protector = dataProtection.CreateProtector("Recall.ModelProviders.ApiKey.v1");
 
-    public string? Protect(string? apiKey) => apiKey is null ? null : _protector.Protect(apiKey);
+    public string? Protect(string? apiKey)
+    {
+        if (apiKey is null)
+            return null;
+
+        try
+        {
+            return _protector.Protect(apiKey);
+        }
+        catch (CryptographicException)
+        {
+            throw new ValidationException("apiKey", "The server cannot save an API key, because its key folder takes no write.");
+        }
+    }
 
     public ProtectedKeyRead Read(string? protectedKey)
     {

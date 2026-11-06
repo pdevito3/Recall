@@ -353,7 +353,10 @@ public class CleanupJobTests : TestBase
 
     [Test]
     [Property("Rule", "SES-37")]
-    public async Task a_payload_that_does_not_read_stops_only_itself()
+    [Arguments("not json")]
+    [Arguments("{}")]
+    [Arguments("null")]
+    public async Task a_payload_that_does_not_read_stops_only_itself(string badPayload)
     {
         // Arrange
         await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
@@ -363,7 +366,7 @@ public class CleanupJobTests : TestBase
         await SetJobStateAsync(good.Id, JobState.Quarantined);
         await JournalScenario.ExecuteOutOfBandAsync(
             "UPDATE backwave_jobs SET payload = $bad WHERE wire_name = $wire AND CAST(payload AS TEXT) LIKE $session",
-            ("$bad", "not json"u8.ToArray()),
+            ("$bad", System.Text.Encoding.UTF8.GetBytes(badPayload)),
             ("$wire", CleanupJob.WireName),
             ("$session", $"%{broken.Id}%"));
         var watch = ActivatorUtilities.CreateInstance<CleanupJobWatch>(Services);

@@ -66,6 +66,7 @@ function PeopleProposals({ session }: { session: SessionDto }) {
   return (
     <section className="flex flex-col gap-2">
       <h3 className="text-sm font-medium">People</h3>
+      <RefusedSaveAlert problem={respond.error ? refusalOf(respond.error, []).problem : null} />
       <ul className="flex flex-col gap-2">
         {session.peopleProposals.map(({ label }) => (
           <li key={label} className="flex flex-wrap items-center gap-2 text-sm">

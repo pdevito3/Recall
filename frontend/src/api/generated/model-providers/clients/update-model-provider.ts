@@ -8,7 +8,7 @@ import type { UpdateModelProviderOptions, UpdateModelProviderResponses } from '.
 import { client, unwrapResult } from '../../.kubb/client'
 
 /**
- * @summary Changes a model provider. A blank key keeps the stored key.
+ * @summary Changes a model provider. A blank key keeps the stored key, but a new base URL needs the key again.
  * {@link /api/v1/model-providers/:id}
  */
 export function updateModelProvider<ThrowOnError extends boolean = true>(options: Options<UpdateModelProviderOptions, ThrowOnError>): Promise<UnwrappedResult<UpdateModelProviderResponses, ThrowOnError>> {

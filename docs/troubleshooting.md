@@ -61,7 +61,7 @@ The server keeps its logs and its telemetry to about 460 MiB, and a full disk do
 
 ## The key ring changed
 
-`/health` answers with `Degraded` and says `The key ring changed` or `The key folder takes no write`. The model providers page shows the same words. `/health` looks at the key ring when the server starts, so after you enter each key again, the page clears at once and `/health` clears at the next start.
+`/health` answers with `Degraded` and says `The key ring changed` or `The key folder takes no write`. The model providers page shows these words while a saved key is unreadable or the folder takes no write. `/health` looks at the key ring when the server starts, so after you enter each key again, the page clears at once and `/health` clears at the next start. A restore with no saved key warns in `/health` at one start only, and there is no key to enter.
 
 - `The key ring changed` means that the database holds values that this key ring cannot read. A restore without `/data/keys` causes this. Restore the `keys` folder from the same backup as the database, or enter each API key of a model provider again.
 - `The key folder takes no write` means that the server cannot save a key ring in `/data/keys`. The server then makes a new ring at the next start, and each saved API key stops working. Make the folder writable, and restart the server.

@@ -1,6 +1,7 @@
 import { membershipPaths } from '@tests/support/api/membership-api'
 import { aProvider, aSession, modelProviderPaths, modelProvidersApi } from '@tests/support/api/model-providers-api'
 import { actorSubject, as } from '@tests/support/auth/actors'
+import { aProblem } from '@tests/support/builders/problem-details-builder'
 import { aUser } from '@tests/support/builders/user-builder'
 import { expect, test } from '@tests/support/fixtures'
 import { modelProviders } from './model-providers.locators'
@@ -210,6 +211,24 @@ test.describe('the Cleanup card', () => {
 
     await expect(at.tagPerson('Sam')).toHaveCount(0)
     expect(api.last('post', respondPath)?.body).toMatchObject({ label: 'Sam', approve: true, createNew: false })
+  })
+
+  test('a refused tag shows the words of the server', async ({ page, api }) => {
+    const message = 'A tag of this name makes Cleaned too long. Shorten Cleaned, then try again.'
+    const proposal = { label: 'Sam', matchedPersonId: null, isNew: true, contexts: ['I met Sam today.'] }
+    const session = aSession({ cleanupStatus: 'Clean', cleanedText: 'I met Sam today.', peopleProposals: [proposal] })
+    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(session), {
+      method: 'post',
+      path: `/api/v1/sessions/${session.id}/people-proposals/respond`,
+      status: 422,
+      body: aProblem().invalid({ label: [message] }).build(),
+    })
+    const at = modelProviders(page)
+    await page.goto(sessionUrl(session.id))
+
+    await at.tagPerson('Sam').click()
+
+    await expect(at.cleanupRefused(message)).toBeVisible()
   })
 
   test('hand edits warn before a new run', async ({ page, api }) => {

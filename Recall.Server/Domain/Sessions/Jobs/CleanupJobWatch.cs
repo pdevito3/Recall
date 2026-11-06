@@ -54,8 +54,15 @@ public sealed class CleanupJobWatch(IJobStore store, IServiceScopeFactory scopeF
                 var jobs = await store.ListJobsAsync(new JobQuery { State = state, WireName = CleanupJob.WireName, AfterSequence = after, MaxResults = PageSize }, cancellationToken);
                 foreach (var job in jobs.Where(job => !_ended.Contains(job.JobId)))
                 {
-                    await EndRunAsync(job, cancellationToken);
-                    _ended.Add(job.JobId);
+                    try
+                    {
+                        await EndRunAsync(job, cancellationToken);
+                        _ended.Add(job.JobId);
+                    }
+                    catch (Exception fault) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        _logger.Here().Warning("The watch could not end the run of Cleanup job {JobId} ({FaultType}), and it tries again.", job.JobId, fault.GetType().FullName);
+                    }
                 }
 
                 if (jobs.Count < PageSize)
@@ -67,23 +74,28 @@ public sealed class CleanupJobWatch(IJobStore store, IServiceScopeFactory scopeF
 
     private async Task EndRunAsync(JobRecord job, CancellationToken cancellationToken)
     {
-        CleanupSession? payload;
-        try
+        if (PayloadOf(job) is not { } payload)
         {
-            payload = JsonSerializer.Deserialize<CleanupSession>(job.Payload.Span, AnyCase);
-        }
-        catch (JsonException)
-        {
-            // The text of the exception can quote the payload, so the type of the failure is all that goes to the log.
             _logger.Here().Warning("Cleanup job {JobId} has a payload that does not read, so no run can end from it.", job.JobId);
             return;
         }
 
-        if (payload is null)
-            return;
-
         await using var scope = scopeFactory.CreateJournalScope(payload.TenantId, payload.UserId);
         await scope.ServiceProvider.GetRequiredService<IMediator>()
             .Send(new FailCleanupRun.Command(payload.SessionId, payload.RunId, CleanupFailure.Interrupted), cancellationToken);
+    }
+
+    /// <summary>Null when the payload holds no JSON of this job, or lacks an ID. An old job or a hand edit can do that.</summary>
+    private static CleanupSession? PayloadOf(JobRecord job)
+    {
+        try
+        {
+            var payload = JsonSerializer.Deserialize<CleanupSession>(job.Payload.Span, AnyCase);
+            return payload is { SessionId: not null, UserId: not null, TenantId: not null, RunId: not null } ? payload : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 }

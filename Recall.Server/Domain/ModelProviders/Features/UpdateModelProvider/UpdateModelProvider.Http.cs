@@ -20,7 +20,7 @@ public sealed class UpdateModelProviderEndpoint : IEndpoint
         .ProducesValidationProblem(StatusCodes.Status422UnprocessableEntity);
 
     /// <summary>
-    /// Changes a model provider. A blank key keeps the stored key.
+    /// Changes a model provider. A blank key keeps the stored key, but a new base URL needs the key again.
     /// </summary>
     public static async Task<Ok<ModelProviderDto>> Handle(
         string id,

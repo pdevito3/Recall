@@ -8,6 +8,6 @@ import * as z from 'zod'
 export const personProposalDtoSchema = z.object({
   label: z.string(),
   matchedPersonId: z.string().nullish(),
-  isNew: z.boolean().describe('True when the directory has no match, so an approval adds a Person.'),
+  isNew: z.boolean().describe('True when the directory had no match when the Cleanup ran. An approval still looks at the directory of that moment.'),
   contexts: z.array(z.string()).describe('Each sentence of Cleaned that an approval tags.'),
 })

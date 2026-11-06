@@ -10,7 +10,7 @@ public sealed record ModelProviderForUpdateDto
     [SchemaMaxLength(typeof(ModelProvider), nameof(ModelProvider.BaseUrlMaxLength))]
     public string? BaseUrl { get; init; }
 
-    /// <summary>A blank value keeps the stored key.</summary>
+    /// <summary>A blank value keeps the stored key. A new base URL needs the key again.</summary>
     [SchemaMaxLength(typeof(ModelProvider), nameof(ModelProvider.ApiKeyMaxLength))]
     public string? ApiKey { get; init; }
 

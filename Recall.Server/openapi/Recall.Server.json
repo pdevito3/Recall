@@ -991,7 +991,7 @@
         "tags": [
           "ModelProviders"
         ],
-        "summary": "Changes a model provider. A blank key keeps the stored key.",
+        "summary": "Changes a model provider. A blank key keeps the stored key, but a new base URL needs the key again.",
         "operationId": "UpdateModelProvider",
         "parameters": [
           {
@@ -4817,7 +4817,7 @@
               "null",
               "string"
             ],
-            "description": "A blank value keeps the stored key."
+            "description": "A blank value keeps the stored key. A new base URL needs the key again."
           },
           "model": {
             "maxLength": 200,
@@ -5027,11 +5027,11 @@
               "null",
               "string"
             ],
-            "description": "The Person to tag. When this is null, the match of the proposal is the Person."
+            "description": "The Person to tag. When this is null, the Person is the match of the proposal, then the Person of this label, then a new Person."
           },
           "createNew": {
             "type": "boolean",
-            "description": "True adds a Person with this label, in place of a match."
+            "description": "True adds a Person with this label, also when one has that label. Send it only when a person asks for a second one."
           }
         }
       },
