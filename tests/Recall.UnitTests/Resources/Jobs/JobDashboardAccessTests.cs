@@ -3,6 +3,8 @@ namespace Recall.UnitTests.Resources.Jobs;
 using BackWave.Dashboard;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using NSubstitute;
 using Recall.Server.Domain.Users;
 using Recall.Server.Resources.Entrypoints.Jobs;
 using Shouldly;
@@ -37,6 +39,34 @@ public class JobDashboardAccessTests
         foreach (var action in WriteActionsOf(options))
             answers.Add(await action(ContextOf(owner)));
         return answers;
+    }
+
+    /// <summary>A functional test cannot stop a host: Program.cs closes the static logger at the stop, and that silences the other tests of the run.</summary>
+    [Test]
+    public async Task a_stop_of_the_host_ends_a_live_stream_at_once()
+    {
+        // Arrange
+        var lifetime = Substitute.For<IHostApplicationLifetime>();
+        using var stopping = new CancellationTokenSource();
+        lifetime.ApplicationStopping.Returns(stopping.Token);
+        var context = new DefaultHttpContext
+        {
+            RequestServices = new ServiceCollection().AddSingleton(lifetime).BuildServiceProvider(),
+        };
+        context.Request.QueryString = new QueryString("?live=1");
+        var ended = new TaskCompletionSource();
+        var stream = JobDashboard.LimitLiveStreamAndExplainRefusalAsync(context, streaming =>
+        {
+            streaming.RequestAborted.Register(ended.SetResult);
+            return ended.Task;
+        });
+
+        // Act
+        await stopping.CancelAsync();
+        await stream.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Assert
+        ended.Task.IsCompletedSuccessfully.ShouldBeTrue();
     }
 
     [Test]

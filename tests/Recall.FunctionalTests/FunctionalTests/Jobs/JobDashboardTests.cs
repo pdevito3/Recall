@@ -341,26 +341,6 @@ public partial class JobDashboardTests
     }
 
     [Test]
-    public async Task a_stop_of_the_host_ends_a_live_stream_at_once()
-    {
-        // Arrange
-        var host = AuthHosts.StoppedLiveStream;
-        using var owner = await SignedInAsync(host);
-        var stream = owner.GetAsync($"{JobDashboard.Path}?live=1");
-        await Task.Delay(TimeSpan.FromSeconds(1));
-        stream.IsCompleted.ShouldBeFalse();
-        var clock = Stopwatch.StartNew();
-
-        // Act
-        host.Services.GetRequiredService<IHostApplicationLifetime>().StopApplication();
-        using var ended = await stream.WaitAsync(TimeSpan.FromSeconds(5));
-
-        // Assert
-        ended.StatusCode.ShouldBe(HttpStatusCode.OK);
-        clock.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(5));
-    }
-
-    [Test]
     public async Task a_session_cookie_with_no_csrf_header_still_gets_no_api_access()
     {
         // Arrange

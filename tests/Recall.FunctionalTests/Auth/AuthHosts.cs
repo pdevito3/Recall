@@ -35,8 +35,6 @@ public static class AuthHosts
 
     public static AuthFlowFactory DemotedLiveStream { get; private set; } = null!;
 
-    public static AuthFlowFactory StoppedLiveStream { get; private set; } = null!;
-
     public static AuthFlowFactory OwnerDemotion { get; private set; } = null!;
 
     public static void Start()
@@ -61,7 +59,6 @@ public static class AuthHosts
         });
         HaltedJobs = StartWithWorker();
         DemotedLiveStream = StartWithWorker();
-        StoppedLiveStream = StartWithWorker();
         OwnerDemotion = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
         TwoProviders = Start(new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts })
         {
@@ -90,7 +87,7 @@ public static class AuthHosts
 
     public static async Task StopAsync()
     {
-        foreach (var host in new[] { Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, Bundle, OwnerDemotion, Sweep, Jobs, FailingJobs, HaltedJobs, DemotedLiveStream, StoppedLiveStream })
+        foreach (var host in new[] { Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, Bundle, OwnerDemotion, Sweep, Jobs, FailingJobs, HaltedJobs, DemotedLiveStream })
         {
             if (host is not null)
                 await host.DisposeAsync();

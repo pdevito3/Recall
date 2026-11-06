@@ -38,7 +38,7 @@ public static class JobDashboard
         ResolveActor = context => context.User.FindFirst("sub")?.Value ?? "unknown",
     };
 
-    private static async Task LimitLiveStreamAndExplainRefusalAsync(HttpContext context, RequestDelegate next)
+    public static async Task LimitLiveStreamAndExplainRefusalAsync(HttpContext context, RequestDelegate next)
     {
         if (context.Request.Query["live"] == "1")
         {
