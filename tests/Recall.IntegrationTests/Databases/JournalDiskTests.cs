@@ -124,10 +124,13 @@ public class JournalDiskTests
             TestGraph.Start(out _)
                 .AddTenant(out var tenant)
                 .AddUsers(out var users, u => u.Role = UserRole.Admin().Value, u => u.Role = UserRole.User().Value);
+
+            // An install keeps a live tenant, so a delete of a tenant needs another one.
+            TestGraph.Start(out _).AddTenant(out var otherTenant);
             await using (var system = services.GetRequiredService<IServiceScopeFactory>().CreateSystemScope())
             {
                 var dbContext = system.ServiceProvider.GetRequiredService<AppDbContext>();
-                dbContext.Tenants.Add(tenant);
+                dbContext.Tenants.AddRange(tenant, otherTenant);
                 dbContext.Users.AddRange(users);
                 await dbContext.SaveChangesAsync();
             }
