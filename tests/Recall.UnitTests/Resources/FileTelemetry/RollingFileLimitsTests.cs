@@ -1,6 +1,8 @@
 namespace Recall.UnitTests.Resources.FileTelemetry;
 
 using System.Globalization;
+using Microsoft.Extensions.Configuration;
+using Recall.Server.Resources;
 using Recall.Server.Resources.FileTelemetry;
 using Serilog;
 using Serilog.Events;
@@ -226,5 +228,46 @@ public class RollingFileLimitsTests
         {
             File.Delete(blocker);
         }
+    }
+
+    [Test]
+    public void a_very_long_limit_that_is_not_a_number_gets_a_refusal_inside_the_cap()
+    {
+        // Arrange
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:appdb"] = "Data Source=/data/recall.db",
+            ["FileTelemetry:Logs:DaysKept"] = new string('x', 100_000),
+        }).Build();
+
+        // Act
+        var refusal = FileTelemetryPlan.RefusalFor(configuration);
+
+        // Assert
+        refusal.ShouldNotBeNull().ShouldContain(TelemetryText.CutMarker);
+        refusal.Length.ShouldBeLessThan(TelemetryText.MaxLength + 100);
+    }
+
+    [Test]
+    public void each_limit_above_its_largest_value_gets_a_refusal_that_names_the_setting()
+    {
+        // Arrange
+        var good = new RollingFileLimits { FileSizeBytes = 1024, FilesKept = 3, DaysKept = 3650 };
+        var options = new FileTelemetryOptions { Logs = good, Traces = good, Metrics = good, MetricExportSeconds = 86_400 };
+
+        // Act
+        var atTheEdge = options.Refusal();
+        var refusals = new[]
+        {
+            options with { Traces = good with { DaysKept = 3651 } },
+            options with { MetricExportSeconds = 86_401 },
+            options with { MetricExportSeconds = 4_294_968 },
+        }.Select(bad => bad.Refusal()).ToList();
+
+        // Assert
+        atTheEdge.ShouldBeNull();
+        refusals[0].ShouldNotBeNull().ShouldContain("FileTelemetry:Traces:DaysKept is 3651, and its largest value is 3650");
+        refusals[1].ShouldNotBeNull().ShouldContain("FileTelemetry:MetricExportSeconds is 86401, and its largest value is 86400");
+        refusals[2].ShouldNotBeNull().ShouldContain("FileTelemetry:MetricExportSeconds is 4294968");
     }
 }

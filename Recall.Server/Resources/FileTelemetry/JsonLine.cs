@@ -45,7 +45,7 @@ public static class JsonLine
                 WriteDouble(json, key, Convert.ToDouble(value, CultureInfo.InvariantCulture));
                 break;
             default:
-                json.WriteString(key, Convert.ToString(value, CultureInfo.InvariantCulture));
+                json.WriteString(key, TelemetryText.Cap(Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty));
                 break;
         }
     }

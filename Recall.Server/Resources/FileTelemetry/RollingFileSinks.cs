@@ -2,6 +2,8 @@ namespace Recall.Server.Resources.FileTelemetry;
 
 using Serilog;
 using Serilog.Configuration;
+using Serilog.Core;
+using Serilog.Events;
 using Serilog.Formatting;
 
 public static class RollingFileSinks
@@ -20,22 +22,45 @@ public static class RollingFileSinks
             fileNotice);
     }
 
-    public static LoggerConfiguration RollingFilesWithNoQueue(this LoggerSinkConfiguration writeTo, ITextFormatter formatter, string path, RollingFileLimits limits)
-        => writeTo.OneRollingFile(formatter, path, limits, FileSinkFailureNotice.OnTheConsole(path));
+    public static LoggerConfiguration RollingFilesWithNoQueue(this LoggerSinkConfiguration writeTo, ITextFormatter formatter, string path, RollingFileLimits limits, FileSinkFailureNotice notice)
+        => writeTo.OneRollingFile(formatter, path, limits, notice);
 
     /// <summary>
     /// The age limit acts when a file opens, so at each start and at each roll. The roll of each day thus removes an old
     /// file on a server with few lines.
     /// </summary>
     private static LoggerConfiguration OneRollingFile(this LoggerSinkConfiguration writeTo, ITextFormatter formatter, string path, RollingFileLimits limits, FileSinkFailureNotice notice)
-        => writeTo.Fallible(
-            to => to.File(
-                formatter,
-                path,
-                fileSizeLimitBytes: limits.FileSizeBytes,
-                rollingInterval: RollingInterval.Day,
-                rollOnFileSizeLimit: true,
-                retainedFileCountLimit: limits.FilesKept,
-                retainedFileTimeLimit: TimeSpan.FromDays(limits.DaysKept)),
-            notice);
+        => writeTo.Sink(LoggerSinkConfiguration.Wrap(
+            file => new ClosesWithNoThrow(file, notice),
+            to => to.Fallible(
+                file => file.File(
+                    formatter,
+                    path,
+                    fileSizeLimitBytes: limits.FileSizeBytes,
+                    rollingInterval: RollingInterval.Day,
+                    rollOnFileSizeLimit: true,
+                    retainedFileCountLimit: limits.FilesKept,
+                    retainedFileTimeLimit: TimeSpan.FromDays(limits.DaysKept)),
+                notice)));
+}
+
+/// <summary>
+/// A file flushes its buffer when it closes, and that throws on a full disk or a volume that went away. The throw would
+/// pass the other sinks and end the process with a crash during a stop that is otherwise clean.
+/// </summary>
+public sealed class ClosesWithNoThrow(ILogEventSink file, FileSinkFailureNotice notice) : ILogEventSink, IDisposable
+{
+    public void Emit(LogEvent logEvent) => file.Emit(logEvent);
+
+    public void Dispose()
+    {
+        try
+        {
+            (file as IDisposable)?.Dispose();
+        }
+        catch (Exception exception)
+        {
+            notice.OnCloseFailed(exception);
+        }
+    }
 }

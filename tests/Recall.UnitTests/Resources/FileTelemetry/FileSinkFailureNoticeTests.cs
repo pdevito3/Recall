@@ -2,6 +2,7 @@ namespace Recall.UnitTests.Resources.FileTelemetry;
 
 using System.Text.Json;
 using Microsoft.Extensions.Time.Testing;
+using NSubstitute;
 using Recall.Server.Resources.FileTelemetry;
 using Serilog.Core;
 using Shouldly;
@@ -66,5 +67,46 @@ public class FileSinkFailureNoticeTests
         // Assert
         beforeTheInterval.ShouldBe(1);
         LinesOf(console).Length.ShouldBe(2);
+    }
+
+    [Test]
+    public void a_file_that_cannot_close_gives_no_throw_when_the_console_also_fails()
+    {
+        // Arrange
+        var console = new StringWriter();
+        console.Dispose();
+        var notice = new FileSinkFailureNotice("/data/logs/recall-.jsonl", new FakeTimeProvider(), console);
+        var file = Substitute.For<ILogEventSink, IDisposable>();
+        ((IDisposable)file).When(sink => sink.Dispose()).Throw(new IOException("No space left on device"));
+        var closes = new ClosesWithNoThrow(file, notice);
+
+        // Act
+        var close = () => closes.Dispose();
+
+        // Assert
+        close.ShouldNotThrow();
+    }
+
+    [Test]
+    public void a_file_that_cannot_close_gives_a_line_on_the_console_and_no_throw()
+    {
+        // Arrange
+        using var console = new StringWriter();
+        var notice = new FileSinkFailureNotice("/data/logs/recall-.jsonl", new FakeTimeProvider(), console);
+        Fail(notice);
+        var file = Substitute.For<ILogEventSink, IDisposable>();
+        ((IDisposable)file).When(sink => sink.Dispose()).Throw(new IOException("No space left on device"));
+        var closes = new ClosesWithNoThrow(file, notice);
+
+        // Act
+        var close = () => closes.Dispose();
+
+        // Assert
+        close.ShouldNotThrow();
+        var lines = LinesOf(console);
+        lines.Length.ShouldBe(2);
+        var line = JsonDocument.Parse(lines[1]).RootElement;
+        line.GetProperty("@mt").GetString().ShouldNotBeNull().ShouldContain("The lines that it still held are lost");
+        line.GetProperty("Cause").GetString().ShouldBe("No space left on device");
     }
 }

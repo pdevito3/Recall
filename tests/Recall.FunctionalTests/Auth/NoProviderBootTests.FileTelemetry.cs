@@ -51,6 +51,30 @@ public partial class NoProviderBootTests
     }
 
     [Test]
+    [Arguments("FileTelemetry__Logs__DaysKept", "2147483647", "FileTelemetry:Logs:DaysKept is 2147483647")]
+    [Arguments("FileTelemetry__Traces__DaysKept", "11000000", "FileTelemetry:Traces:DaysKept is 11000000")]
+    [Arguments("FileTelemetry__MetricExportSeconds", "4294968", "FileTelemetry:MetricExportSeconds is 4294968")]
+    [Arguments("FileTelemetry__Logs__FileSizeBytes", "abc", "'FileTelemetry:Logs:FileSizeBytes'")]
+    [Arguments("FileTelemetry__Logs__DaysKept", "1.5", "'FileTelemetry:Logs:DaysKept'")]
+    [Arguments("FileTelemetry__Logs__DaysKept", "99999999999", "'FileTelemetry:Logs:DaysKept'")]
+    [Arguments("FileTelemetry__MetricExportSeconds", "", "'FileTelemetry:MetricExportSeconds'")]
+    public async Task a_limit_out_of_range_or_not_a_number_stops_the_boot_with_one_line_and_no_stack_trace(string setting, string value, string named)
+    {
+        // Arrange
+        await using var server = await ServerProcess.LaunchAsync(null, new Dictionary<string, string> { [setting] = value });
+
+        // Act
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        await server.WaitForExitAsync(limit.Token);
+
+        // Assert
+        server.ExitCode.ShouldBe(1);
+        server.Output.ShouldContain(named);
+        server.Output.ShouldContain("Correct it, and start the server again.");
+        server.Output.ShouldNotContain("   at ");
+    }
+
+    [Test]
     public async Task the_default_limits_keep_a_metric_file_for_each_of_14_days()
     {
         // Arrange

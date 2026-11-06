@@ -39,7 +39,7 @@ try
         return;
     }
 
-    if (!OpenApiBuildTime.IsActive && FileTelemetryPlan.For(builder.Configuration)?.Options.Refusal() is { } badLimit)
+    if (!OpenApiBuildTime.IsActive && FileTelemetryPlan.RefusalFor(builder.Configuration) is { } badLimit)
     {
         Log.Fatal("{Refusal:l}", badLimit);
         Environment.ExitCode = 1;
