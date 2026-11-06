@@ -15,6 +15,7 @@ using Sessions;
 using Shouldly;
 using TestUtilities;
 
+[NotInParallel(nameof(RecordingSweepTests))]
 public class RecordingSweepTests : TestBase
 {
     private static IServiceProvider Services => TestingWebApplicationFactory.Instance.Services;
@@ -149,20 +150,21 @@ public class RecordingSweepTests : TestBase
 
         // Act
         await service.StartAsync(CancellationToken.None);
-        var afterStart = await WaitForMoreJobsAsync(recording.Id, before);
-        clock.Advance(RecordingSweepService.WaitingCheck);
-        var afterHour = await WaitForMoreJobsAsync(recording.Id, afterStart);
+        var afterStart = await WaitForMoreJobsAsync(recording.Id, before, () => { });
+        var afterHour = await WaitForMoreJobsAsync(recording.Id, afterStart, () => clock.Advance(RecordingSweepService.WaitingCheck));
         await service.StopAsync(CancellationToken.None);
 
         // Assert
         afterHour.ShouldBeGreaterThan(afterStart);
     }
 
-    private static async Task<long> WaitForMoreJobsAsync(string recordingId, long known)
+    // The timer exists only after the first sweep, so one advance can come too early.
+    private static async Task<long> WaitForMoreJobsAsync(string recordingId, long known, Action beforeEachLook)
     {
         var count = known;
         for (var tries = 0; tries < 200 && count <= known; tries++)
         {
+            beforeEachLook();
             await Task.Delay(100);
             count = await CountJobsAsync("transcribe-recording", recordingId);
         }

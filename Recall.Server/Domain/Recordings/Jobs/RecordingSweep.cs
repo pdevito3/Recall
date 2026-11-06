@@ -17,7 +17,7 @@ public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore 
         var (owners, deletedTenants, liveTenants) = await ReadOwnersAsync(cancellationToken);
 
         foreach (var owner in owners)
-            await QueueWaitingAsync(owner, cancellationToken);
+            await SweepStepAsync(owner.UserId, () => QueueWaitingAsync(owner, cancellationToken));
 
         foreach (var tenantId in deletedTenants)
             RecordingWork.TryDeleteFolder(fileStore, FileKey.ForTenant(tenantId), tenantId, _logger);
@@ -39,7 +39,7 @@ public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore 
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            _logger.Here().Warning("Could not sweep the audio of {FolderOwnerId}, because of {FaultType}. The next start tries again", folderOwnerId, exception.GetType().Name);
+            _logger.Here().Warning("Could not sweep the audio of {FolderOwnerId}, because of {FaultType}. A later sweep tries again", folderOwnerId, exception.GetType().Name);
         }
     }
 
@@ -56,7 +56,7 @@ public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore 
     {
         var (owners, _, _) = await ReadOwnersAsync(cancellationToken);
         foreach (var owner in owners)
-            await QueueWaitingAsync(owner, cancellationToken);
+            await SweepStepAsync(owner.UserId, () => QueueWaitingAsync(owner, cancellationToken));
     }
 
     private async Task QueueWaitingAsync(JournalOwner owner, CancellationToken cancellationToken)
@@ -158,7 +158,7 @@ public sealed class RecordingSweepService(RecordingSweep sweep, TimeProvider tim
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             Telemetry.RecordError(System.Diagnostics.Activity.Current, exception);
-            _logger.Here().Error("The audio sweep failed with {FaultType}. The next check tries again", exception.GetType().Name);
+            _logger.Here().Error("The audio sweep failed with {FaultType}. A later sweep tries again", exception.GetType().Name);
         }
     }
 }

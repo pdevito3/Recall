@@ -286,7 +286,7 @@ public class TranscribeJobTests : TestBase
         await RunAsync(JobWith(Saying("heard words")), recording, admin);
 
         // Act
-        var save = await FactoryClient.SaveDraftAsync(recording.SessionId, "typed from an old copy", session!.RawDraftRevision);
+        var save = await FactoryClient.SaveDraftAsync(recording.SessionId, "typed from an old copy", session!.RawDraftRevision, DateTimeOffset.UtcNow.AddSeconds(1));
 
         // Assert
         save.StatusCode.ShouldBe(HttpStatusCode.OK);

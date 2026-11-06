@@ -141,6 +141,22 @@ public class DownloadModelJobTests : TestBase
         store.TryBeginDownload(DateTimeOffset.UtcNow, TimeSpan.FromMinutes(15)).ShouldBeTrue();
     }
 
+    [Test]
+    [Property("Rule", "REC-12")]
+    public async Task a_first_download_that_cannot_be_queued_keeps_no_reservation()
+    {
+        // Arrange
+        using var rig = new Rig();
+        var store = new ModelStore(Options.Create(new TranscriptionOptions { ModelRoot = rig.Root }));
+        var downloads = new ModelDownloads(new NoScopes(), store, TimeProvider.System);
+
+        // Act
+        await Should.ThrowAsync<InvalidOperationException>(() => downloads.RequestAsync(CancellationToken.None));
+
+        // Assert
+        store.TryReserveDownload().ShouldBeTrue();
+    }
+
     private sealed class NoScopes : IServiceScopeFactory
     {
         public IServiceScope CreateScope() => throw new InvalidOperationException("The database is not there.");

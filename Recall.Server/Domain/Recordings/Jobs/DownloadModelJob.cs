@@ -17,8 +17,18 @@ public sealed class ModelDownloads(IServiceScopeFactory scopeFactory, ModelStore
 {
     public async Task RequestAsync(CancellationToken cancellationToken)
     {
-        if (modelStore.TryReserveDownload())
+        if (!modelStore.TryReserveDownload())
+            return;
+
+        try
+        {
             await EnqueueAsync(timeProvider.GetUtcNow(), cancellationToken);
+        }
+        catch
+        {
+            modelStore.ForgetRetry();
+            throw;
+        }
     }
 
     public async Task EnqueueAsync(DateTimeOffset dueTime, CancellationToken cancellationToken)
