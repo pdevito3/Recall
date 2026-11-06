@@ -25,7 +25,8 @@ public static class SqliteFile
             && NetworkMountCheck.Refusal(NetworkMountCheck.RealPathOf(path), mounts) is { } refusal)
             throw new InvalidOperationException(refusal);
 
-        MakeWritableDirectory(Path.GetDirectoryName(path)!);
+        if (NotWritableRefusal(Path.GetDirectoryName(path)!) is { } notWritable)
+            throw new InvalidOperationException(notWritable);
 
         await using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
@@ -34,20 +35,21 @@ public static class SqliteFile
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    private static void MakeWritableDirectory(string directory)
+    /// <summary>Makes the directory and proves that it takes a new file.</summary>
+    /// <returns>What the operator must correct, or null when the directory takes a write.</returns>
+    public static string? NotWritableRefusal(string directory)
     {
         try
         {
             Directory.CreateDirectory(directory);
             using var proof = new FileStream(Path.Combine(directory, $".write-proof-{Guid.NewGuid():N}"),
                 FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize: 1, FileOptions.DeleteOnClose);
+            return null;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            throw new InvalidOperationException(
-                $"The data directory {directory} is not writable, so the database cannot open. " +
-                $"Mount it read-write, and give the user of this process write access. The cause: {exception.Message}",
-                exception);
+            return $"The data directory {directory} is not writable, so the database cannot open. " +
+                $"Mount it read-write, and give the user of this process write access. The cause: {exception.Message}";
         }
     }
 }

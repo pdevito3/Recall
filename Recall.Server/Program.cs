@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Recall.Server;
 using Recall.Server.Databases;
+using Recall.Server.Databases.Sqlite;
 using Recall.Server.Resources;
 using Recall.Server.Resources.Entrypoints;
 using Recall.Server.Resources.Entrypoints.Http.OpenApi;
@@ -26,6 +27,17 @@ try
 
     var builder = WebApplication.CreateBuilder(OpenApiBuildTime.WithHostArgs(args));
     CSharpReplGuard.ThrowIfLoadedOutsideDevelopment(builder.Environment);
+
+    // This check runs before the host, so that one line gives the cause. A failure in a hosted service logs the same
+    // message three times, and its first line blames the migrations.
+    if (!OpenApiBuildTime.IsActive
+        && OwnerOnlyFiles.DataDirectory(builder.Configuration) is { } dataDirectory
+        && SqliteFile.NotWritableRefusal(dataDirectory) is { } notWritable)
+    {
+        Log.Fatal("{Refusal:l}", notWritable);
+        Environment.ExitCode = 1;
+        return;
+    }
 
     builder.AddServiceDefaults(); // OpenTelemetry, Serilog, health checks, resilience, service discovery
     builder.Services.AddHostedService<MigrationHostedService<AppDbContext>>();

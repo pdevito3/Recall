@@ -72,8 +72,13 @@ public static partial class OwnerOnlyFiles
         }
     }
 
-    public static string? KeysDirectory(IConfiguration configuration)
-        => DatabaseFile(configuration) is { } file ? Path.Combine(Path.GetDirectoryName(file)!, "keys") : null;
+    public static string? DataDirectory(IConfiguration configuration)
+        => DatabaseFile(configuration) is { } file ? Path.GetDirectoryName(file)! : null;
+
+    public static string? KeysDirectory(IConfiguration configuration) => InDataDirectory(configuration, "keys");
+
+    private static string? InDataDirectory(IConfiguration configuration, string name)
+        => DataDirectory(configuration) is { } data ? Path.Combine(data, name) : null;
 
     private static string? DatabaseFile(IConfiguration configuration)
     {

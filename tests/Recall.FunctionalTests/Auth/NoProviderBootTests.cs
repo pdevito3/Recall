@@ -181,6 +181,36 @@ public partial class NoProviderBootTests
     }
 
     [Test]
+    public async Task a_data_directory_that_takes_no_write_stops_the_boot_with_one_line_that_does_not_blame_the_migrations()
+    {
+        // Arrange
+        var blocker = Path.Combine(Path.GetTempPath(), $"recall_blocker_{Guid.NewGuid():N}");
+        await File.WriteAllTextAsync(blocker, "");
+        var dataDirectory = Path.Combine(blocker, "data");
+
+        try
+        {
+            // Act
+            await using var server = await ServerProcess.LaunchAsync(null, new Dictionary<string, string>
+            {
+                ["ConnectionStrings__appdb"] = $"Data Source={Path.Combine(dataDirectory, "recall.db")}",
+            });
+            await server.WaitForExitAsync(new CancellationTokenSource(TimeSpan.FromSeconds(60)).Token);
+
+            // Assert
+            server.ExitCode.ShouldBe(1);
+            var lines = server.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            lines.Where(line => line.Contains(dataDirectory, StringComparison.Ordinal)).ShouldHaveSingleItem().ShouldContain("Mount it read-write");
+            lines.ShouldNotContain(line => line.Contains("migration", StringComparison.OrdinalIgnoreCase));
+            lines.ShouldNotContain(line => line.Contains("Hosting failed", StringComparison.Ordinal));
+        }
+        finally
+        {
+            File.Delete(blocker);
+        }
+    }
+
+    [Test]
     public async Task with_no_provider_the_server_stays_up_and_reports_no_login_method()
     {
         // Arrange
