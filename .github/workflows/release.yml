@@ -1,7 +1,5 @@
 name: release
 
-# The operator approves a release by publishing it on GitHub. No other event publishes an image.
-
 on:
   release:
     types: [published]

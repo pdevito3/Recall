@@ -1,9 +1,6 @@
-# Puts Caddy in front of Recall, so that the browser gets HTTPS and the mic works. See docs/install.md, section "Turn on HTTPS".
-#   docker compose -f compose.yaml -f compose.tls.yaml up -d
 # Caddy keeps the Host header and sets X-Forwarded-Proto, as Recall needs.
 services:
   recall:
-    # The plain HTTP port closes, so that each browser comes through Caddy.
     ports: !reset []
 
   caddy:

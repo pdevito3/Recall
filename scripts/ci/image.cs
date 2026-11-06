@@ -1,10 +1,4 @@
 #!/usr/bin/env dotnet
-// The image job of CI. It builds the image with compose.yaml, boots it, and proves the claims of docs/install.md about
-// /data, the user, the health probe, PID 1, and the budgets. It works on a throwaway copy of the checkout. See job.cs.
-//
-//   dotnet run scripts/ci/image.cs
-//
-// With --no-build, it uses the image that COMPOSE_FILE names and skips the size budget.
 
 #:include job.cs
 
@@ -18,6 +12,8 @@ const string Project = "recall-ci";
 const string Tag = "ci";
 const string FailedStart = "recall-ci-failed-start";
 const string PersistMarker = "/data/persist-marker";
+// The file store proves a write at most once in 30 s, so a change of the store shows after that time.
+const int SecondsForAProbeToChange = 45;
 
 var build = args switch
 {
@@ -126,7 +122,6 @@ void CheckDataStays(JobCopy copy)
     Require(DataIdentity(copy) == before, "The data of /data changed in a new container.");
 }
 
-// The inode and the birth of the database prove that it is the same file, and the key names that the key ring stays.
 string DataIdentity(JobCopy copy) => InContainer(copy, "sh", "-c", $"stat -c '%i %W' /data/recall.db && ls /data/keys && ls {PersistMarker}");
 
 void CheckProbeReadsBody(JobCopy copy)
@@ -144,10 +139,9 @@ void CheckProbeReadsBody(JobCopy copy)
     WaitForProbe(copy, wantedExit: 0);
 }
 
-// The store proves a write at most once in 30 s, so a change of the store shows after that time.
 string WaitForProbe(JobCopy copy, int wantedExit)
 {
-    for (var attempt = 0; attempt < 45; attempt++)
+    for (var attempt = 0; attempt < SecondsForAProbeToChange; attempt++)
     {
         var (exitCode, output, _) = copy.Capture("docker", "compose", "exec", "-T", "recall", "/app/healthcheck.sh", "8080", "0");
         if (exitCode == wantedExit)
@@ -155,7 +149,7 @@ string WaitForProbe(JobCopy copy, int wantedExit)
         Thread.Sleep(TimeSpan.FromSeconds(1));
     }
 
-    throw new StepFailure($"The probe did not exit with {wantedExit} in 45 s.");
+    throw new StepFailure($"The probe did not exit with {wantedExit} in {SecondsForAProbeToChange} s.");
 }
 
 void CheckFailedStartExits(JobCopy copy)

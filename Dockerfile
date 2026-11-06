@@ -43,7 +43,6 @@ USER 1654:1654
 EXPOSE 8080
 VOLUME /data
 
-# See docs/install.md, section "The health probe", for the interval. A probe waits up to 50 s for a disk that sleeps.
 HEALTHCHECK --interval=1h --timeout=60s --start-period=2m --start-interval=5s --retries=1 CMD ["/app/healthcheck.sh"]
 
 ENTRYPOINT ["dotnet", "Recall.Server.dll"]

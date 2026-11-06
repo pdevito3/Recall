@@ -14,7 +14,6 @@ export function ThemeProvider({
   ...props
 }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(() => {
-    // The theme script in public/theme.js reads an unknown value as "system" too.
     const stored = localStorage.getItem(storageKey)
     return stored === "dark" || stored === "light" || stored === "system" ? stored : defaultTheme
   })

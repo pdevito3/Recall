@@ -3,7 +3,6 @@ name: CI
 # The api-contract job fails when the committed OpenAPI document or the generated frontend contract is not current.
 # To correct a failure, build the Server, run `pnpm generate:api` in frontend/, and commit the result.
 # The job also builds, lints, and tests the frontend against the contract, and runs the functional suite of the frontend. The test job runs the .NET tests.
-# The image job builds the image, boots it with compose.yaml, and proves /data, the probe, PID 1, and the budgets.
 # The line-endings job fails when a tracked text file has a CR. .gitattributes stores each text file with LF.
 # The template-name job fails when code or config has the template name. See docs/adr/0017-template-fixes-by-cherry-pick.md.
 # The new-feature job runs scripts/ci/new-feature.cs, which runs scripts/new-feature.cs for two sample entities, then lints, builds, and tests the result.

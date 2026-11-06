@@ -1,4 +1,3 @@
-# docs/install.md explains this file. Put your settings in .env, and see .env.example.
 name: recall
 
 services:
@@ -22,7 +21,6 @@ services:
       - AllowedHosts
     volumes:
       - ${RECALL_DATA:-recall-data}:/data
-    # Each probe writes to the disk, so a short interval keeps a NAS disk awake. See docs/install.md, section "The health probe".
     healthcheck:
       interval: ${RECALL_PROBE_INTERVAL:-1h}
 
