@@ -269,7 +269,8 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
     {
         var plain = ProseMirrorToPlainText.Render(Cleaned.Text);
         var cleaned = MentionInsertion.Insert(Cleaned.Text, PeopleTagSpans.Spans(plain, proposal.Label, personId, personLabel));
-        ValidationException.Must(cleaned.Length <= DraftMaxLength, "label", "A tag of this name makes Cleaned too long. Shorten Cleaned, then try again.");
+        if (cleaned != Cleaned.Text)
+            ValidationException.ThrowWhenLongerThan(cleaned, DraftMaxLength, "label", "A tag of this name makes Cleaned too long. Choose Do not tag, or run a new Cleanup.");
 
         DropPersonProposal(proposal);
         if (cleaned != Cleaned.Text)

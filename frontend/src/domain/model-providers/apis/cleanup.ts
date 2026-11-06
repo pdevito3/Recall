@@ -59,7 +59,7 @@ export function useRespondToSuggestion(id: string) {
 export function useRespondToProposal(id: string) {
   const put = usePutSession(id)
   return useMutation({
-    mutationFn: (body: PersonProposalResponseDto) => respondToPersonProposal({ path: { id }, body }),
+    mutationFn: (body: PersonProposalResponseDto) => respondToPersonProposal({ path: { id }, body, options: { suppressErrorToast: true } }),
     onSuccess: put,
   })
 }

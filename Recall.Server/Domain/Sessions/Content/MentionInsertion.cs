@@ -57,7 +57,7 @@ public static class MentionInsertion
         try { doc = JsonNode.Parse(json); }
         catch (JsonException) { return json; }
 
-        return Insert(doc, spans)?.ToJsonString() ?? json;
+        return Insert(doc, spans)?.ToJsonString(PersonMentions.KeepWords) ?? json;
     }
 
     // ---- offset to node resolution -------------------------------------------------------------

@@ -214,14 +214,14 @@ test.describe('the Cleanup card', () => {
   })
 
   test('a refused tag shows the words of the server', async ({ page, api }) => {
-    const message = 'A tag of this name makes Cleaned too long. Shorten Cleaned, then try again.'
+    const message = 'A tag of this name makes Cleaned too long. Choose Do not tag, or run a new Cleanup.'
     const proposal = { label: 'Sam', matchedPersonId: null, isNew: true, contexts: ['I met Sam today.'] }
     const session = aSession({ cleanupStatus: 'Clean', cleanedText: 'I met Sam today.', peopleProposals: [proposal] })
     api.mock(signedInAs('User'), modelProvidersApi.sessionIs(session), {
       method: 'post',
       path: `/api/v1/sessions/${session.id}/people-proposals/respond`,
       status: 422,
-      body: aProblem().invalid({ label: [message] }).build(),
+      body: aProblem().saying(message).invalid({ label: [message] }).build(),
     })
     const at = modelProviders(page)
     await page.goto(sessionUrl(session.id))
@@ -229,6 +229,7 @@ test.describe('the Cleanup card', () => {
     await at.tagPerson('Sam').click()
 
     await expect(at.cleanupRefused(message)).toBeVisible()
+    await expect(at.text(message)).toHaveCount(1)
   })
 
   test('hand edits warn before a new run', async ({ page, api }) => {

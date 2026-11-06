@@ -66,10 +66,14 @@ function PeopleProposals({ session }: { session: SessionDto }) {
   return (
     <section className="flex flex-col gap-2">
       <h3 className="text-sm font-medium">People</h3>
-      <RefusedSaveAlert problem={respond.error ? refusalOf(respond.error, []).problem : null} />
       <ul className="flex flex-col gap-2">
         {session.peopleProposals.map(({ label }) => (
           <li key={label} className="flex flex-wrap items-center gap-2 text-sm">
+            {respond.error && respond.variables?.label === label && (
+              <div className="basis-full">
+                <RefusedSaveAlert problem={refusalOf(respond.error, []).problem} />
+              </div>
+            )}
             <span className="min-w-24 flex-1 wrap-anywhere">{label}</span>
             <Button size="sm" variant="outline" aria-label={`Tag ${label}`} onPress={() => respond.mutate({ label, approve: true, createNew: false })}>
               Tag
@@ -140,7 +144,7 @@ export function CleanupCard({ sessionId }: { sessionId: string }) {
         <Words title="Cleaned" text={data.cleanedText} />
         <Words title="Raw" text={data.rawText} />
         <Suggestions session={data} />
-        <PeopleProposals session={data} />
+        <PeopleProposals key={data.cleanedLatestRevision} session={data} />
       </CardContent>
     </Card>
   )

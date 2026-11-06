@@ -219,6 +219,20 @@ public class CleanupResultRoutesTests : TestBase
     }
 
     [Test]
+    public async Task a_tag_writes_words_of_any_alphabet_as_they_are()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        var session = await CleanedSessionAsync(scenario, ReplyWith("Обед с Sam.", people: ["Sam"]));
+
+        // Act
+        var tagged = await PostAsync(ApiRoutes.Sessions.RespondToPersonProposal(session.Id), new { label = "Sam", approve = true });
+
+        // Assert
+        tagged.CleanedText.ShouldContain("Обед");
+    }
+
+    [Test]
     public async Task an_approval_that_makes_cleaned_too_long_gets_422_and_adds_no_person()
     {
         // Arrange

@@ -20,7 +20,7 @@ public sealed class ApiKeyProtector(IDataProtectionProvider dataProtection)
         }
         catch (CryptographicException)
         {
-            throw new ValidationException("apiKey", "The server cannot save an API key, because its key folder takes no write.");
+            throw new ValidationException("apiKey", "The server cannot save an API key, because it cannot use its key ring. Check the key folder and the log of the server.");
         }
     }
 
