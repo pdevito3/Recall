@@ -4,17 +4,12 @@ name: CI
 # To correct a failure, build the Server, run `pnpm generate:api` in frontend/, and commit the result.
 # The job also builds, lints, and tests the frontend against the contract, and runs the functional suite of the frontend. The test job runs the .NET tests.
 # The line-endings job fails when a tracked text file has a CR. .gitattributes stores each text file with LF.
+# The template-name job fails when code or config has the template name. See docs/adr/0017-template-fixes-by-cherry-pick.md.
 # The grpc-contract job lints the .proto files and fails on a breaking change against main. See buf.yaml.
 # The new-feature job runs scripts/ci/new-feature.cs, which runs scripts/new-feature.cs for two sample entities, then lints, builds, and tests the result.
-# example:start
-# The without-examples job runs scripts/ci/examples/without-examples.cs, which runs scripts/remove-examples.cs, then builds and tests the app that is left. See docs/examples.md.
-# example:end
 # A job that calls a script under scripts/ci/ keeps its steps there, so that an agent can run them locally. The script works on a throwaway copy of the checkout.
 # The BFF jobs (bff-tests, e2e) run only when the changes job finds a BFF change, and on workflow_dispatch.
 # There is no nightly run. See section 7 of docs/specs/home-rolled-bff.md.
-# init:start - scripts/init.cs deletes these lines and conformance.yml when it renames the app
-# conformance.yml runs the OpenID conformance suite.
-# init:end
 
 on:
   pull_request:
@@ -58,10 +53,10 @@ jobs:
       # The build and the generate step write the files again for each supported version.
       # The files of a removed version then show in the diff as deleted files.
       - name: Delete the committed contract files
-        run: rm -rf FullstackTemplate.Server/openapi/*.json frontend/src/api/generated*
+        run: rm -rf Recall.Server/openapi/*.json frontend/src/api/generated*
 
       - name: Build the Server (writes the OpenAPI document)
-        run: dotnet build FullstackTemplate.Server/FullstackTemplate.Server.csproj --configuration Debug
+        run: dotnet build Recall.Server/Recall.Server.csproj --configuration Debug
 
       - name: Install the frontend packages
         working-directory: frontend
@@ -74,7 +69,7 @@ jobs:
       - name: Fail on a contract diff
         run: |
           git add --intent-to-add --all
-          git diff --exit-code --stat -- FullstackTemplate.Server/openapi ':(glob)frontend/src/api/generated*/**'
+          git diff --exit-code --stat -- Recall.Server/openapi ':(glob)frontend/src/api/generated*/**'
 
       - name: Build the frontend
         working-directory: frontend
@@ -113,59 +108,6 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  # example:start
-  without-examples:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
-        with:
-          dotnet-version: 10.0.4xx # One SDK band. A new band can add style errors, so move to it in its own PR.
-
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
-          restore-keys: nuget-${{ runner.os }}-
-
-      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          package_json_file: frontend/package.json
-
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
-
-      # The install-chromium action reads the Playwright version from the installed packages
-      - name: Install the frontend packages
-        working-directory: frontend
-        run: pnpm install --frozen-lockfile
-
-      - uses: ./.github/actions/install-chromium
-
-      - name: Run the steps of the job
-        run: dotnet run scripts/ci/examples/without-examples.cs
-
-      # .vitest/attachments/ has the failure screenshot and the Playwright trace of each failed component test
-      - name: Upload the test reports
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: without-examples-tests
-          path: |
-            ${{ runner.temp }}/without-examples/frontend/.vitest/attachments/
-            ${{ runner.temp }}/without-examples/frontend/playwright-report/
-            ${{ runner.temp }}/without-examples/frontend/test-results/
-          retention-days: 7
-          if-no-files-found: ignore
-  # example:end
-
   line-endings:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -182,6 +124,21 @@ jobs:
           elif [ $? -ne 1 ]; then
             echo "::error::git grep failed."
             exit 2
+          fi
+
+  template-name:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Fail on the template name in code or config
+        run: |
+          if git ls-files | grep -iE 'fullstack-?template' || git grep -ilE 'fullstack[- ]?template' -- ':!*.md' ':!docs/evidence/*'; then
+            echo "::error::The files above have the template name. Change it to Recall. See docs/adr/0017-template-fixes-by-cherry-pick.md."
+            exit 1
           fi
 
   grpc-contract:
@@ -204,7 +161,7 @@ jobs:
 
       - name: Fail on a breaking change to the gRPC contract
         run: |
-          if git ls-tree -r --name-only origin/main -- FullstackTemplate.Server/Domain | grep -q '\.proto$'; then
+          if git ls-tree -r --name-only origin/main -- Recall.Server/Domain | grep -q '\.proto$'; then
             buf breaking --against '.git#ref=refs/remotes/origin/main'
           else
             echo "main has no gRPC contract yet, so there is nothing to compare."
@@ -232,7 +189,7 @@ jobs:
       # The api-contract job checks the OpenAPI document, so this build does not write it again.
       # The bff-tests job runs the BFF tests, so this job skips them.
       - name: Run the tests
-        run: dotnet test --solution FullstackTemplate.slnx -p:OpenApiGenerateDocuments=false -p:SkipBffTests=true
+        run: dotnet test --solution Recall.slnx -p:OpenApiGenerateDocuments=false -p:SkipBffTests=true
 
   new-feature:
     runs-on: ubuntu-latest
@@ -242,9 +199,6 @@ jobs:
       matrix:
         examples:
           - keep
-          # example:start
-          - remove
-          # example:end
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -264,22 +218,6 @@ jobs:
         with:
           version: 1.74.0
           setup_only: true
-
-      # example:start
-      # scripts/remove-examples.cs builds the SPA again
-      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        if: matrix.examples == 'remove'
-        with:
-          package_json_file: frontend/package.json
-
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        if: matrix.examples == 'remove'
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
-
-      # example:end
 
       - name: Run the steps of the job
         run: dotnet run scripts/ci/new-feature.cs -- --examples ${{ matrix.examples }}
@@ -303,15 +241,15 @@ jobs:
         with:
           filters: |
             bff:
-              - 'FullstackTemplate.Bff/**'
-              - 'tests/FullstackTemplate.Bff.Tests/**'
+              - 'Recall.Bff/**'
+              - 'tests/Recall.Bff.Tests/**'
               # The BFF tests compile this helper with a link
-              - 'tests/FullstackTemplate.SharedTestHelpers/Utilities/PauseAtQuery.cs'
+              - 'tests/Recall.SharedTestHelpers/Utilities/PauseAtQuery.cs'
               # The BFF compiles this health check wrapper with a link
-              - 'FullstackTemplate.Server/Resources/Extensions/CallerCancellationHealthCheck.cs'
-              - 'FullstackTemplate.AppHost/**'
+              - 'Recall.Server/Resources/Extensions/CallerCancellationHealthCheck.cs'
+              - 'Recall.AppHost/**'
               # The token check of the Server, which the e2e tests call through the BFF
-              - 'FullstackTemplate.Server/Resources/Entrypoints/**'
+              - 'Recall.Server/Resources/Entrypoints/**'
               - 'Directory.Packages.props'
               - 'Directory.Build.props'
               - 'global.json'
@@ -351,7 +289,7 @@ jobs:
       # Without --results-directory, Microsoft.Testing.Platform writes the reports under bin/ of the test project.
       - name: Run the BFF tests
         run: >-
-          dotnet test --project tests/FullstackTemplate.Bff.Tests/FullstackTemplate.Bff.Tests.csproj
+          dotnet test --project tests/Recall.Bff.Tests/Recall.Bff.Tests.csproj
           --report-trx --results-directory "$GITHUB_WORKSPACE/TestResults"
 
       - name: Upload the test report

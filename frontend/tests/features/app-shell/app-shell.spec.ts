@@ -207,6 +207,12 @@ test.describe('the mobile sidebar on a 320 px phone with a 24 px default font', 
 
     const name = shell.at.mobileSidebarAppName
     await expect(name).toBeVisible()
-    expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight)).toBe(true)
+    const lineBoxOverflowOfTheFontPx = 1
+    expect(
+      await name.evaluate(
+        (el, slack) => el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight + slack,
+        lineBoxOverflowOfTheFontPx,
+      ),
+    ).toBe(true)
   })
 })

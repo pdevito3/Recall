@@ -4,7 +4,9 @@ Guidance for coding agents that work in this repository.
 
 ## Overview
 
-This is a .NET Aspire application with a React frontend. It uses the Backend-For-Frontend (BFF) pattern. It has multi-tenancy, a CQRS architecture, and a configurable auth provider. The `AuthProvider` setting of the AppHost selects it. See [docs/authentication.md](docs/authentication.md).
+Recall is a self-hosted journal. A person opens the phone, dictates, and the entry is captured with no friction. Read [CONTEXT.md](CONTEXT.md) for its language and [docs/adr/](docs/adr/) for its decisions. ADRs 0013 to 0016 give the target shape, and the code moves to it PR by PR.
+
+Today this is a .NET Aspire application with a React frontend. It uses the Backend-For-Frontend (BFF) pattern. It has multi-tenancy, a CQRS architecture, and a configurable auth provider. The `AuthProvider` setting of the AppHost selects it. See [docs/authentication.md](docs/authentication.md).
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -24,9 +26,9 @@ This is a .NET Aspire application with a React frontend. It uses the Backend-For
 
 | Project | Purpose |
 |---------|---------|
-| `FullstackTemplate.AppHost` | Aspire orchestration. Defines all resources in `AppHost.cs` |
-| `FullstackTemplate.Server` | Backend API (.NET 10, JWT auth, CQRS, multi-tenant) |
-| `FullstackTemplate.Bff` | BFF proxy (YARP and OIDC auth). Serves the SPA in production |
+| `Recall.AppHost` | Aspire orchestration. Defines all resources in `AppHost.cs` |
+| `Recall.Server` | Backend API (.NET 10, JWT auth, CQRS, multi-tenant) |
+| `Recall.Bff` | BFF proxy (YARP and OIDC auth). Serves the SPA in production |
 | `frontend` | React SPA (React 19, TanStack Router, TanStack Query, Tailwind v4) |
 | `tests/` | Unit, integration, and functional tests |
 
@@ -46,10 +48,10 @@ Read the doc for an area before you change code in that area.
 | [docs/authentication.md](docs/authentication.md) | BFF login flow, auth providers, test users |
 | [docs/frontend.md](docs/frontend.md) | Frontend structure, API client, query hooks, routes, forms |
 | [docs/frontend/](docs/frontend/) | Rules for server state, client state, code style, and tests |
-| [docs/examples.md](docs/examples.md) | The example code, its markers, and the script that deletes it |
 | [docs/specs/](docs/specs/) | The specs of a domain or an effort. Start a new spec from [TEMPLATE.md](docs/specs/TEMPLATE.md): each rule has an ID, and a test names the ID |
 | [docs/csharp-repl.md](docs/csharp-repl.md) | CSharpRepl in the running server: the hook wiring and the Development-only guards |
-| [docs/template-updates.md](docs/template-updates.md) | Merge new template commits into the app with `scripts/template-merge.cs` of the template |
+| [docs/adr/0017-template-fixes-by-cherry-pick.md](docs/adr/0017-template-fixes-by-cherry-pick.md) | How Recall takes template fixes, and the template commit that Recall started from |
+| [docs/template-updates.md](docs/template-updates.md) | The merge script of the template. Recall does not use it by default. See ADR 0017 |
 
 The pattern rules are in `docs/backend/` and `docs/frontend/`. Before you write code in an area, read its rule doc. Obey the rules in it.
 
@@ -60,7 +62,7 @@ To add a Server feature, use the `backend-feature` skill. To add the SPA pages o
 The Aspire CLI is a local tool in `dotnet-tools.json`. Run `dotnet tool restore` once, then use `dotnet aspire`.
 
 ```bash
-dotnet aspire start --isolated --non-interactive --apphost FullstackTemplate.AppHost
+dotnet aspire start --isolated --non-interactive --apphost Recall.AppHost
 ```
 
 This command starts the Aspire dashboard, the server, the BFF, the Vite dev server, and the auth provider in the background. `--isolated` gives the stack random ports and its own empty database, so that each worktree can run a stack at the same time. The `aspire-cli` skill gives the commands to wait for, inspect, restart, and stop the stack.
@@ -74,8 +76,8 @@ This command starts the Aspire dashboard, the server, the BFF, the Vite dev serv
 
 ```bash
 dotnet tool restore
-dotnet build FullstackTemplate.slnx
-dotnet test --solution FullstackTemplate.slnx
+dotnet build Recall.slnx
+dotnet test --solution Recall.slnx
 
 cd frontend
 pnpm install
@@ -95,7 +97,7 @@ pnpm test:e2e
 - Use `docker compose` with a space. Do not use `docker-compose`.
 - Do not install the Aspire workload. It is obsolete.
 - Do not use persistent containers early in development. They keep state between restarts.
-- Do not edit generated files, such as `frontend/src/routeTree.gen.ts`, `frontend/src/api/generated*/`, `FullstackTemplate.Server/openapi/`, and the EF migration snapshots.
+- Do not edit generated files, such as `frontend/src/routeTree.gen.ts`, `frontend/src/api/generated*/`, `Recall.Server/openapi/`, and the EF migration snapshots.
 - If you change the Server API, use the `api-contract` skill.
 
 ## Aspire

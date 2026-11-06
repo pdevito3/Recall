@@ -1,0 +1,9 @@
+bff rc None
+final url http://nas:24130/signin-oidc?state=<redacted>
+body {"title":"Invalid authorization response","status":400,"errors":{"callback":["The login did not complete. Start a new login."]}}
+GET /bff/user 204
+stored cookies []
+hops 302 /bff/login -> 400 /signin-oidc
+302 /bff/login .AspNetCore.OpenIdConnec=..; path=/signin-oidc; secure; samesite=lax; httponly
+302 /bff/login .AspNetCore.Correlation.=..; path=/signin-oidc; secure; samesite=lax; httponly
+ 

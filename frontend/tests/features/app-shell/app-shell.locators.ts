@@ -9,7 +9,7 @@ export const appShell = (page: Page) => ({
   headerSeparator: page.getByRole('main').getByRole('separator'),
   routerDevtoolsButton: page.getByRole('button', { name: 'Open TanStack Router Devtools' }),
   mobileSidebar: page.locator('[data-slot="sidebar"][data-mobile="true"]'),
-  mobileSidebarAppName: page.locator('[data-slot="sidebar"][data-mobile="true"]').getByText('Fullstack Template', { exact: true }),
+  mobileSidebarAppName: page.locator('[data-slot="sidebar"][data-mobile="true"]').getByText('Recall', { exact: true }),
   homeNavigationLink: page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Home' }),
   aboutNavigationLink: page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'About' }),
   currentNavigationItems: page.getByRole('navigation', { name: 'Main' }).locator('[aria-current]'),

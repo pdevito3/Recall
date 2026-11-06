@@ -1,0 +1,8 @@
+ role  |           email            | first_name | last_name |      id      
+-------+----------------------------+------------+-----------+--------------
+ Admin | alice-a@example.com        | Alice      | A         | rcl_df75e44c
+ User  | alice-b@example.com        | Alice      | B         | rcl_cf52fa8c
+ User  | bob-a@example.com          | Bob        | A         | rcl_f8f0bda7
+ User  | alice-authelia@example.com | Alice      | Authelia  | rcl_74dd58c3
+(4 rows)
+

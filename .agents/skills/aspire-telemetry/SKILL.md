@@ -11,7 +11,7 @@ The design is in `docs/telemetry.md`. Read it before you change a helper or the 
 
 ## Read telemetry
 
-The stack must be running. The `aspire-cli` skill tells how to start it. Run each command from the root of your checkout with `--apphost FullstackTemplate.AppHost`, so that it reads your stack and not the stack of another worktree.
+The stack must be running. The `aspire-cli` skill tells how to start it. Run each command from the root of your checkout with `--apphost Recall.AppHost`, so that it reads your stack and not the stack of another worktree.
 
 | You need | Command |
 |---|---|

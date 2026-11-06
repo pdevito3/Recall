@@ -1,0 +1,8 @@
+http://nas:24000 kc-a {"sub":"rcl_df75e44ceabd49d9992f4b9e08711689","role":"Admin","cookies":["recall secure=false httpOnly=true sameSite=Strict"]}
+   {"url":"http://nas:24000/","isSecureContext":false,"subtle":false,"getUserMedia":false}
+http://nas:24000 authelia {"sub":"rcl_74dd58c3dec94158b9f5760cc17c66dc","role":"User","cookies":["recall secure=false httpOnly=true sameSite=Strict"]}
+   {"url":"http://nas:24000/","isSecureContext":false,"subtle":false,"getUserMedia":false}
+https://recall.localhost:24443 kc-a {"sub":"rcl_df75e44ceabd49d9992f4b9e08711689","role":"Admin","cookies":["__Host-recall secure=true httpOnly=true sameSite=Strict"]}
+   {"url":"https://recall.localhost:24443/","isSecureContext":true,"subtle":true,"getUserMedia":true}
+https://recall.localhost:24443 authelia {"sub":"rcl_74dd58c3dec94158b9f5760cc17c66dc","role":"User","cookies":["__Host-recall secure=true httpOnly=true sameSite=Strict"]}
+   {"url":"https://recall.localhost:24443/","isSecureContext":true,"subtle":true,"getUserMedia":true}

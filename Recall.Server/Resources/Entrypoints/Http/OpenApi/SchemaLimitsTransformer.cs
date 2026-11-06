@@ -1,0 +1,111 @@
+namespace Recall.Server.Resources.Entrypoints.Http.OpenApi;
+
+using System.Globalization;
+using System.Numerics;
+using System.Text.Json.Serialization.Metadata;
+using Microsoft.AspNetCore.OpenApi;
+using Microsoft.OpenApi;
+
+/// <summary>
+/// Gives each property with a <see cref="SchemaMaxLengthAttribute"/> its <c>maxLength</c>, each property with a
+/// <see cref="SchemaMinimumAttribute"/> its <c>minimum</c>, and each property with a
+/// <see cref="SchemaMaximumAttribute"/> its <c>maximum</c>. The generated Zod schema of the SPA then has the limit, so a
+/// form reads it from the contract and not from a copy that can go stale. A max length on a schema that is not a string,
+/// or a minimum or a maximum on a schema that is not a number, fails the Debug build, so that no mark is silently lost.
+/// </summary>
+public sealed class SchemaLimitsTransformer : IOpenApiSchemaTransformer
+{
+    public Task TransformAsync(
+        OpenApiSchema schema,
+        OpenApiSchemaTransformerContext context,
+        CancellationToken cancellationToken)
+    {
+        if (context.JsonPropertyInfo is not { AttributeProvider: { } attributes } property)
+            return Task.CompletedTask;
+
+        var type = schema.Type & ~JsonSchemaType.Null;
+
+        if (attributes.GetCustomAttributes(typeof(SchemaMaxLengthAttribute), false)
+            is [SchemaMaxLengthAttribute maxLength])
+        {
+            if (type != JsonSchemaType.String)
+                throw WrongSchemaType(property, "SchemaMaxLength", schema, "a string");
+            schema.MaxLength = maxLength.MaxLength;
+        }
+
+        if (attributes.GetCustomAttributes(typeof(SchemaMinimumAttribute), false)
+            is [SchemaMinimumAttribute minimum])
+        {
+            if (type is not (JsonSchemaType.Integer or JsonSchemaType.Number))
+                throw WrongSchemaType(property, "SchemaMinimum", schema, "a number");
+            schema.Minimum = minimum.Minimum.ToString(CultureInfo.InvariantCulture);
+        }
+
+        if (attributes.GetCustomAttributes(typeof(SchemaMaximumAttribute), false)
+            is [SchemaMaximumAttribute maximum])
+        {
+            if (type is not (JsonSchemaType.Integer or JsonSchemaType.Number))
+                throw WrongSchemaType(property, "SchemaMaximum", schema, "a number");
+            schema.Maximum = maximum.Maximum.ToString(CultureInfo.InvariantCulture);
+        }
+
+        if (schema is { Minimum: { } low, Maximum: { } high } && IsMoreThan(low, high))
+            throw NoValuePasses(property, low, high);
+
+        return Task.CompletedTask;
+    }
+
+    private static bool IsMoreThan(string low, string high) =>
+        JsonNumber.Parse(low).CompareTo(JsonNumber.Parse(high)) > 0;
+
+    /// <summary>The exact value of a JSON number: <c>Sign × Digits × 10^Exponent</c>, with <c>Digits</c> not negative.</summary>
+    private readonly struct JsonNumber(int sign, BigInteger digits, BigInteger exponent) : IComparable<JsonNumber>
+    {
+        public int Sign { get; } = sign;
+        public BigInteger Digits { get; } = digits;
+        public BigInteger Exponent { get; } = exponent;
+
+        public static JsonNumber Parse(string number)
+        {
+            var e = number.IndexOfAny(['e', 'E']);
+            var exponent = e < 0
+                ? BigInteger.Zero
+                : BigInteger.Parse(number.AsSpan(e + 1), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture);
+            var mantissa = e < 0 ? number : number[..e];
+            var point = mantissa.IndexOf('.');
+            if (point >= 0)
+            {
+                exponent -= mantissa.Length - point - 1;
+                mantissa = mantissa.Remove(point, 1);
+            }
+            var digits = BigInteger.Parse(mantissa, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture);
+            return new(digits.Sign, BigInteger.Abs(digits), exponent);
+        }
+
+        public int CompareTo(JsonNumber other) =>
+            Sign != other.Sign || Sign == 0 ? Sign.CompareTo(other.Sign) : Sign * CompareSizes(other);
+
+        private int CompareSizes(JsonNumber other)
+        {
+            var byMagnitude = Magnitude.CompareTo(other.Magnitude);
+            if (byMagnitude != 0)
+                return byMagnitude;
+            // With equal magnitudes, the exponents differ by less than the digit count, so the power stays small
+            var exponent = BigInteger.Min(Exponent, other.Exponent);
+            return (Digits * BigInteger.Pow(10, (int)(Exponent - exponent)))
+                .CompareTo(other.Digits * BigInteger.Pow(10, (int)(other.Exponent - exponent)));
+        }
+
+        /// <summary>The value is at least <c>10^(Magnitude - 1)</c> and less than <c>10^Magnitude</c>.</summary>
+        private BigInteger Magnitude => Exponent + Digits.ToString(CultureInfo.InvariantCulture).Length;
+    }
+
+    private static InvalidOperationException WrongSchemaType(
+        JsonPropertyInfo property, string attribute, OpenApiSchema schema, string allowed) =>
+        new($"{property.DeclaringType.Name}.{property.Name} has [{attribute}], but its schema type is {schema.Type}. "
+            + $"Put [{attribute}] only on {allowed}.");
+
+    private static InvalidOperationException NoValuePasses(JsonPropertyInfo property, string minimum, string maximum) =>
+        new($"{property.DeclaringType.Name}.{property.Name} has the minimum {minimum} and the maximum {maximum}, so no value passes. "
+            + "Give it a minimum that is not more than its maximum.");
+}

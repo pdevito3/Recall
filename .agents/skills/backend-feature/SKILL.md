@@ -14,9 +14,6 @@ Four tasks:
 4. Files on an entity that exists: an attachment entity with its upload rules.
 
 The files that the script writes are the reference for each pattern of a CRUD feature.
-<!-- example:start -->
-The template also has a reference feature in `FullstackTemplate.Server/Examples/Workshops` and `Examples/Venues`. It shows each core pattern: a decision shape, a run again, a version, allowed actions, and the three entrypoints. `CancelWorkshop` and `ScheduleWorkshop` show each step of a new operation.
-<!-- example:end -->
 
 Read the rule doc of each area in `docs/backend/` before you change it.
 
@@ -49,10 +46,6 @@ The script writes a tenant-owned root with add, get, list, update, and delete. I
 
 A second run with the same input changes nothing. When a file that the script writes exists with other content, the script stops before it writes. CI runs the script for two samples on each pull request, and then builds and tests them (the `new-feature` job). To run the same steps before you push a change to `scripts/new-feature.cs` or to a marker, run [scripts/ci/new-feature.cs](../../../scripts/ci/new-feature.cs): `dotnet run scripts/ci/new-feature.cs`. It works on a throwaway copy of the checkout, so it does not change your files. It needs Docker and buf.
 
-<!-- example:start -->
-With examples in the template, a change to a feature can also fail the `without-examples` job. Run its steps with [scripts/ci/examples/without-examples.cs](../../../scripts/ci/examples/without-examples.cs) and the `new-feature` job with `--examples remove`. See [Run the CI jobs locally](../../../docs/examples.md#run-the-ci-jobs-locally).
-<!-- example:end -->
-
 ### Write the domain rules
 
 The script writes generic rules. Make them the rules of the domain:
@@ -65,7 +58,7 @@ The script writes generic rules. Make them the rules of the domain:
 6. For a `ref`, decide what the delete of the parent does with the entities that refer to it: refuse, delete them too, or clear the reference. Run its load and save in `RootLock.Tenant.RunExclusiveAsync` (`docs/backend/domain-events.md`, `docs/backend/concurrency.md`).
 7. If a unique value, a second foreign key, or a child entity is necessary, change the configuration and add a migration (`docs/backend/entity-configurations.md`).
 8. Regenerate and commit the API contract with the `api-contract` skill.
-9. Run `dotnet build FullstackTemplate.slnx` and `dotnet test --solution FullstackTemplate.slnx`.
+9. Run `dotnet build Recall.slnx` and `dotnet test --solution Recall.slnx`.
 
 The script writes only a root that a tenant owns. For a child entity, an entity of all tenants, or a read model of a view, write the files by hand. Use the files of a generated feature as the pattern, and the checklist of `docs/backend/audit-log.md`.
 
@@ -91,7 +84,7 @@ Rules:
 - A new required parameter of an MCP tool that exists needs a new tool name. To keep the name, add an optional parameter with the default `null` after `CancellationToken` ("MCP versions" in `docs/backend/endpoints.md`).
 - A gRPC field that can have no value is `optional`. Read `Has<Field>`, and set the response field only when the value is not null.
 - Give each new text value a rule in `<Entity>Rules` that fits the max length. Otherwise `AutoFaker` makes text that is too long, and unrelated tests fail at random.
-- Add a migration: `dotnet tool exec dotnet-ef@<version> --yes -- migrations add Add<Property>To<Entity> --project FullstackTemplate.Server --startup-project FullstackTemplate.Server --output-dir Databases/Migrations`. The version is the `Microsoft.EntityFrameworkCore.Design` version in `Directory.Packages.props`.
+- Add a migration: `dotnet tool exec dotnet-ef@<version> --yes -- migrations add Add<Property>To<Entity> --project Recall.Server --startup-project Recall.Server --output-dir Databases/Migrations`. The version is the `Microsoft.EntityFrameworkCore.Design` version in `Directory.Packages.props`.
 - Regenerate and commit the API contract with the `api-contract` skill.
 
 ## 3. New Operation

@@ -31,7 +31,7 @@ Mark a rule `(later)` after its ID until a slice builds it. A rule without `(lat
 `SpecRuleTests` fails when a rule has no test, when a test names an ID that no spec defines, when a `(later)` rule has a test, when two rows have the same ID, or when a row of a rule table gives no ID. It reads each table whose first column is `ID` as a rule table, so give a table of other items, such as open decisions, another first column. It also fails when it cannot read the Rules section: when the section has no rule table, when a table in the section has another first column (such as `Rule ID`), or when a list item in the section starts with a rule ID. Write "None" in a Rules section that has no rules. It reads each spec in `docs/specs/` and its subfolders, but not a table in a code block. To list the faults, run this command from the repository root:
 
 ```bash
-dotnet test --project tests/FullstackTemplate.UnitTests -- --treenode-filter "/*/*/SpecRuleTests/*"
+dotnet test --project tests/Recall.UnitTests -- --treenode-filter "/*/*/SpecRuleTests/*"
 ```
 
 Only a test that runs counts. In .NET, that is a `[Test]` method with no `[Skip]` on it or on its class, and the `[Property]` has the string literals `"Rule"` and the ID. In the frontend, that is a `test(...)` or `it(...)` call with a string title, and the check reads only its title and its options object (the `tag` and the `annotation`). These do not count:
@@ -45,7 +45,7 @@ The check finds the Rules section by a heading with the word "rules", such as `#
 To run the .NET tests of one rule, give the filter to each test project that has them:
 
 ```bash
-dotnet test --project tests/FullstackTemplate.UnitTests -- --treenode-filter "/*/*/*/*[Rule=R-1]"
+dotnet test --project tests/Recall.UnitTests -- --treenode-filter "/*/*/*/*[Rule=R-1]"
 ```
 
 To run the frontend tests of one rule, run `pnpm test:e2e --grep "@R-1\b"`, `pnpm test:e2e:stack --grep "@R-1\b"`, or `pnpm test -t "@R-1\b"` in `frontend/`. The `\b` keeps out `@R-10`.

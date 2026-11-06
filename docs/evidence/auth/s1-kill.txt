@@ -1,0 +1,8 @@
+keycloak token aud undefined azp recall | authelia token authelia_at_v0 dots 1
+S1 Keycloak default token, Audience=recall                 401 DPoP algs="ES256 ES384 ES512 PS256 PS384 PS512 RS256 RS384 RS512", Bearer error="invalid_token", error_descrip
+S1 Authelia opaque token, Audience=recall                  401 DPoP algs="ES256 ES384 ES512 PS256 PS384 PS512 RS256 RS384 RS512", Bearer error="invalid_token"
+S1 Keycloak token, Audience=account                        401 DPoP algs="ES256 ES384 ES512 PS256 PS384 PS512 RS256 RS384 RS512", Bearer error="invalid_token", error_descrip
+S1 positive control, audience claim azp (404=accepted)     404 
+Container recall-auth-proto-keycloak-a-1 Stopped
+S1 same token, IdP stopped, process kept its JWKS          404 
+S1 same token, IdP stopped, process restarted              401 DPoP algs="ES256 ES384 ES512 PS256 PS384 PS512 RS256 RS384 RS512", Bearer error="invalid_token", error_descrip

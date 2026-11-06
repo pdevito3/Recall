@@ -1,13 +1,13 @@
 ---
 name: test-entity-graph
-description: Arranges test data with the entity graph builder in tests/FullstackTemplate.SharedTestHelpers/EntityGraphs. Use when writing the Arrange step of a unit or integration test that needs domain entities, or when adding a new entity, input, and blueprint to the entity graph.
+description: Arranges test data with the entity graph builder in tests/Recall.SharedTestHelpers/EntityGraphs. Use when writing the Arrange step of a unit or integration test that needs domain entities, or when adding a new entity, input, and blueprint to the entity graph.
 ---
 
 # Test Entity Graph
 
 The entity graph builder builds a graph of real domain entities for a test. Each `AddX` call runs the domain factory at once. `BuildAsync` saves all new entities in one save.
 
-The code is in `tests/FullstackTemplate.SharedTestHelpers/EntityGraphs/`:
+The code is in `tests/Recall.SharedTestHelpers/EntityGraphs/`:
 
 | File | Content |
 |---|---|
@@ -17,7 +17,7 @@ The code is in `tests/FullstackTemplate.SharedTestHelpers/EntityGraphs/`:
 | `Blueprints.cs` | One blueprint per entity. The blueprint maps the input to the domain factory. The class has `[GraphGraft]`. |
 | `TestGraph.cs` | The entry point and the shared `GraphOptions`. |
 
-The source generator in `tests/FullstackTemplate.EntityGraphs.Generators/` reads `Blueprints.cs`. It makes the typed `AddX` and `AddXs` methods in the generated class `BlueprintsGrafts`. Do not write these methods by hand.
+The source generator in `tests/Recall.EntityGraphs.Generators/` reads `Blueprints.cs`. It makes the typed `AddX` and `AddXs` methods in the generated class `BlueprintsGrafts`. Do not write these methods by hand.
 
 ## Pick the right tool
 
@@ -182,9 +182,9 @@ Do these steps after the entity, its creation model, and its EF configuration ex
 
 6. If the generated name is wrong, put `[Graft("Name", Plural = "Names")]` on the field. If a field must not get methods, put `[NoGraft]` on it.
 
-7. In `tests/FullstackTemplate.UnitTests/EntityGraphs/`, add a test that the child gets the parent key from the anchor.
+7. In `tests/Recall.UnitTests/EntityGraphs/`, add a test that the child gets the parent key from the anchor.
 
-8. Run `dotnet build FullstackTemplate.slnx`. Then run the unit tests and the integration tests.
+8. Run `dotnet build Recall.slnx`. Then run the unit tests and the integration tests.
 
 Do not do these things:
 

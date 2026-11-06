@@ -4,7 +4,7 @@ import { defineConfig, devices } from '@playwright/test'
  * Playwright configuration for IDP authentication flow testing.
  *
  * The tests run against the IdP of an isolated Aspire stack, usually Keycloak. From the checkout root:
- * 1. Start the stack: AuthProvider=Keycloak dotnet aspire start --isolated --non-interactive --apphost FullstackTemplate.AppHost
+ * 1. Start the stack: AuthProvider=Keycloak dotnet aspire start --isolated --non-interactive --apphost Recall.AppHost
  * 2. Wait until the server, the BFF, and the webfrontend are healthy: dotnet aspire wait <resource> --status healthy
  * 3. In frontend, run the tests: pnpm test:e2e:stack
  *

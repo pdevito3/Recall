@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { checkStack, type DescribeRun } from './stack-description.ts'
 
-const appHost = '../FullstackTemplate.AppHost'
-const startCommand = 'dotnet aspire start --isolated --non-interactive --apphost ../FullstackTemplate.AppHost'
+const appHost = '../Recall.AppHost'
+const startCommand = 'dotnet aspire start --isolated --non-interactive --apphost ../Recall.AppHost'
 
 function resource(displayName: string, overrides: Record<string, unknown> = {}) {
   return { displayName, state: 'Running', healthStatus: 'Healthy', urls: [], environment: {}, ...overrides }
@@ -43,14 +43,14 @@ describe('checkStack', () => {
     const message = messageOf({ status: 0, stdout: 'Finding AppHosts...', error: undefined })
 
     expect(message).toContain('dotnet aspire describe gave output that the script cannot read')
-    expect(message).toContain('dotnet aspire describe --format Json --apphost ../FullstackTemplate.AppHost')
+    expect(message).toContain('dotnet aspire describe --format Json --apphost ../Recall.AppHost')
   })
 
   it('reports JSON that has no list of resources', () => {
     const message = messageOf({ status: 0, stdout: '{"apphost":"x"}', error: undefined })
 
     expect(message).toContain('dotnet aspire describe gave output that the script cannot read')
-    expect(message).toContain('dotnet aspire describe --format Json --apphost ../FullstackTemplate.AppHost')
+    expect(message).toContain('dotnet aspire describe --format Json --apphost ../Recall.AppHost')
   })
 
   it('reports the exit code and the output when describe fails', () => {
@@ -92,7 +92,7 @@ describe('checkStack', () => {
     expect(message).toContain('webfrontend (state Starting, health unknown)')
     expect(message).not.toContain('bff (')
     expect(message).toContain(
-      'for resource in server webfrontend; do dotnet aspire wait "$resource" --status healthy --timeout 900 --apphost ../FullstackTemplate.AppHost; done',
+      'for resource in server webfrontend; do dotnet aspire wait "$resource" --status healthy --timeout 900 --apphost ../Recall.AppHost; done',
     )
   })
 
