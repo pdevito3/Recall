@@ -5,6 +5,7 @@ import type { SessionDto } from '@/api/generated/models/types/session-dto'
 import { addSession } from '@/api/generated/sessions/clients/add-session'
 import { saveCleanedDraft } from '@/api/generated/sessions/clients/save-cleaned-draft'
 import { saveRawDraft } from '@/api/generated/sessions/clients/save-raw-draft'
+import { Notification } from '@/components/notification'
 
 import { sessionQueryOptions } from '../apis/get-session'
 import { SessionKeys, type DraftChannel } from '../apis/session.keys'
@@ -96,6 +97,19 @@ export class DraftSaver {
     this.saver.flush()
   }
 
+  async takeNewestWords(): Promise<string | null> {
+    const id = this.snapshot.sessionId
+    const newest = id && (await this.queryClient.fetchQuery({ ...sessionQueryOptions(id), staleTime: 0 }).catch(() => null))
+    if (!newest) {
+      Notification.error('The newest words did not load. Try again.')
+      return null
+    }
+    const isRaw = this.target.channel === 'raw'
+    this.moveBaseTo(isRaw ? newest.rawDraftRevision : newest.cleanedDraftRevision, isRaw ? newest.rawLatestRevision : newest.cleanedLatestRevision)
+    this.dismissConflict()
+    return isRaw ? newest.rawText : (newest.cleanedText ?? '')
+  }
+
   moveBaseTo(draftRevision: number, latestRevision: number) {
     this.update({ baseRevision: draftRevision, latestRevision: Math.max(latestRevision, this.snapshot.latestRevision) })
   }
@@ -166,8 +180,10 @@ export class DraftSaver {
   }
 
   private keepSessionCurrent(id: string, reply: DraftSaveResultDto, words: string | null) {
-    void this.queryClient.cancelQueries({ queryKey: SessionKeys.detail(id), exact: true })
-    this.queryClient.setQueryData<SessionDto>(SessionKeys.detail(id), (session) => {
+    const key = SessionKeys.detail(id)
+    const isLoaded = this.queryClient.getQueryData(key) !== undefined
+    void (isLoaded ? this.queryClient.cancelQueries({ queryKey: key, exact: true }) : this.queryClient.invalidateQueries({ queryKey: key, exact: true }))
+    this.queryClient.setQueryData<SessionDto>(key, (session) => {
       if (!session) return session
       const isRaw = this.target.channel === 'raw'
       const latest = isRaw ? { rawLatestRevision: reply.latestRevision } : { cleanedLatestRevision: reply.latestRevision }

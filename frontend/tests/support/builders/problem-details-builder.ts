@@ -33,6 +33,15 @@ class ProblemDetailsBuilder {
     })
   }
 
+  conflict(detail: string) {
+    return new ProblemDetailsBuilder({
+      ...this.problem,
+      title: 'The request conflicts with a record that exists.',
+      status: 409,
+      detail,
+    })
+  }
+
   notFound(detail: string) {
     return new ProblemDetailsBuilder({
       ...this.problem,

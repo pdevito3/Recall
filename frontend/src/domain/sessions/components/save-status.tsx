@@ -16,6 +16,8 @@ interface Shown {
   tone: string
 }
 
+const deletedEntryText = 'Not saved. This entry was deleted in another tab or device. Copy these words to keep them.'
+
 const timeOf = (at: string, zone: TimeZone) => formatInstant(new Date(at), zone, { hour: 'numeric', minute: '2-digit' })
 
 function shownFor(status: ShownSaveStatus, zone: TimeZone): Shown | null {
@@ -41,7 +43,7 @@ function shownFor(status: ShownSaveStatus, zone: TimeZone): Shown | null {
     case 'savedInHistory':
       return { icon: Clock01Icon, text: `Saved in History at ${timeOf(status.at, zone)}`, tone: 'text-foreground' }
     case 'refused':
-      return { icon: Alert02Icon, text: `Not saved. ${status.message}`, tone: 'text-destructive' }
+      return { icon: Alert02Icon, text: status.isGone ? deletedEntryText : `Not saved. ${status.message}`, tone: 'text-destructive' }
   }
 }
 

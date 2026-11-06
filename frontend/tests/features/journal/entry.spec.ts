@@ -56,6 +56,7 @@ test.describe('an entry', () => {
     await entry.at.showNewest.click()
 
     await expect(entry.at.words('From the other tab')).toBeVisible()
+    await expect(entry.at.editor).toBeFocused()
   })
 
   test('a save that loses says that it is in History, and Keep sends the words again over the newest save', async ({ page, api }) => {
@@ -76,6 +77,59 @@ test.describe('an entry', () => {
     expect(kept.baseRevision).toBe(5)
     expect(kept.text).toContain('edited')
     expect(kept.savedAt).not.toBe(lost.savedAt)
+    await expect(entry.at.editor).toBeFocused()
+  })
+
+  test('a save reply that lands before the first read of a reload still opens the entry', async ({ page, api }) => {
+    const session = aSession().atRevision(4).saying('Mine').build()
+    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveHasNoReply(session))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+    await entry.edit(session.id, ' edited')
+    await expect(entry.at.status('Not saved yet')).toBeVisible()
+
+    const saved = { ...aSession().atRevision(5).saying('Mine edited').build(), id: session.id, clientSessionId: session.clientSessionId }
+    api.mock({ ...sessionsApi.oneIs(saved), delayMs: 500 }, sessionsApi.draftSaveWins(session, 5))
+    await page.reload()
+
+    await expect(entry.at.words('Mine edited')).toBeVisible()
+  })
+
+  test('the words of a save that won open after the person comes back, when the read after the lost save failed', async ({ page, api }) => {
+    const session = aSession().atRevision(4).saying('Mine').build()
+    api.mock(sessionsApi.oneIs(session), sessionsApi.timelineIs([]))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+
+    api.mock(
+      sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }),
+      sessionsApi.oneFails(session.id, aProblem().refusing('Not now.')),
+    )
+    await entry.edit(session.id, ' edited')
+    await expect(entry.at.status('Saved in History at')).toBeVisible()
+    await entry.goToTheJournal()
+
+    const newest = { ...aSession().atRevision(5).saying('From the other device').build(), id: session.id, clientSessionId: session.clientSessionId }
+    api.mock(sessionsApi.oneIs(newest))
+    await entry.goBack()
+
+    await expect(entry.at.words('From the other device')).toBeVisible()
+  })
+
+  test('newest words that do not load say so, and the words on the page stay', async ({ page, api }) => {
+    const session = aSession().atRevision(4).saying('Mine').build()
+    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+    await entry.edit(session.id, ' edited')
+    await expect(entry.at.showNewest).toBeVisible()
+
+    api.mock(sessionsApi.oneFails(session.id, aProblem().refusing('Not now.')))
+    await entry.at.showNewest.click()
+
+    await expect(entry.at.newestWordsFailure).toBeVisible()
+    await expect(entry.at.words('Mine edited')).toBeVisible()
+    await expect(entry.at.showNewest).toBeVisible()
   })
 
   test('a save bases on the Draft, not on a newer Revision that lost', async ({ page, api }) => {
@@ -119,6 +173,7 @@ test.describe('an entry', () => {
 
     await expect(entry.at.words('From the other device')).toBeVisible()
     await expect(entry.at.updatedNotice).toBeVisible()
+    await expect(entry.at.editor).toBeFocused()
   })
 
   test('refused words are on the page again after a reload, with the refusal', async ({ page, api }) => {
@@ -217,6 +272,21 @@ test.describe('the tags of an entry', () => {
     expect(body.moods).toEqual(['Calm', 'Tired'])
     expect(body.userTopics).toEqual(['work'])
     expect(new Date(body.savedAt).getTime()).not.toBeNaN()
+    await expect(entry.at.moodChip('Tired')).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  test('a read that started before a mood press does not undo the press', async ({ page, api }) => {
+    const session = aSession().tagged({ moods: ['Calm'], topics: [] }).build()
+    api.mock(sessionsApi.oneIs(session))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+    await entry.at.editTags.click()
+
+    api.mock({ ...sessionsApi.oneIs(session), delayMs: 500 }, sessionsApi.metadataSaves({ ...session, moods: ['Calm', 'Tired'] }))
+    await entry.startARead(session.id)
+    await entry.pressMood(session.id, 'Tired')
+    await entry.letAnAnswerHeldForHalfASecondLand()
+
     await expect(entry.at.moodChip('Tired')).toHaveAttribute('aria-pressed', 'true')
   })
 

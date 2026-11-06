@@ -109,6 +109,24 @@ test.each([
   saver.dispose()
 })
 
+test('a reply reaches the owner before the queue changes, so a copy of the queue has what the reply taught', async () => {
+  const seen: string[] = []
+  const saver = new SerialSaver<string, string>({
+    debounceMs: 0,
+    send: () => Promise.resolve('reply'),
+    onReply: () => seen.push('reply'),
+    onQueueChange: (queue) => {
+      if (queue.lastSavedAt) seen.push('queue')
+    },
+  })
+
+  saver.edit('a')
+  await vi.advanceTimersByTimeAsync(0)
+
+  expect(seen).toEqual(['reply', 'queue'])
+  saver.dispose()
+})
+
 test.each([STALE_VERSION_PROBLEM_TYPE, CONCURRENT_CHANGE_PROBLEM_TYPE])('a 409 of type %s tries again', async (type) => {
   const { saver } = saverWith(() => Promise.reject(new ProblemDetailsError({ type, title: 'Changed', status: 409 })))
 

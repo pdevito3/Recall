@@ -37,6 +37,11 @@ export const sessionsApi = {
     return { method: 'post', path: sessionsPaths.timeline, status: 201, body: session }
   },
 
+  createIsRefused(problem: { build(): ProblemDetails }): MockRoute {
+    const body = problem.build()
+    return { method: 'post', path: sessionsPaths.timeline, status: body.status ?? 422, body }
+  },
+
   oneIs(session: SessionDto): MockRoute {
     return { method: 'get', path: sessionsPaths.one(session.id), status: 200, body: session }
   },

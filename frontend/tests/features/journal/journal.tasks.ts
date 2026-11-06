@@ -89,6 +89,15 @@ export function entryPage(page: Page) {
       await at.rowOfTheJournal(preview).click()
     },
 
+    async goToTheJournal() {
+      await at.journalLink.click()
+      await expect(journal(page).composer).toBeVisible()
+    },
+
+    async goBack() {
+      await page.goBack()
+    },
+
     async goBackTwoPages() {
       await page.evaluate(() => window.history.go(-2))
     },
@@ -97,6 +106,16 @@ export function entryPage(page: Page) {
       await at.editor.click()
       await page.keyboard.press('End')
       await page.keyboard.type(words)
+    },
+
+    async startARead(id: string) {
+      const read = page.waitForRequest((r) => r.method() === 'GET' && new URL(r.url()).pathname === sessionsPaths.one(id))
+      await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')))
+      await read
+    },
+
+    async letAnAnswerHeldForHalfASecondLand() {
+      await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 700)))
     },
 
     async pressMood(id: string, mood: string) {

@@ -1,11 +1,9 @@
-import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
 import { Button } from '@/components/ui/button'
 import { useJournalZone } from '@/domain/settings/apis/user-setting'
 
-import { sessionQueryOptions } from '../apis/get-session'
 import type { DraftChannel } from '../apis/session.keys'
 import { shownStatusOf } from '../autosave/draft-saver'
 import { useDraftSaver } from '../autosave/use-draft-saver'
@@ -25,7 +23,6 @@ const latestOf = (session: SessionDto, channel: DraftChannel) =>
   channel === 'raw' ? session.rawLatestRevision : session.cleanedLatestRevision
 
 export function DraftEditor({ session, channel }: { session: SessionDto; channel: DraftChannel }) {
-  const queryClient = useQueryClient()
   const zone = useJournalZone()
   const { saver, snapshot } = useDraftSaver({
     channel,
@@ -36,36 +33,44 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
     latestRevision: latestOf(session, channel),
   })
 
-  const [opened, setOpened] = useState(() => ({ text: saver.unsettledText() ?? draftOf(session, channel), key: 0 }))
+  const [opened, setOpened] = useState(() => ({ text: saver.unsettledText() ?? draftOf(session, channel), key: 0, takesFocus: false }))
+  const [revisionsAtOpen] = useState(() => ({ draft: draftRevisionOf(session, channel), latest: latestOf(session, channel) }))
   const [wasUpdated, setWasUpdated] = useState(false)
   const currentText = useRef(opened.text)
+  const section = useRef<HTMLElement>(null)
 
   const reopenWith = (text: string) => {
     currentText.current = text
-    setOpened((previous) => ({ text, key: previous.key + 1 }))
+    setOpened((previous) => ({ text, key: previous.key + 1, takesFocus: true }))
   }
 
   const serverText = draftOf(session, channel)
   const serverDraft = draftRevisionOf(session, channel)
   const serverLatest = latestOf(session, channel)
   useEffect(() => {
-    if (saver.unsettledText() === null) saver.dismissConflict()
-  }, [saver])
+    if (saver.unsettledText() !== null) return
+    saver.dismissConflict()
+    saver.moveBaseTo(revisionsAtOpen.draft, revisionsAtOpen.latest)
+  }, [saver, revisionsAtOpen])
   useEffect(() => {
     const { baseRevision, conflict } = saver.getSnapshot()
     if (serverDraft <= baseRevision || saver.unsettledText() !== null || conflict === 'wordsMovedToHistory') return
     saver.moveBaseTo(serverDraft, serverLatest)
     if (serverText === currentText.current) return
     currentText.current = serverText
-    setOpened((previous) => ({ text: serverText, key: previous.key + 1 }))
+    const hadFocus = section.current?.contains(document.activeElement) ?? false
+    setOpened((previous) => ({ text: serverText, key: previous.key + 1, takesFocus: hadFocus }))
     setWasUpdated(true)
   }, [saver, serverDraft, serverLatest, serverText])
 
   const showNewest = async () => {
-    const newest = await queryClient.fetchQuery({ ...sessionQueryOptions(session.id), staleTime: 0 })
-    saver.moveBaseTo(draftRevisionOf(newest, channel), latestOf(newest, channel))
-    saver.dismissConflict()
-    reopenWith(draftOf(newest, channel))
+    const newest = await saver.takeNewestWords()
+    if (newest !== null) reopenWith(newest)
+  }
+
+  const keep = () => {
+    saver.keepWords(currentText.current)
+    reopenWith(currentText.current)
   }
 
   const restore = (text: string) => {
@@ -76,9 +81,9 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
 
   return (
     <div className="flex flex-col gap-6">
-      <section aria-label={channelLabels[channel]} className="flex flex-col gap-2">
+      <section ref={section} aria-label={channelLabels[channel]} className="flex flex-col gap-2">
         {snapshot.conflict && (
-          <ConflictNotice conflict={snapshot.conflict} onShowNewest={() => void showNewest()} onKeep={() => saver.keepWords(currentText.current)} />
+          <ConflictNotice conflict={snapshot.conflict} onShowNewest={() => void showNewest()} onKeep={keep} />
         )}
         {wasUpdated && (
           <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted p-3 text-sm dark:bg-card">
@@ -90,6 +95,7 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
           key={opened.key}
           initialText={opened.text}
           label={channelLabels[channel]}
+          autoFocus={opened.takesFocus}
           onChange={(text) => {
             currentText.current = text
             setWasUpdated(false)

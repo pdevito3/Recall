@@ -18,6 +18,7 @@ export function metadataSaverFor(id: string, queryClient: QueryClient) {
     send: ({ value, savedAt }) =>
       setSessionMetadata({ path: { id }, body: { ...value, savedAt }, options: { suppressErrorToast: true } }),
     onReply: (session) => {
+      void queryClient.cancelQueries({ queryKey: SessionKeys.detail(id), exact: true })
       queryClient.setQueryData(SessionKeys.detail(id), session)
       patchTimelineRow(queryClient, id, {
         activity: session.activity,

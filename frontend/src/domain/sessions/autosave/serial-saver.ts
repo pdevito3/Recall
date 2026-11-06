@@ -6,7 +6,7 @@ const firstRetryMs = 2_000
 const longestRetryMs = 30_000
 const statusesThatCanChange = new Set([401, 408, 429])
 const conflictsThatPass = new Set([STALE_VERSION_PROBLEM_TYPE, CONCURRENT_CHANGE_PROBLEM_TYPE])
-const statusOfARowThatIsGone = 404
+const statusesOfARowThatIsGone = new Set([404, 409])
 
 function isFinalRefusal(error: unknown): error is ProblemDetailsError {
   if (!isProblemDetailsError(error) || conflictsThatPass.has(error.problemDetails.type ?? '')) return false
@@ -113,15 +113,15 @@ export class SerialSaver<T, R> {
   private handleReply(reply: R, change: Stamped<T>) {
     if (this.isDisposed) return
     this.retryMs = firstRetryMs
-    this.apply({ type: 'replied', savedAt: change.savedAt })
     this.options.onReply(reply, change)
+    this.apply({ type: 'replied', savedAt: change.savedAt })
     this.pumpUnlessDebouncing()
   }
 
   private handleFailure(error: unknown) {
     if (this.isDisposed) return
     if (isFinalRefusal(error)) {
-      this.apply({ type: 'refused', message: error.displayMessage, isGone: error.status === statusOfARowThatIsGone })
+      this.apply({ type: 'refused', message: error.displayMessage, isGone: statusesOfARowThatIsGone.has(error.status ?? 500) })
       this.pumpUnlessDebouncing()
       return
     }

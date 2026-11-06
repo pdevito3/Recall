@@ -106,6 +106,92 @@ test.describe('writing a new entry', () => {
     await expect(journal.at.status('Saved at')).toBeVisible()
   })
 
+  test('a resume that cannot read its entry starts over once, and the next words make one entry', async ({ page, api }) => {
+    const gone = aSession().saying('Old words').build()
+    api.mock(sessionsApi.creates(gone), sessionsApi.draftSaveWins(gone, 2), sessionsApi.oneIs(gone))
+    const journal = journalPage(page)
+    await journal.open()
+    await journal.write('Old words')
+    await expect(journal.at.status('Saved at')).toBeVisible()
+
+    const next = aSession().build()
+    api.mock(sessionsApi.oneFails(gone.id, aProblem().notFound('The entry is gone.')), sessionsApi.creates(next), sessionsApi.draftSaveWins(next, 2))
+    await journal.reload()
+    await expect(journal.at.composer).toBeEmpty()
+    await journal.write('Hello there')
+
+    await expect(journal.at.composer).toHaveText('Hello there')
+    expect(api.all('post', sessionsPaths.timeline)).toHaveLength(2)
+  })
+
+  test('a save that loses says so, and Keep sends the words again with the cursor still in the words', async ({ page, api }) => {
+    api.mock(sessionsApi.creates(created), sessionsApi.oneIs(created), sessionsApi.draftSaveLoses(created, { draftRevision: 3, latestRevision: 4 }))
+    const journal = journalPage(page)
+    await journal.open()
+    await journal.write('My words')
+    await expect(journal.at.conflict('The words on this page are safe in History.')).toBeVisible()
+    await expect(journal.at.status('Saved in History at')).toBeVisible()
+
+    api.mock(sessionsApi.draftSaveWins(created, 5))
+    await journal.at.keepWords.click()
+
+    await expect(journal.at.status('Saved at')).toBeVisible()
+    await expect(journal.at.conflict('The words on this page are safe in History.')).toHaveCount(0)
+    await expect(journal.at.composer).toHaveText('My words')
+    await expect(journal.at.composer).toBeFocused()
+  })
+
+  test('a save that loses can show the newest words, and the next save bases on them', async ({ page, api }) => {
+    api.mock(sessionsApi.creates(created), sessionsApi.oneIs(created), sessionsApi.draftSaveLoses(created, { draftRevision: 3, latestRevision: 4 }))
+    const journal = journalPage(page)
+    await journal.open()
+    await journal.write('My words')
+
+    const newest = { ...aSession().atRevision(3).saying('From the other tab').build(), id: created.id, clientSessionId: created.clientSessionId }
+    api.mock(sessionsApi.oneIs(newest), sessionsApi.draftSaveWins(created, 5))
+    await journal.at.showNewest.click()
+
+    await expect(journal.at.composer).toHaveText('From the other tab')
+    await expect(journal.at.composer).toBeFocused()
+    await journal.write(' and more')
+    expect((api.last('put', sessionsPaths.rawDraft(created.id))?.body as { baseRevision: number }).baseRevision).toBe(3)
+  })
+
+  test('a save that wins over a save this page did not show says where the other save is', async ({ page, api }) => {
+    api.mock(sessionsApi.creates(created), sessionsApi.draftSaveWins(created, 5))
+    const journal = journalPage(page)
+    await journal.open()
+    await journal.write('My words')
+
+    await expect(journal.at.conflict('The other save is safe in History.')).toBeVisible()
+  })
+
+  test('an entry that was deleted says so and asks the person to copy the words, and Done still clears the page', async ({ page, api }) => {
+    api.mock(sessionsApi.creates(created), sessionsApi.draftSaveIsRefused(created, aProblem().notFound('The entry is gone.')))
+    const journal = journalPage(page)
+    await journal.open()
+    await journal.write('Words for a deleted entry')
+
+    await expect(journal.at.status('This entry was deleted in another tab or device. Copy these words to keep them.')).toBeVisible()
+    await expect(journal.at.composer).toHaveText('Words for a deleted entry')
+    await journal.finish()
+
+    await expect(journal.at.composer).toBeEmpty()
+  })
+
+  test('a create that the Server refuses for a deleted entry does not go again after a reload', async ({ page, api }) => {
+    api.mock(sessionsApi.createIsRefused(aProblem().conflict('This Session was deleted, so it cannot come back. Drop the local copy.')))
+    const journal = journalPage(page)
+    await journal.open()
+    await journal.typeWithoutWaiting('Words for a deleted entry')
+    await expect(journal.at.status('This entry was deleted in another tab or device.')).toBeVisible()
+
+    await journal.reload()
+
+    await expect(journal.at.composer).toBeEmpty()
+    expect(api.all('post', sessionsPaths.timeline)).toHaveLength(1)
+  })
+
   test('a mention names a person from the directory, and a save carries the ID of the person', async ({ page, api }) => {
     api.mock(peopleApi.listIs([aPerson('per_1', 'Ana Reyes')]), sessionsApi.creates(created), sessionsApi.draftSaveWins(created, 2))
     const journal = journalPage(page)

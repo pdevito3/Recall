@@ -1,10 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 
 import { useUserSetting } from '@/domain/settings/apis/user-setting'
 import { mayTakeFocusOnThisPage } from '@/lib/first-page'
 import { newUuid } from '@/lib/new-uuid'
 
+import { sessionQueryOptions } from '../apis/get-session'
 import { draftSaverFor, shownStatusOf, type DraftSaver, type DraftSnapshot } from '../autosave/draft-saver'
 import { useOwner } from '../autosave/use-draft-saver'
 
@@ -68,7 +69,32 @@ export function useComposer() {
   })
   const [resumedSessionId] = useState(() => readPointer(owner)?.sessionId ?? null)
   const [finished, setFinished] = useState<DraftSaver | null>(null)
-  const [editorKey, setEditorKey] = useState(0)
+  const [editor, setEditor] = useState(() => ({
+    key: 0,
+    words: saver?.unsettledText() ?? (resumedSessionId === null ? '' : null),
+  }))
+  const currentWords = useRef(editor.words ?? '')
+
+  const openEditorWith = useCallback((words: string) => {
+    currentWords.current = words
+    setEditor(({ key }) => ({ key: key + 1, words }))
+  }, [])
+
+  const startOver = useCallback(() => {
+    writePointer(null)
+    setSaver(null)
+    openEditorWith('')
+  }, [openEditorWith])
+
+  const isReading = editor.words === null
+  useEffect(() => {
+    if (!isReading || !resumedSessionId) return
+    void queryClient.fetchQuery({ ...sessionQueryOptions(resumedSessionId), staleTime: 0 }).then((session) => {
+      saver?.moveBaseTo(session.rawDraftRevision, session.rawLatestRevision)
+      currentWords.current = session.rawText
+      setEditor(({ key }) => ({ key, words: session.rawText }))
+    }, startOver)
+  }, [isReading, resumedSessionId, saver, queryClient, startOver])
 
   const shown = saver ?? finished
   const snapshot = useSyncExternalStore(shown?.subscribe ?? noSubscription, shown?.getSnapshot ?? (() => idleSnapshot))
@@ -81,6 +107,7 @@ export function useComposer() {
 
   const handleChange = useCallback(
     (text: string, isEmpty: boolean) => {
+      currentWords.current = text
       if (saver) {
         saver.edit(text)
         const current = readPointer(owner)
@@ -106,33 +133,40 @@ export function useComposer() {
     [saver, owner, captureOn, queryClient],
   )
 
-  const canFinish = saver !== null && snapshot.status.kind !== 'refused'
+  const refused = snapshot.status.kind === 'refused' && !snapshot.status.isGone
+  const canFinish = saver !== null && !isReading && !refused
   const finish = useCallback(() => {
     if (!saver || !canFinish) return
     saver.flush()
     writePointer(null)
     setFinished(saver)
     setSaver(null)
-    setEditorKey((key) => key + 1)
-  }, [saver, canFinish])
+    openEditorWith('')
+  }, [saver, canFinish, openEditorWith])
 
-  const startOver = useCallback(() => {
-    writePointer(null)
-    setSaver(null)
-    setEditorKey((key) => key + 1)
-  }, [])
+  const keepWords = useCallback(() => {
+    saver?.keepWords(currentWords.current)
+    openEditorWith(currentWords.current)
+  }, [saver, openEditorWith])
+
+  const showNewest = useCallback(() => {
+    void saver?.takeNewestWords().then((newest) => {
+      if (newest !== null) openEditorWith(newest)
+    })
+  }, [saver, openEditorWith])
 
   return {
-    editorKey,
-    autoFocus: mayTakeFocusOnThisPage() || editorKey > 0,
-    resumedSessionId,
-    saver,
+    editorKey: editor.key,
+    words: editor.words,
+    autoFocus: mayTakeFocusOnThisPage() || editor.key > 0,
     status: shownStatusOf(snapshot),
+    conflict: saver ? snapshot.conflict : null,
     composingSessionId: sessionId,
     canFinish,
     handleChange,
     finish,
-    startOver,
+    keepWords,
+    showNewest,
   }
 }
 

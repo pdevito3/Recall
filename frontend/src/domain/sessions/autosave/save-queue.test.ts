@@ -52,7 +52,7 @@ test('a retry stays in the waiting state until a reply comes, so the state does 
 test('a refusal shows until the next edit, and the refused change does not go again', () => {
   const refused = run(edited('a', 't1'), { type: 'sent' }, { type: 'refused', message: 'Too long.', isGone: false })
 
-  expect(statusOf(refused)).toEqual({ kind: 'refused', message: 'Too long.' })
+  expect(statusOf(refused)).toEqual({ kind: 'refused', message: 'Too long.', isGone: false })
   expect(nextToSend(refused)).toBeNull()
   expect(statusOf(step(refused, edited('b', 't2')))).toEqual({ kind: 'unsent' })
 })
