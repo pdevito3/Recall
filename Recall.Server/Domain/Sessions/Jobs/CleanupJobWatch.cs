@@ -6,6 +6,7 @@ using Features;
 using MediatR;
 using Resources;
 using Serilog;
+using Tenants;
 using Users;
 
 /// <summary>
@@ -85,13 +86,13 @@ public sealed class CleanupJobWatch(IJobStore store, IServiceScopeFactory scopeF
             .Send(new FailCleanupRun.Command(payload.SessionId, payload.RunId, CleanupFailure.Interrupted), cancellationToken);
     }
 
-    /// <summary>Null when the payload holds no JSON of this job, or lacks an ID. An old job or a hand edit can do that.</summary>
+    /// <summary>Null when the payload holds no JSON of this job, or lacks a valid ID. An old job or a hand edit can do that.</summary>
     private static CleanupSession? PayloadOf(JobRecord job)
     {
         try
         {
             var payload = JsonSerializer.Deserialize<CleanupSession>(job.Payload.Span, AnyCase);
-            return payload is { SessionId: not null, UserId: not null, TenantId: not null, RunId: not null } ? payload : null;
+            return payload is { SessionId: not null, RunId: not null } && EntityId.IsValid(payload.TenantId, Tenant.IdPrefix) && EntityId.IsValid(payload.UserId, User.IdPrefix) ? payload : null;
         }
         catch (JsonException)
         {

@@ -356,6 +356,7 @@ public class CleanupJobTests : TestBase
     [Arguments("not json")]
     [Arguments("{}")]
     [Arguments("null")]
+    [Arguments("""{"sessionId":"ses_x","userId":"usr_x","tenantId":"not-a-tenant","runId":"run_x"}""")]
     public async Task a_payload_that_does_not_read_stops_only_itself(string badPayload)
     {
         // Arrange
