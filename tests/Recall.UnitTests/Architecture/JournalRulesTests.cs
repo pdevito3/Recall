@@ -18,30 +18,37 @@ using Shouldly;
 
 public class JournalRulesTests
 {
-    private static readonly string[] JournalNamespaces =
+    // A new table fails until its author puts it here or gives it the owner filter, so it needs no namespace to be seen.
+    private static readonly string[] TablesWithNoJournal =
     [
-        "Recall.Server.Domain.Sessions",
-        "Recall.Server.Domain.People",
-        "Recall.Server.Domain.Corrections",
-        "Recall.Server.Domain.UserSettings",
-        "Recall.Server.Domain.Sync",
+        "Tenant",
+        "User",
+        "UserPermission",
+        "Agent",
+        "AgentPermission",
+        "AuditEntry",
+        "AppCode",
+        "AuthSession",
+        "ExternalLogin",
+        "LoginAttempt",
+        "UsedDPoPProof",
     ];
 
     [Test]
     [Property("Rule", "SES-14")]
-    public void each_table_of_a_journal_domain_has_the_owner_filter()
+    public void each_table_has_the_owner_filter_or_is_named_as_no_journal()
     {
         // Arrange
         using var context = new AppDbContextFactory().CreateDbContext([]);
 
         // Act
         var missing = context.Model.GetEntityTypes()
-            .Where(e => !e.IsOwned() && e.ClrType.Namespace is { } name && JournalNamespaces.Any(root => name.StartsWith(root, StringComparison.Ordinal)))
+            .Where(e => !e.IsOwned() && !TablesWithNoJournal.Contains(e.ClrType.Name))
             .Where(e => e.FindDeclaredQueryFilter(QueryFilterNames.JournalOwner) is null)
             .Select(e => e.ClrType.Name);
 
         // Assert
-        missing.ShouldBeEmpty("A journal table needs IJournalOwned, or ApplyJournalOwner when it has no owner column.");
+        missing.ShouldBeEmpty("A table that holds journal data needs IJournalOwned, or ApplyJournalOwner when it has no owner column. Any other table goes in TablesWithNoJournal.");
     }
 
     [Test]
@@ -95,8 +102,13 @@ public class JournalRulesTests
     public void no_mcp_tool_or_grpc_service_is_in_a_journal_domain()
     {
         // Arrange
+        using var context = new AppDbContextFactory().CreateDbContext([]);
+        var journalNamespaces = context.Model.GetEntityTypes()
+            .Where(e => e.FindDeclaredQueryFilter(QueryFilterNames.JournalOwner) is not null)
+            .Select(e => e.ClrType.Namespace!)
+            .ToHashSet(StringComparer.Ordinal);
         var types = typeof(Session).Assembly.GetTypes()
-            .Where(t => t.Namespace is { } name && JournalNamespaces.Any(root => name.StartsWith(root, StringComparison.Ordinal)));
+            .Where(t => t.Namespace is { } name && journalNamespaces.Any(root => name.StartsWith(root, StringComparison.Ordinal)));
 
         // Act
         var adapters = types
