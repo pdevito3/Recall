@@ -1,5 +1,6 @@
 namespace Recall.FunctionalTests.Auth;
 
+using Microsoft.Extensions.Time.Testing;
 using Recall.Server.Auth;
 using Serilog;
 
@@ -27,6 +28,14 @@ public static class AuthHosts
 
     public static AuthFlowFactory Bundle { get; private set; } = null!;
 
+    public static AuthFlowFactory Jobs { get; private set; } = null!;
+
+    public static AuthFlowFactory FailingJobs { get; private set; } = null!;
+
+    public static AuthFlowFactory HaltedJobs { get; private set; } = null!;
+
+    public static AuthFlowFactory DemotedLiveStream { get; private set; } = null!;
+
     public static AuthFlowFactory OwnerDemotion { get; private set; } = null!;
 
     public static OtlpCollector BundleExport { get; private set; } = null!;
@@ -34,6 +43,10 @@ public static class AuthHosts
     public static AuthFlowFactory NoProviderLogout { get; private set; } = null!;
 
     public static AuthFlowFactory DownAtLogout { get; private set; } = null!;
+
+    public static AuthFlowFactory LostJobTable { get; private set; } = null!;
+
+    public static AuthFlowFactory FrozenClock { get; private set; } = null!;
 
     public static void Start()
     {
@@ -68,11 +81,26 @@ public static class AuthHosts
         _ = Bundle.Services;
         var bundleLogger = Log.Logger;
         Log.Logger = main;
+        Jobs = StartWithWorker();
+        FailingJobs = Start(new Dictionary<string, string?>
+        {
+            ["Auth:OpenSignup"] = "true",
+            ["Auth:StartPermitsPerWindow"] = ManyStarts,
+            ["Jobs:RunWorkers"] = "true",
+            ["Jobs:HealthJob:FailOnPurpose"] = "true",
+        });
+        HaltedJobs = StartWithWorker();
+        DemotedLiveStream = StartWithWorker();
         OwnerDemotion = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
         NoProviderLogout = Start(
             new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts },
             new StubOidcProvider { EndSessionEndpoint = null });
         DownAtLogout = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
+        LostJobTable = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
+        FrozenClock = Start(new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts })
+        {
+            Clock = new FakeTimeProvider(DateTimeOffset.UtcNow),
+        });
         TwoProviders = Start(new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts })
         {
             OtherProvider = new StubOidcProvider(AuthFlowFactory.OtherIssuer),
@@ -106,7 +134,7 @@ public static class AuthHosts
 
     public static async Task StopAsync()
     {
-        foreach (var host in new[] { Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, Bundle, OwnerDemotion, Sweep, NoProviderLogout, DownAtLogout })
+        foreach (var host in new[] { LostJobTable, FrozenClock, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, Bundle, OwnerDemotion, Sweep, Jobs, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
         {
             if (host is not null)
                 await host.DisposeAsync();
@@ -115,6 +143,9 @@ public static class AuthHosts
         if (BundleExport is not null)
             await BundleExport.DisposeAsync();
     }
+
+    private static AuthFlowFactory StartWithWorker() =>
+        Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts, ["Jobs:RunWorkers"] = "true" });
 
     private static AuthFlowFactory Start(Dictionary<string, string?> settings, StubOidcProvider? provider = null) => Start(new AuthFlowFactory(settings, provider));
 

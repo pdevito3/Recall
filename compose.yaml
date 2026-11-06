@@ -6,6 +6,8 @@ services:
     # Compose builds from this checkout when it cannot pull the image.
     build: .
     restart: unless-stopped
+    # The server stops in 8 s and then flushes its telemetry files. See HostShutdownTimeout in JobHosting.cs.
+    stop_grace_period: 10s
     user: ${PUID:-1654}:${PGID:-1654}
     ports:
       - ${RECALL_PORT:-8080}:8080
