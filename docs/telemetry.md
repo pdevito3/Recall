@@ -37,15 +37,15 @@ Server   PUT api/v{version}/tenants/{id}
 
 | File | Purpose |
 |------|---------|
-| `FullstackTemplate.Server/Resources/Telemetry.cs` | The `ActivitySource`, the `Meter`, the shared metrics, `Trace`, `AddEvent`, `TraceRoot`, and the `TraceContext` helpers |
-| `FullstackTemplate.Server/Resources/RequestTracingBehavior.cs` | MediatR behavior. Gives each feature slice its own span and its duration metric |
-| `FullstackTemplate.Server/Resources/LoggerExtensions.cs` | `Here()`, which adds the call site to a log event |
-| `FullstackTemplate.Server/Databases/QueryTagging.cs` | `TagWithOperationCallSite`, which names an EF query |
-| `FullstackTemplate.Server/Databases/QueryTagEnrichment.cs` | Copies the query tags into the Npgsql span |
-| `FullstackTemplate.Server/Databases/DomainEventDispatcher.cs` | Runs each domain event handler in its `domain_event.handle` span |
-| `FullstackTemplate.Server/Resources/Extensions/HostExtensions.cs` | OpenTelemetry and Serilog registration, resource attributes, framework meters, request log level |
-| `FullstackTemplate.Bff/Telemetry.cs`, `FullstackTemplate.Bff/LoginTraceLink.cs` | BFF telemetry and the login trace link |
-| `FullstackTemplate.Bff/LoggerExtensions.cs`, `FullstackTemplate.Bff/Extensions.cs` | The BFF copies of `Here()` and of the registration |
+| `Recall.Server/Resources/Telemetry.cs` | The `ActivitySource`, the `Meter`, the shared metrics, `Trace`, `AddEvent`, `TraceRoot`, and the `TraceContext` helpers |
+| `Recall.Server/Resources/RequestTracingBehavior.cs` | MediatR behavior. Gives each feature slice its own span and its duration metric |
+| `Recall.Server/Resources/LoggerExtensions.cs` | `Here()`, which adds the call site to a log event |
+| `Recall.Server/Databases/QueryTagging.cs` | `TagWithOperationCallSite`, which names an EF query |
+| `Recall.Server/Databases/QueryTagEnrichment.cs` | Copies the query tags into the Npgsql span |
+| `Recall.Server/Databases/DomainEventDispatcher.cs` | Runs each domain event handler in its `domain_event.handle` span |
+| `Recall.Server/Resources/Extensions/HostExtensions.cs` | OpenTelemetry and Serilog registration, resource attributes, framework meters, request log level |
+| `Recall.Bff/Telemetry.cs`, `Recall.Bff/LoginTraceLink.cs` | BFF telemetry and the login trace link |
+| `Recall.Bff/LoggerExtensions.cs`, `Recall.Bff/Extensions.cs` | The BFF copies of `Here()` and of the registration |
 
 ## Log, span, or event
 
@@ -78,7 +78,7 @@ Use a stable dotted span name with no ids or data in it. `AddEvent` does nothing
 
 ## Metrics
 
-The custom metrics are on the `FullstackTemplate.Server` meter:
+The custom metrics are on the `Recall.Server` meter:
 
 - `app.request.duration` - a histogram of the duration of each feature slice request, in seconds. `RequestTracingBehavior` records it. The tags are `app.request.name` (for example `GetUser.Query`) and, when the request throws, `error.type`.
 - `app.errors` - a counter of server errors. `RecordError` increments it with the `exception.type` tag. A client error (4xx) does not increment it.
@@ -91,7 +91,7 @@ The host also collects these framework meters:
 - `Microsoft.EntityFrameworkCore`. The server only.
 - `Microsoft.AspNetCore.Authentication` and `Microsoft.AspNetCore.Authorization`.
 
-The BFF has these custom metrics on the `FullstackTemplate.Bff` meter. Its HTTP, YARP, and auth meters measure each request. The BFF keeps `app.errors` for `RecordError`.
+The BFF has these custom metrics on the `Recall.Bff` meter. Its HTTP, YARP, and auth meters measure each request. The BFF keeps `app.errors` for `RecordError`.
 
 | Counter | Unit | Tags | Content |
 |---|---|---|---|
@@ -105,7 +105,7 @@ A `permanent` failure is an `invalid_grant`, or an ID token in the refresh respo
 
 Traces, metrics, and logs share the same resource attributes: `service.name`, `service.version`, `service.instance.id`, `deployment.environment`, and `host.name`. Serilog exports logs with its own OTLP sink, not with the OpenTelemetry SDK. For this reason, `HostExtensions.ResourceAttributes` gives the one list to both. As a result, the dashboard shows one resource for all three signals.
 
-The values in `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES` win over the defaults in the code. Aspire sets `service.name` to the resource name (`server` or `bff`) and `service.instance.id` to the replica id. The dashboard finds the telemetry of a resource by these two values. Thus `dotnet aspire otel traces server` finds the traces of the server. With no such variables, as in a deployment that does not set them, `service.name` is the application name, for example `FullstackTemplate.Server`.
+The values in `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES` win over the defaults in the code. Aspire sets `service.name` to the resource name (`server` or `bff`) and `service.instance.id` to the replica id. The dashboard finds the telemetry of a resource by these two values. Thus `dotnet aspire otel traces server` finds the traces of the server. With no such variables, as in a deployment that does not set them, `service.name` is the application name, for example `Recall.Server`.
 
 ## Feature slice spans
 
@@ -233,10 +233,10 @@ In Development, the console uses a `Serilog.Expressions` template. Each line sho
 
 ## Tests
 
-- Unit tests use an `ActivityListener` and filter spans by the trace id of the test. Test classes run in parallel, so the listener sees spans from other tests. See `tests/FullstackTemplate.UnitTests/Resources/TelemetryTests.cs`.
-- Unit tests for metrics use a `MeterListener`. See `tests/FullstackTemplate.UnitTests/Resources/RequestTracingBehaviorTests.cs`.
-- Functional tests use the OpenTelemetry in-memory exporter. `TestBase.ExportedSpans()` returns the spans that the current test exported. `TestBase.AllExportedSpans()` also returns startup spans, such as `database.migrate`. See `tests/FullstackTemplate.FunctionalTests/FunctionalTests/Telemetry/TracingTests.cs`.
-- `TestingWebApplicationFactory.ExportedMetrics` collects the exported metrics. Call `MeterProvider.ForceFlush()`, then read them with `ExportedMetrics.Snapshot()`. See `tests/FullstackTemplate.FunctionalTests/FunctionalTests/Telemetry/MetricsTests.cs`.
+- Unit tests use an `ActivityListener` and filter spans by the trace id of the test. Test classes run in parallel, so the listener sees spans from other tests. See `tests/Recall.UnitTests/Resources/TelemetryTests.cs`.
+- Unit tests for metrics use a `MeterListener`. See `tests/Recall.UnitTests/Resources/RequestTracingBehaviorTests.cs`.
+- Functional tests use the OpenTelemetry in-memory exporter. `TestBase.ExportedSpans()` returns the spans that the current test exported. `TestBase.AllExportedSpans()` also returns startup spans, such as `database.migrate`. See `tests/Recall.FunctionalTests/FunctionalTests/Telemetry/TracingTests.cs`.
+- `TestingWebApplicationFactory.ExportedMetrics` collects the exported metrics. Call `MeterProvider.ForceFlush()`, then read them with `ExportedMetrics.Snapshot()`. See `tests/Recall.FunctionalTests/FunctionalTests/Telemetry/MetricsTests.cs`.
 
 ## Read telemetry as an agent
 

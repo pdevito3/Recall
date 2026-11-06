@@ -46,7 +46,7 @@ The key is `(occurred_at, record_id, ordinal)`. One index serves the history of 
 
 An action is a fact that is not a data change, for example "users exported". Declare a `sealed record` that derives from `AuditAction` in `Domain/[EntityName]s/`. Its subject is the aggregate root that the action is about. Mark each property of the action that is not plain, as for an entity.
 
-<!-- code: tests/FullstackTemplate.UnitTests/Databases/Auditing/TestAuditActions.cs -->
+<!-- code: tests/Recall.UnitTests/Databases/Auditing/TestAuditActions.cs -->
 ```csharp
 [AuditActionName("users_exported")]
 public sealed record UsersExported(AuditSubject Subject, ExportFormat Format, int Count,
@@ -55,7 +55,7 @@ public sealed record UsersExported(AuditSubject Subject, ExportFormat Format, in
 
 In the handler, make the subject from the loaded root, record the action, and save:
 
-<!-- code: tests/FullstackTemplate.IntegrationTests/AuditLog/AuditActionTests.cs -->
+<!-- code: tests/Recall.IntegrationTests/AuditLog/AuditActionTests.cs -->
 ```csharp
 var tenant = await dbContext.Tenants.SingleAsync(t => t.Id == request.TenantId, cancellationToken);
 dbContext.RecordAction(new UsersExported(AuditSubject.Of(tenant), "csv", 3));
@@ -90,7 +90,7 @@ A unique violation gives a `ConstraintConflictException`, as in a save. A failed
 
 `ExecuteUpdate`, `ExecuteDelete`, raw SQL, a command on the connection of the context or on a new Npgsql connection, and COPY write no audit entry. Two checks catch them:
 
-- **The build.** `FullstackTemplate.Server/BannedSymbols.txt` bans these APIs in the Server (RS0030): `Database.GetDbConnection()`, `IRelationalConnection.DbConnection`, the `NpgsqlConnection` constructors, and the methods that make an `NpgsqlDataSource` or get a connection from one. The error names the fix.
+- **The build.** `Recall.Server/BannedSymbols.txt` bans these APIs in the Server (RS0030): `Database.GetDbConnection()`, `IRelationalConnection.DbConnection`, the `NpgsqlConnection` constructors, and the methods that make an `NpgsqlDataSource` or get a connection from one. The error names the fix.
 - **The run time.** `WriteGuard` checks each command that EF does not make itself. It refuses a DO block, a CALL, and dollar-quoted text, because their writes are not in the words of the SQL. It refuses a command that can write and that names a guarded table. The guarded tables are each table of the model, `audit_entries` too, except the tables of a `[NotAudited]` type. A LINQ query, a save, a migration, a value generator, and scaffolding run. A raw query with `FromSql` runs when it does not write. While domain event handlers run, only LINQ queries run (see [domain-events.md](domain-events.md#errors)).
 
 The checks catch mistakes, not code that wants to skip them. The guard does not see the writes of a function that a `SELECT` calls. Reflection or a suppressed ban gets past the build.
@@ -130,10 +130,6 @@ The cursor text is `{occurred_at in microseconds since 1970}_{record_id}_{ordina
 - To test the entries of a feature, send its command, then read `AuditEntries` with `ReadAsync` in an integration test. `AuditCaptureTests` and `AuditActionTests` are the examples.
 - `BulkInsertTests` proves the bulk insert against Postgres, also a lost commit and a conflict. `LostCommitReplyTests` proves a save after a lost commit.
 - `GetAuditEntryPageTests` proves the endpoint and the redaction for each permission.
-
-<!-- example:start -->
-In the workshop example, [WorkshopCommandTests.cs](../../tests/FullstackTemplate.IntegrationTests/Examples/Workshops/WorkshopCommandTests.cs) reads the audit entries of the workshop commands.
-<!-- example:end -->
 
 ## Telemetry
 

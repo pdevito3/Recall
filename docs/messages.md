@@ -16,7 +16,7 @@ A 400 for a request that does not bind names the JSON field, for example "The fi
 
 ## The check
 
-`UserMessageAnalyzer` in `FullstackTemplate.SourceGenerators` runs in each build of the Server. It reads the code of the Server and catches the common forms of a code name or an ID in a message. It is not complete. It cannot follow each path by which a value gets into a text, so a message that passes the build can still show a code. The rules apply to each message, whether the analyzer sees it or not.
+`UserMessageAnalyzer` in `Recall.SourceGenerators` runs in each build of the Server. It reads the code of the Server and catches the common forms of a code name or an ID in a message. It is not complete. It cannot follow each path by which a value gets into a text, so a message that passes the build can still show a code. The rules apply to each message, whether the analyzer sees it or not.
 
 It finds each string that goes to a user message:
 
@@ -72,4 +72,4 @@ The text of an MCP tool error starts with a code such as `permission_denied`, so
 
 ## In the SPA
 
-`apiClient` shows the `detail` of a problem in a toast (see [API client](frontend.md#api-client)). A component that also shows the error must not repeat the same text. When the SPA writes its own text, such as a toast, a label, or an empty state, these rules also apply. The SPA has no check for them. The `verify-fullstack-template` skill reads each message on the screen.
+`apiClient` shows the `detail` of a problem in a toast (see [API client](frontend.md#api-client)). A component that also shows the error must not repeat the same text. When the SPA writes its own text, such as a toast, a label, or an empty state, these rules also apply. The SPA has no check for them. The `verify-recall` skill reads each message on the screen.

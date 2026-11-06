@@ -1,0 +1,6 @@
+chromium  http://LAN-IP     cookies sent back: "c=1"                {"isSecureContext":false,"subtle":false,"randomUUID":"undefined","getUserMedia":false,"serviceWorker":false}
+chromium  http://localhost  cookies sent back: "__Host-a=1; b=1; c=1" {"isSecureContext":true,"subtle":true,"randomUUID":"function","getUserMedia":true,"serviceWorker":true}
+firefox LAN browser did not launch: browserType.launch: Failed to launch the browser process.
+firefox localhost browser did not launch: browserType.launch: Failed to launch the browser process.
+webkit    http://LAN-IP     cookies sent back: "c=1"                {"isSecureContext":false,"subtle":false,"randomUUID":"undefined","getUserMedia":false,"serviceWorker":false}
+webkit    http://localhost  cookies sent back: "b=1; c=1"           {"isSecureContext":true,"subtle":true,"randomUUID":"function","getUserMedia":true,"serviceWorker":true}

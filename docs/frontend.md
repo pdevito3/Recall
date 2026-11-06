@@ -102,7 +102,7 @@ The tag and the operation names come from the endpoint names (`.WithName`) and t
 
 To change the contract after a change to the Server API:
 
-1. Build the Server in Debug with `dotnet build FullstackTemplate.Server --no-incremental`. The build writes `FullstackTemplate.Server/openapi/FullstackTemplate.Server.json`. Without `--no-incremental`, a build with nothing to compile does not write the document again.
+1. Build the Server in Debug with `dotnet build Recall.Server --no-incremental`. The build writes `Recall.Server/openapi/Recall.Server.json`. Without `--no-incremental`, a build with nothing to compile does not write the document again.
 2. Run `pnpm generate:api` in `frontend/`.
 3. Commit the OpenAPI document and the generated files together.
 
@@ -134,7 +134,7 @@ const pagination = parsePagination(result)
 
 ### A generated type is wrong
 
-Fix the cause on the Server: the DTO, an attribute such as `[NamesOf<T>]`, or a transformer in `FullstackTemplate.Server/Resources/Entrypoints/Http/OpenApi/`. Add a test in `OpenApiTransformerTests` or `OpenApiDocumentTests`, then regenerate. The rules of the transformers are in [backend.md](backend.md#openapi-document).
+Fix the cause on the Server: the DTO, an attribute such as `[NamesOf<T>]`, or a transformer in `Recall.Server/Resources/Entrypoints/Http/OpenApi/`. Add a test in `OpenApiTransformerTests` or `OpenApiDocumentTests`, then regenerate. The rules of the transformers are in [backend.md](backend.md#openapi-document).
 
 | The generated type | The cause on the Server |
 |---|---|
@@ -226,10 +226,6 @@ The router moves the `component` of each route to a chunk that loads when the pa
   zod has its own vendor chunk (`vendorChunks` in `frontend/vite.config.ts`), so it is not in the entry chunk. When a route checks its search with zod, the zod chunk loads on each first page. It is 67 kB, 18 kB with gzip.
 - Import a type with a top-level `import type`. Do not write `import { Thing, type Option }`. The router keeps the import of a type that the component uses as `import { type Option }`, and TypeScript keeps that line as an import of the module. So the module and each module that it imports load with the entry chunk. `pnpm lint` fails on an inline type import in `routes/`.
 - Do not import a component or a large library in `validateSearch`, `loader`, or `beforeLoad`.
-<!-- example:start -->
-
-The workshop list checks its search and its page like this: [`listSearchSchema`](<../frontend/src/routes/(examples)/workshops/index.tsx>).
-<!-- example:end -->
 
 ## Bundle size
 
@@ -303,10 +299,6 @@ const filterConfig = [
 
 The control types are text, number, date, boolean, and multiselect. Groups can use AND or OR. For a date of a place, give the config the `timeZone` of the place. See "Dates and times" in [code-style.md](frontend/code-style.md).
 
-<!-- example:start -->
-"Starts At in Pago Pago" in `routes/(examples)/filter-demo.tsx` gives the `timeZone` of a place.
-<!-- example:end -->
-
 ## Forms
 
 Use React Hook Form with a Zod schema:
@@ -329,7 +321,3 @@ Take each limit of a form field from the generated Zod schema of its DTO, not fr
 const firstName = userForCreationDtoSchema.shape.firstName
 const schema = z.object({ firstName: stringWithMaxLengthOf(firstName).min(1, 'Required') })
 ```
-
-<!-- example:start -->
-The workshop forms read the max length of the title and the maximum of the capacity from the contract: [`limitsOf`](<../frontend/src/examples/workshops/components/workshop-fields-schema.ts>) and [`workshopFieldsSchema`](<../frontend/src/examples/workshops/components/workshop-fields-schema.ts>). The search boxes read the max length of the field that their filter matches, the title and the venue name: [`searchMaxLength`](<../frontend/src/routes/(examples)/workshops/index.tsx>) and [`searchMaxLength`](<../frontend/src/examples/venues/components/venue-picker.tsx>). The list hooks turn the text into a filter with [`containsText`](../frontend/src/lib/querykit-text.ts). The venue picker keeps a pick that no loaded page has, by loading it by its ID: [`optionsWithPick`](<../frontend/src/examples/venues/components/venue-picker.tsx>).
-<!-- example:end -->

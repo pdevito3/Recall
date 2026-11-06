@@ -31,20 +31,20 @@ For a Playwright run against an isolated stack, set `BASE_URL` to the `webfronte
 2. Start the stack in the background from the checkout root:
 
    ```bash
-   dotnet aspire start --isolated --non-interactive --apphost FullstackTemplate.AppHost
+   dotnet aspire start --isolated --non-interactive --apphost Recall.AppHost
    ```
 
 3. Wait for the server and the BFF. The BFF can be healthy before the server is.
 
    ```bash
-   dotnet aspire wait server --apphost FullstackTemplate.AppHost
-   dotnet aspire wait bff --apphost FullstackTemplate.AppHost
+   dotnet aspire wait server --apphost Recall.AppHost
+   dotnet aspire wait bff --apphost Recall.AppHost
    ```
 
 4. Get the URLs. The app URL is the `webfrontend` URL. The dashboard URL is in the `dotnet aspire ps` output.
 
    ```bash
-   dotnet aspire describe --apphost FullstackTemplate.AppHost
+   dotnet aspire describe --apphost Recall.AppHost
    ```
 
 The step is done when `dotnet aspire describe` shows each resource as running and healthy.
@@ -53,11 +53,11 @@ The step is done when `dotnet aspire describe` shows each resource as running an
 
 Each command (except `ps`) selects the AppHost under the current directory. The worktrees are in `.claude/worktrees/`, under the main checkout. Thus, from the main checkout, a worktree stack is also under the current directory. With two candidates, a non-interactive command stops with an error.
 
-Always add `--apphost FullstackTemplate.AppHost` and run the command from the root of your checkout. The path then names exactly one stack.
+Always add `--apphost Recall.AppHost` and run the command from the root of your checkout. The path then names exactly one stack.
 
 ## Commands
 
-All rows need `--apphost FullstackTemplate.AppHost` (see [Select the AppHost](#select-the-apphost)).
+All rows need `--apphost Recall.AppHost` (see [Select the AppHost](#select-the-apphost)).
 
 | You need | Command |
 |---|---|
@@ -71,7 +71,7 @@ All rows need `--apphost FullstackTemplate.AppHost` (see [Select the AppHost](#s
 | Rebuild a .NET project and restart it | `dotnet aspire resource <resource> rebuild` |
 | Stop the stack | `dotnet aspire stop` |
 
-The resource names are the names in `FullstackTemplate.AppHost/AppHost.cs`: `server`, `bff`, `webfrontend`, `postgres`, `appdb`, and `tests` (the Labcoat test UI).
+The resource names are the names in `Recall.AppHost/AppHost.cs`: `server`, `bff`, `webfrontend`, `postgres`, `appdb`, and `tests` (the Labcoat test UI).
 
 ## Code changes
 
@@ -86,7 +86,7 @@ The resource names are the names in `FullstackTemplate.AppHost/AppHost.cs`: `ser
 Stop your stack before you finish. The step is done when `dotnet aspire ps` does not show your AppHost path.
 
 ```bash
-dotnet aspire stop --apphost FullstackTemplate.AppHost
+dotnet aspire stop --apphost Recall.AppHost
 ```
 
 Stop only the stack of your checkout. Other stacks belong to other worktrees or to the user.

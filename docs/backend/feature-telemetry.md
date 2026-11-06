@@ -136,7 +136,7 @@ The build refuses a constant name that breaks this table (FSTTEL004) in these ca
 - The metric name of a `Meter.Create...` method, except the platform metrics `app.errors` and `app.request.duration` of `Telemetry`.
 - The property names of a Serilog message template.
 
-A tag key can also start with a namespace in `SemanticConventionNamespaces` of `FullstackTemplate.SourceGenerators/TelemetryNameAnalyzer.cs`, such as `error.type` or `server.address`. The list is a selection: the OpenTelemetry semantic-convention namespaces and the .NET, gRPC, and MCP namespaces that the packages of the Server emit. A key in another namespace gets FSTTEL004. The list leaves out `user`, `enduser`, and `session`, because this app names those tags `app.user_id` and `app.user.role`.
+A tag key can also start with a namespace in `SemanticConventionNamespaces` of `Recall.SourceGenerators/TelemetryNameAnalyzer.cs`, such as `error.type` or `server.address`. The list is a selection: the OpenTelemetry semantic-convention namespaces and the .NET, gRPC, and MCP namespaces that the packages of the Server emit. A key in another namespace gets FSTTEL004. The list leaves out `user`, `enduser`, and `session`, because this app names those tags `app.user_id` and `app.user.role`.
 
 The build does not check a name in `ActivitySource.StartActivity`, in `Activity.AddTag`, in a metric tag in a `KeyValuePair` or a `TagList`, in a property from `PropertyEnricher`, `LogContext.PushProperty`, or `ForContext`, or in a Microsoft.Extensions.Logging template. Obey the table there yourself.
 
@@ -159,9 +159,9 @@ Production keeps `Information` and higher (`appsettings.json`). Thus a `Debug` l
 
 `Domain/Users/UserMetrics.cs`:
 
-<!-- code: FullstackTemplate.Server/Domain/Users/UserMetrics.cs -->
+<!-- code: Recall.Server/Domain/Users/UserMetrics.cs -->
 ```csharp
-namespace FullstackTemplate.Server.Domain.Users;
+namespace Recall.Server.Domain.Users;
 
 using System.Diagnostics.Metrics;
 using Resources;
@@ -177,7 +177,7 @@ public static class UserMetrics
 
 `Domain/Users/Features/UpdateUserRole/UpdateUserRole.cs`, the telemetry lines and the lines around them:
 
-<!-- code: FullstackTemplate.Server/Domain/Users/Features/UpdateUserRole/UpdateUserRole.cs -->
+<!-- code: Recall.Server/Domain/Users/Features/UpdateUserRole/UpdateUserRole.cs -->
 ```csharp
 private readonly ILogger _logger = Log.ForContext<Handler>();
 
@@ -212,15 +212,11 @@ The example obeys these rules:
 - The log and the metric come after the save. Thus they record only a change that the database kept.
 - A request for the role that the user already has changes no role. Thus it writes no log and counts nothing.
 
-<!-- example:start -->
-`ScheduleWorkshop` tags the kind of a refusal. It logs and counts a status change only after the save, and only when the status changed. Both are in [ScheduleWorkshop.cs](../../FullstackTemplate.Server/Examples/Workshops/Features/ScheduleWorkshop/ScheduleWorkshop.cs). The counter is in [WorkshopMetrics.cs](../../FullstackTemplate.Server/Examples/Workshops/WorkshopMetrics.cs).
-<!-- example:end -->
-
 ## Test the telemetry
 
 If an alert, a dashboard, or a runbook uses a signal, write a test for it. A test stops a rename that breaks the alert. A log with no consumer needs no test.
 
-- For a span tag, use a functional test. Start a parent activity, send the request, and filter `ExportedSpans()` by the trace id of the parent. See `tests/FullstackTemplate.FunctionalTests/FunctionalTests/Telemetry/TracingTests.cs`.
+- For a span tag, use a functional test. Start a parent activity, send the request, and filter `ExportedSpans()` by the trace id of the parent. See `tests/Recall.FunctionalTests/FunctionalTests/Telemetry/TracingTests.cs`.
 - For a metric, call `MeterProvider.ForceFlush()`, then read `TestingWebApplicationFactory.ExportedMetrics.Snapshot()`. See `MetricsTests.cs` in the same folder.
 - A test class that reads all the exported spans must have `[NotInParallel]`.
 

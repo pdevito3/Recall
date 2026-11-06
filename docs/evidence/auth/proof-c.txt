@@ -1,0 +1,18 @@
+--- A. existing OIDC owner adds a password: up in 22.0s pid=82793
+status {"state":"ready","setupRequired":false,"modes":[["password","local","ready"],["oidc","kc-a","ready"],["oidc","authelia","ready"]]}
+oidc owner rcl_df75e44ceabd49d9992f4b9e08711689 Admin
+set password 204
+--- B. web login with the form in a real browser
+same internal user as OIDC: true | template endpoint role Admin | cookies ["recall"]
+wrong password 401 | unknown user 401
+--- C. app-shaped login returns the same JSON tokens
+keys access_token,refresh_token,token_type,expires_in
+me {"sub":"rcl_df75e44ceabd49d9992f4b9e08711689","sid":"<redacted>","clientKind":"app"} | same user true | template endpoint 200 users list 200
+refresh through the same /auth/token 200
+--- D. every IdP stopped, password still works: Container recall-auth-proto-keycloak-b-1 Stopped
+status {"state":"ready","setupRequired":false,"modes":[["password","local","ready"],["oidc","kc-a","unreachable"],["oidc","authelia","unreachable"]]}
+login 200
+--- E. fresh install, no IdP at all: up in 15.0s pid=83684
+status {"state":"ready","setupRequired":true,"modes":[["password","local","ready"]]}
+setup 200 role Admin email rcl_2dfc55bc4e4046a3abf0e0f665527734@no-email.invalid last -
+second setup 409 | status {"state":"ready","setupRequired":false,"modes":[["password","local","ready"]]}

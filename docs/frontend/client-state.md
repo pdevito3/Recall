@@ -15,10 +15,6 @@ Use the first item in this list that fits:
 
 The app has no global store library. Before you add one, make sure that items 1 to 6 do not fit.
 
-<!-- example:start -->
-The workshop list keeps its search and its page in the search params. A zod schema validates them, and a value that it refuses falls back to the default. The page comes from the contract schema. The search is plain text, because the list hook turns it into a filter: [`listSearchSchema`](<../../frontend/src/routes/(examples)/workshops/index.tsx>). A search that arrives after a link or Back changed the URL does not overwrite the URL: [`handleSearch`](<../../frontend/src/routes/(examples)/workshops/index.tsx>).
-<!-- example:end -->
-
 ## Calculate, do not store
 
 ```typescript
@@ -85,9 +81,7 @@ Do not use an effect for these jobs:
 | Fetch data | TanStack Query |
 | Update state after another state update | Do both updates in one event handler |
 
-<!-- example:start -->
 The search box of a list changes its text during render when the URL changes from outside, not with a `key`. A `key` would remount the box on each URL change, and the remount would drop the text that the user typed after the last search: [`SearchBox`](../../frontend/src/components/search-box.tsx).
-<!-- example:end -->
 
 The debounce timer of a search box is an effect with a cleanup: [`useDebouncedCallback`](../../frontend/src/hooks/use-debounced-callback.ts).
 

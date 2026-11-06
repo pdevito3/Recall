@@ -1,0 +1,71 @@
+status before first login {"instance":"recall","state":"ready","message":null,"setupRequired":true,"modes":[{"kind":"oidc","id":"kc-a","displayName":"Keycloak A","state":"ready","detail":null,"startUrl":"/auth/oidc/kc-a/start"},{"kind":"oidc","id":"kc-b","displayName":"Keycloak B","state":"ready","detail":null,"startUrl":"/auth/oidc/kc-b/start"},{"kind":"oidc","id":"authelia","displayName":"Authelia","state":"ready","detail":null,"startUrl":"/auth/oidc/authelia/start"}]}
+kc-a alice first login             {"sub":"rcl_df75e44ceabd49d9992f4b9e08711689","role":"Admin","email":"alice-a@example.com","username":"alice","cookies":["recall secure=false httpOnly=true sameSite=Strict"]}
+spa text: FT Fullstack Template Navigation Home Users About Examples Toggle Sidebar Home Fullstack Template .NET Aspire + React with a BFF Your session Signed in as rcl_d
+kc-a alice repeat (new browser)    {"sub":"rcl_df75e44ceabd49d9992f4b9e08711689","role":"Admin","email":"alice-a@example.com","username":"alice","cookies":["recall secure=false httpOnly=true sameSite=Strict"]}
+kc-b alice (same sub claim)        {"sub":"rcl_cf52fa8cbb1b401fbbb307ed09742289","role":"User","email":"alice-b@example.com","username":"alice","cookies":["recall secure=false httpOnly=true sameSite=Strict"]}
+kc-a bob                           {"sub":"rcl_f8f0bda71f214de7ab1f5567a2640cbf","role":"User","email":"bob-a@example.com","username":"bob","cookies":["recall secure=false httpOnly=true sameSite=Strict"]}
+authelia alice                     {"sub":"rcl_74dd58c3dec94158b9f5760cc17c66dc","role":"User","email":"alice-authelia@example.com","username":"alice","cookies":["recall secure=false httpOnly=true sameSite=Strict"]}
+setupRequired after false
+               issuer                |               subject                |           user_identifier            
+-------------------------------------+--------------------------------------+--------------------------------------
+ http://localhost:28080/realms/a     | 00000000-0000-4000-8000-000000000001 | rcl_df75e44ceabd49d9992f4b9e08711689
+ http://localhost:28081/realms/b     | 00000000-0000-4000-8000-000000000001 | rcl_cf52fa8cbb1b401fbbb307ed09742289
+ http://localhost:28080/realms/a     | 00000000-0000-4000-8000-000000000002 | rcl_f8f0bda71f214de7ab1f5567a2640cbf
+ https://auth.recall.localhost:29091 | c70e6830-f0f8-4fec-8226-2f8b4ccd1891 | rcl_74dd58c3dec94158b9f5760cc17c66dc
+(4 rows)
+
+
+ERROR:  column "created_on" does not exist
+LINE 1: ...st_name, last_name, tenant_id from users order by created_on
+                                                             ^
+node:internal/errors:985
+  const err = new Error(message);
+              ^
+
+Error: Command failed: docker exec recall-auth-proto-postgres-1 psql -U postgres -d recalldb -c "select identifier, role, email, first_name, last_name, tenant_id from users order by created_on"
+ERROR:  column "created_on" does not exist
+LINE 1: ...st_name, last_name, tenant_id from users order by created_on
+                                                             ^
+
+    at genericNodeError (node:internal/errors:985:15)
+    at wrappedFn (node:internal/errors:539:14)
+    at checkExecSyncError (node:child_process:925:11)
+    at execSync (node:child_process:997:15)
+    at sql (file://<prototype>/recall-proto/driver/lib.mjs:6:44)
+    at file://<prototype>/recall-proto/driver/proof-a-web.mjs:25:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5) {
+  status: 1,
+  signal: null,
+  output: [
+    null,
+    Buffer(0) [Uint8Array] [],
+    Buffer(178) [Uint8Array] [
+       69,  82,  82,  79,  82,  58,  32,  32,  99, 111, 108, 117,
+      109, 110,  32,  34,  99, 114, 101,  97, 116, 101, 100,  95,
+      111, 110,  34,  32, 100, 111, 101, 115,  32, 110, 111, 116,
+       32, 101, 120, 105, 115, 116,  10,  76,  73,  78,  69,  32,
+       49,  58,  32,  46,  46,  46, 115, 116,  95, 110,  97, 109,
+      101,  44,  32, 108,  97, 115, 116,  95, 110,  97, 109, 101,
+       44,  32, 116, 101, 110,  97, 110, 116,  95, 105, 100,  32,
+      102, 114, 111, 109,  32, 117, 115, 101, 114, 115,  32, 111,
+      114, 100, 101, 114,
+      ... 78 more items
+    ]
+  ],
+  pid: 44836,
+  stdout: Buffer(0) [Uint8Array] [],
+  stderr: Buffer(178) [Uint8Array] [
+     69,  82,  82,  79,  82,  58,  32,  32,  99, 111, 108, 117,
+    109, 110,  32,  34,  99, 114, 101,  97, 116, 101, 100,  95,
+    111, 110,  34,  32, 100, 111, 101, 115,  32, 110, 111, 116,
+     32, 101, 120, 105, 115, 116,  10,  76,  73,  78,  69,  32,
+     49,  58,  32,  46,  46,  46, 115, 116,  95, 110,  97, 109,
+    101,  44,  32, 108,  97, 115, 116,  95, 110,  97, 109, 101,
+     44,  32, 116, 101, 110,  97, 110, 116,  95, 105, 100,  32,
+    102, 114, 111, 109,  32, 117, 115, 101, 114, 115,  32, 111,
+    114, 100, 101, 114,
+    ... 78 more items
+  ]
+}
+
+Node.js v24.18.0

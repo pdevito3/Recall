@@ -114,7 +114,7 @@ jobs:
       - name: Start the stack
         run: |
           echo "STACK_START=$(date -u +%s)" >> "$GITHUB_ENV"
-          dotnet aspire start --isolated --non-interactive --apphost FullstackTemplate.AppHost
+          dotnet aspire start --isolated --non-interactive --apphost Recall.AppHost
 
       # The BFF waits for the identity provider and reads its discovery document at startup
       - name: Wait for healthy resources
@@ -123,10 +123,10 @@ jobs:
           # with a short timeout, to fail fast with its name. The slowest provider, Authentik, starts in about 80 s.
           # DuendeDemo is a public service and has no container.
           if [ "$IDP" != duendedemo ]; then
-            dotnet aspire wait "$IDP" --status up --timeout 300 --non-interactive --apphost FullstackTemplate.AppHost
+            dotnet aspire wait "$IDP" --status up --timeout 300 --non-interactive --apphost Recall.AppHost
           fi
           for resource in server bff webfrontend; do
-            dotnet aspire wait "$resource" --status healthy --timeout 900 --non-interactive --apphost FullstackTemplate.AppHost
+            dotnet aspire wait "$resource" --status healthy --timeout 900 --non-interactive --apphost Recall.AppHost
           done
 
       - name: Run the e2e tests
@@ -137,18 +137,18 @@ jobs:
         if: always()
         run: |
           mkdir -p stack-logs
-          dotnet aspire logs --timestamps --non-interactive --apphost FullstackTemplate.AppHost > stack-logs/aspire.log 2>&1 || true
+          dotnet aspire logs --timestamps --non-interactive --apphost Recall.AppHost > stack-logs/aspire.log 2>&1 || true
           # The logs of the Aspire CLI and the AppHost process
           cp -r ~/.aspire/logs stack-logs/aspire-cli || true
           # The state of each resource, and the containers of both runtimes on the runner
-          dotnet aspire describe --non-interactive --apphost FullstackTemplate.AppHost > stack-logs/resources.txt 2>&1 || true
+          dotnet aspire describe --non-interactive --apphost Recall.AppHost > stack-logs/resources.txt 2>&1 || true
           docker ps -a > stack-logs/docker-ps.txt 2>&1 || true
           podman ps -a > stack-logs/podman-ps.txt 2>&1 || true
           docker events --since "$STACK_START" --until "$(date -u +%s)" > stack-logs/docker-events.txt 2>&1 || true
 
       - name: Stop the stack
         if: always()
-        run: dotnet aspire stop --non-interactive --apphost FullstackTemplate.AppHost || true
+        run: dotnet aspire stop --non-interactive --apphost Recall.AppHost || true
 
       - name: Upload the reports
         if: always()

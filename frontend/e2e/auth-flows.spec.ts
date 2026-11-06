@@ -84,7 +84,7 @@ async function loginAtIdp(page: Page, idp: IdpConfig) {
 function dpopSpansOfCurrentUserSince(startedAt: number): number {
   const output = execFileSync(
     'dotnet',
-    ['aspire', 'otel', 'spans', '--search', 'app.auth.scheme', '--format', 'Json', '--apphost', '../FullstackTemplate.AppHost'],
+    ['aspire', 'otel', 'spans', '--search', 'app.auth.scheme', '--format', 'Json', '--apphost', '../Recall.AppHost'],
     { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
   )
   const json = output.split('\n').find((line) => line.startsWith('[{') || line === '[]')
@@ -315,7 +315,7 @@ test.describe(`Swagger - ${currentIdp.name}`, () => {
     })
 
     // Step 2: Verify Swagger loaded correctly with title (it's in h1)
-    await expect(page.locator('h1').filter({ hasText: 'FullstackTemplate API' })).toBeVisible({
+    await expect(page.locator('h1').filter({ hasText: 'Recall API' })).toBeVisible({
       timeout: 10000,
     })
 

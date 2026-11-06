@@ -1,0 +1,2 @@
+R0 deleted the example code of the template from this app. scripts/template-merge.cs
+of the template reads this file, and deletes the example code from each template update. See docs/template-updates.md.

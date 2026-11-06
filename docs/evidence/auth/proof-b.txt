@@ -1,0 +1,23 @@
+1 status, the only thing the client knows: [["oidc","kc-a","ready","/auth/oidc/kc-a/start"],["oidc","kc-b","ready","/auth/oidc/kc-b/start"],["oidc","authelia","ready","/auth/oidc/authelia/start"]]
+2 browser ended at recall://auth/callback with app code of length 43
+3 wrong verifier: {"status":400,"body":{"error":"invalid_grant"}}
+4 token response content-type application/json; charset=utf-8 | set-cookie: null
+  keys access_token,refresh_token,token_type,expires_in expires_in 900
+5 bearer /auth/me {"status":200,"body":{"sub":"rcl_df75e44ceabd49d9992f4b9e08711689","sid":"<redacted>","clientKind":"app"}}
+6 bearer template endpoint by-identifier 200 Admin alice-a@example.com
+  bearer template endpoint users list 200 4 users
+  replay of the code: 400
+7 refreshed, new tokens differ: true
+  old access 401 new access 200
+8 expired access 401
+  refresh after expiry, new access 200 same session true
+9 replay of an old refresh token 400 then the live access 401
+10 loopback + Authelia (opaque IdP token): received app tokens, /auth/me {"status":200,"body":{"sub":"rcl_74dd58c3dec94158b9f5760cc17c66dc","sid":"<redacted>","clientKind":"app"}} by-identifier 200
+11 foreign redirect: 400
+ client_kind | count | revoked 
+-------------+-------+---------
+ web         |     5 |       0
+ app         |     2 |       1
+(2 rows)
+
+

@@ -1,6 +1,8 @@
 # Spec: the home-rolled BFF
 
-This spec replaces `Duende.BFF` and `Duende.BFF.Yarp` in `FullstackTemplate.Bff` with our own code. It is the hand-off of the map [Migrate the BFF off Duende BFF](https://github.com/pdevito3/FullstackTemplate/issues/6). Each decision in this spec links to the ticket that holds its reasons.
+This spec replaces `Duende.BFF` and `Duende.BFF.Yarp` in `Recall.Bff` with our own code. It is the hand-off of the map [Migrate the BFF off Duende BFF](https://github.com/pdevito3/FullstackTemplate/issues/6). Each decision in this spec links to the ticket that holds its reasons.
+
+> Status: Recall dropped the conformance run, and R4 deletes the BFF. Recall has no conformance suite, job, or provider, so each mention of them in this spec describes the template. See [Conformance](../authentication.md#conformance).
 
 The terms **BFF session**, **IdP session**, and **Identity provider** have the meanings in [`CONTEXT.md`](../../CONTEXT.md).
 
@@ -32,7 +34,7 @@ The BFF has no package with a license cost. It keeps full parity with the curren
 
 ### Packages
 
-- Remove `Duende.BFF` 4.0.1 and `Duende.BFF.Yarp` 4.0.1 from `Directory.Packages.props` and `FullstackTemplate.Bff.csproj`.
+- Remove `Duende.BFF` 4.0.1 and `Duende.BFF.Yarp` 4.0.1 from `Directory.Packages.props` and `Recall.Bff.csproj`.
 - Keep the Microsoft `OpenIdConnect` and `Cookies` handlers.
 - Keep YARP (`Yarp.ReverseProxy`). Add it as a direct package reference, because today it comes in through `Duende.BFF.Yarp`.
 - Keep `Duende.AccessTokenManagement.OpenIdConnect` 4.1.0 (Apache 2.0). Add it as a direct package reference, because today it comes in through `Duende.BFF`. Its dependency `Duende.IdentityModel` (Apache 2.0) stays with it.
@@ -57,7 +59,7 @@ The BFF has no package with a license cost. It keeps full parity with the curren
 ### Standing decisions
 
 - The wire contract for the browser does not change (section 2). The frontend code does not change. Only its product copy changes (section 8).
-- The code goes in folders in `FullstackTemplate.Bff`, one folder for each concern. There is no separate library.
+- The code goes in folders in `Recall.Bff`, one folder for each concern. There is no separate library.
 - The cutover replaces Duende in one change. There is no side-by-side flag.
 - DPoP is phase 2 (section 9). PAR is in phase 1.
 - `DuendeDemo` stays the default auth provider of the template. (Note, 2026-10-29: PR 311 made `ZeroFactor` the default.)
@@ -144,7 +146,7 @@ The API response passes through the proxy as today. Change: the proxy removes `S
 
 ## 3. Phase 1 design, by concern
 
-Each subsection is one folder in `FullstackTemplate.Bff`. The configuration keys in this section are the names to use.
+Each subsection is one folder in `Recall.Bff`. The configuration keys in this section are the names to use.
 
 ### 3.1 BFF sessions and the store
 
@@ -439,7 +441,7 @@ Decisions: [Session cookie SameSite](https://github.com/pdevito3/FullstackTempla
 
 **The host filter.** `AllowedHosts` holds the host of `Bff:PublicOrigin`, plus the hosts in `Bff:AdditionalAllowedHosts`. A request with another `Host` header gets a 400.
 
-- The identity provider containers and the conformance suite call `/bff/backchannel` at `host.docker.internal`. The AppHost adds this host in a local run only, not when it publishes. The conformance job adds it too.
+- The identity provider containers call `/bff/backchannel` at `host.docker.internal`. The AppHost adds this host in a local run only, not when it publishes.
 - The health probes call the BFF at its internal host. The AppHost adds `localhost` in a local run only. A deployment adds the host of its probes.
 
 **CORS.** The BFF has no CORS policy, and it allows no cross-origin request. The SPA calls the BFF only from the same origin, through the Vite proxy in a local run and from `wwwroot` when published.
@@ -448,7 +450,7 @@ Decisions: [Session cookie SameSite](https://github.com/pdevito3/FullstackTempla
 
 Decision: [Duende BFF features to drop](https://github.com/pdevito3/FullstackTemplate/issues/22).
 
-The `Duende.Bff` meter goes away. New counters go on the existing `FullstackTemplate.Bff` meter in `Telemetry.cs`, and obey `docs/telemetry.md`:
+The `Duende.Bff` meter goes away. New counters go on the existing `Recall.Bff` meter in `Telemetry.cs`, and obey `docs/telemetry.md`:
 
 | Counter | Unit | Tags |
 |---|---|---|
@@ -566,16 +568,15 @@ Each rule, where the design meets it, and the test that proves it. "Default" mea
 
 Decision: [Provider seed and version changes](https://github.com/pdevito3/FullstackTemplate/issues/19).
 
-- **Version policy.** Each provider image gets an exact patch tag in its provider class in `FullstackTemplate.AppHost/AuthProviders/<Name>/`, as the Cognito and ZeroFactor classes do. Today the tags float: Keycloak `26.0`, Authentik `2024.12`, and FusionAuth `latest`. The research found 26.0.8, 2024.12.5, and 1.69.4 behind them.
+- **Version policy.** Each provider image gets an exact patch tag in its provider class in `Recall.AppHost/AuthProviders/<Name>/`, as the Cognito and ZeroFactor classes do. Today the tags float: Keycloak `26.0`, Authentik `2024.12`, and FusionAuth `latest`. The research found 26.0.8, 2024.12.5, and 1.69.4 behind them.
 - **Authentik.** Upgrade from 2024.12.5 to the latest stable 2026.8.x. Read the release notes between the two versions for changes to the worker and the Redis setup.
-- **Authentik logout flow.** The seed in `FullstackTemplate.AppHost/AuthProviders/Authentik/seed/default.yaml` uses an invalidation flow with a user logout stage. RP-initiated logout then also ends the IdP session.
+- **Authentik logout flow.** The seed in `Recall.AppHost/AuthProviders/Authentik/seed/default.yaml` uses an invalidation flow with a user logout stage. RP-initiated logout then also ends the IdP session.
 - **Back-channel URLs.** Register `<BFF URL>/bff/backchannel` in the Keycloak and Authentik seeds. The container must reach the BFF, for example through `host.docker.internal`. Find out how Aspire exposes the BFF endpoint to a container. FusionAuth and the Duende Demo cannot take part. Back-channel logout in Authentik is a preview feature since 2025.8, so the seed can need to turn it on.
 - **Keycloak password grant.** Set `directAccessGrantsEnabled` to `false`. Nothing in the repo uses it.
 - **Refresh token rotation.** Turn on one-time use in Keycloak (`revokeRefreshToken`, max reuse `0`) and in FusionAuth.
 - **Feature settings.** `WithBffAuth` in `AuthProviders/AuthProviderConfig.cs` gives `Auth__Features__*` to the BFF. The defaults (`Auto`) are correct for each provider.
 - **Public origin.** `WithBffAuth` gives `Bff__PublicOrigin` from the BFF `https` endpoint.
 - **`bffdb`.** The AppHost adds the database and gives it to the BFF.
-- **The conformance provider.** The folder `AuthProviders/Conformance/` gets a `ConformanceAuthProvider` for the conformance job. Its authority is the suite, and its `Bff:PublicOrigin` is the BFF `https` URL. The suite client config registers `<BFF https URL>/signin-oidc`, `/signout-callback-oidc`, and `/bff/backchannel` at `host.docker.internal`.
 
 The capability table (section 7) holds the expected result of these changes:
 
@@ -597,7 +598,7 @@ Decisions: [Test plan in CI](https://github.com/pdevito3/FullstackTemplate/issue
 
 ### Test layers
 
-- **BFF unit and integration tests.** A new project `tests/FullstackTemplate.Bff.Tests`. The integration tests use a `WebApplicationFactory` for the BFF, a fake identity provider, a fake API that echoes the headers, and a Postgres container for `bffdb`. The refresh lock tests run two BFF hosts on one `bffdb`. The tests of sections 3 and 5 go here.
+- **BFF unit and integration tests.** A new project `tests/Recall.Bff.Tests`. The integration tests use a `WebApplicationFactory` for the BFF, a fake identity provider, a fake API that echoes the headers, and a Postgres container for `bffdb`. The refresh lock tests run two BFF hosts on one `bffdb`. The tests of sections 3 and 5 go here.
 - **e2e tests.** The Playwright tests in `frontend/e2e`, against each provider of the `e2e` matrix.
   - A fixed capability table in the test project holds the features of each provider (section 6).
   - A feature test runs only for the providers that have the feature. For the other providers, the test is skipped and gives the reason.
@@ -605,7 +606,7 @@ Decisions: [Test plan in CI](https://github.com/pdevito3/FullstackTemplate/issue
   - One test makes sure that live discovery matches the table.
   - The cookie tests: a full login that ends signed in on the first load, a deep link from another origin for a signed-in user, and a cross-site top-level GET to `/api` that gets a 401.
   - A GET to `/signout-oidc` does not end the BFF session.
-- **Conformance.** The OpenID Foundation suite from `docker-compose-prebuilt.yml`, with our own Playwright driver for `/bff/login` and `/bff/logout`. It runs these five plans:
+- **Conformance.** Recall does not run this layer. The template runs the OpenID Foundation suite from `docker-compose-prebuilt.yml`, with its own Playwright driver for `/bff/login` and `/bff/logout`. It runs these five plans:
   - `oidcc-client-basic-certification-test-plan`
   - `oidcc-client-config-certification-test-plan`
   - `oidcc-client-rp-initiated-logout-rp-basic`
@@ -639,53 +640,43 @@ These tests come from the tickets. Each one is in addition to the tests of secti
 ### CI jobs
 
 - **No nightly run.** The BFF jobs run only on a BFF change, and on `workflow_dispatch`.
-- **The `changes` job.** A path filter. The BFF jobs depend on it. Do not use `paths:` on the trigger, because a skipped job then reports no status. These paths count as a BFF change in `ci.yml` and in `conformance.yml`:
-  - `FullstackTemplate.Bff/**`
-  - `FullstackTemplate.AppHost/**`
-  - `FullstackTemplate.Server/Resources/Entrypoints/**`, the token check of the Server
+- **The `changes` job.** A path filter. The BFF jobs depend on it. Do not use `paths:` on the trigger, because a skipped job then reports no status. These paths count as a BFF change in `ci.yml`:
+  - `Recall.Bff/**`
+  - `Recall.AppHost/**`
+  - `Recall.Server/Resources/Entrypoints/**`, the token check of the Server
   - `Directory.Packages.props`, `Directory.Build.props`, `global.json`, and `dotnet-tools.json`
   - `frontend/package.json` and `frontend/pnpm-lock.yaml`
   - The workflow file
-- `ci.yml` also counts these paths:
   - `.github/workflows/e2e.yml`, the reusable workflow that holds the e2e matrix
-  - `tests/FullstackTemplate.Bff.Tests/**`
+  - `tests/Recall.Bff.Tests/**`
   - `frontend/e2e/**` and `frontend/playwright.stack.config.ts`
   - `frontend/vite.config.ts` and `frontend/src/**`, the SPA and the dev server proxy that the e2e tests drive
-- `conformance.yml` also counts `frontend/conformance/**`.
 - **`bff-tests`.** The BFF unit and integration tests, with the two-host lock tests.
 - **`e2e`.** A matrix of eight legs: Keycloak, Keycloak with DPoP, FusionAuth, Authentik, Cognito, ZeroFactor, the Duende Demo, and the Duende Demo with DPoP. Each leg runs `dotnet aspire start --isolated` and waits for healthy resources. The two Duende Demo legs use `continue-on-error`, because the Duende Demo is a public service. A failure of one of the other six legs fails the workflow.
   - Each leg of a provider in the stack sets `BffRefreshBeforeExpirationSeconds` to 86400, so that each API call refreshes, and `EXPECT_REFRESH_MARGIN=true`. The two Duende Demo legs set no margin and `EXPECT_REFRESH_MARGIN=false`.
   - A DPoP leg sets `DPoP=true` and `EXPECT_DPOP=true`. The other legs set `EXPECT_DPOP=false`.
   - `run-against-stack.ts` fails the leg when an `EXPECT_*` variable and the stack disagree, so a leg cannot pass while its refresh tests or its DPoP test skip.
-- **`conformance`.** The job runs `dotnet aspire start --isolated` with the `Conformance` provider. The suite starts with `docker-compose-prebuilt.yml` and an override file with `extra_hosts: host.docker.internal:host-gateway`. The BFF trusts the self-signed suite certificate. The job sets `Auth:MetadataRefreshInterval` to 1 s, so that each test module gets fresh signing keys.
-  - The suite sends no `expires_in`, so the job sets `Auth:DefaultAccessTokenLifetime` to 1 s. Then the next API call refreshes the token.
-  - The access tokens of the suite are opaque. So the server, with `Auth:AccessTokenValidation=Userinfo` (Development only), checks each token at the userinfo endpoint of the suite. The happy path module of the refresh plan finishes on that userinfo call with the refreshed token. The driver stops the API calls of the SPA, because a call after a module finished fails it.
-  - Each `FAILED` result fails the job.
-  - Each `WARNING` or `REVIEW` result fails the job, unless it is in a committed list of accepted results. Each entry in the list gives a reason.
-  - Each module that does not finish, in each plan, is "not run" and fails the job. A plan with no result must not give a green job.
-  - Each plan blocks, the refresh plan too. Its negative modules send an ID token with a wrong `iss` or `sub` in the refresh response (section 3.7).
-- **Reports.** Each job uploads the exported suite results, the Playwright traces and screenshots, and the stack logs as artifacts, kept for 30 days. The job summary lists each plan with its pass, warning, and fail counts.
-- **Scripts.** The scripts for the stacks and the suite go in the repo, so that a developer can run the same commands locally.
+- **Reports.** Each job uploads the Playwright traces and screenshots and the stack logs as artifacts, kept for 30 days.
+- **Scripts.** The scripts for the stacks go in the repo, so that a developer can run the same commands locally.
 
 ## 8. Repo and doc changes
 
 | File | Change |
 |---|---|
 | `Directory.Packages.props` | Remove `Duende.BFF` and `Duende.BFF.Yarp`. Add `Yarp.ReverseProxy`, `Duende.AccessTokenManagement.OpenIdConnect`, and the EF Core and Data Protection packages. |
-| `FullstackTemplate.Bff/FullstackTemplate.Bff.csproj` | The same package changes. |
-| `FullstackTemplate.Bff/appsettings*.json` | Replace the `Duende` log level overrides. Add the new keys with their defaults. |
-| `FullstackTemplate.AppHost/AppHost.cs` | Add `bffdb`. |
-| `FullstackTemplate.AppHost/AuthProviders/AuthProviderConfig.cs` | Remove `RevokeRefreshTokenOnLogout`. Add the feature settings, `Bff__PublicOrigin`, and `Bff__AdditionalAllowedHosts`. |
-| `FullstackTemplate.AppHost/AuthProviders/Conformance/` | The new `ConformanceAuthProvider`. It sets `RunsE2eTests` to false, so it needs no file in `frontend/e2e/idps/`. The suite logs in with no login form. |
-| `FullstackTemplate.AppHost/Config.cs` | The provider image tags. |
+| `Recall.Bff/Recall.Bff.csproj` | The same package changes. |
+| `Recall.Bff/appsettings*.json` | Replace the `Duende` log level overrides. Add the new keys with their defaults. |
+| `Recall.AppHost/AppHost.cs` | Add `bffdb`. |
+| `Recall.AppHost/AuthProviders/AuthProviderConfig.cs` | Remove `RevokeRefreshTokenOnLogout`. Add the feature settings, `Bff__PublicOrigin`, and `Bff__AdditionalAllowedHosts`. |
+| `Recall.AppHost/Config.cs` | The provider image tags. |
 | `README.md` | Remove "using Duende BFF". Change the project tree line to "BFF proxy (YARP, OIDC)". |
-| `AGENTS.md` | The `FullstackTemplate.Bff` row: "BFF proxy (YARP and OIDC auth)". |
+| `AGENTS.md` | The `Recall.Bff` row: "BFF proxy (YARP and OIDC auth)". |
 | `docs/authentication.md` | The new login and logout flows, the BFF sessions in `bffdb`, the feature settings with a table of the active features for each provider, the back-channel logout, and how a team certifies its own deployment with the same conformance plans. |
 | `docs/telemetry.md` | The BFF now has custom metrics (section 3.9). |
 | `.agents/skills/**` | No change. The skills name only the Duende demo IdP. |
 | `frontend/src/routes/index.tsx` | The subtitle ".NET Aspire + React with Duende BFF" becomes ".NET Aspire + React with a BFF". |
 | `frontend/src/routes/about.tsx` | "Duende BFF" becomes "BFF (YARP and OIDC)". |
-| `FullstackTemplate.Server/Domain/Users/CurrentUserService.cs` | No change. Its comments name the Duende Demo IdP, not Duende BFF. |
+| `Recall.Server/Domain/Users/CurrentUserService.cs` | No change. Its comments name the Duende Demo IdP, not Duende BFF. |
 
 ## 9. Phase 2: DPoP
 
@@ -718,7 +709,7 @@ Each slice is one pull request that you can test alone. Slice 1 must reach parit
 1. **Cutover at parity.**
    - Remove the Duende packages. Add the Microsoft OIDC and cookie handlers, the YARP forwarder with the token attach, `/bff/login`, `/bff/user`, `/bff/logout`, `/bff/backchannel` (validation only), the `X-CSRF` check, and the 302 rewrite.
    - Keep the cookie ticket, `SameSite=Lax`, and the other current behaviors for this slice.
-   - Start `tests/FullstackTemplate.Bff.Tests`.
+   - Start `tests/Recall.Bff.Tests`.
    - Done when the current Keycloak e2e tests pass with no change to the frontend.
 2. **BFF sessions.** `bffdb`, the store seam and its two adapters, the Data Protection keys, the absolute limit, the conditional writes, the `id_token` rule, and the cleanup.
 3. **Back-channel logout and the session metrics.** End BFF sessions by `sid` or `sub`, the `typ`, `iat`, and `jti` checks, and the three counters.
@@ -730,6 +721,6 @@ Each slice is one pull request that you can test alone. Slice 1 must reach parit
 5. **Refresh.** The advisory lock and the refresh failure rules.
 6. **The proxy header rules, `SameSite=Strict`, and host trust.**
 7. **Provider seed and version changes.**
-8. **CI.** The `changes` job, the e2e matrix of the providers, and the conformance suite.
+8. **CI.** The `changes` job and the e2e matrix of the providers.
 9. **Template and doc changes.**
 10. **Phase 2: DPoP.**

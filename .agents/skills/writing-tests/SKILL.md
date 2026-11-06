@@ -15,9 +15,9 @@ Put a test in the lowest suite that can prove the behavior. A lower suite is fas
 | One component in a real browser | Frontend component | `pnpm test` | `frontend/src/**/*.test.tsx` |
 | A page of the SPA: what the user sees and what the page sends to the BFF | Functional | `pnpm test:e2e` | `frontend/tests/features/**/*.spec.ts` |
 | Login, logout, the session cookie, a token refresh, DPoP, PAR, or the BFF against a real IdP | Stack | `pnpm test:e2e:stack` | `frontend/e2e/*.spec.ts` |
-| Who can call a Server endpoint: the 403 for a caller with no permission, and the 404 for a record of another tenant | .NET functional sweep, no new test | `dotnet test --solution FullstackTemplate.slnx` | `tests/FullstackTemplate.FunctionalTests/FunctionalTests/Access/EndpointAccessSweepTests.cs`. See "Access of a Server endpoint" below. |
-| A domain rule, a handler, or a Server endpoint | .NET | `dotnet test --solution FullstackTemplate.slnx` | `tests/`. See `docs/backend.md`, section "Tests". For test data, use the `test-entity-graph` skill. |
-| Two requests that race on the same rows | .NET integration test with `PauseAtQuery` | `dotnet test --solution FullstackTemplate.slnx` | `tests/FullstackTemplate.IntegrationTests/`. See `docs/backend.md#race-tests`. |
+| Who can call a Server endpoint: the 403 for a caller with no permission, and the 404 for a record of another tenant | .NET functional sweep, no new test | `dotnet test --solution Recall.slnx` | `tests/Recall.FunctionalTests/FunctionalTests/Access/EndpointAccessSweepTests.cs`. See "Access of a Server endpoint" below. |
+| A domain rule, a handler, or a Server endpoint | .NET | `dotnet test --solution Recall.slnx` | `tests/`. See `docs/backend.md`, section "Tests". For test data, use the `test-entity-graph` skill. |
+| Two requests that race on the same rows | .NET integration test with `PauseAtQuery` | `dotnet test --solution Recall.slnx` | `tests/Recall.IntegrationTests/`. See `docs/backend.md#race-tests`. |
 
 Run all frontend commands in `frontend/`.
 
@@ -88,9 +88,6 @@ Obey these rules:
 
 - Each functional test runs in three zones: `UTC`, `Pacific/Kiritimati` (UTC+14), and `Pacific/Pago_Pago` (UTC-11). A test of a page with no place sets its clock with `instantIn(wallClock, browserZone())` from `@tests/support/clock`.
 - A time of a place shows and reads in the zone of the place (`docs/frontend/code-style.md`, section "Dates and times"). Test it with a place in a zone far from the browser, at an instant at which the date of the place is not the browser date or the UTC date. See "Time zones" in `docs/frontend/testing.md`. `date-filter.test.tsx` and `calendar.test.tsx` check this rule for the controls.
-<!-- example:start -->
-- The test `a date filter of a place in another zone` in `filter-demo.spec.ts` checks the rule for the date filter of a page.
-<!-- example:end -->
 - Import `test` and `expect` from `@tests/support/fixtures`.
 - Use a role and a name for a selector. If the element has no role or name, give it one in the app.
 - Do not use `page.waitForTimeout`, `test.only`, or retries.

@@ -19,10 +19,6 @@ Check: `pnpm lint` fails on these forms. The rules are in `frontend/eslint.confi
 - Rule 3 (`server-state/query-key-has-inputs`): a local value that the `queryFn` reads and the `queryKey` does not, in `useQuery`, `queryOptions`, `useInfiniteQuery`, and the other query calls. It compares fields: a key with `params` covers `params.page`, and a key with only `params.search` does not. A local that comes only from values in the key, such as `const search = params.search.trim()`, passes, and so does a local `const` of a literal, such as `const pageSize = 25`. A local that a hook makes, such as `useDebouncedValue(search)`, does not, because the hook can return another value. `useMemo` and `useCallback` are the exceptions. A value in the `options` of the client, such as `suppressErrorToast`, does not change the data, so it passes. No check finds a value that a helper function reads for the `queryFn`, or a value in `useQueries`. A local in the key covers all of the value that it comes from, so a key with `page` from `const { page } = params` covers each field of `params`.
 - Rule 3 in a key factory (`server-state/key-has-each-param`): in a `*.keys.ts` file, each parameter of each function must be an item of the array that the function returns, as the identifier itself: `(params: ListParams) => [..., params]`. Each other form fails: a pattern such as `({ search }: ListParams)`, a default value, a rest element, a destructure or an alias in the body, a field such as `params.search`, a call such as `date.toISOString()`, a spread, the parameter inside an object such as `{ search }`, and a parameter that the key does not use. Each of these forms can leave out a value of the request, and the lint cannot see every field of a named type.
 
-<!-- example:start -->
-In the workshop example, the detail page shows a button only for each entry of `allowedActions`: [`WorkshopActions`](<../../frontend/src/examples/workshops/components/workshop-actions.tsx>). A `Record` of the generated union gives each action its label, so a new action on the Server fails the build until it has one: [`LABELS`](<../../frontend/src/examples/workshops/components/workshop-actions.tsx>).
-<!-- example:end -->
-
 ## Key factory
 
 Order the key parts from the most general to the most specific. Then you can invalidate one item, one list, or the whole area.
@@ -36,10 +32,6 @@ export const UserKeys = {
   detail: (id: string) => [...UserKeys.details(), id] as const,
 }
 ```
-
-<!-- example:start -->
-The workshop example puts the search and the page in the list key: [`WorkshopKeys`](<../../frontend/src/examples/workshops/apis/workshop.keys.ts>).
-<!-- example:end -->
 
 ## Query
 
@@ -63,10 +55,6 @@ Give the `signal` to the client, so that TanStack Query can cancel the request.
 
 When more than one place uses the same query, put the key, the function, and the options in one `queryOptions` object. Then `useQuery`, `useSuspenseQuery`, and `queryClient.prefetchQuery` can share it.
 
-<!-- example:start -->
-The workshop example has one `queryOptions` for the detail: [`workshopQueryOptions`](<../../frontend/src/examples/workshops/apis/get-workshop.ts>). The list keeps the last page on the screen while the next one loads, and it turns the search into a `filters` value with `containsText`: [`useWorkshopList`](<../../frontend/src/examples/workshops/apis/get-workshop-list.ts>). The venue picker loads its search one page at a time with `useInfiniteQuery`: [`useVenueSearch`](<../../frontend/src/examples/venues/apis/get-venue-list.ts>).
-<!-- example:end -->
-
 ## Mutation
 
 ```typescript
@@ -88,10 +76,6 @@ After a delete, the page calls `leaveDeletedRecord` from [`lib/leave-deleted-rec
 
 For an optimistic update, change only the query cache. In `onMutate`, cancel the queries, keep the old data, and set the new data. In `onError`, put back the old data. In `onSettled`, invalidate the queries.
 
-<!-- example:start -->
-In the workshop example, a save puts the answer of the Server in the detail cache and invalidates the lists: [`useUpdateWorkshop`](<../../frontend/src/examples/workshops/apis/update-workshop.ts>). A refused action reads the workshop again, because another user can have changed it: [`useSendWorkshopAction`](<../../frontend/src/examples/workshops/apis/send-workshop-action.ts>).
-<!-- example:end -->
-
 ## Errors
 
 `apiClient` shows a toast for each problem details error. See [frontend.md](../frontend.md#api-client). A component does not have to show the same error again. It must still show a state for a failed query, so that the page is not empty.
@@ -109,10 +93,6 @@ retry: (failureCount, error) => {
 ```
 
 A form that shows each refusal itself, with `useServerErrors`, sends `{ suppressErrorToast: true }` in the `options` of its mutation, so the error does not show twice (messages.md, "In the SPA").
-
-<!-- example:start -->
-The workshop forms do this: [`useUpdateWorkshop`](<../../frontend/src/examples/workshops/apis/update-workshop.ts>).
-<!-- example:end -->
 
 `useServerErrors` shows a refusal in the form: each validation message on its field, a stale version as its own problem, and every other message in `RefusedSaveAlert` above the buttons. See [`refusalOf`](../../frontend/src/hooks/use-server-errors.ts) and [`RefusedSaveAlert`](../../frontend/src/components/refused-save-alert.tsx).
 
@@ -134,11 +114,7 @@ const form = useForm<UserFormData>({
 
 Use `defaultValues` in an edit form, not `values`. With `values`, a refetch can put the new version under the edits of the user. The save then overwrites a change that the user did not see.
 
-When another user saved the record first, the PUT gets a 409 with the type `urn:fullstacktemplate:problem:stale-version`. A create can also get this type, when a unique index of the Server tells that another user changed the record. For a create, keep the input of the user and refetch the list or the parent record. Find a stale save by `error.problemDetails.type === 'urn:fullstacktemplate:problem:stale-version'` on the `ProblemDetailsError`, not by the status alone, because a 409 can also be a duplicate value. Keep the edits of the user in the form. Give a way to load the record again, for example a button that refetches the detail query and resets the form with the new record. After the reload, a field that the new record changed shows the saved value, and each other field keeps the edit of the user. [`latestOverEdits`](../../frontend/src/lib/latest-over-edits.ts) sorts the fields. Name the fields that changed, and move the focus to the first of them. Do not send the PUT again with the new version, because that overwrites the other change.
-
-<!-- example:start -->
-In the workshop example, the edit form keeps the loaded version in `defaultValues`: [`WorkshopEditForm`](<../../frontend/src/examples/workshops/components/workshop-edit-form.tsx>). `isStaleVersionError` reads the type: [`isStaleVersionError`](<../../frontend/src/lib/problem-details.ts>). `Load the latest` refetches the detail, keeps the edits that the latest save did not change, and names the fields that it changed, on the same page: [`handleLoadLatest`](<../../frontend/src/examples/workshops/components/workshop-edit-form.tsx>) and [`EditWorkshopPage`](<../../frontend/src/routes/(examples)/workshops/$id/edit.tsx>). The form shows the problem itself, so this save sends no toast.
-<!-- example:end -->
+When another user saved the record first, the PUT gets a 409 with the type `urn:recall:problem:stale-version`. A create can also get this type, when a unique index of the Server tells that another user changed the record. For a create, keep the input of the user and refetch the list or the parent record. Find a stale save by `error.problemDetails.type === 'urn:recall:problem:stale-version'` on the `ProblemDetailsError`, not by the status alone, because a 409 can also be a duplicate value. Keep the edits of the user in the form. Give a way to load the record again, for example a button that refetches the detail query and resets the form with the new record. After the reload, a field that the new record changed shows the saved value, and each other field keeps the edit of the user. [`latestOverEdits`](../../frontend/src/lib/latest-over-edits.ts) sorts the fields. Name the fields that changed, and move the focus to the first of them. Do not send the PUT again with the new version, because that overwrites the other change.
 
 ## Do not
 

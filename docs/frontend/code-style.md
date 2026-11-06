@@ -13,10 +13,6 @@ These rules apply to the TypeScript and React code in `frontend/src/`. `pnpm lin
 7. Use `import type` for an import that is only a type.
 8. A file under `src/domain/` reads the answers of the Server and formats them. It does not decide a business rule. See rule 8 of [server-state.md](server-state.md#rules).
 
-<!-- example:start -->
-In the workshop example, a `Record` of a generated union maps each status to its badge variant: [`VARIANTS`](<../../frontend/src/examples/workshops/components/workshop-status-badge.tsx>).
-<!-- example:end -->
-
 ```typescript
 export const USER_ROLES = ['Admin', 'User'] as const
 export type UserRole = (typeof USER_ROLES)[number]
@@ -33,10 +29,6 @@ function isUserDto(value: unknown): value is UserDto {
 3. React 19 passes `ref` as a prop. Do not use `forwardRef`.
 4. Name a handler prop `onX`. Name the handler inside the component `handleX`.
 5. Use an early return for a loading, empty, or error state. Do not nest ternaries.
-
-<!-- example:start -->
-The workshop list returns early for its loading, error, and empty states: [`WorkshopRows`](<../../frontend/src/routes/(examples)/workshops/index.tsx>).
-<!-- example:end -->
 6. Load a heavy component or library with `lazy` or a dynamic `import()`.
 
 ```typescript
@@ -86,10 +78,6 @@ The components in `components/ui/` use React Aria Components (`react-aria-compon
 4. A table cell wraps its text. Give `whitespace-nowrap` to a cell that holds a code, a date, an amount, an email address, or a badge, so that only prose wraps.
 5. Outside a table, each text that comes from data wraps or shows its full value on demand. A name or an email address can have no spaces, so give it `wrap-anywhere`, and give `min-w-0` to its flex item. A text that truncates is in a button or a link that shows the full value. The sweep of the verify skill finds the text that does not obey this rule.
    The shared components already wrap a long word: `PageHeading`, the title and the description of a dialog, a sheet, a drawer, a card, and a toast, a field description and a field error, the alerts, an option of a select or a combobox, and a chip of a multi-select. `long-word.test.tsx` proves each one at 320 px. It also proves a part at 1280 px when the real layout of that part at 1280 px is too narrow for the long word, because only then can the case fail. When you add a shared component that shows data in a title or a short line, give it `wrap-anywhere` and add it to that test. Make sure that each case fails without the fix.
-
-<!-- example:start -->
-In `WorkshopRows` of the [workshop list](<../../frontend/src/routes/(examples)/workshops/index.tsx>), only the title wraps. The start, the capacity, and the status have `whitespace-nowrap`. A phone has no room for four columns, so there the title cell shows the start and the capacity under the title, and the table has only the title and the status.
-<!-- example:end -->
 
 ## Dates and times
 
