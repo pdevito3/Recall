@@ -11,6 +11,9 @@ using TestUtilities;
 
 public class SessionApiTests : TestBase
 {
+    private static readonly string[] FirstTopic = ["first"];
+    private static readonly string[] ShoutedTopic = [" WORK "];
+
     [Test]
     public async Task a_saved_text_comes_back_exactly()
     {
@@ -129,6 +132,76 @@ public class SessionApiTests : TestBase
         retry.StatusCode.ShouldBe(HttpStatusCode.OK);
         session!.Latitude.ShouldBeNull();
         session.Longitude.ShouldBeNull();
+    }
+
+    [Test]
+    [Property("Rule", "SES-26")]
+    public async Task a_retry_after_more_than_16_newer_fast_changes_does_not_turn_location_capture_on_again()
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var fast = DateTimeOffset.UtcNow.AddHours(5);
+        var on = new { timeZone = "UTC", locationCaptureEnabled = true, requirePeopleTagApproval = false, savedAt = fast };
+        (await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, on)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        foreach (var change in Enumerable.Range(1, 17))
+        {
+            var off = new { timeZone = "UTC", locationCaptureEnabled = false, requirePeopleTagApproval = false, savedAt = fast.AddMinutes(change) };
+            (await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, off)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        // Act
+        var retry = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, on);
+        var created = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.Root, new { clientSessionId = Guid.NewGuid().ToString(), startedAt = JournalScenario.Morning, latitude = 1.5, longitude = 2.5 });
+        var session = await created.Content.ReadFromJsonAsync<SessionDto>();
+
+        // Assert
+        (await retry.Content.ReadFromJsonAsync<UserSettingDto>())!.LocationCaptureEnabled.ShouldBeFalse();
+        session!.Latitude.ShouldBeNull();
+    }
+
+    [Test]
+    [Property("Rule", "SES-21")]
+    public async Task a_retry_after_more_than_16_newer_fast_changes_does_not_undo_the_metadata()
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        var fast = DateTimeOffset.UtcNow.AddHours(5);
+        var first = new { activity = "Walking", moods = Array.Empty<string>(), userTopics = FirstTopic, savedAt = fast };
+        (await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), first)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        foreach (var change in Enumerable.Range(1, 17))
+        {
+            var newer = new { activity = "Resting", moods = Array.Empty<string>(), userTopics = new[] { $"newer {change}" }, savedAt = fast.AddMinutes(change) };
+            (await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), newer)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        // Act
+        var retry = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), first);
+        var read = await retry.Content.ReadFromJsonAsync<SessionDto>();
+
+        // Assert
+        read!.Activity.ShouldBe("Resting");
+        read.Topics.ShouldHaveSingleItem().Name.ShouldBe("newer 17");
+    }
+
+    [Test]
+    [Property("Rule", "SES-21")]
+    public async Task a_retry_with_the_stored_time_does_not_undo_the_metadata_also_with_more_digits_than_the_database_keeps()
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        const string time = "2026-06-01T08:00:00.1234567Z";
+        (await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { activity = "Resting", savedAt = time })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Act
+        var other = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(session.Id), new { activity = "Walking", savedAt = time });
+
+        // Assert
+        (await other.Content.ReadFromJsonAsync<SessionDto>())!.Activity.ShouldBe("Resting");
     }
 
     [Test]

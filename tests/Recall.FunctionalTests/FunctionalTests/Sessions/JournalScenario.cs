@@ -2,6 +2,8 @@ namespace Recall.FunctionalTests.FunctionalTests.Sessions;
 
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Recall.Server.Domain.Sessions.Dtos;
 using Recall.Server.Domain.Sync.Dtos;
 using Recall.Server.Domain.Users;
@@ -21,6 +23,19 @@ internal static class JournalScenario
         await TestBase.InsertAsync(tenant);
         await TestBase.InsertAsync(users);
         return (users[0], users[1]);
+    }
+
+    /// <summary>Makes a state that no route can make, on a connection outside the context, as a restore or a later job does.</summary>
+    public static async Task ExecuteOutOfBandAsync(string sql, params (string Name, object Value)[] parameters)
+    {
+        var connectionString = await TestBase.ExecuteDbContextAsync(db => Task.FromResult(db.Database.GetConnectionString()!));
+        await using var connection = new SqliteConnection(connectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        foreach (var (name, value) in parameters)
+            command.Parameters.AddWithValue(name, value);
+        await command.ExecuteNonQueryAsync();
     }
 
     public static async Task<SessionDto> AddSessionAsync(this HttpClient client, DateTimeOffset? startedAt = null, string? clientSessionId = null)

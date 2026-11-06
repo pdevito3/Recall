@@ -97,8 +97,6 @@ public class StringColumnLengthTests
         "corrections.mishearings",
         "sessions.ai_topics",
         "sessions.mentioned_person_ids",
-        "sessions.metadata_fast_claims",
-        "user_settings.fast_claims",
         "sessions.moods",
         "sessions.preview",
         "sessions.synopsis",

@@ -81,7 +81,7 @@ namespace Recall.Server.Databases.Migrations
                     cleanup_run = table.Column<string>(type: "TEXT", maxLength: 20, nullable: false),
                     last_cleanup_raw_revision = table.Column<int>(type: "INTEGER", nullable: true),
                     metadata_saved_at = table.Column<string>(type: "TEXT", nullable: true),
-                    metadata_fast_claims = table.Column<string>(type: "TEXT", maxLength: 336, nullable: false),
+                    metadata_fast_claims = table.Column<string>(type: "TEXT", nullable: false),
                     activity = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
                     moods = table.Column<string>(type: "TEXT", maxLength: 30150, nullable: false),
                     user_topics = table.Column<string>(type: "TEXT", maxLength: 30150, nullable: false),
@@ -144,7 +144,7 @@ namespace Recall.Server.Databases.Migrations
                     location_capture_enabled = table.Column<bool>(type: "INTEGER", nullable: false),
                     require_people_tag_approval = table.Column<bool>(type: "INTEGER", nullable: false),
                     saved_at = table.Column<string>(type: "TEXT", nullable: true),
-                    fast_claims = table.Column<string>(type: "TEXT", maxLength: 336, nullable: false),
+                    fast_claims = table.Column<string>(type: "TEXT", nullable: false),
                     last_modified_on = table.Column<string>(type: "TEXT", nullable: true),
                     is_deleted = table.Column<bool>(type: "INTEGER", nullable: false),
                     version = table.Column<uint>(type: "INTEGER", nullable: false)

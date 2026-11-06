@@ -83,22 +83,149 @@ public class FastClockRetryTests
         session.Activity.ShouldBe("Resting");
     }
 
+    // The three times of a retry: the claim is still ahead of the server, the server sits between the claim and the
+    // newest claim, and the server has passed each claim.
     [Test]
-    public void a_row_remembers_only_fast_claims_and_only_the_newest_ones()
+    [Property("Rule", "SES-26")]
+    [Arguments(17, 1)]
+    [Arguments(100, 310)]
+    [Arguments(100, 600)]
+    public void a_retry_of_a_setting_does_nothing_after_any_count_of_newer_fast_changes(int newerChanges, int minutesLater)
     {
         // Arrange
-        IReadOnlyList<long> claims = [];
+        var setting = NewSetting();
+        setting.Change(null, true, false, Fast, Noon);
+        foreach (var change in Enumerable.Range(1, newerChanges))
+            setting.Change(null, false, false, Fast.AddMinutes(change), Noon.AddSeconds(change));
+        var savedAt = setting.SavedAt;
 
         // Act
-        var honest = claims.Remembering(Noon, Noon);
-        foreach (var minute in Enumerable.Range(0, FastClockClaims.MaxCount + 1))
-            claims = claims.Remembering(Fast.AddMinutes(minute), Noon);
+        setting.Change(null, true, false, Fast, Noon.AddMinutes(minutesLater));
 
         // Assert
-        honest.ShouldBeEmpty();
-        claims.Count.ShouldBe(FastClockClaims.MaxCount);
-        claims.HoldsRetryOf(Fast).ShouldBeFalse();
-        claims.HoldsRetryOf(Fast.AddMinutes(FastClockClaims.MaxCount)).ShouldBeTrue();
+        setting.LocationCaptureEnabled.ShouldBeFalse();
+        setting.SavedAt.ShouldBe(savedAt);
+    }
+
+    [Test]
+    [Property("Rule", "SES-21")]
+    [Arguments(17, 1)]
+    [Arguments(100, 310)]
+    [Arguments(100, 600)]
+    public void a_retry_of_metadata_does_nothing_after_any_count_of_newer_fast_changes(int newerChanges, int minutesLater)
+    {
+        // Arrange
+        var session = NewSession();
+        session.SetMetadata(Activity("Walking"), Fast, Noon);
+        foreach (var change in Enumerable.Range(1, newerChanges))
+            session.SetMetadata(Activity("Resting"), Fast.AddMinutes(change), Noon.AddSeconds(change));
+        var savedAt = session.MetadataSavedAt;
+
+        // Act
+        session.SetMetadata(Activity("Walking"), Fast, Noon.AddMinutes(minutesLater));
+
+        // Assert
+        session.Activity.ShouldBe("Resting");
+        session.MetadataSavedAt.ShouldBe(savedAt);
+    }
+
+    [Test]
+    [Property("Rule", "SES-26")]
+    public void a_setting_with_the_time_of_the_stored_change_does_nothing_so_its_retry_undoes_nothing()
+    {
+        // Arrange
+        var setting = NewSetting();
+        var time = Noon.AddHours(-1);
+        setting.Change(null, false, false, time, Noon);
+
+        // Act
+        setting.Change(null, true, false, time, Noon.AddSeconds(1));
+
+        // Assert
+        setting.LocationCaptureEnabled.ShouldBeFalse();
+    }
+
+    [Test]
+    [Property("Rule", "SES-21")]
+    public void metadata_with_the_time_of_the_stored_change_does_nothing_so_its_retry_undoes_nothing()
+    {
+        // Arrange
+        var session = NewSession();
+        var time = Noon.AddHours(-1);
+        session.SetMetadata(Activity("Resting"), time, Noon);
+
+        // Act
+        session.SetMetadata(Activity("Walking"), time, Noon.AddSeconds(1));
+
+        // Assert
+        session.Activity.ShouldBe("Resting");
+    }
+
+    [Test]
+    [Property("Rule", "SES-26")]
+    public void a_time_that_the_database_cuts_compares_as_it_is_stored()
+    {
+        // Arrange
+        var setting = NewSetting();
+        var time = Noon.AddHours(-1).AddTicks(1234567);
+        setting.Change(null, false, false, time, Noon);
+
+        // Act
+        setting.Change(null, true, false, time.AddTicks(1), Noon.AddSeconds(1));
+
+        // Assert
+        setting.LocationCaptureEnabled.ShouldBeFalse();
+        setting.SavedAt.ShouldBe(Noon.AddHours(-1).AddTicks(1234560));
+    }
+
+    [Test]
+    [Property("Rule", "SES-21")]
+    public void a_distinct_older_change_from_a_fast_clock_does_nothing_while_the_server_has_not_reached_it()
+    {
+        // Arrange
+        var session = NewSession();
+        session.SetMetadata(Activity("Resting"), Fast.AddMinutes(5), Noon);
+
+        // Act
+        session.SetMetadata(Activity("Walking"), Fast.AddMinutes(1), Noon.AddMinutes(1));
+
+        // Assert
+        session.Activity.ShouldBe("Resting");
+    }
+
+    [Test]
+    [Property("Rule", "SES-21")]
+    public void a_distinct_older_change_from_a_fast_clock_compares_as_itself_after_the_server_has_passed_it()
+    {
+        // Arrange
+        var session = NewSession();
+        session.SetMetadata(Activity("Resting"), Fast.AddMinutes(5), Noon);
+
+        // Act
+        session.SetMetadata(Activity("Walking"), Fast.AddMinutes(1), Fast.AddMinutes(10));
+
+        // Assert
+        session.Activity.ShouldBe("Walking");
+    }
+
+    [Test]
+    public void a_row_keeps_a_fast_claim_only_until_its_save_time_passes_the_claim()
+    {
+        // Arrange
+        var setting = NewSetting();
+        setting.Change(null, true, false, Noon, Noon);
+        var afterAGoodClock = setting.FastClaims.Count;
+        setting.Change(null, true, false, Fast, Noon.AddMinutes(1));
+        setting.Change(null, true, false, Fast.AddMinutes(1), Noon.AddMinutes(2));
+        var afterTwoFastClaims = setting.FastClaims.Count;
+
+        // Act
+        setting.Change(null, false, false, Fast.AddMinutes(2), Fast.AddMinutes(2));
+
+        // Assert
+        afterAGoodClock.ShouldBe(0);
+        afterTwoFastClaims.ShouldBe(2);
+        setting.FastClaims.ShouldBeEmpty();
     }
 
     [Test]

@@ -33,15 +33,15 @@ public class UserSetting : BaseEntity, ITenantable, IJournalOwned
     {
         var zone = string.IsNullOrWhiteSpace(timeZone) ? null : TimeZoneId.Of(timeZone).Value;
 
-        var savedAt = claimedSavedAt < now ? claimedSavedAt : now;
-        if (FastClaims.HoldsRetryOf(claimedSavedAt) || (SavedAt is { } current && savedAt < current))
+        if (!claimedSavedAt.IsNewer(SavedAt, FastClaims, now))
             return;
 
+        var savedAt = FastClockClaims.SaveTimeOf(claimedSavedAt, now);
         TimeZone = zone;
         LocationCaptureEnabled = locationCaptureEnabled;
         RequirePeopleTagApproval = requirePeopleTagApproval;
         SavedAt = savedAt;
-        FastClaims = FastClaims.Remembering(claimedSavedAt, now);
+        FastClaims = FastClaims.Remembering(claimedSavedAt, savedAt);
     }
 
     protected UserSetting() : base(IdPrefix) { }

@@ -798,7 +798,6 @@ namespace Recall.Server.Databases.Migrations
 
                     b.PrimitiveCollection<string>("MetadataFastClaims")
                         .IsRequired()
-                        .HasMaxLength(336)
                         .HasColumnType("TEXT")
                         .HasColumnName("metadata_fast_claims");
 
@@ -1017,7 +1016,6 @@ namespace Recall.Server.Databases.Migrations
 
                     b.PrimitiveCollection<string>("FastClaims")
                         .IsRequired()
-                        .HasMaxLength(336)
                         .HasColumnType("TEXT")
                         .HasColumnName("fast_claims");
 

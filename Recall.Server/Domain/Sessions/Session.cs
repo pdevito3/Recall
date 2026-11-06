@@ -150,12 +150,11 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
 
     public void SetMetadata(SessionMetadata metadata, DateTimeOffset claimedSavedAt, DateTimeOffset now)
     {
-        var savedAt = claimedSavedAt < now ? claimedSavedAt : now;
-        if (MetadataFastClaims.HoldsRetryOf(claimedSavedAt) || (MetadataSavedAt is { } stored && savedAt < stored))
+        if (!claimedSavedAt.IsNewer(MetadataSavedAt, MetadataFastClaims, now))
             return;
 
-        MetadataSavedAt = savedAt;
-        MetadataFastClaims = MetadataFastClaims.Remembering(claimedSavedAt, now);
+        MetadataSavedAt = FastClockClaims.SaveTimeOf(claimedSavedAt, now);
+        MetadataFastClaims = MetadataFastClaims.Remembering(claimedSavedAt, MetadataSavedAt.Value);
         Activity = metadata.Activity;
         Moods = metadata.Moods;
         UserTopics = metadata.UserTopics.Where(t => !AiTopics.Contains(t, StringComparer.OrdinalIgnoreCase)).ToList();
