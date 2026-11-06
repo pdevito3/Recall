@@ -106,6 +106,22 @@ test.describe('the model providers page', () => {
   })
 })
 
+test.describe('the Cleanup card on a 320 px phone', () => {
+  test.use({ actor: as.user('Bob Smith'), viewport: { width: 320, height: 640 } })
+
+  test('a short suggestion stays on one line, with no sideways scroll', async ({ page, api }) => {
+    const session = aSession({ cleanupStatus: 'Clean', cleanedText: 'Done.', suggestions: [{ kind: 'Mood', value: 'Calm' }] })
+    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(session))
+    const at = modelProviders(page)
+
+    await page.goto(`/model-providers?session=${session.id}`)
+
+    await expect(at.text('Calm')).toBeVisible()
+    expect((await at.text('Calm').boundingBox())?.height).toBeLessThan(24)
+    expect(await at.pageOverflow()).toBe(0)
+  })
+})
+
 test.describe('the Cleanup card', () => {
   test.use({ actor: as.user('Bob Smith') })
 

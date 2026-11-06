@@ -46,7 +46,7 @@ function Suggestions({ session }: { session: SessionDto }) {
         {session.suggestions.map(({ kind, value }) => (
           <li key={`${kind}-${value}`} className="flex flex-wrap items-center gap-2 text-sm">
             <Badge variant="outline">{kind}</Badge>
-            <span className="min-w-0 flex-1 wrap-anywhere">{value}</span>
+            <span className="min-w-24 flex-1 wrap-anywhere">{value}</span>
             <Button size="sm" variant="outline" aria-label={`Accept ${value}`} onPress={() => respond.mutate({ accept: true, kind, value })}>
               Accept
             </Button>
@@ -69,7 +69,7 @@ function PeopleProposals({ session }: { session: SessionDto }) {
       <ul className="flex flex-col gap-2">
         {session.peopleProposals.map(({ label, isNew }) => (
           <li key={label} className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="min-w-0 flex-1 wrap-anywhere">
+            <span className="min-w-24 flex-1 wrap-anywhere">
               {label} {isNew && <span className="text-muted-foreground">(new person)</span>}
             </span>
             <Button
