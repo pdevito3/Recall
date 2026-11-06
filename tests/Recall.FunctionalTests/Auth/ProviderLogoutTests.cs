@@ -154,7 +154,7 @@ public class ProviderLogoutTests
         url.ShouldStartWith($"{AuthFlowFactory.OtherIssuer}/logout?");
         plainVisit.StatusCode.ShouldBe(HttpStatusCode.OK);
         var html = await plainVisit.Content.ReadAsStringAsync();
-        html.ShouldContain("Other did not send you back to Recall");
+        html.ShouldContain("Recall cannot tell if your session at Other ended");
         html.ShouldContain("Sign out of Other");
         html.ShouldNotContain("Sign out of Stub");
         html.ShouldContain("/auth/oidc/stub/start?client=web");
@@ -162,7 +162,7 @@ public class ProviderLogoutTests
         back.Headers.Location!.OriginalString.ShouldBe(SignedOutPage);
         var htmlAfterReturn = await afterReturn.Content.ReadAsStringAsync();
         htmlAfterReturn.ShouldContain("<h1>You are signed out</h1>");
-        htmlAfterReturn.ShouldNotContain("did not send you back");
+        htmlAfterReturn.ShouldNotContain("Recall cannot tell");
         htmlAfterReturn.ShouldContain("/auth/oidc/other/start?client=web");
     }
 
@@ -216,9 +216,24 @@ public class ProviderLogoutTests
             page.StatusCode.ShouldBe(HttpStatusCode.OK);
             var html = await page.Content.ReadAsStringAsync();
             html.ShouldContain("<h1>You are signed out</h1>");
-            html.ShouldContain("did not send you back to Recall");
-            html.ShouldContain($"<a href=\"{WebUtility.HtmlEncode(providerLogoutUrl)}\">Sign out of Stub</a>");
+            html.ShouldContain("Recall cannot tell if your session at Stub ended");
+            // In a paragraph of its own, the name of the provider stays on one line with the words before it.
+            html.ShouldContain($"<p><a href=\"{WebUtility.HtmlEncode(providerLogoutUrl)}\">Sign out of Stub</a></p>");
         }
+    }
+
+    [Test]
+    public async Task a_second_tab_that_leaves_while_the_first_tab_is_at_the_provider_gets_only_a_true_note()
+    {
+        // Arrange
+        using var browser = await SignedInBrowserAsync(AuthHosts.Open);
+        await LogoutAsync(browser);
+
+        // Act
+        var secondTab = await browser.GetAsync(SignedOutPage);
+
+        // Assert
+        (await secondTab.Content.ReadAsStringAsync()).ShouldNotContain("did not send you back");
     }
 
     [Test]
@@ -241,7 +256,7 @@ public class ProviderLogoutTests
         var html = await page.Content.ReadAsStringAsync();
         html.ShouldContain("<h1>You are signed out</h1>");
         html.ShouldNotContain("Your session at");
-        html.ShouldNotContain("did not send you back to Recall");
+        html.ShouldNotContain("Recall cannot tell");
         html.ShouldNotContain("Sign out of");
         html.ShouldContain("/auth/oidc/stub/start?client=web");
     }
@@ -277,7 +292,7 @@ public class ProviderLogoutTests
         // Assert
         back.Headers.Location!.OriginalString.ShouldBe(SignedOutPage);
         plainVisit.StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await plainVisit.Content.ReadAsStringAsync()).ShouldContain("did not send you back to Recall");
+        (await plainVisit.Content.ReadAsStringAsync()).ShouldContain("Recall cannot tell if your session at Stub ended");
     }
 
     [Test]
