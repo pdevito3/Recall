@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # The build stages run on the platform of the builder, and the final stage has no RUN, so an image for the other
 # architecture needs no emulation.
 FROM --platform=$BUILDPLATFORM node:24-alpine AS frontend
