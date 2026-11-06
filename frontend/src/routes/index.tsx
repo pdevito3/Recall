@@ -3,6 +3,7 @@ import { Logout01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { useLogout } from '@/domain/auth/apis/auth-actions'
+import { InsecureContextNotice } from '@/domain/capture/components/insecure-context-notice'
 import { useCurrentUser } from '@/domain/users/apis/get-current-user'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,6 +21,7 @@ function Home() {
   return (
     <div className="bg-background">
       <div className="max-w-2xl mx-auto px-4 py-8">
+        <InsecureContextNotice />
         <PageHeading>Recall</PageHeading>
         <p className="text-muted-foreground mt-1">.NET Aspire + React</p>
 

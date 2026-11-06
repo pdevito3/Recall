@@ -12,7 +12,8 @@ public delegate Task<IReadOnlyList<MountEntry>?> ReadMounts(CancellationToken ca
 /// SQLite locks a WAL file through shared memory, which works only on one machine. So the data file must not be on a
 /// network file system, where two machines can open it and the file can corrupt. Each <c>fuse.*</c> type, a union of
 /// disks such as Unraid <c>/mnt/user</c>, and a shared folder of a hypervisor are also refused, because WAL on them has
-/// no proof.
+/// no proof. Docker Desktop shows a folder of the Mac as <c>fakeowner</c>, and WAL there lost commits and corrupted a
+/// database in a kill test.
 /// </summary>
 public static class NetworkMountCheck
 {
@@ -20,7 +21,7 @@ public static class NetworkMountCheck
 
     private static readonly HashSet<string> RefusedTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "9p", "afs", "afpfs", "beegfs", "ceph", "cifs", "coda", "davfs", "fuse", "gfs2", "glusterfs", "gpfs", "lustre",
+        "9p", "afs", "afpfs", "beegfs", "ceph", "cifs", "coda", "davfs", "fakeowner", "fuse", "gfs2", "glusterfs", "gpfs", "lustre",
         "macfuse", "ncpfs", "nfs", "nfs3", "nfs4", "ocfs2", "orangefs", "osxfuse", "prl_fs", "pvfs2", "shfs", "smb3", "smbfs",
         "vboxsf", "virtiofs", "vmhgfs", "webdav",
     };
