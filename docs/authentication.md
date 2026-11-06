@@ -192,19 +192,19 @@ The browser can keep a page in its back-forward cache, and Back then shows this 
 
 So in a live session, Back from this cache costs one call of `/auth/me`.
 
-Each answer of the Server has `Cache-Control: no-store`, also an error answer and the HTML of the app at each address. `UseNoStoreAnswers` sets this in one place, and a new endpoint gets it with no code. Only two kinds of answer do not have it, and neither holds private data: a static file of the app other than `index.html`, and an error that Kestrel answers before the pipeline starts. So after a logout, the HTTP cache of the browser has no private answer that a page can read.
+Each answer of the Server has `Cache-Control: no-store`, also an error answer and the HTML of the app at each address. `UseNoStoreAnswers` sets this in one place, and a new endpoint gets it with no code. Only two kinds of answer do not have it, and neither holds private data: a static file of the app other than `index.html`, and an error that Kestrel or the host filter answers before the pipeline starts. So after a logout, the HTTP cache of the browser has no private answer that a page can read.
 
-This header changes Back in Chromium. Chromium does not keep a page in the back-forward cache after a `fetch` of the page got `no-store`, and each page of the app calls `/auth/me`. So Chromium loads the page again on each Back, also in a live session, and input that was not saved is lost. The reason that Chromium reports is `JsNetworkRequestReceivedCacheControlNoStoreResource`. WebKit does not do this: a WKWebView restored the page in a live session, so the hide above still acts there.
+This header changes Back in Chromium. With it on each answer, Chromium does not restore a page, also in a live session, so it loads the page again on each Back. Input that was not saved can then be lost (inferred, not measured). Chromium reports three reasons: `MainResourceHasCacheControlNoStore`, `JsNetworkRequestReceivedCacheControlNoStoreResource`, and `BrowsingInstanceNotSwapped`. The build with `no-store` only on the HTML still restored the page, so the reason that decides is the one for the `fetch` of the page (inferred). Each page of the app calls `/auth/me`. WebKit does not do this: a WKWebView restored the page in a live session, so the hide above still acts there.
 
 These are local runs of 8 Backs in a live session, in Chromium with the cache on:
 
-| The answers | Chromium restored the page | Median time of Back | Requests of one Back |
+| The answers | Chromium restored the page | Median time of Back | Requests of the page on one Back |
 |---|---|---|---|
-| `no-store` only on the HTML, over HTTP, 2 sets | 16 of 16 | 33 and 35 ms | 2 |
-| `no-store` on each answer, over HTTP, 2 sets | 0 of 16 | 64 and 70 ms | 20 |
-| `no-store` on each answer, over HTTPS, 1 set | 0 of 8 | 126 ms | 20 |
+| `no-store` only on the HTML, over HTTP, 2 sets | 16 of 16 | 33 and 33 ms | 2 |
+| `no-store` on each answer, over HTTP, 2 sets | 0 of 16 | 67 and 63 ms | 20 |
+| `no-store` on each answer, over HTTPS, 1 set | 0 of 8 | 124 ms | 20 |
 
-These runs are on localhost. On a network, the time of Back is the time of a page load (inferred).
+These runs are on localhost. The page also counts a request that the HTTP cache of the browser answers. Over HTTP, 4 of the 20 reached the Server: the HTML, `/auth/me`, and two API calls. On a network, the time of Back is the time of a page load (inferred).
 
 Each count in the next table is the number of local runs in Chromium, with the cache on, that had private text on a frame after Back:
 
@@ -214,13 +214,13 @@ Each count in the next table is the number of local runs in Chromium, with the c
 | All cookies removed while the page waits, over HTTPS | 4 of 8. Chromium restored the page | 0 of 8. Chromium did not restore the page | 0 of 8. Chromium did not restore the page |
 | The session revoked on the Server, with the cookie still in the browser, over HTTP | 3 of 8. Chromium restored the page | 4 of 8. Chromium restored the page | 8 of 8, from a new session. Chromium did not restore the page |
 | The session revoked on the Server, over HTTPS | Not measured | Not measured | 8 of 8, from a new session. Chromium did not restore the page |
-| A logout in this browser, over HTTP | 0 of 8. The message of the logout removed the page from the cache | 0 of 8. The same | 0 of 8. Chromium did not restore the page |
+| A logout in this browser, over HTTP | 0 of 8. The message of the logout removed the page from the cache (inferred) | 0 of 8. Chromium did not restore the page | 0 of 8. Chromium did not restore the page |
 
 - With `no-store` on each answer, a revoke shows no frame of the old page in Chromium, because Back does not restore it. The load then acts as a visit with no session. While the session at the provider lives, the person is signed in again with no click, and the private text in the table is from this new session. A plain visit and a reload do the same in this state: 4 of 4 runs each ended in a new session, on the build with `no-store` only on the HTML and on the build with it on each answer. Back on the build with `no-store` only on the HTML went to the signed-out page in 4 of 4 runs. Back on the build with it on each answer ended in a new session in 4 of 4 runs.
 - The expiry of a real cookie is not measured, so the table does not say what Chromium does at that expiry.
 - With the cookies gone, Back loads the page again, and this load acts as a visit with no session. In the runs, it ended at the sign-in page of the provider, not at the signed-out page, because the removal also took the cookies of the provider. If the session at the provider still lives, this load can sign the person in with no click (inferred from the visit rules of the next section, not measured).
-- After a logout in this browser, the mark of the next section holds the no-click login, so Back loads no data of the old session. In the runs, Back ended at a page of the provider.
-- A WKWebView run of each case over HTTP: in a live session it restored the page. After a logout it restored the page and went to the signed-out page. After the cookies were removed it loaded the page again, and an earlier run on the build with `no-store` only on the HTML restored it. The snapshots after the logout and the removal had no private text. A snapshot can draw a new frame, so it does not prove what the screen showed in this time.
+- After a logout in this browser, Back loads the page again with no session. In the runs, the provider returned at once and had no session, so it asked who the person is. While the provider has not returned, the mark of the next section holds the no-click login. With a provider that has no endpoint, this load can sign the person in again with no password, as the next section says (inferred, not measured).
+- A WKWebView run of each case over HTTP: in a live session it restored the page. After a logout, and after the cookies were removed, it restored the page and went to the signed-out page. The snapshots after the logout and the removal had no private text. A snapshot can draw a new frame, so it does not prove what the screen showed in this time.
 
 Other browsers and other devices stay signed in. Recall has no back-channel logout, so a logout at the provider does not end their Recall sessions. `/auth/sessions/revoke-others` ends them, and they end at their own expiry.
 
