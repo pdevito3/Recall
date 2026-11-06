@@ -54,19 +54,27 @@ public static class PeopleTagSpans
     /// <summary>
     /// The distinct sentence (or line) around each occurrence of <paramref name="name"/>, in document
     /// order - the per-Person previews the review card shows ("every sentence the AI would tag them in").
-    /// Two occurrences in the same sentence collapse to one preview.
+    /// Two occurrences in the same sentence collapse to one preview. Each read of a Session runs this, and a device can
+    /// send words with one name many times and no sentence end, so a preview and the number of previews have a limit.
     /// </summary>
     public static IReadOnlyList<string> Contexts(string? plaintext, string? name)
     {
-        // Each read of a Session runs this, and a device can send words with one name many times and no sentence end.
         var text = plaintext ?? string.Empty;
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var contexts = new List<string>();
-        foreach (var start in Occurrences(text, name).Take(MaxPreviews))
+        var previewEnd = 0;
+        foreach (var start in Occurrences(text, name))
         {
-            var sentence = SentenceAround(text, start);
+            if (start < previewEnd)
+                continue;
+
+            var (from, to) = SentenceAround(text, start);
+            previewEnd = to;
+            var sentence = text[from..to].Trim();
             if (sentence.Length > 0 && seen.Add(sentence))
                 contexts.Add(sentence);
+            if (contexts.Count == MaxPreviews)
+                break;
         }
         return contexts;
     }
@@ -84,7 +92,7 @@ public static class PeopleTagSpans
     private const int MaxPreviewSide = 300;
 
     /// <summary>Expands an offset out to the surrounding sentence, bounded by terminators, newlines, and a width.</summary>
-    private static string SentenceAround(string text, int offset)
+    private static (int From, int To) SentenceAround(string text, int offset)
     {
         var start = offset;
         while (start > 0 && offset - start < MaxPreviewSide && !IsTerminator(text[start - 1]))
@@ -94,7 +102,13 @@ public static class PeopleTagSpans
             end++;
         if (end < text.Length && IsTerminator(text[end])) // include the trailing terminator (e.g. the full stop)
             end++;
-        return text[start..end].Trim();
+
+        // A limit can land inside a character of two UTF-16 units, and half of one cannot be written as JSON.
+        if (start > 0 && char.IsLowSurrogate(text[start]))
+            start++;
+        if (end < text.Length && char.IsLowSurrogate(text[end]))
+            end--;
+        return (start, end);
     }
 
     private static bool IsTerminator(char c) => c is '.' or '!' or '?' or '\n' or '\r';

@@ -9,5 +9,5 @@ export const personProposalDtoSchema = z.object({
   label: z.string(),
   matchedPersonId: z.string().nullish(),
   isNew: z.boolean().describe('True when the directory had no match when the Cleanup ran. An approval still looks at the directory of that moment.'),
-  contexts: z.array(z.string()).describe('Each sentence of Cleaned that an approval tags.'),
+  contexts: z.array(z.string()).describe('The first sentences of Cleaned that an approval tags, as previews. The number of previews and the width of each have a limit.'),
 })

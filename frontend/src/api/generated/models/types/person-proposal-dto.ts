@@ -12,7 +12,7 @@ export type PersonProposalDto = {
     */
     isNew: boolean;
     /**
-     * @description Each sentence of Cleaned that an approval tags.
+     * @description The first sentences of Cleaned that an approval tags, as previews. The number of previews and the width of each have a limit.
      * @type array
     */
     contexts: string[];

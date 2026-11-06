@@ -1,5 +1,6 @@
 namespace Recall.UnitTests.Domain.Sessions.Content;
 
+using System.Text.Json.Nodes;
 using Recall.Server.Domain.Sessions.Content;
 using Shouldly;
 
@@ -22,8 +23,13 @@ public class MarkdownToProseMirrorTests
         var listed = MarkdownToProseMirror.ConvertToJson(lists);
 
         // Assert
-        ProseMirrorToPlainText.Render(quoted).ShouldContain("deep words");
-        ProseMirrorToPlainText.Render(listed).ShouldContain("deep words");
+        foreach (var json in new[] { quoted, listed })
+        {
+            JsonNode.Parse(json).ShouldNotBeNull();
+            var plain = ProseMirrorToPlainText.Render(json);
+            plain.ShouldContain("deep words");
+            plain.ShouldNotContain("\"type\"");
+        }
     }
 
     [Test]
