@@ -5,7 +5,9 @@ using Databases;
 using Databases.Sqlite;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Resources;
+using Resources.Jobs;
 using Resources.Storage;
 using Serilog;
 using Users;
@@ -14,7 +16,8 @@ public static class DeleteTenant
 {
     public sealed record Command(string Id) : IRequest, IRunsAgainWhenRaced;
 
-    public sealed class Handler(AppDbContext dbContext, IPermissionGuard permissionGuard, FileStore fileStore)
+    public sealed class Handler(
+        AppDbContext dbContext, IPermissionGuard permissionGuard, FileStore fileStore, IOptions<JobOptions> jobOptions, TimeProvider timeProvider)
         : IRequestHandler<Command>
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
@@ -47,10 +50,13 @@ public static class DeleteTenant
             Activity.Current?.SetTag("app.tenant.wal_scrubbed", scrubbed);
             _logger.Here().Information("Deleted tenant {TenantId} and its rows {@DeletedCounts}, WAL scrubbed {WalScrubbed}", request.Id, deletedCounts, scrubbed);
 
-            TryDeleteFilesOfTenant(request.Id);
+            if (jobOptions.Value.KillBeforeTenantFolderDelete)
+                Environment.FailFast("A check of the host asked for this kill between the commit and the folder delete.");
+
+            await TryDeleteFilesOfTenantAsync(request.Id, cancellationToken);
         }
 
-        private void TryDeleteFilesOfTenant(string tenantId)
+        private async Task TryDeleteFilesOfTenantAsync(string tenantId, CancellationToken cancellationToken)
         {
             using var activity = Telemetry.Trace([("app.tenant_id", tenantId)], "tenants.delete_files");
             try
@@ -62,6 +68,20 @@ public static class DeleteTenant
             {
                 Telemetry.RecordError(activity, ex);
                 _logger.Here().Error(ex, "Could not delete the files of deleted tenant {TenantId}", tenantId);
+                await TryQueueDeleteAsync(tenantId, cancellationToken);
+            }
+        }
+
+        private async Task TryQueueDeleteAsync(string tenantId, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await dbContext.SaveAndEnqueueAsync(
+                    (jobs, ct) => jobs.EnqueueAsync(new DeleteTenantFiles(tenantId), timeProvider.GetUtcNow(), ct), cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                _logger.Here().Warning("Could not queue the file delete of tenant {TenantId}, because of {FaultType}. The next start tries again", tenantId, exception.GetType().Name);
             }
         }
     }

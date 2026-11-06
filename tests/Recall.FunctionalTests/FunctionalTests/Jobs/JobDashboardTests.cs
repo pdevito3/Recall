@@ -464,7 +464,8 @@ public partial class JobDashboardTests
         health.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
         var body = await health.Content.ReadAsStringAsync();
         body.ShouldStartWith("Unhealthy");
-        body.ShouldContain("The background jobs stopped (worker group system: Microsoft.Data.Sqlite.SqliteException)");
+        body.ShouldContain("The background jobs stopped (worker group ");
+        body.ShouldContain(": Microsoft.Data.Sqlite.SqliteException");
         body.ShouldContain("restart the server");
         body.ShouldNotContain("no such table");
         using var journal = await client.GetAsync(AuthRoutes.Status);

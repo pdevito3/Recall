@@ -3,6 +3,7 @@ namespace Recall.Server.Resources.Extensions;
 using Auth;
 using Databases;
 using Databases.Sqlite;
+using Domain.Recordings.Transcription;
 using Domain.Tenants;
 using Domain.Users;
 using Jobs;
@@ -34,6 +35,7 @@ public static class WebAppServiceConfiguration
         builder.Services.AddScoped<SystemTenantAccess>();
         builder.Services.AddAuthCore(builder.Configuration);
         builder.AddFileStore();
+        builder.AddTranscription();
         builder.AddJobs();
         builder.Services.AddMediatR(cfg =>
         {

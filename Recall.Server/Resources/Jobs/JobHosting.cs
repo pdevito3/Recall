@@ -6,10 +6,13 @@ using BackWave.Generated;
 using BackWave.Hosting;
 using BackWave.Sqlite;
 using Databases;
+using Domain.Recordings.Jobs;
 
 public static class JobHosting
 {
     public const string SystemQueue = "system";
+
+    public const string TranscriptionQueue = "transcription";
 
     public const string HealthCheckName = "backwave";
 
@@ -26,6 +29,18 @@ public static class JobHosting
 
     private static readonly string[] DevelopmentAndTestEnvironments = [Environments.Development, "FunctionalTesting", "IntegrationTesting"];
 
+    private const int TranscriptionsThatFitInMemory = 1;
+
+    public static WorkerGroupOptions TranscriptionWorkers(JobOptions settings) => new()
+    {
+        Name = TranscriptionQueue,
+        PoolSize = TranscriptionsThatFitInMemory,
+        Policy = new DispatchPolicy.Strict([TranscriptionQueue]),
+        PollInterval = TimeSpan.FromSeconds(settings.PollSeconds),
+        ShutdownBudget = JobShutdownBudget,
+        Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
+    };
+
     public static void AddJobs(this WebApplicationBuilder builder)
     {
         var section = builder.Configuration.GetSection(JobOptions.SectionName);
@@ -34,7 +49,11 @@ public static class JobHosting
 
         builder.Services.Configure<JobOptions>(section);
         if (!inDevelopmentOrTest)
-            builder.Services.PostConfigure<JobOptions>(options => options.HealthJob = new HealthJobOptions());
+            builder.Services.PostConfigure<JobOptions>(options =>
+            {
+                options.HealthJob = new HealthJobOptions();
+                options.KillBeforeTenantFolderDelete = false;
+            });
         builder.Services.Configure<HostOptions>(host =>
         {
             host.ShutdownTimeout = HostShutdownTimeout;
@@ -62,7 +81,9 @@ public static class JobHosting
                     ShutdownBudget = JobShutdownBudget,
                     Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
                 });
+                backwave.AddWorkerGroup(TranscriptionWorkers(settingsAtRegistration));
                 builder.Services.AddHostedService<JobHostWatch>();
+                builder.Services.AddHostedService<RecordingSweepService>();
             }
         });
         builder.Services.AddBackWaveDashboardMetrics();

@@ -234,7 +234,7 @@ The server applies migrations at startup. Before them, `SqliteFile.PrepareAsync`
 
 ## File store
 
-`FileStore` in `Resources/Storage/` keeps the bytes of files on the local disk, under one root folder. It has four actions: `WriteAsync`, `OpenRead`, `Delete`, and `DeleteUnder`. `OpenRead` throws `NotFoundException` for a key with no file. The store has no download endpoint and no access check, so the feature that calls it does the permission check of the file. `GET /api/v1/file-store/status` tells a signed-in client whether the store takes writes, as `{ canWrite }`.
+`FileStore` in `Resources/Storage/` keeps the bytes of files on the local disk, under one root folder. It has these actions: `WriteAsync`, `OpenRead`, `Exists`, `LocalPathOf`, `FolderNamesUnder`, `Delete`, and `DeleteUnder`. `OpenRead` throws `NotFoundException` for a key with no file. The store has no download endpoint and no access check, so the feature that calls it does the permission check of the file. The first download endpoint is `GET /api/v1/recordings/{id}/files/{name}`. See [the Recordings spec](specs/recordings.md). `GET /api/v1/file-store/status` tells a signed-in client whether the store takes writes, as `{ canWrite }`.
 
 | Where | Root |
 |-------|------|

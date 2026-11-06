@@ -23,6 +23,7 @@ public static partial class RedactedSettings
         "Serilog",
         "Swagger",
         "Tenancy",
+        "Transcription",
     ];
 
     public static SortedDictionary<string, string> Of(IEnumerable<KeyValuePair<string, string?>> settings)
@@ -52,6 +53,7 @@ public static partial class RedactedSettings
         |FileTelemetry:MetricExportSeconds
         |Kestrel:Endpoints:[^:]+:Url
         |Serilog:MinimumLevel(:.+)?
+        |Transcription:(ModelRoot|Threads|ModelRetryMinutes|StallMinutes)
         )$
         """,
         RegexOptions.IgnoreCase | RegexOptions.IgnorePatternWhitespace | RegexOptions.CultureInvariant)]

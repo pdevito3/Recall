@@ -7,6 +7,7 @@ using Recall.Server.Domain.Agents;
 using Recall.Server.Domain.AuditEntries;
 using Recall.Server.Domain.Corrections;
 using Recall.Server.Domain.People;
+using Recall.Server.Domain.Recordings;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Metadata;
 using Recall.Server.Domain.Sync;
@@ -54,6 +55,7 @@ public class StringColumnLengthTests
         ["sessions.cleaned_text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch), MessageNamesTheLimit: false),
         ["raw_revisions.text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch), MessageNamesTheLimit: false),
         ["cleaned_revisions.text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch), MessageNamesTheLimit: false),
+        ["recordings.client_recording_id"] = new("clientRecordingId", Text, v => Recording.Create("ten_1", "usr_1", "ses_1", v, RecordingFormat.Webm)),
         // new-feature:caller-columns
     };
 
@@ -70,11 +72,16 @@ public class StringColumnLengthTests
         ["sessions.cleanup_run"] = Enum.GetNames<CleanupRunState>(),
         ["sync_changes.entity_type"] = Enum.GetNames<SyncEntityType>(),
         ["user_settings.time_zone"] = TimeZoneInfo.GetSystemTimeZones().Where(zone => zone.HasIanaId).Select(zone => zone.Id).ToList(),
+        ["recordings.format"] = Enum.GetNames<RecordingFormat>(),
+        ["recordings.engine"] = Enum.GetNames<TranscriptionEngineKind>(),
+        ["recordings.status"] = Enum.GetNames<RecordingStatus>(),
+        ["recordings.problem"] = Enum.GetNames<RecordingProblem>(),
         // new-feature:fixed-option-columns
     };
 
     private static readonly HashSet<string> ServerWrittenColumns =
     [
+        "recording_slices.sha256",
         "audit_entries.action",
         "audit_entries.actor_agent_id",
         "audit_entries.actor_user_id",
