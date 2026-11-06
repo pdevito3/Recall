@@ -49,8 +49,6 @@ The dashboard is at `/backwave`. `JobDashboard` lets only the Owner see it or ac
 
 A browser that opens the page sends no `X-CSRF` header, so `AppSessionHandler` accepts a session cookie on this path with no header. The session cookie is `SameSite=Strict`, and BackWave checks an antiforgery token on each write.
 
-An access token lasts for a short time, and only the SPA refreshes it. If the access token ended, open the app, then open `/backwave` again.
-
 ## The license
 
 BackWave is under the PolyForm Shield License 1.0.0, which needs each copy to carry the terms and the Required Notice. `Recall.Server/ThirdPartyNotices/BackWave/LICENSE.md` is the file of the package, byte for byte. `dotnet publish` copies it to `ThirdPartyNotices/BackWave/LICENSE.md` in its output, so the image has it at `/app/ThirdPartyNotices/BackWave/LICENSE.md`. Replace the file when the version of BackWave changes.

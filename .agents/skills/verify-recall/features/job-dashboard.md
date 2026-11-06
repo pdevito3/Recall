@@ -28,7 +28,3 @@ node .agents/skills/verify-recall/scripts/browse.mjs .agents/skills/verify-recal
 
 - A screenshot and an ARIA snapshot of `/backwave/jobs` for the Owner.
 - The status of `/backwave` for a new browser context with no session.
-
-## Known limits
-
-- An access token lasts for a short time, and only the SPA refreshes it. If the Owner gets a 403, open the app first.
