@@ -32,7 +32,7 @@ public static class AddSession
                     .TagWithOperationCallSite("sessions.add.settings")
                     .AsNoTracking()
                     .FirstOrDefaultAsync(ct);
-                var zone = UserSetting.ZoneOf(setting?.TimeZone);
+                var zone = setting is null ? UserSetting.ZoneOf(null) : UserSettingQueries.JournalZoneOf(owner.UserId, setting.TimeZone);
 
                 var existing = await dbContext.Sessions
                     .TagWithOperationCallSite("sessions.add.replay")

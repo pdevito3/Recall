@@ -4647,7 +4647,7 @@
               "null",
               "string"
             ],
-            "description": "The IANA time zone that gives the Journaling day. Null means UTC."
+            "description": "The IANA time zone that gives the Journaling day. Null means UTC. The stored zone is always allowed, also when this host does not know it."
           },
           "locationCaptureEnabled": {
             "type": "boolean"
@@ -4664,6 +4664,7 @@
       },
       "UserSettingDto": {
         "required": [
+          "timeZoneIsKnown",
           "locationCaptureEnabled",
           "requirePeopleTagApproval",
           "version"
@@ -4675,6 +4676,10 @@
               "null",
               "string"
             ]
+          },
+          "timeZoneIsKnown": {
+            "type": "boolean",
+            "description": "False when this host does not know the stored zone. The Journaling day then comes from UTC until the person sets a zone."
           },
           "locationCaptureEnabled": {
             "type": "boolean"

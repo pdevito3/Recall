@@ -5,6 +5,11 @@
 
 export type UserSettingDto = {
     timeZone?: string | null;
+    /**
+     * @description False when this host does not know the stored zone. The Journaling day then comes from UTC until the person sets a zone.
+     * @type boolean
+    */
+    timeZoneIsKnown: boolean;
     locationCaptureEnabled: boolean;
     requirePeopleTagApproval: boolean;
     /**

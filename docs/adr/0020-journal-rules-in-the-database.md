@@ -22,7 +22,7 @@ What stays:
 
 ## Sync retention
 
-Tombstones stay until their owner goes. So no cursor is ever too old, and the server has no "too old" reply. A cursor that is ahead of the newest line of the User can come only from a restore of a backup. It gives 422, and the client drops the cursor and its synced rows, keeps its unsent saves, and pulls from the start. A restore that is followed by enough new writes to pass the cursor of a phone goes unseen, and that is a known limit.
+Tombstones stay until their owner goes. So no cursor is ever too old, and the server has no "too old" reply. A cursor that is ahead of the newest line of the User can come only from a restore of a backup. It gives 422, the one 422 of the feed, and the client drops the cursor and its synced rows, keeps its unsent saves, and pulls from the start. A restore that is followed by enough new writes to pass the cursor of a phone goes unseen, and that is a known limit.
 
 ## Consequences
 

@@ -7,6 +7,7 @@ import * as z from 'zod'
 
 export const userSettingDtoSchema = z.object({
   timeZone: z.string().nullish(),
+  timeZoneIsKnown: z.boolean().describe('False when this host does not know the stored zone. The Journaling day then comes from UTC until the person sets a zone.'),
   locationCaptureEnabled: z.boolean(),
   requirePeopleTagApproval: z.boolean(),
   savedAt: z.iso.datetime().nullish(),

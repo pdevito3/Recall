@@ -5,7 +5,7 @@ using TimeZones;
 
 public sealed record UserSettingChangeDto
 {
-    /// <summary>The IANA time zone that gives the Journaling day. Null means UTC.</summary>
+    /// <summary>The IANA time zone that gives the Journaling day. Null means UTC. The stored zone is always allowed, also when this host does not know it.</summary>
     [SchemaMaxLength(typeof(TimeZoneId), nameof(TimeZoneId.MaxLength))]
     public string? TimeZone { get; init; }
     public required bool LocationCaptureEnabled { get; init; }

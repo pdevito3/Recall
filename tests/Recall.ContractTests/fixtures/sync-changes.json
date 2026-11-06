@@ -82,6 +82,7 @@
   ],
   "settings": {
     "timeZone": "Europe/Tallinn",
+    "timeZoneIsKnown": true,
     "locationCaptureEnabled": true,
     "requirePeopleTagApproval": true,
     "savedAt": "2026-06-01T08:00:00+00:00",

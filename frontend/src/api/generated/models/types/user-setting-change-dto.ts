@@ -5,7 +5,7 @@
 
 export type UserSettingChangeDto = {
     /**
-     * @description The IANA time zone that gives the Journaling day. Null means UTC.
+     * @description The IANA time zone that gives the Journaling day. Null means UTC. The stored zone is always allowed, also when this host does not know it.
      * @maxLength 100
      * @type string | undefined
     */

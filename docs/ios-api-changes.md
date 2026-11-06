@@ -22,9 +22,9 @@ This document compares each of the 22 routes that the POC iOS client calls (`Jou
 | 8 | `PUT api/sessions/{id}/draft` | `PUT /api/v1/sessions/{id}/draft` | Send `text`, `baseRevision`, and `savedAt`. `baseRevision` is required. Send 0 when no Revision exists. The reply has `outcome`, which is `Won`, `Lost`, or `Unchanged`. Fixtures: `draft-save-won`, `draft-save-lost`. |
 | 9 | `GET api/summaries/{period}/{date}` | R10 builds it | No route in this unit. |
 | 10 | `POST api/summaries/{period}/{date}/generate` | R10 builds it | No route in this unit. |
-| 11 | `GET api/me/settings` | `GET /api/v1/me/settings` | `timeZone`, not `timeZoneId`. Fixture: `user-settings`. |
+| 11 | `GET api/me/settings` | `GET /api/v1/me/settings` | `timeZone`, not `timeZoneId`. `timeZoneIsKnown` is false when the host does not know the stored zone, for example after a restore onto other tzdata. The Journaling day then comes from UTC. Show the zone and ask the person for a new one. Fixture: `user-settings`. |
 | 12 | `PUT api/me/settings` | `PUT /api/v1/me/settings` | Send `timeZone` and `savedAt`. An older `savedAt` changes nothing, and the reply has the stored settings. |
-| 13 | `GET api/sync/changes` | `GET /api/v1/sync/changes` | Send `cursor`, not `since`, and `pageSize`. The reply adds `hasMore` and `tombstones`. Pull again with no wait while `hasMore` is true. Remove the local row of each tombstone. A 422 means that the server was restored: drop the cursor and the synced rows, keep the unsent saves, and pull from the start. Fixtures: `sync-changes`, `sync-changes-with-tombstone`, `error-cursor-ahead`. |
+| 13 | `GET api/sync/changes` | `GET /api/v1/sync/changes` | Send `cursor`, not `since`, and `pageSize`. The reply adds `hasMore` and `tombstones`. Pull again with no wait while `hasMore` is true. Remove the local row of each tombstone. A 422 has one meaning, with the key `cursor` in `errors`: the cursor is ahead of the server, because the server was restored. Drop the cursor and the synced rows, keep the unsent saves, and pull from the start. A bad parameter gives 400, and a stored zone that the host does not know gives 200. Fixtures: `sync-changes`, `sync-changes-with-tombstone`, `error-cursor-ahead`. |
 | 14 | `POST api/sessions/{id}/suggestions/accept` and `.../reject` | R9 builds it | No route in this unit. The call site is one for two routes. |
 | 15 | `POST api/sessions/{id}/people-proposals/respond` | R9 builds it | No route in this unit. |
 | 16 | `POST api/sessions/{id}/cleanup/stream` | R9 builds it | No route in this unit. |
@@ -37,7 +37,7 @@ This document compares each of the 22 routes that the POC iOS client calls (`Jou
 
 ## Journaling day
 
-A change of the time zone moves a Session to a new day, but the sync feed does not send the Session again. The feed sends the settings row. Derive the day from `startedAt` and the zone of the settings row. Do not keep `journalingDay` from an older response.
+A change of the time zone moves a Session to a new day, but the sync feed does not send the Session again. The feed sends the settings row. Derive the day from `startedAt` and the zone of the settings row, or from UTC when `timeZoneIsKnown` is false. Do not keep `journalingDay` from an older response.
 
 ## New routes
 

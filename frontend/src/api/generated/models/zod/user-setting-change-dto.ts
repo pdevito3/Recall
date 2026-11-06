@@ -6,7 +6,7 @@
 import * as z from 'zod'
 
 export const userSettingChangeDtoSchema = z.object({
-  timeZone: z.string().max(100).nullish().describe('The IANA time zone that gives the Journaling day. Null means UTC.'),
+  timeZone: z.string().max(100).nullish().describe('The IANA time zone that gives the Journaling day. Null means UTC. The stored zone is always allowed, also when this host does not know it.'),
   locationCaptureEnabled: z.boolean(),
   requirePeopleTagApproval: z.boolean(),
   savedAt: z.iso.datetime().describe('When the person made the change. A change with an older save time than the stored settings does nothing.'),
