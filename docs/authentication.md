@@ -194,6 +194,7 @@ Recall keeps no provider token, so the logout URL has `client_id`, `post_logout_
 |---|---|---|
 | ZeroFactor | Yes | Ends the session and returns at once, with `state`. It accepts any return URL. |
 | Keycloak 26 | Yes | Shows `Do you want to log out?`, then returns, with `state`. Back from the signed-out page shows this page again, with no session behind it, and a second Back shows its sign-in page. With a return URL that is not registered, it shows `Invalid redirect uri`, and its session stays. |
+| FusionAuth 1.69 | Yes | Ends the session and returns at once, with `state`. The return URL must be an authorized redirect URL of the application. |
 | Authelia 4.39 | No | Its session stays, and the signed-out page says so. |
 
 These results come from a run with Recall. For Authentik 2026.8.5, the result comes from its code, and not from a run. It stays on its own page after the logout, because it needs an `id_token_hint` to return. When it has a registered post-logout URI, it refuses a return URL with no hint, so do not register one for Recall. The next visit to Recall shows the note.
