@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Recall.Server.Databases;
 using Recall.Server.Domain.People.Dtos;
 using Recall.Server.Domain.People.Features;
+using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Dtos;
 using Recall.Server.Domain.Sessions.Features;
 using Recall.Server.Domain.Users;
@@ -156,6 +157,30 @@ public class JournalRaceTests : TestBase
 
     [Test]
     [Property("Rule", "SES-13")]
+    public async Task an_add_that_a_delete_of_its_owner_beat_saves_no_row()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var pause = PauseAtQuery.After("sessions.add.tombstone");
+        await using var services = pause.BuildServices();
+        var dto = new SessionForCreationDto { ClientSessionId = Guid.NewGuid().ToString(), StartedAt = Morning };
+
+        // Act
+        var add = ScopeOf(owner, services).SendAsync(new AddSession.Command(dto));
+        await pause.ReachedAsync();
+
+        // The delete does not go through the handler, which can wait for the lock that the add holds. So it always wins.
+        await TestFixture.ExecuteOutOfBandAsync("UPDATE users SET is_deleted = 1 WHERE id = @id", ("@id", owner.Id));
+        pause.Release();
+
+        // Assert
+        (await Should.ThrowAsync<Exception>(add)).ShouldBeOfType<ForbiddenAccessException>();
+        var rows = await new TestingServiceScope().ExecuteDbContextAsync(db => db.Sessions.IgnoreQueryFilters().CountAsync(s => s.UserId == owner.Id));
+        rows.ShouldBe(0);
+    }
+
+    [Test]
+    [Property("Rule", "SES-13")]
     public async Task an_add_and_a_delete_of_its_owner_at_one_time_leave_no_row()
     {
         // Arrange
@@ -183,6 +208,8 @@ public class JournalRaceTests : TestBase
         var addFailure = await add.ContinueWith(t => t.Exception?.InnerException, TaskScheduler.Default);
 
         // Assert
+        // Either order obeys the rule. The add can save first, and then the purge removes the row. Or the delete can
+        // save first, and then the trigger refuses the add, which an_add_that_a_delete_of_its_owner_beat_saves_no_row proves.
         var rows = await new TestingServiceScope().ExecuteDbContextAsync(db => db.Sessions.IgnoreQueryFilters().CountAsync(s => s.UserId == owner.Id));
         rows.ShouldBe(0);
         (addFailure is null or ForbiddenAccessException).ShouldBeTrue(addFailure?.ToString());
