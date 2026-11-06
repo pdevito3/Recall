@@ -13,7 +13,7 @@ test('a page on plain HTTP says that the mic stays off and links to the HTTPS se
 
   const screen = await render(<InsecureContextNotice />)
 
-  await expect.element(screen.getByRole('region', { name: 'Mic' })).toHaveTextContent('The mic needs HTTPS. This page opened on plain HTTP, so the mic stays off.')
+  await expect.element(screen.getByRole('region', { name: 'Mic' })).toHaveTextContent('The mic needs HTTPS. This page opened on plain HTTP, so the mic stays off. Turn on HTTPS')
   await expect.element(screen.getByRole('link', { name: 'Turn on HTTPS' })).toHaveAttribute('href', httpsGuideUrl)
 })
 

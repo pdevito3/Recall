@@ -1,3 +1,5 @@
+# The build stages run on the platform of the builder, and the final stage has no RUN, so an image for the other
+# architecture needs no emulation.
 FROM --platform=$BUILDPLATFORM node:24-alpine AS frontend
 WORKDIR /app
 # Corepack uses the pnpm version of packageManager in package.json
@@ -8,33 +10,40 @@ RUN pnpm install --frozen-lockfile
 COPY frontend/ .
 RUN pnpm build
 
-# Build .NET application
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+# One SDK band, as in CI. A new band can add style errors, and a style error fails this build.
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0.402 AS build
+ARG TARGETARCH
 WORKDIR /src
 
 COPY Directory.Packages.props Directory.Build.props .editorconfig ./
 COPY Recall.Server/*.csproj Recall.Server/
 COPY Recall.SourceGenerators/*.csproj Recall.SourceGenerators/
-RUN dotnet restore Recall.Server/Recall.Server.csproj
+RUN dotnet restore Recall.Server/Recall.Server.csproj -a $TARGETARCH
 
 COPY Recall.SourceGenerators/ Recall.SourceGenerators/
 COPY Recall.Server/ Recall.Server/
 WORKDIR /src/Recall.Server
-RUN dotnet publish -c Release -o /app/publish
+RUN dotnet publish -c Release -a $TARGETARCH --no-restore -o /app/publish
+RUN mkdir /empty-data
 
-# Runtime
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
 COPY --from=build /app/publish .
 COPY --from=frontend /app/dist ./wwwroot
+COPY deploy/healthcheck.sh .
+# A new named volume takes the owner of this folder, so the user below can write to it.
+COPY --from=build --chown=1654:1654 /empty-data /data
 
 # The base image sets ASPNETCORE_HTTP_PORTS=8080. Kestrel ignores it and logs a warning, so clear it.
 ENV ASPNETCORE_ENVIRONMENT=Production \
     ASPNETCORE_HTTP_PORTS=
 
+USER 1654:1654
 EXPOSE 8080
+VOLUME /data
 
-# The aspnet image has no curl, so the image has no HEALTHCHECK. The host probes /health itself.
+# See docs/install.md, section "The health probe", for the interval. A probe waits up to 50 s for a disk that sleeps.
+HEALTHCHECK --interval=1h --timeout=60s --start-period=2m --start-interval=5s --retries=1 CMD ["/app/healthcheck.sh"]
 
 ENTRYPOINT ["dotnet", "Recall.Server.dll"]

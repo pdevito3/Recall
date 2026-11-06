@@ -161,14 +161,8 @@ public partial class NoProviderBootTests
         [GeneratedRegex(@"http://127\.0\.0\.1:[1-9][0-9]*")]
         private static partial Regex ListeningAddress();
 
-        private static string ServerDll()
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Recall.slnx")))
-                directory = directory.Parent;
-            directory.ShouldNotBeNull();
-            return Path.Combine(directory.FullName, "Recall.Server", "bin", TestBuild.Configuration, "net10.0", "Recall.Server.dll");
-        }
+        private static string ServerDll() =>
+            Path.Combine(TestBuild.RepositoryRoot(), "Recall.Server", "bin", TestBuild.Configuration, "net10.0", "Recall.Server.dll");
     }
 
     private static class TestBuild
@@ -178,6 +172,15 @@ public partial class NoProviderBootTests
 #else
         public const string Configuration = "Release";
 #endif
+
+        public static string RepositoryRoot()
+        {
+            var directory = new DirectoryInfo(AppContext.BaseDirectory);
+            while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Recall.slnx")))
+                directory = directory.Parent;
+            directory.ShouldNotBeNull();
+            return directory.FullName;
+        }
     }
 
     [Test]
