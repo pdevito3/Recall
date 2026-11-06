@@ -22,16 +22,27 @@ public sealed class OwnerClaim(string claimFilePath, TimeProvider timeProvider)
     }
 
     /// <summary>
-    /// A move to a unique name is atomic, so one caller wins and the file is gone for each other caller. A move keeps the
+    /// A rename to a unique name is atomic, so one caller wins and the file is gone for each other caller. A rename keeps the
     /// write time. A file that is too old goes too, because a restore that does not keep times would make a file that stays new again.
     /// A file that cannot go refuses the claim and does not stop the login, because the claim must be good for one login only.
+    /// A link or a folder with this name is no claim, because the write time of a link says nothing about when the operator made it.
     /// </summary>
     public bool TryConsume()
     {
         var taken = $"{claimFilePath}.{Guid.CreateVersion7():N}";
         try
         {
-            File.Move(claimFilePath, taken);
+            if ((File.GetAttributes(claimFilePath) & (FileAttributes.ReparsePoint | FileAttributes.Directory)) != 0)
+            {
+                _logger.Here().Warning(
+                    "The owner claim file {ClaimFile} is a link or a folder and not a regular file, so the claim did nothing. Remove it, and create a regular file to claim the Owner",
+                    claimFilePath);
+                return false;
+            }
+
+            // Only the overwrite form is a rename. The other form on Unix links or copies, then removes the old name, so two callers can
+            // each win, and a file that cannot go leaves a new copy at each login.
+            File.Move(claimFilePath, taken, overwrite: true);
 
             // Duration, so that a write time in the future does not read as a new file.
             var age = (timeProvider.GetUtcNow().UtcDateTime - File.GetLastWriteTimeUtc(taken)).Duration();

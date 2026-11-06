@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Resources;
 using Serilog;
+using Serilog.Events;
 
 public enum LoginFailure
 {
@@ -223,7 +224,9 @@ public sealed class Provisioner(
             dbContext.Set<ExternalLogin>().Add(LinkOf(identity, user.Id));
             await dbContext.SaveChangesAsync(ct);
 
-            _logger.Here().Information("A login added user {UserId} to tenant {TenantId} with role {Role}", user.Id, tenantId, role.Value);
+            // Only a claim adds an Admin here, and the operator must be able to find who got it.
+            var level = role.Value == UserRole.Admin().Value ? LogEventLevel.Warning : LogEventLevel.Information;
+            _logger.Here().Write(level, "A login added user {UserId} to tenant {TenantId} with role {Role}", user.Id, tenantId, role.Value);
             return new ProvisionOutcome.Provisioned(user.Id, user.FullName);
         }, cancellationToken);
     }

@@ -37,6 +37,7 @@ public static class AuthHosts
         Sweep = new AuthFlowFactory(new Dictionary<string, string?>
         {
             ["Auth:OpenSignup"] = "true",
+            ["Auth:StartPermitsPerWindow"] = ManyStarts,
             ["Serilog:MinimumLevel:Default"] = "Debug",
             ["Serilog:MinimumLevel:Override:Microsoft"] = "Debug",
             ["Serilog:MinimumLevel:Override:Microsoft.AspNetCore"] = "Debug",
