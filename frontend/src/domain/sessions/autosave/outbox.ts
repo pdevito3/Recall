@@ -9,9 +9,35 @@ export interface OutboxEntry {
   baseRevision: number
   latestRevision: number
   change: Stamped<string>
+  /** Why the Server refused these words. A refused entry waits for the person, and it does not go out again on the next load. */
+  refusal?: string | null
+  movedFromDeletedEntry?: boolean
 }
 
 const prefixOf = (owner: string) => `recall.unsent.${owner}.`
+
+const isStamped = (value: unknown): value is Stamped<string> => {
+  const change = value as Stamped<string> | null
+  return typeof change?.value === 'string' && typeof change.savedAt === 'string'
+}
+
+// The outbox outlives the code that wrote it, and another tab or a person with dev tools can change it.
+function parseEntry(stored: string | null): OutboxEntry | null {
+  try {
+    const entry = JSON.parse(stored ?? 'null') as Partial<OutboxEntry> | null
+    const isEntry = typeof entry?.key === 'string'
+      && (entry.channel === 'raw' || entry.channel === 'cleaned')
+      && typeof entry.clientSessionId === 'string'
+      && typeof entry.startedAt === 'string'
+      && (entry.sessionId === null || typeof entry.sessionId === 'string')
+      && typeof entry.baseRevision === 'number'
+      && typeof entry.latestRevision === 'number'
+      && isStamped(entry.change)
+    return isEntry ? (entry as OutboxEntry) : null
+  } catch {
+    return null
+  }
+}
 
 // Storage can be full or blocked. The save still goes to the Server, so only a reload before the reply can lose words.
 export function writeToOutbox(owner: string, entry: OutboxEntry) {
@@ -32,17 +58,18 @@ export function removeFromOutbox(owner: string, key: string) {
 
 export function readOutboxEntry(owner: string, key: string): OutboxEntry | null {
   try {
-    return JSON.parse(localStorage.getItem(prefixOf(owner) + key) ?? 'null') as OutboxEntry | null
+    return parseEntry(localStorage.getItem(prefixOf(owner) + key))
   } catch {
     return null
   }
 }
 
+/** Reads each entry alone. An entry that cannot be read stays in storage, and it does not hide the others. */
 export function readOutbox(owner: string): OutboxEntry[] {
   try {
     return Object.keys(localStorage)
       .filter((key) => key.startsWith(prefixOf(owner)))
-      .map((key) => JSON.parse(localStorage.getItem(key) ?? 'null') as OutboxEntry)
+      .flatMap((key) => parseEntry(localStorage.getItem(key)) ?? [])
   } catch {
     return []
   }

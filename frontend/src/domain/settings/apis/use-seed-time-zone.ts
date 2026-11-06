@@ -13,10 +13,12 @@ export function useSeedTimeZone() {
   useEffect(() => {
     if (!setting || setting.timeZone || hasSeeded) return
     hasSeeded = true
-    settingSaver(queryClient).edit({
+    const saver = settingSaver(queryClient)
+    const values = saver.newestUnsettledValue() ?? setting
+    saver.edit({
       timeZone: browserTimeZone(),
-      locationCaptureEnabled: setting.locationCaptureEnabled,
-      requirePeopleProposalApproval: setting.requirePeopleProposalApproval,
+      locationCaptureEnabled: values.locationCaptureEnabled,
+      requirePeopleProposalApproval: values.requirePeopleProposalApproval,
     })
   }, [setting, queryClient])
 }

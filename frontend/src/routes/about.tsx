@@ -18,7 +18,7 @@ function About() {
         <ul className="flex list-disc flex-col gap-2 pl-5">
           <li>Your words stay as you wrote them. A cleaned version is a separate copy, and AI never changes your words.</li>
           <li>Each save keeps a version in the history of the entry, so you can read or restore an earlier version.</li>
-          <li>The journal runs on a server that you control, and the data stays there.</li>
+          <li>The journal runs on a server that you control, and the data stays there. If you connect a cloud provider, the words or the audio that it works on go to that provider.</li>
         </ul>
       </div>
     </Page>

@@ -3,6 +3,8 @@ import { useMutation } from '@tanstack/react-query'
 import { Notification } from '@/components/notification'
 import { apiClient } from '@/lib/api-client'
 
+import { settleUnsentWords } from './unsent-words-at-logout'
+
 const serverMaxReturnPathLength = 2048
 
 const signedOutPage = '/auth/login?signedOut=1'
@@ -26,7 +28,9 @@ export function login(returnUrl: string = '/'): void {
 }
 
 export async function logout(): Promise<void> {
+  const leaveNoSign = await settleUnsentWords()
   await apiClient.post('/auth/logout', undefined, { suppressErrorToast: true })
+  leaveNoSign()
   hasSignedOut = true
   window.location.replace(signedOutPage)
 }

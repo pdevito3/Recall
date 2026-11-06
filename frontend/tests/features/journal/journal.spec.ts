@@ -201,15 +201,16 @@ test.describe('writing a new entry', () => {
   })
 
   test('a person who leaves just after the first words finds them on the way back', async ({ page, api }) => {
-    api.mock({ ...sessionsApi.creates(created), delayMs: 300 }, sessionsApi.draftSaveWins(created, 1))
+    const saved = { ...aSession().saying('Words before a move').build(), id: created.id, clientSessionId: created.clientSessionId }
+    api.mock({ ...sessionsApi.creates(created), delayMs: 300 }, sessionsApi.draftSaveWins(created, 1), sessionsApi.oneIs(saved))
     const journal = journalPage(page)
     await journal.open()
+    // The create reads the timeline, and that read stays fresh until the return. It must already hold the row.
+    api.mock(sessionsApi.timelineIs([{ ...aSession().summary('Words before a move'), id: created.id }]))
     await journal.typeWithoutWaiting('Words before a move')
     await journal.goToSettings()
     await expect.poll(() => api.all('put', sessionsPaths.rawDraft(created.id)).length).toBe(1)
 
-    const saved = { ...aSession().saying('Words before a move').build(), id: created.id, clientSessionId: created.clientSessionId }
-    api.mock(sessionsApi.oneIs(saved), sessionsApi.timelineIs([{ ...aSession().summary('Words before a move'), id: created.id }]))
     await journal.goToTheJournalFromTheSidebar()
 
     await expect(journal.at.composer).toHaveText('Words before a move')
@@ -264,7 +265,7 @@ test.describe('writing a new entry', () => {
     await expect(journal.at.done).toBeEnabled()
   })
 
-  test('a return to the journal after a delete elsewhere starts over, and makes no empty entry', async ({ page, api }) => {
+  test('a return to the journal after a delete elsewhere finds the words in a new entry', async ({ page, api }) => {
     api.mock(sessionsApi.creates(created), sessionsApi.oneIs(created), sessionsApi.draftSaveWins(created, 1))
     const journal = journalPage(page)
     await journal.open()
@@ -273,14 +274,17 @@ test.describe('writing a new entry', () => {
 
     api.mock(sessionsApi.draftSaveIsRefused(created, aProblem().notFound('The entry is gone.')), sessionsApi.oneFails(created.id, aProblem().notFound('The entry is gone.')))
     await journal.typeWithoutWaiting(' and more')
+    const next = aSession().build()
+    const savedNext = { ...aSession().saying('First words and more').build(), id: next.id, clientSessionId: next.clientSessionId }
+    api.mock(sessionsApi.creates(next), sessionsApi.draftSaveWins(next, 1), sessionsApi.oneIs(savedNext))
     await journal.goToSettings()
-    await expect.poll(() => api.all('put', sessionsPaths.rawDraft(created.id)).length).toBe(2)
+    await expect(journal.at.movedNotice).toBeVisible()
+    await expect.poll(() => JSON.stringify(api.last('put', sessionsPaths.rawDraft(next.id))?.body)).toContain('First words and more')
     await journal.goToTheJournalFromTheSidebar()
 
-    await expect(journal.at.composer).toBeEmpty()
-    await journal.letAnAnswerHeldForHalfASecondLand()
-    await journal.letAnAnswerHeldForHalfASecondLand()
-    expect(api.all('post', sessionsPaths.timeline)).toHaveLength(1)
+    await expect(journal.at.composer).toHaveText('First words and more')
+    await expect(journal.at.movedNotice).toBeVisible()
+    expect(api.all('post', sessionsPaths.timeline)).toHaveLength(2)
   })
 
   test('a conflict from before a return shows only after the words open', async ({ page, api }) => {
@@ -501,7 +505,7 @@ test.describe('the timeline', () => {
     await expect(journal.at.done).toBeDisabled()
   })
 
-  test('a delete that answers after Done starts a new entry with the words', async ({ page, api }) => {
+  test('a delete that answers after Done keeps the words in a new entry and says so', async ({ page, api }) => {
     const session = aSession().build()
     api.mock(sessionsApi.creates(session), sessionsApi.draftSaveWins(session, 1))
     const journal = journalPage(page)
@@ -516,7 +520,8 @@ test.describe('the timeline', () => {
     api.mock(sessionsApi.creates(next), sessionsApi.draftSaveWins(next, 1))
 
     await expect.poll(() => JSON.stringify(api.last('put', sessionsPaths.rawDraft(next.id))?.body)).toContain('Words for a deleted entry and more')
-    await expect(journal.at.composer).toHaveText('Words for a deleted entry and more')
+    await expect(journal.at.movedNotice).toBeVisible()
+    await expect(journal.at.composer).toBeEmpty()
   })
 
   test('a save that replaces an unseen save after Done brings the words back with the notice, and Done then finishes', async ({ page, api }) => {

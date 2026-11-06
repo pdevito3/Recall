@@ -17,6 +17,10 @@ import { BreadcrumbNameProvider } from '@/components/breadcrumb-name-provider'
 import { Button } from '@/components/ui/button'
 import { login, returnUrlOf } from '@/domain/auth/apis/auth-actions'
 import { authUserQuery } from '@/domain/auth/apis/get-user'
+import { useHasLeftThePage } from '@/domain/auth/apis/page-of-another-person'
+import { PageOfAnotherPerson } from '@/domain/auth/components/page-of-another-person'
+import { UnsentWordsAtLogoutDialog } from '@/domain/auth/components/unsent-words-at-logout-dialog'
+import { DraftNotices } from '@/domain/sessions/components/draft-notices'
 import { FileStoreNotice } from '@/domain/file-store/components/file-store-notice'
 import { MembershipCheckFailedNotice } from '@/domain/membership/components/membership-notice'
 import { useResumeUnsentDrafts } from '@/domain/sessions/autosave/use-resume-unsent-drafts'
@@ -43,6 +47,10 @@ export const Route = createRootRoute({
 })
 
 function RootComponent() {
+  return useHasLeftThePage() ? <PageOfAnotherPerson /> : <SessionGate />
+}
+
+function SessionGate() {
   const session = useQuery(authUserQuery)
 
   // A failed refetch keeps the data of the last answer, and that answer still decides.
@@ -123,6 +131,8 @@ function LayoutContent() {
           </header>
           <MembershipCheckFailedNotice />
           <FileStoreNotice />
+          <DraftNotices />
+          <UnsentWordsAtLogoutDialog />
           <div ref={content} className="flex flex-1 flex-col gap-4 p-4 pt-0">
             <Outlet />
           </div>

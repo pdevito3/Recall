@@ -6,7 +6,7 @@ import { setSessionMetadata } from '@/api/generated/sessions/clients/set-session
 import { SessionKeys } from '../apis/session.keys'
 import { patchTimelineRow } from '../apis/timeline-cache'
 import type { SessionTagValues } from '../tags'
-import { SerialSaver } from './serial-saver'
+import { isARowThatIsGone, SerialSaver } from './serial-saver'
 
 const savers = new Map<string, SerialSaver<SessionTagValues, SessionDto>>()
 
@@ -15,8 +15,9 @@ export function metadataSaverFor(id: string, queryClient: QueryClient) {
   if (existing) return existing
   const saver = new SerialSaver<SessionTagValues, SessionDto>({
     debounceMs: 0,
-    send: ({ value, savedAt }) =>
-      setSessionMetadata({ path: { id }, body: { ...value, savedAt }, options: { suppressErrorToast: true } }),
+    send: ({ value, savedAt }, signal) =>
+      setSessionMetadata({ path: { id }, body: { ...value, savedAt }, signal, options: { suppressErrorToast: true } }),
+    refusalMessage: (error) => (isARowThatIsGone(error) ? 'This entry was deleted in another tab or device.' : error.displayMessage),
     onReply: (session) => {
       void queryClient.cancelQueries({ queryKey: SessionKeys.detail(id), exact: true })
       queryClient.setQueryData(SessionKeys.detail(id), session)

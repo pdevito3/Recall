@@ -36,3 +36,9 @@ export function pointAtCreatedSession(clientSessionId: string, sessionId: string
   const pointer = readStored()
   if (pointer?.clientSessionId === clientSessionId) writePointer({ ...pointer, sessionId })
 }
+
+/** The entry of the pointer was deleted, so the composer now writes a new entry. */
+export function pointAtNewEntry(oldClientSessionId: string, clientSessionId: string) {
+  const pointer = readStored()
+  if (pointer?.clientSessionId === oldClientSessionId) writePointer({ ...pointer, clientSessionId, sessionId: null })
+}

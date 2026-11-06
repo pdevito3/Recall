@@ -1,3 +1,4 @@
+import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
@@ -34,7 +35,12 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
     latestRevision: latestOf(session, channel),
   })
 
-  const [opened, setOpened] = useState(() => ({ text: saver.wordsToOpen() ?? draftOf(session, channel), key: 0, takesFocus: false }))
+  const navigate = useNavigate()
+  const [opened, setOpened] = useState(() => ({
+    text: saver.wordsToOpen() ?? draftOf(session, channel),
+    key: 0,
+    takesFocus: snapshot.movedFromDeletedEntry,
+  }))
   const [revisionsAtOpen] = useState(() => ({ draft: draftRevisionOf(session, channel), latest: latestOf(session, channel) }))
   const [opensAConflict] = useState(() => saver.hasUnseenConflict())
   const [wasUpdated, setWasUpdated] = useState(false)
@@ -64,6 +70,11 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
     setOpened((previous) => ({ text: serverText, key: previous.key + 1, takesFocus: hadFocus }))
     setWasUpdated(true)
   }, [saver, serverDraft, serverLatest, serverText])
+
+  const newEntryId = snapshot.movedFromDeletedEntry && snapshot.sessionId !== session.id ? snapshot.sessionId : null
+  useEffect(() => {
+    if (newEntryId) void navigate({ to: '/sessions/$id', params: { id: newEntryId }, replace: true })
+  }, [newEntryId, navigate])
 
   const showNewest = async () => {
     const newest = await saver.takeNewestWords()
@@ -106,7 +117,7 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
           onSubmit={() => saver.flush()}
           toolbar={(editor) => <EditorToolbar editor={editor} />}
         />
-        <SaveStatusLine status={shownStatusOf(snapshot)} zone={zone} holdsTheOnlyCopy />
+        <SaveStatusLine status={shownStatusOf(snapshot)} zone={zone} />
       </section>
       <SessionHistory
         sessionId={session.id}

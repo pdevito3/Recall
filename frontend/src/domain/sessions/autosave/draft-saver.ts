@@ -6,15 +6,16 @@ import { addSession } from '@/api/generated/sessions/clients/add-session'
 import { saveCleanedDraft } from '@/api/generated/sessions/clients/save-cleaned-draft'
 import { saveRawDraft } from '@/api/generated/sessions/clients/save-raw-draft'
 import { Notification } from '@/components/notification'
+import { newUuid } from '@/lib/new-uuid'
 
 import { sessionQueryOptions } from '../apis/get-session'
 import { SessionKeys, type DraftChannel } from '../apis/session.keys'
 import { patchTimelineRow, refreshTimelineHead } from '../apis/timeline-cache'
 import { mentionedPersonIds, plainPreviewOf } from '../editor/content'
-import { pointAtCreatedSession } from './composer-pointer'
+import { pointAtCreatedSession, pointAtNewEntry } from './composer-pointer'
 import { readOutbox, readOutboxEntry, removeFromOutbox, writeToOutbox, type OutboxEntry } from './outbox'
-import { queueWithUnanswered, newestUnsettled, type SaveQueue, type SaveStatus, type Stamped } from './save-queue'
-import { SerialSaver } from './serial-saver'
+import { queueWithRefusal, queueWithUnanswered, newestUnsettled, type SaveQueue, type SaveStatus, type Stamped } from './save-queue'
+import { isARowThatIsGone, SerialSaver } from './serial-saver'
 
 export type DraftConflict = 'wordsMovedToHistory' | 'replacedUnseenSave' | null
 
@@ -26,7 +27,12 @@ export interface DraftSnapshot {
   sessionId: string | null
   baseRevision: number
   latestRevision: number
+  movedFromDeletedEntry: boolean
 }
+
+export type DraftNotice =
+  | { kind: 'moved'; saver: DraftSaver; sessionId: string | null }
+  | { kind: 'refused'; saver: DraftSaver; reason: string; words: string }
 
 export function shownStatusOf({ status, conflict }: DraftSnapshot): ShownSaveStatus {
   return status.kind === 'saved' && conflict === 'wordsMovedToHistory' ? { kind: 'savedInHistory', at: status.at } : status
@@ -47,7 +53,7 @@ const pauseInTypingMs = 800
 const previewLength = 200
 
 export class DraftSaver {
-  private readonly target: DraftTarget
+  private target: DraftTarget
   private readonly queryClient: QueryClient
   private readonly saver: SerialSaver<string, DraftSaveResultDto>
   private snapshot: DraftSnapshot
@@ -57,7 +63,7 @@ export class DraftSaver {
   private wordsInHistory: string | null = null
   private wordsOnServer: string | null = null
 
-  constructor(target: DraftTarget, queryClient: QueryClient, resumed?: Stamped<string>) {
+  constructor(target: DraftTarget, queryClient: QueryClient, resumed?: OutboxEntry) {
     this.target = target
     this.queryClient = queryClient
     this.snapshot = {
@@ -66,13 +72,14 @@ export class DraftSaver {
       sessionId: target.sessionId,
       baseRevision: target.baseRevision,
       latestRevision: target.latestRevision,
+      movedFromDeletedEntry: resumed?.movedFromDeletedEntry ?? false,
     }
     this.saver = new SerialSaver({
       debounceMs: pauseInTypingMs,
-      send: (change) => this.send(change),
+      send: (change, signal) => this.send(change, signal),
       onReply: (reply, change) => this.handleReply(reply, change),
       onQueueChange: (queue) => this.keepInOutbox(queue),
-      initialQueue: resumed && queueWithUnanswered(resumed),
+      initialQueue: resumed && (resumed.refusal ? queueWithRefusal(resumed.change, resumed.refusal) : queueWithUnanswered(resumed.change)),
     })
     this.snapshot = { ...this.snapshot, status: this.saver.getStatus() }
     this.saver.subscribe(() => this.update({ status: this.saver.getStatus() }))
@@ -84,6 +91,34 @@ export class DraftSaver {
 
   flush() {
     this.saver.flush()
+  }
+
+  settle() {
+    return this.saver.settle()
+  }
+
+  stop() {
+    this.saver.dispose()
+  }
+
+  /** Words typed before the read of the entry ends wait here, so that a reload does not lose them. Nothing goes to the Server. */
+  holdInOutbox(text: string | null) {
+    if (text === null) removeFromOutbox(this.target.owner, draftKey(this.target))
+    else this.writeToOutbox({ value: text, savedAt: new Date().toISOString() }, null)
+  }
+
+  dismissMovedNotice() {
+    this.update({ movedFromDeletedEntry: false })
+    const change = this.saver.newestUnsettled()
+    if (change) this.writeToOutbox(change, this.saver.refusalMessage())
+  }
+
+  notice(): DraftNotice | null {
+    const { status, movedFromDeletedEntry, sessionId } = this.snapshot
+    if (status.kind === 'refused' && this.listeners.size === 0) {
+      return { kind: 'refused', saver: this, reason: status.message, words: this.unsettledText() ?? '' }
+    }
+    return movedFromDeletedEntry ? { kind: 'moved', saver: this, sessionId } : null
   }
 
   unsettledText() {
@@ -138,14 +173,19 @@ export class DraftSaver {
   discard() {
     this.saver.dispose()
     removeFromOutbox(this.target.owner, draftKey(this.target))
-    savers.delete(draftKey(this.target))
+    for (const [key, saver] of savers) {
+      if (saver === this) savers.delete(key)
+    }
+    refreshDraftNotices()
   }
 
   subscribe = (listener: () => void) => {
     this.listeners.add(listener)
     this.conflictIsUnseen = false
+    refreshDraftNotices()
     return () => {
       this.listeners.delete(listener)
+      refreshDraftNotices()
     }
   }
 
@@ -154,9 +194,10 @@ export class DraftSaver {
   private update(patch: Partial<DraftSnapshot>) {
     this.snapshot = { ...this.snapshot, ...patch }
     for (const listener of this.listeners) listener()
+    refreshDraftNotices()
   }
 
-  private async sessionIdForSave() {
+  private async sessionIdForSave(signal: AbortSignal) {
     if (this.snapshot.sessionId) return this.snapshot.sessionId
     const location = await this.target.location
     const created = await addSession({
@@ -166,6 +207,7 @@ export class DraftSaver {
         latitude: location?.latitude ?? null,
         longitude: location?.longitude ?? null,
       },
+      signal,
       options: { suppressErrorToast: true },
     })
     this.afterCreate(created)
@@ -180,13 +222,35 @@ export class DraftSaver {
     void refreshTimelineHead(this.queryClient)
   }
 
-  private async send(change: Stamped<string>) {
-    const id = await this.sessionIdForSave()
+  private async send(change: Stamped<string>, signal: AbortSignal) {
+    try {
+      return await this.saveWords(change, signal)
+    } catch (error) {
+      if (!isARowThatIsGone(error)) throw error
+      this.moveToNewEntry(change)
+      return this.saveWords(change, signal)
+    }
+  }
+
+  private async saveWords(change: Stamped<string>, signal: AbortSignal) {
+    const id = await this.sessionIdForSave(signal)
     const body = { text: change.value, baseRevision: this.snapshot.baseRevision, savedAt: change.savedAt }
     const options = { suppressErrorToast: true }
     return this.target.channel === 'raw'
-      ? saveRawDraft({ path: { id }, body, options })
-      : saveCleanedDraft({ path: { id }, body, options })
+      ? saveRawDraft({ path: { id }, body, signal, options })
+      : saveCleanedDraft({ path: { id }, body, signal, options })
+  }
+
+  /** The entry was deleted in another tab or device. The words stay: they become a new entry, and the person gets a notice. */
+  private moveToNewEntry(change: Stamped<string>) {
+    const oldKey = draftKey(this.target)
+    const clientSessionId = newUuid()
+    pointAtNewEntry(this.target.clientSessionId, clientSessionId)
+    this.target = { ...this.target, clientSessionId, channel: 'raw', sessionId: null, baseRevision: 0, latestRevision: 0 }
+    savers.set(draftKey(this.target), this)
+    this.update({ sessionId: null, baseRevision: 0, latestRevision: 0, conflict: null, movedFromDeletedEntry: true })
+    this.writeToOutbox(change, null)
+    removeFromOutbox(this.target.owner, oldKey)
   }
 
   private handleReply(reply: DraftSaveResultDto, change: Stamped<string>) {
@@ -244,14 +308,17 @@ export class DraftSaver {
   }
 
   private keepInOutbox(queue: SaveQueue<string>) {
-    const key = draftKey(this.target)
     const change = newestUnsettled(queue)
     if (!change) {
-      removeFromOutbox(this.target.owner, key)
+      removeFromOutbox(this.target.owner, draftKey(this.target))
       return
     }
+    this.writeToOutbox(change, queue.refusal?.change === change ? queue.refusal.message : null)
+  }
+
+  private writeToOutbox(change: Stamped<string>, refusal: string | null) {
     writeToOutbox(this.target.owner, {
-      key,
+      key: draftKey(this.target),
       channel: this.target.channel,
       clientSessionId: this.target.clientSessionId,
       startedAt: this.target.startedAt,
@@ -259,6 +326,8 @@ export class DraftSaver {
       baseRevision: this.snapshot.baseRevision,
       latestRevision: this.snapshot.latestRevision,
       change,
+      refusal,
+      movedFromDeletedEntry: this.snapshot.movedFromDeletedEntry,
     })
   }
 }
@@ -287,7 +356,7 @@ function saverFromOutbox(entry: OutboxEntry, target: DraftTarget, queryClient: Q
   return new DraftSaver(
     { ...target, sessionId: entry.sessionId, baseRevision: entry.baseRevision, latestRevision: entry.latestRevision },
     queryClient,
-    entry.change,
+    entry,
   )
 }
 
@@ -311,4 +380,39 @@ export function resumeUnsentDrafts(owner: string, queryClient: QueryClient) {
   for (const entry of readOutbox(owner)) {
     if (!savers.has(entry.key)) savers.set(entry.key, saverFromOutbox(entry, { ...entry, owner }, queryClient))
   }
+  refreshDraftNotices()
+}
+
+let shownNotices: DraftNotice[] = []
+const noticeListeners = new Set<() => void>()
+
+function refreshDraftNotices() {
+  shownNotices = [...new Set(savers.values())].flatMap((saver) => saver.notice() ?? [])
+  for (const listener of noticeListeners) listener()
+}
+
+export const draftNotices = () => shownNotices
+
+export function subscribeToDraftNotices(listener: () => void) {
+  noticeListeners.add(listener)
+  return () => {
+    noticeListeners.delete(listener)
+  }
+}
+
+const everySaver = () => [...new Set(savers.values())]
+
+/** True when the Server holds each word, and false when a word stays unsent or refused. */
+export async function settleDraftSavers() {
+  const settled = await Promise.all(everySaver().map((saver) => saver.settle()))
+  return settled.every(Boolean)
+}
+
+/** The savers stay in the map, so that a render on the way out finds a stopped saver and does not start a new one from the outbox. */
+export function stopDraftSavers() {
+  for (const saver of everySaver()) saver.stop()
+}
+
+export function discardUnsentDrafts() {
+  for (const saver of everySaver()) saver.discard()
 }

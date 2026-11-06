@@ -1,12 +1,24 @@
-import { CONCURRENT_CHANGE_PROBLEM_TYPE, isProblemDetailsError, STALE_VERSION_PROBLEM_TYPE, type ProblemDetailsError } from '@/lib/problem-details'
+import {
+  CONCURRENT_CHANGE_PROBLEM_TYPE,
+  isProblemDetailsError,
+  PAGE_USER_MISMATCH_PROBLEM_TYPE,
+  STALE_VERSION_PROBLEM_TYPE,
+  type ProblemDetailsError,
+} from '@/lib/problem-details'
 
 import { emptyQueue, newestUnsettled, nextToSend, statusOf, step, type SaveEvent, type SaveQueue, type SaveStatus, type Stamped } from './save-queue'
 
 const firstRetryMs = 2_000
 const longestRetryMs = 30_000
+const requestLimitMs = 30_000
 const statusesThatCanChange = new Set([401, 408, 429])
-const conflictsThatPass = new Set([STALE_VERSION_PROBLEM_TYPE, CONCURRENT_CHANGE_PROBLEM_TYPE])
-const statusesOfARowThatIsGone = new Set([404, 409])
+const conflictsThatPass = new Set([STALE_VERSION_PROBLEM_TYPE, CONCURRENT_CHANGE_PROBLEM_TYPE, PAGE_USER_MISMATCH_PROBLEM_TYPE])
+
+export function isARowThatIsGone(error: unknown): boolean {
+  return isProblemDetailsError(error)
+    && (error.status === 404 || error.status === 409)
+    && !conflictsThatPass.has(error.problemDetails.type ?? '')
+}
 
 function isFinalRefusal(error: unknown): error is ProblemDetailsError {
   if (!isProblemDetailsError(error) || conflictsThatPass.has(error.problemDetails.type ?? '')) return false
@@ -16,8 +28,9 @@ function isFinalRefusal(error: unknown): error is ProblemDetailsError {
 
 interface SerialSaverOptions<T, R> {
   debounceMs: number
-  send: (change: Stamped<T>) => Promise<R>
+  send: (change: Stamped<T>, signal: AbortSignal) => Promise<R>
   onReply: (reply: R, change: Stamped<T>) => void
+  refusalMessage?: (error: ProblemDetailsError) => string
   initialQueue?: SaveQueue<T>
   onQueueChange?: (queue: SaveQueue<T>) => void
 }
@@ -30,6 +43,7 @@ export class SerialSaver<T, R> {
   private retry: ReturnType<typeof setTimeout> | undefined
   private retryMs = firstRetryMs
   private isDisposed = false
+  private settleWaiters: ((isSettled: boolean) => void)[] = []
   private readonly options: SerialSaverOptions<T, R>
 
   constructor(options: SerialSaverOptions<T, R>) {
@@ -64,10 +78,28 @@ export class SerialSaver<T, R> {
     window.removeEventListener('online', this.retryNow)
     this.listeners.clear()
     this.isDisposed = true
+    this.answerSettleWaiters()
+  }
+
+  /** Sends now. True when the Server holds the newest value, and false when the next try failed. */
+  settle(): Promise<boolean> {
+    this.flush()
+    return new Promise((resolve) => {
+      this.settleWaiters.push(resolve)
+      if (!this.queue.sending) this.answerSettleWaiters()
+    })
   }
 
   newestUnsettledValue(): T | null {
     return newestUnsettled(this.queue)?.value ?? null
+  }
+
+  newestUnsettled() {
+    return newestUnsettled(this.queue)
+  }
+
+  refusalMessage() {
+    return this.queue.refusal?.change === newestUnsettled(this.queue) ? (this.queue.refusal?.message ?? null) : null
   }
 
   subscribe = (listener: () => void) => {
@@ -104,9 +136,18 @@ export class SerialSaver<T, R> {
     const change = nextToSend(this.queue)
     if (!change || this.isDisposed) return
     this.apply({ type: 'sent' })
-    this.options.send(change).then(
-      (reply) => this.handleReply(reply, change),
-      (error: unknown) => this.handleFailure(error),
+    // A hung request must end, so that the retry and a true status follow. A retry has the same save time, so a request that did arrive changes nothing.
+    const limit = new AbortController()
+    const limitTimer = setTimeout(() => limit.abort(), requestLimitMs)
+    this.options.send(change, limit.signal).then(
+      (reply) => {
+        clearTimeout(limitTimer)
+        this.handleReply(reply, change)
+      },
+      (error: unknown) => {
+        clearTimeout(limitTimer)
+        this.handleFailure(error)
+      },
     )
   }
 
@@ -115,20 +156,29 @@ export class SerialSaver<T, R> {
     this.retryMs = firstRetryMs
     this.options.onReply(reply, change)
     this.apply({ type: 'replied', savedAt: change.savedAt })
-    this.pumpUnlessDebouncing()
+    if (this.settleWaiters.length > 0) this.pump()
+    else this.pumpUnlessDebouncing()
+    if (!this.queue.sending) this.answerSettleWaiters()
   }
 
   private handleFailure(error: unknown) {
     if (this.isDisposed) return
     if (isFinalRefusal(error)) {
-      this.apply({ type: 'refused', message: error.displayMessage, isGone: statusesOfARowThatIsGone.has(error.status ?? 500) })
+      this.apply({ type: 'refused', message: this.options.refusalMessage?.(error) ?? error.displayMessage })
       this.pumpUnlessDebouncing()
+      if (!this.queue.sending) this.answerSettleWaiters()
       return
     }
     this.apply({ type: 'noReply' })
     clearTimeout(this.retry)
     this.retry = setTimeout(this.retryNow, this.retryMs)
     this.retryMs = Math.min(this.retryMs * 2, longestRetryMs)
+    this.answerSettleWaiters()
+  }
+
+  private answerSettleWaiters() {
+    const isSettled = newestUnsettled(this.queue) === null
+    for (const answer of this.settleWaiters.splice(0)) answer(isSettled)
   }
 
   private pumpUnlessDebouncing() {

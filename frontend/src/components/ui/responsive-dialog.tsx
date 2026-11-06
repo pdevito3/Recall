@@ -80,11 +80,13 @@ function ResponsiveDialog({
   children,
   showCloseButton = true,
   isDismissable = true,
+  role,
   ...props
 }: Omit<ModalOverlayPrimitiveProps, "className" | "children"> & {
   className?: string
   children: React.ReactNode
   showCloseButton?: boolean
+  role?: "dialog" | "alertdialog"
 }) {
   const isMobile = useIsMobile()
   const [descriptionId, setDescriptionId] = React.useState<string>()
@@ -121,6 +123,7 @@ function ResponsiveDialog({
       >
         <DialogPrimitive
           data-slot="responsive-dialog"
+          role={role}
           aria-describedby={descriptionId}
           data-close-button={showCloseButton || undefined}
           className="relative flex max-h-[inherit] flex-col outline-none"

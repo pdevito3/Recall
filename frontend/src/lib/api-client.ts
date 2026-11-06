@@ -3,7 +3,9 @@ import axios, { type AxiosRequestConfig, type AxiosError } from 'axios'
 import type { client as KubbClient } from '@/api/generated/.kubb/client'
 import { Notification } from '@/components/notification'
 
+import { pageUserHeader, pageUserOf, refuseThePage } from './page-user'
 import {
+  PAGE_USER_MISMATCH_PROBLEM_TYPE,
   ProblemDetailsError,
   isProblemDetails,
   type ProblemDetails,
@@ -93,6 +95,12 @@ export function setSessionEndedCheck(handler: () => Promise<boolean>) {
   isSessionEnded = handler
 }
 
+apiClient.interceptors.request.use((config) => {
+  const pageUser = pageUserOf()
+  if (pageUser) config.headers.set(pageUserHeader, pageUser)
+  return config
+})
+
 // Response interceptor to handle errors with Problem Details support
 apiClient.interceptors.response.use(
   (response) => response,
@@ -108,6 +116,11 @@ apiClient.interceptors.response.use(
 
     // Convert to appropriate error type
     const processedError = handleErrorResponse(error)
+
+    if (processedError instanceof ProblemDetailsError && processedError.problemDetails.type === PAGE_USER_MISMATCH_PROBLEM_TYPE) {
+      refuseThePage()
+      return Promise.reject(processedError)
+    }
 
     // The check of the session cannot wait for itself, so its own 401 is a failed check.
     if (error.response?.status === 401 && config?.url !== sessionCheckPath) {

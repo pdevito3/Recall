@@ -7,9 +7,11 @@ import { PageError } from '@/components/page-error'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/toaster'
 import { AuthKeys } from '@/domain/auth/apis/auth.keys'
+import { leaveThePageOfAnotherPerson } from '@/domain/auth/apis/page-of-another-person'
 // Connects the generated API clients to apiClient before the first request.
 import { setSessionEndedCheck } from '@/lib/api-client'
 import { watchForNavigation } from '@/lib/first-page'
+import { setPageUserMismatchHandler } from '@/lib/page-user'
 import { createQueryClient } from '@/lib/query-client'
 import './index.css'
 
@@ -33,6 +35,8 @@ setSessionEndedCheck(async () => {
   await queryClient.invalidateQueries({ queryKey: AuthKeys.user() }, { cancelRefetch: false })
   return queryClient.getQueryData(AuthKeys.user()) === null
 })
+
+setPageUserMismatchHandler(() => leaveThePageOfAnotherPerson(queryClient))
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

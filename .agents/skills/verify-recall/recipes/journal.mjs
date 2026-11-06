@@ -1,5 +1,6 @@
 const api = (page, method, path, body) => page.evaluate(async ({ method, path, body }) => {
-  const response = await fetch(path, { method, headers: { 'X-CSRF': '1', 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined })
+  const me = await (await fetch('/auth/me', { headers: { 'X-CSRF': '1' } })).json()
+  const response = await fetch(path, { method, headers: { 'X-CSRF': '1', 'X-Recall-User': me.sub, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined })
   const text = await response.text()
   return { status: response.status, body: text ? JSON.parse(text) : null }
 }, { method, path, body })

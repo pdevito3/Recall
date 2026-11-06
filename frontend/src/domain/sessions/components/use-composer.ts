@@ -12,9 +12,12 @@ import { SessionKeys } from '../apis/session.keys'
 import { readPointer, writePointer, type ComposerPointer } from '../autosave/composer-pointer'
 import { draftSaverFor, shownStatusOf, type DraftSaver, type DraftSnapshot } from '../autosave/draft-saver'
 import { useOwner } from '../autosave/use-draft-saver'
+import { joinWords } from '../editor/content'
 
 const locationWaitMs = 3_000
 const readWaitMs = 5_000
+const readRetryMs = 2_000
+const readLimitMs = 30_000
 
 function captureLocation(): Promise<{ latitude: number; longitude: number } | null> {
   return new Promise((resolve) => {
@@ -31,10 +34,11 @@ function captureLocation(): Promise<{ latitude: number; longitude: number } | nu
   })
 }
 
-const idleSnapshot: DraftSnapshot = { status: { kind: 'idle' }, conflict: null, sessionId: null, baseRevision: 0, latestRevision: 0 }
+const idleSnapshot: DraftSnapshot = { status: { kind: 'idle' }, conflict: null, sessionId: null, baseRevision: 0, latestRevision: 0, movedFromDeletedEntry: false }
 const noSubscription = () => () => undefined
 
 const isTheEntryGone = (error: unknown) => isProblemDetailsError(error) && error.status === 404
+const isWritingNow = () => document.activeElement?.closest('[contenteditable="true"]') != null
 
 const openingWords = (saver: DraftSaver | null, sessionId: string | null, cached: SessionDto | undefined) => {
   const kept = saver?.wordsToOpen() ?? null
@@ -58,10 +62,10 @@ export function useComposer() {
   const [finished, setFinished] = useState<{ saver: DraftSaver; words: string; pointer: ComposerPointer | null } | null>(null)
   const [editor, setEditor] = useState(() => {
     const cached = resumedSessionId ? queryClient.getQueryData<SessionDto>(SessionKeys.detail(resumedSessionId)) : undefined
-    return { key: 0, words: openingWords(saver, resumedSessionId, cached) }
+    return { key: 0, words: openingWords(saver, resumedSessionId, cached), takesFocus: false }
   })
   const currentWords = useRef(editor.words ?? '')
-  const isEditorEmpty = useRef(false)
+  const typedWhileReading = useRef<string | null>(null)
   const latestSaver = useRef(saver)
 
   // A second keystroke can come before React renders the first, and it must reach the same entry.
@@ -72,7 +76,7 @@ export function useComposer() {
 
   const openEditorWith = useCallback((words: string) => {
     currentWords.current = words
-    setEditor(({ key }) => ({ key: key + 1, words }))
+    setEditor(({ key }) => ({ key: key + 1, words, takesFocus: true }))
   }, [])
 
   const startOver = useCallback(() => {
@@ -87,8 +91,12 @@ export function useComposer() {
     let isCurrent = true
     const openWords = (words: string) => {
       if (!opensAConflict) saver?.dismissConflict()
-      currentWords.current = words
-      setEditor(({ key }) => ({ key, words }))
+      const typed = typedWhileReading.current
+      typedWhileReading.current = null
+      const opened = typed === null ? words : joinWords(words, typed)
+      currentWords.current = opened
+      setEditor(({ key }) => ({ key: key + 1, words: opened, takesFocus: isWritingNow() }))
+      if (typed !== null) saver?.edit(opened)
     }
     const open = (session: SessionDto) => {
       if (!isCurrent) return
@@ -101,7 +109,6 @@ export function useComposer() {
       const cached = queryClient.getQueryData<SessionDto>(SessionKeys.detail(resumedSessionId))
       if (lastSaved !== null) openWords(lastSaved)
       else if (cached) open(cached)
-      else startOver()
     }
     if (!onlineManager.isOnline()) {
       openWithNoRead()
@@ -111,18 +118,28 @@ export function useComposer() {
       if (!isOnline) openWithNoRead()
     })
     const giveUp = setTimeout(openWithNoRead, readWaitMs)
+    // A read that hangs must end, so that the next read can answer. Keys wait in the editor until then, and no second entry starts.
+    const readLimit = setInterval(() => void queryClient.cancelQueries({ queryKey: SessionKeys.detail(resumedSessionId), exact: true }), readLimitMs)
+    let readRetry: ReturnType<typeof setTimeout> | undefined
     const read = (): Promise<void> =>
       queryClient.fetchQuery({ ...sessionQueryOptions(resumedSessionId), staleTime: 0 }).then(open, (error: unknown) => {
         if (!isCurrent) return
         if (isCancelledError(error)) return read()
-        if (isTheEntryGone(error)) startOver()
-        else openWithNoRead()
+        if (isTheEntryGone(error)) {
+          if (typedWhileReading.current === null) startOver()
+          else openWords('')
+          return
+        }
+        openWithNoRead()
+        readRetry = setTimeout(() => void read(), readRetryMs)
       })
     void read()
     return () => {
       isCurrent = false
       stopWatching()
       clearTimeout(giveUp)
+      clearInterval(readLimit)
+      clearTimeout(readRetry)
     }
   }, [isReading, resumedSessionId, saver, opensAConflict, queryClient, startOver])
 
@@ -154,7 +171,11 @@ export function useComposer() {
   const handleChange = useCallback(
     (text: string, isEmpty: boolean) => {
       currentWords.current = text
-      isEditorEmpty.current = isEmpty
+      if (isReading) {
+        typedWhileReading.current = isEmpty ? null : text
+        latestSaver.current?.holdInOutbox(typedWhileReading.current)
+        return
+      }
       const composing = latestSaver.current
       if (composing) {
         composing.edit(text)
@@ -164,20 +185,8 @@ export function useComposer() {
       }
       if (!isEmpty) beginEntry(text)
     },
-    [owner, beginEntry],
+    [owner, beginEntry, isReading],
   )
-
-  const isEntryGone = saver !== null && snapshot.status.kind === 'refused' && snapshot.status.isGone
-  useEffect(() => {
-    if (!isEntryGone || isReading) return
-    saver.discard()
-    if (isEditorEmpty.current || currentWords.current === '') {
-      writePointer(null)
-      setSaver(null)
-    } else {
-      beginEntry(currentWords.current)
-    }
-  }, [isEntryGone, isReading, saver, setSaver, beginEntry])
 
   const needsThePersonAfterDone = saver === null && finished !== null && (snapshot.status.kind === 'refused' || snapshot.conflict !== null)
   useEffect(() => {
@@ -212,7 +221,7 @@ export function useComposer() {
   return {
     editorKey: editor.key,
     words: editor.words,
-    autoFocus: mayTakeFocusOnThisPage() || editor.key > 0,
+    autoFocus: mayTakeFocusOnThisPage() || editor.takesFocus,
     status: shownStatusOf(snapshot),
     conflict: saver && !isReading ? snapshot.conflict : null,
     composingSessionId: sessionId,

@@ -190,6 +190,20 @@ The session check shows no error toast. The alert is the only message for a fail
 
 Thus a page always has a session. Do not add a Login button or a signed-out state to a page.
 
+### Unsent words
+
+The words of an entry save in the background. Until the Server holds them, they stay in `localStorage` under `recall.unsent.<owner>.<entry>.<channel>`. A setting that did not reach the Server stays under `recall.unsent-setting.<owner>`. The tab keeps a pointer to the open entry in `sessionStorage` under `recall.composer`. The pointer holds no words. Only the person of the key reads or sends these words.
+
+| What happens | What the app does |
+|---|---|
+| A save gets no answer in 30 s | The request ends, the status says that the save waits, and the save tries again. |
+| A save meets an entry that is gone (404, or a 409 that is not a conflict of a save) | The words become a new entry. A notice says so on each page, also on a later load with no page open. The entry page goes to the new entry. |
+| The Server refuses the words (another 4xx) | The words stay, with the reason, and they do not go out again on the next load. The page of the words shows the reason. With no such page open, a notice gives the reason, a Copy, and a Discard. |
+| A person logs out | The app sends the unsent words and waits up to 5 s. If the Server holds them, the logout goes on. If not, an alert dialog asks to keep them on this device or to discard them. The logout then clears the pointer and ends the session. |
+| The session belongs to another person (see [One browser, two people](authentication.md#one-browser-two-people)) | The tab stops each saver, clears the query cache and the toasts, keeps the words under the key of the first person, and goes to `/auth/login?anotherPerson=1`. |
+
+Kept words go out when the same person signs in on this browser again. The next person sees no sign of them in the app. The browser tools of the device can still read them, and the dialog says so.
+
 ## Routes
 
 Each file in `routes/` is a route. The router generates `routeTree.gen.ts`. Do not edit that file.

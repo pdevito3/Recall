@@ -50,24 +50,18 @@ test('a retry stays in the waiting state until a reply comes, so the state does 
 })
 
 test('a refusal shows until the next edit, and the refused change does not go again', () => {
-  const refused = run(edited('a', 't1'), { type: 'sent' }, { type: 'refused', message: 'Too long.', isGone: false })
+  const refused = run(edited('a', 't1'), { type: 'sent' }, { type: 'refused', message: 'Too long.' })
 
-  expect(statusOf(refused)).toEqual({ kind: 'refused', message: 'Too long.', isGone: false })
+  expect(statusOf(refused)).toEqual({ kind: 'refused', message: 'Too long.' })
   expect(nextToSend(refused)).toBeNull()
   expect(statusOf(step(refused, edited('b', 't2')))).toEqual({ kind: 'unsent' })
 })
 
 test('refused words stay unsettled until the next edit, so a reload still has them', () => {
-  const refused = run(edited('a', 't1'), { type: 'sent' }, { type: 'refused', message: 'Too long.', isGone: false })
+  const refused = run(edited('a', 't1'), { type: 'sent' }, { type: 'refused', message: 'Too long.' })
 
   expect(newestUnsettled(refused)?.value).toBe('a')
   expect(newestUnsettled(step(refused, edited('b', 't2')))?.value).toBe('b')
-})
-
-test('words of a row that is gone do not stay', () => {
-  const gone = run(edited('a', 't1'), { type: 'sent' }, { type: 'refused', message: 'Not found.', isGone: true })
-
-  expect(newestUnsettled(gone)).toBeNull()
 })
 
 test('a queue from an earlier page load replays its change first', () => {

@@ -113,14 +113,27 @@ test.describe('an entry', () => {
     await expect(entry.at.words('Mine edited and more')).toBeVisible()
   })
 
-  test('a save to an entry that another tab deleted tells the person to copy the words', async ({ page, api }) => {
+  test('a save to an entry that another tab deleted makes a new entry with the words, says so, and goes there', async ({ page, api }) => {
     const session = aSession().saying('Mine').build()
-    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveIsRefused(session, aProblem().notFound('The entry is gone.')))
+    const next = aSession().build()
+    const saved = { ...aSession().saying('Mine edited').build(), id: next.id, clientSessionId: next.clientSessionId }
+    api.mock(
+      sessionsApi.oneIs(session),
+      sessionsApi.draftSaveIsRefused(session, aProblem().notFound('The entry is gone.')),
+      sessionsApi.creates(next),
+      sessionsApi.oneIs(saved),
+      sessionsApi.draftSaveWins(next, 1),
+    )
     const entry = entryPage(page)
     await entry.open(session.id)
     await entry.edit(session.id, ' edited')
 
-    await expect(entry.at.status('This entry was deleted in another tab or device. Copy these words to keep them.')).toBeVisible()
+    await expect(page).toHaveURL(new RegExp(`/sessions/${next.id}$`))
+    await expect(entry.at.movedNotice).toBeVisible()
+    await expect.poll(() => JSON.stringify(api.last('put', sessionsPaths.rawDraft(next.id))?.body)).toContain('Mine edited')
+    await page.reload()
+    await expect(entry.at.words('Mine edited')).toBeVisible()
+    await expect.poll(() => page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('recall.unsent')))).toEqual([])
   })
 
   test('a first read that started before the save of a reload does not open the old words', async ({ page, api }) => {

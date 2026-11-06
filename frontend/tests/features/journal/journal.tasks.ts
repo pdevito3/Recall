@@ -1,8 +1,12 @@
 import { expect, type Page } from '@playwright/test'
 import { sessionsPaths } from '@tests/support/api/sessions-api'
-import { entry, journal } from './journal.locators'
+import { actorSubject } from '@tests/support/auth/actors'
+import { entry, journal, unsent } from './journal.locators'
 
 const draftPathPattern = /^\/api\/v1\/sessions\/[^/]+\/draft$/
+
+// The first page of a run makes a cold Vite compile each module of the app, and that takes more than the 5 s of an assertion.
+const firstPaintMs = 30_000
 
 export function journalPage(page: Page) {
   const at = journal(page)
@@ -15,7 +19,7 @@ export function journalPage(page: Page) {
 
     async open() {
       await page.goto('/')
-      await expect(at.composer).toBeVisible()
+      await expect(at.composer).toBeVisible({ timeout: firstPaintMs })
     },
 
     async write(words: string) {
@@ -99,7 +103,7 @@ export function entryPage(page: Page) {
 
     async open(id: string) {
       await page.goto(`/sessions/${id}`)
-      await expect(at.heading).toBeVisible()
+      await expect(at.heading).toBeVisible({ timeout: firstPaintMs })
     },
 
     async edit(id: string, words: string) {
@@ -194,5 +198,79 @@ export function entryPage(page: Page) {
     async signalThatTheConnectionReturned() {
       await page.evaluate(() => window.dispatchEvent(new Event('online')))
     },
+  }
+}
+
+interface Unsent {
+  words: string
+  sessionId: string | null
+  clientSessionId?: string
+  refusal?: string
+  owner?: string
+}
+
+export function unsentWords(page: Page) {
+  const at = unsent(page)
+
+  const leftInStorage = (key: string, stored: string) =>
+    page.addInitScript(([k, v]) => {
+      const flag = `seeded.${k}`
+      if (sessionStorage.getItem(flag)) return
+      sessionStorage.setItem(flag, '1')
+      localStorage.setItem(k, v)
+    }, [key, stored])
+
+  return {
+    at,
+    leftInStorage,
+
+    /** A change that an earlier load of the page left in the outbox. It goes in before the app starts, and only once. */
+    async leftInTheOutbox({ words, sessionId, clientSessionId = crypto.randomUUID(), refusal, owner = actorSubject }: Unsent) {
+      const key = `recall.unsent.${owner}.${clientSessionId}.raw`
+      await leftInStorage(key, JSON.stringify({
+        key: `${clientSessionId}.raw`,
+        channel: 'raw',
+        clientSessionId,
+        startedAt: '2026-11-06T15:30:00.000Z',
+        sessionId,
+        baseRevision: 1,
+        latestRevision: 1,
+        change: { value: words, savedAt: '2026-11-06T15:31:00.000Z' },
+        refusal,
+      }))
+      return key
+    },
+
+    stored: (key: string) => page.evaluate((k) => localStorage.getItem(k), key),
+    keys: () => page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('recall.unsent.'))),
+    settingKeys: () => page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('recall.unsent-setting.'))),
+    composerPointer: () => page.evaluate(() => sessionStorage.getItem('recall.composer')),
+    clipboardText: () => page.evaluate(() => navigator.clipboard.readText()),
+
+    async openSettings() {
+      await page.goto('/settings')
+      await expect(at.settingsHeading).toBeVisible({ timeout: firstPaintMs })
+    },
+
+    async logOut() {
+      await at.userMenu.click()
+      await at.logout.click()
+    },
+
+    async comeBackToTheTab() {
+      await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')))
+    },
+
+    async letAnAnswerLand() {
+      await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 700)))
+    },
+
+    openTheNewEntry: () => at.openNewEntry.click(),
+    dismissTheMovedNotice: () => at.dismissMoved.click(),
+    copyTheRefusedWords: () => at.copyRefused.click(),
+    discardTheRefusedWords: () => at.discardRefused.click(),
+    answerTheLogoutDialog: (choice: string) => at.logoutChoice(choice).click(),
+    reachTheSignInPageForAnotherPerson: () => page.waitForURL(/\/auth\/login\?anotherPerson=1/),
+    reachTheSignedOutPage: () => page.waitForURL(/signedOut=1/),
   }
 }

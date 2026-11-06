@@ -42,5 +42,5 @@ Preconditions:
 
 - A `page.route` mock still answers while `context.setOffline(true)` is on. Prove the offline state on a live stack, not with a mock.
 - `journal.mjs` cannot prove suggestions. R9 owns them.
-- The composer keeps its entry in `sessionStorage`, so a second recipe step on the same page can resume it. Choose `Done` before a step that needs an empty box.
+- The composer keeps a pointer to its entry in `sessionStorage`, with no words, so a second recipe step in the same tab can resume it. Unsent words stay in `localStorage` under the key of the owner, until the Server holds them. Choose `Done` before a step that needs an empty box.
 - A jump to the end of the list settles row heights for one frame. To measure a jump, scroll with `page.mouse.wheel`.

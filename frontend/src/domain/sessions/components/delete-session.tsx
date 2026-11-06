@@ -41,7 +41,7 @@ export function DeleteSession({ session }: { session: SessionDto }) {
   return (
     <ResponsiveDialogTrigger>
       <Button variant="outline" isPending={remove.isPending}>Delete</Button>
-      <ResponsiveDialog>
+      <ResponsiveDialog role="alertdialog">
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>Delete this entry?</ResponsiveDialogTitle>
           <ResponsiveDialogDescription>
