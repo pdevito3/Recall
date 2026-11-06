@@ -190,10 +190,13 @@ public static class AuthEndpoints
 
         if (csrf)
             SessionCookie.Clear(http.Response, request);
-        if (cookie is null)
+        // A browser that lost its cookie is still at the provider. The header proves that it is not a cross-site post.
+        var isBrowser = csrf && (cookie is not null || (bearer is null && refresh is null));
+        if (!isBrowser)
             return Results.NoContent();
 
-        var mode = modes.FindOidc(await store.LoginModeOfWebSessionEvenIfEndedAsync(TokenHash.Of(cookie), cancellationToken));
+        var modeOfSession = cookie is null ? null : await store.LoginModeOfWebSessionEvenIfEndedAsync(TokenHash.Of(cookie), cancellationToken);
+        var mode = modeOfSession is null ? modes.OnlyOidc : modes.FindOidc(modeOfSession);
         if (mode is null)
         {
             SessionCookie.MarkSignedOut(http.Response, request);

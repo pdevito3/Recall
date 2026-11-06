@@ -48,6 +48,8 @@ public sealed class LoginModes(IOptions<AuthOptions> options, OidcHandlerFactory
 
     public OidcLoginMode? FindOidc(string? id) => _modes.FirstOrDefault(mode => mode.Id == id);
 
+    public OidcLoginMode? OnlyOidc => _modes.Count == 1 ? _modes[0] : null;
+
     public void Dispose()
     {
         foreach (var mode in _modes)
