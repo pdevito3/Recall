@@ -192,6 +192,12 @@ The browser can keep a page in its back-forward cache, and Back then shows this 
 
 So in a live session, Back from this cache costs one call of `/auth/me`.
 
+Limits of this hide:
+
+- A logout in this browser sends the message above, and this message removes the page from the cache of Chromium. Back then loads the page again, with no data of the old session.
+- If a session ends with no such message, for example at its expiry or by a revoke, Chromium can show the last frame from before the hide. In 5 of 8 local runs on a loaded machine, this frame stayed for 38 to 227 ms. Then the page goes to the signed-out page.
+- WebKit keeps the page in its cache after the message. A snapshot of a WKWebView 20 ms after Back was blank, but a snapshot can draw a new frame, so it does not prove what the screen showed in this time.
+
 Other browsers and other devices stay signed in. Recall has no back-channel logout, so a logout at the provider does not end their Recall sessions. `/auth/sessions/revoke-others` ends them, and they end at their own expiry.
 
 ### The session at the provider

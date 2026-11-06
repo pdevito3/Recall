@@ -106,8 +106,9 @@ async function checkSessionOfRestoredPage(queryClient: QueryClient) {
 
 /**
  * Keeps private text off the screen when the session of a page ends while the page cannot know it: another tab signs out,
- * or the page waits in the back-forward cache. The page hides as it enters that cache, so that it is hidden at the first
- * paint of a restore, and only an answer of a live session shows it again.
+ * or the page waits in the back-forward cache. The page hides as it enters that cache, and only an answer of a live session
+ * shows it again. Chromium can paint its last frame from before the hide for a moment, so this does not close a session that
+ * ended with no message from a logout. The message of a logout evicts the page from the cache of Chromium.
  */
 export function guardPageAgainstEndedSession(queryClient: QueryClient) {
   otherTabs = new BroadcastChannel('recall.session')
