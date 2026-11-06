@@ -70,7 +70,6 @@ function AddPersonForm() {
           value={label}
           maxLength={longestName}
           onChange={(event) => setLabel(event.target.value)}
-          className="max-md:min-h-11"
         />
         <Button type="submit" variant="outline" isPending={add.isPending}>Add</Button>
       </div>
@@ -117,7 +116,6 @@ function RenameForm({ id, initialLabel, onRenamed }: { id: string; initialLabel:
           value={label}
           maxLength={longestName}
           onChange={(event) => setLabel(event.target.value)}
-          className="max-md:min-h-11"
         />
         <FailedSave error={rename.error} />
       </div>

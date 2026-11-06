@@ -275,16 +275,18 @@ function SidebarTrigger({
 function SidebarRail({
   className,
   ...props
-}: Omit<ButtonProps, "className"> & { className?: string }) {
+}: React.ComponentProps<"button">) {
   const { toggleSidebar } = useSidebar()
 
   return (
-    <ButtonPrimitive
+    // A mouse shortcut. The trigger in the header is the control that a keyboard and a screen reader use.
+    <button
+      type="button"
       data-sidebar="rail"
       data-slot="sidebar-rail"
       aria-hidden
-      excludeFromTabOrder
-      onPress={toggleSidebar}
+      tabIndex={-1}
+      onClick={toggleSidebar}
       className={cn(
         "absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] hover:after:bg-sidebar-border sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
         "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",

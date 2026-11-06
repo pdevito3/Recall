@@ -87,7 +87,7 @@ const BreadcrumbLink = createRouterLink(function BreadcrumbLinkHost({
   return (
     <RouterLinkPrimitive
       data-slot="breadcrumb-link"
-      className={cn("transition-colors hover:text-foreground", className)}
+      className={cn("transition-colors hover:text-foreground max-md:inline-flex max-md:min-h-11 max-md:min-w-11 max-md:items-center", className)}
       {...props}
     />
   )

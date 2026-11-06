@@ -104,7 +104,7 @@ function RevisionView({ sessionId, channel, revision, zone, canRestore, onRestor
       <ResponsiveDialogHeader>
         <ResponsiveDialogTitle>Version from {versionTime(revision.savedAt, zone)}</ResponsiveDialogTitle>
       </ResponsiveDialogHeader>
-      <div className="max-h-[60svh] overflow-y-auto">
+      <div className="mt-4 max-h-[60svh] overflow-y-auto">
         {full.isPending && <p role="status" className="text-sm text-muted-foreground">Loading this version</p>}
         {full.isError && <QueryError title="This version did not load." error={full.error} onRetry={() => full.refetch()} />}
         {full.isSuccess && <JournalText text={full.data.text} label="Words of this version" />}

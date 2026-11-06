@@ -27,7 +27,7 @@ function shownFor(status: SaveStatus, zone: TimeZone): Shown | null {
     case 'waiting':
       return {
         icon: Clock01Icon,
-        text: 'Not saved yet. The save waits for a connection to the Server. Keep this page open.',
+        text: 'Not saved yet. The save waits for a connection to the server. Keep this page open.',
         tone: 'text-foreground',
       }
     case 'saved':

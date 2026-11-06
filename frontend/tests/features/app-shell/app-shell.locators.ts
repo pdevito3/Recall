@@ -15,6 +15,7 @@ export const appShell = (page: Page) => ({
   currentNavigationItems: page.getByRole('navigation', { name: 'Main' }).locator('[aria-current]'),
   sidebarTrigger: page.getByRole('main').getByRole('button', { name: 'Toggle Sidebar' }),
   sidebarToggles: page.getByRole('button', { name: 'Toggle Sidebar' }),
+  sidebarRail: page.locator('[data-slot="sidebar-rail"]'),
   pageHeading: page.getByRole('main').getByRole('heading', { level: 1 }),
   mainLandmarks: page.getByRole('main'),
   wideContent: page.getByRole('region', { name: 'Wide content' }),

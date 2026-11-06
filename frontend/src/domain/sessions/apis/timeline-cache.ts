@@ -34,6 +34,10 @@ export function withFirstPageOnly(data: TimelineData): TimelineData {
 /** Changes one row where it is, so the list keeps its pages and its scroll position with no read of each page. */
 export function patchTimelineRow(queryClient: QueryClient, id: string, patch: Partial<SessionSummaryDto>) {
   queryClient.setQueryData<TimelineData>(SessionKeys.timeline(), (data) => data && withRowPatched(data, id, patch))
+  // A read that left before this change would put the old row back, so it reads again.
+  if (queryClient.isFetching({ queryKey: SessionKeys.timeline() }) > 0) {
+    void queryClient.invalidateQueries({ queryKey: SessionKeys.timeline() })
+  }
 }
 
 export function removeTimelineRow(queryClient: QueryClient, id: string) {

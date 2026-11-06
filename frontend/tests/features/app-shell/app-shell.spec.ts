@@ -267,4 +267,12 @@ test.describe('the accessibility tree of the layout', () => {
 
     expect(await shell.at.sidebarToggles.count()).toBe(1)
   })
+
+  test('keeps the rail of the sidebar, a mouse shortcut, out of the tree', async ({ page }) => {
+    const shell = appShellPage(page)
+
+    await shell.openAbout()
+
+    await expect(shell.at.sidebarRail).toHaveAttribute('aria-hidden', 'true')
+  })
 })

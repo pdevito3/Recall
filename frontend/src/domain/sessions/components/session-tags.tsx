@@ -147,7 +147,6 @@ function TagEditor({ values, onChange }: TagEditorProps) {
             value={topic}
             maxLength={100}
             onChange={(event) => setTopic(event.target.value)}
-            className="max-md:min-h-11"
           />
           <Button type="submit" variant="outline">Add</Button>
         </form>

@@ -78,7 +78,7 @@ export function EditorToolbar({ editor }: { editor: Editor }) {
   })
 
   return (
-    <Toolbar aria-label="Formatting" className="flex flex-wrap gap-0.5 border-b p-1">
+    <Toolbar aria-label="Formatting" className="flex flex-wrap gap-0.5 border-b p-1 max-md:justify-between max-md:gap-0 max-md:p-0">
       {tools.map((tool, index) => (
         <ToggleButton
           key={tool.label}

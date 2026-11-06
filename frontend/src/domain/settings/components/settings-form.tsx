@@ -44,7 +44,7 @@ export function SettingsForm() {
   const zone = journalZoneOf(setting.data)
 
   return (
-    <div className="flex max-w-prose flex-col gap-8">
+    <div className="flex flex-col gap-8">
       <section className="flex flex-col gap-2" aria-labelledby="settings-zone">
         <h2 id="settings-zone" className="text-lg font-semibold">Time zone</h2>
         <p className="text-sm text-muted-foreground">Your time zone decides the day that each entry belongs to.</p>
@@ -71,7 +71,10 @@ export function SettingsForm() {
         </Combobox>
       </section>
       <section className="flex flex-col gap-3" aria-labelledby="settings-entries">
-        <h2 id="settings-entries" className="text-lg font-semibold">Entries</h2>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+          <h2 id="settings-entries" className="text-lg font-semibold">Entries</h2>
+          <SaveStatusLine status={status} zone={zone} />
+        </div>
         <Checkbox
           className="max-md:min-h-11"
           isSelected={values.locationCaptureEnabled}
@@ -86,7 +89,6 @@ export function SettingsForm() {
         >
           Ask me before AI adds a person to an entry
         </Checkbox>
-        <SaveStatusLine status={status} zone={zone} />
       </section>
       <section className="flex flex-col gap-2" aria-labelledby="settings-account">
         <h2 id="settings-account" className="text-lg font-semibold">Account</h2>

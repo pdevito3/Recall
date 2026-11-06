@@ -11,7 +11,7 @@ const chicago = 'America/Chicago' as TimeZone
 test.each<[SaveStatus, string]>([
   [{ kind: 'unsent' }, 'Not saved yet'],
   [{ kind: 'saving' }, 'Saving'],
-  [{ kind: 'waiting' }, 'Not saved yet. The save waits for a connection to the Server. Keep this page open.'],
+  [{ kind: 'waiting' }, 'Not saved yet. The save waits for a connection to the server. Keep this page open.'],
   [{ kind: 'saved', at: '2026-11-06T15:30:00Z' }, 'Saved at 9:30 AM'],
   [{ kind: 'refused', message: 'This text is too long.' }, 'Not saved. This text is too long.'],
 ])('the state %j says what happened', async (status, text) => {
