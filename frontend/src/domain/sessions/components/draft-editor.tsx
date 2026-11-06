@@ -81,7 +81,7 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
           <ConflictNotice conflict={snapshot.conflict} onShowNewest={() => void showNewest()} onKeep={() => saver.keepWords(currentText.current)} />
         )}
         {wasUpdated && (
-          <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted p-3 text-sm">
+          <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted p-3 text-sm dark:bg-card">
             <p>These words changed in another tab or device. This page now shows the newest words.</p>
             <Button variant="ghost" onPress={() => setWasUpdated(false)}>Dismiss</Button>
           </div>

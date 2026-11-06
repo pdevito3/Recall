@@ -15,7 +15,7 @@ interface ConflictNoticeProps {
 
 export function ConflictNotice({ conflict, onShowNewest, onKeep }: ConflictNoticeProps) {
   return (
-    <div role="alert" className="flex flex-col gap-3 rounded-lg border bg-muted p-3 text-sm wrap-anywhere">
+    <div role="alert" className="flex flex-col gap-3 rounded-lg border bg-muted p-3 text-sm dark:bg-card wrap-anywhere">
       <p>{messages[conflict]}</p>
       <div className="flex flex-wrap gap-2">
         {conflict === 'wordsMovedToHistory' && <Button variant="outline" onPress={onShowNewest}>Show the newest words</Button>}
