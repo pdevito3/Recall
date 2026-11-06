@@ -1,6 +1,8 @@
 import { ReactRenderer, type Editor } from '@tiptap/react'
 import type { MentionOptions } from '@tiptap/extension-mention'
 
+import { Notification } from '@/components/notification'
+
 import { MentionList, type MentionListHandle, type MentionOption } from './mention-list'
 
 export interface MentionSource {
@@ -54,7 +56,14 @@ export function mentionSuggestion(source: MentionSource): MentionOptions<Mention
         insertMention(editor, range, option.personId, option.label)
         return
       }
-      void source.addPerson(option.label).then((person) => insertMention(editor, range, person.id, person.label))
+      const documentAtPick = editor.state.doc
+      void source.addPerson(option.label).then(
+        (person) => {
+          const caret = editor.state.selection.from
+          insertMention(editor, editor.state.doc.eq(documentAtPick) ? range : { from: caret, to: caret }, person.id, person.label)
+        },
+        () => Notification.error(`${option.label} was not added. Your words did not change.`),
+      )
     },
     render: () => {
       let list: ReactRenderer<MentionListHandle> | undefined

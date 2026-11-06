@@ -10,16 +10,16 @@ const messages: Record<NonNullable<DraftConflict>, string> = {
 interface ConflictNoticeProps {
   conflict: NonNullable<DraftConflict>
   onShowNewest: () => void
-  onDismiss: () => void
+  onKeep: () => void
 }
 
-export function ConflictNotice({ conflict, onShowNewest, onDismiss }: ConflictNoticeProps) {
+export function ConflictNotice({ conflict, onShowNewest, onKeep }: ConflictNoticeProps) {
   return (
     <div role="alert" className="flex flex-col gap-3 rounded-lg border bg-muted p-3 text-sm wrap-anywhere">
       <p>{messages[conflict]}</p>
       <div className="flex flex-wrap gap-2">
         {conflict === 'wordsMovedToHistory' && <Button variant="outline" onPress={onShowNewest}>Show the newest words</Button>}
-        <Button variant={conflict === 'wordsMovedToHistory' ? 'ghost' : 'outline'} onPress={onDismiss}>Keep these words</Button>
+        <Button variant={conflict === 'wordsMovedToHistory' ? 'ghost' : 'outline'} onPress={onKeep}>Keep these words</Button>
       </div>
     </div>
   )

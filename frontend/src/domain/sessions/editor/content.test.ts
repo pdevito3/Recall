@@ -29,3 +29,9 @@ test('the preview reads the words and the mentions of each block', () => {
 test('the preview of plain words is those words, cut to the length', () => {
   expect(plainPreviewOf('one two three', 7)).toBe('one two')
 })
+
+test('a document with a node that the editor does not know shows its text, so the words are not blank', () => {
+  const text = JSON.stringify({ type: 'doc', content: [{ type: 'hologram', content: [{ type: 'text', text: 'Words' }] }] })
+
+  expect(contentOf(text)).toEqual({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] })
+})

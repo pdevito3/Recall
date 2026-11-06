@@ -42,6 +42,12 @@ export function journalPage(page: Page) {
       await page.keyboard.press('Enter')
     },
 
+    async waitForAPageOfFrames() {
+      await page.evaluate(async () => {
+        for (let frame = 0; frame < 30; frame++) await new Promise((resolve) => requestAnimationFrame(resolve))
+      })
+    },
+
     async scrollToTheEnd() {
       await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
     },
@@ -76,6 +82,15 @@ export function entryPage(page: Page) {
       await page.keyboard.press('End')
       await page.keyboard.type(words)
       await saved
+    },
+
+    async goToAnotherEntryThroughTheJournal(preview: string) {
+      await at.journalLink.click()
+      await at.rowOfTheJournal(preview).click()
+    },
+
+    async goBackTwoPages() {
+      await page.evaluate(() => window.history.go(-2))
     },
 
     async editWithoutWaiting(words: string) {

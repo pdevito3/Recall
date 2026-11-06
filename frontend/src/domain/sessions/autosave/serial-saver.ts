@@ -4,7 +4,8 @@ import { emptyQueue, newestUnsettled, nextToSend, statusOf, step, type SaveEvent
 
 const firstRetryMs = 2_000
 const longestRetryMs = 30_000
-const statusesThatCanChange = new Set([401, 408, 429])
+const statusesThatCanChange = new Set([401, 408, 409, 429])
+const statusOfARowThatIsGone = 404
 
 function isFinalRefusal(error: unknown): error is ProblemDetailsError {
   if (!isProblemDetailsError(error)) return false
@@ -119,7 +120,7 @@ export class SerialSaver<T, R> {
   private handleFailure(error: unknown) {
     if (this.isDisposed) return
     if (isFinalRefusal(error)) {
-      this.apply({ type: 'refused', message: error.displayMessage })
+      this.apply({ type: 'refused', message: error.displayMessage, isGone: error.status === statusOfARowThatIsGone })
       this.pumpUnlessDebouncing()
       return
     }

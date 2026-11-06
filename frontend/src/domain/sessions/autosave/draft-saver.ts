@@ -6,6 +6,7 @@ import { addSession } from '@/api/generated/sessions/clients/add-session'
 import { saveCleanedDraft } from '@/api/generated/sessions/clients/save-cleaned-draft'
 import { saveRawDraft } from '@/api/generated/sessions/clients/save-raw-draft'
 
+import { sessionQueryOptions } from '../apis/get-session'
 import { SessionKeys, type DraftChannel } from '../apis/session.keys'
 import { patchTimelineRow, refreshTimelineHead } from '../apis/timeline-cache'
 import { plainPreviewOf } from '../editor/content'
@@ -15,11 +16,18 @@ import { SerialSaver } from './serial-saver'
 
 export type DraftConflict = 'wordsMovedToHistory' | 'replacedUnseenSave' | null
 
+export type ShownSaveStatus = SaveStatus | { kind: 'savedInHistory'; at: string }
+
 export interface DraftSnapshot {
   status: SaveStatus
   conflict: DraftConflict
   sessionId: string | null
   baseRevision: number
+  latestRevision: number
+}
+
+export function shownStatusOf({ status, conflict }: DraftSnapshot): ShownSaveStatus {
+  return status.kind === 'saved' && conflict === 'wordsMovedToHistory' ? { kind: 'savedInHistory', at: status.at } : status
 }
 
 export interface DraftTarget {
@@ -29,6 +37,7 @@ export interface DraftTarget {
   startedAt: string
   sessionId: string | null
   baseRevision: number
+  latestRevision: number
   location?: Promise<{ latitude: number; longitude: number } | null>
 }
 
@@ -45,7 +54,13 @@ export class DraftSaver {
   constructor(target: DraftTarget, queryClient: QueryClient, resumed?: Stamped<string>) {
     this.target = target
     this.queryClient = queryClient
-    this.snapshot = { status: { kind: 'idle' }, conflict: null, sessionId: target.sessionId, baseRevision: target.baseRevision }
+    this.snapshot = {
+      status: { kind: 'idle' },
+      conflict: null,
+      sessionId: target.sessionId,
+      baseRevision: target.baseRevision,
+      latestRevision: target.latestRevision,
+    }
     this.saver = new SerialSaver({
       debounceMs: pauseInTypingMs,
       send: (change) => this.send(change),
@@ -73,8 +88,16 @@ export class DraftSaver {
     this.update({ conflict: null })
   }
 
-  moveBaseTo(revision: number) {
-    this.update({ baseRevision: revision })
+  keepWords(text: string) {
+    const isOnlyInHistory = this.snapshot.conflict === 'wordsMovedToHistory'
+    this.dismissConflict()
+    if (!isOnlyInHistory) return
+    this.saver.edit(text)
+    this.saver.flush()
+  }
+
+  moveBaseTo(draftRevision: number, latestRevision: number) {
+    this.update({ baseRevision: draftRevision, latestRevision: Math.max(latestRevision, this.snapshot.latestRevision) })
   }
 
   discard() {
@@ -114,7 +137,7 @@ export class DraftSaver {
   }
 
   private afterCreate(created: SessionDto) {
-    this.update({ sessionId: created.id, baseRevision: created.rawLatestRevision })
+    this.update({ sessionId: created.id, baseRevision: created.rawDraftRevision, latestRevision: created.rawLatestRevision })
     this.queryClient.setQueryData(SessionKeys.detail(created.id), created)
     void refreshTimelineHead(this.queryClient)
   }
@@ -129,34 +152,46 @@ export class DraftSaver {
   }
 
   private handleReply(reply: DraftSaveResultDto, change: Stamped<string>) {
-    const base = this.snapshot.baseRevision
-    const conflict = conflictOf(reply, base)
-    this.update({
-      baseRevision: Math.max(base, reply.latestRevision),
-      conflict: conflict ?? this.snapshot.conflict,
-    })
+    const { baseRevision, latestRevision, conflict } = this.snapshot
+    const holdsWords = draftHoldsTheseWords(reply, baseRevision, latestRevision)
+    if (holdsWords || reply.outcome === 'Lost') {
+      this.update({ baseRevision: reply.draftRevision, latestRevision: Math.max(latestRevision, reply.latestRevision) })
+    }
+    this.update({ conflict: conflictAfter(reply, holdsWords, latestRevision, conflict) })
     const id = this.snapshot.sessionId
     if (!id) return
-    this.keepSessionCurrent(id, reply, change)
+    this.keepSessionCurrent(id, reply, holdsWords ? change.value : null)
+    void this.queryClient.invalidateQueries({ queryKey: SessionKeys.revisions(id, this.target.channel) })
+    if (!holdsWords) void this.readNewest(id)
   }
 
-  private keepSessionCurrent(id: string, reply: DraftSaveResultDto, change: Stamped<string>) {
-    const words = reply.outcome === 'Won' ? { text: change.value, savedAt: reply.savedAt } : null
+  private keepSessionCurrent(id: string, reply: DraftSaveResultDto, words: string | null) {
+    void this.queryClient.cancelQueries({ queryKey: SessionKeys.detail(id), exact: true })
     this.queryClient.setQueryData<SessionDto>(SessionKeys.detail(id), (session) => {
       if (!session) return session
-      const revisions = this.target.channel === 'raw'
-        ? { rawDraftRevision: reply.draftRevision, rawLatestRevision: reply.latestRevision, ...(words && { rawText: words.text, rawSavedAt: words.savedAt }) }
-        : { cleanedDraftRevision: reply.draftRevision, cleanedLatestRevision: reply.latestRevision, ...(words && { cleanedText: words.text, cleanedSavedAt: words.savedAt }) }
-      return { ...session, ...revisions, cleanupStatus: reply.cleanupStatus, version: reply.version }
+      const isRaw = this.target.channel === 'raw'
+      const latest = isRaw ? { rawLatestRevision: reply.latestRevision } : { cleanedLatestRevision: reply.latestRevision }
+      const draft = words === null
+        ? {}
+        : isRaw
+          ? { rawDraftRevision: reply.draftRevision, rawText: words, rawSavedAt: reply.savedAt }
+          : { cleanedDraftRevision: reply.draftRevision, cleanedText: words, cleanedSavedAt: reply.savedAt }
+      return { ...session, ...latest, ...draft, cleanupStatus: reply.cleanupStatus, version: reply.version }
     })
-    void this.queryClient.invalidateQueries({ queryKey: SessionKeys.revisions(id, this.target.channel) })
-    if (this.target.channel === 'raw' && words) {
-      patchTimelineRow(this.queryClient, id, {
-        preview: plainPreviewOf(words.text, previewLength),
-        cleanupStatus: reply.cleanupStatus,
-        version: reply.version,
-      })
-    }
+    if (words !== null && this.target.channel === 'raw') this.patchRow(id, words, reply)
+  }
+
+  private async readNewest(id: string) {
+    const newest = await this.queryClient.fetchQuery({ ...sessionQueryOptions(id), staleTime: 0 }).catch(() => null)
+    if (newest && this.target.channel === 'raw') this.patchRow(id, newest.rawText, newest)
+  }
+
+  private patchRow(id: string, words: string, current: Pick<SessionDto, 'cleanupStatus' | 'version'>) {
+    patchTimelineRow(this.queryClient, id, {
+      preview: plainPreviewOf(words, previewLength),
+      cleanupStatus: current.cleanupStatus,
+      version: current.version,
+    })
   }
 
   private keepInOutbox(queue: SaveQueue<string>) {
@@ -173,16 +208,25 @@ export class DraftSaver {
       startedAt: this.target.startedAt,
       sessionId: this.snapshot.sessionId,
       baseRevision: this.snapshot.baseRevision,
+      latestRevision: this.snapshot.latestRevision,
       change,
     })
   }
 }
 
-function conflictOf(reply: DraftSaveResultDto, base: number): DraftConflict {
+export function draftHoldsTheseWords(reply: DraftSaveResultDto, baseRevision: number, latestRevision: number): boolean {
+  if (reply.outcome !== 'Unchanged') return reply.outcome === 'Won'
+  const isDraftThisPageKnows = reply.draftRevision === baseRevision
+  const nextRevision = latestRevision + 1
+  const isTheOnlyNewRevision = reply.draftRevision === nextRevision && reply.latestRevision === nextRevision
+  return isDraftThisPageKnows || isTheOnlyNewRevision
+}
+
+function conflictAfter(reply: DraftSaveResultDto, holdsWords: boolean, latestRevision: number, current: DraftConflict): DraftConflict {
   if (reply.outcome === 'Lost') return 'wordsMovedToHistory'
-  const nextRevisionIfNoSaveCameBetween = base + 1
-  if (reply.outcome === 'Won' && reply.draftRevision > nextRevisionIfNoSaveCameBetween) return 'replacedUnseenSave'
-  return null
+  const wasOnlyInHistory = current === 'wordsMovedToHistory'
+  if (reply.outcome === 'Won' && (wasOnlyInHistory || reply.draftRevision > latestRevision + 1)) return 'replacedUnseenSave'
+  return holdsWords && wasOnlyInHistory ? null : current
 }
 
 const savers = new Map<string, DraftSaver>()
@@ -191,7 +235,11 @@ const draftKey = ({ clientSessionId, channel }: Pick<DraftTarget, 'clientSession
   `${clientSessionId}.${channel}`
 
 function saverFromOutbox(entry: OutboxEntry, target: DraftTarget, queryClient: QueryClient) {
-  return new DraftSaver({ ...target, sessionId: entry.sessionId, baseRevision: entry.baseRevision }, queryClient, entry.change)
+  return new DraftSaver(
+    { ...target, sessionId: entry.sessionId, baseRevision: entry.baseRevision, latestRevision: entry.latestRevision },
+    queryClient,
+    entry.change,
+  )
 }
 
 export function draftSaverFor(target: DraftTarget, queryClient: QueryClient): DraftSaver {

@@ -58,6 +58,97 @@ test.describe('an entry', () => {
     await expect(entry.at.words('From the other tab')).toBeVisible()
   })
 
+  test('a save that loses says that it is in History, and Keep sends the words again over the newest save', async ({ page, api }) => {
+    const session = aSession().atRevision(4).saying('Mine').build()
+    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+    await entry.edit(session.id, ' edited')
+    await expect(entry.at.status('Saved in History at')).toBeVisible()
+    const lost = api.last('put', sessionsPaths.rawDraft(session.id))?.body as { savedAt: string }
+
+    api.mock(sessionsApi.draftSaveWins(session, 7))
+    await entry.at.keepWords.click()
+
+    await expect(entry.at.status('Saved at')).toBeVisible()
+    await expect(entry.at.conflict('The words on this page are safe in History.')).toHaveCount(0)
+    const kept = api.last('put', sessionsPaths.rawDraft(session.id))?.body as { baseRevision: number; text: string; savedAt: string }
+    expect(kept.baseRevision).toBe(5)
+    expect(kept.text).toContain('edited')
+    expect(kept.savedAt).not.toBe(lost.savedAt)
+  })
+
+  test('a save bases on the Draft, not on a newer Revision that lost', async ({ page, api }) => {
+    const session = { ...aSession().atRevision(5).build(), rawLatestRevision: 6 }
+    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveWins(session, 7))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+
+    await entry.edit(session.id, ' more')
+
+    await expect(entry.at.status('Saved at')).toBeVisible()
+    expect((api.last('put', sessionsPaths.rawDraft(session.id))?.body as { baseRevision: number }).baseRevision).toBe(5)
+    await expect(entry.at.conflict('The other save is safe in History.')).toHaveCount(0)
+  })
+
+  test('a retry that finds its first try on the Server is a plain save, with no notice', async ({ page, api }) => {
+    const session = aSession().atRevision(4).build()
+    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveIsUnchanged(session, { draftRevision: 5, latestRevision: 5 }))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+
+    await entry.edit(session.id, ' more')
+
+    await expect(entry.at.status('Saved at')).toBeVisible()
+    await expect(entry.at.updatedNotice).toHaveCount(0)
+    api.mock(sessionsApi.draftSaveWins(session, 6))
+    await entry.edit(session.id, ' again')
+    await expect.poll(() => (api.last('put', sessionsPaths.rawDraft(session.id))?.body as { baseRevision: number }).baseRevision).toBe(5)
+    await expect(entry.at.conflict('The other save is safe in History.')).toHaveCount(0)
+  })
+
+  test('a retry that another save overtook shows the newest words and says so', async ({ page, api }) => {
+    const session = aSession().atRevision(5).saying('Mine').build()
+    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveIsUnchanged(session, { draftRevision: 7, latestRevision: 7 }))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+    const newest = { ...aSession().atRevision(7).saying('From the other device').build(), id: session.id, clientSessionId: session.clientSessionId }
+    api.mock(sessionsApi.oneIs(newest))
+
+    await entry.editWithoutWaiting(' edited')
+
+    await expect(entry.at.words('From the other device')).toBeVisible()
+    await expect(entry.at.updatedNotice).toBeVisible()
+  })
+
+  test('refused words are on the page again after a reload, with the refusal', async ({ page, api }) => {
+    const session = aSession().saying('Mine').build()
+    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveIsRefused(session, aProblem().refusing('This text is too long.')))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+    await entry.edit(session.id, ' refused')
+    await expect(entry.at.status('Not saved. This text is too long.')).toBeVisible()
+
+    await page.reload()
+
+    await expect(entry.at.words('Mine refused')).toBeVisible()
+    await expect(entry.at.status('Not saved. This text is too long.')).toBeVisible()
+  })
+
+  test('a move between two entries with the history of the browser shows the words of the entry', async ({ page, api }) => {
+    const first = aSession().saying('Words of the first entry').build()
+    const second = aSession().saying('Words of the second entry').build()
+    api.mock(sessionsApi.oneIs(first), sessionsApi.oneIs(second), sessionsApi.timelineIs([{ ...second, ...aSession().summary('The second entry'), id: second.id }]))
+    const entry = entryPage(page)
+    await entry.open(first.id)
+    await entry.goToAnotherEntryThroughTheJournal('The second entry')
+    await expect(entry.at.words('Words of the second entry')).toBeVisible()
+
+    await entry.goBackTwoPages()
+
+    await expect(entry.at.words('Words of the first entry')).toBeVisible()
+  })
+
   test('a save that wins over an unseen save says where the other save is', async ({ page, api }) => {
     const session = aSession().atRevision(4).build()
     api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveWins(session, 7))

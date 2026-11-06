@@ -4,7 +4,7 @@ import { aProblem } from '@tests/support/builders/problem-details-builder'
 import { aSession } from '@tests/support/builders/session-builder'
 import { aSetting, settingsApi, settingsPaths } from '@tests/support/api/settings-api'
 import { expect, test } from '@tests/support/fixtures'
-import { journalPage } from './journal.tasks'
+import { entryPage, journalPage } from './journal.tasks'
 
 const created = aSession().build()
 
@@ -166,6 +166,32 @@ test.describe('the timeline', () => {
     await expect(journal.at.entryLink('An old entry')).toBeVisible()
   })
 
+  test('an entry whose first reply was lost opens with its words', async ({ page, api }) => {
+    const session = aSession().atRevision(0).saying('').build()
+    const row = { ...aSession().summary('The new entry'), id: session.id }
+    api.mock(sessionsApi.creates(session), sessionsApi.oneIs(session), sessionsApi.draftSaveIsUnchanged(session, { draftRevision: 1, latestRevision: 1 }), sessionsApi.timelineIs([row]))
+    const journal = journalPage(page)
+    await journal.open()
+    await journal.write('Words that reached the server')
+    await journal.finish()
+
+    await journal.at.entryLink('Words that reached the server').click()
+
+    await expect(entryPage(page).at.words('Words that reached the server')).toBeVisible()
+  })
+
+  test('with a refused save, Done stays off, so the words on the page do not go', async ({ page, api }) => {
+    const session = aSession().build()
+    api.mock(sessionsApi.creates(session), sessionsApi.draftSaveIsRefused(session, aProblem().refusing('This text is too long.')))
+    const journal = journalPage(page)
+    await journal.open()
+
+    await journal.typeWithoutWaiting('Too many words')
+
+    await expect(journal.at.status('Not saved. This text is too long.')).toBeVisible()
+    await expect(journal.at.done).toBeDisabled()
+  })
+
   test('reads the next page with the cursor when the person scrolls to the end', async ({ page, api }) => {
     const firstPage = Array.from({ length: 40 }, (_, index) => aSession().summary(`Entry number ${index}`))
     api.mock(sessionsApi.timelineIs(firstPage, 'next-page'))
@@ -176,6 +202,23 @@ test.describe('the timeline', () => {
     await journal.scrollToTheEnd()
 
     await expect.poll(() => api.last('get', sessionsPaths.timeline)?.query.get('cursor')).toBe('next-page')
+  })
+
+  test('a next page that fails offers Retry, and does not ask again by itself', async ({ page, api }) => {
+    const firstPage = Array.from({ length: 40 }, (_, index) => aSession().summary(`Entry number ${index}`))
+    api.mock(sessionsApi.timelineIs(firstPage, 'next-page'))
+    const journal = journalPage(page)
+    await journal.open()
+    await expect(journal.at.loadedEntries).toHaveCount(40)
+    api.mock(sessionsApi.timelineFails(aProblem().forbidden('You cannot read this journal.')))
+
+    await journal.scrollToTheEnd()
+    await expect(journal.at.moreEntriesFailure).toBeVisible()
+    await journal.scrollToTheEnd()
+
+    const asked = () => api.all('get', sessionsPaths.timeline).filter((request) => request.query.get('cursor') === 'next-page').length
+    await journal.waitForAPageOfFrames()
+    expect(asked()).toBe(1)
   })
 
   test('shows the refusal of the Server once, in place of the list', async ({ page, api }) => {

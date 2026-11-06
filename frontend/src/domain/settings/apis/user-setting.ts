@@ -3,6 +3,7 @@ import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 import type { UserSettingDto } from '@/api/generated/models/types/user-setting-dto'
 import { changeUserSetting } from '@/api/generated/user-settings/clients/change-user-setting'
 import { getUserSetting } from '@/api/generated/user-settings/clients/get-user-setting'
+import { refreshTimelineHead } from '@/domain/sessions/apis/timeline-cache'
 import { SerialSaver } from '@/domain/sessions/autosave/serial-saver'
 import { retryUnlessRefused } from '@/lib/problem-details'
 import { parseTimeZone, type TimeZone } from '@/lib/zoned-time'
@@ -41,7 +42,11 @@ export function settingSaver(queryClient: QueryClient) {
     debounceMs: 0,
     send: ({ value, savedAt }) =>
       changeUserSetting({ body: { ...value, savedAt }, options: { suppressErrorToast: true } }),
-    onReply: (reply) => queryClient.setQueryData(SettingKeys.mine(), reply),
+    onReply: (reply) => {
+      const zoneChanged = queryClient.getQueryData<UserSettingDto>(SettingKeys.mine())?.timeZone !== reply.timeZone
+      queryClient.setQueryData(SettingKeys.mine(), reply)
+      if (zoneChanged) void refreshTimelineHead(queryClient)
+    },
   })
   return saver
 }

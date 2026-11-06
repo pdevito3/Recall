@@ -38,12 +38,14 @@ function ComposerEditor({ composer }: { composer: Composer }) {
   const resumed = useQuery({
     ...sessionQueryOptions(resumedSessionId ?? ''),
     enabled: opening.needsServerWords,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   })
 
   useEffect(() => {
-    if (resumed.data) saver?.moveBaseTo(resumed.data.rawLatestRevision)
-    if (resumed.isError) startOver()
-  }, [resumed.data, resumed.isError, saver, startOver])
+    if (resumed.data) saver?.moveBaseTo(resumed.data.rawDraftRevision, resumed.data.rawLatestRevision)
+    if (resumed.isLoadingError) startOver()
+  }, [resumed.data, resumed.isLoadingError, saver, startOver])
 
   if (opening.needsServerWords && resumed.isPending) {
     return <div role="status" aria-label="Loading your entry" className="min-h-32 rounded-lg border bg-card" />

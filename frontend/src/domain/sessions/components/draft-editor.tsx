@@ -7,6 +7,7 @@ import { useJournalZone } from '@/domain/settings/apis/user-setting'
 
 import { sessionQueryOptions } from '../apis/get-session'
 import type { DraftChannel } from '../apis/session.keys'
+import { shownStatusOf } from '../autosave/draft-saver'
 import { useDraftSaver } from '../autosave/use-draft-saver'
 import { EditorToolbar } from '../editor/editor-toolbar'
 import { JournalEditor } from '../editor/journal-editor'
@@ -18,6 +19,8 @@ const channelLabels: Record<DraftChannel, string> = { raw: 'Your words', cleaned
 
 const draftOf = (session: SessionDto, channel: DraftChannel) =>
   channel === 'raw' ? session.rawText : (session.cleanedText ?? '')
+const draftRevisionOf = (session: SessionDto, channel: DraftChannel) =>
+  channel === 'raw' ? session.rawDraftRevision : session.cleanedDraftRevision
 const latestOf = (session: SessionDto, channel: DraftChannel) =>
   channel === 'raw' ? session.rawLatestRevision : session.cleanedLatestRevision
 
@@ -29,7 +32,8 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
     clientSessionId: session.clientSessionId,
     startedAt: session.startedAt,
     sessionId: session.id,
-    baseRevision: latestOf(session, channel),
+    baseRevision: draftRevisionOf(session, channel),
+    latestRevision: latestOf(session, channel),
   })
 
   const [opened, setOpened] = useState(() => ({ text: saver.unsettledText() ?? draftOf(session, channel), key: 0 }))
@@ -42,19 +46,24 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
   }
 
   const serverText = draftOf(session, channel)
+  const serverDraft = draftRevisionOf(session, channel)
   const serverLatest = latestOf(session, channel)
   useEffect(() => {
-    if (serverLatest <= saver.getSnapshot().baseRevision || saver.unsettledText() !== null) return
-    saver.moveBaseTo(serverLatest)
+    if (saver.unsettledText() === null) saver.dismissConflict()
+  }, [saver])
+  useEffect(() => {
+    const { baseRevision, conflict } = saver.getSnapshot()
+    if (serverDraft <= baseRevision || saver.unsettledText() !== null || conflict === 'wordsMovedToHistory') return
+    saver.moveBaseTo(serverDraft, serverLatest)
     if (serverText === currentText.current) return
     currentText.current = serverText
     setOpened((previous) => ({ text: serverText, key: previous.key + 1 }))
     setWasUpdated(true)
-  }, [saver, serverLatest, serverText])
+  }, [saver, serverDraft, serverLatest, serverText])
 
   const showNewest = async () => {
     const newest = await queryClient.fetchQuery({ ...sessionQueryOptions(session.id), staleTime: 0 })
-    saver.moveBaseTo(latestOf(newest, channel))
+    saver.moveBaseTo(draftRevisionOf(newest, channel), latestOf(newest, channel))
     saver.dismissConflict()
     reopenWith(draftOf(newest, channel))
   }
@@ -69,7 +78,7 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
     <div className="flex flex-col gap-6">
       <section aria-label={channelLabels[channel]} className="flex flex-col gap-2">
         {snapshot.conflict && (
-          <ConflictNotice conflict={snapshot.conflict} onShowNewest={() => void showNewest()} onDismiss={() => saver.dismissConflict()} />
+          <ConflictNotice conflict={snapshot.conflict} onShowNewest={() => void showNewest()} onKeep={() => saver.keepWords(currentText.current)} />
         )}
         {wasUpdated && (
           <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted p-3 text-sm">
@@ -89,12 +98,12 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
           onSubmit={() => saver.flush()}
           toolbar={(editor) => <EditorToolbar editor={editor} />}
         />
-        <SaveStatusLine status={snapshot.status} zone={zone} />
+        <SaveStatusLine status={shownStatusOf(snapshot)} zone={zone} />
       </section>
       <SessionHistory
         sessionId={session.id}
         channel={channel}
-        currentRevision={channel === 'raw' ? session.rawDraftRevision : session.cleanedDraftRevision}
+        currentRevision={serverDraft}
         onRestore={restore}
       />
     </div>

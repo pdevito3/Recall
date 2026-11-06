@@ -8,7 +8,7 @@ export interface SaveQueue<T> {
   sending: Stamped<T> | null
   unanswered: Stamped<T> | null
   isWaitingSinceNoReply: boolean
-  refusal: string | null
+  refusal: { message: string; change: Stamped<T> | null } | null
   lastSavedAt: string | null
 }
 
@@ -17,7 +17,7 @@ export type SaveEvent<T> =
   | { type: 'sent' }
   | { type: 'replied'; savedAt: string }
   | { type: 'noReply' }
-  | { type: 'refused'; message: string }
+  | { type: 'refused'; message: string; isGone: boolean }
 
 export type SaveStatus =
   | { kind: 'idle' }
@@ -40,7 +40,7 @@ export function nextToSend<T>(queue: SaveQueue<T>): Stamped<T> | null {
 }
 
 export function newestUnsettled<T>(queue: SaveQueue<T>): Stamped<T> | null {
-  return queue.unsent ?? queue.unanswered ?? queue.sending
+  return queue.unsent ?? queue.unanswered ?? queue.sending ?? queue.refusal?.change ?? null
 }
 
 export function step<T>(queue: SaveQueue<T>, event: SaveEvent<T>): SaveQueue<T> {
@@ -57,7 +57,12 @@ export function step<T>(queue: SaveQueue<T>, event: SaveEvent<T>): SaveQueue<T> 
     case 'noReply':
       return { ...queue, sending: null, unanswered: queue.sending, isWaitingSinceNoReply: true }
     case 'refused':
-      return { ...queue, sending: null, isWaitingSinceNoReply: false, refusal: event.message }
+      return {
+        ...queue,
+        sending: null,
+        isWaitingSinceNoReply: false,
+        refusal: { message: event.message, change: event.isGone ? null : queue.sending },
+      }
   }
 }
 
@@ -65,7 +70,7 @@ export function statusOf<T>(queue: SaveQueue<T>): SaveStatus {
   if (queue.isWaitingSinceNoReply) return { kind: 'waiting' }
   if (queue.sending) return { kind: 'saving' }
   if (queue.unsent) return { kind: 'unsent' }
-  if (queue.refusal !== null) return { kind: 'refused', message: queue.refusal }
+  if (queue.refusal !== null) return { kind: 'refused', message: queue.refusal.message }
   if (queue.lastSavedAt !== null) return { kind: 'saved', at: queue.lastSavedAt }
   return { kind: 'idle' }
 }

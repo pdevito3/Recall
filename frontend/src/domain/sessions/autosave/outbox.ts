@@ -7,6 +7,7 @@ export interface OutboxEntry {
   startedAt: string
   sessionId: string | null
   baseRevision: number
+  latestRevision: number
   change: Stamped<string>
 }
 

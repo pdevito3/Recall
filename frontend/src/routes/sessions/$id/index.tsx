@@ -20,7 +20,7 @@ function SessionRoute() {
       {session.isError && !session.data && (
         <QueryError title="This entry did not load." error={session.error} onRetry={() => session.refetch()} />
       )}
-      {session.data && <SessionPage session={session.data} />}
+      {session.data && <SessionPage key={session.data.id} session={session.data} />}
     </Page>
   )
 }
