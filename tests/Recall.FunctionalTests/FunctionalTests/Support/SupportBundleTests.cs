@@ -48,7 +48,7 @@ public class SupportBundleTests
         var response = await browser.GetAsync($"/{ApiRoutes.SupportBundle}", csrf: true);
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         response.Content.Headers.ContentType?.MediaType.ShouldBe("application/zip");
-        response.Headers.CacheControl?.NoStore.ShouldBeTrue();
+        response.Headers.CacheControl.ShouldNotBeNull().NoStore.ShouldBeTrue();
         await using var zip = new ZipArchive(await response.Content.ReadAsStreamAsync(), ZipArchiveMode.Read);
         var entries = new Dictionary<string, string>();
         foreach (var entry in zip.Entries)

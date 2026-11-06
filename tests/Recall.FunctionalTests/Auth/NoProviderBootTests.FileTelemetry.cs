@@ -51,19 +51,23 @@ public partial class NoProviderBootTests
     }
 
     [Test]
-    public async Task a_log_file_that_cannot_roll_gives_one_warning_on_the_console_and_the_console_keeps_each_log()
+    public async Task a_file_that_cannot_roll_gives_one_warning_for_each_file_on_the_console_and_the_console_keeps_each_log()
     {
         // Arrange
         const int requests = 40;
         await using var server = await ServerProcess.StartAsync(settings: new Dictionary<string, string>
         {
             ["FileTelemetry__Logs__FileSizeBytes"] = "1024",
+            ["FileTelemetry__Traces__FileSizeBytes"] = "1024",
         });
         var logs = Path.Combine(server.DataDirectory, "logs");
+        var telemetry = Path.Combine(server.DataDirectory, "telemetry");
         var path = $"/{Guid.NewGuid():N}.txt";
         using var first = await server.Client.GetAsync($"/{Guid.NewGuid():N}.txt");
         await FirstLineAsync(logs, "recall-*.jsonl", _ => true);
+        await FirstLineAsync(telemetry, "traces-*.jsonl", _ => true);
         File.SetUnixFileMode(logs, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        File.SetUnixFileMode(telemetry, UnixFileMode.UserRead | UnixFileMode.UserExecute);
 
         try
         {
@@ -73,18 +77,23 @@ public partial class NoProviderBootTests
 
             // Assert
             var lines = server.Output.Split('\n');
-            for (var attempt = 0; attempt < 150 && lines.Count(line => line.Contains(path, StringComparison.Ordinal)) < requests; attempt++)
+            string[] WarningsIn(string[] console) => [.. console.Where(line => line.Contains(FileSinkFailureNotice.Text, StringComparison.Ordinal))];
+            for (var attempt = 0; attempt < 150 && (lines.Count(line => line.Contains(path, StringComparison.Ordinal)) < requests || WarningsIn(lines).Length < 2); attempt++)
             {
                 await Task.Delay(TimeSpan.FromMilliseconds(200));
                 lines = server.Output.Split('\n');
             }
 
             lines.Count(line => line.Contains(path, StringComparison.Ordinal)).ShouldBe(requests);
-            lines.Where(line => line.Contains(FileSinkFailureNotice.Text, StringComparison.Ordinal)).ShouldHaveSingleItem().ShouldContain(logs);
+            var warnings = WarningsIn(lines);
+            warnings.Length.ShouldBe(2);
+            warnings.ShouldContain(line => line.Contains(logs, StringComparison.Ordinal));
+            warnings.ShouldContain(line => line.Contains(telemetry, StringComparison.Ordinal));
         }
         finally
         {
             File.SetUnixFileMode(logs, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            File.SetUnixFileMode(telemetry, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
     }
 

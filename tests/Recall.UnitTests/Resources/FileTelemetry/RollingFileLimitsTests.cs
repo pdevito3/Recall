@@ -30,8 +30,10 @@ public class RollingFileLimitsTests
         using var diskIsBack = new ManualResetEventSlim();
         const int linesSent = 11_000;
         var limits = new RollingFileLimits { FileSizeBytes = 1_048_576, FilesKept = 3, DaysKept = 14 };
+        using var console = new StringWriter();
+        var path = Path.Combine(folder, "recall-.jsonl");
         var logger = new LoggerConfiguration()
-            .WriteTo.RollingFiles(new FormatterOnADiskThatBlocks(diskIsBack), Path.Combine(folder, "recall-.jsonl"), limits)
+            .WriteTo.RollingFiles(new FormatterOnADiskThatBlocks(diskIsBack), path, limits, new FileSinkFailureNotice(path, TimeProvider.System, console))
             .CreateLogger();
 
         try
@@ -46,6 +48,7 @@ public class RollingFileLimitsTests
 
             // Assert
             first.ShouldBe(calls, "A logging call waited for the disk.");
+            console.ToString().ShouldContain(FileSinkFailureNotice.Text);
             diskIsBack.Set();
             await logger.DisposeAsync();
             var kept = Directory.GetFiles(folder).SelectMany(File.ReadLines).Count();
