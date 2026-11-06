@@ -31,7 +31,6 @@ export function ComposerForm({ composer }: { composer: Composer }) {
 
 function ComposerEditor({ composer }: { composer: Composer }) {
   const { saver, resumedSessionId, startOver } = composer
-  // The words of an earlier page load: first those with no reply, then those that the Server holds. The editor reads them once.
   const [opening] = useState(() => {
     const unsettled = saver?.unsettledText() ?? null
     return { unsettled, needsServerWords: unsettled === null && resumedSessionId !== null }
@@ -43,7 +42,6 @@ function ComposerEditor({ composer }: { composer: Composer }) {
 
   useEffect(() => {
     if (resumed.data) saver?.moveBaseTo(resumed.data.rawLatestRevision)
-    // The entry is gone, for example after a delete in another tab, so the page starts a new one.
     if (resumed.isError) startOver()
   }, [resumed.data, resumed.isError, saver, startOver])
 

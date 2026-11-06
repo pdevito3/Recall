@@ -1,18 +1,15 @@
-import { isProblemDetailsError } from '@/lib/problem-details'
+import { isProblemDetailsError, type ProblemDetailsError } from '@/lib/problem-details'
 
 import { emptyQueue, newestUnsettled, nextToSend, statusOf, step, type SaveEvent, type SaveQueue, type SaveStatus, type Stamped } from './save-queue'
 
 const firstRetryMs = 2_000
 const longestRetryMs = 30_000
-// A sign-in that ended, a timeout, and a rate limit are answers that a later try can change.
 const statusesThatCanChange = new Set([401, 408, 429])
 
-/** Null means that the save got no reply that settles it, so it goes again. */
-function refusalOf(error: unknown): string | null {
-  if (!isProblemDetailsError(error)) return null
+function isFinalRefusal(error: unknown): error is ProblemDetailsError {
+  if (!isProblemDetailsError(error)) return false
   const status = error.status ?? 500
-  const isRefused = status >= 400 && status < 500 && !statusesThatCanChange.has(status)
-  return isRefused ? error.displayMessage : null
+  return status >= 400 && status < 500 && !statusesThatCanChange.has(status)
 }
 
 interface SerialSaverOptions<T, R> {
@@ -23,10 +20,6 @@ interface SerialSaverOptions<T, R> {
   onQueueChange?: (queue: SaveQueue<T>) => void
 }
 
-/**
- * Sends the changes of one row in order, one at a time, and waits for each reply. Metadata, settings, and drafts follow
- * this rule of the API (docs/specs/sessions.md). It has no React in it, so a save goes on after the page that made it closes.
- */
 export class SerialSaver<T, R> {
   private queue: SaveQueue<T>
   private status: SaveStatus
@@ -42,8 +35,7 @@ export class SerialSaver<T, R> {
     this.queue = options.initialQueue ?? emptyQueue<T>()
     this.status = statusOf(this.queue)
     window.addEventListener('online', this.retryNow)
-    // A page can make a saver while it renders, so the first send waits for the render to end.
-    if (this.queue.unanswered) this.retry = setTimeout(this.retryNow, 0)
+    if (this.queue.unanswered) this.sendAfterThisRender()
   }
 
   edit(value: T) {
@@ -59,13 +51,11 @@ export class SerialSaver<T, R> {
     }, this.options.debounceMs)
   }
 
-  /** Sends the newest change now, with no wait for the pause in typing. */
   flush() {
     this.cancelDebounce()
     this.pump()
   }
 
-  /** Stops each timer and each listener. A save that is on the wire still finishes, and its reply changes nothing. */
   dispose() {
     this.cancelDebounce()
     clearTimeout(this.retry)
@@ -86,6 +76,10 @@ export class SerialSaver<T, R> {
   }
 
   getStatus = () => this.status
+
+  private sendAfterThisRender() {
+    this.retry = setTimeout(this.retryNow, 0)
+  }
 
   private readonly retryNow = () => {
     clearTimeout(this.retry)
@@ -124,9 +118,8 @@ export class SerialSaver<T, R> {
 
   private handleFailure(error: unknown) {
     if (this.isDisposed) return
-    const refusal = refusalOf(error)
-    if (refusal !== null) {
-      this.apply({ type: 'refused', message: refusal })
+    if (isFinalRefusal(error)) {
+      this.apply({ type: 'refused', message: error.displayMessage })
       this.pumpUnlessDebouncing()
       return
     }

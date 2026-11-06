@@ -20,7 +20,6 @@ export function useUserSetting() {
   return useQuery(userSettingOptions)
 }
 
-/** The zone of the journal. A User with no zone, or a zone that this browser does not know, uses UTC, as the Server does. */
 export function journalZoneOf(setting: UserSettingDto | undefined): TimeZone {
   try {
     return parseTimeZone(setting?.timeZone ?? 'UTC')
@@ -37,7 +36,6 @@ export type SettingChange = Pick<UserSettingDto, 'timeZone' | 'locationCaptureEn
 
 let saver: SerialSaver<SettingChange, UserSettingDto> | undefined
 
-/** One saver for the one settings row, so its changes go one at a time, in order. */
 export function settingSaver(queryClient: QueryClient) {
   saver ??= new SerialSaver<SettingChange, UserSettingDto>({
     debounceMs: 0,

@@ -31,7 +31,6 @@ export function withFirstPageOnly(data: TimelineData): TimelineData {
   return { pages: data.pages.slice(0, 1), pageParams: data.pageParams.slice(0, 1) }
 }
 
-/** Changes one row where it is, so the list keeps its pages and its scroll position with no read of each page. */
 export function patchTimelineRow(queryClient: QueryClient, id: string, patch: Partial<SessionSummaryDto>) {
   queryClient.setQueryData<TimelineData>(SessionKeys.timeline(), (data) => data && withRowPatched(data, id, patch))
   // A read that left before this change would put the old row back, so it reads again.

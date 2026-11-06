@@ -16,7 +16,6 @@ const loadAheadPx = 1200
 
 interface TimelineProps {
   zone: TimeZone
-  /** The entry that the composer holds. It shows in the list when the person finishes it. */
   hiddenSessionId: string | null
 }
 

@@ -45,13 +45,11 @@ function insertMention(editor: Editor, range: { from: number; to: number }, pers
     .run()
 }
 
-export function mentionSuggestion(source: MentionSource): MentionOptions['suggestion'] {
+export function mentionSuggestion(source: MentionSource): MentionOptions<MentionOption, MentionOption>['suggestion'] {
   return {
     char: '@',
     items: ({ query }) => optionsFor(source.people(), query),
-    command: ({ editor, range, props }) => {
-      // The list gives `command` the option that the person picks, and the types of TipTap expect the attributes of a node.
-      const option = props as unknown as MentionOption
+    command: ({ editor, range, props: option }) => {
       if (option.kind === 'person') {
         insertMention(editor, range, option.personId, option.label)
         return

@@ -11,11 +11,8 @@ import { journalZoneOf, settingSaver, useUserSetting, type SettingChange } from 
 import { useCurrentUser } from '@/domain/users/apis/get-current-user'
 import { parseTimeZone, timeZoneLabel, type TimeZone } from '@/lib/zoned-time'
 
-// The lib of this project is older than this method. Each browser that runs this app has it.
-const supportedZones = () => (Intl as unknown as { supportedValuesOf: (key: 'timeZone') => string[] }).supportedValuesOf('timeZone')
-
 function zoneOptions(): { id: string; label: string }[] {
-  return supportedZones().map((id) => ({ id, label: `${id.replaceAll('/', ' / ')} (${timeZoneLabel(id as TimeZone)})` }))
+  return Intl.supportedValuesOf('timeZone').map((id) => ({ id, label: `${id.replaceAll('/', ' / ')} (${timeZoneLabel(id as TimeZone)})` }))
 }
 
 export function SettingsForm() {

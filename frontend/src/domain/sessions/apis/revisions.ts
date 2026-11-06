@@ -35,7 +35,6 @@ export function useRevision(id: string, channel: DraftChannel, number: number) {
     queryKey: SessionKeys.revision(id, channel, number),
     queryFn: ({ signal }) =>
       clients[channel].one({ path: { id, number }, signal, options: { suppressErrorToast: true } }),
-    // A revision never changes.
     staleTime: Infinity,
     retry: retryUnlessRefused,
   })

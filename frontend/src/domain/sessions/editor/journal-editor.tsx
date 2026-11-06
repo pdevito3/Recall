@@ -9,7 +9,6 @@ import { PersonMention, textExtensions } from './journal-extensions'
 import { mentionSuggestion, type MentionSource } from './mention-suggestion'
 
 interface JournalEditorProps {
-  /** The editor reads this once. To show other words, give the component another `key`. */
   initialText: string
   label: string
   placeholder?: string
@@ -97,7 +96,6 @@ const LeaveKey = Extension.create({
   },
 })
 
-/** Shows a saved text with no editing. */
 export function JournalText({ text, label }: { text: string; label: string }) {
   const editor = useEditor({
     editable: false,

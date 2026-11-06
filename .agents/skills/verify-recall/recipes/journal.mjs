@@ -19,7 +19,6 @@ const typeAtEnd = async (page, box, words) => {
   await page.keyboard.type(words)
 }
 
-// A control that a finger can press. The label of a checkbox is its target, so the input inside it does not count.
 const smallTargets = (page) => page.evaluate(() => {
   const controls = document.querySelectorAll('a[href], button, input:not([type="hidden"], [type="checkbox"]), select, textarea, [role="button"], [role="switch"], [role="tab"], [role="combobox"], [role="option"], [role="menuitem"], label:has(input[type="checkbox"]), [contenteditable="true"]')
   return [...controls]
@@ -45,7 +44,6 @@ const focusIsVisible = (page) => page.evaluate(() => {
     const style = getComputedStyle(element)
     return style.boxShadow !== 'none' || (style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0)
   }
-  // The ring of the editor is on its frame, a few levels above the text.
   const frames = [focused, focused.parentElement, focused.parentElement?.parentElement, focused.parentElement?.parentElement?.parentElement]
   return { name: focused.getAttribute('aria-label') ?? focused.textContent?.trim().slice(0, 30) ?? focused.tagName, visible: frames.some((frame) => frame && shows(frame)) }
 })

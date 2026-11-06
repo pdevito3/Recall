@@ -32,7 +32,6 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
     baseRevision: latestOf(session, channel),
   })
 
-  // The editor owns its words while the person types. This is what it opens with, and a new key opens it again.
   const [opened, setOpened] = useState(() => ({ text: saver.unsettledText() ?? draftOf(session, channel), key: 0 }))
   const [wasUpdated, setWasUpdated] = useState(false)
   const currentText = useRef(opened.text)

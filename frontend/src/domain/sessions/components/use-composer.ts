@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 
 import { useUserSetting } from '@/domain/settings/apis/user-setting'
-import { isFirstPageOfLoad } from '@/lib/first-page'
+import { mayTakeFocusOnThisPage } from '@/lib/first-page'
 import { newUuid } from '@/lib/new-uuid'
 
 import { draftSaverFor, type DraftSaver, type DraftSnapshot } from '../autosave/draft-saver'
@@ -55,10 +55,6 @@ function captureLocation(): Promise<{ latitude: number; longitude: number } | nu
 const idleSnapshot: DraftSnapshot = { status: { kind: 'idle' }, conflict: null, sessionId: null, baseRevision: 0 }
 const noSubscription = () => () => undefined
 
-/**
- * The entry that the journal page writes. An entry starts at the first word, so a person who only reads makes no entry.
- * A reload within an hour goes back to the same entry.
- */
 export function useComposer() {
   const queryClient = useQueryClient()
   const owner = useOwner()
@@ -126,7 +122,7 @@ export function useComposer() {
 
   return {
     editorKey,
-    autoFocus: isFirstPageOfLoad() || editorKey > 0,
+    autoFocus: mayTakeFocusOnThisPage() || editorKey > 0,
     resumedSessionId,
     saver,
     status: snapshot.status,

@@ -17,7 +17,6 @@ export function useSessionTimeline() {
   return useInfiniteQuery({
     queryKey: SessionKeys.timeline(),
     queryFn: ({ pageParam, signal }) =>
-      // The page shows the failure, so a toast would say it twice.
       getSessionPage({
         query: { cursor: pageParam, pageSize: timelinePageSize },
         signal,

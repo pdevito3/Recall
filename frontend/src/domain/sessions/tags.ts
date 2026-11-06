@@ -18,7 +18,6 @@ export const tagValuesOf = (session: SessionDto): SessionTagValues => ({
   userTopics: session.topics.filter((topic) => topic.provenance === 'UserSet').map((topic) => topic.name),
 })
 
-/** Two Topics match with case ignored, as on the Server (SES-21). */
 export function withTopicAdded(topics: string[], added: string): string[] {
   const name = added.trim()
   if (!name || topics.some((topic) => topic.toLowerCase() === name.toLowerCase())) return topics

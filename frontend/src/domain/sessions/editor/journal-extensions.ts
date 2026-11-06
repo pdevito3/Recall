@@ -1,10 +1,12 @@
 import Highlight from '@tiptap/extension-highlight'
 import { TaskItem, TaskList } from '@tiptap/extension-list'
-import Mention from '@tiptap/extension-mention'
+import Mention, { type MentionOptions } from '@tiptap/extension-mention'
 import type { Extensions } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 
-export const PersonMention = Mention.extend({
+import type { MentionOption } from './mention-list'
+
+export const PersonMention = Mention.extend<MentionOptions<MentionOption, MentionOption>>({
   addAttributes() {
     return {
       personId: {

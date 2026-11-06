@@ -100,10 +100,6 @@ export function validationErrorsOf(error: unknown): Record<string, string[]> {
   )
 }
 
-/**
- * A refusal of the Server will not change on a second try, so a query sends one retry only for a failure with no answer
- * or a failure of the Server.
- */
 export function retryUnlessRefused(failureCount: number, error: Error): boolean {
   const isRefused = isProblemDetailsError(error) && (error.status ?? 500) < 500
   return !isRefused && failureCount < 1

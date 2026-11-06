@@ -329,7 +329,6 @@
   }
 }
 
-/* The words of an entry. The editor and the read-only views share these rules. */
 .journal-prose {
   font-size: 1rem;
   line-height: 1.625;

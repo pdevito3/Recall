@@ -5,7 +5,6 @@ export const SetNameContext = createContext<(name: string | undefined) => void>(
 
 export const useCurrentBreadcrumbName = () => use(NameContext)
 
-/** A detail page gives the name of its record here. The breadcrumb shows that name in place of the name of the route. */
 export function useBreadcrumbName(name: string | undefined) {
   const setName = use(SetNameContext)
   useEffect(() => {

@@ -13,11 +13,7 @@ import { readOutbox, readOutboxEntry, removeFromOutbox, writeToOutbox, type Outb
 import { queueWithUnanswered, newestUnsettled, type SaveQueue, type SaveStatus, type Stamped } from './save-queue'
 import { SerialSaver } from './serial-saver'
 
-/**
- * `lost`: a newer save holds the Draft, and these words stay as a Revision.
- * `replaced`: these words hold the Draft, over a save that this page had not seen.
- */
-export type DraftConflict = 'lost' | 'replaced' | null
+export type DraftConflict = 'wordsMovedToHistory' | 'replacedUnseenSave' | null
 
 export interface DraftSnapshot {
   status: SaveStatus
@@ -33,14 +29,12 @@ export interface DraftTarget {
   startedAt: string
   sessionId: string | null
   baseRevision: number
-  /** Waits for a location, when the person turned on the capture. */
   location?: Promise<{ latitude: number; longitude: number } | null>
 }
 
 const pauseInTypingMs = 800
 const previewLength = 200
 
-/** The autosave of one text of one Session. It outlives the page, so a save goes on after the person leaves the page. */
 export class DraftSaver {
   private readonly target: DraftTarget
   private readonly queryClient: QueryClient
@@ -71,7 +65,6 @@ export class DraftSaver {
     this.saver.flush()
   }
 
-  /** The words that the Server has not answered, which a page shows in place of the words from the Server. */
   unsettledText() {
     return this.saver.newestUnsettledValue()
   }
@@ -80,7 +73,6 @@ export class DraftSaver {
     this.update({ conflict: null })
   }
 
-  /** The page read a newer Revision from the Server and shows it, so the next save is based on it. */
   moveBaseTo(revision: number) {
     this.update({ baseRevision: revision })
   }
@@ -187,9 +179,9 @@ export class DraftSaver {
 }
 
 function conflictOf(reply: DraftSaveResultDto, base: number): DraftConflict {
-  if (reply.outcome === 'Lost') return 'lost'
-  // A save based on the newest Revision makes the next number. A higher number means that a save came between.
-  if (reply.outcome === 'Won' && reply.draftRevision > base + 1) return 'replaced'
+  if (reply.outcome === 'Lost') return 'wordsMovedToHistory'
+  const nextRevisionIfNoSaveCameBetween = base + 1
+  if (reply.outcome === 'Won' && reply.draftRevision > nextRevisionIfNoSaveCameBetween) return 'replacedUnseenSave'
   return null
 }
 
@@ -202,7 +194,6 @@ function saverFromOutbox(entry: OutboxEntry, target: DraftTarget, queryClient: Q
   return new DraftSaver({ ...target, sessionId: entry.sessionId, baseRevision: entry.baseRevision }, queryClient, entry.change)
 }
 
-/** The saver of one text. Words from an earlier page load that have no reply go first. */
 export function draftSaverFor(target: DraftTarget, queryClient: QueryClient): DraftSaver {
   const key = draftKey(target)
   const existing = savers.get(key)
@@ -219,7 +210,6 @@ export function discardDraftSavers(clientSessionId: string) {
   }
 }
 
-/** Sends the words that an earlier page load did not get a reply for, also of an entry that no page opens. */
 export function resumeUnsentDrafts(owner: string, queryClient: QueryClient) {
   for (const entry of readOutbox(owner)) {
     if (!savers.has(entry.key)) savers.set(entry.key, saverFromOutbox(entry, { ...entry, owner }, queryClient))

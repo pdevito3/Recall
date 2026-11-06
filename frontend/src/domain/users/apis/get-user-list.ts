@@ -17,7 +17,6 @@ export function useUserList(params: UserListParams, { enabled = true }: { enable
     enabled,
     queryKey: UserKeys.list(params),
     queryFn: async ({ signal }) => {
-      // The page shows the failure, so a toast would say it twice.
       const result = await getUserList({
         query: { pageNumber: params.page, pageSize: USER_PAGE_SIZE },
         signal,

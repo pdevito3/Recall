@@ -21,8 +21,10 @@ public sealed class FileStoreHealthCheck(Func<string?> proveWritable, string roo
         return problem is null ? HealthCheckResult.Healthy() : new(context.Registration.FailureStatus, problem);
     }
 
-    /// <summary>Null means that the file store takes writes. The text names a path of the host, so it stays in the log.</summary>
-    public async Task<string?> WriteProblemAsync(CancellationToken cancellationToken)
+    public async Task<bool> TakesWritesAsync(CancellationToken cancellationToken)
+        => await WriteProblemAsync(cancellationToken) is null;
+
+    private async Task<string?> WriteProblemAsync(CancellationToken cancellationToken)
     {
         var (proof, timeLeft) = CurrentProof();
         try

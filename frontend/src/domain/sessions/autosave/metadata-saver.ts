@@ -10,7 +10,6 @@ import { SerialSaver } from './serial-saver'
 
 const savers = new Map<string, SerialSaver<SessionTagValues, SessionDto>>()
 
-/** One saver for each Session, so the tag changes of a row go one at a time, in order. */
 export function metadataSaverFor(id: string, queryClient: QueryClient) {
   const existing = savers.get(id)
   if (existing) return existing

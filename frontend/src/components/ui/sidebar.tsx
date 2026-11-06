@@ -35,10 +35,11 @@ const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
-// Only the mobile sidebar uses the sheet, so the modal code is not in the entry
-// chunk. It loads at the start, because a window can become narrow with no network.
 const loadSheet = () => import("@/components/ui/sheet")
-void loadSheet().catch(() => undefined)
+const preloadSheetForAWindowThatNarrowsOffline = () => {
+  void loadSheet().catch(() => undefined)
+}
+preloadSheetForAWindowThatNarrowsOffline()
 const Sheet = React.lazy(async () => {
   const { Sheet } = await loadSheet()
   return { default: Sheet }
@@ -281,7 +282,6 @@ function SidebarRail({
   const { toggleSidebar } = useSidebar()
 
   return (
-    // A mouse shortcut. The trigger in the header is the control that a keyboard and a screen reader use.
     <button
       type="button"
       data-sidebar="rail"

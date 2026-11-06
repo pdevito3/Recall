@@ -7,6 +7,8 @@ import { renamePerson } from '@/api/generated/people/clients/rename-person'
 import { parsePagination } from '@/lib/pagination'
 import { retryUnlessRefused } from '@/lib/problem-details'
 
+import { SessionKeys } from '@/domain/sessions/apis/session.keys'
+
 import { PersonKeys } from './person.keys'
 
 const directoryPageSize = 100
@@ -48,7 +50,11 @@ export function useRenamePerson() {
   return useMutation({
     mutationFn: ({ id, label }: { id: string; label: string }) =>
       renamePerson({ path: { id }, body: { label }, options: { suppressErrorToast: true } }),
-    // A rename changes the words of each entry that mentions the person.
-    onSuccess: () => queryClient.invalidateQueries(),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: PersonKeys.all }),
+        queryClient.invalidateQueries({ queryKey: SessionKeys.all }),
+      ])
+    },
   })
 }
