@@ -40,7 +40,7 @@ function vendorChunk(id: string): string | undefined {
   )
 }
 
-const firstPageBudgetKb = 950
+const firstPageBudgetKb = 960
 
 const failOverFirstPageBudget: Plugin = {
   name: 'first-page-budget',

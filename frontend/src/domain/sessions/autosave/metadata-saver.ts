@@ -9,6 +9,7 @@ import { patchTimelineRow } from '../apis/timeline-cache'
 import { tagValuesOf, type SessionTagValues } from '../tags'
 import { RowSaver } from './row-saver'
 import { isARowThatIsGone } from './serial-saver'
+import { forgetTagSaver, noteTagSaver } from './tag-savers'
 
 const savers = new Map<string, RowSaver<SessionTagValues, SessionDto>>()
 
@@ -37,18 +38,13 @@ export function metadataSaverFor(id: string, queryClient: QueryClient) {
     },
   })
   savers.set(id, saver)
+  noteTagSaver(saver)
   return saver
 }
 
-export const isAnyTagChangeUnsaved = () => [...savers.values()].some((saver) => saver.hasUnsaved())
-
-export const stopMetadataSavers = () => {
-  for (const saver of savers.values()) saver.dispose()
-}
-
-export const settleMetadataSavers = async () => (await Promise.all([...savers.values()].map((saver) => saver.settle()))).every(Boolean)
-
 export function discardMetadataSaver(id: string) {
-  savers.get(id)?.dispose()
+  const saver = savers.get(id)
+  if (saver) forgetTagSaver(saver)
+  saver?.dispose()
   savers.delete(id)
 }

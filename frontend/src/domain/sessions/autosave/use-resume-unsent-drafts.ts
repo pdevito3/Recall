@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { resumeUnsentSetting } from '@/domain/settings/apis/user-setting'
 
 import { isAnyWordOnlyInMemory, resumeUnsentDrafts } from './draft-saver'
-import { isAnyTagChangeUnsaved } from './metadata-saver'
+import { isAnyTagChangeUnsaved } from './tag-savers'
 import { useOwner } from './use-draft-saver'
 
 export function useResumeUnsentDrafts() {

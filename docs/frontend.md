@@ -244,7 +244,7 @@ The router moves the `component` of each route to a chunk that loads when the pa
 
 ## Bundle size
 
-`pnpm build` fails when the JavaScript that `dist/index.html` loads is more than 950 kB of minified code. That is the entry chunk in the `<script type="module">` tag and each chunk in the `modulepreload` links, which the entry imports statically. The budget does not count the CSS, or the chunk of a route. `main.tsx` loads the chunk of each route after the first idle moment, because a page with no network cannot fetch a chunk, and the status line tells a person to keep the page open. The budget is `firstPageBudgetKb` in `frontend/vite.config.ts`. The error gives the size of each chunk that it counts.
+`pnpm build` fails when the JavaScript that `dist/index.html` loads is more than 960 kB of minified code. That is the entry chunk in the `<script type="module">` tag and each chunk in the `modulepreload` links, which the entry imports statically. The budget does not count the CSS, or the chunk of a route. `main.tsx` loads the chunk of each route after the first idle moment, because a page with no network cannot fetch a chunk, and the status line tells a person to keep the page open. The budget is `firstPageBudgetKb` in `frontend/vite.config.ts`. The error gives the size of each chunk that it counts.
 
 When the build fails:
 

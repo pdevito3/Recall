@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 
 import { writePointer } from '@/domain/sessions/autosave/composer-pointer'
 import { discardUnsentDrafts, settleDraftSavers, stopDraftSavers } from '@/domain/sessions/autosave/draft-saver'
-import { settleMetadataSavers, stopMetadataSavers } from '@/domain/sessions/autosave/metadata-saver'
+import { settleMetadataSavers, stopMetadataSavers } from '@/domain/sessions/autosave/tag-savers'
 import { settleSettingSaver, stopSettingSaver } from '@/domain/settings/apis/user-setting'
 
 type Choice = 'keep' | 'discard' | 'stay'
