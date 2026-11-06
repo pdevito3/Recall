@@ -10,6 +10,8 @@ public static class JobHosting
 {
     public const string SystemQueue = "system";
 
+    public const string HealthCheckName = "backwave";
+
     /// <summary>The time that <c>docker stop</c> waits before it kills the process.</summary>
     public static readonly TimeSpan DockerStopGrace = TimeSpan.FromSeconds(10);
 
@@ -57,6 +59,7 @@ public static class JobHosting
                 Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
             });
         });
+        builder.Services.AddHealthChecks().AddCheck<BackWaveHealthCheck>(HealthCheckName);
         builder.Services.AddHostedService<HealthJobOnStart>();
     }
 }

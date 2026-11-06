@@ -5,7 +5,7 @@ Work that does not fit in a request runs as a BackWave job. A job survives a cra
 ## Rules for a job
 
 1. Write a job as a `[Job("wire-name", Queue = JobHosting.SystemQueue)]` method. The wire name stays the same for the life of the job, because a row in the database names it.
-2. A payload holds IDs only. BackWave stores a payload as plain text, and the Owner can read a job row. The job reads the text from the database. `JobPayloadTests` refuses a job parameter that is a `string` with a name that does not end in `Id`, and each type that is not an ID.
+2. A payload holds IDs only. BackWave stores a payload as plain text, and the Owner can read a job row. The job reads the text from the database. `JobPayloadTests` refuses a job parameter that is a `string` with a name other than `id` or a name that does not end in `Id`, and each type that is not an ID.
 3. A job has no caller. Open a scope with `IServiceScopeFactory.CreateSystemScope()`, because a plain scope sees no tenant, so the query filters hide each row.
 4. A job can run more than one time. A crash after the work and before the commit of the job row runs the work again. Make the work idempotent.
 5. A job honors its `CancellationToken`. At shutdown a job has `JobHosting.JobShutdownBudget` less the fifth that BackWave keeps to give back the leases, so about 4.8 s. If it does not stop, its lease ends and a later start runs it again.
@@ -39,6 +39,8 @@ A worker sees a job that this path committed at its next poll, not at once, beca
 | `HostOptions.ShutdownTimeout` | 8 s | `docker stop` kills the process after 10 s. The telemetry files flush after the host stops. |
 | `ShutdownBudget` | 6 s | BackWave clamps it to 4/5 of the host timeout. |
 | `KeepSucceeded` | 14 days | The dashboard shows a finished job for as long as a dead-letter job. |
+
+`/health` includes `BackWaveHealthCheck`, which reads memory only. A store fault that is not transient, such as a full disk, halts the worker group until the next start, and `/health` then answers 503.
 
 The host enqueues one `system-health` job at each start. A recurring schedule would write to the disk at each run and wake the disk of a NAS. `Jobs__HealthJob__HoldSeconds` keeps the job in its run, and `Jobs__HealthJob__FailOnPurpose` makes it fail, so a check of the host can kill a process during a job or fill the dead-letter list.
 

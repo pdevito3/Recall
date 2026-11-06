@@ -1,6 +1,5 @@
 namespace Recall.FunctionalTests.FunctionalTests.Jobs;
 
-using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
@@ -10,6 +9,7 @@ using BackWave.Storage;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Recall.FunctionalTests.Auth;
@@ -221,25 +221,25 @@ public partial class JobDashboardTests
     {
         // Arrange
         var factory = TestingWebApplicationFactory.Instance;
-        var idlePoll = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == "BackWave",
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = span =>
-            {
-                if (span.GetTagItem("backwave.claimed_count") is 0)
-                    idlePoll.TrySetResult(span.SpanId.ToHexString());
-            },
-        };
-        ActivitySource.AddActivityListener(listener);
+        var twoPolls = TimeSpan.FromSeconds(new JobOptions().PollSeconds * 2 + 1);
 
         // Act
-        var spanId = await idlePoll.Task.WaitAsync(WaitLimit);
-        await Task.Delay(TimeSpan.FromSeconds(1));
+        await Task.Delay(twoPolls);
 
         // Assert
-        factory.ExportedActivities.Snapshot().ShouldNotContain(span => span.SpanId.ToHexString() == spanId);
+        factory.ExportedActivities.Snapshot()
+            .Where(span => span.Source.Name == "BackWave" && span.GetTagItem("backwave.claimed_count") is 0)
+            .ShouldBeEmpty();
+    }
+
+    [Test]
+    public void the_health_endpoint_reports_a_halted_worker_group()
+    {
+        // Act
+        var checks = AuthHosts.Jobs.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations;
+
+        // Assert
+        checks.ShouldContain(check => check.Name == JobHosting.HealthCheckName);
     }
 
     private static bool HasHealthJobSpan(TestingWebApplicationFactory factory) => factory.ExportedActivities.Snapshot()

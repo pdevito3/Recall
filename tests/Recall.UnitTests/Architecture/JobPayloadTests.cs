@@ -31,6 +31,7 @@ public class JobPayloadTests
         violations.ShouldBe(
         [
             "SampleJobs.SampleAsync(text)",
+            "SampleJobs.SampleAsync(said)",
             "SampleRecord.Transcript",
         ], ignoreOrder: true);
     }
@@ -66,13 +67,13 @@ public class JobPayloadTests
             || type == typeof(bool) || type.IsEnum)
             return true;
 
-        return type == typeof(string) && name.EndsWith("Id", StringComparison.OrdinalIgnoreCase);
+        return type == typeof(string) && (name == "id" || name.EndsWith("Id", StringComparison.Ordinal));
     }
 
     public sealed class SampleJobs
     {
         [Job("sample-method", Queue = "sample")]
-        public static Task SampleAsync(string entryId, string text, Guid attemptId, CancellationToken cancellationToken)
+        public static Task SampleAsync(string entryId, string text, string said, Guid attemptId, CancellationToken cancellationToken)
             => Task.CompletedTask;
     }
 
