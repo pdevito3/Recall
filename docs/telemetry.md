@@ -243,6 +243,10 @@ No package fits these files, so `SpanFileExporter` and `MetricFileExporter` are 
 
 The [support bundle](troubleshooting.md#send-a-support-bundle) gives these files to an Owner in one zip. Its `settings.json` shows each setting name and hides each value unless `RedactedSettings` lists the setting. A new setting thus starts hidden.
 
+## Background jobs
+
+`AddBackWaveInstrumentation` sends the spans and the metrics of BackWave to the same places. Each attempt of a job is a span named `process <queue>`, with the wire name of the job in `messaging.destination.template` and the job ID in `messaging.message.id`. The span of a poll that claimed no job goes to no exporter, so an idle server writes no span. See [background jobs](backend/background-jobs.md).
+
 ## Tests
 
 - Unit tests use an `ActivityListener` and filter spans by the trace id of the test. Test classes run in parallel, so the listener sees spans from other tests. See `tests/Recall.UnitTests/Resources/TelemetryTests.cs`.

@@ -4,6 +4,8 @@ using Microsoft.Data.Sqlite;
 
 public sealed class SqliteTestDatabase : IAsyncDisposable
 {
+    private const int DeleteAttempts = 10;
+
     private readonly string _directory = Path.Combine(Path.GetTempPath(), $"recall_test_{Guid.NewGuid():N}");
 
     public SqliteTestDatabase()
@@ -20,12 +22,23 @@ public sealed class SqliteTestDatabase : IAsyncDisposable
 
     public string ConnectionString { get; }
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         using (var connection = new SqliteConnection(ConnectionString))
             SqliteConnection.ClearPool(connection);
 
-        Directory.Delete(_directory, recursive: true);
-        return ValueTask.CompletedTask;
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                Directory.Delete(_directory, recursive: true);
+                return;
+            }
+            // The last metric export of a stopped host can make a file while the delete walks the folder.
+            catch (IOException) when (attempt < DeleteAttempts)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(200));
+            }
+        }
     }
 }

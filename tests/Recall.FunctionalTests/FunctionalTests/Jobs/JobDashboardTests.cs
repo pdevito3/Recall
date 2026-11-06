@@ -1,6 +1,8 @@
 namespace Recall.FunctionalTests.FunctionalTests.Jobs;
 
+using System.Diagnostics;
 using System.Net;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.RegularExpressions;
 using BackWave.Monitor;
@@ -11,6 +13,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Recall.FunctionalTests.Auth;
+using Recall.Server.Auth.Entities;
+using TestUtilities;
 using Recall.Server.Resources.Jobs;
 using Shouldly;
 
@@ -78,13 +82,30 @@ public partial class JobDashboardTests
         // Arrange
         using var owner = await SignedInAsync(AuthHosts.Jobs);
         using var member = await SignedInAsync(AuthHosts.Jobs, $"jobs-member-{Guid.NewGuid():N}");
+        var adminSubject = $"jobs-admin-{Guid.NewGuid():N}";
+        using var admin = await SignedInAsync(AuthHosts.Jobs, adminSubject);
+        var adminId = await AuthHosts.Jobs.WithDatabaseAsync(database => database.Set<ExternalLogin>()
+            .IgnoreQueryFilters()
+            .Where(login => login.Subject == adminSubject)
+            .Select(login => login.UserId)
+            .SingleAsync());
+        using var promote = new HttpRequestMessage(HttpMethod.Put, $"/{ApiRoutes.Users.UpdateRole(adminId)}")
+        {
+            Content = JsonContent.Create(new { role = "Admin" }),
+        };
+        promote.Headers.Add("X-CSRF", "1");
+        using var promoted = await owner.SendAsync(promote);
+        promoted.IsSuccessStatusCode.ShouldBeTrue();
 
         // Act
-        using var page = await member.GetAsync($"{JobDashboard.Path}/jobs");
+        using var byMember = await member.GetAsync($"{JobDashboard.Path}/jobs");
+        using var byAdmin = await admin.GetAsync($"{JobDashboard.Path}/jobs");
 
         // Assert
-        page.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        (await page.Content.ReadAsStringAsync()).ShouldBeEmpty();
+        byMember.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await byMember.Content.ReadAsStringAsync()).ShouldBeEmpty();
+        byAdmin.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await byAdmin.Content.ReadAsStringAsync()).ShouldBeEmpty();
     }
 
     [Test]
@@ -191,6 +212,32 @@ public partial class JobDashboardTests
 
         // Assert
         HasHealthJobSpan(factory).ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task an_idle_poll_exports_no_span()
+    {
+        // Arrange
+        var factory = TestingWebApplicationFactory.Instance;
+        var idlePoll = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == "BackWave",
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = span =>
+            {
+                if (span.GetTagItem("backwave.claimed_count") is 0)
+                    idlePoll.TrySetResult(span.SpanId.ToHexString());
+            },
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        // Act
+        var spanId = await idlePoll.Task.WaitAsync(WaitLimit);
+        await Task.Delay(TimeSpan.FromSeconds(1));
+
+        // Assert
+        factory.ExportedActivities.Snapshot().ShouldNotContain(span => span.SpanId.ToHexString() == spanId);
     }
 
     private static bool HasHealthJobSpan(TestingWebApplicationFactory factory) => factory.ExportedActivities.Snapshot()

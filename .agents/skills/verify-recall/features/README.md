@@ -43,6 +43,7 @@ Keep implementation details out of the map. Name only user paths, stable handles
 - [Login and logout](./login-logout.md) covers the Server login through the IdP of the stack, the session, the name of the user, and logout.
 - [Navigation and theme](./navigation-and-theme.md) covers the sidebar links, the breadcrumb, sidebar collapse, and the light/dark/system theme.
 - [First owner](./first-owner.md) covers the first login, which makes the Owner and its tenant, and the refusal of a second person when signup is closed.
+- [Job dashboard](./job-dashboard.md) covers `/backwave`: the BackWave console of the Owner, the finished health job, and the 403 for each other caller.
 - [Users](./users.md) covers `/users` and `/users/<id>`: the list of the users of the tenant, the actions from `allowedActions`, the role change, the delete, and the refusal for a member.
 
 ## Not mapped yet
