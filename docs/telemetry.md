@@ -1,10 +1,12 @@
 # Telemetry
 
-The server exports traces, metrics, and logs with OpenTelemetry. In development, the Aspire dashboard shows them at https://localhost:24700 (the `aspire run` output gives the login link). An isolated run (`--isolated`) uses a random port. `dotnet aspire ps` gives its URL.
+The server exports traces, metrics, and logs with OpenTelemetry. In development, the Aspire dashboard shows them at https://localhost:24700 (the `aspire run` output gives the login link). An isolated run (`--isolated`) uses a random port. `dotnet aspire ps` gives its URL. The server also writes all three signals to files beside the database. See [Files](#files) and [troubleshooting.md](troubleshooting.md).
 
 ## Privacy rule
 
-A span carries names, identifiers, and counts. It never carries user-entered content or personal data, such as names or email addresses. Every helper below takes its tags from the caller, so each call site must obey this rule.
+A span, a log, a metric tag, and a telemetry file carry names, identifiers, and counts. They never carry user-entered content or personal data, such as names or email addresses. Journal text is the first example: Raw, Cleaned, a Revision, a Synopsis, a Summary, and the audio of a Session never reach a log, a span, or a support bundle. Every helper below takes its tags from the caller, so each call site must obey this rule.
+
+The rule also covers an exception. A client error can hold text from the caller in its message, so it never becomes a span event or a log with that message. Do not write a route or a query key that holds user text, because the request log and the span keep the path. `SupportBundleTests` sends a marker through the entrypoints and searches the whole bundle for it. When you add an entrypoint that takes user text, add it to that test.
 
 `SqlSpanInterceptor` makes a span for each SQL command of the Server, and it copies the SQL text into `db.query.text`. Thus a value from the caller must go to the database as a parameter, never as a literal in the SQL text. `CustomQueryKitConfiguration` sets `ParameterizeFilterValues`, so the SQL text of a list query has a parameter name in place of each filter value. The value of a QueryKit `CustomOperation` still goes into the SQL text as a literal.
 
@@ -43,6 +45,8 @@ Server   PUT api/v{version}/tenants/{id}
 | `Recall.Server/Databases/QueryTagEnrichment.cs` | Copies the query tags into the SQL span |
 | `Recall.Server/Databases/DomainEventDispatcher.cs` | Runs each domain event handler in its `domain_event.handle` span |
 | `Recall.Server/Resources/Extensions/HostExtensions.cs` | OpenTelemetry and Serilog registration, resource attributes, framework meters, request log level |
+| `Recall.Server/Resources/FileTelemetry/` | The rotating files of the logs, the traces, and the metrics, and the two exporters |
+| `Recall.Server/Domain/Support/` | The support bundle |
 
 ## Log, span, or event
 
@@ -86,6 +90,18 @@ The host also collects these framework meters:
 - `Polly`, for the resilience handlers on `HttpClient`. The meter has data only after an outgoing call.
 - `Microsoft.EntityFrameworkCore`. The server only.
 - `Microsoft.AspNetCore.Authentication` and `Microsoft.AspNetCore.Authorization`.
+
+### The metrics of the removed BFF
+
+The BFF had three metrics of its own. The BFF kept each session and refreshed its tokens at the identity provider, and ADR 0014 moved the sessions to the Server. No custom metric replaces the three. These signals answer the same questions:
+
+| Removed metric | The signal now |
+|---|---|
+| `bff.sessions.started` | The log `Started web session {SessionId} for user {UserId}`, and the same log for a native session. `aspnetcore.authentication.sign_ins` does not count them, because the Server stores its own sessions. |
+| `bff.sessions.ended`, with a reason | The columns `revoked_at` and `revoked_reason` of the Auth session row. A refresh token that comes back gives the log `Ended session {SessionId} because an old refresh token came back`. No log marks a logout or an expiry. |
+| `bff.refresh.failures` | An Auth session keeps working when the identity provider is down, so a web session has no refresh that can fail. A failed native refresh shows as the request log of `POST /auth/token` with its 4xx status. |
+
+`aspnetcore.authentication.authenticate.duration` counts each check of a session, and its tag `aspnetcore.authentication.result` tells `success`, `failure`, or `none`.
 
 ## Resource attributes
 
@@ -177,7 +193,7 @@ using var trace = Telemetry.TraceRoot([], "work.run", links);
 
 ## Logs
 
-Serilog is the logging provider. The OTLP sink sends logs to the Aspire dashboard when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. The sink must stay inside the `AddSerilog` callback in `HostExtensions.cs`. The host replaces a logger that you assign to `Log.Logger` in a different location, so its sinks never run.
+Serilog is the logging provider. The file sink writes each log to `logs/` beside the database. The OTLP sink also sends logs to the Aspire dashboard when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Each sink must stay inside the `AddSerilog` callback in `HostExtensions.cs`. The host replaces a logger that you assign to `Log.Logger` in a different location, so its sinks never run.
 
 ### Call site
 
@@ -194,7 +210,7 @@ _logger.Here().Information("Created tenant {TenantId} for new user {UserId}", te
 - `CallSite` - the short form, for example `MigrationHostedService.cs:StartAsync@31`.
 - `code.function`, `code.file.path`, and `code.line.number` - the same names as on a span.
 
-Log only ids, names of operations, and counts. The privacy rule for spans also applies to logs.
+Log only ids, names of operations, and counts. The [privacy rule](#privacy-rule) applies to each log.
 
 ### Console output
 
@@ -208,6 +224,24 @@ In Development, the console uses a `Serilog.Expressions` template. Each line sho
 - A health probe (`/health` or `/alive`) gives `Verbose`, so the default minimum level drops it.
 - A health probe that the caller leaves during a check gives `Verbose`. In the server, `CallerCancellationHealthCheck` ends each check with the cancellation, so the exception handler gives 499, not 503. A check that runs past its own timeout still reports `Unhealthy` at `Error`.
 - All other requests give `Information`.
+
+## Files
+
+A person who runs Recall on a NAS has no log service, so the server keeps its own files. The folders are beside the database, so `dirname(database)/logs` and `dirname(database)/telemetry`. In the image the database is `/data/recall.db`, so the folders are `/data/logs` and `/data/telemetry`. A process run finds them in the same way. An in-memory database writes no files.
+
+| File | Content | Limit of one file | Files kept | Days kept |
+|---|---|---|---|---|
+| `logs/recall-<date>.jsonl` | One log in each line, in the Serilog compact JSON format, with the trace id in `@tr` and the span id in `@sp` | 10 MiB | 20 | 14 |
+| `telemetry/traces-<date>.jsonl` | One span in each line | 10 MiB | 20 | 14 |
+| `telemetry/metrics-<date>.jsonl` | One point of a metric in each line, each 60 seconds | 10 MiB | 5 | 14 |
+
+These limits hold at most 450 MiB. The section `FileTelemetry` in `appsettings.json` sets them. Set `FileTelemetry__Logs__FilesKept`, for example, to change one in an environment variable. A file passes its size limit by at most one line, and then the next line opens a new file with a number after the date. The age limit acts when a file opens, so at a start, at the first line of each day, and when a file reaches its size limit.
+
+The server makes these folders with owner-only modes. A logging call and a span give their data to a queue and return, so a slow or full disk does not hold a request. When the disk cannot take a line, the line goes. The console and OTLP do not change, and the two OTLP exports run beside the files.
+
+No package fits these files, so `SpanFileExporter` and `MetricFileExporter` are ours. Each writes one JSON line through `JsonLinesFile`, and Serilog.Sinks.File does the rotation.
+
+The [support bundle](troubleshooting.md#send-a-support-bundle) gives these files to an Owner in one zip. Its `settings.json` shows each setting name and hides each value unless `RedactedSettings` lists the setting. A new setting thus starts hidden.
 
 ## Tests
 

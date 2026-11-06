@@ -41,6 +41,7 @@ Read the doc for an area before you change code in that area.
 | [docs/backend/](docs/backend/) | Rules for entities, features, DTOs and mappers, endpoints (HTTP, MCP), concurrency (a version, a run again, or a lock), domain events, EF configurations, feature telemetry, and the audit log |
 | [docs/backend/source-generators.md](docs/backend/source-generators.md) | When to use a source generator and when reflection is allowed |
 | [docs/telemetry.md](docs/telemetry.md) | Traces, metrics, logs, `Trace`, `AddEvent`, `Here()`, `TraceRoot`, `TraceContext`, named queries |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | The log and telemetry files of an install: find a failed request, read a startup failure, send a support bundle |
 | [docs/messages.md](docs/messages.md) | The text of error messages, alerts, toasts, and labels |
 | [docs/multi-tenancy.md](docs/multi-tenancy.md) | Tenant isolation |
 | [docs/authentication.md](docs/authentication.md) | Web and native login, sessions, origins, auth providers, test users |

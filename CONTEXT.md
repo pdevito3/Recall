@@ -212,6 +212,12 @@ _Avoid_: Error code, failure reason
 A type that only the decision makes, which the write method takes, so the write cannot run without the check.
 _Avoid_: Token, ticket, witness
 
+### Support
+
+**Support bundle**:
+The one zip that an Owner downloads to get help: the log and telemetry files, the version, and the settings with the secrets hidden. It holds no journal text.
+_Avoid_: Diagnostics dump, debug archive
+
 ### Files
 
 **File store**:
