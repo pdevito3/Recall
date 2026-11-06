@@ -181,7 +181,7 @@ public class FastClockRetryTests
 
     [Test]
     [Property("Rule", "SES-21")]
-    public void a_distinct_older_change_from_a_fast_clock_does_nothing_while_the_server_has_not_reached_it()
+    public void a_distinct_older_change_from_a_fast_clock_applies_when_it_arrives_so_it_replaces_the_newer_change()
     {
         // Arrange
         var session = NewSession();
@@ -191,7 +191,112 @@ public class FastClockRetryTests
         session.SetMetadata(Activity("Walking"), Fast.AddMinutes(1), Noon.AddMinutes(1));
 
         // Assert
+        session.Activity.ShouldBe("Walking");
+    }
+
+    [Test]
+    [Property("Rule", "SES-26")]
+    public void a_different_change_with_the_time_of_a_kept_claim_looks_like_its_retry_and_does_nothing()
+    {
+        // Arrange
+        var setting = NewSetting();
+        setting.Change(null, true, false, FarFuture, Noon);
+
+        // Act
+        setting.Change(null, false, false, FarFuture, Noon.AddMinutes(1));
+
+        // Assert
+        setting.LocationCaptureEnabled.ShouldBeTrue();
+    }
+
+    [Test]
+    [Property("Rule", "SES-26")]
+    [Arguments(6)]
+    [Arguments(60)]
+    [Arguments(3600)]
+    public void location_capture_off_from_a_fast_clock_takes_effect_behind_a_far_future_claim(int secondsFast)
+    {
+        // Arrange
+        var setting = NewSetting();
+        setting.Change(null, true, false, FarFuture, Noon);
+        var later = Noon.AddMinutes(1);
+
+        // Act
+        setting.Change(null, false, false, later.AddSeconds(secondsFast), later);
+
+        // Assert
+        setting.LocationCaptureEnabled.ShouldBeFalse();
+    }
+
+    [Test]
+    [Property("Rule", "SES-21")]
+    [Arguments(6)]
+    [Arguments(60)]
+    [Arguments(3600)]
+    public void metadata_from_a_fast_clock_takes_effect_behind_a_far_future_claim(int secondsFast)
+    {
+        // Arrange
+        var session = NewSession();
+        session.SetMetadata(Activity("Resting"), FarFuture, Noon);
+        var later = Noon.AddMinutes(1);
+
+        // Act
+        session.SetMetadata(Activity("Walking"), later.AddSeconds(secondsFast), later);
+
+        // Assert
+        session.Activity.ShouldBe("Walking");
+    }
+
+    [Test]
+    [Property("Rule", "SES-26")]
+    public void a_setting_that_arrives_behind_a_far_future_claim_and_its_retry_do_not_undo_a_newer_change()
+    {
+        // Arrange
+        var setting = NewSetting();
+        setting.Change(null, false, false, FarFuture, Noon);
+        var sixSecondsFast = Noon.AddSeconds(66);
+        setting.Change(null, true, false, sixSecondsFast, Noon.AddSeconds(60));
+        setting.Change(null, false, false, Noon.AddSeconds(61), Noon.AddSeconds(61));
+
+        // Act
+        setting.Change(null, true, false, sixSecondsFast, Noon.AddMilliseconds(62_500));
+
+        // Assert
+        setting.LocationCaptureEnabled.ShouldBeFalse();
+    }
+
+    [Test]
+    [Property("Rule", "SES-21")]
+    public void metadata_that_arrives_behind_a_far_future_claim_and_its_retry_do_not_undo_a_newer_change()
+    {
+        // Arrange
+        var session = NewSession();
+        session.SetMetadata(Activity("Resting"), FarFuture, Noon);
+        var sixSecondsFast = Noon.AddSeconds(66);
+        session.SetMetadata(Activity("Walking"), sixSecondsFast, Noon.AddSeconds(60));
+        session.SetMetadata(Activity("Resting"), Noon.AddSeconds(61), Noon.AddSeconds(61));
+
+        // Act
+        session.SetMetadata(Activity("Walking"), sixSecondsFast, Noon.AddMilliseconds(62_500));
+
+        // Assert
         session.Activity.ShouldBe("Resting");
+    }
+
+    [Test]
+    [Property("Rule", "SES-26")]
+    public void a_retry_of_a_far_future_claim_does_not_undo_a_newer_change()
+    {
+        // Arrange
+        var setting = NewSetting();
+        setting.Change(null, true, false, FarFuture, Noon);
+        setting.Change(null, false, false, Noon.AddMinutes(1), Noon.AddMinutes(1));
+
+        // Act
+        setting.Change(null, true, false, FarFuture, Noon.AddYears(1));
+
+        // Assert
+        setting.LocationCaptureEnabled.ShouldBeFalse();
     }
 
     [Test]
