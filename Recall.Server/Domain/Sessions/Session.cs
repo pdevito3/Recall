@@ -151,7 +151,7 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         RefreshFromDrafts();
     }
 
-    /// <returns>False when the Session already holds these values, so a retry does nothing at any version.</returns>
+    /// <returns>False for a retry: the Session holds these values and the client sent another version.</returns>
     /// <exception cref="StaleMetadataVersionException">The metadata changed after the version that the client read.</exception>
     public bool SetMetadata(SessionMetadata metadata, uint metadataVersion)
     {

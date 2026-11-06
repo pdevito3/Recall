@@ -26,7 +26,7 @@ A unique index can also tell that another user changed the record, for example a
 
 A save can guard only part of a row when other writes move the `Version` of that row with no relation to that part. A Draft save moves the `Version` of its Session, and it does not make a metadata save stale. So a metadata save sends `metadataVersion`, a counter on the Session that only an applied metadata change moves (SES-32). A stale value throws `StaleMetadataVersionException`, which gives the same 409 as a stale version, with `metadataVersion` in `errors`. It is not a `StaleVersionException`, so `RaceRetryBehavior` does not catch it.
 
-`SetSessionMetadata` keeps `IRunsAgainWhenRaced`, because a lost race on the row with a Draft save says nothing about the metadata. The next run reads the row again and checks `metadataVersion` again, so a rival metadata save gives the 409 on that run.
+`SetSessionMetadata` keeps `IRunsAgainWhenRaced`, because a lost race on the row with a Draft save says nothing about the metadata. The next run reads the row again and checks `metadataVersion` again, so a rival metadata save gives the 409 on that run. Rule 5 of the run-again rules does not stop this increment, because each run adds one to the row that it read, and only after the check of the base.
 
 Add such a counter only when writes that do not conflict with the form must share the row. In other cases, send `Version`.
 
