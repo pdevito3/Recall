@@ -54,7 +54,9 @@ try
         new("Fail the probe when the file store cannot write", CheckProbeReadsBody),
         new("Exit with a nonzero code as PID 1 after a failed start", CheckFailedStartExits),
         new("Fail over the idle memory budget", CheckIdleMemory),
-        new("Write to a bind mount as another user", CheckBindMount),
+        OperatingSystem.IsMacOS()
+            ? new("Refuse a folder of the Mac", CheckMacFolderRefused)
+            : new("Write to a bind mount as another user", CheckBindMount),
     ]);
 }
 finally
@@ -201,6 +203,15 @@ void CheckBindMount(JobCopy copy)
     Require(File.Exists(Path.Combine(bindFolder, "recall.db")), $"The folder {bindFolder} has no recall.db.");
     var user = InContainer(copy, "id", "-u").Trim();
     Require(user == Environment.GetEnvironmentVariable("PUID"), $"The user of the container is {user}.");
+}
+
+void CheckMacFolderRefused(JobCopy copy)
+{
+    copy.Run("docker", "compose", "down");
+    Environment.SetEnvironmentVariable("RECALL_DATA", bindFolder);
+    var (exitCode, output, errors) = copy.Capture("docker", "compose", "run", "--rm", "--no-deps", "recall");
+    Require(exitCode != 0, "The Server started on a folder of the Mac.");
+    Require($"{output}{errors}".Contains("fakeowner", StringComparison.Ordinal), $"The Server did not name the mount. Its output: {output}{errors}");
 }
 
 static void Up(JobCopy copy) => copy.Run("docker", "compose", "up", "--detach", "--wait", "--wait-timeout", "180", "--no-build");

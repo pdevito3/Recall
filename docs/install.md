@@ -35,7 +35,7 @@ To use another port, add `RECALL_PORT=8090` to `.env`. See [Connect a login prov
 
 **On Unraid, the path must not be under `/mnt/user`.** It is a FUSE file system. Use a path such as `/mnt/cache/appdata/recall` or `/mnt/disk1/appdata/recall`.
 
-On a Mac, keep the Docker volume. A bind mount in Docker Desktop is not on a local disk of the Linux machine that runs the container. The Server allows it for a test, but use it only for data that you can lose.
+On a Mac, keep the Docker volume. Docker Desktop shows a folder of the Mac as the shared folder type `fakeowner`, so the Server refuses to start on it.
 
 ### Use a folder in place of the Docker volume
 
