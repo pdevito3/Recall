@@ -18,6 +18,8 @@ export const modelProviders = (page: Page) => ({
   text: (words: string) => page.getByText(words),
   pageOverflow: () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
   runCleanup: page.getByRole('button', { name: /^Run Cleanup/ }),
+  wordsGoTo: (name: string) => page.getByText(`A Cleanup sends your words to ${name}.`),
+  wordsGoToAnyProvider: page.getByText('A Cleanup sends your words to'),
   tagPerson: (label: string) => page.getByRole('button', { name: `Tag ${label}`, exact: true }),
   doNotTagPerson: (label: string) => page.getByRole('button', { name: `Do not tag ${label}`, exact: true }),
   acceptSuggestion: (value: string) => page.getByRole('button', { name: `Accept ${value}`, exact: true }),

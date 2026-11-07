@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { refusalOf } from '@/hooks/use-server-errors'
 
 import { useCleanupSession, useRespondToProposal, useRespondToSuggestion, useStartCleanup } from '../apis/cleanup'
+import { useActiveModelProvider } from '../apis/model-providers'
 import { plainTextOf } from './plain-text'
 
 const STATUS_TEXT: Record<SessionDto['cleanupStatus'], string> = {
@@ -95,6 +96,7 @@ function PeopleProposals({ session }: { session: SessionDto }) {
 export function CleanupCard({ sessionId }: { sessionId: string }) {
   const session = useCleanupSession(sessionId)
   const start = useStartCleanup(sessionId)
+  const provider = useActiveModelProvider()
   const startProblem = start.error ? refusalOf(start.error, []).problem : null
 
   if (session.isPending) {
@@ -132,6 +134,9 @@ export function CleanupCard({ sessionId }: { sessionId: string }) {
           <p className="text-sm text-muted-foreground">
             You edited Cleaned by hand. A new Cleanup replaces Cleaned, and your edit stays as a Revision.
           </p>
+        )}
+        {provider.data?.name && (
+          <p className="text-sm text-muted-foreground wrap-anywhere">A Cleanup sends your words to {provider.data.name}.</p>
         )}
         <RefusedSaveAlert problem={startProblem} />
         <div>

@@ -110,6 +110,10 @@ test.describe('the model providers page', () => {
 test.describe('the Cleanup card on a 320 px phone', () => {
   test.use({ actor: as.user('Bob Smith'), viewport: { width: 320, height: 640 } })
 
+  test.beforeEach(({ api }) => {
+    api.mock(modelProvidersApi.activeIs('Home lab'))
+  })
+
   test('a short suggestion stays on one line, with no sideways scroll', async ({ page, api }) => {
     const session = aSession({ cleanupStatus: 'Clean', cleanedText: 'Done.', suggestions: [{ kind: 'Mood', value: 'Calm' }] })
     api.mock(signedInAs('User'), modelProvidersApi.sessionIs(session))
@@ -146,6 +150,10 @@ test.describe('the Cleanup card', () => {
 
   const sessionUrl = (id: string) => `/model-providers?session=${id}`
 
+  test.beforeEach(({ api }) => {
+    api.mock(modelProvidersApi.activeIs('Home lab'))
+  })
+
   test('a run shows that the person can leave, and a later visit finds Cleaned with Raw unchanged', async ({ page, api }) => {
     const session = aSession()
     const running = aSession({ cleanupStatus: 'Running' })
@@ -165,6 +173,20 @@ test.describe('the Cleanup card', () => {
 
     await expect(at.cleanedWords).toContainText('I met Sam today.')
     await expect(at.rawWords).toContainText('um I met sam today')
+  })
+
+  test('the card names the provider that gets the words, and it names none when no provider takes them', async ({ page, api }) => {
+    const session = aSession()
+    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(session), modelProvidersApi.activeIs('Home lab'))
+    const at = modelProviders(page)
+
+    await page.goto(sessionUrl(session.id))
+    await expect(at.wordsGoTo('Home lab')).toBeVisible()
+
+    api.mock(modelProvidersApi.activeIs(null))
+    await page.reload()
+    await expect(at.runCleanup).toBeEnabled()
+    await expect(at.wordsGoToAnyProvider).toHaveCount(0)
   })
 
   test('a Running run polls until the result arrives', async ({ page, api }) => {

@@ -1080,6 +1080,40 @@
         }
       }
     },
+    "/api/v1/model-providers/active": {
+      "get": {
+        "tags": [
+          "ModelProviders"
+        ],
+        "summary": "Gets the name of the model provider that gets the words of the next Cleanup of the caller.",
+        "operationId": "GetActiveModelProvider",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveModelProviderDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
     "/api/v1/model-providers/{id}/test": {
       "post": {
         "tags": [
@@ -4601,6 +4635,18 @@
   },
   "components": {
     "schemas": {
+      "ActiveModelProviderDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The name of the model provider that gets the words of the next Cleanup. Null when no Cleanup can start yet."
+          }
+        }
+      },
       "AgentDto": {
         "required": [
           "id",

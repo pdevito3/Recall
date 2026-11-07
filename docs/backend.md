@@ -158,7 +158,7 @@ A command, or a query that reads data that needs a permission, checks a permissi
 | `read_audit_log` | `GetAuditEntryPage` |
 | `read_audit_log_sensitive` | None. `GetAuditEntryPage` shows the sensitive values of the audit log only to a caller with it. |
 | `read_users` | `GetUserList`, `GetUser` for another user, `GetUserByIdentifier` for another user or for an identifier that no user has. `UpdateUser`, `UpdateUserRole`, `AddUserPermission`, and `RemoveUserPermission` for another user, because they return the user. |
-| `manage_model_providers` | `AddModelProvider`, `UpdateModelProvider`, `DeleteModelProvider`, `GetModelProviderList`, `TestModelProvider` |
+| `manage_model_providers` | `AddModelProvider`, `UpdateModelProvider`, `DeleteModelProvider`, `GetModelProviderList`, `TestModelProvider`. A person with a journal reads only the name of the active provider, with `GetActiveModelProvider`. `Agent.Grant` refuses this permission, so no agent holds it. |
 | `read_agents` | `GetAgentList`, `GetAgent`. `AddAgentPermission` and `RemoveAgentPermission`, because they return the agent. |
 
 The role of a user gives the default permissions. `UserRole.GetDefaultPermissions` gives each permission to `Admin` and no permission to `User`. `User.Create` and `UpdateRole` write the defaults as rows. After that, `AddUserPermission` and `RemoveUserPermission` change the rows, and the rows decide. The guard does not read the role.

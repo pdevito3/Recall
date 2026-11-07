@@ -43,6 +43,7 @@ public class EndpointAccessSweepTests : TestBase
         ["GetCurrentUser"] = new("Each signed-in caller reads the own identity. It takes no ID, and its one read is the own user row behind the tenant filter."),
         ["get_tenant"] = new("ToolAccessKind.Read. Each member reads the own tenant, and the tenant filter hides the others."),
         ["list_tenants"] = new("ToolAccessKind.Read. Each member lists the own tenant, and the tenant filter hides the others."),
+        ["GetActiveModelProvider"] = new("Each member sees where a Cleanup sends the own words. It takes no ID and gives only the name of the provider of the own tenant."),
         ["AddSession"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetSession"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetSessionPage"] = new(JournalOfEachMember, OwnerOnly: true),

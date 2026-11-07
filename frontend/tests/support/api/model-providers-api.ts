@@ -8,6 +8,7 @@ import type { MockRoute } from './mock-route'
 
 export const modelProviderPaths = {
   list: '/api/v1/model-providers',
+  active: '/api/v1/model-providers/active',
   record: (id: string) => `/api/v1/model-providers/${id}`,
   test: (id: string) => `/api/v1/model-providers/${id}/test`,
   session: (id: string) => `/api/v1/sessions/${id}`,
@@ -40,6 +41,10 @@ export const aSession = (changes: Partial<SessionDto> = {}): SessionDto =>
   }) as SessionDto
 
 export const modelProvidersApi = {
+  activeIs(name: string | null): MockRoute {
+    return { method: 'get', path: modelProviderPaths.active, status: 200, body: { name } }
+  },
+
   listHolds(items: ModelProviderDto[], keyRing: ModelProviderListDto['keyRing'] = 'Same'): MockRoute {
     return { method: 'get', path: modelProviderPaths.list, status: 200, body: { items, keyRing } satisfies ModelProviderListDto }
   },

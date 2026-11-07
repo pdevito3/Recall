@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { addModelProvider } from '@/api/generated/model-providers/clients/add-model-provider'
 import { deleteModelProvider } from '@/api/generated/model-providers/clients/delete-model-provider'
+import { getActiveModelProvider } from '@/api/generated/model-providers/clients/get-active-model-provider'
 import { getModelProviders } from '@/api/generated/model-providers/clients/get-model-providers'
 import { testModelProvider } from '@/api/generated/model-providers/clients/test-model-provider'
 import { updateModelProvider } from '@/api/generated/model-providers/clients/update-model-provider'
@@ -11,6 +12,7 @@ import type { ModelProviderForUpdateDto } from '@/api/generated/models/types/mod
 export const ModelProviderKeys = {
   all: ['model-providers'] as const,
   lists: () => [...ModelProviderKeys.all, 'list'] as const,
+  active: () => [...ModelProviderKeys.all, 'active'] as const,
 }
 
 export function useModelProviders(enabled: boolean) {
@@ -21,9 +23,16 @@ export function useModelProviders(enabled: boolean) {
   })
 }
 
+export function useActiveModelProvider() {
+  return useQuery({
+    queryKey: ModelProviderKeys.active(),
+    queryFn: ({ signal }) => getActiveModelProvider({ signal }),
+  })
+}
+
 function useRefreshedList() {
   const queryClient = useQueryClient()
-  return () => queryClient.invalidateQueries({ queryKey: ModelProviderKeys.lists() })
+  return () => queryClient.invalidateQueries({ queryKey: ModelProviderKeys.all })
 }
 
 export function useAddModelProvider() {

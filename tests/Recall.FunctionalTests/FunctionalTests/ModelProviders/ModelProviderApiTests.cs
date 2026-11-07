@@ -12,6 +12,36 @@ using TestUtilities;
 
 public class ModelProviderApiTests : TestBase
 {
+    [Test]
+    public async Task a_member_reads_the_name_of_the_active_provider_and_no_other_field()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+
+        // Act
+        var answer = await FactoryClient.GetAsync(ApiRoutes.ModelProviders.Active);
+        var list = await FactoryClient.GetAsync(ApiRoutes.ModelProviders.Root);
+        var body = await answer.Content.ReadAsStringAsync();
+
+        // Assert
+        answer.StatusCode.ShouldBe(HttpStatusCode.OK);
+        body.ShouldBe($$"""{"name":"{{scenario.Provider.Name}}"}""");
+        list.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Test]
+    public async Task the_active_provider_has_no_name_until_it_has_a_model()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient, pickModel: false);
+
+        // Act
+        var active = await FactoryClient.GetFromJsonAsync<ActiveModelProviderDto>(ApiRoutes.ModelProviders.Active);
+
+        // Assert
+        active.ShouldNotBeNull().Name.ShouldBeNull();
+    }
+
     private async Task<(FakeModelProvider Fake, string Key)> StartAdminAsync()
     {
         var (admin, _) = await JournalScenario.AddPeopleAsync();

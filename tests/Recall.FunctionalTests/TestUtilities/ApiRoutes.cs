@@ -64,6 +64,7 @@ public static class ApiRoutes
     public static class ModelProviders
     {
         public static string Root => $"{Base}/model-providers";
+        public static string Active => $"{Base}/model-providers/active";
         public static string GetRecord(string id) => $"{Base}/model-providers/{id}";
         public static string Test(string id) => $"{Base}/model-providers/{id}/test";
     }
