@@ -14,6 +14,7 @@ public sealed class StopCleanupEndpoint : IEndpoint
         .MapToApiVersion(ApiVersions.V1)
         .RequireAuthorization()
         .ProducesProblem(StatusCodes.Status404NotFound)
+        .ProducesValidationProblem(StatusCodes.Status422UnprocessableEntity)
         .ProducesValidationProblem(StatusCodes.Status409Conflict);
 
     /// <summary>

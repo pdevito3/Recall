@@ -48,7 +48,7 @@ public class KeyRingWatchTests
         await using var system = services.GetRequiredService<IServiceScopeFactory>().CreateSystemScope();
         var dbContext = system.ServiceProvider.GetRequiredService<AppDbContext>();
         dbContext.Tenants.Add(tenant);
-        dbContext.ModelProviders.Add(ModelProvider.Connect(tenant.Id, ModelProviderKind.Anthropic, "Mine", null, protectedKey, DateTimeOffset.UnixEpoch));
+        dbContext.ModelProviders.Add(ModelProvider.Connect(tenant.Id, ModelProviderKind.Anthropic, "Mine", null, protectedKey));
         await dbContext.SaveChangesAsync();
     }
 

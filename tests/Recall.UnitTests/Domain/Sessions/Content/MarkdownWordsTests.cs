@@ -143,10 +143,12 @@ public partial class MarkdownWordsTests
     [Test]
     public void random_markdown_keeps_each_word()
     {
+        // Arrange
         Console.WriteLine($"Seed {RandomSeed}, {RandomInputs} inputs");
         var random = new Random(RandomSeed);
         string[] glue = ["[", "]", "(", ")", "<", ">", "*", "**", "_", "`", "~~", "==", "++", "|", "!", "#", "\\", "-", ":", "&", ";", "\"", "'", "\n", "\n\n", " ", "  \n", "> ", "- ", "1. ", "- [ ] ", "---", "```", "    ", "[^", "]:", "](", "<!--", "-->", "<div>", "https://", "mailto:", "javascript:", "&amp;", "@", "="];
 
+        // Act and Assert
         for (var input = 0; input < RandomInputs; input++)
         {
             var written = new List<string>();

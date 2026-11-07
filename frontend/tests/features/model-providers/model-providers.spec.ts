@@ -135,6 +135,16 @@ test.describe('the model providers page', () => {
     await expect(at.text('The server cannot read this key. Enter it again.')).toBeVisible()
   })
 
+  test('a key folder that takes no write says that each saved key still works', async ({ page, api }) => {
+    api.mock(signedInAs('Admin'), noSessions, modelProvidersApi.listHolds([aProvider()], 'NotWritable'))
+    const at = modelProviders(page)
+
+    await page.goto('/model-providers')
+
+    await expect(at.text('Each saved API key still works')).toBeVisible()
+    await expect(at.text('a new ring')).toHaveCount(0)
+  })
+
   test('a member who is no Admin does not ask for the providers', async ({ page, api }) => {
     api.mock(signedInAs('User'), noSessions)
     const at = modelProviders(page)

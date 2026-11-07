@@ -43,6 +43,7 @@ public class ProviderTextAndAddressTests
     [Test]
     public void a_message_with_no_form_of_the_key_stays_whole()
     {
+        // Act and Assert
         ProviderFailureText.Shown("Your credit balance is too low.", Key, "fallback").ShouldBe("Your credit balance is too low.");
     }
 
@@ -62,6 +63,7 @@ public class ProviderTextAndAddressTests
     [Arguments("line\nnext", "line\nnext")]
     public void a_hidden_character_does_not_reach_a_message(string message, string shown)
     {
+        // Act and Assert
         ProviderFailureText.Shown(message, null, "fallback").ShouldBe(shown);
     }
 
@@ -77,6 +79,7 @@ public class ProviderTextAndAddressTests
     [Arguments(ModelProviderKind.OpenAiCompatible, "secret words of a service on the network", null)]
     public void only_the_error_format_of_the_provider_shows_a_message(ModelProviderKind kind, string body, string? expected)
     {
+        // Act and Assert
         ProviderFailureText.MessageIn(kind, body).ShouldBe(expected);
     }
 
@@ -113,6 +116,7 @@ public class ProviderTextAndAddressTests
     [Arguments("2606:4700::1111", true, false)]
     public void the_address_rule_names_each_range(string address, bool loopbackIsTheApp, bool refused)
     {
+        // Act and Assert
         ProviderAddressRule.Refuses(IPAddress.Parse(address), loopbackIsTheApp).ShouldBe(refused);
     }
 
@@ -122,7 +126,10 @@ public class ProviderTextAndAddressTests
     [Arguments("http://[::ffff:169.254.169.254]/v1")]
     public void a_refused_address_cannot_be_saved(string baseUrl)
     {
+        // Act
         var save = () => ModelProviderAddress.Normalized(baseUrl);
+
+        // Assert
         save.ShouldThrow<Recall.Server.Exceptions.ValidationException>();
     }
 
@@ -131,6 +138,7 @@ public class ProviderTextAndAddressTests
     [Arguments("https://api.example.com/v1")]
     public void a_private_or_a_public_address_can_be_saved(string baseUrl)
     {
+        // Act and Assert
         ModelProviderAddress.Normalized(baseUrl).ShouldBe(baseUrl);
     }
 }

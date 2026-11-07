@@ -51,11 +51,11 @@ public static class JobHosting
         Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
     };
 
-    /// <summary>The pool holds one job of each queue, so a queue limit is what a tenant can hold, and other tenants keep the rest.</summary>
+    /// <summary>A queue limit is what a tenant can hold, and the pool has room for each queue at its limit.</summary>
     public static WorkerGroupOptions CleanupWorkers(JobOptions settings) => new()
     {
         Name = "cleanup",
-        PoolSize = CleanupQueues.Count,
+        PoolSize = CleanupQueues.Workers,
         Policy = CleanupQueues.Policy,
         PollInterval = TimeSpan.FromSeconds(settings.PollSeconds),
         ShutdownBudget = JobShutdownBudget,

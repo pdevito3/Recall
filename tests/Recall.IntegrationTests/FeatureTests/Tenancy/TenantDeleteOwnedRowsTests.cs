@@ -32,7 +32,7 @@ public class TenantDeleteOwnedRowsTests : TestBase
             .AddAgent(out _, a => a.Permissions = [Permission.Names.ReadAgents])
             // new-feature:tenant-owned-rows
             .BuildAsync();
-        var provider = ModelProvider.Connect(tenant.Id, ModelProviderKind.Anthropic, "Mine", null, "protected value", DateTimeOffset.UnixEpoch);
+        var provider = ModelProvider.Connect(tenant.Id, ModelProviderKind.Anthropic, "Mine", null, "protected value");
         await scope.ExecuteDbContextAsync(async db =>
         {
             db.ModelProviders.Add(provider);

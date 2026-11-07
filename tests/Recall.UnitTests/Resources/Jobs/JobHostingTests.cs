@@ -102,7 +102,7 @@ public class JobHostingTests
         var cleanups = JobHosting.CleanupWorkers(new JobOptions());
 
         // Assert
-        cleanups.PoolSize.ShouldBe(CleanupQueues.Count);
+        cleanups.PoolSize.ShouldBe(CleanupQueues.Count * CleanupQueues.JobsAtOnceInAQueue);
         cleanups.Policy.ShouldBeOfType<DispatchPolicy.Weighted>().Queues.ShouldBe(CleanupQueues.All);
         CleanupQueues.All.ShouldNotContain(JobHosting.SystemQueue);
         JobHosting.SystemWorkers(new JobOptions()).Policy.ShouldBeOfType<DispatchPolicy.Strict>().Queues.ShouldBe([JobHosting.SystemQueue]);

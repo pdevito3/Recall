@@ -15,7 +15,10 @@ public static class CleanupQueues
 
     public const int Count = 8;
 
-    public const int JobsAtOnceInAQueue = 2;
+    public const int JobsAtOnceInAQueue = 3;
+
+    /// <summary>Each queue can fill its limit at one time, so a queue at its limit takes no worker from another queue.</summary>
+    public const int Workers = Count * JobsAtOnceInAQueue;
 
     private const uint FnvOffset = 2166136261;
     private const uint FnvPrime = 16777619;

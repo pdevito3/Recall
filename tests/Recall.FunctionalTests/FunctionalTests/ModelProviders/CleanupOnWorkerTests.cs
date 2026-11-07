@@ -194,7 +194,7 @@ public class CleanupOnWorkerTests
 
     [Test]
     [Property("Rule", "SES-43")]
-    public async Task hung_calls_of_one_queue_hold_two_workers_and_leave_the_others_to_other_queues()
+    public async Task hung_calls_of_one_queue_hold_its_limit_and_leave_the_others_to_other_queues()
     {
         // Arrange
         var key = CleanupScenario.NewKey();

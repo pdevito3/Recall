@@ -18,6 +18,8 @@ export const stopCleanupStatus404Schema = problemDetailsSchema
 
 export const stopCleanupStatus409Schema = validationProblemDetailsSchema
 
+export const stopCleanupStatus422Schema = validationProblemDetailsSchema
+
 export const stopCleanupResponseSchema = stopCleanupStatus200Schema
 
-export const stopCleanupErrorSchema = z.union([stopCleanupStatus401Schema, stopCleanupStatus404Schema, stopCleanupStatus409Schema])
+export const stopCleanupErrorSchema = z.union([stopCleanupStatus401Schema, stopCleanupStatus404Schema, stopCleanupStatus409Schema, stopCleanupStatus422Schema])
