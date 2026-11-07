@@ -4,9 +4,12 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Recall.Server.Databases;
 using Recall.Server.Domain.Recordings;
 using Recall.Server.Domain.Recordings.Dtos;
 using Recall.Server.Domain.Recordings.Features;
+using Recall.Server.Domain.Tenants;
 using Recall.Server.Resources.Storage;
 using Sessions;
 using Shouldly;
@@ -46,6 +49,59 @@ public class RecordingApiTests : TestBase
         // Assert
         replay.StatusCode.ShouldBe(HttpStatusCode.OK);
         (await replay.Content.ReadFromJsonAsync<RecordingDto>())!.Id.ShouldBe(first.Id);
+    }
+
+    [Test]
+    [Property("Rule", "REC-11")]
+    public async Task a_delete_that_races_a_slice_write_never_gives_a_server_error()
+    {
+        // Arrange
+        var (sessionId, _, _) = await SignedInWithSessionAsync();
+        var slices = Enumerable.Range(0, 24).Select(i => (byte[])[0x1A, 0x45, 0xDF, 0xA3, (byte)i, 1, 2, 3]).ToList();
+        var answers = new List<HttpStatusCode>();
+
+        // Act
+        for (var round = 0; round < 12; round++)
+        {
+            var recording = await FactoryClient.AddRecordingAsync(sessionId);
+            var writes = slices.Select((slice, index) => FactoryClient.PutSliceAsync(recording.Id, index, slice)).ToList();
+            await Task.Delay(round % 4);
+            var delete = await FactoryClient.DeleteAsync(ApiRoutes.Recordings.GetRecord(recording.Id));
+            answers.AddRange((await Task.WhenAll(writes)).Select(response => response.StatusCode));
+            delete.EnsureSuccessStatusCode();
+        }
+
+        // Assert
+        answers.ShouldNotContain(HttpStatusCode.InternalServerError);
+        answers.ShouldContain(HttpStatusCode.NotFound);
+    }
+
+    [Test]
+    public async Task a_disk_fault_on_a_live_recording_stays_a_fault()
+    {
+        // Arrange
+        var (sessionId, owner, _) = await SignedInWithSessionAsync();
+        var recording = await FactoryClient.AddRecordingAsync(sessionId);
+        var root = Path.Combine(Path.GetTempPath(), $"recall_not_a_folder_{Guid.CreateVersion7():N}");
+        await File.WriteAllBytesAsync(root, [1]);
+        var services = TestingWebApplicationFactory.Instance.Services;
+        await using var scope = services.GetRequiredService<IServiceScopeFactory>().CreateJournalScope(new JournalOwner(owner.Id, owner.TenantId));
+        var handler = new StoreRecordingSlice.Handler(
+            scope.ServiceProvider.GetRequiredService<AppDbContext>(),
+            new FileStore(Options.Create(new FileStoreOptions { Root = root })));
+
+        try
+        {
+            // Act
+            var write = () => handler.Handle(new StoreRecordingSlice.Command(recording.Id, 0, [0x1A, 0x45, 0xDF, 0xA3, 1, 2, 3, 4]), CancellationToken.None);
+
+            // Assert
+            await Should.ThrowAsync<IOException>(write);
+        }
+        finally
+        {
+            File.Delete(root);
+        }
     }
 
     [Test]
