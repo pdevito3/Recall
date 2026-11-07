@@ -130,7 +130,8 @@ for (const [width, height] of [
     }).toEqual([])
   })
 
-  test(`at ${width}x${height} the header and footer of a long form do not hide the field in focus`, async () => {
+  // 39 key presses, each a round trip to the browser. This takes 5 to 10 s at 0% idle CPU, over the 15 s limit at worst.
+  test(`at ${width}x${height} the header and footer of a long form do not hide the field in focus`, { timeout: 30_000 }, async () => {
     await page.viewport(width, height)
     render(<FormDialog title={longTitle} description={longDescription} />)
     await openAnimationsFinished()
