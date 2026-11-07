@@ -57,6 +57,8 @@ An answer is Markdown, and the server turns it into the stored document. The tim
 | The work of links: for each block between blank lines, the count of `](` and `]:` times the length of the block | 500 000 000 | Markdig reads to the end of the block for each open link, so `[a](` repeated takes time that grows with the square of the length: 371 s for 1 M characters. One unit took about 1.5 ns, so the bound is under 1 s. |
 | Marks nested in marks | 64 levels | A deeper tree ended the process with a stack overflow, which no `catch` can stop. |
 
+On the release image with a limit of 1 GiB, each text that passes the bounds and is the worst of its form was stored, one at a time and four at the same time: 11 000 open links, 33 000 signs of emphasis, and a table of 8 300 rows. The peak was 604 MB, and the slowest took 8.2 s from the request to the answer. With a limit of 512 MiB, one at a time was stored, but four tables at the same time stopped the process with exit 137. So `docs/install.md` asks for 1 GiB.
+
 A text over a bound is stored as the source: each line is a paragraph of plain text, and no word is lost. A conversion that throws `OutOfMemoryException`, a parse error, or a time-out of a regular expression also stores the source, with no new try. The rule of the words then compares the shown words with the source, and a form that would change them stays as the source too.
 
 The test button always answers with 200 and with one of these kinds. A person can also stop a run: see [The Cleanup job](background-jobs.md#the-cleanup-job).

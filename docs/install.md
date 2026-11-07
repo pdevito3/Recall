@@ -39,6 +39,8 @@ To install the model on a machine with no network, copy the files `tokens.txt`, 
 
 One transcription needs up to 1.5 GB of memory, and Recall runs one at a time. It uses 2 CPU threads by default. Set `Transcription__Threads` to change this.
 
+Give the container at least 1 GiB of memory, and add the 1.5 GB of a transcription to it. A Cleanup turns the Markdown of a model into a document, and the largest text that a Draft can hold uses up to about 600 MB while it does so. With a limit of 512 MiB, four such results at the same time stopped the server. With a limit of 1 GiB, each of them was stored.
+
 A person can download the audio until 7 days after the text is saved. Audio that did not become text stays stored until the person deletes the Recording.
 
 The licenses of ffmpeg, sherpa-onnx, ONNX Runtime, and the Parakeet model are in `/app/ThirdPartyNotices` in the image.
