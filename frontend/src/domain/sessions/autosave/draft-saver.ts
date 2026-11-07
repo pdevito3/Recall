@@ -15,7 +15,7 @@ import { holdsEachWordOf, joinWords, mentionedPersonIds, mergeWords, plainPrevie
 import { pointAtCreatedSession, pointAtNewEntry } from './composer-pointer'
 import { prefixOfOutbox, readOutbox, removeFromOutbox, storedEntriesIn, writeToOutbox, type OutboxEntry, type StoredEntry } from './outbox'
 import { queueWithRefusal, queueWithUnanswered, type SaveStatus, type Stamped } from './save-queue'
-import { isARowThatIsGone, SerialSaver } from './serial-saver'
+import { isARowThatIsGone, isFinalRefusal, SerialSaver } from './serial-saver'
 import { hasWriterLeft, isKeyStored, takeKeysOfTabsThatLeft, thisTab, type OtherTabReport } from './tab-keys'
 
 export type DraftConflict = 'wordsMovedToHistory' | 'discardedInAnotherTab' | null
@@ -462,7 +462,17 @@ export class DraftSaver {
       return { reply: null, newest, isKeyWithAnotherTab: this.isNewestTextInAKey(change) }
     }
     const reply = await this.saveWords(change, signal)
-    return { reply, newest: reply.outcome === 'Kept' || reply.outcome === 'Lost' ? await this.readForAnswer(signal) : null }
+    return { reply, newest: reply.outcome === 'Kept' || reply.outcome === 'Lost' ? await this.readAfterSave(signal) : null }
+  }
+
+  /** A refused read is no refusal of the words, so the same save goes again. A read of an entry that is gone moves the words. */
+  private async readAfterSave(signal: AbortSignal) {
+    try {
+      return await this.readForAnswer(signal)
+    } catch (error) {
+      if (isFinalRefusal(error) && !isARowThatIsGone(error)) throw new Error(`The read after a save failed: ${error.displayMessage}`)
+      throw error
+    }
   }
 
   private isNewestTextInAKey(change: Stamped<string>) {

@@ -635,6 +635,26 @@ test('a failed read after a loss sends the same save again, and it raises no not
   vi.useRealTimers()
 })
 
+test('a refused read after a loss is no refusal of the words, so the same save goes again', async () => {
+  vi.useFakeTimers()
+  vi.mocked(saveRawDraft).mockResolvedValue(lostWithNoNumber())
+  const queryClient = new QueryClient()
+  const read = vi.spyOn(queryClient, 'fetchQuery').mockRejectedValueOnce(new ProblemDetailsError({ type: 'about:blank', title: 'Not now.', status: 422 }))
+  read.mockResolvedValue(entryWithWords('newer words', 7))
+  const saver = new DraftSaver(target, queryClient)
+
+  saver.edit('my words')
+  saver.flush()
+  await vi.advanceTimersByTimeAsync(10)
+  expect(saver.getSnapshot().status.kind).toBe('waiting')
+
+  await vi.advanceTimersByTimeAsync(3000)
+  expect(saveRawDraft).toHaveBeenCalledTimes(2)
+  expect(saver.getSnapshot().conflict).toBe('wordsMovedToHistory')
+  saver.stop()
+  vi.useRealTimers()
+})
+
 test('words that the Draft holds raise no notice, and the page takes the Draft', async () => {
   vi.mocked(saveRawDraft).mockResolvedValue(lostWithNoNumber())
   const saver = new DraftSaver(target, clientAnswering(doc('my words', 'a chunk'), 7))
