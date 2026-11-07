@@ -12,7 +12,7 @@ export const recordingDtoSchema = z.object({
   format: z.enum(['Webm', 'Mp4']),
   engine: z.enum(['Local']),
   status: z.enum(['Receiving', 'Received', 'Transcribing', 'Transcribed', 'Failed']),
-  problem: z.enum(['None', 'WaitingForModel', 'AudioUnreadable', 'AudioMissing', 'OutOfMemory', 'EngineCrashed', 'EngineStalled', 'EngineNotInstalled', 'TooManyAttempts', 'TooLong', 'TextTooLong', 'NoWordsFound']),
+  problem: z.enum(['None', 'WaitingForModel', 'AudioUnreadable', 'AudioMissing', 'DiskFull', 'OutOfMemory', 'EngineKilled', 'EngineCrashed', 'EngineStalled', 'EngineNotInstalled', 'TooManyAttempts', 'TooLong', 'TextTooLong', 'NoWordsFound']),
   problemText: z.string().nullish().describe('What happened and what to do, for a person. Null when nothing is wrong.'),
   highestStoredSlice: z.int32().nullish(),
   storedSlices: z.array(z.int32()).describe('The indexes that are stored, so that a client can send the ones that a broken upload lost.'),

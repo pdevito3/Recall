@@ -45,6 +45,7 @@ The `recordings` table is not in the sync feed. The text of a Recording reaches 
 | REC-12 | A machine with no model and no network stores the audio with a true status. The Recording stays Received with the reason, and the download tries again. | `BeginTranscription`, `DownloadModelJob` | |
 | REC-13 | At most one transcription runs at a time, in a subprocess that a token stop kills. The memory of the host is out of reach of the worker: the kernel kills the worker first. | The `transcription` worker group with a pool of 1, `LocalParakeetEngine` | |
 | REC-14 | A person can see that the jobs stopped, with what to do. | `GetTranscriptionStatus` | |
+| REC-15 | A failure names a cause only when the server has seen it. `DiskFull` needs the words of the disk error from ffmpeg. `OutOfMemory` needs a rise of `oom_kill` in `memory.events` during the run. Other kills read `EngineKilled`, with no claim of a cause. | `LocalParakeetEngine` | |
 
 ## 4. Rejected rows
 

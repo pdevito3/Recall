@@ -25,6 +25,12 @@ public class LocalParakeetEngineTests
             return path;
         }
 
+        public string MemoryEvents => Path.Combine(Folder, "memory.events");
+
+        public string KilledForMemory() => $"""printf 'oom_group_kill 0\noom_kill 3\n' > "{MemoryEvents}"; kill -9 $$""";
+
+        public void WriteMemoryEvents() => File.WriteAllText(MemoryEvents, "low 0\noom 2\noom_kill 2\noom_group_kill 0\n");
+
         public string WorkingFfmpeg() => Script("ffmpeg", """for last; do :; done; head -c 100 /dev/zero > "$last" """);
 
         public LocalParakeetEngine Engine(string worker, string? ffmpeg = null, int stallMinutes = 10)
@@ -35,6 +41,7 @@ public class LocalParakeetEngineTests
                 FfmpegPath = ffmpeg ?? WorkingFfmpeg(),
                 WorkerPath = worker,
                 StallMinutes = stallMinutes,
+                MemoryEventsPath = MemoryEvents,
             });
             return new LocalParakeetEngine(new ModelStore(settings), settings);
         }
@@ -100,7 +107,61 @@ public class LocalParakeetEngineTests
     }
 
     [Test]
-    public async Task a_worker_killed_by_the_kernel_is_out_of_memory()
+    [Property("Rule", "REC-15")]
+    public async Task a_worker_killed_for_memory_is_out_of_memory()
+    {
+        // Arrange
+        using var rig = new Rig();
+        rig.WriteMemoryEvents();
+        var engine = rig.Engine(rig.Script("worker", rig.KilledForMemory()));
+
+        // Act
+        var problem = await ProblemOfAsync(engine, rig.Input());
+
+        // Assert
+        problem.ShouldBe(RecordingProblem.OutOfMemory);
+    }
+
+    [Test]
+    [Property("Rule", "REC-15")]
+    public async Task ffmpeg_killed_for_memory_is_out_of_memory()
+    {
+        // Arrange
+        using var rig = new Rig();
+        rig.WriteMemoryEvents();
+        var engine = rig.Engine(rig.Script("worker", ChunkLine), rig.Script("ffmpeg", rig.KilledForMemory()));
+
+        // Act
+        var problem = await ProblemOfAsync(engine, rig.Input());
+
+        // Assert
+        problem.ShouldBe(RecordingProblem.OutOfMemory);
+    }
+
+    [Test]
+    [Property("Rule", "REC-15")]
+    public async Task a_kill_with_no_new_memory_kill_claims_no_cause()
+    {
+        // Arrange
+        using var workerRig = new Rig();
+        using var ffmpegRig = new Rig();
+        workerRig.WriteMemoryEvents();
+        ffmpegRig.WriteMemoryEvents();
+        var worker = workerRig.Engine(workerRig.Script("worker", "kill -9 $$"));
+        var ffmpeg = ffmpegRig.Engine(ffmpegRig.Script("worker", ChunkLine), ffmpegRig.Script("ffmpeg", "kill -9 $$"));
+
+        // Act
+        var ofWorker = await ProblemOfAsync(worker, workerRig.Input());
+        var ofFfmpeg = await ProblemOfAsync(ffmpeg, ffmpegRig.Input());
+
+        // Assert
+        ofWorker.ShouldBe(RecordingProblem.EngineKilled);
+        ofFfmpeg.ShouldBe(RecordingProblem.EngineKilled);
+    }
+
+    [Test]
+    [Property("Rule", "REC-15")]
+    public async Task a_kill_on_a_server_that_cannot_read_the_memory_count_claims_no_cause()
     {
         // Arrange
         using var rig = new Rig();
@@ -110,7 +171,7 @@ public class LocalParakeetEngineTests
         var problem = await ProblemOfAsync(engine, rig.Input());
 
         // Assert
-        problem.ShouldBe(RecordingProblem.OutOfMemory);
+        problem.ShouldBe(RecordingProblem.EngineKilled);
     }
 
     [Test]
@@ -169,6 +230,71 @@ public class LocalParakeetEngineTests
         // Assert
         problem.ShouldBe(RecordingProblem.AudioUnreadable);
         File.Exists(Path.Combine(rig.Folder, "work.wav")).ShouldBeFalse();
+    }
+
+    [Test]
+    [Property("Rule", "REC-15")]
+    public async Task a_full_disk_during_the_decode_is_a_full_disk_and_a_later_try_works()
+    {
+        // Arrange
+        using var rig = new Rig();
+        var full = Path.Combine(rig.Folder, "full");
+        await File.WriteAllTextAsync(full, "");
+        var ffmpeg = rig.Script("ffmpeg", $"""
+            if [ -e "{full}" ]; then
+              echo '[out#0/wav @ 0x79e3af0] Error writing trailer: No space left on device' >&2
+              exit 228
+            fi
+            for last; do :; done; head -c 100 /dev/zero > "$last"
+            """);
+        var engine = rig.Engine(rig.Script("worker", ChunkLine), ffmpeg);
+
+        // Act
+        var problem = await ProblemOfAsync(engine, rig.Input());
+        var workFileLeft = File.Exists(Path.Combine(rig.Folder, "work.wav.part"));
+        File.Delete(full);
+        var chunks = await CollectAsync(engine, rig.Input());
+
+        // Assert
+        problem.ShouldBe(RecordingProblem.DiskFull);
+        workFileLeft.ShouldBeFalse();
+        chunks.Count.ShouldBe(1);
+    }
+
+    [Test]
+    [Property("Rule", "REC-15")]
+    public async Task a_full_disk_stays_in_view_past_a_long_error_stream()
+    {
+        // Arrange
+        using var rig = new Rig();
+        var ffmpeg = rig.Script("ffmpeg", """
+            i=0; while [ $i -lt 2000 ]; do echo "a warning about a packet of the audio number $i" >&2; i=$((i+1)); done
+            echo 'Error closing file: No space left on device' >&2
+            exit 1
+            """);
+        var engine = rig.Engine(rig.Script("worker", ChunkLine), ffmpeg);
+
+        // Act
+        var problem = await ProblemOfAsync(engine, rig.Input());
+
+        // Assert
+        problem.ShouldBe(RecordingProblem.DiskFull);
+    }
+
+    [Test]
+    [Property("Rule", "REC-8")]
+    public async Task the_error_stream_of_ffmpeg_stays_out_of_the_fault()
+    {
+        // Arrange
+        using var rig = new Rig();
+        var ffmpeg = rig.Script("ffmpeg", "echo 'secret-title: No space left on device' >&2; exit 1");
+        var engine = rig.Engine(rig.Script("worker", ChunkLine), ffmpeg);
+
+        // Act
+        var fault = await Should.ThrowAsync<TranscriptionEngineException>(() => CollectAsync(engine, rig.Input()));
+
+        // Assert
+        fault.ToString().ShouldNotContain("secret-title");
     }
 
     [Test]

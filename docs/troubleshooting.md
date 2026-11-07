@@ -94,7 +94,9 @@ Read `GET /api/v1/recordings/{id}`. The audio stays stored for each of these val
 |-----------|-------|------------|
 | `WaitingForModel` | The speech model is not on the server, and the download has not finished | Give the server a network, or copy the model into `/data/models`. See [Install](install.md#transcribe-audio) |
 | `EngineNotInstalled` | The image has no ffmpeg or no worker | Use the release image, then send `POST /api/v1/recordings/{id}/retry` |
+| `DiskFull` | The disk of the server has no room for the decoded audio | Free some space in `/data`, then retry |
 | `OutOfMemory` | The system stopped the worker because it needed more memory than the container has | Give the container at least 2 GB, then retry |
+| `EngineKilled` | A signal stopped the worker, and the memory count of the container shows no kill. This also shows when the server cannot read `/sys/fs/cgroup/memory.events` (cgroup v1) | Retry. If it stops again, look for what stops processes on the host, and check the memory of the host |
 | `EngineCrashed`, `EngineStalled` | The worker stopped, or it gave no text for 10 minutes | Retry. If it fails again, send a support bundle |
 | `TooManyAttempts` | The server restarted during each try | Find why the server restarts, then retry |
 | `AudioUnreadable` | ffmpeg cannot read the audio | Download the audio, and check that it plays |

@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 
@@ -12,6 +13,9 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
     private const string WorkAudioName = "work.wav";
     private const int BytesPerSample = 2;
     private const int SigkillExitCode = 137;
+    private const int ErrorTailLength = 4096;
+    private const string DiskFullError = "No space left on device";
+    private const string OomKillCounter = "oom_kill ";
 
     private static readonly JsonSerializerOptions WorkerLines = new(JsonSerializerDefaults.Web);
 
@@ -25,6 +29,7 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
         var wav = await WorkAudioAsync(input, cancellationToken);
         var settings = options.Value;
 
+        var oomKillsBefore = ReadOomKills();
         using var process = Start(WorkerCommand(settings, wav, input.StartSample), settings.Threads);
         using var killOnCancel = cancellationToken.Register(() => KillQuietly(process));
         var discardErrors = DiscardAsync(process.StandardError);
@@ -41,7 +46,9 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
 
             await process.WaitForExitAsync(cancellationToken);
             if (process.ExitCode != 0)
-                throw new TranscriptionEngineException(ProblemOfExit(process.ExitCode));
+                throw new TranscriptionEngineException(process.ExitCode == SigkillExitCode
+                    ? ProblemOfKill(oomKillsBefore)
+                    : RecordingProblem.EngineCrashed);
         }
         finally
         {
@@ -50,8 +57,27 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
         }
     }
 
-    public static RecordingProblem ProblemOfExit(int exitCode)
-        => exitCode == SigkillExitCode ? RecordingProblem.OutOfMemory : RecordingProblem.EngineCrashed;
+    private RecordingProblem ProblemOfKill(long? oomKillsBefore)
+        => ReadOomKills() > oomKillsBefore ? RecordingProblem.OutOfMemory : RecordingProblem.EngineKilled;
+
+    // The kernel counts an OOM kill before it sends the signal, so the count is true by the time the exit code is.
+    private long? ReadOomKills()
+    {
+        try
+        {
+            foreach (var line in File.ReadLines(options.Value.MemoryEventsPath))
+            {
+                if (line.StartsWith(OomKillCounter, StringComparison.Ordinal)
+                    && long.TryParse(line.AsSpan(OomKillCounter.Length), CultureInfo.InvariantCulture, out var kills))
+                    return kills;
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+        }
+
+        return null;
+    }
 
     private async Task<string> WorkAudioAsync(TranscriptionInput input, CancellationToken cancellationToken)
     {
@@ -77,19 +103,22 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
             "-ac", "1", "-c:a", "pcm_s16le", "-f", "wav", partial,
         ];
 
+        var oomKillsBefore = ReadOomKills();
         using var process = Start(command, threads: 1);
         using var killOnCancel = cancellationToken.Register(() => KillQuietly(process));
         process.StandardInput.Close();
         var discardOutput = DiscardAsync(process.StandardOutput);
-        await DiscardAsync(process.StandardError);
+        var errorTail = await ReadTailAsync(process.StandardError);
         await discardOutput;
         await process.WaitForExitAsync(cancellationToken);
         if (process.ExitCode != 0)
         {
             File.Delete(partial);
             throw new TranscriptionEngineException(process.ExitCode == SigkillExitCode
-                ? RecordingProblem.OutOfMemory
-                : RecordingProblem.AudioUnreadable);
+                ? ProblemOfKill(oomKillsBefore)
+                : errorTail.Contains(DiskFullError, StringComparison.Ordinal)
+                    ? RecordingProblem.DiskFull
+                    : RecordingProblem.AudioUnreadable);
         }
 
         File.Move(partial, wav, overwrite: true);
@@ -188,6 +217,27 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
         catch (IOException)
         {
         }
+    }
+
+    private static async Task<string> ReadTailAsync(StreamReader output)
+    {
+        var tail = new StringBuilder();
+        var buffer = new char[ErrorTailLength];
+        try
+        {
+            int read;
+            while ((read = await output.ReadAsync(buffer)) > 0)
+            {
+                tail.Append(buffer, 0, read);
+                if (tail.Length > ErrorTailLength)
+                    tail.Remove(0, tail.Length - ErrorTailLength);
+            }
+        }
+        catch (IOException)
+        {
+        }
+
+        return tail.ToString();
     }
 
     private static void KillQuietly(Process process)
