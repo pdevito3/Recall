@@ -218,7 +218,7 @@ test.describe('the users of a tenant, for a member who cannot see them', () => {
 test.describe('the users pages on a 390 px phone', () => {
   test.use({ actor: as.user('Ana Admin'), viewport: { width: 390, height: 844 } })
 
-  test('each user link and each pager button is a touch target of 44 px', async ({ page, api }) => {
+  test('each user link, each pager button, and the way back to the list is a touch target of 44 px', async ({ page, api }) => {
     const grace = aUser().named('Grace Hopper').seenByAdmin()
     api.mock(usersApi.listReturns([grace, aUser().named('Alan Turing')], { total: 25 }), usersApi.oneIs(grace))
     const users = usersPage(page)
@@ -234,7 +234,7 @@ test.describe('the users pages on a 390 px phone', () => {
 
     await users.openUser('Grace Hopper', grace.build().id)
 
-    expect((await users.at.allUsersLink.boundingBox())?.height).toBeGreaterThanOrEqual(44)
+    expect((await users.at.usersBreadcrumbLink.boundingBox())?.height).toBeGreaterThanOrEqual(44)
   })
 })
 

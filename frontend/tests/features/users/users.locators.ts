@@ -18,7 +18,7 @@ export const users = (page: Page) => {
     nextPage: page.getByRole('navigation', { name: 'Pages of users' }).getByRole('button', { name: 'Next' }),
     nameLinks: grid.getByRole('link'),
     pagerButtons: page.getByRole('navigation', { name: 'Pages of users' }).getByRole('button'),
-    allUsersLink: page.getByRole('link', { name: 'All users', exact: true }),
+    usersBreadcrumbLink: page.getByRole('navigation', { name: 'breadcrumb' }).getByRole('link', { name: 'Users', exact: true }),
     emptyPage: page.getByText(/^There are no users on page \d+\./),
     firstPageLink: page.getByRole('link', { name: 'Go to page 1' }),
     loadFailure: page.getByRole('alert').filter({ hasText: 'The users did not load.' }),
