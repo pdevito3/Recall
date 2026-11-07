@@ -30,17 +30,18 @@ public static class CleanupQueues
 
     /// <summary>
     /// The queue of a new Cleanup of <paramref name="tenantId"/>, from the queue and the tenant of each Cleanup that has not
-    /// ended. A tenant stays in the queue that it uses, so its limit holds. A tenant with none takes its own hash queue if no
-    /// other tenant uses it, then the first queue that no tenant uses, and only when each queue is in use, its hash queue.
+    /// ended. A tenant stays in the queue that it uses, so its limit holds. A tenant with none takes the queue with the fewest
+    /// such Cleanups, its own hash queue first on a tie. So it takes a queue that no tenant uses while one is free, and when each
+    /// queue is in use, a queue with a free slot before a queue that a hung tenant fills.
     /// </summary>
     public static string Pick(string tenantId, IReadOnlyCollection<(string Queue, string TenantId)> unfinished)
     {
         if (unfinished.FirstOrDefault(job => job.TenantId == tenantId).Queue is { } own)
             return own;
 
-        var used = unfinished.Select(job => job.Queue).ToHashSet(StringComparer.Ordinal);
+        var load = unfinished.CountBy(job => job.Queue).ToDictionary(StringComparer.Ordinal);
         var hashed = Of(tenantId);
-        return used.Contains(hashed) ? All.FirstOrDefault(queue => !used.Contains(queue)) ?? hashed : hashed;
+        return All.OrderBy(queue => load.GetValueOrDefault(queue)).ThenBy(queue => queue != hashed).First();
     }
 
     public static string Of(string tenantId)

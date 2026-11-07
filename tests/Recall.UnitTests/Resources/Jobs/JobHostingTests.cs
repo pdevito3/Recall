@@ -147,6 +147,24 @@ public class JobHostingTests
     }
 
     [Test]
+    [Property("Rule", "SES-44")]
+    public void a_new_tenant_takes_a_queue_with_a_free_slot_when_each_queue_is_in_use()
+    {
+        // Arrange
+        var hashed = CleanupQueues.Of("tenant-new");
+        var oneEach = CleanupQueues.All.Where(queue => queue != hashed).Select((queue, i) => (queue, $"other-{i}"));
+        var hungInHashed = Enumerable.Repeat((hashed, "tenant-hung"), CleanupQueues.JobsAtOnceInAQueue + 1);
+        var unfinished = oneEach.Concat(hungInHashed).ToList();
+
+        // Act
+        var picked = CleanupQueues.Pick("tenant-new", unfinished);
+
+        // Assert
+        picked.ShouldNotBe(hashed);
+        unfinished.Count(job => job.Item1 == picked).ShouldBeLessThan(CleanupQueues.JobsAtOnceInAQueue);
+    }
+
+    [Test]
     public void a_tenant_keeps_its_queue_in_each_process_and_tenants_spread_over_the_queues()
     {
         // Act
