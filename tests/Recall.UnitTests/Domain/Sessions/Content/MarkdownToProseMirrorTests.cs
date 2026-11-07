@@ -60,6 +60,9 @@ public class MarkdownToProseMirrorTests
     [Arguments("a~~b~~c")]
     [Arguments("2*3*4")]
     [Arguments("w1**w2**")]
+    [Arguments("*été*בית")]
+    [Arguments("é**té**é")]
+    [Arguments("नमस्ते**हिन्दी**नमस्ते")]
     public void a_mark_inside_a_word_stays_as_text_and_the_rest_keeps_its_form(string inWord)
     {
         // Arrange

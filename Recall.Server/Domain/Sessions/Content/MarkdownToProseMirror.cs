@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -114,8 +115,8 @@ public static class MarkdownToProseMirror
         if (string.IsNullOrWhiteSpace(markdown))
             return """{"type":"doc","content":[]}""";
 
-        if (MarkdownCost.IsAboveBound(markdown))
         markdown = WithLineFeeds(markdown);
+        if (MarkdownCost.IsAboveBound(markdown))
             return SourceAsText(markdown);
 
         try
@@ -128,10 +129,10 @@ public static class MarkdownToProseMirror
         }
     }
 
-    // ---- blocks -------------------------------------------------------------------------------
     /// <summary>The parser ends a line at "\r\n", "\r", and "\n". The bound and the source read a line to "\n", so each reads the lines of the parser.</summary>
     internal static string WithLineFeeds(string markdown) => markdown.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
 
+    // ---- blocks -------------------------------------------------------------------------------
 
     private static void AppendBlock(JsonArray target, Block block)
     {
@@ -475,12 +476,25 @@ public static class MarkdownToProseMirror
         return (inline as LiteralInline)?.Content.ToString();
     }
 
-    private static bool StartsAWord(string? text)
     /// <summary>A combining mark or a vowel sign is a part of the letter before it, also over a sign of the form.</summary>
-        => Rune.DecodeFromUtf16(text, out var rune, out _) == OperationStatus.Done && MarkdownWords.JoinsItsNeighbours(rune);
+    private static bool StartsAWord(string? text)
+        => Rune.DecodeFromUtf16(text, out var rune, out _) == OperationStatus.Done && (IsCombining(rune) || MarkdownWords.JoinsItsNeighbours(rune));
 
     private static bool EndsAWord(string? text)
-        => Rune.DecodeLastFromUtf16(text, out var rune, out _) == OperationStatus.Done && MarkdownWords.JoinsItsNeighbours(rune);
+    {
+        var rest = text.AsSpan();
+        while (Rune.DecodeLastFromUtf16(rest, out var rune, out var length) == OperationStatus.Done)
+        {
+            if (!IsCombining(rune))
+                return MarkdownWords.JoinsItsNeighbours(rune);
+            rest = rest[..^length];
+        }
+
+        return false;
+    }
+
+    private static bool IsCombining(Rune rune)
+        => Rune.GetUnicodeCategory(rune) is UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark or UnicodeCategory.EnclosingMark;
 
     private static void AppendLink(JsonArray target, ContainerInline link, string? url, string? title, MarkSet? marks, int depth)
     {
