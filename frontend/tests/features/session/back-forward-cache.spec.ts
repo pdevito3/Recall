@@ -56,12 +56,15 @@ test.describe('a page that Back restores from the back-forward cache', () => {
     await expect(session.at.navigation).toHaveCount(0)
   })
 
-  test('loads again when the check does not answer in time, so a person does not wait on an empty page', async ({ page }) => {
+  test('loads again when the check does not answer in time, so a person does not wait on an empty page', async ({ page, api, actor }) => {
     const session = sessionPage(page)
     await session.leavePrivatePageForAnotherDocument()
+    const checksBefore = api.all('get', authPaths.me).length
 
-    await page.route(`**${authPaths.me}`, () => {}, { times: 1 })
+    api.mock({ ...authApi.userIs(actor), neverAnswers: true })
     await session.goBackToTheCachedPage()
+    await expect.poll(() => api.all('get', authPaths.me).length).toBe(checksBefore + 1)
+    api.mock(authApi.userIs(actor))
 
     await expect.poll(() => session.isStillTheFirstLoad(), { timeout: 15000 }).toBe(false)
   })
