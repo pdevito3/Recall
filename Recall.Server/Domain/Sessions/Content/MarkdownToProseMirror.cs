@@ -38,7 +38,7 @@ public static class MarkdownToProseMirror
     //     ~tilde~ and ^carets^ stay literal text.
     //   - TaskLists so "- [ ]" / "- [x]" parse into list items carrying a TaskList inline marker.
     // Everything else stays CommonMark.
-    private static readonly MarkdownPipeline Pipeline =
+    internal static readonly MarkdownPipeline Pipeline =
         new MarkdownPipelineBuilder()
             .UsePipeTables()
             .UseGridTables()
@@ -78,7 +78,7 @@ public static class MarkdownToProseMirror
             {
                 var end = markdown.IndexOf('\n', start);
                 end = end < 0 ? markdown.Length : end;
-                var line = markdown.AsSpan(start, end - start).TrimEnd('\r');
+                var line = markdown.AsSpan(start, end - start);
                 if (!line.IsWhiteSpace())
                 {
                     writer.WriteStartObject();
@@ -115,6 +115,7 @@ public static class MarkdownToProseMirror
             return """{"type":"doc","content":[]}""";
 
         if (MarkdownCost.IsAboveBound(markdown))
+        markdown = WithLineFeeds(markdown);
             return SourceAsText(markdown);
 
         try
@@ -128,6 +129,9 @@ public static class MarkdownToProseMirror
     }
 
     // ---- blocks -------------------------------------------------------------------------------
+    /// <summary>The parser ends a line at "\r\n", "\r", and "\n". The bound and the source read a line to "\n", so each reads the lines of the parser.</summary>
+    internal static string WithLineFeeds(string markdown) => markdown.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+
 
     private static void AppendBlock(JsonArray target, Block block)
     {
@@ -472,6 +476,7 @@ public static class MarkdownToProseMirror
     }
 
     private static bool StartsAWord(string? text)
+    /// <summary>A combining mark or a vowel sign is a part of the letter before it, also over a sign of the form.</summary>
         => Rune.DecodeFromUtf16(text, out var rune, out _) == OperationStatus.Done && MarkdownWords.JoinsItsNeighbours(rune);
 
     private static bool EndsAWord(string? text)

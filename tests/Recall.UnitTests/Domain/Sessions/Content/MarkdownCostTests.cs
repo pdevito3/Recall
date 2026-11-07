@@ -14,6 +14,12 @@ public class MarkdownCostTests
 
     private static string Repeat(string text, int count) => new StringBuilder(text.Length * count).Insert(0, text, count).ToString();
 
+    private static string GridTable(string cell)
+    {
+        var border = "+" + Repeat("-", cell.Length + 2) + "+";
+        return $"{border}\n| {cell} |\n{border}";
+    }
+
     public static IEnumerable<Func<string>> EachCostlyText()
     {
         string[] texts =
@@ -47,6 +53,13 @@ public class MarkdownCostTests
             "- > - a\n  >     " + Repeat("- ", 300_000) + "x",
             "> - a\nb\n>     " + Repeat("- ", 300_000) + "x",
             string.Concat(Enumerable.Range(0, 170).Select(line => Repeat(" ", line * 64) + Repeat("- ", 32) + "x\n")),
+            "a\r" + Repeat("- ", 300_000) + "x",
+            "a\r" + Repeat("> ", 300_000) + "x",
+            "> - a\r>     " + Repeat("- ", 300_000) + "x",
+            "> - a\r\n>     " + Repeat("- ", 300_000) + "x",
+            string.Concat(Enumerable.Range(0, 170).Select(line => Repeat(" ", line * 64) + Repeat("- ", 32) + "x\r")),
+            GridTable(Repeat("- ", 150_000) + "x"),
+            "> " + GridTable(Repeat("> ", 150_000) + "x").Replace("\n", "\n> ", StringComparison.Ordinal),
         ];
         return texts.Select<string, Func<string>>(text => () => text);
     }
@@ -55,8 +68,14 @@ public class MarkdownCostTests
     [MethodDataSource(nameof(EachCostlyText))]
     public void a_text_above_the_bound_stays_as_the_source_at_a_bounded_memory(string markdown)
     {
-        // Arrange
-        MarkdownCost.IsAboveBound(markdown).ShouldBeTrue();
+        // Arrange: the text does not get to the parser.
+        var parses = false;
+        MarkdownToProseMirror.ConvertToJson(markdown, _ =>
+        {
+            parses = true;
+            return "";
+        });
+        parses.ShouldBeFalse();
         var before = GC.GetAllocatedBytesForCurrentThread();
 
         // Act
@@ -64,7 +83,7 @@ public class MarkdownCostTests
 
         // Assert
         (GC.GetAllocatedBytesForCurrentThread() - before).ShouldBeLessThan(MostBytesOfOneConversion);
-        var lines = markdown.Split('\n').Where(line => line.Length > 0).ToList();
+        var lines = markdown.Split(["\r\n", "\r", "\n"], StringSplitOptions.None).Where(line => line.Length > 0).ToList();
         var nodes = JsonNode.Parse(json)!["content"]!.AsArray();
         nodes.Count.ShouldBe(lines.Count);
         nodes[0]!["content"]![0]!["text"]!.GetValue<string>().ShouldBe(lines[0]);
@@ -125,7 +144,19 @@ public class MarkdownCostTests
     }
 
     [Test]
-    [Arguments("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -")]
+    [Arguments(63, false)]
+    [Arguments(64, true)]
+    public void the_indent_after_a_quote_counts_to_the_bound(int indentPairs, bool isAbove)
+    {
+        // Arrange: the quote is one block, and each two columns after it can hold one list item that goes on.
+        var markdown = "> - a\n>" + Repeat("  ", indentPairs) + "x";
+
+        // Act and assert
+        MarkdownCost.IsAboveBound(markdown).ShouldBe(isAbove);
+    }
+
+    [Test]
+    [Arguments("- - - - -- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -")]
     [Arguments("> * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *")]
     [Arguments("-      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - x")]
     [Arguments("1234567890. 1. 2. 3. 4. 5. 6. 7. 8. 9. 10. 11. 12. 13. 14. 15. 16. 17. 18. 19. 20. 21. 22. 23. 24. 25. 26. 27. 28. 29. 30. 31. 32. 33.")]

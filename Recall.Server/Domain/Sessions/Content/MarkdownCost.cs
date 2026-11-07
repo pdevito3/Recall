@@ -64,26 +64,36 @@ internal static class MarkdownCost
         }
 
         linkWork += linkStarts * (markdown.Length - blockStart);
-        return marks > MostMarks || linkWork > MostLinkWork || NestsTooDeep(markdown);
+        return marks > MostMarks || linkWork > MostLinkWork || DeepestLine(markdown) > DeepestBlock;
     }
 
-    private static bool NestsTooDeep(string markdown)
+    /// <summary>The most blocks that one line can be in. A line ends at "\n" only, so the text must have the line ends of <see cref="MarkdownToProseMirror.WithLineFeeds"/>.</summary>
+    internal static int DeepestLine(string markdown)
     {
+        var deepest = 0;
         for (var start = 0; start < markdown.Length;)
         {
             var end = markdown.IndexOf('\n', start);
             end = end < 0 ? markdown.Length : end;
-            if (Depth(markdown.AsSpan(start, end - start).TrimEnd('\r')) > DeepestBlock)
-                return true;
+            deepest = Math.Max(deepest, Depth(markdown.AsSpan(start, end - start)));
             start = end + 1;
         }
 
-        return false;
+        return deepest;
     }
 
+    /// <summary>A cell of a grid table holds blocks of its own, so the blocks of a line can start again after each "|".</summary>
     private static int Depth(ReadOnlySpan<char> line)
     {
         line = line[..ThematicBreakStart(line)];
+        var depth = 0;
+        foreach (var cell in line.Split('|'))
+            depth += DepthFromStart(line[cell]);
+        return depth;
+    }
+
+    private static int DepthFromStart(ReadOnlySpan<char> line)
+    {
         var depth = 0;
         var at = 0;
         while (true)
@@ -117,7 +127,8 @@ internal static class MarkdownCost
         }
     }
 
-    private static int BlankLength(ReadOnlySpan<char> line, int at) => line.Length - at - line[at..].TrimStart(Blank).Length;
+    /// <summary>Any white space, because the parser trims a cell of a grid table of each kind, and more blanks only count more blocks.</summary>
+    private static int BlankLength(ReadOnlySpan<char> line, int at) => line.Length - at - line[at..].TrimStart().Length;
 
     private static int Columns(ReadOnlySpan<char> blanks) => blanks.Length + (3 * blanks.Count('\t'));
 
