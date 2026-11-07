@@ -135,13 +135,26 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
         await process.WaitForExitAsync(cancellationToken);
         if (process.ExitCode != 0)
         {
-            File.Delete(partial);
+            DeleteLeftover(partial);
             throw new TranscriptionEngineException(process.ExitCode == SigkillExitCode
                 ? ProblemOfKill(oomKillsBefore)
                 : ProblemOfDecodeError(errorTail));
         }
 
         File.Move(partial, wav, overwrite: true);
+    }
+
+    // A disk that refused the decode can also refuse this delete. The sweep at the next start removes the file, and the
+    // cause of the failure is the answer that a person needs.
+    private static void DeleteLeftover(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     private static RecordingProblem ProblemOfDecodeError(string errorTail)

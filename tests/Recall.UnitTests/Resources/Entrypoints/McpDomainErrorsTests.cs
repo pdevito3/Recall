@@ -102,6 +102,20 @@ public class McpDomainErrorsTests
     }
 
     [Test]
+    public async Task a_full_disk_is_a_resource_exhausted_tool_error_that_says_what_to_do()
+    {
+        // Act
+        var result = await CallToolThatThrows(new SqliteException("database or disk is full", 13));
+
+        // Assert
+        result.IsError.ShouldBe(true);
+        var text = result.Content.OfType<TextContentBlock>().ShouldHaveSingleItem().Text;
+        text.ShouldStartWith("resource_exhausted: ");
+        text.ShouldContain("free some space");
+        result.StructuredContent.ShouldNotBeNull().GetProperty("code").GetString().ShouldBe("resource_exhausted");
+    }
+
+    [Test]
     public async Task a_json_error_when_each_argument_converts_stays_a_server_fault()
     {
         // Act

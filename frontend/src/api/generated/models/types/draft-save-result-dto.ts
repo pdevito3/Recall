@@ -24,7 +24,7 @@ export type DraftSaveResultDtoCleanupStatusEnumKey = (typeof draftSaveResultDtoC
 
 export type DraftSaveResultDto = {
     /**
-     * @description `Won` and `Unchanged` say that the Draft holds these words. `Kept` says that an earlier try of this save won, at the number in `draftRevision`, and that a chunk or a later save moved the Draft after it. `Lost` says that the Draft never took these words, and they are in a Revision.
+     * @description `Won` and `Unchanged` say that the Draft holds these words. `Kept` says that an earlier try of this save won, at the number in `draftRevision`, and that a chunk or a later save moved the Draft after it. `Lost` says that the Draft did not take this save, and its words are in a Revision. A replay of a win from before the `was_draft` column also reads `Lost`.
      * @type string
     */
     outcome: DraftSaveResultDtoOutcomeEnumKey;

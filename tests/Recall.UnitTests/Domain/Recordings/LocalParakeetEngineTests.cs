@@ -332,6 +332,31 @@ public class LocalParakeetEngineTests
 
     [Test]
     [Property("Rule", "REC-15")]
+    public async Task a_disk_that_also_refuses_the_delete_of_the_work_file_still_says_that_it_refused()
+    {
+        // Arrange
+        using var rig = new Rig();
+        var worker = rig.Script("worker", ChunkLine);
+        var ffmpeg = rig.Script("ffmpeg", """for last; do :; done; : > "$last"; chmod 555 "$(dirname "$last")"; echo 'Permission denied' >&2; exit 243""");
+        var engine = rig.Engine(worker, ffmpeg);
+        var writable = File.GetUnixFileMode(rig.Folder);
+
+        try
+        {
+            // Act
+            var problem = await ProblemOfAsync(engine, rig.Input());
+
+            // Assert
+            problem.ShouldBe(RecordingProblem.DiskRefused);
+        }
+        finally
+        {
+            File.SetUnixFileMode(rig.Folder, writable);
+        }
+    }
+
+    [Test]
+    [Property("Rule", "REC-15")]
     [Arguments("kill -TERM $$")]
     [Arguments("kill -SEGV $$")]
     [Arguments("kill -ABRT $$")]
