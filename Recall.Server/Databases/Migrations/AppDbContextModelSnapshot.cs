@@ -804,11 +804,6 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("number");
 
-                    b.Property<string>("ClaimedSavedAt")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("claimed_saved_at");
-
                     b.Property<string>("SavedAt")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -841,11 +836,6 @@ namespace Recall.Server.Databases.Migrations
                     b.Property<int>("Number")
                         .HasColumnType("INTEGER")
                         .HasColumnName("number");
-
-                    b.Property<string>("ClaimedSavedAt")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("claimed_saved_at");
 
                     b.Property<string>("SavedAt")
                         .IsRequired()
@@ -915,10 +905,6 @@ namespace Recall.Server.Databases.Migrations
                     b.Property<string>("LastModifiedOn")
                         .HasColumnType("TEXT")
                         .HasColumnName("last_modified_on");
-
-                    b.Property<int?>("LastTranscriptRevision")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("last_transcript_revision");
 
                     b.Property<double?>("Latitude")
                         .HasColumnType("REAL")
