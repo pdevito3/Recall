@@ -26,7 +26,7 @@ public static class AddRecording
         {
             var owner = dbContext.RequireJournalOwner();
             var dto = request.Dto;
-            ValidationException.Must(Enum.TryParse<RecordingFormat>(dto.Format, out var format) && Enum.IsDefined(format),
+            ValidationException.Must(Enum.TryParse<RecordingFormat>(dto.Format, out var format) && Enum.GetName(format) == dto.Format,
                 "format", "The audio format must be Webm or Mp4.");
             ValidationException.ThrowWhenNullOrWhitespace(dto.ClientRecordingId, "clientRecordingId", "Please provide a client recording ID.");
             ValidationException.ThrowWhenHasCharacterNotStorable(dto.ClientRecordingId, "clientRecordingId", "The client recording ID has a character that is not allowed.");

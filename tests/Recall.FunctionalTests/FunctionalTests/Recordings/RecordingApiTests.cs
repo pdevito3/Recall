@@ -105,16 +105,38 @@ public class RecordingApiTests : TestBase
     }
 
     [Test]
-    public async Task an_unknown_format_is_refused()
+    [Arguments("Exe")]
+    [Arguments("Webm,Mp4")]
+    [Arguments("1")]
+    [Arguments("0")]
+    [Arguments(" Webm ")]
+    [Arguments("webm")]
+    public async Task a_format_that_is_not_the_exact_name_is_refused(string format)
     {
         // Arrange
         var (sessionId, _, _) = await SignedInWithSessionAsync();
 
         // Act
-        var response = await FactoryClient.PostAsJsonAsync(ApiRoutes.Recordings.OfSession(sessionId), new { clientRecordingId = "x", format = "Exe" });
+        var response = await FactoryClient.PostAsJsonAsync(ApiRoutes.Recordings.OfSession(sessionId), new { clientRecordingId = "x", format });
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Test]
+    [Arguments("Webm")]
+    [Arguments("Mp4")]
+    public async Task each_exact_format_name_is_stored(string format)
+    {
+        // Arrange
+        var (sessionId, _, _) = await SignedInWithSessionAsync();
+
+        // Act
+        var response = await FactoryClient.PostAsJsonAsync(ApiRoutes.Recordings.OfSession(sessionId), new { clientRecordingId = "x", format });
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await response.Content.ReadFromJsonAsync<RecordingDto>())!.Format.ShouldBe(format);
     }
 
     [Test]
