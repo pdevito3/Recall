@@ -27,24 +27,24 @@ public class SessionTests
     {
         // Arrange
         var session = NewSession();
-        session.SaveRaw(Save("typed", 0), false);
+        session.SaveRaw(Save("typed", 0));
         session.TryAppendTranscript("heard", Now).ShouldBeTrue();
         var chunk = session.Raw.DraftRevision;
 
         // Act
-        var old = session.SaveRaw(Save("old copy", chunk - 1, Now.AddHours(1)), false);
-        var current = session.SaveRaw(Save("merged", chunk, Now.AddHours(2)), false);
+        var old = session.SaveRaw(Save("old copy", chunk - 1, Now.AddHours(1)));
+        var current = session.SaveRaw(Save("merged", chunk, Now.AddHours(2)));
 
         // Assert
-        old.ShouldBe(DraftSaveOutcome.Lost);
-        current.ShouldBe(DraftSaveOutcome.Won);
+        old.Outcome.ShouldBe(DraftSaveOutcome.Lost);
+        current.Outcome.ShouldBe(DraftSaveOutcome.Won);
         session.Raw.Text.ShouldBe("merged");
     }
 
     private static Session CleanSession()
     {
         var session = NewSession();
-        session.SaveRaw(Save("raw words", 0), false);
+        session.SaveRaw(Save("raw words", 0));
         session.BeginCleanup();
         session.CompleteCleanup("clean words", "A recap", session.Raw.DraftRevision, Noon);
         return session;
@@ -53,7 +53,7 @@ public class SessionTests
     private static Session SessionAt(CleanupRunState state)
     {
         var session = NewSession();
-        session.SaveRaw(Save("raw words", 0), false);
+        session.SaveRaw(Save("raw words", 0));
         if (state == CleanupRunState.NotRun)
             return session;
 
@@ -95,7 +95,7 @@ public class SessionTests
         var session = NewSession();
 
         // Act
-        session.SaveRaw(Save("words", 0), false);
+        session.SaveRaw(Save("words", 0));
 
         // Assert
         session.CleanupStatus.ShouldBe(CleanupStatus.NotRun);
@@ -109,7 +109,7 @@ public class SessionTests
         var session = CleanSession();
 
         // Act
-        session.SaveRaw(Save("newer words", session.Raw.DraftRevision), false);
+        session.SaveRaw(Save("newer words", session.Raw.DraftRevision));
 
         // Assert
         session.CleanupStatus.ShouldBe(CleanupStatus.Stale);
@@ -123,10 +123,10 @@ public class SessionTests
         var session = CleanSession();
 
         // Act
-        var outcome = session.SaveRaw(Save("older words", 0, Noon.AddHours(-1)), false);
+        var outcome = session.SaveRaw(Save("older words", 0, Noon.AddHours(-1)));
 
         // Assert
-        outcome.ShouldBe(DraftSaveOutcome.Lost);
+        outcome.Outcome.ShouldBe(DraftSaveOutcome.Lost);
         session.CleanupStatus.ShouldBe(CleanupStatus.Clean);
     }
 
@@ -138,7 +138,7 @@ public class SessionTests
         var session = CleanSession();
 
         // Act
-        session.SaveCleaned(Save("edited by hand", session.Cleaned.DraftRevision), false);
+        session.SaveCleaned(Save("edited by hand", session.Cleaned.DraftRevision));
 
         // Assert
         session.CleanupStatus.ShouldBe(CleanupStatus.Clean);
@@ -222,7 +222,7 @@ public class SessionTests
     {
         // Arrange
         var session = NewSession();
-        session.SaveRaw(Save("words", 0), false);
+        session.SaveRaw(Save("words", 0));
 
         // Act
         session.BeginCleanup();
@@ -240,10 +240,10 @@ public class SessionTests
     {
         // Arrange
         var session = NewSession();
-        session.SaveRaw(Save("first", 0, Noon), false);
+        session.SaveRaw(Save("first", 0, Noon));
 
         // Act
-        session.SaveRaw(Save("older words", 0, Noon.AddHours(-1)), false);
+        session.SaveRaw(Save("older words", 0, Noon.AddHours(-1)));
 
         // Assert
         session.Raw.Text.ShouldBe("first");
@@ -257,8 +257,8 @@ public class SessionTests
     {
         // Arrange
         var session = NewSession();
-        session.SaveRaw(Save(Mention("Sam"), 0), false);
-        session.SaveCleaned(Save(Mention("Sam"), 0), false);
+        session.SaveRaw(Save(Mention("Sam"), 0));
+        session.SaveCleaned(Save(Mention("Sam"), 0));
 
         // Act
         session.RenamePerson(PersonId, "Samuel", Noon.AddHours(1));
@@ -276,7 +276,7 @@ public class SessionTests
     {
         // Arrange
         var session = NewSession();
-        session.SaveRaw(Save(Mention("Sam"), 0), false);
+        session.SaveRaw(Save(Mention("Sam"), 0));
 
         // Act
         session.RenamePerson("per_other", "Someone", Noon.AddHours(1));
@@ -292,7 +292,7 @@ public class SessionTests
         // Arrange
         var text = Mention("Sam").Replace("Lunch with ", "Söögiaeg \U0001F600 with ", StringComparison.Ordinal);
         var session = NewSession();
-        session.SaveRaw(Save(text, 0), false);
+        session.SaveRaw(Save(text, 0));
 
         // Act
         session.RenamePerson(PersonId, "Samuel", Noon.AddHours(1));
@@ -322,7 +322,7 @@ public class SessionTests
     {
         // Arrange
         var session = NewSession();
-        session.SaveRaw(Save(Mention("Sam"), 0), false);
+        session.SaveRaw(Save(Mention("Sam"), 0));
         session.BeginCleanup();
         session.CompleteCleanup(Mention("Sam"), "Lunch with Sam", session.Raw.DraftRevision, Noon);
 
@@ -340,10 +340,10 @@ public class SessionTests
     {
         // Arrange
         var session = NewSession();
-        session.SaveRaw(Save(Mention("Sam"), 0), false);
+        session.SaveRaw(Save(Mention("Sam"), 0));
         session.BeginCleanup();
         session.CompleteCleanup(Mention("Sam"), "Lunch with Sam", session.Raw.DraftRevision, Noon);
-        session.SaveRaw(Save(Mention("Sam") + " ", session.Raw.DraftRevision), false);
+        session.SaveRaw(Save(Mention("Sam") + " ", session.Raw.DraftRevision));
         var readByCleanup = session.LastCleanupRawRevision;
 
         // Act
@@ -360,7 +360,7 @@ public class SessionTests
     {
         // Arrange
         var session = NewSession();
-        session.SaveRaw(Save(Mention("Sam"), 0), false);
+        session.SaveRaw(Save(Mention("Sam"), 0));
         session.BeginCleanup();
         session.CompleteCleanup(Mention("Sam"), "Lunch with Sam", session.Raw.DraftRevision, Noon);
 
@@ -377,8 +377,8 @@ public class SessionTests
     {
         // Arrange
         var session = NewSession();
-        session.SaveRaw(Save("raw words", 0), false);
-        session.SaveCleaned(Save("edited by hand", 0), false);
+        session.SaveRaw(Save("raw words", 0));
+        session.SaveCleaned(Save("edited by hand", 0));
         var raw = session.Raw;
 
         // Act
@@ -429,9 +429,9 @@ public class SessionTests
         var session = NewSession();
 
         // Act
-        session.SaveRaw(Save(Mention("Sam"), 0), false);
+        session.SaveRaw(Save(Mention("Sam"), 0));
         var whileMentioned = session.MentionedPersonIds.ToList();
-        session.SaveRaw(Save("no mention now", 1), false);
+        session.SaveRaw(Save("no mention now", 1));
 
         // Assert
         whileMentioned.ShouldBe([PersonId]);
@@ -444,11 +444,11 @@ public class SessionTests
     {
         // Arrange
         var session = NewSession();
-        session.SaveRaw(Save(Mention("Sam"), 0), false);
-        session.SaveCleaned(Save(Mention("Sam"), 0), false);
+        session.SaveRaw(Save(Mention("Sam"), 0));
+        session.SaveCleaned(Save(Mention("Sam"), 0));
 
         // Act
-        session.SaveRaw(Save("no mention now", 1), false);
+        session.SaveRaw(Save("no mention now", 1));
 
         // Assert
         session.MentionedPersonIds.ShouldBe([PersonId]);
@@ -462,7 +462,7 @@ public class SessionTests
         var session = NewSession();
 
         // Act
-        session.SaveRaw(Save(Mention("Sam"), 0), false);
+        session.SaveRaw(Save(Mention("Sam"), 0));
         var saved = session.Preview;
         session.RenamePerson(PersonId, "Samuel", Noon.AddHours(1));
 
@@ -479,7 +479,7 @@ public class SessionTests
         var session = NewSession();
 
         // Act
-        session.SaveRaw(Save(string.Concat(Enumerable.Repeat("\U0001F600", Session.PreviewMaxLength + 5)), 0), false);
+        session.SaveRaw(Save(string.Concat(Enumerable.Repeat("\U0001F600", Session.PreviewMaxLength + 5)), 0));
 
         // Assert
         session.Preview.EnumerateRunes().Count().ShouldBe(Session.PreviewMaxLength);

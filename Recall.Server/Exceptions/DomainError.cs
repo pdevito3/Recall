@@ -1,5 +1,7 @@
 namespace Recall.Server.Exceptions;
 
+using Microsoft.Data.Sqlite;
+
 /// <summary>
 /// The kind of a failure, with no transport in it. Each entrypoint maps a kind to its own error:
 /// an HTTP status or an MCP tool error.
@@ -35,6 +37,9 @@ public enum DomainErrorKind
     /// </summary>
     ConcurrentChange,
 
+    /// <summary>The disk of the database or of the file store has no room. Nothing changed, and the same request works when the disk has room.</summary>
+    DiskFull,
+
     /// <summary>A server fault. Its message stays on the server.</summary>
     Unexpected,
 }
@@ -56,6 +61,14 @@ public sealed record DomainError(
     private const string ConflictTitle = "The request conflicts with a record that exists.";
     private const string StaleVersionTitle = "The record changed after you loaded it.";
     private const string ConcurrentChangeTitle = "Other users changed the record at the same time.";
+    private const string DiskFullTitle = "The disk of the server is full.";
+    private const string DiskFullDetail = "The disk of the server is full, so nothing changed. Ask the Owner to free some space, then try again.";
+    private const int SqliteFull = 13;
+
+    // On Unix, the HResult of an IOException is the errno: ENOSPC, and EDQUOT on Linux and on macOS.
+    private const int NoSpaceErrno = 28;
+    private const int LinuxQuotaErrno = 122;
+    private const int MacQuotaErrno = 69;
 
     /// <summary>
     /// Classifies an exception. An exception that is not a domain exception is <see cref="DomainErrorKind.Unexpected"/>.
@@ -101,11 +114,17 @@ public sealed record DomainError(
             ConflictTitle,
             ex.Message,
             string.IsNullOrEmpty(ex.Property) ? [] : new() { [ex.Property] = [ex.Message] }),
+        _ when IsDiskFull(exception) => new(DomainErrorKind.DiskFull, DiskFullTitle, DiskFullDetail, null),
         _ => new(DomainErrorKind.Unexpected, "An error occurred while processing your request.", null, null),
     };
+
+    private static bool IsDiskFull(Exception exception)
+        => exception is SqliteException { SqliteErrorCode: SqliteFull }
+               or IOException { HResult: NoSpaceErrno or LinuxQuotaErrno or MacQuotaErrno }
+           || (exception.InnerException is { } inner && IsDiskFull(inner));
 
     /// <summary>
     /// True when the exception is an expected outcome of a bad request, not a server fault.
     /// </summary>
-    public static bool IsClientError(Exception exception) => From(exception).Kind != DomainErrorKind.Unexpected;
+    public static bool IsClientError(Exception exception) => From(exception).Kind is not (DomainErrorKind.Unexpected or DomainErrorKind.DiskFull);
 }

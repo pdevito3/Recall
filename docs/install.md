@@ -33,7 +33,7 @@ The stored files include the audio of each Recording. Recall does not encrypt th
 
 The image carries ffmpeg and the speech worker. It does not carry the speech model. The first Recording downloads about 660 MB from Hugging Face into `/data/models`, and Recall checks each file against a pinned SHA-256.
 
-The download is the only network call of local transcription. The audio and the text stay on your server. On a machine with no network, each Recording stays stored with the status `Received` and the problem `WaitingForModel`. Recall tries the download again every 15 minutes while a Recording waits.
+The download is the only network call of local transcription. The audio and the text stay on your server. On a machine with no network, each Recording stays stored with the status `Received` and the problem `WaitingForModel`. Recall tries the download again while a Recording waits, every 15 minutes by default. `Transcription__ModelRetryMinutes` sets this time. Use 1 or more.
 
 To install the model on a machine with no network, copy the files `tokens.txt`, `joiner.int8.onnx`, `decoder.int8.onnx`, and `encoder.int8.onnx` of the model into `/data/models/parakeet-tdt-0.6b-v2-int8`. Recall checks each file against its hash and does not download a file that passes.
 

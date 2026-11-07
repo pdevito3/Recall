@@ -6,9 +6,9 @@
 import * as z from 'zod'
 
 export const draftSaveResultDtoSchema = z.object({
-  outcome: z.enum(['Unchanged', 'Won', 'Lost']).describe('A save with the outcome `Lost` did not change the Draft, and its words stay as the newest Revision.'),
-  draftRevision: z.int32(),
-  latestRevision: z.int32(),
+  outcome: z.enum(['Unchanged', 'Won', 'Lost', 'Kept']).describe('`Won` and `Unchanged` say that the Draft holds these words. `Kept` says that the Draft took these words at the number in `draftRevision`, and that a chunk or a later save moved the Draft after it. `Lost` says that the Draft did not take this save, and its words are in a Revision.'),
+  draftRevision: z.int32().nullish().describe('After `Won` or `Unchanged`, the base of the next save. After `Kept`, the number at which the Draft took these words, which is older than the Draft and is not a base: read the Session before the next save. After `Lost`, null: read the Session, merge, and save from the number of the read, with a new `savedAt`.'),
+  latestRevision: z.int32().describe('The number of the newest Revision. It is never a base.'),
   savedAt: z.iso.datetime().nullish(),
   cleanupStatus: z.enum(['NotRun', 'Running', 'Clean', 'Stale', 'Failed']),
   version: z.int().min(0).max(4294967295),

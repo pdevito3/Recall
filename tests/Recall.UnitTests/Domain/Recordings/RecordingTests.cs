@@ -375,6 +375,31 @@ public class RecordingTests
     }
 
     [Test]
+    [Property("Rule", "REC-15")]
+    public void only_bad_audio_tells_a_person_to_record_again()
+    {
+        // Arrange
+        var problems = Enum.GetValues<RecordingProblem>().Where(p => p is not (RecordingProblem.None or RecordingProblem.AudioUnreadable));
+
+        // Act and assert
+        RecordingViews.ProblemTextOf(RecordingProblem.AudioUnreadable, ModelStatus.DownloadFailed).ShouldNotBeNull().ShouldContain("record again");
+        foreach (var problem in problems)
+            RecordingViews.ProblemTextOf(problem, ModelStatus.DownloadFailed).ShouldNotBeNull().ShouldNotContain("record again", Case.Insensitive, problem.ToString());
+    }
+
+    [Test]
+    [Property("Rule", "REC-15")]
+    public void a_kill_with_a_memory_kill_in_the_same_try_does_not_claim_that_the_memory_kill_hit_the_engine()
+    {
+        // Act
+        var text = RecordingViews.ProblemTextOf(RecordingProblem.OutOfMemory, ModelStatus.DownloadFailed);
+
+        // Assert
+        text.ShouldNotBeNull().ShouldContain("during the same try");
+        text.ShouldNotContain("needs more memory", Case.Insensitive);
+    }
+
+    [Test]
     public void each_problem_tells_a_person_what_happened()
     {
         // Arrange
@@ -383,6 +408,47 @@ public class RecordingTests
         // Act and assert
         foreach (var problem in problems)
             RecordingViews.ProblemTextOf(problem, ModelStatus.DownloadFailed).ShouldNotBeNullOrWhiteSpace(problem.ToString());
+    }
+
+    [Test]
+    [Arguments(ModelStatus.DownloadFailed)]
+    [Arguments(ModelStatus.HashRejected)]
+    public void the_model_text_names_no_retry_time_because_the_owner_sets_it(ModelStatus model)
+    {
+        // Act
+        var text = RecordingViews.ModelTextOf(model);
+
+        // Assert
+        text.ShouldNotBeNull();
+        text.ShouldContain("tries again");
+        text.ShouldNotContain("minutes");
+    }
+
+    [Test]
+    [Property("Rule", "REC-14")]
+    public void a_recording_that_waits_says_that_the_jobs_stopped()
+    {
+        // Arrange
+        var waiting = Received();
+        var ended = Received();
+        ended.Fail(RecordingProblem.TooLong);
+
+        // Act
+        var whileStopped = waiting.ToDto([], ModelStatus.Ready, jobsStopped: true);
+        var attempting = Received();
+        attempting.BeginAttempt();
+        var attemptingWhileStopped = attempting.ToDto([], ModelStatus.Ready, jobsStopped: true);
+        var whileRunning = waiting.ToDto([], ModelStatus.Ready, jobsStopped: false);
+        var endedWhileStopped = ended.ToDto([], ModelStatus.Ready, jobsStopped: true);
+
+        // Assert
+        whileStopped.ProblemText.ShouldBe(GetTranscriptionStatus.JobsStoppedText);
+        whileStopped.Status.ShouldBe(nameof(RecordingStatus.Received));
+        whileStopped.Problem.ShouldBe(nameof(RecordingProblem.None));
+        attemptingWhileStopped.Status.ShouldBe(nameof(RecordingStatus.Transcribing));
+        attemptingWhileStopped.ProblemText.ShouldBe(GetTranscriptionStatus.JobsStoppedText);
+        whileRunning.ProblemText.ShouldBeNull();
+        endedWhileStopped.ProblemText.ShouldBe(RecordingViews.ProblemTextOf(RecordingProblem.TooLong, ModelStatus.Ready));
     }
 
     [Test]

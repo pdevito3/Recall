@@ -19,6 +19,8 @@ export const deleteRecordingStatus409Schema = validationProblemDetailsSchema
 
 export const deleteRecordingStatus422Schema = validationProblemDetailsSchema
 
+export const deleteRecordingStatus507Schema = problemDetailsSchema
+
 export const deleteRecordingResponseSchema = deleteRecordingStatus204Schema
 
-export const deleteRecordingErrorSchema = z.union([deleteRecordingStatus401Schema, deleteRecordingStatus404Schema, deleteRecordingStatus409Schema, deleteRecordingStatus422Schema])
+export const deleteRecordingErrorSchema = z.union([deleteRecordingStatus401Schema, deleteRecordingStatus404Schema, deleteRecordingStatus409Schema, deleteRecordingStatus422Schema, deleteRecordingStatus507Schema])

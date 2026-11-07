@@ -42,6 +42,7 @@ public class TenantFilesTests : TestBase
     {
         // Arrange
         var (tenant, admin) = await AddTenantWithAdminAsync();
+        await AddTenantWithAdminAsync();
         var outside = Path.Combine(Path.GetTempPath(), $"recall_test_outside_{Guid.NewGuid():N}");
         var outsideFile = Path.Combine(outside, "file");
         Directory.CreateDirectory(outside);
@@ -111,6 +112,7 @@ public class TenantFilesTests : TestBase
     {
         // Arrange
         var (tenant, admin) = await AddTenantWithAdminAsync();
+        await AddTenantWithAdminAsync();
         var files = FileKey.ForTenant(tenant.Id, "recordings", "rec_1", "00001");
         await WriteAsync(files, [1]);
         FactoryClient.SignInAsAppUser(admin.Identifier);

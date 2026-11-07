@@ -19,8 +19,10 @@ export const addCorrectionStatus403Schema = problemDetailsSchema
 
 export const addCorrectionStatus422Schema = validationProblemDetailsSchema
 
+export const addCorrectionStatus507Schema = problemDetailsSchema
+
 export const addCorrectionResponseSchema = addCorrectionStatus201Schema
 
-export const addCorrectionErrorSchema = z.union([addCorrectionStatus400Schema, addCorrectionStatus401Schema, addCorrectionStatus403Schema, addCorrectionStatus422Schema])
+export const addCorrectionErrorSchema = z.union([addCorrectionStatus400Schema, addCorrectionStatus401Schema, addCorrectionStatus403Schema, addCorrectionStatus422Schema, addCorrectionStatus507Schema])
 
 export const addCorrectionBodySchema = correctionForCreationDtoSchema

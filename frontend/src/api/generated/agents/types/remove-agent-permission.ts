@@ -22,6 +22,8 @@ export type RemoveAgentPermissionStatus404 = ProblemDetails;
 
 export type RemoveAgentPermissionStatus422 = ValidationProblemDetails;
 
+export type RemoveAgentPermissionStatus507 = ProblemDetails;
+
 export type RemoveAgentPermissionOptions = {
     body?: never;
     path: RemoveAgentPermissionPath;
@@ -35,6 +37,7 @@ export type RemoveAgentPermissionResponses = {
     "403": RemoveAgentPermissionStatus403;
     "404": RemoveAgentPermissionStatus404;
     "422": RemoveAgentPermissionStatus422;
+    "507": RemoveAgentPermissionStatus507;
 };
 
 /**

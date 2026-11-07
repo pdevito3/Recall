@@ -23,8 +23,10 @@ export const addSessionStatus409Schema = validationProblemDetailsSchema
 
 export const addSessionStatus422Schema = validationProblemDetailsSchema
 
+export const addSessionStatus507Schema = problemDetailsSchema
+
 export const addSessionResponseSchema = z.union([addSessionStatus200Schema, addSessionStatus201Schema])
 
-export const addSessionErrorSchema = z.union([addSessionStatus400Schema, addSessionStatus401Schema, addSessionStatus403Schema, addSessionStatus409Schema, addSessionStatus422Schema])
+export const addSessionErrorSchema = z.union([addSessionStatus400Schema, addSessionStatus401Schema, addSessionStatus403Schema, addSessionStatus409Schema, addSessionStatus422Schema, addSessionStatus507Schema])
 
 export const addSessionBodySchema = sessionForCreationDtoSchema
