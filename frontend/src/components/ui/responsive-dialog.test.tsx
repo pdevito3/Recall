@@ -111,6 +111,16 @@ for (const [width, height] of [
     expect(linesUnderButton).toEqual([])
   })
 
+  test(`at ${width}x${height} the title starts at the same x as the text under it`, async () => {
+    await page.viewport(width, height)
+    render(<LongDialog title="Edit filter" description={longDescription} />)
+    await openAnimationsFinished()
+
+    const title = page.getByRole('heading', { name: 'Edit filter' }).element().getBoundingClientRect()
+    const description = page.getByText(longDescription).element().getBoundingClientRect()
+    expect(title.left).toBe(description.left)
+  })
+
   test(`at ${width}x${height} the content of a long dialog does not scroll under the close button`, async () => {
     await page.viewport(width, height)
     render(<LongDialog title="Edit filter" />)

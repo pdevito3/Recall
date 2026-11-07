@@ -211,7 +211,7 @@ function ResponsiveDialogTitle({
       data-slot="responsive-dialog-title"
       className={cn(
         "text-base leading-snug font-semibold wrap-anywhere md:text-sm md:font-medium",
-        "in-data-close-button:max-md:px-8 in-data-close-button:md:pr-8",
+        "in-data-close-button:max-md:pr-10 in-data-close-button:md:pr-8",
         className
       )}
       {...props}

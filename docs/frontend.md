@@ -229,7 +229,7 @@ A page that opens takes the key of a writer that left. When the newest words of 
 
 The app cannot change this delay. No web API forces the commit.
 
-**One very long text with no spaces.** Blink and the editor take time that grows faster than the size of one unbroken text. No word goes, and the tab does not answer during that time. The server limit is 1,000,000 characters. A text with spaces of 1.1 M characters takes 244 ms. A change of the wrap rule to `break-word` did not help (200,000 characters: 9.4 s).
+**One very long text with no spaces.** Blink and the editor take time that grows faster than the size of one unbroken text. No word goes, and the tab does not answer during that time. The server limit is 1,000,000 characters. A text with spaces of 1.1 M characters takes 244 ms. A change of the wrap rule to `break-word` did not help (200,000 characters: 9.4 s). The notice of a text over the limit can take 36 s to show, and a reload with a dead tab can take 69 s. Real words of the same size take 223 ms.
 
 | Unbroken text | Paste |
 |---|---|

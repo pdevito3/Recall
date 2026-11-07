@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { SidebarMenuButton } from '@/components/ui/sidebar'
+import { useSidebar } from '@/components/ui/use-sidebar'
 
 import { useLogout } from '../apis/auth-actions'
 import { useAuth } from '../apis/get-user'
@@ -17,6 +18,7 @@ import { useAuth } from '../apis/get-user'
 export function UserMenu() {
   const { username } = useAuth()
   const logout = useLogout()
+  const { setOpenMobile } = useSidebar()
   const name = username ?? 'Your account'
 
   return (
@@ -30,7 +32,13 @@ export function UserMenu() {
           <DropdownMenuLabel className="wrap-anywhere">{name}</DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onAction={() => logout.mutate()}>
+        <DropdownMenuItem
+          onAction={() => {
+            // On a phone the sidebar is a sheet over the page, and the toast of the sign-out must not lie over it.
+            setOpenMobile(false)
+            logout.mutate()
+          }}
+        >
           <HugeiconsIcon icon={Logout01Icon} />
           Logout
         </DropdownMenuItem>
