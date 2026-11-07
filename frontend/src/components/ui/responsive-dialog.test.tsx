@@ -130,7 +130,7 @@ for (const [width, height] of [
     }).toEqual([])
   })
 
-  // 39 key presses, each a round trip to the browser. This takes 5 to 10 s at 0% idle CPU, over the 15 s limit at worst.
+  // 39 key presses, each a round trip to the browser. This took 5 to 14 s at 0% idle CPU, and once went over the 15 s limit.
   test(`at ${width}x${height} the header and footer of a long form do not hide the field in focus`, { timeout: 30_000 }, async () => {
     await page.viewport(width, height)
     render(<FormDialog title={longTitle} description={longDescription} />)
