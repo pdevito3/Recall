@@ -8,6 +8,7 @@ using System.Text.Json.Nodes;
 using Recall.FunctionalTests.FunctionalTests.Recordings;
 using Recall.Server.Domain;
 using Recall.Server.Domain.Corrections;
+using Recall.Server.Domain.ModelProviders;
 using Recall.Server.Domain.People;
 using Recall.Server.Domain.Recordings;
 using Recall.Server.Domain.Sessions;
@@ -42,6 +43,7 @@ public class EndpointAccessSweepTests : TestBase
         ["GetCurrentUser"] = new("Each signed-in caller reads the own identity. It takes no ID, and its one read is the own user row behind the tenant filter."),
         ["get_tenant"] = new("ToolAccessKind.Read. Each member reads the own tenant, and the tenant filter hides the others."),
         ["list_tenants"] = new("ToolAccessKind.Read. Each member lists the own tenant, and the tenant filter hides the others."),
+        ["GetActiveModelProvider"] = new("Each member sees where a Cleanup sends the own words. It takes no ID and gives only the name of the provider of the own tenant."),
         ["AddSession"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetSession"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetSessionPage"] = new(JournalOfEachMember, OwnerOnly: true),
@@ -49,6 +51,14 @@ public class EndpointAccessSweepTests : TestBase
         ["SaveCleanedDraft"] = new(JournalOfEachMember, OwnerOnly: true),
         ["SetSessionMetadata"] = new(JournalOfEachMember, OwnerOnly: true),
         ["DeleteSession"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["StartCleanup"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["StopCleanup"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["StreamCleanup"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["AcceptSuggestion"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["RejectSuggestion"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["RespondToPersonProposal"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["RecordCleanupResult"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["ApplyWaitingCleanup"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetRawRevisionPage"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetRawRevision"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetCleanedRevisionPage"] = new(JournalOfEachMember, OwnerOnly: true),
@@ -345,6 +355,10 @@ public class EndpointAccessSweepTests : TestBase
         await InsertAsync(session);
         await InsertAsync(person);
         await InsertAsync(correction);
+        var provider = ModelProvider.Connect(tenant.Id, ModelProviderKind.OpenAiCompatible, "Sweep provider", "http://127.0.0.1:9/v1", null);
+        provider.Update("Sweep provider", "http://127.0.0.1:9/v1", null, "sweep-model", provider.Version);
+        provider.Activate(DateTimeOffset.UnixEpoch);
+        await InsertAsync(provider);
         var recording = Recording.Create(tenant.Id, admin.Id, session.Id, $"sweep-{Guid.NewGuid():N}", RecordingFormat.Webm);
         recording.StoreSlice(0, 1);
         recording.Finish([0], 1, 1);
@@ -361,6 +375,7 @@ public class EndpointAccessSweepTests : TestBase
             ["sessions"] = session.Id,
             ["people"] = person.Id,
             ["corrections"] = correction.Id,
+            ["model-providers"] = provider.Id,
             ["recordings"] = recording.Id,
             // new-feature:sweep-ids
         };
@@ -387,10 +402,11 @@ public class EndpointAccessSweepTests : TestBase
     private async Task<Outcome> SendHttpAsync(HttpEntrypoint endpoint, RecordIds ids)
     {
         using var request = endpoint.RequestFor(ids);
-        using var response = await FactoryClient.SendAsync(request);
+        using var response = await FactoryClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
         // Each caller, with records that exist and with records that do not. The HTTP cache of a browser would keep a private answer after a logout.
         (response.Headers.CacheControl?.NoStore == true).ShouldBeTrue($"{request.Method} {request.RequestUri}: {(int)response.StatusCode}");
-        var body = await response.Content.ReadAsStringAsync();
+        // A stream ends when its Cleanup ends, and no worker runs here
+        var body = response.Content.Headers.ContentType?.MediaType == "text/event-stream" ? "" : await response.Content.ReadAsStringAsync();
         return new Outcome(((int)response.StatusCode).ToString(CultureInfo.InvariantCulture), body.Length > 300 ? body[..300] : body);
     }
 

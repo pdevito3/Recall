@@ -19,6 +19,10 @@ public sealed class JobEnqueuer
     public async Task<Guid> EnqueueAsync<TJob>(TJob job, DateTimeOffset dueTime, CancellationToken cancellationToken = default)
         where TJob : notnull
         => await _client.EnqueueAsync(job, dueTime, transaction: _transaction, cancellationToken: cancellationToken);
+
+    public async Task<Guid> EnqueueOnAsync<TJob>(TJob job, DateTimeOffset dueTime, string queue, CancellationToken cancellationToken = default)
+        where TJob : notnull
+        => await _client.EnqueueAsync(job, dueTime, queue, transaction: _transaction, cancellationToken: cancellationToken);
 }
 
 /// <summary>

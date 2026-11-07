@@ -5,6 +5,7 @@ using BackWave.Core;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Recall.Server.Resources.Entrypoints.Jobs;
 using Recall.Server.Resources.Jobs;
@@ -92,6 +93,88 @@ public class JobHostingTests
         // Assert
         group.PoolSize.ShouldBe(1);
         group.Policy.ShouldBeOfType<DispatchPolicy.Strict>().Queues.ShouldBe([JobHosting.TranscriptionQueue]);
+    }
+
+    [Test]
+    public void each_cleanup_limit_is_written_before_a_worker_group_can_claim()
+    {
+        // Arrange
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Production" });
+
+        // Act
+        builder.AddJobs();
+
+        // Assert
+        var hosted = builder.Services.Where(service => service.ServiceType == typeof(IHostedService)).ToList();
+        var limits = hosted.FindIndex(service => service.ImplementationType == typeof(CleanupQueueLimits));
+        limits.ShouldBeGreaterThanOrEqualTo(0);
+        hosted.Take(limits).ShouldBeEmpty();
+    }
+
+    [Test]
+    [Property("Rule", "SES-44")]
+    public void a_cleanup_has_its_own_workers_and_a_system_job_never_waits_behind_one()
+    {
+        // Act
+        var cleanups = JobHosting.CleanupWorkers(new JobOptions());
+
+        // Assert
+        cleanups.PoolSize.ShouldBe(CleanupQueues.Count * CleanupQueues.JobsAtOnceInAQueue);
+        cleanups.Policy.ShouldBeOfType<DispatchPolicy.Weighted>().Queues.ShouldBe(CleanupQueues.All);
+        CleanupQueues.All.ShouldNotContain(JobHosting.SystemQueue);
+        JobHosting.SystemWorkers(new JobOptions()).Policy.ShouldBeOfType<DispatchPolicy.Strict>().Queues.ShouldBe([JobHosting.SystemQueue]);
+    }
+
+    [Test]
+    public void a_tenant_takes_a_queue_that_no_other_tenant_uses_and_keeps_it_while_its_cleanups_run()
+    {
+        // Arrange
+        var sameHash = Enumerable.Range(0, 800).Select(i => $"tenant-{i}").Where(t => CleanupQueues.Of(t) == CleanupQueues.Of("tenant-a")).First();
+        var hung = Enumerable.Repeat((CleanupQueues.Of("tenant-a"), "tenant-a"), 4).ToList();
+
+        // Act
+        var second = CleanupQueues.Pick(sameHash, hung);
+        var again = CleanupQueues.Pick("tenant-a", [.. hung, (second, sameHash)]);
+        var alone = CleanupQueues.Pick(sameHash, []);
+        var allUsed = CleanupQueues.All.Select((queue, i) => (queue, $"other-{i}")).ToList();
+
+        // Assert
+        second.ShouldNotBe(CleanupQueues.Of("tenant-a"));
+        again.ShouldBe(CleanupQueues.Of("tenant-a"));
+        alone.ShouldBe(CleanupQueues.Of(sameHash));
+        CleanupQueues.Pick(sameHash, [.. hung, (second, sameHash)]).ShouldBe(second);
+        CleanupQueues.Pick(sameHash, allUsed).ShouldBe(CleanupQueues.Of(sameHash));
+    }
+
+    [Test]
+    [Property("Rule", "SES-44")]
+    public void a_new_tenant_takes_a_queue_with_a_free_slot_when_each_queue_is_in_use()
+    {
+        // Arrange
+        var hashed = CleanupQueues.Of("tenant-new");
+        var oneEach = CleanupQueues.All.Where(queue => queue != hashed).Select((queue, i) => (queue, $"other-{i}"));
+        var hungInHashed = Enumerable.Repeat((hashed, "tenant-hung"), CleanupQueues.JobsAtOnceInAQueue + 1);
+        var unfinished = oneEach.Concat(hungInHashed).ToList();
+
+        // Act
+        var picked = CleanupQueues.Pick("tenant-new", unfinished);
+
+        // Assert
+        picked.ShouldNotBe(hashed);
+        unfinished.Count(job => job.Item1 == picked).ShouldBeLessThan(CleanupQueues.JobsAtOnceInAQueue);
+    }
+
+    [Test]
+    public void a_tenant_keeps_its_queue_in_each_process_and_tenants_spread_over_the_queues()
+    {
+        // Act
+        var queues = Enumerable.Range(0, 800).Select(i => CleanupQueues.Of($"tenant-{i}")).ToList();
+
+        // Assert
+        CleanupQueues.Of("tenant-0").ShouldBe("cleanup-0");
+        CleanupQueues.Of("tenant-1").ShouldBe("cleanup-3");
+        queues.Distinct().Order().ShouldBe(CleanupQueues.All);
+        queues.GroupBy(queue => queue).Min(group => group.Count()).ShouldBeGreaterThan(60);
     }
 
     [Test]

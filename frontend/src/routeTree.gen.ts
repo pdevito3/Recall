@@ -9,11 +9,17 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ModelProvidersRouteImport } from './routes/model-providers'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UsersIndexRouteImport } from './routes/users/index'
 import { Route as UsersIdIndexRouteImport } from './routes/users/$id/index'
 
+const ModelProvidersRoute = ModelProvidersRouteImport.update({
+  id: '/model-providers',
+  path: '/model-providers',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AboutRoute = AboutRouteImport.update({
   id: '/about',
   path: '/about',
@@ -38,12 +44,14 @@ const UsersIdIndexRoute = UsersIdIndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/model-providers': typeof ModelProvidersRoute
   '/users': typeof UsersIndexRoute
   '/users/$id': typeof UsersIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/model-providers': typeof ModelProvidersRoute
   '/users': typeof UsersIndexRoute
   '/users/$id': typeof UsersIdIndexRoute
 }
@@ -51,26 +59,41 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/model-providers': typeof ModelProvidersRoute
   '/users/': typeof UsersIndexRoute
   '/users/$id/': typeof UsersIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/users' | '/users/$id'
+  fullPaths: '/' | '/about' | '/model-providers' | '/users' | '/users/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/users' | '/users/$id'
-  id: '__root__' | '/' | '/about' | '/users/' | '/users/$id/'
+  to: '/' | '/about' | '/model-providers' | '/users' | '/users/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/about'
+    | '/model-providers'
+    | '/users/'
+    | '/users/$id/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
+  ModelProvidersRoute: typeof ModelProvidersRoute
   UsersIndexRoute: typeof UsersIndexRoute
   UsersIdIndexRoute: typeof UsersIdIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/model-providers': {
+      id: '/model-providers'
+      path: '/model-providers'
+      fullPath: '/model-providers'
+      preLoaderRoute: typeof ModelProvidersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/about': {
       id: '/about'
       path: '/about'
@@ -105,6 +128,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
+  ModelProvidersRoute: ModelProvidersRoute,
   UsersIndexRoute: UsersIndexRoute,
   UsersIdIndexRoute: UsersIdIndexRoute,
 }

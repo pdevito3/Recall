@@ -39,6 +39,8 @@ To install the model on a machine with no network, copy the files `tokens.txt`, 
 
 One transcription needs up to 1.5 GB of memory, and Recall runs one at a time. It uses 2 CPU threads by default. Set `Transcription__Threads` to change this.
 
+Give the container at least 1 GiB of memory, and add the 1.5 GB of a transcription to it. A Cleanup turns the Markdown of a model into a document, and the largest text that a Draft can hold uses up to about 600 MB while it does so. With a limit of 512 MiB, four such results at the same time stopped the server. With a limit of 1 GiB, each of them was stored.
+
 A person can download the audio until 7 days after the text is saved. Audio that did not become text stays stored until the person deletes the Recording.
 
 The licenses of ffmpeg, sherpa-onnx, ONNX Runtime, and the Parakeet model are in `/app/ThirdPartyNotices` in the image.
@@ -197,7 +199,7 @@ Docker runs `/app/healthcheck.sh` each hour. Run it yourself to see the state no
 docker compose exec recall /app/healthcheck.sh
 ```
 
-It prints the answer of `/health`. `Healthy` passes. `Degraded` means that the file store cannot take a write, or that the background jobs have a transient store fault, and it fails. `Unhealthy` and `No answer from /health` also fail. A sleeping disk can give a slow answer, so the probe asks up to four times, 10 seconds apart, before it fails.
+It prints the answer of `/health`. `Healthy` passes. `Degraded` means that the file store cannot take a write, that the background jobs have a transient store fault, or that the key ring changed, and it fails. A second line can give the cause. `Unhealthy` and `No answer from /health` also fail. A sleeping disk can give a slow answer, so the probe asks up to four times, 10 seconds apart, before it fails.
 
 **The status that `docker compose ps` shows can be as old as the probe interval, which is one hour by default.** It is the result of the last probe, and this command does not change it. After one failed probe, the status stays `unhealthy` until the next probe passes, up to one interval after you correct the cause. Run the command above to see the state now.
 
@@ -209,7 +211,7 @@ Other writes also wake a disk. In two tests of 10 idle minutes after a start, wi
 
 ## Back up and restore
 
-A backup is a copy of `/data` while Recall is stopped. The copy holds the journal and the keys, so keep it private. These commands use the Docker volume. They write `recall-backup.tar.gz` in the current folder, and only you can read that file. If the commands do not print `The backup is complete`, the backup failed. The file of the last backup then stays, and the failed backup stays as `recall-backup.new.tar.gz`.
+A backup is a copy of `/data` while Recall is stopped. The copy holds the journal and the keys, so keep it private. The API keys of a model provider are encrypted with the key ring in `keys/`, so restore `keys/` with the database that it belongs to. If you do not, each API key stops working, and the model providers page and `/health` say that the key ring changed. These commands use the Docker volume. They write `recall-backup.tar.gz` in the current folder, and only you can read that file. If the commands do not print `The backup is complete`, the backup failed. The file of the last backup then stays, and the failed backup stays as `recall-backup.new.tar.gz`.
 
 To back up:
 
@@ -263,7 +265,7 @@ After the first release, you can use the published image in place of a build. Ru
 | `docker compose ps` shows `Restarting`, and the log says `is not writable` | The user of the container cannot write to `/data` | With a folder, set `PUID` and `PGID` to its owner. With the Docker volume, remove `PUID` and `PGID` |
 | `docker compose ps` shows `Restarting`, and the log names `Auth:Providers:0` | A setting of the provider is missing or wrong | Correct the value in `.env`, and run `docker compose up -d` |
 | `docker compose ps` shows `unhealthy` | The last probe failed. This status can be as old as the probe interval | Run `docker compose exec recall /app/healthcheck.sh`. If it prints `Healthy`, the cause is gone, and the status changes at the next probe of Docker. If it prints another answer, read `docker compose logs recall` |
-| The probe prints `Degraded` | The database answers, but the file store cannot take a write, or the background jobs have a transient store fault | For the file store, see the next two rows. For the jobs, do not restart: the jobs try again, and the status clears by itself when the store answers. If the probe prints `Unhealthy` and `The background jobs stopped`, see [The background jobs stopped](troubleshooting.md#the-background-jobs-stopped) |
+| The probe prints `Degraded` | The database answers, but the file store cannot take a write, the background jobs have a transient store fault, or the key ring changed | For the key ring, see [The key ring changed](troubleshooting.md#the-key-ring-changed). For the file store, see the next two rows. For the jobs, do not restart: the jobs try again, and the status clears by itself when the store answers. If the probe prints `Unhealthy` and `The background jobs stopped`, see [The background jobs stopped](troubleshooting.md#the-background-jobs-stopped) |
 | The log says `The file store root ... cannot take a write` | The Server cannot write to `/data/files`. The line gives the cause, for example a full disk, a disk mounted read-only, or the wrong owner. A new file fails until you correct this | Correct the cause. No restart is necessary. The probe command finds the change in up to 30 seconds, and the status of `docker compose ps` changes at the next probe of Docker |
 | The log says `The file store root ... did not finish a write` | A write to `/data/files` took more than 5 seconds. A sleeping disk can do this when it wakes | Run the probe command. If it prints `Healthy`, the disk was only slow, and you do not need to do anything. If it continues to print `Degraded`, examine the disk. If a write stays stuck, restart Recall after you correct the disk |
 | The provider says that the redirect URI is not valid | The callback URL of this address is not registered, or a proxy changed `Host` | Register the URL from `/auth/status`, and see [Another proxy](#another-proxy) |

@@ -12,6 +12,7 @@ export type UserDtoRoleEnumKey = (typeof userDtoRoleEnum)[keyof typeof userDtoRo
 
 export const userDtoPermissionsEnum = {
     manage_agents: "manage_agents",
+    manage_model_providers: "manage_model_providers",
     manage_tenant: "manage_tenant",
     manage_user_access: "manage_user_access",
     manage_users: "manage_users",

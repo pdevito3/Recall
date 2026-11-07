@@ -25,6 +25,7 @@ public sealed class DraftSave
         ValidationException.ThrowWhenLongerThan(text, Session.DraftMaxLength, TextField,
             $"The text must not have more than {Session.DraftMaxLength} characters.");
         ValidationException.ThrowWhenHasCharacterNotStorable(text, TextField, "The text has a character that is not allowed.");
+        ValidationException.Must(!Content.LinkAddress.AnyRefusedIn(text), TextField, "The text has a link that no page may open.");
 
         ValidationException.Must(baseRevision >= DraftSlot.NoRevision, BaseRevisionField, "The base revision must not be negative.");
 

@@ -15,6 +15,19 @@ export const sessionSummaryDtoCleanupStatusEnum = {
 
 export type SessionSummaryDtoCleanupStatusEnumKey = (typeof sessionSummaryDtoCleanupStatusEnum)[keyof typeof sessionSummaryDtoCleanupStatusEnum];
 
+export const sessionSummaryDtoCleanupFailureEnum = {
+    None: "None",
+    NoModelProvider: "NoModelProvider",
+    KeyUnreadable: "KeyUnreadable",
+    ProviderRefused: "ProviderRefused",
+    ProviderUnavailable: "ProviderUnavailable",
+    BadModelOutput: "BadModelOutput",
+    Interrupted: "Interrupted",
+    Stopped: "Stopped"
+} as const;
+
+export type SessionSummaryDtoCleanupFailureEnumKey = (typeof sessionSummaryDtoCleanupFailureEnum)[keyof typeof sessionSummaryDtoCleanupFailureEnum];
+
 /**
  * @description One row of the timeline. It has no Draft, so a page costs the same whatever the length of the text.
  * @type object
@@ -37,6 +50,11 @@ export type SessionSummaryDto = {
     preview: string;
     synopsis?: string | null;
     cleanupStatus: SessionSummaryDtoCleanupStatusEnumKey;
+    /**
+     * @description Why the last Cleanup ended with no result. `Stopped` is a stop that the person asked for, not a fault.
+     * @type string
+    */
+    cleanupFailure: SessionSummaryDtoCleanupFailureEnumKey;
     activity: string;
     moods: string[];
     topics: SessionTopicDto[];

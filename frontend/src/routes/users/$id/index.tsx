@@ -59,7 +59,7 @@ function UserPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8">
-      <Link to="/users" className="text-sm text-muted-foreground underline-offset-4 hover:underline">
+      <Link to="/users" className="text-sm text-muted-foreground underline-offset-4 hover:underline max-sm:flex max-sm:min-h-11 max-sm:items-center max-sm:self-start">
         All users
       </Link>
       <PageHeading ref={headingRef}>{fullName}</PageHeading>

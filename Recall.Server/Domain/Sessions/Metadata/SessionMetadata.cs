@@ -1,5 +1,6 @@
 namespace Recall.Server.Domain.Sessions.Metadata;
 
+using Databases;
 using Exceptions;
 
 public sealed record SessionMetadata
@@ -24,12 +25,20 @@ public sealed record SessionMetadata
 
         return new SessionMetadata(
             canonicalActivity,
-            ListOf(ValuesOf(moods).Select(Mood.Canonical), "moods"),
-            ListOf(ValuesOf(userTopics).Select(t => t.Trim()), "userTopics"));
+            ListOf(VisibleValuesOf(moods, "moods").Select(Mood.Canonical), "moods"),
+            ListOf(VisibleValuesOf(userTopics, "userTopics"), "userTopics"));
     }
 
-    private static IEnumerable<string> ValuesOf(IEnumerable<string?>? values)
-        => (values ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value!);
+    /// <summary>A character that the store refuses stays refused. The other hidden characters go, so a page shows what the value holds.</summary>
+    private static IEnumerable<string> VisibleValuesOf(IEnumerable<string?>? values, string field)
+    {
+        foreach (var value in (values ?? []).Where(value => value is not null))
+        {
+            ValidationException.ThrowWhenHasCharacterNotStorable(value!, field, $"The {field} value has a character that is not allowed.");
+            if (VisibleText.OneLine(value!) is { Length: > 0 } visible)
+                yield return visible;
+        }
+    }
 
     private static List<string> ListOf(IEnumerable<string> values, string field)
     {

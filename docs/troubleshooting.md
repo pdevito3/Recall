@@ -59,6 +59,17 @@ The server keeps its logs and its telemetry to about 460 MiB, and a full disk do
 2. Make room on the volume. You can delete old files in `/data/logs` and `/data/telemetry` while the server runs. Do not delete `recall.db`, its `-wal` file, or the `keys` folder.
 3. If `/health` answers 503 and says `The background jobs stopped`, restart the server. The journal does not need a restart, but no job of a stopped group runs until then. See [The background jobs stopped](#the-background-jobs-stopped).
 
+## The key ring changed
+
+`/health` answers with `Degraded` and says `The key ring changed` or `The key folder takes no write`. The model providers page shows these words while a saved key is unreadable or the folder takes no write. `/health` looks at the key ring when the server starts, so after you enter each key again, the page clears at once and `/health` clears at the next start. Until then the probe of the image fails, and `docker compose ps` shows `unhealthy`, but the journal still works. A restore with no saved key warns in `/health` at one start only, and there is no key to enter.
+
+- `The key ring changed` means that the database holds values that this key ring cannot read. A restore without `/data/keys` causes this. Restore the `keys` folder from the same backup as the database, or enter each API key of a model provider again.
+- `The key folder takes no write` means that the server cannot save a key ring in `/data/keys`. The server then makes a new ring at the next start, and each saved API key stops working. Make the folder writable, and restart the server.
+
+## A Cleanup failed
+
+The Session shows a closed reason, and the words of the model provider are not stored. Open the model providers page and press **Test**. It shows the message of the model provider, with the key removed. An Anthropic key that has no workspace needs a workspace ID, and Recall does not send one yet, so use a key of a workspace.
+
 ## The background jobs stopped
 
 A store fault that is not transient, such as a full disk, stops the background jobs and leaves the journal up. `/health` answers 503, and its body starts with `Unhealthy` and says `The background jobs stopped`. The log has one line at the level `Fatal` with the same text. The job pages at `/backwave` can show `The job pages cannot open`. A person can still read and write in the journal. Text that waits for a job, such as a transcript, waits until the jobs run again.

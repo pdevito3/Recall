@@ -8,8 +8,6 @@ public abstract record CallerIdentity
     /// <summary>System work in a scope from <see cref="SystemScopeExtensions.CreateSystemScope"/>.</summary>
     public sealed record System : CallerIdentity;
 
-    public sealed record JournalWork(string UserId, string TenantId) : CallerIdentity;
-
     /// <summary>
     /// A client on <see cref="TenancyOptions.ReadAllTenantsClientIds"/> or
     /// <see cref="TenancyOptions.ManageAllTenantsClientIds"/>, whatever the <c>sub</c> of the token.
@@ -17,6 +15,9 @@ public abstract record CallerIdentity
     public sealed record AllTenantsClient(string ClientId, bool CanManage) : CallerIdentity;
 
     public sealed record User(string Subject, LiveUser? LiveUser) : CallerIdentity;
+
+    /// <summary>Work for one journal owner in a scope from <see cref="SystemScopeExtensions.CreateJournalScope"/>, such as a job.</summary>
+    public sealed record JournalWork(string UserId, string TenantId) : CallerIdentity;
 
     /// <summary>
     /// A client that the tenant of the user registered as a delegated agent, in a token for a live app user of that
@@ -44,8 +45,8 @@ public abstract record CallerIdentity
     public TenantScope Scope => this switch
     {
         System or AllTenantsClient => TenantScope.AllTenants,
-        JournalWork work => TenantScope.ForTenant(work.TenantId),
         User { LiveUser: { } liveUser } => TenantScope.ForTenant(liveUser.TenantId),
+        JournalWork work => TenantScope.ForTenant(work.TenantId),
         DelegatedAgent agent => TenantScope.ForTenant(agent.LiveUser.TenantId),
         MachineAgent agent => TenantScope.ForTenant(agent.TenantId),
         _ => TenantScope.NoTenant,

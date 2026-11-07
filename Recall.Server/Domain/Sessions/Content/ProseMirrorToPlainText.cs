@@ -5,6 +5,8 @@ using System.Text.Json.Nodes;
 
 public static class ProseMirrorToPlainText
 {
+    internal const string StrikeSign = "~~";
+
     public static string Render(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
@@ -46,8 +48,14 @@ public static class ProseMirrorToPlainText
         if (content is not JsonArray children)
             return;
 
-        foreach (var child in children.OfType<JsonObject>())
+        var inlines = children.OfType<JsonObject>().ToList();
+        var strikes = ProseMirrorNode.StrikeEdgesOf(inlines);
+        for (var at = 0; at < inlines.Count; at++)
         {
+            var child = inlines[at];
+            if (strikes[at].Opens)
+                line.Append(StrikeSign);
+
             switch (ProseMirrorNode.TypeOf(child))
             {
                 case "text":
@@ -60,6 +68,9 @@ public static class ProseMirrorToPlainText
                     RenderInline(child["content"], line);
                     break;
             }
+
+            if (strikes[at].Closes)
+                line.Append(StrikeSign);
         }
     }
 }

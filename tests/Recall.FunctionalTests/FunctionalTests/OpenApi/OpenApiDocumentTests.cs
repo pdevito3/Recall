@@ -24,6 +24,7 @@ public class OpenApiDocumentTests
     private static readonly Dictionary<string, string[]> NonJsonSuccessResponses = new()
     {
         ["GET /api/v1/support-bundle 200"] = ["application/zip"],
+        ["POST /api/v1/sessions/{id}/cleanup/stream 200"] = ["text/event-stream"],
         ["GET /api/v1/recordings/{id}/files/{name} 200"] = ["audio/webm", "audio/mp4"],
         ["PUT /api/v1/recordings/{id}/slices/{index} request body"] = ["application/octet-stream"],
     };

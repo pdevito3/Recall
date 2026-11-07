@@ -33,7 +33,7 @@ function Home() {
           </CardHeader>
           <CardContent className="flex flex-wrap items-center justify-between gap-4">
             <SignedInUser />
-            <Button variant="outline" isPending={logout.isPending} onPress={() => logout.mutate()}>
+            <Button variant="outline" className="max-sm:h-11" isPending={logout.isPending} onPress={() => logout.mutate()}>
               <HugeiconsIcon icon={Logout01Icon} className="size-4" />
               Logout
             </Button>

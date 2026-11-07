@@ -14,7 +14,7 @@ A save adds one audit entry for each entity that it adds, changes, or deletes, a
 | `Restored` | sets `IsDeleted` back to false | The old and the new value of each value that also changed |
 | `Action` | saves a recorded action | Each property of the action, except its subject |
 
-The entries do not record the key, the `BaseEntity` bookkeeping (`LastModifiedOn`, `IsDeleted`, and `Version`), or the discriminator of a TPH hierarchy. The entity type of the entry names the derived type. An update that changes only these values writes no entry. Thus the owner touch of [concurrency.md](concurrency.md#versions) writes no entry.
+The entries do not record the key, the `BaseEntity` bookkeeping (`LastModifiedOn`, `IsDeleted`, and `Version`), the discriminator of a TPH hierarchy, or a property with `[NotRecorded(reason)]`. Use that mark for a secret that a delete must really remove, such as the protected API key of a model provider. `[Sensitive]` hides a value from a reader, but the entry still holds it. The entity type of the entry names the derived type. An update that changes only these values writes no entry. Thus the owner touch of [concurrency.md](concurrency.md#versions) writes no entry.
 
 An `IJournalOwned` row records only its `TenantId` and its `UserId`. Those values do not change after a create, so only the create and the delete of a row write an entry, and an entry holds no word of the journal. A Revision and a line of the sync feed are not audited. See [ADR 0020](../adr/0020-journal-rules-in-the-database.md).
 

@@ -1,4 +1,5 @@
 import {
+  AiBrain01Icon,
   Home01Icon,
   InformationCircleIcon,
   UserGroupIcon,
@@ -41,6 +42,11 @@ const navItems = [
     title: "Users",
     url: "/users",
     icon: UserGroupIcon,
+  },
+  {
+    title: "Model providers",
+    url: "/model-providers",
+    icon: AiBrain01Icon,
   },
   {
     title: "About",
