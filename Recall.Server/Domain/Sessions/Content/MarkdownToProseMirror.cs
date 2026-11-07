@@ -371,6 +371,11 @@ public static class MarkdownToProseMirror
             case TaskList:
                 break;
 
+            // Markdig leaves the space between "[x]" and the words in the first literal of a task.
+            case LiteralInline { PreviousSibling: TaskList } literal:
+                AddText(target, literal.Content.ToString().TrimStart(), marks);
+                break;
+
             case LiteralInline literal:
                 AddText(target, literal.Content.ToString(), marks);
                 break;

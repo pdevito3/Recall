@@ -41,4 +41,18 @@ public class MarkdownToProseMirrorTests
         // Assert
         json.ShouldContain("Обед");
     }
+
+    [Test]
+    [Arguments("- [x] paid rent\n- [ ] call mum", "paid rent|call mum")]
+    [Arguments("- [x] **paid** rent", "paid")]
+    public void a_task_starts_with_its_words_and_not_with_the_space_after_its_box(string markdown, string firstWords)
+    {
+        // Act
+        var json = MarkdownToProseMirror.ConvertToJson(markdown);
+
+        // Assert
+        var items = JsonNode.Parse(json)!["content"]![0]!["content"]!.AsArray();
+        var firstTexts = items.Select(item => item!["content"]![0]!["content"]![0]!["text"]!.GetValue<string>());
+        string.Join('|', firstTexts).ShouldBe(firstWords);
+    }
 }
