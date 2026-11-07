@@ -1,6 +1,8 @@
 namespace Recall.UnitTests.Architecture;
 
 using System.Reflection;
+using BackWave.Jobs;
+using Microsoft.Extensions.Hosting;
 using Recall.Server.Resources;
 using Recall.Server.Resources.Entrypoints.Http;
 using ModelContextProtocol.Server;
@@ -84,6 +86,7 @@ public sealed class BoundaryScanner(
     /// </summary>
     public string[] CoreThatCreatesARunAgainRequest()
         => CoreTypes()
+            .Where(type => !IsBackgroundEntrypoint(Outermost(type)))
             .Where(type => type.Methods
                 .Where(method => method.HasBody && method.Name != "<Clone>$")
                 .SelectMany(method => method.Body.Instructions)
@@ -103,6 +106,16 @@ public sealed class BoundaryScanner(
     /// <summary>The top-level core types.</summary>
     public HashSet<string> CoreNames()
         => CoreTypes().Select(t => Outermost(t).FullName).ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>A job or a hosted service starts its own DI scope and sends the command first, so a run again discards nothing.</summary>
+    private bool IsBackgroundEntrypoint(TypeDefinition type)
+    {
+        var reflected = _assembly.GetType(type.FullName.Replace('/', '+'));
+        return reflected is not null
+            && (typeof(BackgroundService).IsAssignableFrom(reflected)
+                || reflected.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
+                    .Any(method => method.IsDefined(typeof(JobAttribute))));
+    }
 
     private bool IsAdapter(TypeDefinition type)
     {

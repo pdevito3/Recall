@@ -4,6 +4,8 @@
 */
 
 import * as z from 'zod'
+import { personProposalDtoSchema } from './person-proposal-dto'
+import { sessionSuggestionDtoSchema } from './session-suggestion-dto'
 import { sessionTopicDtoSchema } from './session-topic-dto'
 
 export const sessionDtoSchema = z.object({
@@ -23,6 +25,11 @@ export const sessionDtoSchema = z.object({
   synopsis: z.string().nullish(),
   cleanupStatus: z.enum(['NotRun', 'Running', 'Clean', 'Stale', 'Failed']),
   lastCleanupRawRevision: z.int32().nullish(),
+  cleanupBaseCleanedRevision: z.int32().nullish().describe('The number of the Cleaned Draft at the start of the last run. While the run runs, a newer Cleaned means its result will wait in History.'),
+  waitingCleanupRevision: z.int32().nullish().describe('The Cleaned Revision that holds a Cleanup result that did not replace Cleaned, because Cleaned moved during its run. Null when none waits.'),
+  cleanupFailure: z.enum(['None', 'NoModelProvider', 'KeyUnreadable', 'ProviderRefused', 'ProviderUnavailable', 'BadModelOutput', 'Interrupted', 'Stopped']).describe('Why the last Cleanup failed. It is a closed code, and the words of a model provider never come here.'),
+  suggestions: z.array(sessionSuggestionDtoSchema),
+  peopleProposals: z.array(personProposalDtoSchema),
   activity: z.string(),
   moods: z.array(z.string()),
   topics: z.array(sessionTopicDtoSchema),

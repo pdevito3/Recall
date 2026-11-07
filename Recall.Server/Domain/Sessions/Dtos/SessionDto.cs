@@ -22,6 +22,18 @@ public sealed record SessionDto
     [EnumNames<CleanupStatus>]
     public string CleanupStatus { get; init; } = default!;
     public int? LastCleanupRawRevision { get; init; }
+
+    /// <summary>The number of the Cleaned Draft at the start of the last run. While the run runs, a newer Cleaned means its result will wait in History.</summary>
+    public int? CleanupBaseCleanedRevision { get; init; }
+
+    /// <summary>The Cleaned Revision that holds a Cleanup result that did not replace Cleaned, because Cleaned moved during its run. Null when none waits.</summary>
+    public int? WaitingCleanupRevision { get; init; }
+
+    /// <summary>Why the last Cleanup failed. It is a closed code, and the words of a model provider never come here.</summary>
+    [EnumNames<CleanupFailure>]
+    public string CleanupFailure { get; init; } = nameof(Sessions.CleanupFailure.None);
+    public IReadOnlyList<SessionSuggestionDto> Suggestions { get; init; } = [];
+    public IReadOnlyList<PersonProposalDto> PeopleProposals { get; init; } = [];
     public string Activity { get; init; } = default!;
     public IReadOnlyList<string> Moods { get; init; } = [];
     public IReadOnlyList<SessionTopicDto> Topics { get; init; } = [];

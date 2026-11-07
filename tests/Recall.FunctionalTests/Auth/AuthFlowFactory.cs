@@ -6,12 +6,14 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Recall.FunctionalTests.TestUtilities;
 using Recall.Server.Auth;
 using Recall.Server.Databases;
+using Recall.Server.Domain.Recordings.Transcription;
 using Recall.Server.Domain.Tenants;
 using Recall.SharedTestHelpers.Utilities;
 using Serilog.Core;
@@ -31,6 +33,8 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
 
     public CapturedLogs Logs { get; } = new();
 
+    public ITranscriptionEngine? TranscriptionEngine { get; init; }
+
     /// <summary>A second provider with the mode ID <see cref="OtherModeId"/>, for a test of one provider that fails next to one that works.</summary>
     public StubOidcProvider? OtherProvider { get; init; }
 
@@ -42,6 +46,20 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
 
     /// <summary>True on the flow of a request to this host. Each host of the process logs through one static logger, so this tells their lines apart.</summary>
     public bool IsInRequest => _inRequest.Value;
+
+    /// <summary>Runs work that a request did not start, such as a job, so that its lines count as lines of this host.</summary>
+    public async Task InRequestFlowAsync(Func<Task> work)
+    {
+        _inRequest.Value = true;
+        try
+        {
+            await work();
+        }
+        finally
+        {
+            _inRequest.Value = false;
+        }
+    }
 
     public HttpClient NewClient()
     {
@@ -91,6 +109,12 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
                 services.AddSingleton(provider => new OwnerClaim(claimFile, provider.GetRequiredService<TimeProvider>()));
             if (Clock is { } clock)
                 services.AddSingleton(clock);
+            if (TranscriptionEngine is { } engine)
+            {
+                services.RemoveAll<ITranscriptionEngine>();
+                services.AddSingleton(engine);
+            }
+
             services.AddSingleton<ILogEventSink>(Logs);
             services.AddSingleton<IStartupFilter, ConnectionAddressFilter>();
             services.AddSingleton<IStartupFilter>(new RequestFlowFilter(_inRequest));

@@ -6,8 +6,8 @@ using System.Text.Json.Nodes;
 
 public static class PersonMentions
 {
-    // The default encoder writes each non-ASCII character as an escape, so a rename would make the words longer on disk.
-    private static readonly JsonSerializerOptions KeepWords = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+    // The default encoder writes each non-ASCII character as an escape, so a rename or a tag would make the words longer on disk.
+    internal static readonly JsonSerializerOptions KeepWords = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     public static IReadOnlySet<string> PersonIdsIn(string? json)
     {

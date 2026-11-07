@@ -15,6 +15,8 @@ public class SessionTests
 
     private static Session NewSession() => Session.Create("ten_1", "usr_1", "device-1", Noon, null, Now);
 
+    private static CleanupOutcome Outcome(string cleaned, string synopsis) => new(cleaned, synopsis, [], [], []);
+
     private static DraftSave Save(string text, int baseRevision, DateTimeOffset? savedAt = null)
         => DraftSave.Of(text, baseRevision, savedAt ?? Noon);
 
@@ -47,7 +49,7 @@ public class SessionTests
         var session = NewSession();
         session.SaveRaw(Save("raw words", 0));
         session.BeginCleanup();
-        session.CompleteCleanup("clean words", "A recap", session.Raw.DraftRevision, Noon);
+        session.CompleteCleanup(Outcome("clean words", "A recap"), session.Raw.DraftRevision, Noon);
         return session;
     }
 
@@ -60,9 +62,9 @@ public class SessionTests
 
         session.BeginCleanup();
         if (state == CleanupRunState.Clean)
-            session.CompleteCleanup("clean words", "A recap", session.Raw.DraftRevision, Noon);
+            session.CompleteCleanup(Outcome("clean words", "A recap"), session.Raw.DraftRevision, Noon);
         else
-            session.FailCleanup();
+            session.FailCleanup(CleanupFailure.ProviderRefused);
         return session;
     }
 
@@ -174,7 +176,7 @@ public class SessionTests
         var cleaned = session.Cleaned;
 
         // Act
-        var complete = () => session.CompleteCleanup("late words", "A late recap", session.Raw.DraftRevision, Now);
+        var complete = () => session.CompleteCleanup(Outcome("late words", "A late recap"), session.Raw.DraftRevision, Now);
 
         // Assert
         complete.ShouldThrow<ValidationException>();
@@ -193,7 +195,7 @@ public class SessionTests
         var session = SessionAt(state);
 
         // Act
-        var fail = () => session.FailCleanup();
+        var fail = () => session.FailCleanup(CleanupFailure.ProviderRefused);
 
         // Assert
         fail.ShouldThrow<ValidationException>();
@@ -228,7 +230,7 @@ public class SessionTests
         // Act
         session.BeginCleanup();
         var whileRunning = session.CleanupStatus;
-        session.FailCleanup();
+        session.FailCleanup(CleanupFailure.ProviderRefused);
 
         // Assert
         whileRunning.ShouldBe(CleanupStatus.Running);
@@ -325,7 +327,7 @@ public class SessionTests
         var session = NewSession();
         session.SaveRaw(Save(Mention("Sam"), 0));
         session.BeginCleanup();
-        session.CompleteCleanup(Mention("Sam"), "Lunch with Sam", session.Raw.DraftRevision, Noon);
+        session.CompleteCleanup(Outcome(Mention("Sam"), "Lunch with Sam"), session.Raw.DraftRevision, Noon);
 
         // Act
         session.RenamePerson(PersonId, "Samuel", Noon.AddHours(1));
@@ -343,7 +345,7 @@ public class SessionTests
         var session = NewSession();
         session.SaveRaw(Save(Mention("Sam"), 0));
         session.BeginCleanup();
-        session.CompleteCleanup(Mention("Sam"), "Lunch with Sam", session.Raw.DraftRevision, Noon);
+        session.CompleteCleanup(Outcome(Mention("Sam"), "Lunch with Sam"), session.Raw.DraftRevision, Noon);
         session.SaveRaw(Save(Mention("Sam") + " ", session.Raw.DraftRevision));
         var readByCleanup = session.LastCleanupRawRevision;
 
@@ -363,7 +365,7 @@ public class SessionTests
         var session = NewSession();
         session.SaveRaw(Save(Mention("Sam"), 0));
         session.BeginCleanup();
-        session.CompleteCleanup(Mention("Sam"), "Lunch with Sam", session.Raw.DraftRevision, Noon);
+        session.CompleteCleanup(Outcome(Mention("Sam"), "Lunch with Sam"), session.Raw.DraftRevision, Noon);
 
         // Act
         session.RenamePerson(PersonId, "Samuel", Noon.AddHours(1));
@@ -384,7 +386,7 @@ public class SessionTests
 
         // Act
         session.BeginCleanup();
-        session.CompleteCleanup("clean words", "A recap", raw.DraftRevision, Noon);
+        session.CompleteCleanup(Outcome("clean words", "A recap"), raw.DraftRevision, Noon);
 
         // Assert
         session.Raw.ShouldBe(raw);

@@ -147,6 +147,8 @@ For interactive exploration, the Playwright MCP server in `.mcp.json` also works
 
 A row that the restore put back has its old values again, also its `version`. The next recipe reads its rows from the page, so it gets that version.
 
+The copy, the restore, and `data.changes` leave out the `backwave_*` tables, because the job server writes them on its own clock. A job row that a recipe queues stays after the restore, also when the restore removes its Session. Do not assert a count of job rows across runs.
+
 If a run stops before the restore (Ctrl-C, a killed process, a restore that failed), `db-snapshot.json` stays. The next `browse.mjs` run restores it first and prints `data: an earlier run did not restore the database`. The doctor prints a `warn` line while the file is there. If that restore also fails, for example after a migration changed a table, `browse.mjs` stops. Delete `db-snapshot.json` to keep the rows as they are, or launch a new stack.
 
 The restore changes only rows. The server keeps a cache of the tenant of each user for up to 30 minutes. A login on a restored database makes a new user ID, so the next run reads no old answer from that cache. A recipe that keeps the same user with `--keep-data` and changes its tenant can still read an old answer. Run `dotnet aspire resource server restart --apphost Recall.AppHost` after such a recipe.

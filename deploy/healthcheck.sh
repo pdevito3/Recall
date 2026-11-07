@@ -5,13 +5,19 @@
 port="${1:-8080}"
 seconds_between_attempts="${2:-10}"
 attempts_for_a_disk_to_wake=4
+newline=$'\n'
 
 read_health() {
   body=
   exec 3<>"/dev/tcp/127.0.0.1/$port" || return
   printf 'GET /health HTTP/1.0\r\n\r\n' >&3
+  in_body=
   while IFS= read -r line <&3 || [ -n "$line" ]; do
-    body="$line"
+    if [ -n "$in_body" ]; then
+      body="${body:+$body$newline}$line"
+    elif [ "$line" = $'\r' ]; then
+      in_body=1
+    fi
   done
   exec 3<&-
 }

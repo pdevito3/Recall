@@ -7,6 +7,7 @@ using BackWave.Hosting;
 using BackWave.Sqlite;
 using Databases;
 using Domain.Recordings.Jobs;
+using Domain.Sessions.Jobs;
 
 public static class JobHosting
 {
@@ -31,11 +32,31 @@ public static class JobHosting
 
     private const int TranscriptionsThatFitInMemory = 1;
 
+    public static WorkerGroupOptions SystemWorkers(JobOptions settings) => new()
+    {
+        Name = "system",
+        Policy = new DispatchPolicy.Strict([SystemQueue]),
+        PollInterval = TimeSpan.FromSeconds(settings.PollSeconds),
+        ShutdownBudget = JobShutdownBudget,
+        Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
+    };
+
     public static WorkerGroupOptions TranscriptionWorkers(JobOptions settings) => new()
     {
         Name = TranscriptionQueue,
         PoolSize = TranscriptionsThatFitInMemory,
         Policy = new DispatchPolicy.Strict([TranscriptionQueue]),
+        PollInterval = TimeSpan.FromSeconds(settings.PollSeconds),
+        ShutdownBudget = JobShutdownBudget,
+        Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
+    };
+
+    /// <summary>A queue limit is what a tenant can hold, and the pool has room for each queue at its limit.</summary>
+    public static WorkerGroupOptions CleanupWorkers(JobOptions settings) => new()
+    {
+        Name = "cleanup",
+        PoolSize = CleanupQueues.Workers,
+        Policy = CleanupQueues.Policy,
         PollInterval = TimeSpan.FromSeconds(settings.PollSeconds),
         ShutdownBudget = JobShutdownBudget,
         Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
@@ -61,6 +82,9 @@ public static class JobHosting
             // stops after it gets no time to give back its jobs.
             host.ServicesStopConcurrently = true;
         });
+        // A hosted service starts in the order of its registration, so each limit is in place before a worker group can claim.
+        if (settingsAtRegistration.RunWorkers || !inDevelopmentOrTest)
+            builder.Services.AddHostedService<CleanupQueueLimits>();
         builder.Services.AddBackWave(backwave =>
         {
             backwave.UseStore(services => new SqliteJobStore(new SqliteStoreOptions
@@ -73,22 +97,19 @@ public static class JobHosting
             })).UseJobs(JobFailureFilter.Applied(BackWaveJobs.Module));
             if (settingsAtRegistration.RunWorkers || !inDevelopmentOrTest)
             {
-                backwave.AddWorkerGroup(new WorkerGroupOptions
-                {
-                    Name = "system",
-                    Policy = new DispatchPolicy.Strict([SystemQueue]),
-                    PollInterval = TimeSpan.FromSeconds(settingsAtRegistration.PollSeconds),
-                    ShutdownBudget = JobShutdownBudget,
-                    Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
-                });
+                backwave.AddWorkerGroup(SystemWorkers(settingsAtRegistration));
+                backwave.AddWorkerGroup(CleanupWorkers(settingsAtRegistration));
                 backwave.AddWorkerGroup(TranscriptionWorkers(settingsAtRegistration));
                 builder.Services.AddHostedService<JobHostWatch>();
+                builder.Services.AddSingleton<CleanupJobWatch>();
+                builder.Services.AddHostedService(services => services.GetRequiredService<CleanupJobWatch>());
                 builder.Services.AddHostedService<RecordingSweepService>();
             }
         });
         builder.Services.AddBackWaveDashboardMetrics();
         builder.Services.AddSingleton<JobHostStatus>();
         builder.Services.AddSingleton<SaveJobs>();
+        builder.Services.AddSingleton<RunningCleanups>();
         builder.Services.AddHealthChecks().AddCheck<JobHostHealthCheck>(HealthCheckName);
     }
 }

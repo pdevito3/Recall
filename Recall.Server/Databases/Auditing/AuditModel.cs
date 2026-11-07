@@ -8,8 +8,9 @@ using Microsoft.EntityFrameworkCore.Metadata;
 
 /// <summary>
 /// One value column of an entity type, with its audit facts. <c>IsRecorded</c> is false for the key, the
-/// <see cref="BaseEntity"/> bookkeeping (<c>LastModifiedOn</c> and <c>IsDeleted</c>), the TPH discriminator, and each
-/// column of an <see cref="IJournalOwned"/> type other than its tenant and its owner.
+/// <see cref="BaseEntity"/> bookkeeping (<c>LastModifiedOn</c> and <c>IsDeleted</c>), the TPH discriminator, a value with
+/// <see cref="NotRecordedAttribute"/>, and each column of an <see cref="IJournalOwned"/> type other than its tenant and
+/// its owner.
 /// </summary>
 internal sealed record AuditedValue(string Path, EntityColumn Column, bool IsRecorded, Sensitivity Sensitivity);
 
@@ -74,7 +75,8 @@ internal sealed class AuditModel
         if (column.Complex is not { } complex)
             return new AuditedValue(property.Name, column,
                 IsRecorded: !property.IsPrimaryKey() && !Bookkeeping.Contains(property.Name)
-                            && property.DeclaringType.FindDiscriminatorProperty() != property,
+                            && property.DeclaringType.FindDiscriminatorProperty() != property
+                            && property.PropertyInfo?.IsDefined(typeof(NotRecordedAttribute)) != true,
                 AuditSensitivity.Of(property.PropertyInfo ?? (MemberInfo?)property.FieldInfo, property.ClrType,
                     property.IsForeignKey()));
 

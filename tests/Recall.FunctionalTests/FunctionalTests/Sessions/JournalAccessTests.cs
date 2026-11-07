@@ -158,6 +158,9 @@ public class JournalAccessTests : TestBase
         response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 
+    private static List<string> EachPermissionOfAnAgent()
+        => Permission.GetAll().Where(p => p != Permission.ManageModelProviders()).Select(p => p.Value).ToList();
+
     private static async Task<(User Member, Agent Machine, Agent Delegated)> AddAgentsAsync()
     {
         TestGraph.Start(out _)
@@ -165,8 +168,8 @@ public class JournalAccessTests : TestBase
             .AddUser(out var member, u => u.Role = "User")
             .Under(tenant)
             .AddAgents(out var agents,
-                a => { a.Mode = AgentMode.Machine().Value; a.Permissions = Permission.GetAll().Select(p => p.Value).ToList(); },
-                a => { a.Mode = AgentMode.Delegated().Value; a.Permissions = Permission.GetAll().Select(p => p.Value).ToList(); });
+                a => { a.Mode = AgentMode.Machine().Value; a.Permissions = EachPermissionOfAnAgent(); },
+                a => { a.Mode = AgentMode.Delegated().Value; a.Permissions = EachPermissionOfAnAgent(); });
         await InsertAsync(tenant);
         await InsertAsync(member);
         await InsertAsync(agents);

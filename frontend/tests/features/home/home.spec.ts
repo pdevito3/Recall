@@ -92,6 +92,18 @@ test.describe('a signed-in user on the home page', () => {
   })
 })
 
+test.describe('the home page on a phone', () => {
+  test.use({ actor: as.user('Bob Smith'), viewport: { width: 390, height: 844 } })
+
+  test('the Logout button of the page is a touch target of 44 px', async ({ page }) => {
+    const home = homePage(page)
+
+    await home.open()
+
+    expect((await home.at.logout.boundingBox())?.height).toBeGreaterThanOrEqual(44)
+  })
+})
+
 test.describe('a logout that fails on a phone', () => {
   test.use({ actor: as.user('Bob Smith'), viewport: { width: 390, height: 844 } })
 

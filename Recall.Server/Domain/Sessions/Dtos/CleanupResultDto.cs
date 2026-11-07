@@ -1,0 +1,33 @@
+namespace Recall.Server.Domain.Sessions.Dtos;
+
+using System.ComponentModel.DataAnnotations;
+using People;
+using Resources;
+
+/// <summary>A Cleanup that a model on the device did. The server does the same work on it as on the answer of a model provider.</summary>
+public sealed record CleanupResultDto
+{
+    [RequiredField]
+    [SchemaMaxLength(typeof(Session), nameof(Session.DraftMaxLength))]
+    public string CleanedMarkdown { get; init; } = default!;
+
+    [SchemaMaxLength(typeof(Session), nameof(Session.SynopsisMaxLength))]
+    public string? Synopsis { get; init; }
+
+    [SchemaMaxLength(typeof(Session), nameof(Session.MetadataValueMaxLength))]
+    public IReadOnlyList<string> TopicSuggestions { get; init; } = [];
+
+    [SchemaMaxLength(typeof(Session), nameof(Session.MetadataValueMaxLength))]
+    public IReadOnlyList<string> MoodSuggestions { get; init; } = [];
+
+    [SchemaMaxLength(typeof(Person), nameof(Person.LabelMaxLength))]
+    public IReadOnlyList<string> PeopleProposal { get; init; } = [];
+
+    /// <summary>The Revision of Raw that the model read. A later Revision of Raw makes the Session Stale.</summary>
+    [Range(1, int.MaxValue)]
+    public required int BaseRawRevision { get; init; }
+
+    /// <summary>The number of the Cleaned Draft that the device read, 0 for the empty Draft. If Cleaned moved after it, Cleaned stays and the result waits in History.</summary>
+    [Range(0, int.MaxValue)]
+    public required int BaseCleanedRevision { get; init; }
+}
