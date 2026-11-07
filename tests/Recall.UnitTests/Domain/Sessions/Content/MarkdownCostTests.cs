@@ -69,6 +69,7 @@ public class MarkdownCostTests
             GridTable(Repeat("- ", 150_000) + "x"),
             "> " + GridTable(Repeat("> ", 150_000) + "x").Replace("\n", "\n> ", StringComparison.Ordinal),
             CellOverABorder(Repeat("- ", 120_000) + "x"),
+            GridTable("\u00a0" + Repeat("- ", 150_000) + "x"),
         ];
         return texts.Select<string, Func<string>>(text => () => text);
     }
