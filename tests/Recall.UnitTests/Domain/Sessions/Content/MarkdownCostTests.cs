@@ -93,7 +93,7 @@ public class MarkdownCostTests
     [Arguments("a paragraph\n\n- an item\n- an item\n\n# a heading")]
     public void a_text_of_a_person_is_under_the_bound(string markdown)
     {
-        // Assert
+        // Act and assert
         MarkdownCost.IsAboveBound(markdown).ShouldBeFalse();
     }
 
@@ -104,7 +104,7 @@ public class MarkdownCostTests
         var markdown = Repeat("a line of words with [a link](https://example.com/page) in a block of its own\n\n", 3_000);
         MarkdownToProseMirror.ConvertToJson(markdown).Length.ShouldBeLessThan(Session.DraftMaxLength);
 
-        // Assert
+        // Act and assert
         MarkdownCost.IsAboveBound(markdown).ShouldBeFalse();
     }
 
@@ -116,7 +116,7 @@ public class MarkdownCostTests
         var inOne = Repeat(block, 10);
         var inMany = Repeat(block + "\n\n", 10);
 
-        // Assert
+        // Act and assert
         MarkdownCost.IsAboveBound(inOne).ShouldBeTrue();
         MarkdownCost.IsAboveBound(inMany).ShouldBeFalse();
     }
@@ -146,7 +146,7 @@ public class MarkdownCostTests
     [Test]
     public void empty_words_give_the_empty_document()
     {
-        // Assert
+        // Act and assert
         MarkdownToProseMirror.ConvertToJson("  \n ").ShouldBe("""{"type":"doc","content":[]}""");
         MarkdownToProseMirror.ConvertToJson(null).ShouldBe("""{"type":"doc","content":[]}""");
     }
