@@ -74,7 +74,7 @@ After `Lost`, do these steps:
 3. Compare the words with the text of the read. If the text holds them, stop, and use the number of the read as the next base. A merge that lost its reply can be in the Draft.
 4. Merge the words into the text of the read, one time.
 5. Save the merge, with the number of the read as `baseRevision` and a new `savedAt`. The old `savedAt` with the same words is a replay, and it gives `Lost` again.
-6. If the reply is `Lost` again, or the save has no reply, go back to step 2.
+6. If the reply is `Lost` again, or the save has no reply, go back to step 2. After 3 `Lost` answers in a row, wait before step 2. Wait 1 s first, then double the wait after each next `Lost`, up to 30 s, and add a random part of up to half the wait. A `Won`, `Unchanged`, or `Kept` reply ends the waits. While the client waits, show the person that the words wait to save. Do not say that the words are lost: each `Lost` save keeps them in a Revision, and the queue still holds them.
 
 These steps stop a repeat of text. A merge from an old queue entry adds the words a second time when the merge before it is in the Draft.
 
