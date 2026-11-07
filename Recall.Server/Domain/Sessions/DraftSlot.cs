@@ -6,23 +6,18 @@ public sealed record DraftSlot(string Text, int DraftRevision, int LatestRevisio
 
     public static readonly DraftSlot Empty = new(string.Empty, NoRevision, NoRevision, null);
 
-    public bool NeedsReplayLookup(DraftSave save) => save.Text != Text && save.BaseRevision != DraftRevision;
-
-    public DraftDecision Decide(DraftSave save, DraftReplay? replay = null, bool missesTranscript = false)
+    public DraftDecision Decide(DraftSave save, DraftAnswer? earlier = null, bool baseCanWin = true)
     {
         if (save.Text == Text)
             return new DraftDecision(this, DraftSaveOutcome.Unchanged, null, DraftRevision);
 
-        if (replay is { WonRevision: { } won })
-            return new DraftDecision(this, DraftSaveOutcome.Kept, null, won);
+        if (earlier is { DraftTookAt: var number })
+            return new DraftDecision(this, number is null ? DraftSaveOutcome.Lost : DraftSaveOutcome.Kept, null, number);
 
-        if (replay is not null)
-            return new DraftDecision(this, DraftSaveOutcome.Lost, null, null);
-
-        var number = LatestRevision + 1;
-        return !missesTranscript && Beats(save)
-            ? new DraftDecision(new DraftSlot(save.Text, number, number, LaterOf(SavedAt, save.SavedAt)), DraftSaveOutcome.Won, number, number)
-            : new DraftDecision(this with { LatestRevision = number }, DraftSaveOutcome.Lost, number, null);
+        var next = LatestRevision + 1;
+        return baseCanWin && Beats(save)
+            ? new DraftDecision(new DraftSlot(save.Text, next, next, LaterOf(SavedAt, save.SavedAt)), DraftSaveOutcome.Won, next, next)
+            : new DraftDecision(this with { LatestRevision = next }, DraftSaveOutcome.Lost, next, null);
     }
 
     public DraftSlot RewrittenKeepingSavedAt(string text) => new(text, LatestRevision + 1, LatestRevision + 1, SavedAt);
@@ -35,8 +30,8 @@ public sealed record DraftSlot(string Text, int DraftRevision, int LatestRevisio
         => first is { } value && value > second ? value : second;
 }
 
-/// <summary>An earlier try of a save, from its Revision. <paramref name="WonRevision"/> is the number at which the Draft took the words, and null when the try lost.</summary>
-public readonly record struct DraftReplay(int? WonRevision);
+/// <summary>The first Revision that already answers a save. <paramref name="DraftTookAt"/> is the number at which the Draft took the words, and null when this save lost. SES-8.</summary>
+public readonly record struct DraftAnswer(int? DraftTookAt);
 
 /// <summary>What a save does to a Draft. <c>NextBase</c> is the number of a Draft whose words the client holds, or null when it holds none. SES-36.</summary>
 public readonly record struct DraftDecision(DraftSlot Next, DraftSaveOutcome Outcome, int? MintedRevision, int? NextBase);

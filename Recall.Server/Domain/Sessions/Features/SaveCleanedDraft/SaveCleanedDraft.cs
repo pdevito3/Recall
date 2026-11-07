@@ -26,17 +26,19 @@ public static class SaveCleanedDraft
                 .GetById(request.Id, cancellationToken);
 
             var save = DraftSave.Of(request.Dto.Text, request.Dto.BaseRevision, request.Dto.SavedAt, timeProvider.GetUtcNow());
-            var replay = session.Cleaned.NeedsReplayLookup(save)
-                ? await dbContext.CleanedRevisions
-                    .TagWithOperationCallSite("sessions.save_cleaned.replay")
-                    .Where(r => r.SessionId == session.Id && r.ClaimedSavedAt == save.ClaimedSavedAt && r.Text == save.Text)
-                    .OrderByDescending(r => r.WasDraft)
-                    .ThenByDescending(r => r.Number)
-                    .Select(r => (DraftReplay?)new DraftReplay(r.WasDraft ? r.Number : null))
-                    .FirstOrDefaultAsync(cancellationToken)
-                : null;
+            var earlier = await dbContext.CleanedRevisions
+                .TagWithOperationCallSite("sessions.save_cleaned.earlier")
+                .Where(r => r.SessionId == session.Id
+                    && (r.WasDraft ? r.Number >= save.BaseRevision : r.ClaimedSavedAt == save.ClaimedSavedAt)
+                    && r.Text == save.Text)
+                .OrderBy(r => r.Number)
+                .Select(r => (DraftAnswer?)new DraftAnswer(r.WasDraft ? r.Number : null))
+                .FirstOrDefaultAsync(cancellationToken);
+            var baseWasDraft = save.BaseRevision == DraftSlot.NoRevision || await dbContext.CleanedRevisions
+                .TagWithOperationCallSite("sessions.save_cleaned.base")
+                .AnyAsync(r => r.SessionId == session.Id && r.Number == save.BaseRevision && r.WasDraft, cancellationToken);
 
-            var decision = session.SaveCleaned(save, replay);
+            var decision = session.SaveCleaned(save, earlier, baseWasDraft);
             await dbContext.SaveChangesAsync(cancellationToken);
 
             Activity.Current?.SetTag("app.session.save_outcome", decision.Outcome.ToString());

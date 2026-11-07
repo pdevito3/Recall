@@ -13,7 +13,7 @@ public class CleanedRevision
 
     [Sensitive] public string Text { get; private set; } = default!;
 
-    /// <summary>True when the Draft took these words at this number. False for a save that lost, and for each row from before this column.</summary>
+    /// <summary>True when the Draft took these words at this number. False for a save that lost.</summary>
     public bool WasDraft { get; private set; }
 
     public Session Session { get; private set; } = default!;

@@ -6,14 +6,14 @@ using Shouldly;
 public class DraftSlotTests
 {
     [Test]
-    public void a_save_that_misses_a_transcript_loses_at_any_time_and_stays_as_a_revision()
+    public void a_save_from_a_base_that_cannot_win_loses_at_any_time_and_stays_as_a_revision()
     {
         // Arrange
         var slot = new DraftSlot("heard words", 6, 6, new DateTimeOffset(2026, 6, 1, 12, 0, 0, TimeSpan.Zero));
         var save = DraftSave.Of("old copy", 5, new DateTimeOffset(2026, 6, 1, 13, 0, 0, TimeSpan.Zero), new DateTimeOffset(2026, 6, 1, 14, 0, 0, TimeSpan.Zero));
 
         // Act
-        var decision = slot.Decide(save, missesTranscript: true);
+        var decision = slot.Decide(save, baseCanWin: false);
 
         // Assert
         decision.Outcome.ShouldBe(DraftSaveOutcome.Lost);
@@ -134,7 +134,7 @@ public class DraftSlotTests
         var slot = At(4, Noon);
 
         // Act
-        var decision = slot.Decide(Save("older words", 1, Noon.AddHours(-1)), new DraftReplay(WonRevision: null));
+        var decision = slot.Decide(Save("older words", 1, Noon.AddHours(-1)), new DraftAnswer(DraftTookAt: null));
 
         // Assert
         decision.Outcome.ShouldBe(DraftSaveOutcome.Lost);
@@ -152,7 +152,7 @@ public class DraftSlotTests
         var slot = At(4, Noon);
 
         // Act
-        var decision = slot.Decide(Save("older words", 1, Noon.AddHours(-1)), new DraftReplay(WonRevision: 2));
+        var decision = slot.Decide(Save("older words", 1, Noon.AddHours(-1)), new DraftAnswer(DraftTookAt: 2));
 
         // Assert
         decision.Outcome.ShouldBe(DraftSaveOutcome.Kept);
@@ -191,18 +191,6 @@ public class DraftSlotTests
         // Assert
         offline.Outcome.ShouldBe(DraftSaveOutcome.Won);
         offline.Next.Text.ShouldBe("offline words");
-    }
-
-    [Test]
-    public void only_a_stale_save_of_other_words_needs_a_read_of_the_revisions()
-    {
-        // Arrange
-        var slot = At(4, Noon);
-
-        // Act and Assert
-        slot.NeedsReplayLookup(Save("other", 1, Noon)).ShouldBeTrue();
-        slot.NeedsReplayLookup(Save("other", 4, Noon)).ShouldBeFalse();
-        slot.NeedsReplayLookup(Save("current words", 1, Noon)).ShouldBeFalse();
     }
 
     [Test]

@@ -5,9 +5,10 @@ A person dictates on a phone that can stay offline for days. Each other command 
 So a save of a Draft sends no `Version`. It sends a base Revision and the save time on the client. The server applies these rules ([sessions spec](../specs/sessions.md), SES-5 to SES-8):
 
 - A save that is based on the current Draft wins.
-- A save that is based on an older Revision wins when its save time is not before the save time of the Draft.
+- A save that is based on an older Draft wins when its save time is not before the save time of the Draft.
+- A save with a base that names no Draft loses at any save time. The column `was_draft` on a Revision says which numbers were a Draft. A lost save takes a number, so a base of `latestRevision` would otherwise win under the time rule and push a chunk out of the Draft.
 - A save that loses changes no Draft, and its words stay as the newest Revision. No words go away.
-- A replay of a save makes no Revision. A replay of a save that won says `Kept` with the number at which it won, and a replay of a save that lost says `Lost`. The column `WasDraft` on a Revision is the least data that tells them apart.
+- A replay of a save makes no Revision. The first Revision that holds the words answers it. A Revision that was a Draft at the base or later says `Kept` with its number, and a Revision that lost with the same `savedAt` says `Lost`. So the answers come from the Revisions, and no new table holds them. A replay of a save that first said `Unchanged` wrote no row, and it says `Kept` from the Revision of the same words.
 - A save time in the future becomes the time of the server, so a fast clock cannot win each later save.
 
 The server marks the save commands `IRunsAgainWhenRaced`, so the `Version` of the Session row still orders two saves at the same moment. The row version protects the server, and the save time decides between the words of the person.

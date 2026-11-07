@@ -19,7 +19,7 @@ This document compares each of the 22 routes that the POC iOS client calls (`Jou
 | 5 | `POST api/sessions` | `POST /api/v1/sessions` | Send `clientSessionId` in place of `id`, and add `startedAt`. The server makes `id`. A replay gives 200 with the same Session. A replay after a delete gives 409, so drop the local copy. Fixtures: `session-created`, `session-replayed`, `error-replay-after-delete`. |
 | 6 | `GET api/sessions` | `GET /api/v1/sessions` | The body is `{ items, nextCursor }`, not a list. Send `cursor` and `pageSize`. A row has `startedAt`, not `createdAt`, and `personIds`, not `people`. `topics` holds `{ name, provenance }`. A row adds `metadataVersion`, the base of the next metadata save. Fixtures: `session-page`, `session-page-with-next-cursor`. |
 | 7 | `GET api/sessions/{id}` | `GET /api/v1/sessions/{id}` | Fields as in `session`, also `metadataVersion`, the base of the next metadata save. Another person's Session gives 404. |
-| 8 | `PUT api/sessions/{id}/draft` | `PUT /api/v1/sessions/{id}/draft` | Send `text`, `baseRevision`, and `savedAt`. `baseRevision` is required. Send 0 when no Revision exists. The reply has `outcome`, which is `Won`, `Unchanged`, `Kept`, or `Lost`. See [the base of a Draft save](#the-base-of-a-draft-save). Fixtures: `draft-save-won`, `draft-save-lost`. |
+| 8 | `PUT api/sessions/{id}/draft` | `PUT /api/v1/sessions/{id}/draft` | Send `text`, `baseRevision`, and `savedAt`. `baseRevision` is required. Send 0 when no Revision exists. The reply has `outcome`, which is `Won`, `Unchanged`, `Kept`, or `Lost`, and `Kept` and `Lost` have their own fixtures, `draft-save-kept` and `draft-save-lost`. See [the base of a Draft save](#the-base-of-a-draft-save). Fixtures: `draft-save-won`, `draft-save-lost`. |
 | 9 | `GET api/summaries/{period}/{date}` | R10 builds it | No route in this unit. |
 | 10 | `POST api/summaries/{period}/{date}/generate` | R10 builds it | No route in this unit. |
 | 11 | `GET api/me/settings` | `GET /api/v1/me/settings` | `timeZone`, not `timeZoneId`, and `requirePeopleProposalApproval`, not `requirePeopleTagApproval`. `version` is the base of the next settings save, and it is 0 when the User has no row. `timeZoneIsKnown` is false when the host does not know the stored zone, for example after a restore onto other tzdata. The Journaling day then comes from UTC. Show the zone and ask the person for a new one. Fixture: `user-settings`. |
@@ -42,9 +42,9 @@ The rules are SES-5, SES-6, SES-8, and SES-36 in the [sessions spec](specs/sessi
 `baseRevision` is the number of a Draft whose text the client holds. Get this number from one of these sources:
 
 - A read of the Session: `rawDraftRevision` with `rawText`, or `cleanedDraftRevision` with `cleanedText`.
-- A `Won`, `Unchanged`, or `Kept` reply: `draftRevision`.
+- A `Won` or `Unchanged` reply: `draftRevision`.
 
-Do not use `latestRevision` as a base. It can name a Revision that lost.
+Do not use `latestRevision` as a base. It can name a Revision that lost, and a base that names no Draft loses at any `savedAt`. Do not use the number of a `Kept` reply as a base. It names an older Draft, and a save from it can replace newer words under the time rule.
 
 Each `outcome` tells the client this:
 
@@ -52,10 +52,10 @@ Each `outcome` tells the client this:
 |-----------|-----------|------------------------|-----------------|
 | `Won` | Holds these words | In the Draft, and in a new Revision | The number of the Draft |
 | `Unchanged` | Holds these words | In the Draft. No new Revision | The number of the Draft |
-| `Kept` | Took these words at an earlier save. It can hold more words now, or other words | In an earlier Revision. No new Revision | The number at which the Draft took these words |
+| `Kept` | Took these words at or after the base. It can hold more words now, or other words | In an earlier Revision. No new Revision | The number at which the Draft took these words. It is not a base |
 | `Lost` | Never took these words in this save | In a Revision | `null` |
 
-A replay of a save that won gives `Kept`, and a replay of a save that lost gives `Lost`. Neither makes a new Revision. So a client that lost a reply gets the true answer when it sends the save again. After `Kept`, do not merge these words into the Draft again, because the Draft already took them. Read the Session to see what changed. A Revision from before the `was_draft` column reads as a loss, so a replay of an older win can still give `Lost`.
+A replay sends the same `text`, the same `baseRevision`, and the same `savedAt`. Give each new save a new `savedAt`, and keep the `savedAt` of a queued save when you send it again. A replay of a save that won or gave `Unchanged` gives `Kept`, and a replay of a save that lost gives `Lost`. Neither makes a new Revision. So a client that lost a reply gets the true answer when it sends the save again. After `Kept`, do not merge these words into the Draft again, because the Draft already took them. Read the Session before the next save, and use the number of the read as the base.
 
 Any write can answer 507 when the disk of the server is full. The save did not happen. Keep the words, and send the same save again later.
 
@@ -65,7 +65,7 @@ After `Lost`, do these steps:
 
 1. Read the Session.
 2. Merge the words of the client into the text of the read.
-3. Save the merge, with the number of the read as `baseRevision`.
+3. Save the merge, with the number of the read as `baseRevision` and a new `savedAt`. The old `savedAt` with the same words is a replay, and it gives `Lost` again.
 4. If the reply is `Lost` again, go back to step 1.
 
 Do not send a new save from the old base and expect it to win. While a transcript moves the Draft, a save from a base older than the last chunk loses at any `savedAt`.

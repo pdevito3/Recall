@@ -102,9 +102,9 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         };
     }
 
-    public DraftDecision SaveRaw(DraftSave save, DraftReplay? replay = null)
+    public DraftDecision SaveRaw(DraftSave save, DraftAnswer? earlier = null, bool baseWasDraft = true)
     {
-        var decision = Raw.Decide(save, replay, missesTranscript: save.BaseRevision < LastTranscriptRevision);
+        var decision = Raw.Decide(save, earlier, baseWasDraft && !(save.BaseRevision < LastTranscriptRevision));
         Raw = decision.Next;
         if (decision.MintedRevision is { } number)
             _appendedRawRevisions.Add(new RawRevision(Id, number, save.SavedAt, save.ClaimedSavedAt, save.Text, decision.Outcome == DraftSaveOutcome.Won));
@@ -113,9 +113,9 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         return decision;
     }
 
-    public DraftDecision SaveCleaned(DraftSave save, DraftReplay? replay = null)
+    public DraftDecision SaveCleaned(DraftSave save, DraftAnswer? earlier = null, bool baseWasDraft = true)
     {
-        var decision = Cleaned.Decide(save, replay);
+        var decision = Cleaned.Decide(save, earlier, baseWasDraft);
         Cleaned = decision.Next;
         if (decision.MintedRevision is { } number)
             _appendedCleanedRevisions.Add(new CleanedRevision(Id, number, save.SavedAt, save.ClaimedSavedAt, save.Text, decision.Outcome == DraftSaveOutcome.Won));
