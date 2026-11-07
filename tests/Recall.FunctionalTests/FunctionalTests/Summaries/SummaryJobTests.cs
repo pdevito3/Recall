@@ -519,14 +519,17 @@ public class SummaryJobTests : TestBase
         await FactoryClient.SessionOnAsync(Monday, "some words");
         var failed = await FactoryClient.OpenAndRunAsync(SummaryPeriod.Day, Monday);
 
+        var context = new BackWave.Jobs.JobContext { JobId = Guid.NewGuid(), Attempt = 1 };
+
         // Act
-        await SummaryScenario.RefreshAsync(member.Id, member.TenantId);
+        await ActivatorUtilities.CreateInstance<SummaryJobs>(Services).RefreshSummariesAsync(member.Id, member.TenantId, context, CancellationToken.None);
         var after = await FactoryClient.ReadAsync(SummaryPeriod.Day, Monday);
 
         // Assert
         failed.Status.ShouldBe(nameof(SummaryStatus.Failed));
         failed.Failure.ShouldBe(nameof(SummaryFailure.NoModelProvider));
         after.ShouldBe(failed);
+        context.BufferedTags.ShouldContain(BackWave.Storage.JobTag.Keyed(SummaryJobs.SkippedTag, nameof(SummaryFailure.NoModelProvider)));
     }
 
     [Test]

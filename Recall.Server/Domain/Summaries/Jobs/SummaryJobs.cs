@@ -25,6 +25,9 @@ public sealed class SummaryJobs(IServiceScopeFactory scopeFactory, IModelProvide
     public const string RunWireName = "summary-run";
     public const string RefreshWireName = "summaries-refresh";
 
+    /// <summary>The tag of a refresh that made no call, with its <see cref="SummaryFailure"/>, so the dashboard shows why it did nothing.</summary>
+    public const string SkippedTag = "skipped";
+
     /// <summary>
     /// The claims that one job can have. Each claim counts, also a stop of the host and a kill, so a job that makes the server
     /// exit ends here before the group limit of 10. A run that a later claim takes over keeps the words of the runs before it.
@@ -99,6 +102,7 @@ public sealed class SummaryJobs(IServiceScopeFactory scopeFactory, IModelProvide
         var generation = await StartAsync(owner, plan.First, plan.End, context, cancellationToken);
         if (generation.Endpoint is not { } endpoint)
         {
+            context.AddTag(SkippedTag, generation.NoEndpointFailure.ToString());
             _logger.Here().Information("The summary refresh of user {UserId} skipped {SummaryCount} summaries, reason {SummaryFailure}", userId, plan.Targets.Count, generation.NoEndpointFailure);
             return;
         }
