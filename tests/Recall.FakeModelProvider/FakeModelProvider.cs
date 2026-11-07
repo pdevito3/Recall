@@ -89,6 +89,24 @@ public sealed class FakeBehavior
 
     /// <summary>With <see cref="FakeMode.Hold"/>, only a request that holds these words waits.</summary>
     public string? HoldOnly { get; set; }
+
+    /// <summary>The largest audio file that the route of transcriptions takes. OpenAI and Groq document 25 MB.</summary>
+    public long MaxAudioBytes { get; set; } = FakeModelProvider.AudioFileLimit;
+
+    /// <summary>With <see cref="FakeMode.Status"/> or <see cref="FakeMode.Hold"/> on audio, only the first this many audio calls take the mode, and the rest answer.</summary>
+    public int? AudioFaultCalls { get; set; }
+
+    /// <summary>
+    /// The output limit of a model such as <c>gpt-4o-transcribe</c>, which documents 2,000 tokens. The fake speaks
+    /// <see cref="AudioTokensPerSecond"/>, bills tokens, and cuts the text of a part that needs more.
+    /// </summary>
+    public int? AudioOutputTokens { get; set; }
+
+    /// <summary>OpenAI refuses a file under 0.1 s with a 400.</summary>
+    public double MinAudioSeconds { get; set; } = 0.1;
+
+    /// <summary>The output tokens that a second of audio needs. A higher value stands for denser speech.</summary>
+    public double AudioTokensPerSecond { get; set; } = FakeModelProvider.TokensPerSecond;
 }
 
 /// <summary>
@@ -101,6 +119,10 @@ public sealed partial class FakeModelProvider : IAsyncDisposable
     public const string ModelId = "fake-model-1";
     public const string SecondModelId = "fake-model-2";
     public const long ModelMaxTokens = 64_000;
+    public const long AudioFileLimit = 25_000_000;
+    public const string TranscriptionModelId = "fake-transcribe-1";
+
+    private static readonly string[] AudioFormats = ["json", "text", "srt", "verbose_json", "vtt"];
 
     private const int ThoughtsOfAModel = 10;
 
@@ -111,6 +133,7 @@ public sealed partial class FakeModelProvider : IAsyncDisposable
     private int _completionCalls;
     private int _modelListCalls;
     private int _stolenCalls;
+    private int _audioCalls;
 
     private FakeModelProvider(WebApplication app, string apiKey)
     {
@@ -125,6 +148,17 @@ public sealed partial class FakeModelProvider : IAsyncDisposable
     public int ModelListCalls => Volatile.Read(ref _modelListCalls);
 
     public int StolenCalls => Volatile.Read(ref _stolenCalls);
+
+    public int AudioCalls => Volatile.Read(ref _audioCalls);
+
+    /// <summary>Each audio file that the route of transcriptions took, in the order of arrival.</summary>
+    public ConcurrentQueue<byte[]> AudioFiles { get; } = new();
+
+    /// <summary>The <c>model</c> field of each audio file that the route took, in the same order.</summary>
+    public ConcurrentQueue<string> AudioModels { get; } = new();
+
+    /// <summary>Fast speech: about 250 words a minute at about 1.4 tokens a word.</summary>
+    public const double TokensPerSecond = 6;
 
     private static readonly string[] DefaultTopics = ["work"];
     private static readonly string[] DefaultMoods = ["calm"];
@@ -174,6 +208,7 @@ public sealed partial class FakeModelProvider : IAsyncDisposable
         _app.MapPost("/v1/messages", AnthropicMessage);
         _app.MapGet("/compat/v1/models", CompatibleModels);
         _app.MapPost("/compat/v1/chat/completions", CompatibleCompletion);
+        _app.MapPost("/compat/v1/audio/transcriptions", CompatibleTranscription);
         _app.MapGet("/stolen", _ =>
         {
             Interlocked.Increment(ref _stolenCalls);
@@ -191,7 +226,7 @@ public sealed partial class FakeModelProvider : IAsyncDisposable
             Behavior = await context.Request.ReadFromJsonAsync<FakeBehavior>(Web) ?? new FakeBehavior();
             await context.Response.WriteAsJsonAsync(new { Behavior.Mode, Behavior.Status, Behavior.DelayMs });
         });
-        _app.MapGet("/control", (HttpContext context) => context.Response.WriteAsJsonAsync(new { completionCalls = CompletionCalls, modelListCalls = ModelListCalls, stolenCalls = StolenCalls }));
+        _app.MapGet("/control", (HttpContext context) => context.Response.WriteAsJsonAsync(new { completionCalls = CompletionCalls, modelListCalls = ModelListCalls, stolenCalls = StolenCalls, audioCalls = AudioCalls }));
     }
 
     private async Task<bool> WroteBodyOfModeAsync(HttpContext context)
@@ -462,6 +497,92 @@ public sealed partial class FakeModelProvider : IAsyncDisposable
             },
         });
     }
+
+    /// <summary>
+    /// <c>POST /v1/audio/transcriptions</c> of the OpenAI reference: a multipart form with <c>file</c> and <c>model</c>, a file of
+    /// up to 25 MB, and a <c>response_format</c> from its list. The answer to <c>json</c> is <c>{"text": ...}</c> with the usage.
+    /// The text names the part and its length, so a test reads the order of the parts from the stored text.
+    /// </summary>
+    private async Task CompatibleTranscription(HttpContext context)
+    {
+        var call = Interlocked.Increment(ref _audioCalls);
+        if (await RefusedCompatibleAsync(context))
+            return;
+
+        if (!context.Request.HasFormContentType)
+        {
+            await WriteCompatibleErrorAsync(context, 400, "The request must be multipart/form-data.");
+            return;
+        }
+
+        var form = await context.Request.ReadFormAsync(context.RequestAborted);
+        var file = form.Files["file"];
+        if (file is null || string.IsNullOrWhiteSpace(form["model"]))
+        {
+            await WriteCompatibleErrorAsync(context, 400, "you must provide a file and a model");
+            return;
+        }
+
+        if (file.Length > Behavior.MaxAudioBytes)
+        {
+            await WriteCompatibleErrorAsync(context, 413, $"Maximum content size limit ({Behavior.MaxAudioBytes}) exceeded ({file.Length} bytes read)");
+            return;
+        }
+
+        var format = form["response_format"].ToString();
+        if (format.Length > 0 && !AudioFormats.Contains(format))
+        {
+            await WriteCompatibleErrorAsync(context, 400, $"response_format must be one of {string.Join(", ", AudioFormats)}");
+            return;
+        }
+
+        using var bytes = new MemoryStream();
+        await file.CopyToAsync(bytes, context.RequestAborted);
+        AudioFiles.Enqueue(bytes.ToArray());
+        AudioModels.Enqueue(form["model"].ToString());
+        if (Math.Max(0, bytes.Length - 44) / 2 / 16_000.0 < Behavior.MinAudioSeconds)
+        {
+            await WriteCompatibleErrorAsync(context, 400, $"Audio file is too short. Minimum audio length is {Behavior.MinAudioSeconds} seconds.");
+            return;
+        }
+
+        var faulted = Behavior.AudioFaultCalls is not { } faults || call <= faults;
+        switch (Behavior.Mode)
+        {
+            case FakeMode.EchoError when faulted:
+                await WriteCompatibleErrorAsync(context, 400, $"Cannot read this audio with key {_apiKey}");
+                return;
+            case FakeMode.Status when faulted:
+                await WriteCompatibleErrorAsync(context, Behavior.Status, $"The fake answers with this status, key {_apiKey}");
+                return;
+            case FakeMode.Hold when faulted:
+                await Task.Delay(Behavior.DelayMs, context.RequestAborted);
+                break;
+            case FakeMode.BadJson when faulted:
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsync("{\"words\": ");
+                return;
+        }
+
+        var seconds = Math.Max(0, bytes.Length - 44) / 2 / 16_000.0;
+        var text = Behavior.Reply ?? $"Part {AudioFiles.Count} heard {Seconds(seconds)} seconds.";
+        if (Behavior.AudioOutputTokens is not { } limit)
+        {
+            await context.Response.WriteAsJsonAsync(new { text, usage = new { type = "duration", seconds = (int)Math.Ceiling(seconds) } });
+            return;
+        }
+
+        var tokens = (int)Math.Ceiling(seconds * Behavior.AudioTokensPerSecond);
+        if (tokens > limit)
+        {
+            tokens = limit;
+            text = $"Part {AudioFiles.Count} heard {Seconds(limit / Behavior.AudioTokensPerSecond)} of {Seconds(seconds)} seconds";
+        }
+
+        await context.Response.WriteAsJsonAsync(new { text, usage = new { type = "tokens", input_tokens = (int)Math.Ceiling(seconds * 10), output_tokens = tokens, total_tokens = tokens } });
+    }
+
+    private static string Seconds(double seconds) => seconds.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
 
     private async Task CompatibleCompletion(HttpContext context)
     {

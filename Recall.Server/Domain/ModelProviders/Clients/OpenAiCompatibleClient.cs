@@ -7,7 +7,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 /// <summary>
-/// The wire format of <c>GET {base}/models</c> and <c>POST {base}/chat/completions</c>. A completion asks for a stream, because
+/// The wire format of <c>GET {base}/models</c>, <c>POST {base}/chat/completions</c>, and <c>POST {base}/audio/transcriptions</c>. A completion asks for a stream, because
 /// only a stream shows the progress of a model that works for minutes. A server that ignores the request answers with one
 /// object, and the idle limit then bounds its whole answer.
 /// </summary>
@@ -57,6 +57,32 @@ public sealed class OpenAiCompatibleClient(IHttpClientFactory httpClientFactory,
                 ? new ProviderReply<string>.Answered(answer)
                 : new ProviderReply<string>.Failed(ProviderFailureText.Unusable());
         }, limit), cancellationToken);
+
+    /// <summary>
+    /// One part of the audio as a WAV file, in the multipart form of the OpenAI reference. Only <c>json</c> is a format that each
+    /// transcription model of OpenAI takes, and its <c>text</c> holds the words. A <c>text</c> that is empty is a part with no speech.
+    /// </summary>
+    public async Task<ProviderReply<HeardAudio>> TranscribeAsync(ModelEndpoint endpoint, string model, byte[] wav, CancellationToken cancellationToken)
+        => await ProviderCall.RunAsync<HeardAudio>(limits.AudioCall, async limit =>
+        {
+            using var request = RequestTo(endpoint, HttpMethod.Post, "audio/transcriptions");
+            var form = new MultipartFormDataContent();
+            var file = new ByteArrayContent(wav);
+            file.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
+            form.Add(file, "file", "audio.wav");
+            form.Add(new StringContent(model), "model");
+            form.Add(new StringContent("json"), "response_format");
+            request.Content = form;
+
+            using var response = await httpClientFactory.CreateClient(ModelProviderHttp.AudioClientName).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, limit);
+            var body = await response.Content.ReadAsStringAsync(limit);
+            if (!response.IsSuccessStatusCode)
+                return new ProviderReply<HeardAudio>.Failed(ProviderFailureText.ForStatus(endpoint.Kind, (int)response.StatusCode, body, endpoint.ApiKey));
+
+            return JsonSerializer.Deserialize<Transcription>(body) is { Text: { } text } transcription
+                ? new ProviderReply<HeardAudio>.Answered(new HeardAudio(text, transcription.Usage is { Type: "tokens", OutputTokens: { } tokens } && tokens >= limits.AudioOutputTokens))
+                : new ProviderReply<HeardAudio>.Failed(ProviderFailureText.Unusable());
+        }, cancellationToken);
 
     private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         => await httpClientFactory.CreateClient(ModelProviderHttp.ClientName).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
@@ -126,6 +152,14 @@ public sealed class OpenAiCompatibleClient(IHttpClientFactory httpClientFactory,
         return request;
     }
 
+    private sealed record Transcription(
+        [property: JsonPropertyName("text")] string? Text,
+        [property: JsonPropertyName("usage")] TranscriptionUsage? Usage = null);
+
+    private sealed record TranscriptionUsage(
+        [property: JsonPropertyName("type")] string? Type,
+        [property: JsonPropertyName("output_tokens")] long? OutputTokens);
+
     private sealed record ModelList([property: JsonPropertyName("data")] IReadOnlyList<ModelRow>? Data);
 
     private sealed record ModelRow([property: JsonPropertyName("id")] string? Id);
@@ -149,3 +183,6 @@ public sealed class OpenAiCompatibleClient(IHttpClientFactory httpClientFactory,
         [property: JsonPropertyName("delta")] ChoiceMessage? Delta,
         [property: JsonPropertyName("finish_reason")] string? FinishReason);
 }
+
+/// <summary>The words of one part of audio. <paramref name="Cut"/> means that the model stopped at its output limit, so words are missing.</summary>
+public sealed record HeardAudio(string Text, bool Cut);

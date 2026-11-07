@@ -43,6 +43,12 @@ public class ModelProvider : BaseEntity, ITenantable
     /// <summary>Null until a person chooses this provider, and again when its model goes away.</summary>
     [NotSensitive] public DateTimeOffset? ActivatedOn { get; private set; }
 
+    /// <summary>The model that turns audio into text. It is null until an Admin sends audio to this provider.</summary>
+    [NotSensitive] public string? TranscriptionModel { get; private set; }
+
+    /// <summary>The newest choice of a tenant gets its audio. Null when audio does not go to this provider.</summary>
+    [NotSensitive] public DateTimeOffset? TranscriptionChosenOn { get; private set; }
+
     public static ModelProvider Connect(string tenantId, ModelProviderKind kind, string name, string? baseUrl, string? protectedApiKey)
     {
         var provider = new ModelProvider { TenantId = tenantId, Kind = kind };
@@ -70,6 +76,24 @@ public class ModelProvider : BaseEntity, ITenantable
     {
         ValidationException.Must(Model is not null, ModelField, "Please pick a model before you make this model provider active.");
         ActivatedOn = now;
+    }
+
+    /// <summary>Audio goes to this provider from now on. Only a kind that takes audio can get it.</summary>
+    public void ChooseForTranscription(string? model, DateTimeOffset now)
+    {
+        ValidationException.Must(Kind.TakesAudio(), KindField, "This kind of model provider takes no audio. Choose an OpenAI-compatible provider.");
+        ValidationException.ThrowWhenNullOrWhitespace(model, ModelField, "Please provide the model that turns audio into text.");
+        var trimmed = model!.Trim();
+        ValidationException.ThrowWhenLongerThan(trimmed, ModelMaxLength, ModelField, $"The model must not have more than {ModelMaxLength} characters.");
+        ValidationException.ThrowWhenHasCharacterNotStorable(trimmed, ModelField, "The model has a character that is not allowed.");
+        TranscriptionModel = trimmed;
+        TranscriptionChosenOn = now;
+    }
+
+    public void StopTranscription()
+    {
+        TranscriptionModel = null;
+        TranscriptionChosenOn = null;
     }
 
     /// <summary>A deleted row stays for the audit log. A key must not stay with it.</summary>

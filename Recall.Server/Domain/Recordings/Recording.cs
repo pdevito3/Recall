@@ -100,7 +100,8 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
         return Enumerable.Range(0, sliceCount).Where(index => !present.Contains(index)).ToList();
     }
 
-    public void Finish(IReadOnlyCollection<int> stored, int sliceCount, long byteLength)
+    /// <summary>The engine is chosen here and at a retry of a failure only, so two engines never work on one Recording at a time.</summary>
+    public void Finish(IReadOnlyCollection<int> stored, int sliceCount, long byteLength, TranscriptionEngineKind engine)
     {
         if (Status != RecordingStatus.Receiving)
             throw new ConflictException(StatusField, "This Recording is already finished.");
@@ -114,19 +115,40 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
             throw new ConflictException(ByteLengthField, "The stored slices do not have the byte length that this finish names.");
 
         Status = RecordingStatus.Received;
+        Engine = engine;
     }
 
+    /// <summary>A provider that did not answer on each try is the cause that a person needs, and not the count of the tries.</summary>
     public bool BeginAttempt()
     {
         RequireWaitingForTranscription();
+        var causeOfLastTry = Problem;
         Status = RecordingStatus.Transcribing;
         Problem = RecordingProblem.None;
         AttemptsWithoutProgress++;
         if (AttemptsWithoutProgress <= MaxAttemptsWithoutProgress)
             return true;
 
-        Fail(RecordingProblem.TooManyAttempts);
+        Fail(causeOfLastTry == RecordingProblem.ProviderUnavailable ? causeOfLastTry : RecordingProblem.TooManyAttempts);
         return false;
+    }
+
+    /// <summary>The provider did not answer, and the job tries again later.</summary>
+    public void WaitForProvider()
+    {
+        RequireWaitingForTranscription();
+        Status = RecordingStatus.Received;
+        Problem = RecordingProblem.ProviderUnavailable;
+    }
+
+    /// <summary>No provider takes the audio of the tenant any more, so the audio stays on the server, and the local engine makes the text.</summary>
+    public void HandToLocalEngine()
+    {
+        RequireWaitingForTranscription();
+        Engine = TranscriptionEngineKind.Local;
+        Status = RecordingStatus.Received;
+        Problem = RecordingProblem.None;
+        AttemptsWithoutProgress = 0;
     }
 
     public void WaitForModel()
@@ -136,6 +158,12 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
         Problem = RecordingProblem.WaitingForModel;
         AttemptsWithoutProgress = 0;
     }
+
+    /// <summary>
+    /// A chunk that the saved text already holds joins as nothing. Any other chunk must start where the text ends, so a run with
+    /// other cuts, or a second run, repeats no word and leaves no gap.
+    /// </summary>
+    public bool Joins(long fromSample, long endSample) => endSample <= TranscribedSamples || fromSample == TranscribedSamples;
 
     public bool AdvanceTo(long endSample, long totalSamples, bool hasWords)
     {
@@ -170,7 +198,8 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
         Problem = problem;
     }
 
-    public void Retry()
+    /// <summary>A Recording that still waits keeps its engine, because its job can still run.</summary>
+    public void Retry(TranscriptionEngineKind engine)
     {
         if (WaitsForTranscription)
             return;
@@ -178,6 +207,7 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
         if (Status != RecordingStatus.Failed)
             throw new ConflictException(StatusField, "Only a Recording that failed or that waits for its text can run again.");
 
+        Engine = engine;
         Status = RecordingStatus.Received;
         Problem = RecordingProblem.None;
         AttemptsWithoutProgress = 0;
@@ -216,7 +246,11 @@ public enum RecordingFormat
 
 public enum TranscriptionEngineKind
 {
+    /// <summary>Parakeet in a subprocess on the server. The audio stays on the server.</summary>
     Local,
+
+    /// <summary>The model provider that an Admin chose for audio. The audio goes to that provider.</summary>
+    Cloud,
 }
 
 public enum RecordingProblem
@@ -236,4 +270,8 @@ public enum RecordingProblem
     TooLong,
     TextTooLong,
     NoWordsFound,
+    ProviderUnavailable,
+    ProviderRefused,
+    ProviderBadAnswer,
+    ProviderKeyUnreadable,
 }

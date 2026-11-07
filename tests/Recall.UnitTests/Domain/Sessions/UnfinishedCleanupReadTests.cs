@@ -4,8 +4,9 @@ using System.Text;
 using System.Text.Json;
 using BackWave.Storage;
 using BackWave.Storage.InMemory;
-using Recall.Server.Domain.Sessions.Features;
+using Recall.Server.Domain.Recordings.Jobs;
 using Recall.Server.Domain.Sessions.Jobs;
+using Recall.Server.Resources.Jobs;
 using Shouldly;
 
 /// <summary>SES-44: a start reads each Cleanup that has not ended before it picks a queue.</summary>
@@ -30,7 +31,7 @@ public class UnfinishedCleanupReadTests
         await EnqueueAsync(store, "cleanup-5", Payload("ten_late", 999));
 
         // Act
-        var unfinished = await StartCleanup.UnfinishedCleanupsAsync(store, CancellationToken.None);
+        var unfinished = await CleanupQueues.UnfinishedAsync(store, CancellationToken.None);
 
         // Assert
         unfinished.Count.ShouldBe(202);
@@ -48,9 +49,27 @@ public class UnfinishedCleanupReadTests
         await EnqueueAsync(store, "cleanup-3", Payload("ten_ok", 1));
 
         // Act
-        var unfinished = await StartCleanup.UnfinishedCleanupsAsync(store, CancellationToken.None);
+        var unfinished = await CleanupQueues.UnfinishedAsync(store, CancellationToken.None);
 
         // Assert
         unfinished.ShouldBe([("cleanup-3", "ten_ok")]);
+    }
+
+    [Test]
+    [Property("Rule", "REC-20")]
+    public async Task a_cloud_transcription_counts_with_the_cleanups_of_its_tenant()
+    {
+        // Arrange
+        var store = new InMemoryJobStore(new StoreBounds(), JobHistoryPolicy.Off);
+        await EnqueueAsync(store, "cleanup-2", Payload("ten_cleanup", 1));
+        var transcription = JsonSerializer.SerializeToUtf8Bytes(new TranscribeRecordingInCloud("rec_1", "usr_1", "ten_audio"));
+        await store.EnqueueAsync(new NewJob(Guid.NewGuid(), TranscribeRecordingJob.CloudWireName, transcription, "cleanup-6", Noon.AddDays(1)), Noon, null!, CancellationToken.None);
+
+        // Act
+        var unfinished = await CleanupQueues.UnfinishedAsync(store, CancellationToken.None);
+
+        // Assert
+        unfinished.ShouldBe([("cleanup-2", "ten_cleanup"), ("cleanup-6", "ten_audio")], ignoreOrder: true);
+        CleanupQueues.Pick("ten_audio", unfinished).ShouldBe("cleanup-6");
     }
 }

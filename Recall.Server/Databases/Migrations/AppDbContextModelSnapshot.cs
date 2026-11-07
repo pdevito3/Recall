@@ -660,6 +660,14 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnName("tenant_id")
                         .UseCollation("BINARY");
 
+                    b.Property<string>("TranscriptionChosenOn")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("transcription_chosen_on");
+
+                    b.Property<string>("TranscriptionModel")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("transcription_model");
+
                     b.Property<uint>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER")

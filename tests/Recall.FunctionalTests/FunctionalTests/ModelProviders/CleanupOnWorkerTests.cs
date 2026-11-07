@@ -16,6 +16,7 @@ using Recall.FunctionalTests.FunctionalTests.Recordings;
 using Recall.Server.Domain.ModelProviders;
 using Recall.Server.Domain.ModelProviders.Dtos;
 using Recall.Server.Domain.Recordings.Dtos;
+using Recall.Server.Domain.Recordings.Jobs;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Dtos;
 using Recall.Server.Domain.Sessions.Jobs;
@@ -248,9 +249,10 @@ public class CleanupOnWorkerTests
         var hashed = CleanupQueues.Of(tenantId);
         var store = Host.Services.GetRequiredService<IJobStore>();
 
-        // Each test of this class runs as the same tenant, and a tenant stays in the queue of a Cleanup that has not ended. So a
-        // job of an earlier test that still holds its lease would keep this Cleanup in the hashed queue.
-        await WaitUntilNoCleanupIsUnfinishedAsync(store);
+        // Each owner of this host joins one tenant, and a tenant stays in the queue of a provider job that has not ended. So
+        // the jobs of an earlier test must end first, or this tenant keeps its own queue and the rule under test never runs.
+        await CancelWaitingProviderJobsAsync(store);
+        await WaitUntilAsync(async () => !(await CleanupQueues.UnfinishedAsync(store, CancellationToken.None)).Any(job => job.TenantId == tenantId));
         var otherTenant = new CleanupSession("ses_other", "usr_other", $"ten_other{Guid.NewGuid():N}", "run_other");
         var held = await Host.Services.GetRequiredService<BackWaveClient>().EnqueueAsync(otherTenant, DateTimeOffset.UtcNow.AddDays(1), hashed);
 
@@ -311,33 +313,26 @@ public class CleanupOnWorkerTests
     }
 
     /// <summary>A job that waits for a later try is cancelled, because its backoff can be longer than the wait. A leased job ends soon.</summary>
-    private static async Task WaitUntilNoCleanupIsUnfinishedAsync(IJobStore store)
+    private static async Task CancelWaitingProviderJobsAsync(IJobStore store)
     {
-        var deadline = DateTimeOffset.UtcNow + WaitLimit;
-        while (true)
-        {
-            foreach (var state in new[] { JobState.Scheduled, JobState.AwaitingParent })
-            foreach (var waiting in await store.ListJobsAsync(new JobQuery { State = state, WireName = CleanupJob.WireName }))
-                await store.CancelJobAsync(waiting.JobId, "test", DateTimeOffset.UtcNow);
-
-            if ((await store.ListJobsAsync(new JobQuery { State = JobState.Leased, WireName = CleanupJob.WireName })).Count == 0)
-                return;
-            if (DateTimeOffset.UtcNow > deadline)
-                throw new TimeoutException($"A Cleanup of an earlier test did not end in {WaitLimit}.");
-            await Task.Delay(TimeSpan.FromMilliseconds(50));
-        }
+        foreach (var wireName in new[] { CleanupJob.WireName, TranscribeRecordingJob.CloudWireName })
+        foreach (var state in new[] { JobState.Scheduled, JobState.AwaitingParent })
+        foreach (var waiting in await store.ListJobsAsync(new JobQuery { State = state, WireName = wireName }))
+            await store.CancelJobAsync(waiting.JobId, "test", DateTimeOffset.UtcNow);
     }
 
-    private static async Task WaitUntilAsync(Func<bool> condition)
+    private static async Task WaitUntilAsync(Func<Task<bool>> condition)
     {
         var deadline = DateTimeOffset.UtcNow + WaitLimit;
-        while (!condition())
+        while (!await condition())
         {
             if (DateTimeOffset.UtcNow > deadline)
                 throw new TimeoutException($"The condition did not hold in {WaitLimit}.");
             await Task.Delay(TimeSpan.FromMilliseconds(50));
         }
     }
+
+    private static Task WaitUntilAsync(Func<bool> condition) => WaitUntilAsync(() => Task.FromResult(condition()));
 
     [Test]
     [Property("Rule", "REC-13")]

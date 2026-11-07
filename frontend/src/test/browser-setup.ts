@@ -14,6 +14,8 @@ declare module 'vitest/browser' {
     /** Answers each request that matches an answer. A later answer wins. `[]` removes all answers. */
     answerRequests: (answers: Answer[]) => Promise<void>
     takeUnansweredRequests: () => Promise<string[]>
+    /** The method, pathname, and JSON body of each request other than a GET since the last call. */
+    takeSentRequests: () => Promise<{ method: string; path: string; body: unknown }[]>
     /** Holds each request for `path` (pathname and query) until `releaseRequests(path)`. */
     holdRequests: (path: string) => Promise<void>
     /** Lets the held requests for `path` go on. */
@@ -33,6 +35,7 @@ beforeEach(async () => {
   await cleanup()
   await commands.answerRequests([])
   await commands.takeUnansweredRequests()
+  await commands.takeSentRequests()
 })
 
 // A request with no answer gets an error from the dev server. A test can still pass by mistake, for example when
