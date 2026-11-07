@@ -586,7 +586,7 @@ export class DraftSaver {
     }
     const fate = newest ? fateOfWords(change.value, this.draftTextIn(newest)) : 'onlyInHistory'
     if (fate === 'areTheDraft' && newest) this.noteWordsAreTheDraft(change.value, this.isRaw ? newest.rawDraftRevision : newest.cleanedDraftRevision)
-    else if (fate === 'areInTheDraft' && newest) this.noteDraftHoldsMoreThan(change.value, newest)
+    else if (fate === 'areInTheDraft' && newest) this.noteDraftHoldsMoreThan(change, newest)
     else if (reply) this.noteWordsOnlyInHistory(change.value)
     else if (isKeyWithAnotherTab) this.update({ areWordsWithAnotherTab: true })
     else if (this.listeners.size > 0) this.update({ conflict: 'discardedInAnotherTab' })
@@ -640,10 +640,19 @@ export class DraftSaver {
     this.update({ baseRevision: draftRevision, conflict: null, areWordsWithAnotherTab: false, waitsForAnotherWriter: false })
   }
 
-  /** The words of this save are safe, and the Draft holds more. The page takes the Draft, unless the person typed since. Then the next save decides. */
-  private noteDraftHoldsMoreThan(words: string, newest: SessionDto) {
+  /**
+   * The words of this save are safe, and the Draft holds more. The page takes the Draft. If the person typed since, this
+   * save is the base of that typing, so only the typing joins the Draft, and the words of this save do not show twice.
+   */
+  private noteDraftHoldsMoreThan(change: Stamped<string>, newest: SessionDto) {
     this.noteArrival()
-    if (this.unsettledText() !== words) return
+    const typed = this.unsettledText()
+    if (typed !== null && typed !== change.value) {
+      this.baseText = change.value
+      this.mergeIntoRead(change, newest)
+      return
+    }
+    if (typed !== change.value) return
     const draft = this.draftTextIn(newest)
     this.wordsOnServer = draft
     this.wordsInHistory = null

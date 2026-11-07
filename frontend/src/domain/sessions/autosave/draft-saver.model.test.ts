@@ -978,6 +978,26 @@ test('a merge whose reply did not come finds its words in the Draft at the repla
   tab.run(() => tab.mod.stopDraftSavers())
 })
 
+test('a save that won with no reply, then a chunk and more typing during the read, puts each word in the Draft once', async () => {
+  aScene()
+  const tab = await aTabOn('entry-1')
+  tab.type('w1x')
+  await pass(2000)
+  const row = world.rows[0] as Row
+  world.losesNextReply = true
+  world.readsTakeMs = 1500
+  tab.type('w2x')
+  await pass(1000)
+  world.appendChunk(row, 'c3x')
+  tab.type('w4x')
+  await pass(15_000)
+
+  expect([...tokensIn(row.text)].sort()).toEqual(['c3x', 'w1x', 'w2x', 'w4x'])
+  expect([...tokensIn(tab.page?.editor ?? '')].sort()).toEqual(['c3x', 'w1x', 'w2x', 'w4x'])
+  expect(tab.page?.saver.getSnapshot().conflict).toBeNull()
+  tab.run(() => tab.mod.stopDraftSavers())
+})
+
 test('a read after a replay that sees a later save of this page raises no notice of a loss', async () => {
   aScene()
   const tab = await aTabOn('entry-1')
