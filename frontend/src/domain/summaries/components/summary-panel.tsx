@@ -136,7 +136,13 @@ export function SummaryPanel({ period, date }: SummaryPanelProps) {
 
   const { data } = summary
   const noun = periodNoun(period)
-  const iconLinkClassName = buttonVariants({ variant: 'outline', size: 'icon', className: 'max-sm:size-11' })
+  const previous = previousPeriodDate(period, date)
+  const next = nextPeriodDate(period, date)
+  const iconLinkClassName = buttonVariants({
+    variant: 'outline',
+    size: 'icon',
+    className: 'max-sm:size-11 data-disabled:pointer-events-none data-disabled:opacity-50',
+  })
   const handleGenerate = () => generate.mutate(undefined, { onSuccess: () => headingRef.current?.focus() })
 
   return (
@@ -148,7 +154,8 @@ export function SummaryPanel({ period, date }: SummaryPanelProps) {
         <div className="flex items-center gap-2">
           <Link
             to="/summaries"
-            search={{ period, date: previousPeriodDate(data) }}
+            search={{ period, date: previous ?? date }}
+            isDisabled={previous === null}
             aria-label={`Previous ${noun}`}
             className={iconLinkClassName}
           >
@@ -157,7 +164,13 @@ export function SummaryPanel({ period, date }: SummaryPanelProps) {
           <Link to="/summaries" search={{ period }} className={buttonVariants({ variant: 'outline', className: 'max-sm:h-11' })}>
             Today
           </Link>
-          <Link to="/summaries" search={{ period, date: nextPeriodDate(data) }} aria-label={`Next ${noun}`} className={iconLinkClassName}>
+          <Link
+            to="/summaries"
+            search={{ period, date: next ?? date }}
+            isDisabled={next === null}
+            aria-label={`Next ${noun}`}
+            className={iconLinkClassName}
+          >
             <HugeiconsIcon icon={ArrowRight01Icon} aria-hidden />
           </Link>
         </div>

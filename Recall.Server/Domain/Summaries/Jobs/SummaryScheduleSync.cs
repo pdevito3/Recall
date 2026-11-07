@@ -46,7 +46,7 @@ public sealed class SummaryScheduleSync(IServiceScopeFactory scopeFactory, Summa
         {
             await using var scope = scopeFactory.CreateJournalScope(owner);
             var zone = await scope.ServiceProvider.GetRequiredService<AppDbContext>().LoadJournalZoneAsync(cancellationToken);
-            await schedules.EnsureAsync(owner.UserId, owner.TenantId, zone, cancellationToken);
+            await schedules.TryEnsureAsync(owner.UserId, owner.TenantId, zone, cancellationToken);
         }
 
         await schedules.RemoveAllButAsync(owners.Select(o => o.UserId).ToHashSet(), cancellationToken);

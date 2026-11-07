@@ -31,7 +31,7 @@ public static class GenerateSummary
             Activity.Current?.SetTag("app.summary.period", key.Period.ToString());
 
             var zone = await dbContext.LoadJournalZoneAsync(cancellationToken);
-            await schedules.EnsureAsync(owner.UserId, owner.TenantId, zone, cancellationToken);
+            await schedules.TryEnsureAsync(owner.UserId, owner.TenantId, zone, cancellationToken);
             var sources = (await dbContext.LoadSourcesAsync(zone, key, cancellationToken)).StateOf(key);
             var summary = await dbContext.Summaries
                 .TagWithOperationCallSite("summaries.generate.load")

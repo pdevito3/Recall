@@ -154,8 +154,8 @@ test('a stale Summary keeps its words, says that it is out of date, and Regenera
 
 test('Next week opens the week after, and a tab opens the period of the same date', async () => {
   // Arrange
-  const nextWeekPath = '/api/v1/summaries/Week/2026-06-08'
-  const monthPath = '/api/v1/summaries/Month/2026-06-08'
+  const nextWeekPath = '/api/v1/summaries/Week/2026-06-10'
+  const monthPath = '/api/v1/summaries/Month/2026-06-10'
   const nextWeek = week({ periodDate: '2026-06-08', periodLastDate: '2026-06-14', content: 'The next week.' })
   const june = week({ period: 'Month', periodDate: '2026-06-01', periodLastDate: '2026-06-30', content: 'All of June.', sourceCount: 2 })
   const { screen, router } = await openPage('/summaries?period=Week&date=2026-06-03', [
@@ -179,7 +179,40 @@ test('Next week opens the week after, and a tab opens the period of the same dat
   await expect.element(screen.getByText('All of June.')).toBeVisible()
   await expect.element(screen.getByText(/^Reads 2 days · Written /)).toBeVisible()
   await expect.element(screen.getByRole('tab', { name: 'Month' })).toHaveAttribute('aria-selected', 'true')
-  expect(router.state.location.search).toEqual({ period: 'Month', date: '2026-06-08' })
+  expect(router.state.location.search).toEqual({ period: 'Month', date: '2026-06-10' })
+})
+
+test('a second press of Next while the next week loads goes on to the week after it', async () => {
+  // Arrange
+  const third = week({ periodDate: '2026-06-15', periodLastDate: '2026-06-21', content: 'The third week.' })
+  const { screen, router } = await openPage('/summaries?period=Week&date=2026-06-03', [
+    open(weekPath, week()),
+    open('/api/v1/summaries/Week/2026-06-10', week({ periodDate: '2026-06-08', periodLastDate: '2026-06-14', content: 'The next week.' })),
+    open('/api/v1/summaries/Week/2026-06-17', third),
+  ])
+  await expect.element(screen.getByText('The first words of the week.')).toBeVisible()
+  const next = screen.getByRole('link', { name: 'Next week' })
+
+  // Act
+  await userEvent.click(next)
+  await expect.poll(() => router.state.location.search).toEqual({ period: 'Week', date: '2026-06-10' })
+  await userEvent.click(next)
+
+  // Assert
+  await expect.element(screen.getByText('The third week.')).toBeVisible()
+  expect(router.state.location.search).toEqual({ period: 'Week', date: '2026-06-17' })
+})
+
+test('Previous is off in the first year that the Server takes', async () => {
+  // Arrange
+  const path = '/api/v1/summaries/Year/1900-06-01'
+  const first = week({ period: 'Year', periodDate: '1900-01-01', periodLastDate: '1900-12-31', content: 'The first year.' })
+  const { screen } = await openPage('/summaries?period=Year&date=1900-06-01', [open(path, first)])
+
+  // Assert
+  await expect.element(screen.getByText('The first year.')).toBeVisible()
+  await expect.element(screen.getByRole('link', { name: 'Previous year' })).toHaveAttribute('aria-disabled', 'true')
+  await expect.element(screen.getByRole('link', { name: 'Next year' })).not.toHaveAttribute('aria-disabled')
 })
 
 test('a period or a date that the contract refuses falls back to the Day of today', async () => {

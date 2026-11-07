@@ -18,20 +18,29 @@ describe('periodTitle', () => {
 })
 
 describe('the periods next to a period', () => {
-  test('a Week goes back to the Sunday before its Monday and on to the Monday after its Sunday', () => {
-    const week = { period: 'Week', periodDate: '2026-06-01', periodLastDate: '2026-06-07' } as const
+  test('a Week steps a whole week from any of its days', () => {
+    expect(previousPeriodDate('Week', '2026-06-03')).toBe('2026-05-27')
+    expect(nextPeriodDate('Week', '2026-06-07')).toBe('2026-06-14')
+  })
 
-    expect(previousPeriodDate(week)).toBe('2026-05-31')
-    expect(nextPeriodDate(week)).toBe('2026-06-08')
+  test('a Month from its last day lands in the month next to it, not past it', () => {
+    expect(previousPeriodDate('Month', '2026-03-31')).toBe('2026-02-28')
+    expect(nextPeriodDate('Month', '2026-01-31')).toBe('2026-02-28')
   })
 
   test('a Quarter crosses into the year before and the year after', () => {
-    expect(previousPeriodDate({ period: 'Quarter', periodDate: '2026-01-01', periodLastDate: '2026-03-31' })).toBe('2025-12-31')
-    expect(nextPeriodDate({ period: 'Quarter', periodDate: '2026-10-01', periodLastDate: '2026-12-31' })).toBe('2027-01-01')
+    expect(previousPeriodDate('Quarter', '2026-03-31')).toBe('2025-12-31')
+    expect(nextPeriodDate('Quarter', '2026-10-01')).toBe('2027-01-01')
   })
 
   test('a Day after the end of February of a leap year is the 29th', () => {
-    expect(nextPeriodDate({ period: 'Day', periodDate: '2028-02-28', periodLastDate: '2028-02-28' })).toBe('2028-02-29')
+    expect(nextPeriodDate('Day', '2028-02-28')).toBe('2028-02-29')
+  })
+
+  test('no step leaves the years that the Server takes', () => {
+    expect(previousPeriodDate('Year', '1900-06-01')).toBeNull()
+    expect(nextPeriodDate('Day', '9998-12-31')).toBeNull()
+    expect(nextPeriodDate('Year', '9997-12-31')).toBe('9998-12-31')
   })
 })
 

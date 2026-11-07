@@ -6,6 +6,7 @@ using BackWave.Core;
 using BackWave.Storage;
 using Domain.Summaries.Jobs;
 using Domain.TimeZones;
+using Serilog;
 
 /// <summary>
 /// The nightly refresh of the Summaries of each User, at <see cref="NightlyHour"/> in the time zone of the User. A schedule
@@ -23,7 +24,25 @@ public sealed class SummarySchedules(BackWaveClient client, IJobStore store)
 
     private readonly ConcurrentDictionary<string, string> _inPlace = new();
 
+    private readonly ILogger _logger = Log.ForContext<SummarySchedules>();
+
     public static string IdOf(string userId) => IdPrefix + userId;
+
+    /// <summary>
+    /// As <see cref="EnsureAsync"/>, but a fault of the job store does not fail the work that asked for the schedule, such as an
+    /// open of a period or a settings save. The next open of a period or the next start puts the schedule in place.
+    /// </summary>
+    public async Task TryEnsureAsync(string userId, string tenantId, TimeZoneId zone, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await EnsureAsync(userId, tenantId, zone, cancellationToken);
+        }
+        catch (Exception fault) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.Here().Warning("The nightly summary schedule of user {UserId} was not put in place ({FaultType})", userId, fault.GetType().FullName);
+        }
+    }
 
     public async Task EnsureAsync(string userId, string tenantId, TimeZoneId zone, CancellationToken cancellationToken)
     {

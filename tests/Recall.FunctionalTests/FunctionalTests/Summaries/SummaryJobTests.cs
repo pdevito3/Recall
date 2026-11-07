@@ -198,6 +198,28 @@ public class SummaryJobTests : TestBase
     }
 
     [Test]
+    public async Task a_roll_up_calls_a_provider_that_refused_once_and_fails_each_source()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        await FactoryClient.SessionOnAsync(Monday, "first day");
+        await FactoryClient.SessionOnAsync(Monday.AddDays(9), "tenth day");
+        await FactoryClient.SessionOnAsync(Monday.AddDays(29), "last day");
+        scenario.Fake.Behavior.Mode = FakeMode.EchoError;
+        scenario.Fake.Behavior.Status = 400;
+
+        // Act
+        var month = await FactoryClient.OpenAndRunAsync(SummaryPeriod.Month, Monday);
+        var rows = await SummaryScenario.RowsOfAsync(scenario.Member.Id);
+
+        // Assert
+        month.Status.ShouldBe(nameof(SummaryStatus.Failed));
+        month.Failure.ShouldBe(nameof(SummaryFailure.SourceFailed));
+        scenario.Fake.CompletionCalls.ShouldBe(1);
+        rows.Where(r => r.Period == SummaryPeriod.Day).Select(r => r.Failure).ShouldBe([SummaryFailure.ProviderRefused, SummaryFailure.ProviderRefused, SummaryFailure.ProviderRefused]);
+    }
+
+    [Test]
     [Arguments("")]
     [Arguments("   ")]
     public async Task an_empty_answer_is_a_failed_summary_and_not_a_ready_one_with_no_words(string answer)
@@ -303,6 +325,38 @@ public class SummaryJobTests : TestBase
 
         // Act
         await ActivatorUtilities.CreateInstance<SummaryJobWatch>(Services).EndRunsOfEndedJobsAsync(CancellationToken.None);
+        var summary = await FactoryClient.ReadAsync(SummaryPeriod.Day, Monday);
+
+        // Assert
+        summary.Status.ShouldBe(nameof(SummaryStatus.Failed));
+        summary.Failure.ShouldBe(nameof(SummaryFailure.Interrupted));
+    }
+
+    [Test]
+    public async Task a_job_that_ends_with_no_result_again_after_a_requeue_leaves_no_summary_generating()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        await FactoryClient.SessionOnAsync(Monday, "some words");
+        var opened = await FactoryClient.OpenAsync(SummaryPeriod.Day, Monday);
+        var ofTheJob = ("$summary", (object)$"%{opened.Id}%");
+        var wire = ("$wire", (object)SummaryJobs.RunWireName);
+        await JournalScenario.ExecuteOutOfBandAsync(
+            "UPDATE backwave_jobs SET state = $state WHERE wire_name = $wire AND CAST(payload AS TEXT) LIKE $summary", ("$state", (int)JobState.DeadLettered), wire, ofTheJob);
+        var watch = ActivatorUtilities.CreateInstance<SummaryJobWatch>(Services);
+        await watch.EndRunsOfEndedJobsAsync(CancellationToken.None);
+        var jobs = await Services.GetRequiredService<IJobStore>().ListJobsAsync(new JobQuery { WireName = SummaryJobs.RunWireName, MaxResults = 1000 });
+        var jobId = jobs.Single(job => System.Text.Encoding.UTF8.GetString(job.Payload.Span).Contains(opened.Id!, StringComparison.Ordinal)).JobId;
+
+        // An Owner requeues the job, a claim begins a run, and the job ends in the dead letters again.
+        await JournalScenario.ExecuteOutOfBandAsync(
+            "UPDATE summaries SET run_state = $generating, run_job_id = $job WHERE id = $id",
+            ("$generating", nameof(SummaryRunState.Generating)), ("$job", jobId.ToString().ToUpperInvariant()), ("$id", opened.Id!));
+        await JournalScenario.ExecuteOutOfBandAsync(
+            "UPDATE backwave_jobs SET terminal_at = due_time WHERE wire_name = $wire AND CAST(payload AS TEXT) LIKE $summary", wire, ofTheJob);
+
+        // Act
+        await watch.EndRunsOfEndedJobsAsync(CancellationToken.None);
         var summary = await FactoryClient.ReadAsync(SummaryPeriod.Day, Monday);
 
         // Assert

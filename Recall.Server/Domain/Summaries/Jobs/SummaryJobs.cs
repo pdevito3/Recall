@@ -199,6 +199,10 @@ public sealed class SummaryJobs(IServiceScopeFactory scopeFactory, IModelProvide
     {
         private readonly Dictionary<PeriodKey, bool> _ready = [];
 
+        // A provider that refused a request or gave no words fails each later run of the claim in the same way, so a roll-up of
+        // many sources does not wait on each call in turn or send the words of each source to a provider that refuses them.
+        private SummaryFailure? _providerFailure;
+
         public ModelEndpoint? Endpoint { get; private set; }
 
         public string? Model { get; private set; }
@@ -244,6 +248,12 @@ public sealed class SummaryJobs(IServiceScopeFactory scopeFactory, IModelProvide
                 return true;
 
             var run = await jobs.SendAsync(owner, new BeginSummaryRun.Command(key, requestedRunId, context.JobId), cancellationToken);
+            if (_providerFailure is { } stop)
+            {
+                await jobs.SendAsync(owner, new FailSummaryRun.Command(run.SummaryId, run.RunId, stop), cancellationToken);
+                return false;
+            }
+
             IReadOnlyList<SummarySourceText> texts;
             if (key.SourcePeriod is null)
             {
@@ -286,6 +296,9 @@ public sealed class SummaryJobs(IServiceScopeFactory scopeFactory, IModelProvide
             };
             if (failure is null)
                 return true;
+
+            if (failure is SummaryFailure.ProviderRefused or SummaryFailure.ProviderUnavailable)
+                _providerFailure = failure;
 
             await jobs.SendAsync(owner, new FailSummaryRun.Command(run.SummaryId, run.RunId, failure.Value), cancellationToken);
             return false;

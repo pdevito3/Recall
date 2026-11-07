@@ -26,7 +26,9 @@ public sealed class SummaryJobWatch(IJobStore store, IServiceScopeFactory scopeF
     private const int PageSize = 200;
 
     private readonly ILogger _logger = Log.ForContext<SummaryJobWatch>();
-    private readonly HashSet<Guid> _ended = [];
+    // An Owner can requeue a job from the dead letters, and it can end there again with the same ID, so an end is the ID and
+    // the time of the end. A pass keeps only the ends that the store still lists.
+    private HashSet<(Guid JobId, DateTimeOffset? TerminalAt)> _ended = [];
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -48,6 +50,7 @@ public sealed class SummaryJobWatch(IJobStore store, IServiceScopeFactory scopeF
 
     public async Task EndRunsOfEndedJobsAsync(CancellationToken cancellationToken)
     {
+        var listed = new HashSet<(Guid, DateTimeOffset?)>();
         foreach (var wireName in WireNames)
         foreach (var state in EndedWithNoResult)
         {
@@ -55,12 +58,19 @@ public sealed class SummaryJobWatch(IJobStore store, IServiceScopeFactory scopeF
             while (true)
             {
                 var jobs = await store.ListJobsAsync(new JobQuery { State = state, WireName = wireName, AfterSequence = after, MaxResults = PageSize }, cancellationToken);
-                foreach (var job in jobs.Where(job => !_ended.Contains(job.JobId)))
+                foreach (var job in jobs)
                 {
+                    var end = (job.JobId, job.TerminalAt);
+                    if (_ended.Contains(end))
+                    {
+                        listed.Add(end);
+                        continue;
+                    }
+
                     try
                     {
                         await EndRunsAsync(job, cancellationToken);
-                        _ended.Add(job.JobId);
+                        listed.Add(end);
                     }
                     catch (Exception fault) when (!cancellationToken.IsCancellationRequested)
                     {
@@ -73,6 +83,8 @@ public sealed class SummaryJobWatch(IJobStore store, IServiceScopeFactory scopeF
                 after = jobs[^1].Sequence;
             }
         }
+
+        _ended = listed;
     }
 
     private async Task EndRunsAsync(JobRecord job, CancellationToken cancellationToken)

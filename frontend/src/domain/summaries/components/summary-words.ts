@@ -1,4 +1,4 @@
-import type { CalendarDate } from '@internationalized/date'
+import type { CalendarDate, DateDuration } from '@internationalized/date'
 import { parseDate } from '@internationalized/date'
 
 import type { SummaryDto } from '@/api/generated/models/types/summary-dto'
@@ -57,14 +57,34 @@ export function sourceCountText(period: SummaryPeriod, count: number): string {
   return `Reads ${count} ${count === 1 ? one : many}`
 }
 
-/** The last day of the period before. The Server owns the bounds of a period, so a day in it is enough. */
-export function previousPeriodDate({ periodDate }: PeriodBounds): string {
-  return parseDate(periodDate).subtract({ days: 1 }).toString()
+/** The years that the Server takes in a date. */
+const FIRST_YEAR = 1900
+const LAST_YEAR = 9998
+
+/**
+ * A step of one period from any day of a period lands in the period next to it, and a day in a period is enough, because the
+ * Server owns its bounds. So a step needs only the date that the page asked for, not the Summary that is still on its way.
+ */
+const PERIOD_STEP: Record<SummaryPeriod, DateDuration> = {
+  Day: { days: 1 },
+  Week: { weeks: 1 },
+  Month: { months: 1 },
+  Quarter: { months: 3 },
+  Year: { years: 1 },
 }
 
-/** The first day of the period after. */
-export function nextPeriodDate({ periodLastDate }: PeriodBounds): string {
-  return parseDate(periodLastDate).add({ days: 1 }).toString()
+function inServerYears(date: CalendarDate): string | null {
+  return date.year >= FIRST_YEAR && date.year <= LAST_YEAR ? date.toString() : null
+}
+
+/** A day in the period before the one that holds `date`, or null before the first year that the Server takes. */
+export function previousPeriodDate(period: SummaryPeriod, date: string): string | null {
+  return inServerYears(parseDate(date).subtract(PERIOD_STEP[period]))
+}
+
+/** A day in the period after the one that holds `date`, or null after the last year that the Server takes. */
+export function nextPeriodDate(period: SummaryPeriod, date: string): string | null {
+  return inServerYears(parseDate(date).add(PERIOD_STEP[period]))
 }
 
 export function writtenAtText(generatedAt: string, zone: TimeZone): string {
