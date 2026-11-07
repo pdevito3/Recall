@@ -3,7 +3,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExter
 import { flushSync } from 'react-dom'
 
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
-import { locationCaptureIsOn, useUserSetting } from '@/domain/settings/apis/user-setting'
+import { Notification } from '@/components/notification'
+import { locationCaptureIsOn, locationWaitsForAnAnswer, useUserSetting } from '@/domain/settings/apis/user-setting'
 import { mayTakeFocusOnThisPage } from '@/lib/first-page'
 import { isProblemDetailsError } from '@/lib/problem-details'
 import { newUuid } from '@/lib/new-uuid'
@@ -36,7 +37,10 @@ function captureLocation(): Promise<{ latitude: number; longitude: number } | nu
 }
 
 function locationOfNewEntry(queryClient: QueryClient) {
-  if (!locationCaptureIsOn(queryClient)) return undefined
+  if (!locationCaptureIsOn(queryClient)) {
+    if (locationWaitsForAnAnswer(queryClient)) Notification.info('This entry saves no location, because Settings waits for your answer about location capture.')
+    return undefined
+  }
   const position = captureLocation()
   return async () => {
     const found = await position

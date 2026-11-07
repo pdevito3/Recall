@@ -245,7 +245,7 @@ The app cannot change this delay. No web API forces the commit.
 
 **A replay with a failed read.** When the read after a replay also fails, the app cannot know where the words went. It shows the notice of a loss, also for a save that won, and the words stay on the screen. `Show the newest words` reads the Draft again. **A save that won with no reply, then a later save.** On a device whose clock differs from the Server, the later save can show that it replaced a save that the page did not show, though that save was its own. Both are false alarms, and no word goes.
 
-**A change of location capture to off that waits.** The app asks at the start of an entry and again at its create. A change to off in the memory of this tab, or in a key of any tab of the person, stops the location. The prompt of a stale change shows only on Settings of the tab that holds it, so a live tab with no answer keeps location off in that browser until the person answers there or that tab closes.
+**A change of location capture to off that waits.** The app asks at the start of an entry and again at its create. A change to off in the memory of this tab, or in a key of any tab of the person, stops the location. The prompt of a stale change shows on Settings, and the key moves to the next tab that opens, so location stays off in that browser until the person answers there. While it waits, each new entry shows a notice that it saves no location. A row that has not loaded at the first word also gives no location to that entry. A refused change to off holds only in the tab that made it, the row stays on, and only that tab shows the refusal.
 
 ## Routes
 
@@ -287,7 +287,7 @@ The router moves the `component` of each route to a chunk that loads when the pa
 
 ## Bundle size
 
-`pnpm build` fails when the JavaScript that `dist/index.html` loads is more than 960 kB of minified code. That is the entry chunk in the `<script type="module">` tag and each chunk in the `modulepreload` links, which the entry imports statically. The budget does not count the CSS, or the chunk of a route. `main.tsx` loads the chunk of each route after the first idle moment, because a page with no network cannot fetch a chunk, and the status line tells a person to keep the page open. The budget is `firstPageBudgetKb` in `frontend/vite.config.ts`. The error gives the size of each chunk that it counts.
+`pnpm build` fails when the JavaScript that `dist/index.html` loads is more than 961 kB of minified code. That is the entry chunk in the `<script type="module">` tag and each chunk in the `modulepreload` links, which the entry imports statically. The budget does not count the CSS, or the chunk of a route. `main.tsx` loads the chunk of each route after the first idle moment, because a page with no network cannot fetch a chunk, and the status line tells a person to keep the page open. The budget is `firstPageBudgetKb` in `frontend/vite.config.ts`. The error gives the size of each chunk that it counts.
 
 When the build fails:
 

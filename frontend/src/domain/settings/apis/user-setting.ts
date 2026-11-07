@@ -17,6 +17,8 @@ export const userSettingOptions = queryOptions({
   queryKey: SettingKeys.mine(),
   queryFn: ({ signal }) => getUserSetting({ signal, options: { suppressErrorToast: true } }),
   staleTime: 60_000,
+  // A retry of a create can come long after the last page that reads the row, and with no row it would drop the location.
+  gcTime: Infinity,
   retry: retryUnlessRefused,
 })
 
@@ -79,20 +81,22 @@ export const resumeUnsentSetting = (owner: string, queryClient: QueryClient) =>
     }
   })
 
-const holdsAnOff = (change: Partial<SettingChange> | undefined, asks: RowSaverState<SettingChange>['asks']) =>
-  change?.locationCaptureEnabled === false || asks.some(({ field, yours }) => field === 'locationCaptureEnabled' && yours === false)
+const asksAboutOff = ({ asks }: Pick<RowSaverState<SettingChange>, 'asks'>) =>
+  asks.some(({ field, yours }) => field === 'locationCaptureEnabled' && yours === false)
+
+function waitingChanges(queryClient: QueryClient) {
+  const saver = settingSaver(queryClient)
+  const owner = pageUserOf()
+  const inKeys = owner === null ? [] : keysUnder(prefixOf(owner)).flatMap((key) => stateIn(key) ?? [])
+  return [...inKeys.map(({ change, asks }) => ({ fields: change?.value, asks })), { fields: saver.pendingFields(), asks: saver.asks() }]
+}
 
 /** A change to off can wait for a save or an answer, in this tab or in a key of another tab. The app saves no location while it waits, so the choice holds also on a page with no prompt. */
-export function locationCaptureIsOn(queryClient: QueryClient) {
-  const saver = settingSaver(queryClient)
-  const isOnInRow = queryClient.getQueryData<UserSettingDto>(SettingKeys.mine())?.locationCaptureEnabled === true
-  const owner = pageUserOf()
-  const isOffInAKey = owner !== null && keysUnder(prefixOf(owner)).some((key) => {
-    const state = stateIn(key)
-    return state !== null && holdsAnOff(state.change?.value, state.asks)
-  })
-  return isOnInRow && !isOffInAKey && !holdsAnOff(saver.pendingFields(), saver.asks())
-}
+export const locationCaptureIsOn = (queryClient: QueryClient) =>
+  queryClient.getQueryData<UserSettingDto>(SettingKeys.mine())?.locationCaptureEnabled === true
+  && !waitingChanges(queryClient).some((waiting) => waiting.fields?.locationCaptureEnabled === false || asksAboutOff(waiting))
+
+export const locationWaitsForAnAnswer = (queryClient: QueryClient) => waitingChanges(queryClient).some(asksAboutOff)
 
 export const settleSettingSaver = () => saver?.settle() ?? Promise.resolve(true)
 

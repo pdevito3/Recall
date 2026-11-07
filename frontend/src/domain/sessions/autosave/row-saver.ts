@@ -138,6 +138,7 @@ export class RowSaver<F extends object, R> {
     const newest = this.saver.newestUnsettled()
     const isOlder = newest !== null && change !== null && newest.savedAt > change.savedAt
     const fields = change && (isOlder ? withoutFields(change.value, fieldsIn(this.pendingFields())) : change.value)
+    for (const field of fieldsIn(fields ?? {})) this.keptAsTheyAre.delete(field)
     if (fields && change && fieldsIn(fields).length > 0) this.saver.edit(fields, isOlder ? newest.savedAt : change.savedAt)
     else this.keep()
     this.notify()

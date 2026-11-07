@@ -579,7 +579,7 @@ test.describe('a setting that did not reach the Server', () => {
   test('is not lost to the time zone seed of the next load', async ({ page, api }) => {
     const unsent = unsentWords(page)
     api.mock(settingsApi.are(aSetting({ timeZone: null })), { method: 'put', path: settingsPaths.mine, status: 503 })
-    await unsent.leftInStorage(`recall.unsent-setting.${actorSubject}`, JSON.stringify({
+    await unsent.leftInStorage(`recall.unsent-setting.${actorSubject}.tab-that-died.1`, JSON.stringify({
       change: { value: { locationCaptureEnabled: true }, savedAt: '2026-11-06T15:31:00.000Z' },
       attempt: null,
       asks: [],
@@ -593,6 +593,8 @@ test.describe('a setting that did not reach the Server', () => {
 })
 
 test.describe('the location of a new entry', () => {
+  // A create that failed retries after its wait, and a failure of the poll must show as a failure of the poll.
+  test.setTimeout(60_000)
   const place = { latitude: 41.5, longitude: -88.4 }
   const failingPut = { method: 'put' as const, path: settingsPaths.mine, status: 503 }
 
@@ -651,6 +653,23 @@ test.describe('the location of a new entry', () => {
     await typeOnTheJournal(await context.newPage(), api)
 
     expect(await createdLatitude(api)).toBeNull()
+  })
+
+  test('stays out with a notice while an answer about a change to off waits', async ({ page, context, api }) => {
+    await givePlace(context)
+    const session = aSession().build()
+    const unsent = unsentWords(page)
+    api.mock(settingsApi.are(aSetting({ locationCaptureEnabled: true })), sessionsApi.creates(session), sessionsApi.draftSaveWins(session, 1))
+    await unsent.leftInStorage(`recall.unsent-setting.${actorSubject}.tab-that-died.1`, JSON.stringify({
+      change: null,
+      attempt: null,
+      asks: [{ field: 'locationCaptureEnabled', yours: false, now: true }],
+    }))
+
+    await typeOnTheJournal(page, api)
+
+    expect(await createdLatitude(api)).toBeNull()
+    await expect(unsent.at.noLocationNotice).toBeVisible()
   })
 
   test('stays out at the first word when a tab that died left a change to off', async ({ page, context, api }) => {

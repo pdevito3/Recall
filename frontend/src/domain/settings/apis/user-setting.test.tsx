@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { commands } from 'vitest/browser'
 
 import { SettingKeys } from './setting.keys'
-import { locationCaptureIsOn, resumeUnsentSetting, settingSaver } from './user-setting'
+import { locationCaptureIsOn, locationWaitsForAnAnswer, resumeUnsentSetting, settingSaver, userSettingOptions } from './user-setting'
 
 const prefix = 'recall.unsent-setting.person-a.'
 const staleKey = {
@@ -46,7 +46,22 @@ test('this tab saves no location while a change to off waits for an answer', asy
 
   saver.adopt({ change: null, attempt: null, asks: [{ field: 'locationCaptureEnabled', yours: false, now: true }] })
   expect(locationCaptureIsOn(queryClient)).toBe(false)
+  expect(locationWaitsForAnAnswer(queryClient)).toBe(true)
 
   saver.answerAsk(saver.asks()[0], false)
+  expect(locationCaptureIsOn(queryClient)).toBe(true)
+  expect(locationWaitsForAnAnswer(queryClient)).toBe(false)
+})
+
+test('the row stays known when no page reads it, so a create that retries much later still sends the location', async () => {
+  const row = { timeZone: 'UTC', timeZoneIsKnown: true, locationCaptureEnabled: true, requirePeopleProposalApproval: false, version: 2 }
+  await commands.answerRequests([{ method: 'GET', path: '/api/v1/me/settings', body: row }])
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  const queryClient = new QueryClient()
+
+  await queryClient.fetchQuery(userSettingOptions)
+  vi.advanceTimersByTime(6 * 60_000)
+  vi.useRealTimers()
+
   expect(locationCaptureIsOn(queryClient)).toBe(true)
 })

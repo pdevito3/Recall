@@ -277,7 +277,10 @@ export function unsentWords(page: Page) {
     stored: (key: string) => page.evaluate((k) => localStorage.getItem(k), key),
     keys: () => page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('recall.unsent.'))),
     clientSessionIdOfTheHold: () =>
-      page.evaluate(() => Object.keys(localStorage).find((key) => key.includes('.hold.'))!.split('.')[3]),
+      page.evaluate(() => {
+        const entries = Object.keys(localStorage).filter((key) => key.startsWith('recall.unsent.')).map((key) => JSON.parse(localStorage.getItem(key)!) as { clientSessionId: string; held?: string | null })
+        return entries.find(({ held }) => held != null)!.clientSessionId
+      }),
     settingKeys: () => page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('recall.unsent-setting.'))),
     composerPointer: () => page.evaluate(() => sessionStorage.getItem('recall.composer')),
     clipboardText: () => page.evaluate(() => navigator.clipboard.readText()),
