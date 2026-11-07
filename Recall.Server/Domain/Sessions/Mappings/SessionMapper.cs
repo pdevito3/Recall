@@ -28,8 +28,10 @@ public static partial class SessionMapper
         if (session.PeopleProposals.Count == 0)
             return [];
 
+        // A Person whom Cleaned tags has nothing left to tag.
+        var tagged = PersonMentions.PersonIdsIn(session.Cleaned.Text);
         var plain = ProseMirrorToPlainText.Render(session.Cleaned.Text);
-        return session.PeopleProposals.Select(proposal => new PersonProposalDto
+        return session.PeopleProposals.Where(proposal => proposal.MatchedPersonId is null || !tagged.Contains(proposal.MatchedPersonId)).Select(proposal => new PersonProposalDto
         {
             Label = proposal.Label,
             MatchedPersonId = proposal.MatchedPersonId,
