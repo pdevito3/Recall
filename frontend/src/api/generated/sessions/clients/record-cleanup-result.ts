@@ -9,7 +9,8 @@ import { client, unwrapResult } from '../../.kubb/client'
 
 /**
  * @summary Stores the Cleanup of a model on the device as a new Cleaned Revision, and Raw does not change. A call while a Cleanup job
- * runs gets 422. A retry with the same words and the same base gets 200 and adds no Revision.
+ * runs gets 422. A result applies once. A repeat of it gets 200 with the stored Session and writes nothing, so a later hand
+ * edit, tag, or Cleanup stays.
  * {@link /api/v1/sessions/:id/cleanup/result}
  */
 export function recordCleanupResult<ThrowOnError extends boolean = true>(options: Options<RecordCleanupResultOptions, ThrowOnError>): Promise<UnwrappedResult<RecordCleanupResultResponses, ThrowOnError>> {

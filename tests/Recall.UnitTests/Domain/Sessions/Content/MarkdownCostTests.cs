@@ -1,6 +1,5 @@
 namespace Recall.UnitTests.Domain.Sessions.Content;
 
-using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -126,7 +125,9 @@ public class MarkdownCostTests
     public void an_out_of_memory_in_a_conversion_leaves_the_source_and_no_retry()
     {
         // Act
-        var json = MarkdownToProseMirror.ConvertToJson("**words**", _ => new byte[long.MaxValue].Length.ToString(CultureInfo.InvariantCulture));
+#pragma warning disable CA2201 // The conversion catches this exact type, which an allocation throws, and a test cannot exhaust the memory of the runner.
+        var json = MarkdownToProseMirror.ConvertToJson("**words**", _ => throw new OutOfMemoryException());
+#pragma warning restore CA2201
 
         // Assert
         ProseMirrorToPlainText.Render(json).Trim().ShouldBe("**words**");

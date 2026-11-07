@@ -20,7 +20,8 @@ public sealed class RecordCleanupResultEndpoint : IEndpoint
 
     /// <summary>
     /// Stores the Cleanup of a model on the device as a new Cleaned Revision, and Raw does not change. A call while a Cleanup job
-    /// runs gets 422. A retry with the same words and the same base gets 200 and adds no Revision.
+    /// runs gets 422. A result applies once. A repeat of it gets 200 with the stored Session and writes nothing, so a later hand
+    /// edit, tag, or Cleanup stays.
     /// </summary>
     public static async Task<Ok<SessionDto>> Handle(string id, CleanupResultDto dto, IMediator mediator, CancellationToken cancellationToken)
         => TypedResults.Ok(await mediator.Send(new RecordCleanupResult.Command(id, dto), cancellationToken));

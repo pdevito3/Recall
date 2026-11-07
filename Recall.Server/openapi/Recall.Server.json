@@ -2736,7 +2736,7 @@
         "tags": [
           "Sessions"
         ],
-        "summary": "Stores the Cleanup of a model on the device as a new Cleaned Revision, and Raw does not change. A call while a Cleanup job\nruns gets 422. A retry with the same words and the same base gets 200 and adds no Revision.",
+        "summary": "Stores the Cleanup of a model on the device as a new Cleaned Revision, and Raw does not change. A call while a Cleanup job\nruns gets 422. A result applies once. A repeat of it gets 200 with the stored Session and writes nothing, so a later hand\nedit, tag, or Cleanup stays.",
         "operationId": "RecordCleanupResult",
         "parameters": [
           {

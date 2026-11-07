@@ -75,6 +75,26 @@ public class JournalTextSafetyTests : TestBase
     }
 
     [Test]
+    [Arguments("""{"type":"doc","content":[{"type":"image","attrs":{"src":"javascript:alert(1)"}}]}""")]
+    [Arguments("""{"type":"doc","content":[{"type":"iframe","attrs":{"src":"JaVa\tScRiPt:alert(1)"}}]}""")]
+    [Arguments("""{"type":"doc","content":[{"type":"paragraph","content":[{"type":"image","attrs":{"src":"data:text/html,x"}}]}]}""")]
+    public async Task a_draft_with_an_image_or_a_frame_that_no_page_may_open_is_refused(string document)
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+
+        // Act
+        var raw = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Draft(session.Id), new { text = document, baseRevision = 0, savedAt = JournalScenario.Morning });
+        var cleaned = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Cleaned(session.Id), new { text = document, baseRevision = 0, savedAt = JournalScenario.Morning });
+
+        // Assert
+        raw.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        cleaned.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Test]
     [Arguments("ftp://files.example/a")]
     [Arguments("sms:+15551234")]
     [Arguments("example.com:8080/a")]

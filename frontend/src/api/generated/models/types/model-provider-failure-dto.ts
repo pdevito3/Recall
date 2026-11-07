@@ -6,7 +6,8 @@
 export const modelProviderFailureDtoKindEnum = {
     Refused: "Refused",
     Unavailable: "Unavailable",
-    BadOutput: "BadOutput"
+    BadOutput: "BadOutput",
+    NoWords: "NoWords"
 } as const;
 
 export type ModelProviderFailureDtoKindEnumKey = (typeof modelProviderFailureDtoKindEnum)[keyof typeof modelProviderFailureDtoKindEnum];

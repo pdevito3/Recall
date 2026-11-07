@@ -42,7 +42,7 @@ public static class LinkAddress
                     continue;
 
                 var isType = reader.CurrentDepth == 1 && TextIs(ref reader, "type");
-                var isAddress = TextIs(ref reader, "href");
+                var isAddress = TextIs(ref reader, "href") || TextIs(ref reader, "src");
                 if (!isType && !isAddress)
                     continue;
 

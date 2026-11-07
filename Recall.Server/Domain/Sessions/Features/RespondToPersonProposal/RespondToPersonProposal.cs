@@ -69,7 +69,9 @@ public static class RespondToPersonProposal
                     return match;
             }
 
-            var person = Person.Create(session.TenantId, session.UserId, proposal.Label);
+            var person = dto.CreateNew
+                ? Person.Create(session.TenantId, session.UserId, proposal.Label)
+                : Person.CreateFromProposedName(session.TenantId, session.UserId, proposal.Label);
             await dbContext.People.AddAsync(person, cancellationToken);
             return person;
         }

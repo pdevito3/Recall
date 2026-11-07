@@ -202,11 +202,11 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         return CleanupRunId;
     }
 
-    public void CompleteCleanup(CleanupOutcome outcome, int rawRevisionRead, DateTimeOffset now)
+    public void CompleteCleanup(CleanupOutcome outcome, int rawRevisionRead, DateTimeOffset now, string? deviceResultHash = null)
     {
         RequireRunningCleanup();
         Cleaned = new DraftSlot(outcome.CleanedText, Cleaned.LatestRevision + 1, Cleaned.LatestRevision + 1, now);
-        _appendedCleanedRevisions.Add(new CleanedRevision(Id, Cleaned.DraftRevision, now, now, outcome.CleanedText, wasDraft: true));
+        _appendedCleanedRevisions.Add(new CleanedRevision(Id, Cleaned.DraftRevision, now, now, outcome.CleanedText, wasDraft: true, deviceResultHash));
         Synopsis = outcome.Synopsis;
         CleanedHasHandEdits = false;
         LastCleanupRawRevision = rawRevisionRead;
@@ -283,7 +283,14 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
     public void ApprovePersonProposal(PersonProposal proposal, string personId, string personLabel, DateTimeOffset now)
     {
         var plain = ProseMirrorToPlainText.Render(Cleaned.Text);
-        var cleaned = MentionInsertion.Insert(Cleaned.Text, PeopleTagSpans.Spans(plain, proposal.Label, personId, personLabel));
+        var spans = PeopleTagSpans.Spans(plain, proposal.Label, personId, personLabel);
+        var placed = MentionInsertion.Placeable(Cleaned.Text, spans);
+        ValidationException.Must(
+            placed.Count > 0 || PersonMentions.PersonIdsIn(Cleaned.Text).Contains(personId),
+            "label",
+            "Cleaned has no place for this tag, because a mark crosses the name or the name is gone. Choose Do not tag, or edit Cleaned first.");
+
+        var cleaned = placed.Count > 0 ? MentionInsertion.Insert(Cleaned.Text, placed) : Cleaned.Text;
         if (cleaned != Cleaned.Text)
             ValidationException.ThrowWhenLongerThan(cleaned, DraftMaxLength, "label", "A tag of this name makes Cleaned too long. Choose Do not tag, or run a new Cleanup.");
 

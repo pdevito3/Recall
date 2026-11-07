@@ -6,7 +6,7 @@
 import * as z from 'zod'
 
 export const modelProviderFailureDtoSchema = z.object({
-  kind: z.enum(['Refused', 'Unavailable', 'BadOutput']),
+  kind: z.enum(['Refused', 'Unavailable', 'BadOutput', 'NoWords']),
   statusCode: z.int32().nullish(),
   message: z.string().describe('The words of the provider, with the key removed.'),
 })

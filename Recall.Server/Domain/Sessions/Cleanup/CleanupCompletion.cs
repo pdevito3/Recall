@@ -47,19 +47,23 @@ public sealed class CleanupCompletion(AppDbContext dbContext)
         else
         {
             var spans = new List<MentionSpan>();
+            var newPeople = new List<Person>();
             foreach (var name in names)
             {
-                var person = MatchOf(people.Concat(added), name);
+                var person = MatchOf(people.Concat(newPeople), name);
                 if (person is null)
                 {
-                    person = Person.Create(session.TenantId, session.UserId, name);
-                    added.Add(person);
+                    person = Person.CreateFromProposedName(session.TenantId, session.UserId, name);
+                    newPeople.Add(person);
                 }
 
                 spans.AddRange(PeopleTagSpans.Spans(plain, name, person.Id, person.Label));
             }
 
-            cleaned = MentionInsertion.Insert(cleaned, spans);
+            // A name with a mark across it can hold no tag, and a Person with no tag is a change that nothing on the page explains.
+            var placed = MentionInsertion.Placeable(cleaned, spans);
+            added.AddRange(newPeople.Where(person => placed.Any(span => span.PersonId == person.Id)));
+            cleaned = MentionInsertion.Insert(cleaned, placed);
         }
 
         if (cleaned.Length > Session.DraftMaxLength)
@@ -70,7 +74,7 @@ public sealed class CleanupCompletion(AppDbContext dbContext)
     }
 
     public static Person? MatchOf(IEnumerable<Person> people, string name)
-        => people.FirstOrDefault(person => person.Label.Equals(name.Trim(), StringComparison.OrdinalIgnoreCase));
+        => people.FirstOrDefault(person => Person.KeyOf(person.Label) == Person.KeyOf(name));
 
     /// <summary>Each hard-replace mishearing becomes its term, whole word and in any case. Raw is not an input here.</summary>
     public static string WithHardReplacements(string markdown, IEnumerable<Correction> corrections)

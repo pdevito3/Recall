@@ -13,5 +13,6 @@ public static partial class PersonMapper
     [MapperIgnoreSource(nameof(Person.LastModifiedOn))]
     [MapperIgnoreSource(nameof(Person.IsDeleted))]
     [MapperIgnoreSource(nameof(Person.DomainEvents))]
+    [MapperIgnoreSource(nameof(Person.ProposalKey))]
     public static partial PersonDto ToPersonDto(this Person person);
 }

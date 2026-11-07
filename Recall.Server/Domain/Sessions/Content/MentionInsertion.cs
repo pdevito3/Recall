@@ -60,6 +60,23 @@ public static class MentionInsertion
         return Insert(doc, spans)?.ToJsonString(PersonMentions.KeepWords) ?? json;
     }
 
+    /// <summary>The spans that <see cref="Insert(string?, IReadOnlyCollection{MentionSpan})"/> can wrap in this document.</summary>
+    public static IReadOnlyList<MentionSpan> Placeable(string? json, IReadOnlyCollection<MentionSpan> spans)
+    {
+        if (string.IsNullOrWhiteSpace(json) || spans.Count == 0)
+            return [];
+
+        JsonNode? doc;
+        try { doc = JsonNode.Parse(json); }
+        catch (JsonException) { return []; }
+
+        if (doc is null)
+            return [];
+
+        var index = BuildPlaintextIndex(doc);
+        return spans.Where(span => TryResolve(index, span, out _, out _)).ToList();
+    }
+
     // ---- offset to node resolution -------------------------------------------------------------
 
     /// <summary>One approved insertion localized to a text node: wrap <c>[Start, Start+Length)</c> of its text.</summary>

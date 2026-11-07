@@ -5,10 +5,12 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Recall.FunctionalTests.FunctionalTests.Sessions;
+using Recall.Server.Domain.People;
 using Recall.Server.Domain.People.Dtos;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Dtos;
 using Recall.Server.Domain.UserSettings.Dtos;
+using Recall.Server.Exceptions;
 using Shouldly;
 using TestUtilities;
 
@@ -17,6 +19,10 @@ public class CleanupResultRoutesTests : TestBase
 {
     private static readonly string[] HeldTopics = ["work"];
     private static readonly string[] Misheard = ["cooper netties"];
+    private static readonly string[] Ann = ["Ann"];
+    private static readonly string[] Rae = ["Rae"];
+    private static readonly string[] SamLee = ["Sam Lee"];
+    private static readonly string[] SamLeeAndAnn = ["Sam Lee", "Ann"];
 
     private static string ReplyWith(string cleaned, string[]? topics = null, string[]? moods = null, string[]? people = null) => JsonSerializer.Serialize(new
     {
@@ -369,6 +375,134 @@ public class CleanupResultRoutesTests : TestBase
         stored.RawLatestRevision.ShouldBe(1);
         retried.CleanedLatestRevision.ShouldBe(stored.CleanedLatestRevision);
         (await CleanupScenario.CleanedRevisionCountAsync(session.Id)).ShouldBe(1);
+    }
+
+    [Test]
+    [Property("Rule", "SES-42")]
+    public async Task a_repeat_of_a_device_result_after_a_hand_edit_writes_nothing()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        var session = await scenario.SessionWithWordsAsync("raw words");
+        var body = new { cleanedMarkdown = "Words of the device", synopsis = "I wrote.", baseRawRevision = 1 };
+        var stored = await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), body);
+        var edit = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Cleaned(session.Id), new { text = "My own words", baseRevision = stored.CleanedLatestRevision, savedAt = DateTimeOffset.UtcNow });
+        edit.StatusCode.ShouldBe(HttpStatusCode.OK, await edit.Content.ReadAsStringAsync());
+
+        // Act
+        var repeated = await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), body);
+
+        // Assert
+        repeated.CleanedText.ShouldBe("My own words");
+        repeated.CleanedHasHandEdits.ShouldBeTrue();
+        repeated.CleanedLatestRevision.ShouldBe(stored.CleanedLatestRevision + 1);
+        (await CleanupScenario.CleanedRevisionCountAsync(session.Id)).ShouldBe(2);
+    }
+
+    [Test]
+    [Property("Rule", "SES-42")]
+    public async Task a_late_repeat_of_a_device_result_keeps_a_tag_and_a_later_result()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        var session = await scenario.SessionWithWordsAsync("raw words");
+        var first = new { cleanedMarkdown = "I met Ann today", synopsis = "I met Ann.", peopleProposal = Ann, baseRawRevision = 1 };
+        await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), first);
+        var tagged = await PostAsync(ApiRoutes.Sessions.RespondToPersonProposal(session.Id), new { label = "Ann", approve = true, createNew = false });
+        var second = await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "A second answer", synopsis = "Later.", baseRawRevision = 1 });
+
+        // Act
+        var afterTag = await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), first);
+
+        // Assert
+        tagged.CleanedText.ShouldContain("mention");
+        afterTag.CleanedText.ShouldBe(second.CleanedText);
+        afterTag.PeopleProposals.ShouldBeEmpty();
+        afterTag.CleanedLatestRevision.ShouldBe(second.CleanedLatestRevision);
+    }
+
+    [Test]
+    [Property("Rule", "SES-41")]
+    public async Task approvals_of_one_new_name_at_once_in_many_sessions_give_one_person()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        var sessions = new List<SessionDto>();
+        foreach (var words in new[] { "one", "two", "three", "four", "five", "six" })
+        {
+            var session = await scenario.SessionWithWordsAsync($"raw {words}");
+            sessions.Add(await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = $"I met Rae about {words}", peopleProposal = Rae, baseRawRevision = 1 }));
+        }
+
+        // Act
+        var approved = await Task.WhenAll(sessions.Select(session => PostAsync(ApiRoutes.Sessions.RespondToPersonProposal(session.Id), new { label = "Rae", approve = true, createNew = false })));
+
+        // Assert
+        var people = await ExecuteDbContextAsync(db => db.People.IgnoreQueryFilters().Where(person => person.UserId == scenario.Member.Id && person.Label == "Rae").Select(person => person.Id).ToListAsync());
+        var id = people.ShouldHaveSingleItem();
+        approved.ShouldAllBe(session => session.CleanedText.Contains(id));
+    }
+
+    [Test]
+    [Property("Rule", "SES-41")]
+    public async Task a_second_person_of_a_proposed_name_stops_at_the_database()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        await ExecuteDbContextAsync(async db =>
+        {
+            await db.People.AddAsync(Person.CreateFromProposedName(scenario.Member.TenantId, scenario.Member.Id, "Rae Lee"));
+            await db.SaveChangesAsync();
+        });
+
+        // Act
+        var add = () => ExecuteDbContextAsync(async db =>
+        {
+            await db.People.AddAsync(Person.CreateFromProposedName(scenario.Member.TenantId, scenario.Member.Id, "rae  LEE"));
+            await db.SaveChangesAsync();
+        });
+
+        // Assert
+        await add.ShouldThrowAsync<StaleVersionException>();
+    }
+
+    [Test]
+    [Property("Rule", "SES-41")]
+    public async Task an_approval_of_a_name_that_a_mark_crosses_gets_422_and_adds_no_person()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        var session = await scenario.SessionWithWordsAsync("raw words");
+        await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "I met **Sam** Lee today", peopleProposal = SamLee, baseRawRevision = 1 });
+
+        // Act
+        var answer = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.RespondToPersonProposal(session.Id), new { label = "Sam Lee", approve = true, createNew = false });
+
+        // Assert
+        answer.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await answer.Content.ReadAsStringAsync()).ShouldContain("a mark crosses the name");
+        var stored = await scenario.ReadAsync(session.Id);
+        stored.PeopleProposals.ShouldHaveSingleItem().Label.ShouldBe("Sam Lee");
+        (await ExecuteDbContextAsync(db => db.People.IgnoreQueryFilters().CountAsync(person => person.UserId == scenario.Member.Id))).ShouldBe(0);
+    }
+
+    [Test]
+    [Property("Rule", "SES-40")]
+    public async Task with_approval_off_a_name_that_a_mark_crosses_adds_no_person()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        var settings = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new UserSettingChangeDto { TimeZone = "Europe/Tallinn", LocationCaptureEnabled = false, RequirePeopleProposalApproval = false, Version = 0 });
+        settings.StatusCode.ShouldBe(HttpStatusCode.OK, await settings.Content.ReadAsStringAsync());
+        var session = await scenario.SessionWithWordsAsync("raw words");
+
+        // Act
+        var stored = await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "I met **Sam** Lee and Ann", peopleProposal = SamLeeAndAnn, baseRawRevision = 1 });
+
+        // Assert
+        var labels = await ExecuteDbContextAsync(db => db.People.IgnoreQueryFilters().Where(person => person.UserId == scenario.Member.Id).Select(person => person.Label).ToListAsync());
+        labels.ShouldBe(["Ann"]);
+        stored.CleanedText.ShouldContain("\"label\":\"Ann\"");
     }
 
     [Test]

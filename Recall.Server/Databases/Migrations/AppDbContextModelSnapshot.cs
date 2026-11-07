@@ -696,6 +696,11 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("last_modified_on");
 
+                    b.Property<string>("ProposalKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("proposal_key");
+
                     b.Property<string>("TenantId")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -720,6 +725,11 @@ namespace Recall.Server.Databases.Migrations
 
                     b.HasIndex("TenantId")
                         .HasDatabaseName("ix_people_tenant_id");
+
+                    b.HasIndex("UserId", "ProposalKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_people_user_id_proposal_key")
+                        .HasFilter("proposal_key IS NOT NULL AND is_deleted = false");
 
                     b.HasIndex("UserId", "Label", "Id")
                         .HasDatabaseName("ix_people_user_id_label_id");
@@ -894,6 +904,11 @@ namespace Recall.Server.Databases.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("claimed_saved_at");
+
+                    b.Property<string>("DeviceResultHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("device_result_hash");
 
                     b.Property<string>("SavedAt")
                         .IsRequired()
