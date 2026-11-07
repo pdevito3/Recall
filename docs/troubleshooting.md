@@ -57,7 +57,7 @@ The server keeps its logs and its telemetry to about 460 MiB, and a full disk do
 
 1. Run `df -h /data` and `du -sh /data/*` to find what holds the space.
 2. Make room on the volume. You can delete old files in `/data/logs` and `/data/telemetry` while the server runs. Do not delete `recall.db`, its `-wal` file, or the `keys` folder.
-3. If `/health` answers 503 and says `The background jobs stopped`, restart the server. The journal does not need a restart, but no background job runs until then. See [The background jobs stopped](#the-background-jobs-stopped).
+3. If `/health` answers 503 and says `The background jobs stopped`, restart the server. The journal does not need a restart, but no job of a stopped group runs until then. See [The background jobs stopped](#the-background-jobs-stopped).
 
 ## The background jobs stopped
 
@@ -88,11 +88,11 @@ A stop on a full disk exits with 0. If a file cannot write the lines that it sti
 
 ## A Recording has no text
 
-Read `GET /api/v1/recordings/{id}`. The audio stays stored for each of these values of `problem`. The field `problemText` says the same thing in words.
+Read `GET /api/v1/recordings/{id}`. The audio stays stored for each of these values of `problem`. The field `problemText` says the same thing in words. While the jobs that make text are stopped, `problemText` of a Recording that waits says that instead. See [The background jobs stopped](#the-background-jobs-stopped).
 
 | `problem` | Cause | What to do |
 |-----------|-------|------------|
-| `WaitingForModel` | The speech model is not on the server, and the download has not finished | Give the server a network, or copy the model into `/data/models`. See [Install](install.md#transcribe-audio) |
+| `WaitingForModel` | The speech model is not on the server, and the download has not finished | Give the server a network and free space in `/data`, or copy the model into `/data/models`. See [Install](install.md#transcribe-audio) |
 | `EngineNotInstalled` | The image has no ffmpeg or no worker | Use the release image, then send `POST /api/v1/recordings/{id}/retry` |
 | `DiskFull` | The disk of the server has no room for the decoded audio | Free some space in `/data`, then retry |
 | `OutOfMemory` | The system stopped the worker because it needed more memory than the container has | Give the container at least 2 GB, then retry |

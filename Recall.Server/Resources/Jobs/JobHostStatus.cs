@@ -23,7 +23,7 @@ public sealed class JobHostStatus(BackWaveHealth health)
     public bool TranscriptionIsStopped => _startFault is not null || health.HaltedGroups.ContainsKey(JobHosting.TranscriptionQueue);
 
     public static string StoppedText(string cause) =>
-        $"The background jobs stopped ({cause}). The journal still runs. Fix the cause, then restart the server. No job runs until then. " +
+        $"The background jobs stopped ({cause}). The journal still runs. Fix the cause, then restart the server. No job of a stopped group runs until then. " +
         "See \"The background jobs stopped\" in docs/troubleshooting.md.";
 }
 
