@@ -26,6 +26,7 @@ export const recordingDtoProblemEnum = {
     AudioUnreadable: "AudioUnreadable",
     AudioMissing: "AudioMissing",
     DiskFull: "DiskFull",
+    DiskRefused: "DiskRefused",
     OutOfMemory: "OutOfMemory",
     EngineKilled: "EngineKilled",
     EngineCrashed: "EngineCrashed",

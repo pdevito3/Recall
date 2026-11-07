@@ -1556,6 +1556,16 @@
               }
             }
           },
+          "507": {
+            "description": "Insufficient Storage",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "409": {
             "description": "Conflict",
             "content": {
@@ -4273,17 +4283,18 @@
             "enum": [
               "Unchanged",
               "Won",
-              "Lost"
+              "Lost",
+              "Kept"
             ],
             "type": "string",
-            "description": "`Unchanged` says that the Draft holds these words. `Lost` says that it does not, and the words are in a Revision, also on a replay."
+            "description": "`Won` and `Unchanged` say that the Draft holds these words. `Kept` says that an earlier try of this save won, at the number in `draftRevision`, and that a chunk or a later save moved the Draft after it. `Lost` says that the Draft never took these words, and they are in a Revision."
           },
           "draftRevision": {
             "type": [
               "null",
               "integer"
             ],
-            "description": "The base of the next save. It is null after `Lost`, because the client does not hold the words of the Draft: read the Draft, merge, and save from the number of the read.",
+            "description": "The base of the next save: the number of a Draft whose words the client holds. After `Kept` it is the number at which this save won, which is below the current Draft. It is null after `Lost`, because the client holds the words of no Draft: read the Draft, merge, and save from the number of the read.",
             "format": "int32"
           },
           "latestRevision": {
@@ -4550,6 +4561,7 @@
               "AudioUnreadable",
               "AudioMissing",
               "DiskFull",
+              "DiskRefused",
               "OutOfMemory",
               "EngineKilled",
               "EngineCrashed",

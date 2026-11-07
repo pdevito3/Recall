@@ -6,7 +6,8 @@
 export const draftSaveResultDtoOutcomeEnum = {
     Unchanged: "Unchanged",
     Won: "Won",
-    Lost: "Lost"
+    Lost: "Lost",
+    Kept: "Kept"
 } as const;
 
 export type DraftSaveResultDtoOutcomeEnumKey = (typeof draftSaveResultDtoOutcomeEnum)[keyof typeof draftSaveResultDtoOutcomeEnum];
@@ -23,12 +24,12 @@ export type DraftSaveResultDtoCleanupStatusEnumKey = (typeof draftSaveResultDtoC
 
 export type DraftSaveResultDto = {
     /**
-     * @description `Unchanged` says that the Draft holds these words. `Lost` says that it does not, and the words are in a Revision, also on a replay.
+     * @description `Won` and `Unchanged` say that the Draft holds these words. `Kept` says that an earlier try of this save won, at the number in `draftRevision`, and that a chunk or a later save moved the Draft after it. `Lost` says that the Draft never took these words, and they are in a Revision.
      * @type string
     */
     outcome: DraftSaveResultDtoOutcomeEnumKey;
     /**
-     * @description The base of the next save. It is null after `Lost`, because the client does not hold the words of the Draft: read the Draft, merge, and save from the number of the read.
+     * @description The base of the next save: the number of a Draft whose words the client holds. After `Kept` it is the number at which this save won, which is below the current Draft. It is null after `Lost`, because the client holds the words of no Draft: read the Draft, merge, and save from the number of the read.
      *
      * Format: `int32`
      * @type integer | undefined

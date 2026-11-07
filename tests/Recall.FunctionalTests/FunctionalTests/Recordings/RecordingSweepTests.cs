@@ -271,6 +271,7 @@ public class RecordingSweepTests : TestBase
     {
         // Arrange
         var (tenant, admin) = await AddTenantWithAdminAsync();
+        await AddTenantWithAdminAsync();
         var outside = Path.Combine(Path.GetTempPath(), $"recall_test_outside_{Guid.NewGuid():N}");
         Directory.CreateDirectory(outside);
         var tenantsFolder = Path.Combine(TestingWebApplicationFactory.Instance.FileRoot, "tenants");
