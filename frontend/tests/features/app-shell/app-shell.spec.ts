@@ -195,6 +195,25 @@ test.describe('the mobile sidebar with a 24 px default font', () => {
   })
 })
 
+test.describe('the mobile sidebar on a 390 px phone', () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test('each link and button, the theme buttons too, is a touch target of 44 px', async ({ page }) => {
+    const shell = appShellPage(page)
+    await shell.openAbout()
+
+    await shell.openMobileSidebar()
+
+    const controls = await shell.at.mobileSidebarControls.all()
+    expect(controls.length).toBeGreaterThanOrEqual(8)
+    for (const control of controls) {
+      const box = await control.boundingBox()
+      const name = (await control.getAttribute('aria-label')) ?? (await control.textContent()) ?? ''
+      expect(Math.min(box!.width, box!.height), name).toBeGreaterThanOrEqual(44)
+    }
+  })
+})
+
 test.describe('the mobile sidebar on a 320 px phone with a 24 px default font', () => {
   test.use({ viewport: { width: 320, height: 640 } })
 

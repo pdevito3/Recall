@@ -204,6 +204,29 @@ test.describe('the users of a tenant, for a member who cannot see them', () => {
   })
 })
 
+test.describe('the users pages on a 390 px phone', () => {
+  test.use({ actor: as.user('Ana Admin'), viewport: { width: 390, height: 844 } })
+
+  test('each user link and each pager button is a touch target of 44 px', async ({ page, api }) => {
+    const grace = aUser().named('Grace Hopper').seenByAdmin()
+    api.mock(usersApi.listReturns([grace, aUser().named('Alan Turing')], { total: 25 }), usersApi.oneIs(grace))
+    const users = usersPage(page)
+
+    await users.openList()
+
+    const targets = [...(await users.at.nameLinks.all()), ...(await users.at.pagerButtons.all())]
+    expect(targets).toHaveLength(4)
+    for (const target of targets) {
+      const box = await target.boundingBox()
+      expect(Math.min(box!.width, box!.height), (await target.textContent()) ?? '').toBeGreaterThanOrEqual(44)
+    }
+
+    await users.openUser('Grace Hopper', grace.build().id)
+
+    expect((await users.at.allUsersLink.boundingBox())?.height).toBeGreaterThanOrEqual(44)
+  })
+})
+
 const longName = 'Maximilianbartholomewalexandervanderwesthuizenmontgomerysmythesinclairfitzgeraldworthingtonhughes'
 
 test.describe('the users pages on a 320 px phone', () => {

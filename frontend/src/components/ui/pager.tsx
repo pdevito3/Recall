@@ -17,7 +17,7 @@ function PagerButton({ isAvailable, onPress, ref, children }: PagerButtonProps) 
       variant="outline"
       size="sm"
       aria-disabled={!isAvailable || undefined}
-      className="aria-disabled:pointer-events-none aria-disabled:opacity-50 aria-disabled:focus-visible:ring-ring"
+      className="aria-disabled:pointer-events-none aria-disabled:opacity-50 aria-disabled:focus-visible:ring-ring max-sm:h-11"
       onPress={() => {
         if (isAvailable) onPress()
       }}

@@ -86,7 +86,7 @@ function UserRows({ list, page, onPageChange }: UserRowsProps) {
             {users.map((user) => (
               <TableRow key={user.id} id={user.id}>
                 <TableCell className="wrap-anywhere">
-                  <Link to="/users/$id" params={{ id: user.id }} className="font-medium underline-offset-4 hover:underline">
+                  <Link to="/users/$id" params={{ id: user.id }} className="font-medium underline-offset-4 hover:underline max-sm:flex max-sm:min-h-11 max-sm:items-center">
                     {user.fullName}
                   </Link>
                   {isMobile && user.email && <p className="text-sm text-muted-foreground">{user.email}</p>}
