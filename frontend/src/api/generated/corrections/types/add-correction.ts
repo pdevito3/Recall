@@ -18,6 +18,8 @@ export type AddCorrectionStatus403 = ProblemDetails;
 
 export type AddCorrectionStatus422 = ValidationProblemDetails;
 
+export type AddCorrectionStatus507 = ProblemDetails;
+
 export type AddCorrectionBody = CorrectionForCreationDto;
 
 export type AddCorrectionOptions = {
@@ -33,6 +35,7 @@ export type AddCorrectionResponses = {
     "401": AddCorrectionStatus401;
     "403": AddCorrectionStatus403;
     "422": AddCorrectionStatus422;
+    "507": AddCorrectionStatus507;
 };
 
 /**

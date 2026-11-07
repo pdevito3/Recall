@@ -23,8 +23,10 @@ export const addAgentPermissionStatus404Schema = problemDetailsSchema
 
 export const addAgentPermissionStatus422Schema = validationProblemDetailsSchema
 
+export const addAgentPermissionStatus507Schema = problemDetailsSchema
+
 export const addAgentPermissionResponseSchema = addAgentPermissionStatus200Schema
 
-export const addAgentPermissionErrorSchema = z.union([addAgentPermissionStatus400Schema, addAgentPermissionStatus401Schema, addAgentPermissionStatus403Schema, addAgentPermissionStatus404Schema, addAgentPermissionStatus422Schema])
+export const addAgentPermissionErrorSchema = z.union([addAgentPermissionStatus400Schema, addAgentPermissionStatus401Schema, addAgentPermissionStatus403Schema, addAgentPermissionStatus404Schema, addAgentPermissionStatus422Schema, addAgentPermissionStatus507Schema])
 
 export const addAgentPermissionBodySchema = agentPermissionDtoSchema

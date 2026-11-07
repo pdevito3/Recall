@@ -24,6 +24,8 @@ export type RenamePersonStatus409 = ValidationProblemDetails;
 
 export type RenamePersonStatus422 = ValidationProblemDetails;
 
+export type RenamePersonStatus507 = ProblemDetails;
+
 export type RenamePersonBody = PersonLabelDto;
 
 export type RenamePersonOptions = {
@@ -40,6 +42,7 @@ export type RenamePersonResponses = {
     "404": RenamePersonStatus404;
     "409": RenamePersonStatus409;
     "422": RenamePersonStatus422;
+    "507": RenamePersonStatus507;
 };
 
 /**

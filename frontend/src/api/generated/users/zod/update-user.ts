@@ -25,8 +25,10 @@ export const updateUserStatus409Schema = validationProblemDetailsSchema
 
 export const updateUserStatus422Schema = validationProblemDetailsSchema
 
+export const updateUserStatus507Schema = problemDetailsSchema
+
 export const updateUserResponseSchema = updateUserStatus200Schema
 
-export const updateUserErrorSchema = z.union([updateUserStatus400Schema, updateUserStatus401Schema, updateUserStatus403Schema, updateUserStatus404Schema, updateUserStatus409Schema, updateUserStatus422Schema])
+export const updateUserErrorSchema = z.union([updateUserStatus400Schema, updateUserStatus401Schema, updateUserStatus403Schema, updateUserStatus404Schema, updateUserStatus409Schema, updateUserStatus422Schema, updateUserStatus507Schema])
 
 export const updateUserBodySchema = userForUpdateDtoSchema

@@ -20,6 +20,8 @@ export type DeleteCorrectionStatus409 = ValidationProblemDetails;
 
 export type DeleteCorrectionStatus422 = ValidationProblemDetails;
 
+export type DeleteCorrectionStatus507 = ProblemDetails;
+
 export type DeleteCorrectionOptions = {
     body?: never;
     path: DeleteCorrectionPath;
@@ -33,6 +35,7 @@ export type DeleteCorrectionResponses = {
     "404": DeleteCorrectionStatus404;
     "409": DeleteCorrectionStatus409;
     "422": DeleteCorrectionStatus422;
+    "507": DeleteCorrectionStatus507;
 };
 
 /**

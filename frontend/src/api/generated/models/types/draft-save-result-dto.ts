@@ -24,12 +24,12 @@ export type DraftSaveResultDtoCleanupStatusEnumKey = (typeof draftSaveResultDtoC
 
 export type DraftSaveResultDto = {
     /**
-     * @description `Won` and `Unchanged` say that the Draft holds these words. `Kept` says that an earlier try of this save won, at the number in `draftRevision`, and that a chunk or a later save moved the Draft after it. `Lost` says that the Draft did not take this save, and its words are in a Revision. A replay of a win from before the `was_draft` column also reads `Lost`.
+     * @description `Won` and `Unchanged` say that the Draft holds these words. `Kept` says that the Draft took these words at the number in `draftRevision`, and that a chunk or a later save moved the Draft after it. `Lost` says that the Draft did not take this save, and its words are in a Revision.
      * @type string
     */
     outcome: DraftSaveResultDtoOutcomeEnumKey;
     /**
-     * @description The base of the next save: the number of a Draft whose words the client holds. After `Kept` it is the number at which this save won, which is below the current Draft. It is null after `Lost`, because the client holds the words of no Draft: read the Draft, merge, and save from the number of the read.
+     * @description After `Won` or `Unchanged`, the base of the next save. After `Kept`, the number at which the Draft took these words, which is older than the Draft and is not a base: read the Session before the next save. After `Lost`, null: read the Session, merge, and save from the number of the read, with a new `savedAt`.
      *
      * Format: `int32`
      * @type integer | undefined

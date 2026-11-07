@@ -20,6 +20,8 @@ export type DeleteSessionStatus409 = ValidationProblemDetails;
 
 export type DeleteSessionStatus422 = ValidationProblemDetails;
 
+export type DeleteSessionStatus507 = ProblemDetails;
+
 export type DeleteSessionOptions = {
     body?: never;
     path: DeleteSessionPath;
@@ -33,6 +35,7 @@ export type DeleteSessionResponses = {
     "404": DeleteSessionStatus404;
     "409": DeleteSessionStatus409;
     "422": DeleteSessionStatus422;
+    "507": DeleteSessionStatus507;
 };
 
 /**

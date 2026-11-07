@@ -23,8 +23,10 @@ export const saveCleanedDraftStatus409Schema = validationProblemDetailsSchema
 
 export const saveCleanedDraftStatus422Schema = validationProblemDetailsSchema
 
+export const saveCleanedDraftStatus507Schema = problemDetailsSchema
+
 export const saveCleanedDraftResponseSchema = saveCleanedDraftStatus200Schema
 
-export const saveCleanedDraftErrorSchema = z.union([saveCleanedDraftStatus400Schema, saveCleanedDraftStatus401Schema, saveCleanedDraftStatus404Schema, saveCleanedDraftStatus409Schema, saveCleanedDraftStatus422Schema])
+export const saveCleanedDraftErrorSchema = z.union([saveCleanedDraftStatus400Schema, saveCleanedDraftStatus401Schema, saveCleanedDraftStatus404Schema, saveCleanedDraftStatus409Schema, saveCleanedDraftStatus422Schema, saveCleanedDraftStatus507Schema])
 
 export const saveCleanedDraftBodySchema = draftSaveDtoSchema

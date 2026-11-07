@@ -37,7 +37,7 @@ public enum DomainErrorKind
     /// </summary>
     ConcurrentChange,
 
-    /// <summary>The database has no room on its disk. Nothing changed, and the same request works when the disk has room.</summary>
+    /// <summary>The disk of the database or of the file store has no room. Nothing changed, and the same request works when the disk has room.</summary>
     DiskFull,
 
     /// <summary>A server fault. Its message stays on the server.</summary>
@@ -64,6 +64,11 @@ public sealed record DomainError(
     private const string DiskFullTitle = "The disk of the server is full.";
     private const string DiskFullDetail = "The disk of the server is full, so nothing changed. Ask the Owner to free some space, then try again.";
     private const int SqliteFull = 13;
+
+    // On Unix, the HResult of an IOException is the errno: ENOSPC, and EDQUOT on Linux and on macOS.
+    private const int NoSpaceErrno = 28;
+    private const int LinuxQuotaErrno = 122;
+    private const int MacQuotaErrno = 69;
 
     /// <summary>
     /// Classifies an exception. An exception that is not a domain exception is <see cref="DomainErrorKind.Unexpected"/>.
@@ -109,13 +114,14 @@ public sealed record DomainError(
             ConflictTitle,
             ex.Message,
             string.IsNullOrEmpty(ex.Property) ? [] : new() { [ex.Property] = [ex.Message] }),
-        _ when IsDatabaseFull(exception) => new(DomainErrorKind.DiskFull, DiskFullTitle, DiskFullDetail, null),
+        _ when IsDiskFull(exception) => new(DomainErrorKind.DiskFull, DiskFullTitle, DiskFullDetail, null),
         _ => new(DomainErrorKind.Unexpected, "An error occurred while processing your request.", null, null),
     };
 
-    private static bool IsDatabaseFull(Exception exception)
+    private static bool IsDiskFull(Exception exception)
         => exception is SqliteException { SqliteErrorCode: SqliteFull }
-           || (exception.InnerException is { } inner && IsDatabaseFull(inner));
+               or IOException { HResult: NoSpaceErrno or LinuxQuotaErrno or MacQuotaErrno }
+           || (exception.InnerException is { } inner && IsDiskFull(inner));
 
     /// <summary>
     /// True when the exception is an expected outcome of a bad request, not a server fault.
