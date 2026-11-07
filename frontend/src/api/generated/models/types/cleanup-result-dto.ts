@@ -30,4 +30,13 @@ export type CleanupResultDto = {
      * @type integer
     */
     baseRawRevision: number;
+    /**
+     * @description The number of the Cleaned Draft that the device read, 0 for the empty Draft. If Cleaned moved after it, Cleaned stays and the result waits in History.
+     *
+     * Format: `int32`
+     * @minLength 0
+     * @maxLength 2147483647
+     * @type integer
+    */
+    baseCleanedRevision: number;
 };

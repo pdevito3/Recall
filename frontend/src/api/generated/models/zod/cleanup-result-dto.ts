@@ -12,4 +12,5 @@ export const cleanupResultDtoSchema = z.object({
   moodSuggestions: z.array(z.string().max(100)),
   peopleProposal: z.array(z.string().max(200)),
   baseRawRevision: z.int32().min(1).max(2147483647).describe('The Revision of Raw that the model read. A later Revision of Raw makes the Session Stale.'),
+  baseCleanedRevision: z.int32().min(0).max(2147483647).describe('The number of the Cleaned Draft that the device read, 0 for the empty Draft. If Cleaned moved after it, Cleaned stays and the result waits in History.'),
 }).describe('A Cleanup that a model on the device did. The server does the same work on it as on the answer of a model provider.')

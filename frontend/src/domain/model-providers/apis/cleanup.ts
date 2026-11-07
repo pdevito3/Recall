@@ -3,7 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { PersonProposalResponseDto } from '@/api/generated/models/types/person-proposal-response-dto'
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
 import type { SuggestionResponseDto } from '@/api/generated/models/types/suggestion-response-dto'
+import type { WaitingCleanupApplyDto } from '@/api/generated/models/types/waiting-cleanup-apply-dto'
 import { acceptSuggestion } from '@/api/generated/sessions/clients/accept-suggestion'
+import { applyWaitingCleanup } from '@/api/generated/sessions/clients/apply-waiting-cleanup'
 import { getSession } from '@/api/generated/sessions/clients/get-session'
 import { getSessionPage } from '@/api/generated/sessions/clients/get-session-page'
 import { rejectSuggestion } from '@/api/generated/sessions/clients/reject-suggestion'
@@ -53,6 +55,17 @@ export function useStopCleanup(id: string) {
   return useMutation({
     mutationFn: () => stopCleanup({ path: { id }, options: { suppressErrorToast: true } }),
     onSuccess: put,
+  })
+}
+
+/** A refusal means that Cleaned moved or the result no longer waits, so the card reads the Session again. */
+export function useApplyWaitingCleanup(id: string) {
+  const put = usePutSession(id)
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: WaitingCleanupApplyDto) => applyWaitingCleanup({ path: { id }, body, options: { suppressErrorToast: true } }),
+    onSuccess: put,
+    onError: () => queryClient.invalidateQueries({ queryKey: CleanupKeys.session(id) }),
   })
 }
 

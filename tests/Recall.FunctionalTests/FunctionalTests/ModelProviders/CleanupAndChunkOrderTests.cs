@@ -160,7 +160,7 @@ public class CleanupAndChunkOrderTests : TestBase
         await SaveChunkAsync(scenario, session.Id, recording.Id);
 
         // Act
-        var answer = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "Clean words of the device.", baseRawRevision = oldRevision });
+        var answer = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "Clean words of the device.", baseCleanedRevision = 0, baseRawRevision = oldRevision });
         var after = await scenario.ReadAsync(session.Id);
 
         // Assert

@@ -2354,6 +2354,100 @@
         }
       }
     },
+    "/api/v1/sessions/{id}/cleanup/waiting/apply": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Puts the Cleanup result that waits in History into Cleaned. A result waits when Cleaned moved during its run. Send the\nnumber of the waiting Revision and the number of the Cleaned Draft that you read. A newer Cleaned gets 409, and a result\nthat no longer waits gets 422. Cleaned before it stays as a Revision.",
+        "operationId": "ApplyWaitingCleanup",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WaitingCleanupApplyDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/sessions/{id}": {
       "delete": {
         "tags": [
@@ -5474,6 +5568,7 @@
         "required": [
           "cleanedMarkdown",
           "baseRawRevision",
+          "baseCleanedRevision",
           "topicSuggestions",
           "moodSuggestions",
           "peopleProposal"
@@ -5517,6 +5612,13 @@
             "minimum": 1,
             "type": "integer",
             "description": "The Revision of Raw that the model read. A later Revision of Raw makes the Session Stale.",
+            "format": "int32"
+          },
+          "baseCleanedRevision": {
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer",
+            "description": "The number of the Cleaned Draft that the device read, 0 for the empty Draft. If Cleaned moved after it, Cleaned stays and the result waits in History.",
             "format": "int32"
           }
         },
@@ -6545,6 +6647,22 @@
             ],
             "format": "int32"
           },
+          "cleanupBaseCleanedRevision": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "description": "The number of the Cleaned Draft at the start of the last run. While the run runs, a newer Cleaned means its result will wait in History.",
+            "format": "int32"
+          },
+          "waitingCleanupRevision": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "description": "The Cleaned Revision that holds a Cleanup result that did not replace Cleaned, because Cleaned moved during its run. Null when none waits.",
+            "format": "int32"
+          },
           "cleanupFailure": {
             "enum": [
               "None",
@@ -7370,6 +7488,29 @@
                 "type": "string"
               }
             }
+          }
+        }
+      },
+      "WaitingCleanupApplyDto": {
+        "required": [
+          "revision",
+          "baseCleanedRevision"
+        ],
+        "type": "object",
+        "properties": {
+          "revision": {
+            "maximum": 2147483647,
+            "minimum": 1,
+            "type": "integer",
+            "description": "The Cleaned Revision that holds the waiting result, from `waitingCleanupRevision` of the Session.",
+            "format": "int32"
+          },
+          "baseCleanedRevision": {
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer",
+            "description": "The number of the Cleaned Draft that the person read.",
+            "format": "int32"
           }
         }
       }

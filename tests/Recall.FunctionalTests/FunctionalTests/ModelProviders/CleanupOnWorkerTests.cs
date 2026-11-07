@@ -234,6 +234,78 @@ public class CleanupOnWorkerTests
         stillHung.CleanupStatus.ShouldBe(nameof(CleanupStatus.Running));
     }
 
+    [Test]
+    [Property("Rule", "SES-44")]
+    public async Task a_cleanup_does_not_join_the_queue_of_another_tenant_that_has_cleanups_left()
+    {
+        // Arrange
+        var key = CleanupScenario.NewKey();
+        await using var fake = await FakeModelProvider.StartAsync(key);
+        using var owner = await OwnerAsync();
+        await ConnectAsync(owner, fake, key);
+        var session = await SessionWithWordsAsync(owner, $"apart{Guid.NewGuid():N}");
+        var tenantId = await Host.WithDatabaseAsync(database => database.Sessions.IgnoreQueryFilters().Where(s => s.Id == session.Id).Select(s => s.TenantId).FirstAsync());
+        var hashed = CleanupQueues.Of(tenantId);
+        var otherTenant = new CleanupSession("ses_other", "usr_other", $"ten_other{Guid.NewGuid():N}", "run_other");
+        var held = await Host.Services.GetRequiredService<BackWaveClient>().EnqueueAsync(otherTenant, DateTimeOffset.UtcNow.AddDays(1), hashed);
+        var store = Host.Services.GetRequiredService<IJobStore>();
+
+        try
+        {
+            // Act
+            await ReadAsync<SessionDto>(await SendAsync(owner, HttpMethod.Post, ApiRoutes.Sessions.Cleanup(session.Id)), HttpStatusCode.Accepted);
+            var finished = await SessionAfterRunAsync(owner, session.Id);
+            var jobs = await store.ListJobsAsync(new JobQuery { WireName = CleanupJob.WireName, MaxResults = 1000 });
+            var mine = jobs.Single(job => System.Text.Encoding.UTF8.GetString(job.Payload.Span).Contains(session.Id, StringComparison.Ordinal));
+
+            // Assert
+            finished.CleanupStatus.ShouldBe(nameof(CleanupStatus.Clean));
+            mine.Queue.ShouldNotBe(hashed);
+        }
+        finally
+        {
+            await store.CancelJobAsync(held, "test", DateTimeOffset.UtcNow);
+        }
+    }
+
+    [Test]
+    [Property("Rule", "SES-5")]
+    public async Task a_hand_edit_during_a_run_stays_in_cleaned_and_the_person_can_use_the_result_that_waits()
+    {
+        // Arrange
+        var key = CleanupScenario.NewKey();
+        await using var fake = await FakeModelProvider.StartAsync(key);
+        var marker = $"handedit{Guid.NewGuid():N}";
+        fake.Behavior.Mode = FakeMode.Hold;
+        fake.Behavior.HoldOnly = marker;
+        fake.Behavior.DelayMs = 3_000;
+        using var owner = await OwnerAsync();
+        await ConnectAsync(owner, fake, key);
+        var session = await SessionWithWordsAsync(owner, marker);
+        var started = await ReadAsync<SessionDto>(await SendAsync(owner, HttpMethod.Post, ApiRoutes.Sessions.Cleanup(session.Id)), HttpStatusCode.Accepted);
+        await WaitUntilAsync(() => fake.RequestBodies.Any(body => body.Contains(marker, StringComparison.Ordinal)));
+
+        // Act
+        var edit = await SendAsync(owner, HttpMethod.Put, ApiRoutes.Sessions.Cleaned(session.Id), new { text = "My own words", baseRevision = started.CleanedDraftRevision, savedAt = DateTimeOffset.UtcNow });
+        var finished = await SessionAfterRunAsync(owner, session.Id);
+        var fromOldBase = await SendAsync(owner, HttpMethod.Post, ApiRoutes.Sessions.ApplyWaitingCleanup(session.Id), new { revision = finished.WaitingCleanupRevision, baseCleanedRevision = started.CleanedDraftRevision });
+        var used = await ReadAsync<SessionDto>(
+            await SendAsync(owner, HttpMethod.Post, ApiRoutes.Sessions.ApplyWaitingCleanup(session.Id), new { revision = finished.WaitingCleanupRevision, baseCleanedRevision = finished.CleanedDraftRevision }),
+            HttpStatusCode.OK);
+
+        // Assert
+        edit.StatusCode.ShouldBe(HttpStatusCode.OK, await edit.Content.ReadAsStringAsync());
+        finished.CleanupStatus.ShouldBe(nameof(CleanupStatus.Clean));
+        finished.CleanedText.ShouldBe("My own words");
+        finished.CleanedHasHandEdits.ShouldBeTrue();
+        finished.CleanupBaseCleanedRevision.ShouldBe(started.CleanedDraftRevision);
+        finished.WaitingCleanupRevision.ShouldBe(finished.CleanedLatestRevision);
+        fromOldBase.StatusCode.ShouldBe(HttpStatusCode.Conflict, await fromOldBase.Content.ReadAsStringAsync());
+        used.CleanedText.ShouldContain($"{marker} (cleaned)");
+        used.CleanedHasHandEdits.ShouldBeFalse();
+        used.WaitingCleanupRevision.ShouldBeNull();
+    }
+
     private static async Task WaitUntilAsync(Func<bool> condition)
     {
         var deadline = DateTimeOffset.UtcNow + WaitLimit;

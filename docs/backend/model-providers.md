@@ -95,6 +95,10 @@ The app sends no `anthropic-workspace-id` header. A key of a workspace works, be
 
 Any other body gets the status and a fixed text. So the page of an internal service does not reach the person. Each message loses each hidden character, and each form of the key: as it is, in any case, base64, base64url, hex, URL-encoded, HTML-encoded, and each cut of 8 characters or more. A failed run stores only a closed code.
 
+## A result and the words of the person
+
+A result follows the save rule of a Draft ([SES-5](../specs/sessions.md)). A run takes the number of the Cleaned Draft at its start as its base (`Session.CleanupBaseCleanedRevision`). A device result sends the number of the Cleaned Draft that it read, as `baseCleanedRevision`. If Cleaned is still at that number, the result replaces Cleaned, and the words before it stay as a Revision. So an edit made before the run starts is replaced on purpose, and the page says so before the run. If Cleaned moved after the base, by a hand edit, a rename, or a tag, Cleaned stays. The result is a Revision that waits, `waitingCleanupRevision` of the Session names it, and the page says that the result waits in History. `POST /sessions/{id}/cleanup/waiting/apply` puts it in Cleaned from the number of the current Draft only, and an older number gets 409. The Synopsis, the suggestions, and the proposals of the result apply in both cases.
+
 ## What an Admin can still learn
 
 An Admin can type any address that the rules allow, so the test button is still a small probe of the network of the server:

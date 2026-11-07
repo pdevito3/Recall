@@ -365,7 +365,7 @@ public class CleanupResultRoutesTests : TestBase
         // Arrange
         await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
         var session = await scenario.SessionWithWordsAsync("raw words");
-        var body = new { cleanedMarkdown = "## Notes\n\nClean words", synopsis = "I wrote.", topicSuggestions = new[] { "work" }, moodSuggestions = Array.Empty<string>(), peopleProposal = Array.Empty<string>(), baseRawRevision = 1 };
+        var body = new { cleanedMarkdown = "## Notes\n\nClean words", synopsis = "I wrote.", topicSuggestions = new[] { "work" }, moodSuggestions = Array.Empty<string>(), peopleProposal = Array.Empty<string>(), baseCleanedRevision = 0, baseRawRevision = 1 };
 
         // Act
         var stored = await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), body);
@@ -380,13 +380,36 @@ public class CleanupResultRoutesTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-5")]
+    public async Task a_device_result_from_a_cleaned_base_before_a_hand_edit_keeps_the_edit_and_waits_in_history()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        var session = await scenario.SessionWithWordsAsync("raw words");
+        var first = await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "First words of the device", baseCleanedRevision = 0, baseRawRevision = 1 });
+        var edit = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Cleaned(session.Id), new { text = "My own words", baseRevision = first.CleanedDraftRevision, savedAt = DateTimeOffset.UtcNow });
+        edit.StatusCode.ShouldBe(HttpStatusCode.OK, await edit.Content.ReadAsStringAsync());
+
+        // Act
+        var late = await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "Second words of the device", baseCleanedRevision = first.CleanedDraftRevision, baseRawRevision = 1 });
+        var unknownBase = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "Third", baseCleanedRevision = late.CleanedLatestRevision + 1, baseRawRevision = 1 });
+
+        // Assert
+        late.CleanedText.ShouldBe("My own words");
+        late.CleanedHasHandEdits.ShouldBeTrue();
+        late.WaitingCleanupRevision.ShouldBe(late.CleanedLatestRevision);
+        late.CleanupStatus.ShouldBe(nameof(CleanupStatus.Clean));
+        unknownBase.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Test]
     [Property("Rule", "SES-42")]
     public async Task a_repeat_of_a_device_result_after_a_hand_edit_writes_nothing()
     {
         // Arrange
         await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
         var session = await scenario.SessionWithWordsAsync("raw words");
-        var body = new { cleanedMarkdown = "Words of the device", synopsis = "I wrote.", baseRawRevision = 1 };
+        var body = new { cleanedMarkdown = "Words of the device", synopsis = "I wrote.", baseCleanedRevision = 0, baseRawRevision = 1 };
         var stored = await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), body);
         var edit = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Cleaned(session.Id), new { text = "My own words", baseRevision = stored.CleanedLatestRevision, savedAt = DateTimeOffset.UtcNow });
         edit.StatusCode.ShouldBe(HttpStatusCode.OK, await edit.Content.ReadAsStringAsync());
@@ -408,10 +431,10 @@ public class CleanupResultRoutesTests : TestBase
         // Arrange
         await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
         var session = await scenario.SessionWithWordsAsync("raw words");
-        var first = new { cleanedMarkdown = "I met Ann today", synopsis = "I met Ann.", peopleProposal = Ann, baseRawRevision = 1 };
+        var first = new { cleanedMarkdown = "I met Ann today", synopsis = "I met Ann.", peopleProposal = Ann, baseCleanedRevision = 0, baseRawRevision = 1 };
         await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), first);
         var tagged = await PostAsync(ApiRoutes.Sessions.RespondToPersonProposal(session.Id), new { label = "Ann", approve = true, createNew = false });
-        var second = await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "A second answer", synopsis = "Later.", baseRawRevision = 1 });
+        var second = await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "A second answer", synopsis = "Later.", baseCleanedRevision = tagged.CleanedDraftRevision, baseRawRevision = 1 });
 
         // Act
         var afterTag = await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), first);
@@ -433,7 +456,7 @@ public class CleanupResultRoutesTests : TestBase
         foreach (var words in new[] { "one", "two", "three", "four", "five", "six" })
         {
             var session = await scenario.SessionWithWordsAsync($"raw {words}");
-            sessions.Add(await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = $"I met Rae about {words}", peopleProposal = Rae, baseRawRevision = 1 }));
+            sessions.Add(await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = $"I met Rae about {words}", peopleProposal = Rae, baseCleanedRevision = 0, baseRawRevision = 1 }));
         }
 
         // Act
@@ -475,7 +498,7 @@ public class CleanupResultRoutesTests : TestBase
         // Arrange
         await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
         var session = await scenario.SessionWithWordsAsync("raw words");
-        await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "I met **Sam** Lee today", peopleProposal = SamLee, baseRawRevision = 1 });
+        await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "I met **Sam** Lee today", peopleProposal = SamLee, baseCleanedRevision = 0, baseRawRevision = 1 });
 
         // Act
         var answer = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.RespondToPersonProposal(session.Id), new { label = "Sam Lee", approve = true, createNew = false });
@@ -499,7 +522,7 @@ public class CleanupResultRoutesTests : TestBase
         var session = await scenario.SessionWithWordsAsync("raw words");
 
         // Act
-        var stored = await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "I met **Sam** Lee and Ann", peopleProposal = SamLeeAndAnn, baseRawRevision = 1 });
+        var stored = await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "I met **Sam** Lee and Ann", peopleProposal = SamLeeAndAnn, baseCleanedRevision = 0, baseRawRevision = 1 });
 
         // Assert
         var labels = await ExecuteDbContextAsync(db => db.People.IgnoreQueryFilters().Where(person => person.UserId == scenario.Member.Id).Select(person => person.Label).ToListAsync());
@@ -518,7 +541,7 @@ public class CleanupResultRoutesTests : TestBase
         var session = await scenario.SessionWithWordsAsync("raw words");
 
         // Act
-        var stored = await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "I met Sam Lee today", peopleProposal = SamAndSamLee, baseRawRevision = 1 });
+        var stored = await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "I met Sam Lee today", peopleProposal = SamAndSamLee, baseCleanedRevision = 0, baseRawRevision = 1 });
 
         // Assert
         var people = await ExecuteDbContextAsync(db => db.People.IgnoreQueryFilters().Where(person => person.UserId == scenario.Member.Id).Select(person => person.Id).ToListAsync());
@@ -536,10 +559,10 @@ public class CleanupResultRoutesTests : TestBase
         var running = await scenario.SessionWithRunningCleanupAsync("other words");
 
         // Act
-        var unknownBase = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "Clean", baseRawRevision = 9 });
-        var noBase = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "Clean", baseRawRevision = 0 });
-        var whileRunning = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.CleanupResult(running.Id), new { cleanedMarkdown = "Clean", baseRawRevision = 1 });
-        var blank = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "   ", baseRawRevision = 1 });
+        var unknownBase = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "Clean", baseCleanedRevision = 0, baseRawRevision = 9 });
+        var noBase = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "Clean", baseCleanedRevision = 0, baseRawRevision = 0 });
+        var whileRunning = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.CleanupResult(running.Id), new { cleanedMarkdown = "Clean", baseCleanedRevision = 0, baseRawRevision = 1 });
+        var blank = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "   ", baseCleanedRevision = 0, baseRawRevision = 1 });
 
         // Assert
         unknownBase.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);

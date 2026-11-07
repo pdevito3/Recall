@@ -126,6 +126,27 @@ public class JobHostingTests
     }
 
     [Test]
+    public void a_tenant_takes_a_queue_that_no_other_tenant_uses_and_keeps_it_while_its_cleanups_run()
+    {
+        // Arrange
+        var sameHash = Enumerable.Range(0, 800).Select(i => $"tenant-{i}").Where(t => CleanupQueues.Of(t) == CleanupQueues.Of("tenant-a")).First();
+        var hung = Enumerable.Repeat((CleanupQueues.Of("tenant-a"), "tenant-a"), 4).ToList();
+
+        // Act
+        var second = CleanupQueues.Pick(sameHash, hung);
+        var again = CleanupQueues.Pick("tenant-a", [.. hung, (second, sameHash)]);
+        var alone = CleanupQueues.Pick(sameHash, []);
+        var allUsed = CleanupQueues.All.Select((queue, i) => (queue, $"other-{i}")).ToList();
+
+        // Assert
+        second.ShouldNotBe(CleanupQueues.Of("tenant-a"));
+        again.ShouldBe(CleanupQueues.Of("tenant-a"));
+        alone.ShouldBe(CleanupQueues.Of(sameHash));
+        CleanupQueues.Pick(sameHash, [.. hung, (second, sameHash)]).ShouldBe(second);
+        CleanupQueues.Pick(sameHash, allUsed).ShouldBe(CleanupQueues.Of(sameHash));
+    }
+
+    [Test]
     public void a_tenant_keeps_its_queue_in_each_process_and_tenants_spread_over_the_queues()
     {
         // Act

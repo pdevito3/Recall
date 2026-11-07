@@ -8,6 +8,7 @@ import { refusalOf } from '@/hooks/use-server-errors'
 
 import {
   pollWhileRunningMs,
+  useApplyWaitingCleanup,
   useCleanupSession,
   useRespondToProposal,
   useRespondToSuggestion,
@@ -26,6 +27,8 @@ const STATUS_TEXT: Record<SessionDto['cleanupStatus'], string> = {
 }
 
 const STOPPED_TEXT = 'You stopped the last Cleanup. Your words did not change, and you can run it again.'
+
+const WAITING_TEXT = 'The last Cleanup ended, and Cleaned kept your words.'
 
 const NO_PROVIDER_TEXT = 'An Admin must connect a model provider, pick a model, and make it active first.'
 
@@ -114,10 +117,12 @@ export function CleanupCard({ sessionId }: { sessionId: string }) {
   const session = useCleanupSession(sessionId)
   const start = useStartCleanup(sessionId)
   const stop = useStopCleanup(sessionId)
+  const apply = useApplyWaitingCleanup(sessionId)
   // Each try of a run reads the active model provider again, so the line follows a change while the run lasts.
   const provider = useActiveModelProvider(session.data?.cleanupStatus === 'Running' ? pollWhileRunningMs : false)
   const startProblem = start.error ? refusalOf(start.error, []).problem : null
   const stopProblem = stop.error ? refusalOf(stop.error, []).problem : null
+  const applyProblem = apply.error ? refusalOf(apply.error, []).problem : null
 
   if (session.isPending) {
     return (
@@ -135,6 +140,14 @@ export function CleanupCard({ sessionId }: { sessionId: string }) {
   const isStop = data.cleanupStatus === 'Failed' && data.cleanupFailure === 'Stopped'
   const failure = isStop ? null : FAILURE_TEXT[data.cleanupFailure]
   const hasNoProvider = provider.isSuccess && !provider.data.name
+  const waiting = isRunning ? null : (data.waitingCleanupRevision ?? null)
+  const cleanedMovedInRun = isRunning && data.cleanedDraftRevision !== data.cleanupBaseCleanedRevision
+  const handEditNote = cleanedMovedInRun
+    ? 'Cleaned changed during this Cleanup. Cleaned keeps your words, and the result will wait in History.'
+    : data.cleanedHasHandEdits && waiting === null
+      ? `You edited Cleaned by hand. ${isRunning ? 'This' : 'A new'} Cleanup replaces Cleaned, and your edit stays as a Revision.`
+      : null
+  const statusText = isStop ? STOPPED_TEXT : waiting !== null ? WAITING_TEXT : STATUS_TEXT[data.cleanupStatus]
 
   return (
     <Card>
@@ -145,17 +158,29 @@ export function CleanupCard({ sessionId }: { sessionId: string }) {
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <p role="status" className="text-sm">
-          {isStop ? STOPPED_TEXT : STATUS_TEXT[data.cleanupStatus]}
+          {statusText}
         </p>
         {failure && (
           <p role="alert" className="text-sm text-destructive">
             {failure}
           </p>
         )}
-        {data.cleanedHasHandEdits && !isRunning && (
-          <p className="text-sm text-muted-foreground">
-            You edited Cleaned by hand. A new Cleanup replaces Cleaned, and your edit stays as a Revision.
-          </p>
+        {handEditNote && <p className="text-sm text-muted-foreground">{handEditNote}</p>}
+        {waiting !== null && (
+          <div className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
+            <p>
+              Cleaned changed during the last Cleanup, so the result waits in History as Revision {waiting}. Use it to replace
+              Cleaned, and your words stay as a Revision.
+            </p>
+            <Button
+              variant="outline"
+              className="self-start"
+              isPending={apply.isPending}
+              onPress={() => apply.mutate({ revision: waiting, baseCleanedRevision: data.cleanedDraftRevision })}
+            >
+              Use the Cleanup result
+            </Button>
+          </div>
         )}
         {provider.data?.name && (
           <p className="text-sm text-muted-foreground wrap-anywhere">
@@ -163,7 +188,7 @@ export function CleanupCard({ sessionId }: { sessionId: string }) {
           </p>
         )}
         {hasNoProvider && failure !== NO_PROVIDER_TEXT && <p className="text-sm text-muted-foreground">{NO_PROVIDER_TEXT}</p>}
-        <RefusedSaveAlert problem={startProblem ?? stopProblem} />
+        <RefusedSaveAlert problem={startProblem ?? stopProblem ?? applyProblem} />
         <div className="flex flex-wrap gap-2">
           <Button isPending={start.isPending} isDisabled={isRunning || hasNoProvider} onPress={() => start.mutate()}>
             {data.cleanupStatus === 'NotRun' || isRunning ? 'Run Cleanup' : 'Run Cleanup again'}

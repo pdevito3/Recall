@@ -26,4 +26,8 @@ public sealed record CleanupResultDto
     /// <summary>The Revision of Raw that the model read. A later Revision of Raw makes the Session Stale.</summary>
     [Range(1, int.MaxValue)]
     public required int BaseRawRevision { get; init; }
+
+    /// <summary>The number of the Cleaned Draft that the device read, 0 for the empty Draft. If Cleaned moved after it, Cleaned stays and the result waits in History.</summary>
+    [Range(0, int.MaxValue)]
+    public required int BaseCleanedRevision { get; init; }
 }

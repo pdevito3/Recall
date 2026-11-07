@@ -51,6 +51,12 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
     /// <summary>The Cleanup that runs or that ran last. A job works only for its own run.</summary>
     [NotSensitive] public string? CleanupRunId { get; private set; }
 
+    /// <summary>The number of the Cleaned Draft at the start of the run. A result replaces Cleaned only from this number (SES-5).</summary>
+    public int? CleanupBaseCleanedRevision { get; private set; }
+
+    /// <summary>The Cleaned Revision that holds a result that did not replace Cleaned, because Cleaned moved after the base of its run.</summary>
+    public int? WaitingCleanupRevision { get; private set; }
+
     public CleanupFailure CleanupFailure { get; private set; }
 
     [Sensitive] public IReadOnlyList<string> TopicSuggestions { get; private set; } = [];
@@ -196,21 +202,59 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         CleanupRun = CleanupRunState.Running;
         CleanupRunId = EntityId.New(CleanupRunIdPrefix);
         CleanupFailure = CleanupFailure.None;
+        CleanupBaseCleanedRevision = Cleaned.DraftRevision;
         return CleanupRunId;
     }
 
+    /// <summary>
+    /// A result replaces Cleaned only while Cleaned is at the base of the run. After a hand edit, a rename, or a tag during the
+    /// run, Cleaned stays, and the result is a Revision that waits for the person (SES-5, SES-20).
+    /// </summary>
     public void CompleteCleanup(CleanupOutcome outcome, int rawRevisionRead, DateTimeOffset now, string? deviceResultHash = null)
     {
         RequireRunningCleanup();
-        Cleaned = Cleaned.Rewritten(outcome.CleanedText, now);
-        _appendedCleanedRevisions.Add(new CleanedRevision(Id, Cleaned.DraftRevision, now, outcome.CleanedText, wasDraft: true, deviceResultHash));
+        if (Cleaned.DraftRevision == CleanupBaseCleanedRevision)
+        {
+            Cleaned = Cleaned.Rewritten(outcome.CleanedText, now);
+            _appendedCleanedRevisions.Add(new CleanedRevision(Id, Cleaned.DraftRevision, now, outcome.CleanedText, wasDraft: true, deviceResultHash));
+            CleanedHasHandEdits = false;
+            WaitingCleanupRevision = null;
+        }
+        else
+        {
+            Cleaned = Cleaned with { LatestRevision = Cleaned.LatestRevision + 1 };
+            _appendedCleanedRevisions.Add(new CleanedRevision(Id, Cleaned.LatestRevision, now, outcome.CleanedText, wasDraft: false, deviceResultHash));
+            WaitingCleanupRevision = Cleaned.LatestRevision;
+        }
+
         Synopsis = outcome.Synopsis;
-        CleanedHasHandEdits = false;
         LastCleanupRawRevision = rawRevisionRead;
         CleanupRun = CleanupRunState.Clean;
         TopicSuggestions = outcome.TopicSuggestions.Where(topic => !HoldsTopic(topic)).ToList();
         MoodSuggestions = outcome.MoodSuggestions.Where(mood => !Moods.Contains(mood, StringComparer.OrdinalIgnoreCase)).ToList();
         PeopleProposals = outcome.PeopleProposals;
+        RefreshFromDrafts();
+    }
+
+    /// <summary>A result of a model on the device, from the Cleaned Draft that the device read.</summary>
+    public void TakeDeviceCleanup(CleanupOutcome outcome, int rawRevisionRead, int cleanedBase, DateTimeOffset now, string deviceResultHash)
+    {
+        BeginCleanup();
+        CleanupBaseCleanedRevision = cleanedBase;
+        CompleteCleanup(outcome, rawRevisionRead, now, deviceResultHash);
+    }
+
+    /// <summary>The person takes the waiting result into Cleaned. It is not a hand edit. Like a save, it wins only from the current Draft.</summary>
+    public void ApplyWaitingCleanup(int revision, string waitingText, int baseCleanedRevision, DateTimeOffset now)
+    {
+        ValidationException.Must(WaitingCleanupRevision == revision, CleanupField, "This Cleanup result no longer waits in History.");
+        if (baseCleanedRevision != Cleaned.DraftRevision)
+            throw new ConflictException(CleanupField, "Cleaned changed after you read it. Read the Session again, and then choose.");
+
+        Cleaned = Cleaned.Rewritten(waitingText, now);
+        _appendedCleanedRevisions.Add(new CleanedRevision(Id, Cleaned.DraftRevision, now, waitingText, wasDraft: true));
+        CleanedHasHandEdits = false;
+        WaitingCleanupRevision = null;
         RefreshFromDrafts();
     }
 

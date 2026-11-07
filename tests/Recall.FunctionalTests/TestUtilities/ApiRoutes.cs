@@ -55,6 +55,7 @@ public static class ApiRoutes
         public static string CleanedRevision(string id, int number) => $"{Base}/sessions/{id}/cleaned-revisions/{number}";
         public static string Cleanup(string id) => $"{Base}/sessions/{id}/cleanup";
         public static string StopCleanup(string id) => $"{Base}/sessions/{id}/cleanup/stop";
+        public static string ApplyWaitingCleanup(string id) => $"{Base}/sessions/{id}/cleanup/waiting/apply";
         public static string CleanupStream(string id) => $"{Base}/sessions/{id}/cleanup/stream";
         public static string CleanupResult(string id) => $"{Base}/sessions/{id}/cleanup/result";
         public static string AcceptSuggestion(string id) => $"{Base}/sessions/{id}/suggestions/accept";

@@ -983,6 +983,10 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("cleaned_has_hand_edits");
 
+                    b.Property<int?>("CleanupBaseCleanedRevision")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("cleanup_base_cleaned_revision");
+
                     b.Property<string>("CleanupFailure")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -1101,6 +1105,10 @@ namespace Recall.Server.Databases.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER")
                         .HasColumnName("version");
+
+                    b.Property<int?>("WaitingCleanupRevision")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("waiting_cleanup_revision");
 
                     b.ComplexProperty(typeof(Dictionary<string, object>), "Cleaned", "Recall.Server.Domain.Sessions.Session.Cleaned#DraftSlot", b1 =>
                         {
