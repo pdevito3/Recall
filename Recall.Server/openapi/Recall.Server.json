@@ -1088,6 +1088,16 @@
         ],
         "summary": "Sends the audio of each new Recording to a model provider that takes audio, or keeps it on the server with no provider.\nA provider of a kind that takes no audio gets 422.",
         "operationId": "ChooseTranscriptionEngine",
+        "parameters": [
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -4099,6 +4109,14 @@
             "name": "date",
             "in": "path",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
             "schema": {
               "type": "string"
             }
