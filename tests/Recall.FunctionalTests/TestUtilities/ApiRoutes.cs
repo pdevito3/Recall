@@ -69,6 +69,7 @@ public static class ApiRoutes
         public static string Active => $"{Base}/model-providers/active";
         public static string GetRecord(string id) => $"{Base}/model-providers/{id}";
         public static string Test(string id) => $"{Base}/model-providers/{id}/test";
+        public static string TranscriptionEngine => $"{Base}/transcription-engine";
     }
 
     public static class Sync

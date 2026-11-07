@@ -44,6 +44,7 @@ public class EndpointAccessSweepTests : TestBase
         ["get_tenant"] = new("ToolAccessKind.Read. Each member reads the own tenant, and the tenant filter hides the others."),
         ["list_tenants"] = new("ToolAccessKind.Read. Each member lists the own tenant, and the tenant filter hides the others."),
         ["GetActiveModelProvider"] = new("Each member sees where a Cleanup sends the own words. It takes no ID and gives only the name of the provider of the own tenant."),
+        ["GetTranscriptionEngine"] = new("Each member sees where the own audio becomes text. It takes no ID and gives only the name and model of the provider of the own tenant."),
         ["AddSession"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetSession"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetSessionPage"] = new(JournalOfEachMember, OwnerOnly: true),

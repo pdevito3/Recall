@@ -201,6 +201,82 @@ public class RecordingTests
     }
 
     [Test]
+    [Property("Rule", "REC-19")]
+    public void a_provider_that_never_answers_ends_the_attempts_with_its_own_reason()
+    {
+        // Arrange
+        var recording = Received();
+        for (var attempt = 0; attempt < Recording.MaxAttemptsWithoutProgress; attempt++)
+        {
+            recording.BeginAttempt().ShouldBeTrue();
+            recording.WaitForProvider();
+        }
+
+        // Act
+        var began = recording.BeginAttempt();
+
+        // Assert
+        began.ShouldBeFalse();
+        recording.Status.ShouldBe(RecordingStatus.Failed);
+        recording.Problem.ShouldBe(RecordingProblem.ProviderUnavailable);
+    }
+
+    [Test]
+    [Property("Rule", "REC-17")]
+    public void the_engine_is_fixed_at_the_finish_and_a_retry_of_a_waiting_recording_keeps_it()
+    {
+        // Arrange
+        var recording = Receiving();
+        recording.StoreSlice(0, 10);
+
+        // Act
+        recording.Finish([0], 1, 10, TranscriptionEngineKind.Cloud);
+        recording.Retry(TranscriptionEngineKind.Local);
+
+        // Assert
+        recording.Engine.ShouldBe(TranscriptionEngineKind.Cloud);
+        recording.Status.ShouldBe(RecordingStatus.Received);
+    }
+
+    [Test]
+    [Property("Rule", "REC-17")]
+    public void a_retry_of_a_failed_recording_takes_the_engine_of_now()
+    {
+        // Arrange
+        var recording = Received();
+        recording.Fail(RecordingProblem.ProviderRefused);
+
+        // Act
+        recording.Retry(TranscriptionEngineKind.Cloud);
+
+        // Assert
+        recording.Engine.ShouldBe(TranscriptionEngineKind.Cloud);
+        recording.Status.ShouldBe(RecordingStatus.Received);
+        recording.Problem.ShouldBe(RecordingProblem.None);
+    }
+
+    [Test]
+    [Property("Rule", "REC-21")]
+    public void a_hand_over_to_the_local_engine_starts_its_attempts_again()
+    {
+        // Arrange
+        var recording = Receiving();
+        recording.StoreSlice(0, 10);
+        recording.Finish([0], 1, 10, TranscriptionEngineKind.Cloud);
+        recording.BeginAttempt();
+        recording.WaitForProvider();
+
+        // Act
+        recording.HandToLocalEngine();
+
+        // Assert
+        recording.Engine.ShouldBe(TranscriptionEngineKind.Local);
+        recording.Status.ShouldBe(RecordingStatus.Received);
+        recording.Problem.ShouldBe(RecordingProblem.None);
+        recording.AttemptsWithoutProgress.ShouldBe(0);
+    }
+
+    [Test]
     [Property("Rule", "REC-7")]
     public void the_limit_of_attempts_ends_before_the_ceiling_of_the_jobs()
     {

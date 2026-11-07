@@ -12,7 +12,6 @@ import { useModelProviders } from '../apis/model-providers'
 import { CleanupCard } from './cleanup-card'
 import { ConnectProviderForm } from './connect-provider-form'
 import { ModelProviderCard } from './model-provider-card'
-import { TranscriptionEngineCard } from './transcription-engine-card'
 
 const KEY_RING_TEXT: Record<ModelProviderListDto['keyRing'], string | null> = {
   Same: null,
@@ -129,7 +128,6 @@ export function ModelProvidersPage({ sessionId }: { sessionId?: string }) {
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 max-sm:[&_[data-slot=button]]:h-11 max-sm:[&_[data-slot=button]]:min-w-11 max-sm:[&_[data-slot=input]]:h-11 max-sm:[&_[data-slot=select-trigger]]:h-11">
       <PageHeading>Model providers</PageHeading>
       {sessionId ? <CleanupCard sessionId={sessionId} /> : <RecentSessions />}
-      <TranscriptionEngineCard canChoose={mightBeAnAdmin} />
       {mightBeAnAdmin ? (
         <Providers />
       ) : (
