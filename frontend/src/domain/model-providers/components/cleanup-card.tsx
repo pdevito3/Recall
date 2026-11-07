@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
 import { QueryError } from '@/components/query-error'
 import { RefusedSaveAlert } from '@/components/refused-save-alert'
@@ -128,6 +130,13 @@ export function CleanupCard({ sessionId }: { sessionId: string }) {
   const startProblem = start.error ? refusalOf(start.error, []).problem : null
   const stopProblem = stop.error ? refusalOf(stop.error, []).problem : null
   const applyProblem = apply.error ? refusalOf(apply.error, []).problem : null
+  const isRunning = session.data?.cleanupStatus === 'Running'
+  const { reset: resetApply } = apply
+
+  // A use that a run refused says to look again when the run ends, so the refusal ends with the run.
+  useEffect(() => {
+    if (!isRunning) resetApply()
+  }, [isRunning, resetApply])
 
   if (session.isPending) {
     return (
@@ -141,7 +150,6 @@ export function CleanupCard({ sessionId }: { sessionId: string }) {
   }
 
   const { data } = session
-  const isRunning = data.cleanupStatus === 'Running'
   const isStop = data.cleanupStatus === 'Failed' && data.cleanupFailure === 'Stopped'
   const failure = isStop ? null : FAILURE_TEXT[data.cleanupFailure]
   const hasNoProvider = provider.isSuccess && !provider.data.name

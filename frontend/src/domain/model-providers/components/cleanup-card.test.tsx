@@ -4,6 +4,8 @@ import { commands, page, userEvent } from 'vitest/browser'
 import { render } from 'vitest-browser-react'
 
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
+// The app sends each request through this client, and it gives the words of a failure.
+import '@/lib/api-client'
 
 import { CleanupCard } from './cleanup-card'
 
@@ -138,6 +140,7 @@ test('a waiting result that does not load keeps the use off and says why', async
 
   // Assert
   await expect.element(screen.getByText('The result did not load, so the page cannot say which tags a use keeps.')).toBeVisible()
+  await expect.element(screen.getByText('The Server could not do this, and it answered with error 500. Try again later.')).toBeVisible()
   await expect.element(screen.getByRole('button', { name: 'Use the Cleanup result' })).toBeDisabled()
 })
 
@@ -151,6 +154,58 @@ test('a waiting result that keeps each tag of Cleaned says nothing of tags', asy
   // Assert
   await expect.element(screen.getByRole('button', { name: 'Use the Cleanup result' })).toBeEnabled()
   await expect.element(screen.getByText(/Cleaned tags/)).not.toBeInTheDocument()
+})
+
+const runsNow = 'A new Cleanup of this Session runs now, and its result can replace this one. Look again when it ends.'
+const refusal = (detail: string) => ({
+  status: 409,
+  body: { type: 'https://tools.ietf.org/html/rfc9110#section-15.5.10', title: 'Conflict', status: 409, detail, errors: { cleanup: [detail] } },
+})
+
+test('a use that a run refused stops saying that the run goes on when the run ends', async () => {
+  // Arrange: another tab started a run after this page read the waiting result.
+  const answersWith = (body: SessionDto) => [
+    { method: 'GET', path: '/api/v1/model-providers/active', body: { name: 'Mine' } },
+    { method: 'GET', path: '/api/v1/sessions/ses_1', body },
+    { method: 'GET', path: '/api/v1/sessions/ses_1/cleaned-revisions/3', body: revision(3, doc('second clean words')) },
+    { method: 'POST', path: '/api/v1/sessions/ses_1/cleanup/waiting/apply', ...refusal(runsNow) },
+  ] satisfies Parameters<typeof commands.answerRequests>[0]
+  const screen = await renderCard(answersWith(waitingSince({})))
+  await expect.element(screen.getByRole('button', { name: 'Use the Cleanup result' })).toBeEnabled()
+  await commands.answerRequests(answersWith(waitingSince({ cleanupStatus: 'Running' })))
+  await userEvent.click(screen.getByRole('button', { name: 'Use the Cleanup result' }))
+  await expect.element(screen.getByText(runsNow)).toBeVisible()
+
+  // Act
+  await commands.answerRequests(answersWith(session({ cleanedDraftRevision: 4, cleanedLatestRevision: 4, cleanupBaseCleanedRevision: 2 })))
+
+  // Assert
+  await expect.element(screen.getByRole('status'), { timeout: 5_000 }).toHaveTextContent('Cleaned is current.')
+  await expect.element(screen.getByText(runsNow)).not.toBeInTheDocument()
+})
+
+test('a new run clears the refusal of a use', async () => {
+  // Arrange
+  const stale = 'Cleaned changed after you read it. Look at Cleaned as it is now, and then choose again.'
+  const answersWith = (body: SessionDto) => [
+    { method: 'GET', path: '/api/v1/model-providers/active', body: { name: 'Mine' } },
+    { method: 'GET', path: '/api/v1/sessions/ses_1', body },
+    { method: 'GET', path: '/api/v1/sessions/ses_1/cleaned-revisions/3', body: revision(3, doc('second clean words')) },
+    { method: 'POST', path: '/api/v1/sessions/ses_1/cleanup/waiting/apply', ...refusal(stale) },
+    { method: 'POST', path: '/api/v1/sessions/ses_1/cleanup', body: waitingSince({ cleanupStatus: 'Running' }) },
+  ] satisfies Parameters<typeof commands.answerRequests>[0]
+  const screen = await renderCard(answersWith(waitingSince({})))
+  await expect.element(screen.getByRole('button', { name: 'Use the Cleanup result' })).toBeEnabled()
+  await userEvent.click(screen.getByRole('button', { name: 'Use the Cleanup result' }))
+  await expect.element(screen.getByText(stale)).toBeVisible()
+  await commands.answerRequests(answersWith(waitingSince({ cleanupStatus: 'Running' })))
+
+  // Act
+  await userEvent.click(screen.getByRole('button', { name: 'Run Cleanup again' }))
+
+  // Assert
+  await expect.element(screen.getByRole('button', { name: 'Stop Cleanup' })).toBeVisible()
+  await expect.element(screen.getByText(stale)).not.toBeInTheDocument()
 })
 
 test('a hand edit after a Cleanup shows one status, and it does not say that Cleaned is current', async () => {
