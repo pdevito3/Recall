@@ -14,6 +14,9 @@ const staleKey = {
 
 let otherTab: BroadcastChannel
 
+// An ask makes the saver read the row. The read must land before its test ends, or it counts as unanswered in the next test.
+const rowReads = () => performance.getEntriesByType('resource').filter(({ name }) => new URL(name).pathname === '/api/v1/me/settings').length
+
 beforeEach(() => {
   otherTab = new BroadcastChannel('recall.tabs')
 })
@@ -43,10 +46,12 @@ test('this tab saves no location while a change to off waits for an answer', asy
   queryClient.setQueryData(SettingKeys.mine(), row)
   expect(locationCaptureIsOn(queryClient)).toBe(true)
   const saver = settingSaver(queryClient)
+  const readsBefore = rowReads()
 
   saver.adopt({ change: null, attempt: null, asks: [{ field: 'locationCaptureEnabled', yours: false, now: true }] })
   expect(locationCaptureIsOn(queryClient)).toBe(false)
   expect(locationWaitsForAnAnswer(queryClient)).toBe(true)
+  await vi.waitFor(() => expect(rowReads()).toBe(readsBefore + 1))
   queryClient.setQueryData(SettingKeys.mine(), { ...row, locationCaptureEnabled: false })
   expect(locationWaitsForAnAnswer(queryClient)).toBe(false)
   queryClient.setQueryData(SettingKeys.mine(), row)
@@ -75,10 +80,13 @@ test('no location is saved while any answer about location waits, in either dire
   const queryClient = new QueryClient()
   queryClient.setQueryData(SettingKeys.mine(), row)
   const saver = settingSaver(queryClient)
+  const readsBefore = rowReads()
 
   saver.adopt({ change: null, attempt: null, asks: [{ field: 'requirePeopleProposalApproval', yours: true, now: false }] })
   expect(locationCaptureIsOn(queryClient)).toBe(true)
 
   saver.adopt({ change: null, attempt: null, asks: [{ field: 'locationCaptureEnabled', yours: false, now: true }] })
   expect(locationCaptureIsOn(queryClient)).toBe(false)
+  // The second read starts while the first runs, so the query client joins them in one request.
+  await vi.waitFor(() => expect(rowReads()).toBe(readsBefore + 1))
 })
