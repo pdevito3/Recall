@@ -246,9 +246,12 @@ public class CleanupOnWorkerTests
         var session = await SessionWithWordsAsync(owner, $"apart{Guid.NewGuid():N}");
         var tenantId = await Host.WithDatabaseAsync(database => database.Sessions.IgnoreQueryFilters().Where(s => s.Id == session.Id).Select(s => s.TenantId).FirstAsync());
         var hashed = CleanupQueues.Of(tenantId);
+        var store = Host.Services.GetRequiredService<IJobStore>();
+        // Each owner of this host joins one tenant, and a tenant stays in the queue that it uses. So the stopped Cleanups of
+        // an earlier test must end first, or this tenant keeps its own queue and the rule under test never runs.
+        await WaitUntilAsync(async () => !(await CleanupQueues.UnfinishedAsync(store, CancellationToken.None)).Any(job => job.TenantId == tenantId));
         var otherTenant = new CleanupSession("ses_other", "usr_other", $"ten_other{Guid.NewGuid():N}", "run_other");
         var held = await Host.Services.GetRequiredService<BackWaveClient>().EnqueueAsync(otherTenant, DateTimeOffset.UtcNow.AddDays(1), hashed);
-        var store = Host.Services.GetRequiredService<IJobStore>();
 
         try
         {
@@ -306,16 +309,18 @@ public class CleanupOnWorkerTests
         used.WaitingCleanupRevision.ShouldBeNull();
     }
 
-    private static async Task WaitUntilAsync(Func<bool> condition)
+    private static async Task WaitUntilAsync(Func<Task<bool>> condition)
     {
         var deadline = DateTimeOffset.UtcNow + WaitLimit;
-        while (!condition())
+        while (!await condition())
         {
             if (DateTimeOffset.UtcNow > deadline)
                 throw new TimeoutException($"The condition did not hold in {WaitLimit}.");
             await Task.Delay(TimeSpan.FromMilliseconds(50));
         }
     }
+
+    private static Task WaitUntilAsync(Func<bool> condition) => WaitUntilAsync(() => Task.FromResult(condition()));
 
     [Test]
     [Property("Rule", "REC-13")]
