@@ -103,11 +103,15 @@ test('a sign-out waits for each tab that heard, also for a tab slower than the f
   expect(reports).toContainEqual(report)
 })
 
-test('a browser with no BroadcastChannel takes the keys of other tabs, and no call throws', async () => {
-  const realChannel = globalThis.BroadcastChannel
-  vi.resetModules()
-  vi.stubGlobal('BroadcastChannel', undefined)
-  const keys = await import('./tab-keys')
+// A browser test has no vi.resetModules, so a new URL gives a copy of the module with no channel yet.
+const aNewCopyOfTheModule = (name: string): Promise<typeof import('./tab-keys')> => import(/* @vite-ignore */ new URL(`./tab-keys.ts?${name}`, import.meta.url).href)
+
+test.each([
+  ['has no BroadcastChannel', undefined],
+  ['refuses to make a channel', class { constructor() { throw new DOMException('blocked', 'SecurityError') } }],
+])('a browser that %s takes the keys of other tabs, and no call throws', async (name, channel) => {
+  vi.stubGlobal('BroadcastChannel', channel)
+  const keys = await aNewCopyOfTheModule(name.replaceAll(' ', '-'))
   localStorage.setItem(`${prefix}another-tab.1`, 'words')
 
   expect(() => keys.joinTheOtherTabs(() => Promise.resolve({ wordsOnlyInMemory: [], hasUnsavedTags: false }))).not.toThrow()
@@ -117,7 +121,6 @@ test('a browser with no BroadcastChannel takes the keys of other tabs, and no ca
   expect(() => keys.noteThisTabLeaves()).not.toThrow()
 
   expect(taken).toEqual([`${prefix}another-tab.1`])
-  vi.stubGlobal('BroadcastChannel', realChannel)
   vi.unstubAllGlobals()
 })
 

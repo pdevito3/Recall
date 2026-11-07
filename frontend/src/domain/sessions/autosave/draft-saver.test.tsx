@@ -718,9 +718,11 @@ test('words of a tab that closed raise no notice when an open page shows them', 
   const stored = storedByAnotherTab(entryWith('words of a closed tab'))
 
   const saver = new DraftSaver(target, new QueryClient(), stored)
-  saver.subscribe(() => undefined)
+  const leavePage = saver.subscribe(() => undefined)
 
   await vi.waitFor(() => expect(saver.getSnapshot().status.kind).toBe('saved'))
+  expect(saver.notice()).toBeNull()
+  leavePage()
   expect(saver.notice()).toBeNull()
   saver.stop()
 })

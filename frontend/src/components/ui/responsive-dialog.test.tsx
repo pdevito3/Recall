@@ -116,9 +116,12 @@ for (const [width, height] of [
     render(<LongDialog title="Edit filter" description={longDescription} />)
     await openAnimationsFinished()
 
-    const title = page.getByRole('heading', { name: 'Edit filter' }).element().getBoundingClientRect()
-    const description = page.getByText(longDescription).element().getBoundingClientRect()
-    expect(title.left).toBe(description.left)
+    const leftOfText = (element: Element) => {
+      const range = document.createRange()
+      range.selectNodeContents(element)
+      return range.getBoundingClientRect().left
+    }
+    expect(leftOfText(page.getByRole('heading', { name: 'Edit filter' }).element())).toBe(leftOfText(page.getByText(longDescription).element()))
   })
 
   test(`at ${width}x${height} the content of a long dialog does not scroll under the close button`, async () => {
