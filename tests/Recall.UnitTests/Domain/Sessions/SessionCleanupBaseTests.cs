@@ -113,6 +113,26 @@ public class SessionCleanupBaseTests
         session.Cleaned.DraftRevision.ShouldBeGreaterThan(waiting);
         session.CleanedHasHandEdits.ShouldBeFalse();
         session.WaitingCleanupRevision.ShouldBeNull();
-        again.ShouldThrow<ConflictException>();
+        again.ShouldThrow<ConflictException>().Message.ShouldBe("This Cleanup result no longer waits. It was used, or a later Cleanup replaced it.");
+    }
+
+    [Test]
+    public void the_waiting_result_is_not_used_while_a_new_cleanup_runs()
+    {
+        // Arrange
+        var session = CleanSession();
+        session.BeginCleanup();
+        session.SaveCleaned(DraftSave.Of("my own words", session.Cleaned.DraftRevision, Noon));
+        session.CompleteCleanup(Outcome("second clean words"), session.Raw.DraftRevision, Noon);
+        var waiting = session.WaitingCleanupRevision!.Value;
+        session.BeginCleanup();
+
+        // Act
+        var refused = Should.Throw<ConflictException>(() => session.ApplyWaitingCleanup(waiting, "second clean words", session.Cleaned.DraftRevision, Noon));
+
+        // Assert
+        refused.Message.ShouldContain("runs now");
+        session.Cleaned.Text.ShouldBe("my own words");
+        session.WaitingCleanupRevision.ShouldBe(waiting);
     }
 }
