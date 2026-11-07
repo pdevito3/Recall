@@ -20,11 +20,11 @@ internal static class MarkdownCost
     public const long MostLinkWork = 500_000_000;
 
     /// <summary>
-    /// The blocks that one line can be in: the signs that open a quote or a list item at its start, and half of its indent,
-    /// because a list item that goes on takes two columns or more. The parser reads the rest of the line again for each new
-    /// list item and the indent again for each one that goes on, so 300 000 signs took 10 s, and 5 000 blocks in indented
-    /// lines took 12 s. The JSON writer refuses a depth over 64, and each block takes two levels of it, so a line in more
-    /// than 32 blocks stays as the source in any case. The bound is twice that, so an indent of code has room.
+    /// The blocks that one line can be in: the signs that open a quote or a list item at its start, and half of its indent and
+    /// of the indent after each quote, because a list item that goes on takes two columns or more. The parser reads the rest of
+    /// the line again for each new list item and the indent again for each one that goes on, so 300 000 signs took 10 s, and
+    /// 5 000 blocks in indented lines took 12 s. The JSON writer refuses a depth over 64, and each block takes two levels of it,
+    /// so a line in more than 32 blocks stays as the source in any case. The bound is twice that, so an indent of code has room.
     /// </summary>
     public const int DeepestBlock = 64;
 
@@ -84,33 +84,42 @@ internal static class MarkdownCost
     private static int Depth(ReadOnlySpan<char> line)
     {
         line = line[..ThematicBreakStart(line)];
-        var columns = 0;
+        var depth = 0;
         var at = 0;
-        for (; at < line.Length && line[at] is ' ' or '\t'; at++)
-            columns += line[at] == '\t' ? 4 : 1;
-
-        var depth = columns / 2;
-        while (at < line.Length)
+        while (true)
         {
-            var isQuote = line[at] == '>';
-            var after = isQuote ? at + 1 : ListMarkerEnd(line, at);
-            if (after < 0)
-                return depth;
+            // At the start of the line and after a quote, a list item that the line goes on in can take the indent.
+            var indent = BlankLength(line, at);
+            depth += Columns(line.Slice(at, indent)) / 2;
+            at += indent;
+            while (at < line.Length && line[at] != '>')
+            {
+                var after = ListMarkerEnd(line, at);
+                if (after < 0)
+                    return depth;
 
-            var gap = line.Length - after - line[after..].TrimStart(Blank).Length;
-            if (!isQuote && gap == 0 && after < line.Length)
-                return depth;
+                var gap = BlankLength(line, after);
+                if (gap == 0 && after < line.Length)
+                    return depth;
 
+                depth++;
+
+                // Four columns past the sign of a new list item start indented code, which opens no block.
+                if (gap > 4)
+                    return depth;
+                at = after + gap;
+            }
+
+            if (at == line.Length)
+                return depth;
             depth++;
-
-            // Four columns past the sign start indented code, which opens no block.
-            if (gap > 4)
-                return depth;
-            at = after + gap;
+            at++;
         }
-
-        return depth;
     }
+
+    private static int BlankLength(ReadOnlySpan<char> line, int at) => line.Length - at - line[at..].TrimStart(Blank).Length;
+
+    private static int Columns(ReadOnlySpan<char> blanks) => blanks.Length + (3 * blanks.Count('\t'));
 
     private static int ListMarkerEnd(ReadOnlySpan<char> line, int at)
     {

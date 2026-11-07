@@ -37,6 +37,15 @@ public class MarkdownCostTests
             Repeat("- * ", 30_000) + "-",
             Repeat("- > 1. ", 100_000) + "x",
             "- a\n" + Repeat(" ", 6) + Repeat("- ", 300_000) + "x",
+            "> - a\n>     " + Repeat("- ", 300_000) + "x",
+            "> 1. a\n>      " + Repeat("1. ", 200_000) + "x",
+            "> 123456789. a\n>              " + Repeat("- ", 300_000) + "x",
+            "> * a\n>     " + Repeat("+ ", 300_000) + "x",
+            "> - a\n>\t  " + Repeat("- ", 300_000) + "x",
+            "> > - a\n> >     " + Repeat("- ", 300_000) + "x",
+            "> - - a\n>       " + Repeat("- ", 300_000) + "x",
+            "- > - a\n  >     " + Repeat("- ", 300_000) + "x",
+            "> - a\nb\n>     " + Repeat("- ", 300_000) + "x",
             string.Concat(Enumerable.Range(0, 170).Select(line => Repeat(" ", line * 64) + Repeat("- ", 32) + "x\n")),
         ];
         return texts.Select<string, Func<string>>(text => () => text);
