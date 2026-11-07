@@ -63,6 +63,7 @@ export const entry = (page: Page) => ({
   removeTopic: (name: string) => page.getByRole('button', { name: `Remove topic ${name}`, exact: true }),
   topicsFromAi: page.getByText('Topics from AI', { exact: true }),
   noTags: page.getByText('No tags yet.', { exact: true }),
+  tag: (name: string) => page.getByRole('region', { name: 'Tags' }).getByText(name, { exact: true }),
   showHistory: page.getByRole('button', { name: 'Show history', exact: true }),
   closeHistory: page.getByRole('button', { name: 'Close history', exact: true }),
   olderVersions: page.getByRole('button', { name: 'Show older versions', exact: true }),

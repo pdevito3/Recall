@@ -563,7 +563,7 @@ test.describe('the tags of an entry', () => {
     await entry.open(session.id)
 
     await expect(entry.at.topicsFromAi).toBeVisible()
-    await expect(page.getByRole('region', { name: 'Tags' }).getByText('travel', { exact: true })).toBeVisible()
+    await expect(entry.at.tag('travel')).toBeVisible()
     await expect(entry.at.noTags).toHaveCount(0)
   })
 })
