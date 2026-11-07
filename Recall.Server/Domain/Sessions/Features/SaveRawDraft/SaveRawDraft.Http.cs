@@ -19,8 +19,8 @@ public sealed class SaveRawDraftEndpoint : IEndpoint
         .ProducesValidationProblem(StatusCodes.Status409Conflict);
 
     /// <summary>
-    /// Saves the Raw Draft with Last-write-wins on the save time. A save that loses keeps its words as a Revision.
-    /// A base must be the number of a Draft whose words the client holds. A higher base loses at any save time.
+    /// Saves the Raw Draft. A save wins only when its base is the number of the current Draft. Any other save loses and keeps its words as a Revision.
+    /// A base must be the number of a Draft whose words the client holds. The save time decides no save.
     /// </summary>
     public static async Task<Ok<DraftSaveResultDto>> Handle(
         string id,

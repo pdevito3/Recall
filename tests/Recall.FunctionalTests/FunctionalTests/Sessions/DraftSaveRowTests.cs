@@ -54,33 +54,6 @@ public class DraftSaveRowTests : TestBase
         (raw ? read!.RawText : read!.CleanedText).ShouldBe("the same words");
     }
 
-    [Test]
-    [Property("Rule", "SES-36")]
-    [Arguments(true)]
-    [Arguments(false)]
-    public async Task a_base_that_was_a_draft_only_in_another_session_loses_at_any_time(bool raw)
-    {
-        // Arrange
-        var other = await AddSessionOfNewPersonAsync();
-        var session = await FactoryClient.AddSessionAsync();
-        var now = DateTimeOffset.UtcNow;
-        await SaveAsync(RouteOf(other, raw), "first of the other session", 0, now.AddMinutes(-6));
-        var otherDraft = await SaveAsync(RouteOf(other, raw), "second of the other session", 1, now.AddMinutes(-5));
-        var route = RouteOf(session, raw);
-        await SaveAsync(route, "first words", 0, now.AddMinutes(-4));
-        var lost = await SaveAsync(route, "words that lost", 99, now.AddMinutes(-3));
-        await SaveAsync(route, "merged words", 1, now.AddMinutes(-2));
-
-        // Act
-        var result = await SaveAsync(route, "from the number of the loss", lost.LatestRevision, now.AddMinutes(-1));
-        var read = await FactoryClient.GetFromJsonAsync<SessionDto>(ApiRoutes.Sessions.GetRecord(session.Id));
-
-        // Assert
-        lost.LatestRevision.ShouldBe(otherDraft.DraftRevision!.Value);
-        result.Outcome.ShouldBe("Lost");
-        (raw ? read!.RawText : read!.CleanedText).ShouldBe("merged words");
-    }
-
     private async Task<SessionDto> AddSessionOfNewPersonAsync()
     {
         var (_, member) = await JournalScenario.AddPeopleAsync();

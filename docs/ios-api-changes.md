@@ -37,14 +37,18 @@ This document compares each of the 22 routes that the POC iOS client calls (`Jou
 
 ## The base of a Draft save
 
-The rules are SES-5, SES-6, SES-8, and SES-36 in the [sessions spec](specs/sessions.md). They apply to the `draft` route and to the `cleaned` route.
+The rules are SES-5, SES-6, SES-7, SES-8, and SES-36 in the [sessions spec](specs/sessions.md). They apply to the `draft` route and to the `cleaned` route.
 
-`baseRevision` is the number of a Draft whose text the client holds. Send only a number from one of these sources. SES-36 states what a replay can do when a client sends another number.
+A save wins only when `baseRevision` is the number of the current Draft. A save from any other number gets `Lost`. `savedAt` plays no part in this, so the clock of a device cannot win or lose a save.
+
+`baseRevision` is the number of a Draft whose text the client holds. Send only a number from one of these sources.
 
 - A read of the Session: `rawDraftRevision` with `rawText`, or `cleanedDraftRevision` with `cleanedText`.
-- A `Won` or `Unchanged` reply: `draftRevision`.
+- A `Won`, `Unchanged`, or `Kept` reply: `draftRevision`.
 
-Do not use `latestRevision` as a base. It can name a Revision that lost, and a base that names no Draft loses at any `savedAt`. Do not use the number of a `Kept` reply as a base. It names an older Draft, and a save from it can replace newer words under the time rule.
+Do not use `latestRevision` as a base. It can name a Revision that lost, and that number never wins.
+
+Keep one save in flight for each Draft, and send the next save from the number of the reply. A second save from the same base gets `Lost`. An offline queue holds the newest text for a Draft, and it does not send each older text.
 
 Each `outcome` tells the client this:
 
@@ -52,14 +56,16 @@ Each `outcome` tells the client this:
 |-----------|-----------|------------------------|-----------------|
 | `Won` | Holds these words | In the Draft, and in a new Revision | The number of the Draft |
 | `Unchanged` | Holds these words | In the Draft. No new Revision | The number of the Draft |
-| `Kept` | Took these words at or after the base. It can hold more words now, or other words | In an earlier Revision. No new Revision | The number at which the Draft took these words. It is not a base |
-| `Lost` | Never took these words in this save | In a Revision | `null` |
+| `Kept` | Took these words in the first try of this save. It can hold other words now | In an earlier Revision. No new Revision | The number at which the Draft took these words |
+| `Lost` | Did not take this save | In a Revision | `null` |
 
-A replay sends the same `text`, the same `baseRevision`, and the same `savedAt`. Give each new save a new `savedAt`, and keep the `savedAt` of a queued save when you send it again. A replay of a save that won or gave `Unchanged` gives `Kept`, and a replay of a save that lost gives `Lost`. Neither makes a new Revision. So a client that lost a reply gets the true answer when it sends the save again. SES-8 states the replays of `Unchanged` that give `Lost` or `Kept` with another number. Two writers can also each get `Won` and overwrite words with no signal, as SES-5 states. After `Kept`, do not merge these words into the Draft again, because the Draft already took them. Read the Session before the next save, and use the number of the read as the base.
+A replay sends the same `text` and the same `savedAt`. Give each new save a new `savedAt`, and keep the `savedAt` of a queued save when you send it again. A replay of a save that won gives `Kept`, and a replay of a save that lost gives `Lost`. Neither makes a new Revision. So a client that lost a reply gets the true answer when it sends the save again. A replay of a save that gave `Unchanged` gives `Unchanged` while the Draft holds the words, and `Lost` after the Draft moved. After `Kept`, do not merge these words into the Draft again, because the Draft already took them.
 
 Any write can answer 507 when the disk of the server is full. The save did not happen. Keep the words, and send the same save again later.
 
-A base that names no Draft, such as a `latestRevision` or a number above the Draft, gives `Lost`, also with a later `savedAt`. The server keeps the words as the newest Revision, and it does not refuse the save with a 4xx.
+A base that is not the number of the current Draft gives `Lost`, also with a later `savedAt`. The server keeps the words as the newest Revision, and it does not refuse the save with a 4xx.
+
+Two devices that edit one Draft see more `Lost` answers, and a chunk of a transcript or a Person rename also moves the number. Each `Lost` costs the client one merge, or one notice to the person. No word leaves the Draft with no signal.
 
 After `Lost`, do these steps:
 
@@ -72,7 +78,7 @@ After `Lost`, do these steps:
 
 These steps stop a repeat of text. A merge from an old queue entry adds the words a second time when the merge before it is in the Draft.
 
-Do not send a new save from the old base and expect it to win. While a transcript moves the Draft, a save from a base older than the last chunk loses at any `savedAt`.
+Do not send a new save from the old base and expect it to win. It gets `Lost` at any `savedAt`.
 
 ## Settings and metadata saves
 

@@ -16,7 +16,7 @@ public class WordsThatAreNotADocumentTests
 
     private static Session NewSession() => Session.Create("ten_1", "usr_1", "device-1", Noon, null, Now);
 
-    private static DraftSave Save(string text) => DraftSave.Of(text, 0, Noon, Now);
+    private static DraftSave Save(string text) => DraftSave.Of(text, 0, Noon);
 
     [Test]
     [Property("Rule", "SES-29")]
@@ -162,7 +162,7 @@ public class WordsThatAreNotADocumentTests
         const int negative = -1;
 
         // Act
-        var act = () => DraftSave.Of("words", negative, Noon, Now);
+        var act = () => DraftSave.Of("words", negative, Noon);
 
         // Assert
         act.ShouldThrow<ValidationException>();
@@ -170,17 +170,17 @@ public class WordsThatAreNotADocumentTests
 
     [Test]
     [Property("Rule", "SES-8")]
-    public void a_save_keeps_the_time_that_the_client_claimed_next_to_the_clamped_time()
+    public void a_save_holds_the_time_of_the_client_in_utc_at_any_clock_so_a_replay_with_another_offset_is_one_save()
     {
         // Arrange
-        var claimed = Now.AddHours(5);
+        var fast = Now.AddHours(5);
 
         // Act
-        var save = DraftSave.Of("words", 0, claimed, Now);
+        var save = DraftSave.Of("words", 0, fast.ToOffset(TimeSpan.FromHours(2)));
 
         // Assert
-        save.SavedAt.ShouldBe(Now);
-        save.ClaimedSavedAt.ShouldBe(claimed);
+        save.SavedAt.ShouldBe(fast);
+        save.SavedAt.Offset.ShouldBe(TimeSpan.Zero);
     }
 
     [Test]

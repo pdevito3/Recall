@@ -5,125 +5,77 @@ using Shouldly;
 
 public class DraftSlotTests
 {
-    [Test]
-    public void a_save_from_a_base_that_cannot_win_loses_at_any_time_and_stays_as_a_revision()
-    {
-        // Arrange
-        var slot = new DraftSlot("heard words", 6, 6, new DateTimeOffset(2026, 6, 1, 12, 0, 0, TimeSpan.Zero));
-        var save = DraftSave.Of("old copy", 5, new DateTimeOffset(2026, 6, 1, 13, 0, 0, TimeSpan.Zero), new DateTimeOffset(2026, 6, 1, 14, 0, 0, TimeSpan.Zero));
-
-        // Act
-        var decision = slot.Decide(save, baseCanWin: false);
-
-        // Assert
-        decision.Outcome.ShouldBe(DraftSaveOutcome.Lost);
-        decision.Next.Text.ShouldBe("heard words");
-        decision.MintedRevision.ShouldBe(7);
-    }
-
     private static readonly DateTimeOffset Noon = new(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
-    private static readonly DateTimeOffset Now = Noon.AddDays(1);
 
-    private static DraftSave Save(string text, int baseRevision, DateTimeOffset savedAt) => DraftSave.Of(text, baseRevision, savedAt, Now);
+    private static DraftSave Save(string text, int baseRevision, DateTimeOffset savedAt) => DraftSave.Of(text, baseRevision, savedAt);
 
     private static DraftSlot At(int revision, DateTimeOffset savedAt) => new("current words", revision, revision, savedAt);
 
     [Test]
     [Property("Rule", "SES-5")]
-    public void a_save_based_on_the_current_draft_wins_with_an_older_clock()
+    [Arguments(-3)]
+    [Arguments(0)]
+    [Arguments(5)]
+    public void a_save_from_the_current_draft_wins_at_any_clock(int hours)
     {
         // Arrange
         var slot = At(2, Noon);
 
         // Act
-        var decision = slot.Decide(Save("new words", 2, Noon.AddHours(-3)));
+        var decision = slot.Decide(Save("new words", 2, Noon.AddHours(hours)));
 
         // Assert
         decision.Outcome.ShouldBe(DraftSaveOutcome.Won);
         decision.Next.Text.ShouldBe("new words");
         decision.Next.DraftRevision.ShouldBe(3);
-        decision.Next.SavedAt.ShouldBe(Noon, "A slow clock cannot move the save time of the Draft back.");
+        decision.Next.SavedAt.ShouldBe(Noon.AddHours(hours));
     }
 
     [Test]
     [Property("Rule", "SES-5")]
-    public void of_two_stale_saves_the_later_save_time_wins_in_either_order_of_arrival()
-    {
-        // Arrange
-        var start = At(1, Noon);
-        var earlier = Save("earlier", 0, Noon.AddMinutes(1));
-        var later = Save("later", 0, Noon.AddMinutes(2));
-
-        // Act
-        var earlierFirst = start.Decide(earlier).Next.Decide(later).Next;
-        var laterFirst = start.Decide(later).Next.Decide(earlier).Next;
-
-        // Assert
-        earlierFirst.Text.ShouldBe("later");
-        laterFirst.Text.ShouldBe("later");
-    }
-
-    [Test]
-    [Property("Rule", "SES-5")]
-    public void of_two_equal_save_times_the_save_that_arrives_last_wins()
-    {
-        // Arrange
-        var slot = At(1, Noon);
-
-        // Act
-        var decision = slot.Decide(Save("same time", 0, Noon));
-
-        // Assert
-        decision.Outcome.ShouldBe(DraftSaveOutcome.Won);
-        decision.Next.Text.ShouldBe("same time");
-    }
-
-    [Test]
     [Property("Rule", "SES-6")]
-    public void a_save_that_loses_keeps_the_draft_and_takes_the_next_revision_number()
-    {
-        // Arrange
-        var slot = At(4, Noon);
-
-        // Act
-        var decision = slot.Decide(Save("older words", 1, Noon.AddHours(-1)));
-
-        // Assert
-        decision.Outcome.ShouldBe(DraftSaveOutcome.Lost);
-        decision.Next.Text.ShouldBe("current words");
-        decision.Next.DraftRevision.ShouldBe(4);
-        decision.Next.LatestRevision.ShouldBe(5);
-        decision.MintedRevision.ShouldBe(5);
-    }
-
-    [Test]
-    [Property("Rule", "SES-5")]
-    [Arguments(5)]
-    [Arguments(6)]
-    [Arguments(999_999)]
-    public void a_base_above_the_draft_loses_at_any_time_and_stays_as_a_revision(int baseRevision)
+    [Arguments(0, -3)]
+    [Arguments(0, 5)]
+    [Arguments(3, -3)]
+    [Arguments(3, 5)]
+    [Arguments(5, 5)]
+    [Arguments(999_999, 5)]
+    public void a_save_from_any_other_base_loses_at_any_clock_and_takes_the_next_number(int baseRevision, int hours)
     {
         // Arrange
         var slot = new DraftSlot("current words", 4, 6, Noon);
 
         // Act
-        var decision = slot.Decide(Save("guessed base", baseRevision, Noon.AddHours(1)));
+        var decision = slot.Decide(Save("other words", baseRevision, Noon.AddHours(hours)));
 
         // Assert
         decision.Outcome.ShouldBe(DraftSaveOutcome.Lost);
+        decision.DraftRevision.ShouldBeNull();
         decision.Next.Text.ShouldBe("current words");
+        decision.Next.DraftRevision.ShouldBe(4);
+        decision.Next.SavedAt.ShouldBe(Noon);
+        decision.Next.LatestRevision.ShouldBe(7);
         decision.MintedRevision.ShouldBe(7);
     }
 
     [Test]
-    [Property("Rule", "SES-7")]
-    public void a_save_time_in_the_future_becomes_the_time_of_the_server()
+    [Property("Rule", "SES-5")]
+    public void of_two_saves_from_one_base_the_first_to_arrive_wins_in_either_order()
     {
+        // Arrange
+        var start = At(1, Noon);
+        var earlier = Save("earlier", 1, Noon.AddMinutes(1));
+        var later = Save("later", 1, Noon.AddMinutes(2));
+
         // Act
-        var save = Save("words", 0, Now.AddYears(5));
+        var earlierFirst = start.Decide(earlier).Next.Decide(later);
+        var laterFirst = start.Decide(later).Next.Decide(earlier);
 
         // Assert
-        save.SavedAt.ShouldBe(Now);
+        earlierFirst.Outcome.ShouldBe(DraftSaveOutcome.Lost);
+        earlierFirst.Next.Text.ShouldBe("earlier");
+        laterFirst.Outcome.ShouldBe(DraftSaveOutcome.Lost);
+        laterFirst.Next.Text.ShouldBe("later");
     }
 
     [Test]
@@ -145,7 +97,6 @@ public class DraftSlotTests
 
     [Test]
     [Property("Rule", "SES-8")]
-    [Property("Rule", "SES-36")]
     public void a_replay_of_a_save_that_won_says_kept_and_gives_the_number_at_which_it_won()
     {
         // Arrange
@@ -163,48 +114,52 @@ public class DraftSlotTests
 
     [Test]
     [Property("Rule", "SES-8")]
-    public void a_save_of_the_words_of_the_draft_makes_no_revision()
+    public void a_replay_answers_before_the_words_of_the_draft_do()
     {
         // Arrange
         var slot = At(4, Noon);
 
         // Act
-        var decision = slot.Decide(Save("current words", 4, Noon.AddMinutes(5)));
+        var replayOfALoss = slot.Decide(Save("current words", 1, Noon), new DraftAnswer(DraftTookAt: null));
+        var replayOfAWin = slot.Decide(Save("current words", 3, Noon), new DraftAnswer(DraftTookAt: 4));
+
+        // Assert
+        replayOfALoss.Outcome.ShouldBe(DraftSaveOutcome.Lost);
+        replayOfAWin.Outcome.ShouldBe(DraftSaveOutcome.Kept);
+    }
+
+    [Test]
+    [Property("Rule", "SES-8")]
+    [Arguments(4)]
+    [Arguments(1)]
+    public void a_save_of_the_words_of_the_draft_makes_no_revision_from_any_base(int baseRevision)
+    {
+        // Arrange
+        var slot = At(4, Noon);
+
+        // Act
+        var decision = slot.Decide(Save("current words", baseRevision, Noon.AddMinutes(5)));
 
         // Assert
         decision.Outcome.ShouldBe(DraftSaveOutcome.Unchanged);
+        decision.DraftRevision.ShouldBe(4);
         decision.MintedRevision.ShouldBeNull();
         decision.Next.ShouldBe(slot);
     }
 
     [Test]
-    [Property("Rule", "SES-8")]
-    public void a_later_offline_edit_keeps_the_slot_after_a_save_of_the_same_words()
+    [Property("Rule", "SES-9")]
+    public void a_rewrite_moves_the_number_and_the_save_time_so_a_save_from_before_it_loses()
     {
         // Arrange
-        var slot = At(4, Noon);
-        var resaved = slot.Decide(Save("current words", 4, Noon.AddMinutes(10))).Next;
+        var slot = new DraftSlot("current words", 4, 6, Noon);
 
         // Act
-        var offline = resaved.Decide(Save("offline words", 3, Noon.AddMinutes(5)));
+        var rewritten = slot.Rewritten("new label", Noon.AddHours(1));
+        var fromBefore = rewritten.Decide(Save("old label", 4, Noon.AddHours(2)));
 
         // Assert
-        offline.Outcome.ShouldBe(DraftSaveOutcome.Won);
-        offline.Next.Text.ShouldBe("offline words");
-    }
-
-    [Test]
-    [Property("Rule", "SES-8")]
-    public void a_replay_of_the_same_words_does_not_move_the_save_time()
-    {
-        // Arrange
-        var slot = new DraftSlot("words", 1, 1, Noon);
-
-        // Act
-        var replay = slot.Decide(DraftSave.Of("words", 0, Noon.AddHours(5), Noon.AddMinutes(10)));
-
-        // Assert
-        replay.Outcome.ShouldBe(DraftSaveOutcome.Unchanged);
-        replay.Next.ShouldBe(slot);
+        rewritten.ShouldBe(new DraftSlot("new label", 7, 7, Noon.AddHours(1)));
+        fromBefore.Outcome.ShouldBe(DraftSaveOutcome.Lost);
     }
 }

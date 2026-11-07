@@ -1,5 +1,7 @@
 # Drafts use last-write-wins on the save time, not a version check
 
+> Superseded in part by [ADR 0021](0021-a-draft-save-wins-only-from-the-current-draft.md): the save time no longer decides a Draft save. The parts on a base number with no `Version`, on Revisions, on settings, and on metadata still apply.
+
 A person dictates on a phone that can stay offline for days. Each other command in this repository sends the `Version` of the row, and a stale version gives 409 (see [concurrency](../backend/concurrency.md)). The client then shows an error and the person loads the record again. On a Draft, that error tells a person that the words they spoke did not save.
 
 So a save of a Draft sends no `Version`. It sends a base Revision and the save time on the client. The server applies these rules ([sessions spec](../specs/sessions.md), SES-5 to SES-8):

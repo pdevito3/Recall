@@ -13,7 +13,7 @@ public static class SaveCleanedDraft
 {
     public sealed record Command(string Id, DraftSaveDto Dto) : IRequest<DraftSaveResultDto>, IRunsAgainWhenRaced;
 
-    public sealed class Handler(AppDbContext dbContext, TimeProvider timeProvider) : IRequestHandler<Command, DraftSaveResultDto>
+    public sealed class Handler(AppDbContext dbContext) : IRequestHandler<Command, DraftSaveResultDto>
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
 
@@ -25,20 +25,15 @@ public static class SaveCleanedDraft
                 .TagWithOperationCallSite("sessions.save_cleaned.load")
                 .GetById(request.Id, cancellationToken);
 
-            var save = DraftSave.Of(request.Dto.Text, request.Dto.BaseRevision, request.Dto.SavedAt, timeProvider.GetUtcNow());
+            var save = DraftSave.Of(request.Dto.Text, request.Dto.BaseRevision, request.Dto.SavedAt);
             var earlier = await dbContext.CleanedRevisions
                 .TagWithOperationCallSite("sessions.save_cleaned.earlier")
-                .Where(r => r.SessionId == session.Id
-                    && (r.WasDraft ? r.Number >= save.BaseRevision : r.ClaimedSavedAt == save.ClaimedSavedAt)
-                    && r.Text == save.Text)
+                .Where(r => r.SessionId == session.Id && r.SavedAt == save.SavedAt && r.Text == save.Text)
                 .OrderBy(r => r.Number)
                 .Select(r => (DraftAnswer?)new DraftAnswer(r.WasDraft ? r.Number : null))
                 .FirstOrDefaultAsync(cancellationToken);
-            var baseWasDraft = save.BaseRevision == DraftSlot.NoRevision || await dbContext.CleanedRevisions
-                .TagWithOperationCallSite("sessions.save_cleaned.base")
-                .AnyAsync(r => r.SessionId == session.Id && r.Number == save.BaseRevision && r.WasDraft, cancellationToken);
 
-            var decision = session.SaveCleaned(save, earlier, baseWasDraft);
+            var decision = session.SaveCleaned(save, earlier);
             await dbContext.SaveChangesAsync(cancellationToken);
 
             Activity.Current?.SetTag("app.session.save_outcome", decision.Outcome.ToString());
