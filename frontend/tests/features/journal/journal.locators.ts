@@ -10,7 +10,6 @@ export const journal = (page: Page) => ({
   savedAtStart: page.getByRole('status').filter({ hasText: /^Saved at/ }),
   movedNotice: page.getByRole('status', { name: 'Your words moved' }),
   showNewest: page.getByRole('button', { name: 'Show the newest words', exact: true }),
-  keepWords: page.getByRole('button', { name: 'Keep these words', exact: true }),
   addMyWords: page.getByRole('button', { name: 'Add my words to the newest words', exact: true }),
   newestWordsFailure: page.getByRole('alertdialog').filter({ hasText: 'The newest words did not load.' }),
   previewOfARow: (words: string) => page.getByRole('main').getByText(words, { exact: true }),

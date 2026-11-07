@@ -38,7 +38,7 @@ function captureLocation(): Promise<{ latitude: number; longitude: number } | nu
 
 function locationOfNewEntry(queryClient: QueryClient) {
   if (!locationCaptureIsOn(queryClient)) {
-    if (locationWaitsForAnAnswer(queryClient)) Notification.info('This entry saves no location, because Settings waits for your answer about location capture.')
+    if (locationWaitsForAnAnswer(queryClient)) Notification.info('This entry saves no location. A question about location capture waits on Settings, in this tab or in another.')
     return undefined
   }
   const position = captureLocation()

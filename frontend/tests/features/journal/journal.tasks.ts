@@ -1,5 +1,6 @@
 import { expect, type Page } from '@playwright/test'
 import { sessionsPaths } from '@tests/support/api/sessions-api'
+import { settingsPaths } from '@tests/support/api/settings-api'
 import { actorSubject } from '@tests/support/auth/actors'
 import { entry, journal, unsent } from './journal.locators'
 
@@ -52,8 +53,8 @@ export function journalPage(page: Page) {
 
     isTheSameEditor: () => at.composer.evaluate((editor) => (window as unknown as { markedEditor: Element }).markedEditor === editor),
 
-    async moveTheCursorOneBack() {
-      await page.keyboard.press('ArrowLeft')
+    aReadOfTheSettingsAnswered() {
+      return page.waitForResponse((r) => r.request().method() === 'GET' && new URL(r.url()).pathname === settingsPaths.mine)
     },
 
     async typeAfterTheCursor(words: string) {

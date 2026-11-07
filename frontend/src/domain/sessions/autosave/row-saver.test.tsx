@@ -641,7 +641,11 @@ test('a stale key that turns capture off asks, and does not go over a later choi
   saver.dispose()
 })
 
-test('a change of a tab that left goes out, also when this tab kept that field before', async () => {
+test.each([
+  { when: 'after', savedAt: '2026-11-06T11:00:00.000Z', capture: false },
+  { when: 'before', savedAt: '2026-11-06T09:00:00.000Z', capture: true },
+])('a change of a tab that left, made $when the answer to keep the field', async ({ savedAt, capture }) => {
+  vi.setSystemTime(new Date('2026-11-06T10:00:00.000Z'))
   const api = server({ capture: true })
   const copy = { current: api.row.current }
   const { saver } = saverOn(api, copy)
@@ -649,10 +653,10 @@ test('a change of a tab that left goes out, also when this tab kept that field b
   await vi.advanceTimersByTimeAsync(0)
   saver.answerAsk(saver.asks()[0], false)
 
-  saver.adopt({ change: { value: { capture: false }, savedAt: '2026-11-06T00:00:00.000Z' }, attempt: null, asks: [] })
+  saver.adopt({ change: { value: { capture: false }, savedAt }, attempt: null, asks: [] })
   await vi.advanceTimersByTimeAsync(0)
 
-  expect(api.row.current.capture).toBe(false)
+  expect(api.row.current.capture).toBe(capture)
   saver.dispose()
 })
 

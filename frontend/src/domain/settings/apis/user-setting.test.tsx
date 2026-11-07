@@ -47,6 +47,9 @@ test('this tab saves no location while a change to off waits for an answer', asy
   saver.adopt({ change: null, attempt: null, asks: [{ field: 'locationCaptureEnabled', yours: false, now: true }] })
   expect(locationCaptureIsOn(queryClient)).toBe(false)
   expect(locationWaitsForAnAnswer(queryClient)).toBe(true)
+  queryClient.setQueryData(SettingKeys.mine(), { ...row, locationCaptureEnabled: false })
+  expect(locationWaitsForAnAnswer(queryClient)).toBe(false)
+  queryClient.setQueryData(SettingKeys.mine(), row)
 
   saver.answerAsk(saver.asks()[0], false)
   expect(locationCaptureIsOn(queryClient)).toBe(true)

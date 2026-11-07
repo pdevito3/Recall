@@ -603,10 +603,12 @@ test.describe('the location of a new entry', () => {
     await context.setGeolocation(place)
   }
 
-  const typeOnTheJournal = async (page: Page, api: Api) => {
+  const typeOnTheJournal = async (page: Page) => {
     const journal = journalPage(page)
+    // The first word asks the row, so this tab must have its answer. A read of another tab tells nothing.
+    const rowAnswered = journal.aReadOfTheSettingsAnswered()
     await journal.open()
-    await expect.poll(() => api.all('get', settingsPaths.mine).length).toBeGreaterThan(0)
+    await rowAnswered
     await journal.typeWithoutWaiting('Words at the cafe')
   }
 
@@ -620,9 +622,10 @@ test.describe('the location of a new entry', () => {
     const session = aSession().build()
     api.mock(settingsApi.are(aSetting({ locationCaptureEnabled: true })), sessionsApi.creates(session), sessionsApi.draftSaveWins(session, 1))
 
-    await typeOnTheJournal(page, api)
+    await typeOnTheJournal(page)
 
     expect(await createdLatitude(api)).toBe(place.latitude)
+    expect(await unsentWords(page).at.noLocationNotice.count()).toBe(0)
   })
 
   test('stays out when the person turns capture off after the first word, and the change waits', async ({ page, context, api }) => {
@@ -630,7 +633,7 @@ test.describe('the location of a new entry', () => {
     const session = aSession().build()
     const unsent = unsentWords(page)
     api.mock(settingsApi.are(aSetting({ locationCaptureEnabled: true })), { method: 'post', path: sessionsPaths.timeline, status: 503 }, failingPut)
-    await typeOnTheJournal(page, api)
+    await typeOnTheJournal(page)
     await expect.poll(() => api.all('post', sessionsPaths.timeline).length).toBeGreaterThan(0)
 
     await unsent.at.settingsLink.click()
@@ -650,9 +653,11 @@ test.describe('the location of a new entry', () => {
     await unsent.at.locationCapture.click({ force: true })
     await expect.poll(() => unsent.settingKeys()).not.toEqual([])
 
-    await typeOnTheJournal(await context.newPage(), api)
+    const secondTab = await context.newPage()
+    await typeOnTheJournal(secondTab)
 
     expect(await createdLatitude(api)).toBeNull()
+    expect(await unsentWords(secondTab).at.noLocationNotice.count()).toBe(0)
   })
 
   test('stays out with a notice while an answer about a change to off waits', async ({ page, context, api }) => {
@@ -666,7 +671,7 @@ test.describe('the location of a new entry', () => {
       asks: [{ field: 'locationCaptureEnabled', yours: false, now: true }],
     }))
 
-    await typeOnTheJournal(page, api)
+    await typeOnTheJournal(page)
 
     expect(await createdLatitude(api)).toBeNull()
     await expect(unsent.at.noLocationNotice).toBeVisible()
@@ -683,7 +688,7 @@ test.describe('the location of a new entry', () => {
       asks: [],
     }))
 
-    await typeOnTheJournal(page, api)
+    await typeOnTheJournal(page)
 
     expect(await createdLatitude(api)).toBeNull()
   })

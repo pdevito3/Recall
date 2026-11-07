@@ -91,12 +91,13 @@ function waitingChanges(queryClient: QueryClient) {
   return [...inKeys.map(({ change, asks }) => ({ fields: change?.value, asks })), { fields: saver.pendingFields(), asks: saver.asks() }]
 }
 
+const isOnInTheRow = (queryClient: QueryClient) => queryClient.getQueryData<UserSettingDto>(SettingKeys.mine())?.locationCaptureEnabled === true
+
 /** A change to off can wait for a save or an answer, in this tab or in a key of another tab. The app saves no location while it waits, so the choice holds also on a page with no prompt. */
 export const locationCaptureIsOn = (queryClient: QueryClient) =>
-  queryClient.getQueryData<UserSettingDto>(SettingKeys.mine())?.locationCaptureEnabled === true
-  && !waitingChanges(queryClient).some((waiting) => waiting.fields?.locationCaptureEnabled === false || asksAboutOff(waiting))
+  isOnInTheRow(queryClient) && !waitingChanges(queryClient).some((waiting) => waiting.fields?.locationCaptureEnabled === false || asksAboutOff(waiting))
 
-export const locationWaitsForAnAnswer = (queryClient: QueryClient) => waitingChanges(queryClient).some(asksAboutOff)
+export const locationWaitsForAnAnswer = (queryClient: QueryClient) => isOnInTheRow(queryClient) && waitingChanges(queryClient).some(asksAboutOff)
 
 export const settleSettingSaver = () => saver?.settle() ?? Promise.resolve(true)
 

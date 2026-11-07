@@ -96,7 +96,8 @@ export class RowSaver<F extends object, R> {
   private readonly saver: SerialSaver<Partial<F>, R>
   private attempt: Attempt<F> | null = null
   private currentAsks: FieldAsk<F>[] = []
-  private readonly keptAsTheyAre = new Set<string>()
+  /** The time of each answer to keep a field, so that only a later change clears the answer. */
+  private readonly keptAsTheyAre = new Map<string, string>()
   private appliedWithNoAsk: (keyof F & string)[] = []
   private readonly listeners = new Set<() => void>()
   private isDisposed = false
@@ -138,7 +139,9 @@ export class RowSaver<F extends object, R> {
     const newest = this.saver.newestUnsettled()
     const isOlder = newest !== null && change !== null && newest.savedAt > change.savedAt
     const fields = change && (isOlder ? withoutFields(change.value, fieldsIn(this.pendingFields())) : change.value)
-    for (const field of fieldsIn(fields ?? {})) this.keptAsTheyAre.delete(field)
+    for (const field of fieldsIn(fields ?? {})) {
+      if (change && change.savedAt > (this.keptAsTheyAre.get(field) ?? '')) this.keptAsTheyAre.delete(field)
+    }
     if (fields && change && fieldsIn(fields).length > 0) this.saver.edit(fields, isOlder ? newest.savedAt : change.savedAt)
     else this.keep()
     this.notify()
@@ -162,7 +165,7 @@ export class RowSaver<F extends object, R> {
   answerAsk(ask: FieldAsk<F>, usesYours: boolean) {
     this.currentAsks = this.currentAsks.filter((other) => other !== ask)
     if (usesYours) this.edit({ [ask.field]: ask.yours } as Partial<F>)
-    else this.keptAsTheyAre.add(ask.field)
+    else this.keptAsTheyAre.set(ask.field, new Date().toISOString())
     this.keep()
     this.notify()
   }
@@ -171,7 +174,7 @@ export class RowSaver<F extends object, R> {
 
   pendingFields(): Partial<F> {
     const pending = this.saver.unsettled().reduce<Partial<F>>((fields, { value }) => ({ ...fields, ...value }), {})
-    return withoutFields(pending, [...this.keptAsTheyAre])
+    return withoutFields(pending, [...this.keptAsTheyAre.keys()])
   }
 
   hasUnsaved() {
@@ -211,7 +214,7 @@ export class RowSaver<F extends object, R> {
   }
 
   private async send(queued: Partial<F>, signal: AbortSignal): Promise<R> {
-    let fields = withoutFields(queued, [...this.currentAsks.map((ask) => ask.field), ...this.keptAsTheyAre])
+    let fields = withoutFields(queued, [...this.currentAsks.map((ask) => ask.field), ...this.keptAsTheyAre.keys()])
     if (fieldsIn(fields).length === 0) return this.options.copyOf() ?? this.options.read(signal)
     this.attempt ??= { base: this.baseOf(this.options.copyOf() ?? (await this.options.read(signal))), hadNoReply: false }
     let { base, hadNoReply } = this.attempt
