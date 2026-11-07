@@ -43,7 +43,7 @@ public class LocalParakeetEngineTests
                 StallMinutes = stallMinutes,
                 MemoryEventsPath = MemoryEvents,
             });
-            return new LocalParakeetEngine(new ModelStore(settings), settings);
+            return new LocalParakeetEngine(new ModelStore(settings), new WorkAudio(settings), settings);
         }
 
         public TranscriptionInput Input(long start = 0) => new(Path.Combine(Folder, "audio.webm"), Folder, start);

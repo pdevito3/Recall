@@ -9,4 +9,9 @@ public static class ModelProviderQueries
     /// <summary>Each provider for a list. A provider that a person did not choose comes last.</summary>
     public static IQueryable<ModelProvider> NewestActivationFirst(this IQueryable<ModelProvider> providers)
         => providers.OrderByDescending(p => p.ActivatedOn).ThenByDescending(p => p.Id);
+
+    /// <summary>The first one gets the audio of the tenant. With none, the local engine makes the text.</summary>
+    public static IQueryable<ModelProvider> TranscriptionFirst(this IQueryable<ModelProvider> providers)
+        => providers.Where(p => p.TranscriptionChosenOn != null && p.TranscriptionModel != null)
+            .OrderByDescending(p => p.TranscriptionChosenOn).ThenByDescending(p => p.Id);
 }

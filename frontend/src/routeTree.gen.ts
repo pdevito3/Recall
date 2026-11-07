@@ -9,12 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TranscriptionEngineRouteImport } from './routes/transcription-engine'
 import { Route as ModelProvidersRouteImport } from './routes/model-providers'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UsersIndexRouteImport } from './routes/users/index'
 import { Route as UsersIdIndexRouteImport } from './routes/users/$id/index'
 
+const TranscriptionEngineRoute = TranscriptionEngineRouteImport.update({
+  id: '/transcription-engine',
+  path: '/transcription-engine',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ModelProvidersRoute = ModelProvidersRouteImport.update({
   id: '/model-providers',
   path: '/model-providers',
@@ -45,6 +51,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/model-providers': typeof ModelProvidersRoute
+  '/transcription-engine': typeof TranscriptionEngineRoute
   '/users': typeof UsersIndexRoute
   '/users/$id': typeof UsersIdIndexRoute
 }
@@ -52,6 +59,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/model-providers': typeof ModelProvidersRoute
+  '/transcription-engine': typeof TranscriptionEngineRoute
   '/users': typeof UsersIndexRoute
   '/users/$id': typeof UsersIdIndexRoute
 }
@@ -60,19 +68,33 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/model-providers': typeof ModelProvidersRoute
+  '/transcription-engine': typeof TranscriptionEngineRoute
   '/users/': typeof UsersIndexRoute
   '/users/$id/': typeof UsersIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/model-providers' | '/users' | '/users/$id'
+  fullPaths:
+    | '/'
+    | '/about'
+    | '/model-providers'
+    | '/transcription-engine'
+    | '/users'
+    | '/users/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/model-providers' | '/users' | '/users/$id'
+  to:
+    | '/'
+    | '/about'
+    | '/model-providers'
+    | '/transcription-engine'
+    | '/users'
+    | '/users/$id'
   id:
     | '__root__'
     | '/'
     | '/about'
     | '/model-providers'
+    | '/transcription-engine'
     | '/users/'
     | '/users/$id/'
   fileRoutesById: FileRoutesById
@@ -81,12 +103,20 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   ModelProvidersRoute: typeof ModelProvidersRoute
+  TranscriptionEngineRoute: typeof TranscriptionEngineRoute
   UsersIndexRoute: typeof UsersIndexRoute
   UsersIdIndexRoute: typeof UsersIdIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/transcription-engine': {
+      id: '/transcription-engine'
+      path: '/transcription-engine'
+      fullPath: '/transcription-engine'
+      preLoaderRoute: typeof TranscriptionEngineRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/model-providers': {
       id: '/model-providers'
       path: '/model-providers'
@@ -129,6 +159,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   ModelProvidersRoute: ModelProvidersRoute,
+  TranscriptionEngineRoute: TranscriptionEngineRoute,
   UsersIndexRoute: UsersIndexRoute,
   UsersIdIndexRoute: UsersIdIndexRoute,
 }

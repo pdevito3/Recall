@@ -19,7 +19,7 @@ public class RecordingTests
     {
         var recording = Receiving();
         recording.StoreSlice(0, 10);
-        recording.Finish([0], 1, 10);
+        recording.Finish([0], 1, 10, TranscriptionEngineKind.Local);
         return recording;
     }
 
@@ -71,7 +71,7 @@ public class RecordingTests
         recording.BeginAttempt();
 
         // Act
-        recording.Retry();
+        recording.Retry(TranscriptionEngineKind.Local);
 
         // Assert
         recording.Status.ShouldBe(RecordingStatus.Transcribing);
@@ -89,7 +89,7 @@ public class RecordingTests
         recording.Problem.ShouldBe(RecordingProblem.NoWordsFound);
 
         // Act
-        recording.Retry();
+        recording.Retry(TranscriptionEngineKind.Local);
 
         // Assert
         recording.TranscribedSamples.ShouldBe(0);
@@ -154,7 +154,7 @@ public class RecordingTests
         recording.StoreSlice(2, 1);
 
         // Act and assert
-        Should.Throw<ConflictException>(() => recording.Finish([0, 2], 3, 2));
+        Should.Throw<ConflictException>(() => recording.Finish([0, 2], 3, 2, TranscriptionEngineKind.Local));
         recording.Status.ShouldBe(RecordingStatus.Receiving);
         Recording.MissingSlices([0, 2], 3).ShouldBe([1]);
     }
@@ -167,7 +167,7 @@ public class RecordingTests
         recording.StoreSlice(0, 4);
 
         // Act and assert
-        Should.Throw<ConflictException>(() => recording.Finish([0], 1, 5));
+        Should.Throw<ConflictException>(() => recording.Finish([0], 1, 5, TranscriptionEngineKind.Local));
         recording.Status.ShouldBe(RecordingStatus.Receiving);
     }
 
@@ -180,7 +180,7 @@ public class RecordingTests
         recording.StoreSlice(1, 4);
 
         // Act and assert
-        Should.Throw<ConflictException>(() => recording.Finish([0, 1], 1, 8));
+        Should.Throw<ConflictException>(() => recording.Finish([0, 1], 1, 8, TranscriptionEngineKind.Local));
     }
 
     [Test]
@@ -198,6 +198,109 @@ public class RecordingTests
         began.ShouldBeFalse();
         recording.Status.ShouldBe(RecordingStatus.Failed);
         recording.Problem.ShouldBe(RecordingProblem.TooManyAttempts);
+    }
+
+    [Test]
+    [Property("Rule", "REC-19")]
+    public void a_provider_that_never_answers_ends_the_attempts_with_its_own_reason()
+    {
+        // Arrange
+        var recording = Received();
+        for (var attempt = 0; attempt < Recording.MaxAttemptsWithoutProgress; attempt++)
+        {
+            recording.BeginAttempt().ShouldBeTrue();
+            recording.WaitForProvider();
+        }
+
+        var waitingText = recording.ToDto([], ModelStatus.Ready, jobsStopped: false).ProblemText;
+
+        // Act
+        var began = recording.BeginAttempt();
+
+        // Assert
+        began.ShouldBeFalse();
+        recording.Status.ShouldBe(RecordingStatus.Failed);
+        recording.Problem.ShouldBe(RecordingProblem.ProviderUnavailable);
+        waitingText.ShouldNotBeNull().ShouldContain("tries again on its own");
+        var failedText = recording.ToDto([], ModelStatus.Ready, jobsStopped: false).ProblemText.ShouldNotBeNull();
+        failedText.ShouldNotContain("tries again on its own");
+        failedText.ShouldContain("Try again later");
+    }
+
+    [Test]
+    [Property("Rule", "REC-19")]
+    [Arguments(0L, 100L, true)]
+    [Arguments(50L, 150L, false)]
+    [Arguments(100L, 200L, true)]
+    [Arguments(150L, 200L, false)]
+    [Arguments(0L, 80L, true)]
+    public void a_chunk_joins_only_where_the_saved_text_ends(long from, long end, bool joins)
+    {
+        // Arrange
+        var recording = Received();
+        recording.BeginAttempt();
+        recording.AdvanceTo(100, 1000, hasWords: true);
+
+        // Act
+        var result = recording.Joins(from, end);
+
+        // Assert
+        result.ShouldBe(joins);
+    }
+
+    [Test]
+    [Property("Rule", "REC-17")]
+    public void the_engine_is_fixed_at_the_finish_and_a_retry_of_a_waiting_recording_keeps_it()
+    {
+        // Arrange
+        var recording = Receiving();
+        recording.StoreSlice(0, 10);
+
+        // Act
+        recording.Finish([0], 1, 10, TranscriptionEngineKind.Cloud);
+        recording.Retry(TranscriptionEngineKind.Local);
+
+        // Assert
+        recording.Engine.ShouldBe(TranscriptionEngineKind.Cloud);
+        recording.Status.ShouldBe(RecordingStatus.Received);
+    }
+
+    [Test]
+    [Property("Rule", "REC-17")]
+    public void a_retry_of_a_failed_recording_takes_the_engine_of_now()
+    {
+        // Arrange
+        var recording = Received();
+        recording.Fail(RecordingProblem.ProviderRefused);
+
+        // Act
+        recording.Retry(TranscriptionEngineKind.Cloud);
+
+        // Assert
+        recording.Engine.ShouldBe(TranscriptionEngineKind.Cloud);
+        recording.Status.ShouldBe(RecordingStatus.Received);
+        recording.Problem.ShouldBe(RecordingProblem.None);
+    }
+
+    [Test]
+    [Property("Rule", "REC-21")]
+    public void a_hand_over_to_the_local_engine_starts_its_attempts_again()
+    {
+        // Arrange
+        var recording = Receiving();
+        recording.StoreSlice(0, 10);
+        recording.Finish([0], 1, 10, TranscriptionEngineKind.Cloud);
+        recording.BeginAttempt();
+        recording.WaitForProvider();
+
+        // Act
+        recording.HandToLocalEngine();
+
+        // Assert
+        recording.Engine.ShouldBe(TranscriptionEngineKind.Local);
+        recording.Status.ShouldBe(RecordingStatus.Received);
+        recording.Problem.ShouldBe(RecordingProblem.None);
+        recording.AttemptsWithoutProgress.ShouldBe(0);
     }
 
     [Test]
@@ -219,7 +322,7 @@ public class RecordingTests
     public void the_payload_of_a_job_holds_only_ids()
     {
         // Arrange
-        Type[] payloads = [typeof(TranscribeRecording), typeof(DeleteRecordingAudio)];
+        Type[] payloads = [typeof(TranscribeRecording), typeof(TranscribeRecordingInCloud), typeof(DeleteRecordingAudio)];
 
         // Act
         var fields = payloads.SelectMany(p => p.GetProperties()).Select(p => p.Name).Distinct().Order();
@@ -321,7 +424,7 @@ public class RecordingTests
         recording.Fail(RecordingProblem.EngineCrashed);
 
         // Act
-        recording.Retry();
+        recording.Retry(TranscriptionEngineKind.Local);
 
         // Assert
         recording.Status.ShouldBe(RecordingStatus.Received);
@@ -339,7 +442,7 @@ public class RecordingTests
         recording.Complete(Now);
 
         // Act and assert
-        Should.Throw<ConflictException>(recording.Retry);
+        Should.Throw<ConflictException>(() => recording.Retry(TranscriptionEngineKind.Local));
     }
 
     [Test]

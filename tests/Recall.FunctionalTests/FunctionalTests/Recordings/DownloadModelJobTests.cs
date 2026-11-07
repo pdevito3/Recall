@@ -38,7 +38,7 @@ public class DownloadModelJobTests : TestBase
             var store = new ModelStore(settings);
             var scopes = Services.GetRequiredService<IServiceScopeFactory>();
             var clock = TimeProvider.System;
-            return (new DownloadModelJob(client, store, new ModelDownloads(scopes, store, clock), new RecordingSweep(scopes, Services.GetRequiredService<Recall.Server.Resources.Storage.FileStore>(), clock), settings, clock), store);
+            return (new DownloadModelJob(client, store, new ModelDownloads(scopes, store, clock), new RecordingSweep(scopes, Services.GetRequiredService<Recall.Server.Resources.Storage.FileStore>(), Services.GetRequiredService<BackWave.Storage.IJobStore>(), clock), settings, clock), store);
         }
     }
 
@@ -131,7 +131,7 @@ public class DownloadModelJobTests : TestBase
         var store = new ModelStore(settings);
         var scopes = Services.GetRequiredService<IServiceScopeFactory>();
         var job = new DownloadModelJob(answer, store, new ModelDownloads(new NoScopes(), store, TimeProvider.System),
-            new RecordingSweep(scopes, Services.GetRequiredService<Recall.Server.Resources.Storage.FileStore>(), TimeProvider.System), settings, TimeProvider.System);
+            new RecordingSweep(scopes, Services.GetRequiredService<Recall.Server.Resources.Storage.FileStore>(), Services.GetRequiredService<BackWave.Storage.IJobStore>(), TimeProvider.System), settings, TimeProvider.System);
 
         // Act
         await Should.ThrowAsync<InvalidOperationException>(() => job.DownloadModelAsync(CancellationToken.None));

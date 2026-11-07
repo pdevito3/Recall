@@ -16,7 +16,9 @@ public static class RecordingViews
         Problem = recording.Problem.ToString(),
         ProblemText = recording.WaitsForTranscription && jobsStopped
             ? GetTranscriptionStatus.JobsStoppedText
-            : ProblemTextOf(recording.Problem, model),
+            : recording is { Status: RecordingStatus.Failed, Problem: RecordingProblem.ProviderUnavailable }
+                ? ProviderGaveUpText
+                : ProblemTextOf(recording.Problem, model),
         HighestStoredSlice = recording.HighestStoredSlice,
         StoredSlices = storedSlices,
         ByteLength = recording.ByteLength,
@@ -26,6 +28,10 @@ public static class RecordingViews
         AudioKeptUntil = recording.AudioKeptUntil,
         Version = recording.Version,
     };
+
+    /// <summary>The tries of the job ended, so no new try comes unless a person asks for one.</summary>
+    public const string ProviderGaveUpText = "The audio is stored, but the provider that makes the text did not answer on any try. "
+        + "Try again later. If it keeps failing, ask an Admin to check the provider.";
 
     public static string? ProblemTextOf(RecordingProblem problem, ModelStatus model) => problem switch
     {
@@ -44,6 +50,10 @@ public static class RecordingViews
         RecordingProblem.TooLong => "The audio is stored, but it is longer than the 4 hours that the server can turn into text. Download it to keep a copy.",
         RecordingProblem.TextTooLong => "The audio is stored, but its text does not fit in this Session. The text so far is saved. Download the audio to keep a copy.",
         RecordingProblem.NoWordsFound => "The audio is stored, but the server heard no words in it. Listen to it to check, or try again.",
+        RecordingProblem.ProviderUnavailable => "The audio is stored, but the provider that makes the text did not answer. The server tries again on its own. If it keeps failing, ask an Admin to check the provider.",
+        RecordingProblem.ProviderRefused => "The audio is stored, but the provider that makes the text refused it. Ask an Admin to check the key, the model, and the limits of the provider, then try again.",
+        RecordingProblem.ProviderBadAnswer => "The audio is stored, but the provider that makes the text gave an answer that the server cannot read. Ask an Admin to check the model of the provider, then try again.",
+        RecordingProblem.ProviderKeyUnreadable => "The audio is stored, but this server cannot read the key of the provider that makes the text. Ask an Admin to enter the key again, then try again.",
         _ => null,
     };
 
