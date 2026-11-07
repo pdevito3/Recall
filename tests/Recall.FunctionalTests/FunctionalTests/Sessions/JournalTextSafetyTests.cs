@@ -12,6 +12,47 @@ using TestUtilities;
 public class JournalTextSafetyTests : TestBase
 {
     [Test]
+    [Arguments("javascript:alert(1)")]
+    [Arguments("JaVa\tScRiPt:alert(1)")]
+    [Arguments(" data:text/html,x")]
+    [Arguments("vbscript:x")]
+    public async Task a_draft_with_a_link_that_no_page_may_open_is_refused_and_changes_nothing(string address)
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        var document = """{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"click","marks":[{"type":"link","attrs":{"href":ADDRESS}}]}]}]}""".Replace("ADDRESS", System.Text.Json.JsonSerializer.Serialize(address));
+
+        // Act
+        var raw = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Draft(session.Id), new { text = document, baseRevision = 0, savedAt = JournalScenario.Morning });
+        var cleaned = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Cleaned(session.Id), new { text = document, baseRevision = 0, savedAt = JournalScenario.Morning });
+
+        // Assert
+        raw.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        cleaned.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        var stored = await ExecuteDbContextAsync(db => db.Sessions.IgnoreQueryFilters().SingleAsync(s => s.Id == session.Id));
+        stored.Raw.Text.ShouldNotContain("click");
+        stored.Cleaned.Text.ShouldNotContain("click");
+    }
+
+    [Test]
+    public async Task a_draft_with_a_web_link_saves()
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        const string document = """{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"site","marks":[{"type":"link","attrs":{"href":"https://example.com/a:b"}}]},{"type":"text","text":" and "},{"type":"text","text":"note","marks":[{"type":"link","attrs":{"href":"/sessions/x:1"}}]}]}]}""";
+
+        // Act
+        var cleaned = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Cleaned(session.Id), new { text = document, baseRevision = 0, savedAt = JournalScenario.Morning });
+
+        // Assert
+        cleaned.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Test]
     [Property("Rule", "SES-19")]
     public async Task no_journal_text_reaches_a_log_a_span_or_an_audit_value_through_a_write_route()
     {

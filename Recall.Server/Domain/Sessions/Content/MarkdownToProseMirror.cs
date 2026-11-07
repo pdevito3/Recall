@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json.Nodes;
 using Markdig;
 using Markdig.Extensions.EmphasisExtras;
@@ -18,8 +17,11 @@ namespace Recall.Server.Domain.Sessions.Content;
 /// MentionInsertion, never here.) The AI is never asked to emit schema-valid editor JSON - it emits
 /// markdown and the server converts here. No DB, no network.
 ///
-/// Unsupported markdown never throws: it degrades to the nearest supported node. The degrade choices
-/// are documented inline at each call site.
+/// Unsupported markdown never throws: it degrades to the nearest supported node. The rule for each input: each word of
+/// the markdown is in the document, as text, as the address of a link, or as the language of a code block. Two things are
+/// not words: the number of a list item after the first, and an HTML entity, which becomes its character.
+/// <see cref="MarkdownWords"/> checks the rule on each conversion, and a document that breaks it gives way to the source
+/// as text. So a person can see the marks of the source, and cannot lose a word.
 /// </summary>
 public static class MarkdownToProseMirror
 {
@@ -51,12 +53,20 @@ public static class MarkdownToProseMirror
         foreach (var block in parsed)
             AppendBlock(content, block);
 
-        return doc;
+        return MarkdownWords.Keeps(markdown, parsed, doc) ? doc : SourceAsText(markdown);
+    }
+
+    private static JsonObject SourceAsText(string markdown)
+    {
+        var content = new JsonArray();
+        foreach (var line in markdown.Split('\n'))
+            AddParagraphFromText(content, line.TrimEnd('\r'));
+        return new JsonObject { ["type"] = "doc", ["content"] = content };
     }
 
     /// <summary>
     /// Converts markdown to the JSON of the canonical Content doc node. Never throws. The parser and the JSON writer each
-    /// refuse very deep nesting, and a model can answer with it, so such words become one paragraph.
+    /// refuse very deep nesting, and a model can answer with it, so such words stay as the source.
     /// </summary>
     public static string ConvertToJson(string? markdown)
     {
@@ -66,8 +76,7 @@ public static class MarkdownToProseMirror
         }
         catch (Exception fault) when (fault is ArgumentException or InvalidOperationException)
         {
-            var paragraph = new JsonObject { ["type"] = "paragraph", ["content"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = markdown }) };
-            return new JsonObject { ["type"] = "doc", ["content"] = new JsonArray(paragraph) }.ToJsonString(PersonMentions.KeepWords);
+            return SourceAsText(markdown!).ToJsonString(PersonMentions.KeepWords);
         }
     }
 
@@ -102,27 +111,34 @@ public static class MarkdownToProseMirror
                 target.Add(new JsonObject { ["type"] = "horizontalRule" });
                 break;
 
-            // Raw HTML block degrades to a paragraph carrying its literal text, so words survive.
+            // Raw HTML block degrades to a paragraph carrying its literal text.
             case HtmlBlock html:
                 AddParagraphFromText(target, RawLines(html));
                 break;
 
-            // Tables (extension) degrade to a paragraph per row, cells joined by spaces - keeps the
-            // words and avoids dropping content, without inventing a table node we don't support.
+            // Tables (extension) degrade to a paragraph per row, cells joined by spaces, without inventing a table node we
+            // don't support.
             case Table table:
                 AppendTableAsParagraphs(target, table);
                 break;
 
-            // Any other container we don't model (e.g. footnotes): recurse so nested supported
-            // blocks still surface; anything truly unknown is skipped.
+            // A definition has no place in the schema, and its label and address can be the words of a person.
+            case LinkReferenceDefinition definition:
+                AddParagraphFromText(target, $"[{definition.Label}]: {definition.Url}{(string.IsNullOrEmpty(definition.Title) ? string.Empty : $" \"{definition.Title}\"")}");
+                break;
+
+            // Any other container we don't model: recurse so nested supported blocks still surface.
             case ContainerBlock container:
                 foreach (var child in container)
                     AppendBlock(target, child);
                 break;
 
-            // A leaf block we don't recognize to paragraph of its raw text, never thrown away.
-            case LeafBlock leaf when leaf.Inline is not null:
+            case LeafBlock { Inline: not null } leaf:
                 target.Add(Paragraph(leaf.Inline));
+                break;
+
+            case LeafBlock leaf:
+                AddParagraphFromText(target, RawLines(leaf));
                 break;
         }
     }
@@ -142,12 +158,20 @@ public static class MarkdownToProseMirror
     private static JsonObject Paragraph(ContainerInline? inline) =>
         new() { ["type"] = "paragraph", ["content"] = Inlines(inline) };
 
-    private static JsonObject Blockquote(QuoteBlock quote)
+    // The schema of a quote and of a list item needs a block, and "-" and ">" alone have none.
+    private static JsonArray BlocksOf(ContainerBlock container)
     {
         var content = new JsonArray();
-        foreach (var child in quote)
+        foreach (var child in container)
             AppendBlock(content, child);
-        return new JsonObject { ["type"] = "blockquote", ["content"] = content };
+        if (content.Count == 0)
+            content.Add(new JsonObject { ["type"] = "paragraph", ["content"] = new JsonArray() });
+        return content;
+    }
+
+    private static JsonObject Blockquote(QuoteBlock quote)
+    {
+        return new JsonObject { ["type"] = "blockquote", ["content"] = BlocksOf(quote) };
     }
 
     private static JsonObject List(ListBlock list)
@@ -164,22 +188,16 @@ public static class MarkdownToProseMirror
         {
             if (isTaskList)
             {
-                var itemContent = new JsonArray();
-                foreach (var inner in itemBlock)
-                    AppendBlock(itemContent, inner);
                 items.Add(new JsonObject
                 {
                     ["type"] = "taskItem",
                     ["attrs"] = new JsonObject { ["checked"] = TaskItemChecked(itemBlock) },
-                    ["content"] = itemContent,
+                    ["content"] = BlocksOf(itemBlock),
                 });
             }
             else
             {
-                var itemContent = new JsonArray();
-                foreach (var inner in itemBlock)
-                    AppendBlock(itemContent, inner); // paragraphs + nested lists nest inside the listItem
-                items.Add(new JsonObject { ["type"] = "listItem", ["content"] = itemContent });
+                items.Add(new JsonObject { ["type"] = "listItem", ["content"] = BlocksOf(itemBlock) });
             }
         }
 
@@ -211,12 +229,16 @@ public static class MarkdownToProseMirror
 
     private static JsonObject CodeBlockNode(CodeBlock code)
     {
-        var text = string.Join("\n", code.Lines.Lines.Take(code.Lines.Count).Select(l => l.ToString()));
-        return new JsonObject
+        var text = RawLines(code);
+        var node = new JsonObject
         {
             ["type"] = "codeBlock",
-            ["content"] = new JsonArray { Text(text) },
+            // The schema refuses an empty text node.
+            ["content"] = new JsonArray(text.Length > 0 ? [Text(text)] : []),
         };
+        if (code is FencedCodeBlock { Info: { Length: > 0 } language })
+            node["attrs"] = new JsonObject { ["language"] = language };
+        return node;
     }
 
     private static void AppendTableAsParagraphs(JsonArray target, Table table)
@@ -226,22 +248,43 @@ public static class MarkdownToProseMirror
             if (rowObj is not TableRow row)
                 continue;
 
-            var sb = new StringBuilder();
-            foreach (var cellObj in row)
+            var line = new JsonArray();
+            foreach (var cell in row.OfType<TableCell>())
+                AppendInlinesOf(line, cell);
+            if (line.Count > 0)
+                target.Add(new JsonObject { ["type"] = "paragraph", ["content"] = line });
+        }
+    }
+
+    // Each cell of a row, or each block of a grid cell, is one run of inlines, with a space between two runs.
+    private static void AppendInlinesOf(JsonArray line, ContainerBlock container)
+    {
+        foreach (var child in container)
+        {
+            var run = new JsonArray();
+            switch (child)
             {
-                if (cellObj is not TableCell cell)
+                case ContainerBlock inner:
+                    AppendInlinesOf(line, inner);
                     continue;
-                var cellText = PlainTextOfBlocks(cell);
-                if (cellText.Length == 0)
-                    continue;
-                if (sb.Length > 0)
-                    sb.Append(' ');
-                sb.Append(cellText);
+                case LeafBlock { Inline: { } inlines }:
+                    foreach (var inline in inlines)
+                        AppendInline(run, inline, marks: null);
+                    break;
+                case LeafBlock leaf:
+                    AddText(run, RawLines(leaf), marks: null);
+                    break;
             }
 
-            var line = sb.ToString().Trim();
-            if (line.Length > 0)
-                AddParagraphFromText(target, line);
+            if (run.Count == 0)
+                continue;
+            if (line.Count > 0)
+                line.Add(Text(" "));
+            foreach (var node in run.ToArray())
+            {
+                run.Remove(node);
+                line.Add(node);
+            }
         }
     }
 
@@ -300,8 +343,7 @@ public static class MarkdownToProseMirror
                 //   ~      to strikethrough (DelimiterChar '~', count 2)  to strike
                 //   =      to marked        (DelimiterChar '=', count 2)  to highlight
                 //   +      to inserted      (DelimiterChar '+', count 2)  to underline
-                // An unrecognized delimiter char carries NO mark - we just recurse the children as
-                // plain text so its words survive (this is the safe degrade for any future extra).
+                // An unrecognized delimiter char carries NO mark, and its children stay as plain text.
                 var mark = emphasis.DelimiterChar switch
                 {
                     '*' or '_' => Mark.Of(emphasis.DelimiterCount >= 2 ? "bold" : "italic"),
@@ -317,40 +359,64 @@ public static class MarkdownToProseMirror
                 break;
             }
 
-            // Links emit a link mark on their visible text (matching tiptap's Link default attrs);
-            // images degrade to their alt text (no image node in the set). Either way the words survive.
+            // A link emits a link mark on its visible text (matching tiptap's Link default attrs). An image has no node in
+            // the set, so its alt text does the same.
             case LinkInline link:
-            {
-                if (link.IsImage)
-                {
-                    AddText(target, PlainTextOf(link), marks); // alt text (the link's children)
-                }
-                else
-                {
-                    var nested = MarkSet.With(marks, Mark.Link(link.Url));
-                    foreach (var child in link)
-                        AppendInline(target, child, nested);
-                }
+                AppendLink(target, link, link.Url, link.Title, marks);
                 break;
-            }
+
+            case AutolinkInline autolink:
+                AppendAddress(target, autolink.Url, autolink.IsEmail ? $"mailto:{autolink.Url}" : autolink.Url, marks);
+                break;
+
+            case HtmlEntityInline entity:
+                AddText(target, entity.Transcoded.ToString(), marks);
+                break;
+
+            // An unmatched "[" stays a delimiter. Its literal form and the inlines after it are the words of the person.
+            case DelimiterInline delimiter:
+                AddText(target, delimiter.ToLiteral(), marks);
+                foreach (var child in delimiter)
+                    AppendInline(target, child, marks);
+                break;
 
             // Raw inline HTML (e.g. <span>) degrades to its literal text rather than being dropped.
             case HtmlInline html:
                 AddText(target, html.Tag, marks);
                 break;
 
-            // Any other container inline (e.g. an extension wrapper) - recurse to keep its content.
+            // Any other container inline (e.g. an extension wrapper): recurse.
             case ContainerInline other:
                 foreach (var child in other)
                     AppendInline(target, child, marks);
                 break;
 
-            // Unknown leaf inline to its plain text, never thrown away.
-            default:
-                AddText(target, PlainTextOf(inline), marks);
-                break;
+            // MarkdownWords catches a leaf inline with words that no case here knows.
         }
     }
+
+    private static void AppendLink(JsonArray target, ContainerInline link, string? url, string? title, MarkSet? marks)
+    {
+        var kept = target.Count;
+        var nested = LinkAddress.IsAllowed(url) ? MarkSet.With(marks, Mark.Link(url)) : marks;
+        foreach (var child in link)
+            AppendInline(target, child, nested);
+
+        // A link with no visible text, or an address that no page may open, keeps its address as text.
+        if (!string.IsNullOrEmpty(url))
+        {
+            if (target.Count == kept)
+                AppendAddress(target, url, url, marks);
+            else if (!LinkAddress.IsAllowed(url))
+                AddText(target, $" ({url})", marks);
+        }
+
+        if (!string.IsNullOrEmpty(title))
+            AddText(target, $" \"{title}\"", marks);
+    }
+
+    private static void AppendAddress(JsonArray target, string text, string url, MarkSet? marks)
+        => AddText(target, text, LinkAddress.IsAllowed(url) ? MarkSet.With(marks, Mark.Link(url)) : marks);
 
     private static void AddText(JsonArray target, string? text, MarkSet? marks)
     {
@@ -368,60 +434,8 @@ public static class MarkdownToProseMirror
         return node;
     }
 
-    // Flatten an inline subtree to plain text (used for alt text, table cells, unknown inlines).
-    private static string PlainTextOf(Inline inline)
-    {
-        switch (inline)
-        {
-            case TaskList:
-                return string.Empty; // the "[ ]"/"[x]" marker is structural, not words
-            case LiteralInline literal:
-                return literal.Content.ToString();
-            case CodeInline code:
-                return code.Content;
-            case LineBreakInline:
-                return " ";
-            case HtmlInline html:
-                return html.Tag;
-            case ContainerInline container:
-                var sb = new StringBuilder();
-                foreach (var child in container)
-                    sb.Append(PlainTextOf(child));
-                return sb.ToString();
-            default:
-                return string.Empty;
-        }
-    }
-
-    // Flatten a block subtree (e.g. a table cell's paragraphs) to plain text.
-    private static string PlainTextOfBlocks(ContainerBlock container)
-    {
-        var sb = new StringBuilder();
-        foreach (var child in container)
-        {
-            switch (child)
-            {
-                case LeafBlock leaf when leaf.Inline is not null:
-                    if (sb.Length > 0)
-                        sb.Append(' ');
-                    sb.Append(PlainTextOf(leaf.Inline));
-                    break;
-                case ContainerBlock inner:
-                    var nested = PlainTextOfBlocks(inner);
-                    if (nested.Length > 0)
-                    {
-                        if (sb.Length > 0)
-                            sb.Append(' ');
-                        sb.Append(nested);
-                    }
-                    break;
-            }
-        }
-        return sb.ToString().Trim();
-    }
-
     private static string RawLines(LeafBlock block) =>
-        string.Join("\n", block.Lines.Lines.Take(block.Lines.Count).Select(l => l.ToString()));
+        block.Lines.Lines is null ? string.Empty : string.Join("\n", block.Lines.Lines.Take(block.Lines.Count).Select(l => l.ToString()));
 
     // ---- mark model ---------------------------------------------------------------------------
 
