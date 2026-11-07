@@ -91,5 +91,5 @@ BackWave is under the PolyForm Shield License 1.0.0, which needs each copy to ca
 
 - It runs on the queues of the Cleanup group, on the queue that `CleanupQueues.Pick` gives the tenant. A hung provider of one tenant holds only that queue, and the work of another tenant goes to another queue. `CleanupQueues.UnfinishedAsync` counts the Cleanups and the cloud transcriptions of each tenant together.
 - Each part that comes back is saved as a chunk with the sample pointer, so a lease return or a restart sends only the parts after the pointer.
-- A provider that is unavailable leaves the Recording Received with `ProviderUnavailable` and throws `JobSafeTextException`, and the job tries again by rule 7. `Recording.MaxAttemptsWithoutProgress` ends the tries before the ceiling of 10, as Failed with `ProviderUnavailable`.
+- A provider that is unavailable leaves the Recording Received with `ProviderUnavailable` and throws `JobSafeTextException`, and the job tries again by its `[Retry(10, 60, 120, 300, 600, 900)]`, so the first 5 tries cover an outage of 33 minutes. `Recording.MaxAttemptsWithoutProgress` ends the tries before the ceiling of 10, as Failed with `ProviderUnavailable`.
 - The local job stays on the `transcription` queue with its pool of 1. A job of one engine leaves a Recording of the other engine alone.

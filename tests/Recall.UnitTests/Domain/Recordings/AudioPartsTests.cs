@@ -42,6 +42,20 @@ public class AudioPartsTests
     }
 
     [Test]
+    [Arguments(200_001L)]
+    [Arguments(200_000L + AudioParts.MinPartSamples)]
+    public void a_window_leaves_at_least_the_shortest_part_after_its_end(long rest)
+    {
+        // Arrange and act
+        var window = AudioParts.WindowBeforeLimit(1_000, 1_000 + rest, 200_000);
+
+        // Assert
+        window.ShouldNotBeNull();
+        (1_000 + rest - (window.Value.From + window.Value.Length)).ShouldBeGreaterThanOrEqualTo(AudioParts.MinPartSamples);
+        (window.Value.From - 1_000).ShouldBeGreaterThanOrEqualTo(AudioParts.MinPartSamples);
+    }
+
+    [Test]
     public void a_cut_falls_in_the_middle_of_the_quietest_frame()
     {
         // Arrange

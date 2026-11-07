@@ -19,16 +19,25 @@ public static class AudioParts
     /// <summary>The last 5 s before a limit, where a cut can fall.</summary>
     public const int WindowSamples = 5 * Recording.SamplesPerSecond;
 
+    /// <summary>OpenAI refuses a file under 0.1 s, so no part is shorter than 1 s when the limit leaves room for that.</summary>
+    public const int MinPartSamples = Recording.SamplesPerSecond;
+
     public static long MaxSamplesIn(long maxFileBytes) => (maxFileBytes - WavHeaderBytes) / BytesPerSample;
 
-    /// <summary>The window to read before a cut, or null when the rest from <paramref name="start"/> fits in one part.</summary>
+    /// <summary>
+    /// The window to read before a cut, or null when the rest from <paramref name="start"/> fits in one part. The window ends
+    /// <see cref="MinPartSamples"/> before the end of the audio, so a quiet end does not leave a last part that a provider refuses.
+    /// </summary>
     public static (long From, int Length)? WindowBeforeLimit(long start, long total, long maxSamples)
     {
         if (total - start <= maxSamples)
             return null;
 
         var length = (int)Math.Min(WindowSamples, maxSamples / 2);
-        return (start + maxSamples - length, length);
+        var end = Math.Min(start + maxSamples, total - MinPartSamples);
+        if (end - length < start + MinPartSamples)
+            end = start + maxSamples;
+        return (end - length, length);
     }
 
     /// <summary>The end of a part: the middle of the quietest frame of the window. The later frame wins a tie, so a part is as long as it can be.</summary>

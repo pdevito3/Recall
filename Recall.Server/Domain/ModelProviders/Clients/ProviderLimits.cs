@@ -26,6 +26,12 @@ public sealed record ProviderLimits
     /// <summary>One call with one part of audio: the upload, the wait, and the answer.</summary>
     public TimeSpan AudioCall { get; init; } = TimeSpan.FromMinutes(15);
 
+    /// <summary>
+    /// The output limit of each OpenAI model that bills tokens for audio: <c>gpt-4o-transcribe</c>, <c>gpt-4o-mini-transcribe</c>,
+    /// and <c>gpt-4o-transcribe-diarize</c>. An answer with this many tokens was cut, and its <c>text</c> still looks whole.
+    /// </summary>
+    public int AudioOutputTokens { get; init; } = 2_000;
+
     /// <summary>The limits of the HTTP client that sends audio. Only the wait for a read differs.</summary>
     public ProviderLimits ForAudio() => this with { Idle = AudioIdle };
 

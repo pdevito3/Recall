@@ -37,9 +37,11 @@ public sealed class TranscribeRecordingJob(
     /// <summary>
     /// A provider can hang for minutes, so this job runs in the queues of the provider calls, one queue for each tenant at a time
     /// (<see cref="CleanupQueues.Pick"/>), and a hung provider of one tenant holds no slot of another. A provider that did not
-    /// answer leaves the Recording waiting with its audio, and the job tries again by the retry policy of its group.
+    /// answer leaves the Recording waiting with its audio, and the job tries again after 1, 2, 5, 10, and 15 minutes, so an outage
+    /// of half an hour fails no Recording before <see cref="Recording.MaxAttemptsWithoutProgress"/> ends the tries.
     /// </summary>
     [Job(CloudWireName, Queue = CleanupQueues.First)]
+    [Retry(10, 60, 120, 300, 600, 900)]
     public Task TranscribeRecordingInCloudAsync(string recordingId, string userId, string tenantId, CancellationToken cancellationToken)
         => TranscribeAsync(TranscriptionEngineKind.Cloud, recordingId, userId, tenantId, cancellationToken);
 

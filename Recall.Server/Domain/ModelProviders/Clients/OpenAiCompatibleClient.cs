@@ -62,8 +62,8 @@ public sealed class OpenAiCompatibleClient(IHttpClientFactory httpClientFactory,
     /// One part of the audio as a WAV file, in the multipart form of the OpenAI reference. Only <c>json</c> is a format that each
     /// transcription model of OpenAI takes, and its <c>text</c> holds the words. A <c>text</c> that is empty is a part with no speech.
     /// </summary>
-    public async Task<ProviderReply<string>> TranscribeAsync(ModelEndpoint endpoint, string model, byte[] wav, CancellationToken cancellationToken)
-        => await ProviderCall.RunAsync<string>(limits.AudioCall, async limit =>
+    public async Task<ProviderReply<HeardAudio>> TranscribeAsync(ModelEndpoint endpoint, string model, byte[] wav, CancellationToken cancellationToken)
+        => await ProviderCall.RunAsync<HeardAudio>(limits.AudioCall, async limit =>
         {
             using var request = RequestTo(endpoint, HttpMethod.Post, "audio/transcriptions");
             var form = new MultipartFormDataContent();
@@ -77,11 +77,11 @@ public sealed class OpenAiCompatibleClient(IHttpClientFactory httpClientFactory,
             using var response = await httpClientFactory.CreateClient(ModelProviderHttp.AudioClientName).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, limit);
             var body = await response.Content.ReadAsStringAsync(limit);
             if (!response.IsSuccessStatusCode)
-                return new ProviderReply<string>.Failed(ProviderFailureText.ForStatus(endpoint.Kind, (int)response.StatusCode, body, endpoint.ApiKey));
+                return new ProviderReply<HeardAudio>.Failed(ProviderFailureText.ForStatus(endpoint.Kind, (int)response.StatusCode, body, endpoint.ApiKey));
 
-            return JsonSerializer.Deserialize<Transcription>(body)?.Text is { } text
-                ? new ProviderReply<string>.Answered(text)
-                : new ProviderReply<string>.Failed(ProviderFailureText.Unusable());
+            return JsonSerializer.Deserialize<Transcription>(body) is { Text: { } text } transcription
+                ? new ProviderReply<HeardAudio>.Answered(new HeardAudio(text, transcription.Usage is { Type: "tokens", OutputTokens: { } tokens } && tokens >= limits.AudioOutputTokens))
+                : new ProviderReply<HeardAudio>.Failed(ProviderFailureText.Unusable());
         }, cancellationToken);
 
     private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -152,7 +152,13 @@ public sealed class OpenAiCompatibleClient(IHttpClientFactory httpClientFactory,
         return request;
     }
 
-    private sealed record Transcription([property: JsonPropertyName("text")] string? Text);
+    private sealed record Transcription(
+        [property: JsonPropertyName("text")] string? Text,
+        [property: JsonPropertyName("usage")] TranscriptionUsage? Usage = null);
+
+    private sealed record TranscriptionUsage(
+        [property: JsonPropertyName("type")] string? Type,
+        [property: JsonPropertyName("output_tokens")] long? OutputTokens);
 
     private sealed record ModelList([property: JsonPropertyName("data")] IReadOnlyList<ModelRow>? Data);
 
@@ -177,3 +183,6 @@ public sealed class OpenAiCompatibleClient(IHttpClientFactory httpClientFactory,
         [property: JsonPropertyName("delta")] ChoiceMessage? Delta,
         [property: JsonPropertyName("finish_reason")] string? FinishReason);
 }
+
+/// <summary>The words of one part of audio. <paramref name="Cut"/> means that the model stopped at its output limit, so words are missing.</summary>
+public sealed record HeardAudio(string Text, bool Cut);

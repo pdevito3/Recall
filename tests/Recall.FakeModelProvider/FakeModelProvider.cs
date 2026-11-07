@@ -94,6 +94,15 @@ public sealed class FakeBehavior
 
     /// <summary>With <see cref="FakeMode.Status"/> or <see cref="FakeMode.Hold"/> on audio, only the first this many audio calls take the mode, and the rest answer.</summary>
     public int? AudioFaultCalls { get; set; }
+
+    /// <summary>
+    /// The output limit of a model such as <c>gpt-4o-transcribe</c>, which documents 2,000 tokens. The fake speaks
+    /// <see cref="FakeModelProvider.TokensPerSecond"/>, bills tokens, and cuts the text of a part that needs more.
+    /// </summary>
+    public int? AudioOutputTokens { get; set; }
+
+    /// <summary>OpenAI refuses a file under 0.1 s with a 400.</summary>
+    public double MinAudioSeconds { get; set; } = 0.1;
 }
 
 /// <summary>
@@ -140,6 +149,12 @@ public sealed class FakeModelProvider : IAsyncDisposable
 
     /// <summary>Each audio file that the route of transcriptions took, in the order of arrival.</summary>
     public ConcurrentQueue<byte[]> AudioFiles { get; } = new();
+
+    /// <summary>The <c>model</c> field of each audio file that the route took, in the same order.</summary>
+    public ConcurrentQueue<string> AudioModels { get; } = new();
+
+    /// <summary>Fast speech: about 250 words a minute at about 1.4 tokens a word.</summary>
+    public const double TokensPerSecond = 6;
 
     private static readonly string[] DefaultTopics = ["work"];
     private static readonly string[] DefaultMoods = ["calm"];
@@ -520,6 +535,11 @@ public sealed class FakeModelProvider : IAsyncDisposable
         using var bytes = new MemoryStream();
         await file.CopyToAsync(bytes, context.RequestAborted);
         AudioFiles.Enqueue(bytes.ToArray());
+        if (Math.Max(0, bytes.Length - 44) / 2 / 16_000.0 < Behavior.MinAudioSeconds)
+        {
+            await WriteCompatibleErrorAsync(context, 400, $"Audio file is too short. Minimum audio length is {Behavior.MinAudioSeconds} seconds.");
+            return;
+        }
 
         var faulted = Behavior.AudioFaultCalls is not { } faults || call <= faults;
         switch (Behavior.Mode)
@@ -539,10 +559,26 @@ public sealed class FakeModelProvider : IAsyncDisposable
                 return;
         }
 
+        AudioModels.Enqueue(form["model"].ToString());
         var seconds = Math.Max(0, bytes.Length - 44) / 2 / 16_000.0;
-        var text = Behavior.Reply ?? $"Part {AudioFiles.Count} heard {seconds.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)} seconds.";
-        await context.Response.WriteAsJsonAsync(new { text, usage = new { type = "duration", seconds = (int)Math.Ceiling(seconds) } });
+        var text = Behavior.Reply ?? $"Part {AudioFiles.Count} heard {Seconds(seconds)} seconds.";
+        if (Behavior.AudioOutputTokens is not { } limit)
+        {
+            await context.Response.WriteAsJsonAsync(new { text, usage = new { type = "duration", seconds = (int)Math.Ceiling(seconds) } });
+            return;
+        }
+
+        var tokens = (int)Math.Ceiling(seconds * TokensPerSecond);
+        if (tokens > limit)
+        {
+            tokens = limit;
+            text = $"Part {AudioFiles.Count} heard {Seconds((double)limit / TokensPerSecond)} of {Seconds(seconds)} seconds";
+        }
+
+        await context.Response.WriteAsJsonAsync(new { text, usage = new { type = "tokens", input_tokens = (int)Math.Ceiling(seconds * 10), output_tokens = tokens, total_tokens = tokens } });
     }
+
+    private static string Seconds(double seconds) => seconds.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
 
     private async Task CompatibleCompletion(HttpContext context)
     {

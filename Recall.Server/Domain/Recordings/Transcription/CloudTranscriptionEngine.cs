@@ -12,6 +12,9 @@ using ModelProviders.Clients;
 public sealed class CloudTranscriptionEngine(WorkAudio workAudio, OpenAiCompatibleClient client, IOptions<TranscriptionOptions> options)
     : ITranscriptionEngine
 {
+    /// <summary>A cut answer of a shorter part is no speech that a model can hear, so the part is not split again.</summary>
+    public const int SmallestPartToSplit = 4 * Recording.SamplesPerSecond;
+
     public TranscriptionEngineKind Kind => TranscriptionEngineKind.Cloud;
 
     public bool IsReady => true;
@@ -20,22 +23,34 @@ public sealed class CloudTranscriptionEngine(WorkAudio workAudio, OpenAiCompatib
     {
         var provider = input.Provider ?? throw new InvalidOperationException("A cloud transcription needs its provider.");
         var wav = await workAudio.PrepareAsync(input, cancellationToken);
-        var maxSamples = AudioParts.MaxSamplesIn(options.Value.CloudPartBytes);
+        var maxSamples = Math.Min(AudioParts.MaxSamplesIn(options.Value.CloudPartBytes), options.Value.CloudPartSeconds * (long)Recording.SamplesPerSecond);
 
         using var audio = PcmAudio.Open(wav);
         var start = input.StartSample;
+        var limit = maxSamples;
         while (start < audio.Samples)
         {
-            var end = audio.EndOfPart(start, maxSamples);
+            var end = audio.EndOfPart(start, limit);
             var part = AudioParts.WavOf(audio.ReadBytes(start, end));
-            var reply = await client.TranscribeAsync(provider.Endpoint, provider.Model, part, cancellationToken);
-            yield return reply switch
+            var heard = await client.TranscribeAsync(provider.Endpoint, provider.Model, part, cancellationToken) switch
             {
-                ProviderReply<string>.Answered answered => new TranscriptChunk(end, audio.Samples, answered.Value),
-                ProviderReply<string>.Failed failed => throw FailureOf(failed.Failure),
+                ProviderReply<HeardAudio>.Answered answered => answered.Value,
+                ProviderReply<HeardAudio>.Failed failed => throw FailureOf(failed.Failure),
                 _ => throw new InvalidOperationException(),
             };
+
+            if (heard.Cut)
+            {
+                // The words of a cut part are missing, so none of them is saved, and the part goes again as two.
+                limit = end - start >= SmallestPartToSplit
+                    ? (end - start) / 2
+                    : throw new TranscriptionEngineException(RecordingProblem.ProviderBadAnswer);
+                continue;
+            }
+
+            yield return new TranscriptChunk(end, audio.Samples, heard.Text);
             start = end;
+            limit = maxSamples;
         }
     }
 

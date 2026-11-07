@@ -174,7 +174,7 @@ public class CloudTranscriptionTests : TestBase
     {
         // Arrange
         await using var scenario = await ChosenAsync();
-        const int partSamples = Recording.SamplesPerSecond;
+        const int partSamples = 3 * Recording.SamplesPerSecond;
         scenario.Fake.Behavior.MaxAudioBytes = PartBytesFor(partSamples);
         var samples = Speech(partSamples + extraSamples);
         var recording = await RecordingWithAudioAsync(scenario, samples);
@@ -190,7 +190,7 @@ public class CloudTranscriptionTests : TestBase
 
     [Test]
     [Property("Rule", "REC-18")]
-    public async Task the_default_part_fits_the_25_mb_that_openai_and_groq_take()
+    public async Task the_default_part_holds_two_minutes_and_fits_the_25_mb_that_openai_and_groq_take()
     {
         // Arrange
         await using var scenario = await ChosenAsync();
@@ -203,8 +203,8 @@ public class CloudTranscriptionTests : TestBase
 
         // Assert
         scenario.Fake.Behavior.MaxAudioBytes.ShouldBe(25_000_000);
-        scenario.Fake.AudioCalls.ShouldBe(2);
-        scenario.Fake.AudioFiles.ShouldAllBe(file => file.Length <= 25_000_000);
+        scenario.Fake.AudioCalls.ShouldBe(7);
+        scenario.Fake.AudioFiles.ShouldAllBe(file => file.Length <= PartBytesFor(120 * Recording.SamplesPerSecond));
         ReceivedPcm(scenario.Fake).ShouldBe(PcmOf(samples));
         (await scenario.Client.GetRecordingAsync(recording.Id)).Status.ShouldBe(nameof(RecordingStatus.Transcribed));
     }
@@ -617,5 +617,222 @@ public class CloudTranscriptionTests : TestBase
         jobs.ShouldNotContain(marker);
         jobs.ShouldNotContain(scenario.ApiKey);
         (await CleanupScenario.DumpOfTableAsync("recordings")).ShouldNotContain(marker);
+    }
+
+    [Test]
+    [Property("Rule", "REC-19")]
+    public void a_provider_that_is_down_for_half_an_hour_fails_no_recording()
+    {
+        // Arrange
+        var registration = Services.GetRequiredService<BackWave.Jobs.JobRegistry>().Registrations.Single(r => r.WireName == TranscribeRecordingJob.CloudWireName);
+
+        // Act
+        var waits = registration.Retry.ShouldNotBeNull().BackoffByAttempt.Take(Recording.MaxAttemptsWithoutProgress).ToArray();
+
+        // Assert
+        waits.Aggregate(TimeSpan.Zero, (sum, wait) => sum + wait).ShouldBeGreaterThanOrEqualTo(TimeSpan.FromMinutes(30));
+    }
+
+    private static double HeardSeconds(string line) => double.Parse(line.Split(' ')[3], System.Globalization.CultureInfo.InvariantCulture);
+
+    [Test]
+    [Property("Rule", "REC-18")]
+    public async Task a_model_with_an_output_limit_of_2000_tokens_hears_each_word_of_13_minutes_of_fast_speech()
+    {
+        // Arrange
+        await using var scenario = await ChosenAsync();
+        scenario.Fake.Behavior.AudioOutputTokens = 2_000;
+        var samples = Speech((int)AudioParts.MaxSamplesIn(new TranscriptionOptions().CloudPartBytes) + 1);
+        var recording = await RecordingWithAudioAsync(scenario, samples);
+
+        // Act
+        await RunCloudAsync(JobWith(CloudEngine()), scenario, recording);
+
+        // Assert
+        ReceivedPcm(scenario.Fake).ShouldBe(PcmOf(samples));
+        var lines = (await PlainRawAsync(scenario.Client, recording.SessionId)).Split('\n');
+        lines.ShouldAllBe(line => line.EndsWith(" seconds.") && !line.Contains(" of "));
+        lines.Sum(HeardSeconds).ShouldBe((double)samples.Length / Recording.SamplesPerSecond, lines.Length * 0.01);
+        (await scenario.Client.GetRecordingAsync(recording.Id)).Status.ShouldBe(nameof(RecordingStatus.Transcribed));
+    }
+
+    [Test]
+    [Property("Rule", "REC-18")]
+    public async Task a_cut_answer_is_never_saved_and_its_part_goes_again_in_two()
+    {
+        // Arrange
+        await using var scenario = await ChosenAsync();
+        const int outputTokens = (int)(10 * FakeModelProvider.TokensPerSecond);
+        scenario.Fake.Behavior.AudioOutputTokens = outputTokens;
+        var samples = Speech(30 * Recording.SamplesPerSecond);
+        var recording = await RecordingWithAudioAsync(scenario, samples);
+        var engine = CloudEngine(PartBytesFor(16 * Recording.SamplesPerSecond), new ProviderLimits { AudioOutputTokens = outputTokens });
+
+        // Act
+        await RunCloudAsync(JobWith(engine), scenario, recording);
+
+        // Assert
+        var lines = (await PlainRawAsync(scenario.Client, recording.SessionId)).Split('\n');
+        lines.ShouldAllBe(line => line.EndsWith(" seconds.") && !line.Contains(" of "));
+        lines.Sum(HeardSeconds).ShouldBe(30, lines.Length * 0.01);
+        scenario.Fake.AudioCalls.ShouldBeGreaterThan(lines.Length);
+        (await scenario.Client.GetRecordingAsync(recording.Id)).Status.ShouldBe(nameof(RecordingStatus.Transcribed));
+    }
+
+    [Test]
+    [Property("Rule", "REC-19")]
+    public async Task a_cut_answer_of_a_short_part_fails_the_recording_with_its_reason_and_keeps_the_audio()
+    {
+        // Arrange
+        await using var scenario = await ChosenAsync();
+        scenario.Fake.Behavior.AudioOutputTokens = 1;
+        var recording = await RecordingWithAudioAsync(scenario, Speech(5 * Recording.SamplesPerSecond));
+
+        // Act
+        await RunCloudAsync(JobWith(CloudEngine(limits: new ProviderLimits { AudioOutputTokens = 1 })), scenario, recording);
+
+        // Assert
+        var read = await scenario.Client.GetRecordingAsync(recording.Id);
+        read.Status.ShouldBe(nameof(RecordingStatus.Failed));
+        read.Problem.ShouldBe(nameof(RecordingProblem.ProviderBadAnswer));
+        (await PlainRawAsync(scenario.Client, recording.SessionId)).ShouldBeEmpty();
+        await AudioStaysAsync(scenario.Client, recording);
+    }
+
+    [Test]
+    [Property("Rule", "REC-18")]
+    public async Task a_quiet_end_of_the_window_leaves_a_last_part_of_at_least_one_second()
+    {
+        // Arrange
+        await using var scenario = await ChosenAsync();
+        const int partSamples = 10 * Recording.SamplesPerSecond;
+        var samples = Speech(partSamples + 400, (partSamples - AudioParts.FrameSamples, partSamples));
+        var recording = await RecordingWithAudioAsync(scenario, samples);
+
+        // Act
+        await RunCloudAsync(JobWith(CloudEngine(PartBytesFor(partSamples))), scenario, recording);
+
+        // Assert
+        var files = scenario.Fake.AudioFiles.ToArray();
+        files.Length.ShouldBe(2);
+        files.ShouldAllBe(file => file.Length >= PartBytesFor(Recording.SamplesPerSecond) && file.Length <= PartBytesFor(partSamples));
+        ReceivedPcm(scenario.Fake).ShouldBe(PcmOf(samples));
+        (await scenario.Client.GetRecordingAsync(recording.Id)).Status.ShouldBe(nameof(RecordingStatus.Transcribed));
+    }
+
+    [Test]
+    [Property("Rule", "REC-17")]
+    public async Task a_new_model_of_the_same_provider_during_a_run_takes_the_next_part()
+    {
+        // Arrange
+        await using var scenario = await ChosenAsync();
+        const int partSamples = Recording.SamplesPerSecond;
+        const string newModel = "fake-transcribe-2";
+        var samples = Speech(3 * partSamples, (12_000, 12_800), (28_000, 28_800));
+        var recording = await RecordingWithAudioAsync(scenario, samples);
+        var engine = new ActBeforeFirstPartIsSaved(CloudEngine(PartBytesFor(partSamples)), async () =>
+        {
+            scenario.Client.SignInAsAppUser(scenario.Admin.Identifier);
+            (await ChooseAsync(scenario.Client, scenario.Provider.Id, newModel)).StatusCode.ShouldBe(HttpStatusCode.OK);
+            scenario.Client.SignInAsAppUser(scenario.Member.Identifier);
+        });
+
+        // Act
+        await RunCloudAsync(JobWith(engine), scenario, recording);
+
+        // Assert
+        var models = scenario.Fake.AudioModels.ToArray();
+        models[0].ShouldBe(FakeModelProvider.TranscriptionModelId);
+        models.Skip(1).ShouldAllBe(model => model == newModel);
+        models.Length.ShouldBeGreaterThan(1);
+        ReceivedPcm(scenario.Fake).ShouldBe(PcmOf(samples));
+        (await scenario.Client.GetRecordingAsync(recording.Id)).Status.ShouldBe(nameof(RecordingStatus.Transcribed));
+    }
+
+    [Test]
+    [Property("Rule", "REC-17")]
+    public async Task a_new_key_of_the_same_provider_during_a_run_takes_the_next_part()
+    {
+        // Arrange
+        await using var scenario = await ChosenAsync();
+        const int partSamples = Recording.SamplesPerSecond;
+        var recording = await RecordingWithAudioAsync(scenario, Speech(3 * partSamples, (12_000, 12_800), (28_000, 28_800)));
+        var engine = new ActBeforeFirstPartIsSaved(CloudEngine(PartBytesFor(partSamples)), async () =>
+        {
+            scenario.Client.SignInAsAppUser(scenario.Admin.Identifier);
+            var list = (await scenario.Client.GetFromJsonAsync<ModelProviderListDto>(ApiRoutes.ModelProviders.Root)).ShouldNotBeNull();
+            var provider = list.Items.Single(p => p.Id == scenario.Provider.Id);
+            var updated = await scenario.Client.PutAsJsonAsync(ApiRoutes.ModelProviders.GetRecord(provider.Id), new
+            {
+                name = provider.Name,
+                baseUrl = provider.BaseUrl,
+                apiKey = CleanupScenario.NewKey(),
+                model = provider.Model,
+                version = provider.Version,
+            });
+            updated.StatusCode.ShouldBe(HttpStatusCode.OK, await updated.Content.ReadAsStringAsync());
+            scenario.Client.SignInAsAppUser(scenario.Member.Identifier);
+        });
+
+        // Act
+        await RunCloudAsync(JobWith(engine), scenario, recording);
+
+        // Assert
+        scenario.Fake.AudioCalls.ShouldBe(2);
+        var read = await scenario.Client.GetRecordingAsync(recording.Id);
+        read.Status.ShouldBe(nameof(RecordingStatus.Failed));
+        read.Problem.ShouldBe(nameof(RecordingProblem.ProviderRefused));
+        (await PlainRawAsync(scenario.Client, recording.SessionId)).ShouldStartWith("Part 1 heard");
+    }
+
+    [Test]
+    [Property("Rule", "REC-21")]
+    public async Task a_part_that_arrives_after_the_hand_over_to_the_local_engine_is_not_saved()
+    {
+        // Arrange
+        await using var scenario = await ChosenAsync();
+        var recording = await RecordingWithAudioAsync(scenario, Speech(Recording.SamplesPerSecond));
+        var engine = new ActBeforeFirstPartIsSaved(CloudEngine(), async () =>
+        {
+            scenario.Client.SignInAsAppUser(scenario.Admin.Identifier);
+            (await ChooseAsync(scenario.Client, null, null)).StatusCode.ShouldBe(HttpStatusCode.OK);
+            scenario.Client.SignInAsAppUser(scenario.Member.Identifier);
+            await RunCloudAsync(JobWith(CloudEngine()), scenario, recording);
+        });
+
+        // Act
+        await RunCloudAsync(JobWith(engine), scenario, recording);
+
+        // Assert
+        scenario.Fake.AudioCalls.ShouldBe(1);
+        var read = await scenario.Client.GetRecordingAsync(recording.Id);
+        read.Engine.ShouldBe(nameof(TranscriptionEngineKind.Local));
+        read.Status.ShouldBe(nameof(RecordingStatus.Received));
+        (await PlainRawAsync(scenario.Client, recording.SessionId)).ShouldBeEmpty();
+    }
+
+    [Test]
+    [Property("Rule", "REC-18")]
+    public async Task a_part_of_a_second_run_with_other_cuts_joins_only_where_the_saved_text_ends()
+    {
+        // Arrange
+        await using var scenario = await ChosenAsync();
+        var samples = Speech(4 * Recording.SamplesPerSecond, (20_000, 20_800), (44_000, 44_800));
+        var recording = await RecordingWithAudioAsync(scenario, samples);
+        var engine = new ActBeforeFirstPartIsSaved(CloudEngine(PartBytesFor(3 * Recording.SamplesPerSecond)), async () =>
+        {
+            using var stop = new CancellationTokenSource();
+            var second = JobWith(new StopAfterFirstPart(CloudEngine(PartBytesFor(2 * Recording.SamplesPerSecond)), stop));
+            await Should.ThrowAsync<OperationCanceledException>(() => RunCloudAsync(second, scenario, recording, stop.Token));
+        });
+
+        // Act
+        await RunCloudAsync(JobWith(engine), scenario, recording);
+
+        // Assert
+        scenario.Fake.AudioCalls.ShouldBe(2);
+        var lines = (await PlainRawAsync(scenario.Client, recording.SessionId)).Split('\n');
+        lines.Length.ShouldBe(1);
+        lines[0].ShouldStartWith("Part 2 heard");
     }
 }
