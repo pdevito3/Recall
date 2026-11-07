@@ -32,6 +32,8 @@ export type SaveCleanedDraftStatus409 = ValidationProblemDetails;
 
 export type SaveCleanedDraftStatus422 = ValidationProblemDetails;
 
+export type SaveCleanedDraftStatus507 = ProblemDetails;
+
 export type SaveCleanedDraftBody = DraftSaveDto;
 
 export type SaveCleanedDraftOptions = {
@@ -48,6 +50,7 @@ export type SaveCleanedDraftResponses = {
     "404": SaveCleanedDraftStatus404;
     "409": SaveCleanedDraftStatus409;
     "422": SaveCleanedDraftStatus422;
+    "507": SaveCleanedDraftStatus507;
 };
 
 /**

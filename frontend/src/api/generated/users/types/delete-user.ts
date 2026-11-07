@@ -30,6 +30,8 @@ export type DeleteUserStatus409 = ValidationProblemDetails;
 
 export type DeleteUserStatus422 = ValidationProblemDetails;
 
+export type DeleteUserStatus507 = ProblemDetails;
+
 export type DeleteUserOptions = {
     body?: never;
     path: DeleteUserPath;
@@ -44,6 +46,7 @@ export type DeleteUserResponses = {
     "404": DeleteUserStatus404;
     "409": DeleteUserStatus409;
     "422": DeleteUserStatus422;
+    "507": DeleteUserStatus507;
 };
 
 /**

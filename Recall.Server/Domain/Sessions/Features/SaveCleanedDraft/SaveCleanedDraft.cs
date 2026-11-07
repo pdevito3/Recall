@@ -26,16 +26,24 @@ public static class SaveCleanedDraft
                 .GetById(request.Id, cancellationToken);
 
             var save = DraftSave.Of(request.Dto.Text, request.Dto.BaseRevision, request.Dto.SavedAt, timeProvider.GetUtcNow());
-            var isReplay = session.Cleaned.NeedsReplayLookup(save) && await dbContext.CleanedRevisions
-                .TagWithOperationCallSite("sessions.save_cleaned.replay")
-                .AnyAsync(r => r.SessionId == session.Id && r.ClaimedSavedAt == save.ClaimedSavedAt && r.Text == save.Text, cancellationToken);
+            var earlier = await dbContext.CleanedRevisions
+                .TagWithOperationCallSite("sessions.save_cleaned.earlier")
+                .Where(r => r.SessionId == session.Id
+                    && (r.WasDraft ? r.Number >= save.BaseRevision : r.ClaimedSavedAt == save.ClaimedSavedAt)
+                    && r.Text == save.Text)
+                .OrderBy(r => r.Number)
+                .Select(r => (DraftAnswer?)new DraftAnswer(r.WasDraft ? r.Number : null))
+                .FirstOrDefaultAsync(cancellationToken);
+            var baseWasDraft = save.BaseRevision == DraftSlot.NoRevision || await dbContext.CleanedRevisions
+                .TagWithOperationCallSite("sessions.save_cleaned.base")
+                .AnyAsync(r => r.SessionId == session.Id && r.Number == save.BaseRevision && r.WasDraft, cancellationToken);
 
-            var outcome = session.SaveCleaned(save, isReplay);
+            var decision = session.SaveCleaned(save, earlier, baseWasDraft);
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            Activity.Current?.SetTag("app.session.save_outcome", outcome.ToString());
-            _logger.Here().Information("Saved Cleaned of session {SessionId}, outcome {Outcome}", session.Id, outcome);
-            return session.ToSaveResult(session.Cleaned, outcome);
+            Activity.Current?.SetTag("app.session.save_outcome", decision.Outcome.ToString());
+            _logger.Here().Information("Saved Cleaned of session {SessionId}, outcome {Outcome}", session.Id, decision.Outcome);
+            return session.ToSaveResult(session.Cleaned, decision);
         }
     }
 }

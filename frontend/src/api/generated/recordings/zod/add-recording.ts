@@ -27,8 +27,10 @@ export const addRecordingStatus404Schema = problemDetailsSchema
 
 export const addRecordingStatus422Schema = validationProblemDetailsSchema
 
+export const addRecordingStatus507Schema = problemDetailsSchema
+
 export const addRecordingResponseSchema = z.union([addRecordingStatus200Schema, addRecordingStatus201Schema])
 
-export const addRecordingErrorSchema = z.union([addRecordingStatus400Schema, addRecordingStatus401Schema, addRecordingStatus403Schema, addRecordingStatus404Schema, addRecordingStatus422Schema])
+export const addRecordingErrorSchema = z.union([addRecordingStatus400Schema, addRecordingStatus401Schema, addRecordingStatus403Schema, addRecordingStatus404Schema, addRecordingStatus422Schema, addRecordingStatus507Schema])
 
 export const addRecordingBodySchema = recordingForCreationDtoSchema

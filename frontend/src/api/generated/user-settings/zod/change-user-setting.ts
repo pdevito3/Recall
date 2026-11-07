@@ -23,8 +23,10 @@ export const changeUserSettingStatus409Schema = validationProblemDetailsSchema
 
 export const changeUserSettingStatus422Schema = validationProblemDetailsSchema
 
+export const changeUserSettingStatus507Schema = problemDetailsSchema
+
 export const changeUserSettingResponseSchema = changeUserSettingStatus200Schema
 
-export const changeUserSettingErrorSchema = z.union([changeUserSettingStatus400Schema, changeUserSettingStatus401Schema, changeUserSettingStatus403Schema, changeUserSettingStatus409Schema, changeUserSettingStatus422Schema])
+export const changeUserSettingErrorSchema = z.union([changeUserSettingStatus400Schema, changeUserSettingStatus401Schema, changeUserSettingStatus403Schema, changeUserSettingStatus409Schema, changeUserSettingStatus422Schema, changeUserSettingStatus507Schema])
 
 export const changeUserSettingBodySchema = userSettingChangeDtoSchema

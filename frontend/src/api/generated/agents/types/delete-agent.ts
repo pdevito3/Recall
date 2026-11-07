@@ -28,6 +28,8 @@ export type DeleteAgentStatus404 = ProblemDetails;
 
 export type DeleteAgentStatus422 = ValidationProblemDetails;
 
+export type DeleteAgentStatus507 = ProblemDetails;
+
 export type DeleteAgentOptions = {
     body?: never;
     path: DeleteAgentPath;
@@ -41,6 +43,7 @@ export type DeleteAgentResponses = {
     "403": DeleteAgentStatus403;
     "404": DeleteAgentStatus404;
     "422": DeleteAgentStatus422;
+    "507": DeleteAgentStatus507;
 };
 
 /**

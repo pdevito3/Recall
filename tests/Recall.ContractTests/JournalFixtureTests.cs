@@ -137,6 +137,15 @@ public class JournalFixtureTests
         ahead.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
         await fixtures.CheckAsync("error-cursor-ahead", ahead);
 
+        var third = await client.PostAsJsonAsync(ApiRoutes.Sessions.Root, new { clientSessionId = "client-session-3", startedAt = Morning.AddHours(2) });
+        third.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var thirdRoute = ApiRoutes.Sessions.Draft((await third.Content.ReadFromJsonAsync<SessionDto>())!.Id);
+        (await client.PutAsJsonAsync(thirdRoute, new { text = "Words of the first save", baseRevision = 0, savedAt = Morning.AddHours(2) })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await client.PutAsJsonAsync(thirdRoute, new { text = "Words of the second save", baseRevision = 1, savedAt = Morning.AddHours(3) })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var kept = await client.PutAsJsonAsync(thirdRoute, new { text = "Words of the first save", baseRevision = 0, savedAt = Morning.AddHours(2) });
+        kept.StatusCode.ShouldBe(HttpStatusCode.OK);
+        await fixtures.CheckAsync("draft-save-kept", kept);
+
         (await client.DeleteAsync(ApiRoutes.Corrections.GetRecord(correctionId))).StatusCode.ShouldBe(HttpStatusCode.NoContent);
     }
 

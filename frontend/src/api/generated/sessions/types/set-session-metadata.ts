@@ -32,6 +32,8 @@ export type SetSessionMetadataStatus409 = ValidationProblemDetails;
 
 export type SetSessionMetadataStatus422 = ValidationProblemDetails;
 
+export type SetSessionMetadataStatus507 = ProblemDetails;
+
 export type SetSessionMetadataBody = SessionMetadataChangeDto;
 
 export type SetSessionMetadataOptions = {
@@ -48,6 +50,7 @@ export type SetSessionMetadataResponses = {
     "404": SetSessionMetadataStatus404;
     "409": SetSessionMetadataStatus409;
     "422": SetSessionMetadataStatus422;
+    "507": SetSessionMetadataStatus507;
 };
 
 /**

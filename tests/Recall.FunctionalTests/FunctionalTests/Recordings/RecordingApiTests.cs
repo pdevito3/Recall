@@ -2,11 +2,20 @@ namespace Recall.FunctionalTests.FunctionalTests.Recordings;
 
 using System.Net;
 using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
+using BackWave.Hosting;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Recall.Server.Databases;
 using Recall.Server.Domain.Recordings;
 using Recall.Server.Domain.Recordings.Dtos;
 using Recall.Server.Domain.Recordings.Features;
+using Recall.Server.Domain.Recordings.Transcription;
+using Recall.Server.Domain.Tenants;
+using Recall.Server.Resources.Jobs;
 using Recall.Server.Resources.Storage;
 using Sessions;
 using Shouldly;
@@ -49,16 +58,177 @@ public class RecordingApiTests : TestBase
     }
 
     [Test]
-    public async Task an_unknown_format_is_refused()
+    [Property("Rule", "REC-11")]
+    public async Task a_delete_that_races_a_slice_write_never_gives_a_server_error()
+    {
+        // Arrange
+        var (sessionId, _, _) = await SignedInWithSessionAsync();
+        var slices = Enumerable.Range(0, 24).Select(i => (byte[])[0x1A, 0x45, 0xDF, 0xA3, (byte)i, 1, 2, 3]).ToList();
+        var answers = new List<HttpStatusCode>();
+
+        // Act
+        for (var round = 0; round < 12; round++)
+        {
+            var recording = await FactoryClient.AddRecordingAsync(sessionId);
+            var writes = slices.Select((slice, index) => FactoryClient.PutSliceAsync(recording.Id, index, slice)).ToList();
+            await Task.Delay(round % 4);
+            var delete = await FactoryClient.DeleteAsync(ApiRoutes.Recordings.GetRecord(recording.Id));
+            answers.AddRange((await Task.WhenAll(writes)).Select(response => response.StatusCode));
+            delete.EnsureSuccessStatusCode();
+        }
+
+        // Assert
+        answers.ShouldNotContain(HttpStatusCode.InternalServerError);
+        answers.ShouldContain(HttpStatusCode.NotFound);
+    }
+
+    [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ReportHalted")]
+    private static extern void ReportHalted(BackWaveHealth health, string workerGroup, string pump, int groupPumpCount, Exception exception);
+
+    [Test]
+    [Property("Rule", "REC-14")]
+    [Arguments(JobHosting.TranscriptionQueue, true)]
+    [Arguments(JobHosting.SystemQueue, false)]
+    public async Task the_status_says_that_the_jobs_stopped_only_when_the_group_that_makes_text_stopped(string group, bool stopped)
+    {
+        // Arrange
+        var (_, owner, _) = await SignedInWithSessionAsync();
+        var services = TestingWebApplicationFactory.Instance.Services;
+        var health = new BackWaveHealth();
+        var status = new JobHostStatus(health);
+        ReportHalted(health, group, "pump", 1, new InvalidOperationException());
+        await using var scope = services.GetRequiredService<IServiceScopeFactory>().CreateJournalScope(new JournalOwner(owner.Id, owner.TenantId));
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var modelStore = scope.ServiceProvider.GetRequiredService<ModelStore>();
+
+        // Act
+        var read = await new GetTranscriptionStatus.Handler(dbContext, status, modelStore).Handle(new GetTranscriptionStatus.Query(), CancellationToken.None);
+
+        // Assert
+        read.JobsStopped.ShouldBe(stopped);
+        read.JobsStoppedText.ShouldBe(stopped ? GetTranscriptionStatus.JobsStoppedText : null);
+    }
+
+    [Test]
+    [Property("Rule", "REC-7")]
+    public async Task a_retry_on_a_full_disk_says_that_the_disk_is_full_and_works_after_space_is_free()
+    {
+        // Arrange
+        var (sessionId, owner, _) = await SignedInWithSessionAsync();
+        var recording = await FactoryClient.AddFinishedRecordingAsync(sessionId);
+        var services = TestingWebApplicationFactory.Instance.Services;
+        await using (var scope = services.GetRequiredService<IServiceScopeFactory>().CreateJournalScope(new JournalOwner(owner.Id, owner.TenantId)))
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var row = await dbContext.Recordings.SingleAsync(r => r.Id == recording.Id);
+            row.Fail(RecordingProblem.EngineKilled);
+            await dbContext.SaveChangesAsync();
+        }
+
+        var failingSaves = TestingWebApplicationFactory.Instance.FailingSaves;
+        failingSaves.FillDisk(recording.Id);
+
+        // Act
+        var full = await FactoryClient.PostAsync(ApiRoutes.Recordings.Retry(recording.Id), null);
+        var problem = await full.Content.ReadFromJsonAsync<ProblemDetails>();
+        var afterFull = await FactoryClient.GetFromJsonAsync<RecordingDto>(ApiRoutes.Recordings.GetRecord(recording.Id));
+        failingSaves.FreeDisk(recording.Id);
+        var retry = await FactoryClient.PostAsync(ApiRoutes.Recordings.Retry(recording.Id), null);
+        var afterRetry = await FactoryClient.GetFromJsonAsync<RecordingDto>(ApiRoutes.Recordings.GetRecord(recording.Id));
+
+        // Assert
+        full.StatusCode.ShouldBe(HttpStatusCode.InsufficientStorage);
+        problem!.Title.ShouldBe("The disk of the server is full.");
+        problem.Detail.ShouldNotBeNull().ShouldContain("free some space");
+        afterFull!.Status.ShouldBe(nameof(RecordingStatus.Failed));
+        retry.StatusCode.ShouldBe(HttpStatusCode.OK);
+        afterRetry!.Status.ShouldNotBe(nameof(RecordingStatus.Failed));
+    }
+
+    [Test]
+    [Property("Rule", "REC-14")]
+    public async Task a_read_of_a_waiting_recording_says_that_the_jobs_stopped()
+    {
+        // Arrange
+        var (sessionId, owner, _) = await SignedInWithSessionAsync();
+        var recording = await FactoryClient.AddFinishedRecordingAsync(sessionId);
+        var services = TestingWebApplicationFactory.Instance.Services;
+        var stopped = new JobHostStatus(services.GetRequiredService<BackWaveHealth>());
+        stopped.ReportStartFault(new InvalidOperationException());
+        await using var scope = services.GetRequiredService<IServiceScopeFactory>().CreateJournalScope(new JournalOwner(owner.Id, owner.TenantId));
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var modelStore = scope.ServiceProvider.GetRequiredService<ModelStore>();
+
+        // Act
+        var read = await new GetRecording.Handler(dbContext, modelStore, stopped).Handle(new GetRecording.Query(recording.Id), CancellationToken.None);
+        var list = await new GetSessionRecordings.Handler(dbContext, modelStore, stopped).Handle(new GetSessionRecordings.Query(sessionId), CancellationToken.None);
+
+        // Assert
+        read.ProblemText.ShouldBe(GetTranscriptionStatus.JobsStoppedText);
+        list.Single().ProblemText.ShouldBe(GetTranscriptionStatus.JobsStoppedText);
+    }
+
+    [Test]
+    public async Task a_disk_fault_on_a_live_recording_stays_a_fault()
+    {
+        // Arrange
+        var (sessionId, owner, _) = await SignedInWithSessionAsync();
+        var recording = await FactoryClient.AddRecordingAsync(sessionId);
+        var root = Path.Combine(Path.GetTempPath(), $"recall_not_a_folder_{Guid.CreateVersion7():N}");
+        await File.WriteAllBytesAsync(root, [1]);
+        var services = TestingWebApplicationFactory.Instance.Services;
+        await using var scope = services.GetRequiredService<IServiceScopeFactory>().CreateJournalScope(new JournalOwner(owner.Id, owner.TenantId));
+        var handler = new StoreRecordingSlice.Handler(
+            scope.ServiceProvider.GetRequiredService<AppDbContext>(),
+            new FileStore(Options.Create(new FileStoreOptions { Root = root })));
+
+        try
+        {
+            // Act
+            var write = () => handler.Handle(new StoreRecordingSlice.Command(recording.Id, 0, [0x1A, 0x45, 0xDF, 0xA3, 1, 2, 3, 4]), CancellationToken.None);
+
+            // Assert
+            await Should.ThrowAsync<IOException>(write);
+        }
+        finally
+        {
+            File.Delete(root);
+        }
+    }
+
+    [Test]
+    [Arguments("Exe")]
+    [Arguments("Webm,Mp4")]
+    [Arguments("1")]
+    [Arguments("0")]
+    [Arguments(" Webm ")]
+    [Arguments("webm")]
+    public async Task a_format_that_is_not_the_exact_name_is_refused(string format)
     {
         // Arrange
         var (sessionId, _, _) = await SignedInWithSessionAsync();
 
         // Act
-        var response = await FactoryClient.PostAsJsonAsync(ApiRoutes.Recordings.OfSession(sessionId), new { clientRecordingId = "x", format = "Exe" });
+        var response = await FactoryClient.PostAsJsonAsync(ApiRoutes.Recordings.OfSession(sessionId), new { clientRecordingId = "x", format });
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Test]
+    [Arguments("Webm")]
+    [Arguments("Mp4")]
+    public async Task each_exact_format_name_is_stored(string format)
+    {
+        // Arrange
+        var (sessionId, _, _) = await SignedInWithSessionAsync();
+
+        // Act
+        var response = await FactoryClient.PostAsJsonAsync(ApiRoutes.Recordings.OfSession(sessionId), new { clientRecordingId = "x", format });
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await response.Content.ReadFromJsonAsync<RecordingDto>())!.Format.ShouldBe(format);
     }
 
     [Test]

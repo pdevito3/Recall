@@ -34,6 +34,8 @@ export type AddRecordingStatus404 = ProblemDetails;
 
 export type AddRecordingStatus422 = ValidationProblemDetails;
 
+export type AddRecordingStatus507 = ProblemDetails;
+
 export type AddRecordingBody = RecordingForCreationDto;
 
 export type AddRecordingOptions = {
@@ -51,6 +53,7 @@ export type AddRecordingResponses = {
     "403": AddRecordingStatus403;
     "404": AddRecordingStatus404;
     "422": AddRecordingStatus422;
+    "507": AddRecordingStatus507;
 };
 
 /**

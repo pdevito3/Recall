@@ -21,6 +21,8 @@ export const deleteAgentStatus404Schema = problemDetailsSchema
 
 export const deleteAgentStatus422Schema = validationProblemDetailsSchema
 
+export const deleteAgentStatus507Schema = problemDetailsSchema
+
 export const deleteAgentResponseSchema = deleteAgentStatus204Schema
 
-export const deleteAgentErrorSchema = z.union([deleteAgentStatus401Schema, deleteAgentStatus403Schema, deleteAgentStatus404Schema, deleteAgentStatus422Schema])
+export const deleteAgentErrorSchema = z.union([deleteAgentStatus401Schema, deleteAgentStatus403Schema, deleteAgentStatus404Schema, deleteAgentStatus422Schema, deleteAgentStatus507Schema])

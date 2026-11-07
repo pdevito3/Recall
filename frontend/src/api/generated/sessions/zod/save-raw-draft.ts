@@ -25,8 +25,10 @@ export const saveRawDraftStatus409Schema = validationProblemDetailsSchema
 
 export const saveRawDraftStatus422Schema = validationProblemDetailsSchema
 
+export const saveRawDraftStatus507Schema = problemDetailsSchema
+
 export const saveRawDraftResponseSchema = saveRawDraftStatus200Schema
 
-export const saveRawDraftErrorSchema = z.union([saveRawDraftStatus400Schema, saveRawDraftStatus401Schema, saveRawDraftStatus404Schema, saveRawDraftStatus409Schema, saveRawDraftStatus422Schema])
+export const saveRawDraftErrorSchema = z.union([saveRawDraftStatus400Schema, saveRawDraftStatus401Schema, saveRawDraftStatus404Schema, saveRawDraftStatus409Schema, saveRawDraftStatus422Schema, saveRawDraftStatus507Schema])
 
 export const saveRawDraftBodySchema = draftSaveDtoSchema

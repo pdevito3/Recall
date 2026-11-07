@@ -20,6 +20,7 @@ public sealed class SaveRawDraftEndpoint : IEndpoint
 
     /// <summary>
     /// Saves the Raw Draft with Last-write-wins on the save time. A save that loses keeps its words as a Revision.
+    /// A base must be the number of a Draft whose words the client holds. A higher base loses at any save time.
     /// </summary>
     public static async Task<Ok<DraftSaveResultDto>> Handle(
         string id,

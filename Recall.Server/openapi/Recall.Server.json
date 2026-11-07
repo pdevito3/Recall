@@ -86,6 +86,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       },
@@ -273,6 +283,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -338,6 +358,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       },
@@ -470,6 +500,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -614,6 +654,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       },
@@ -759,6 +809,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       },
@@ -891,6 +951,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -965,6 +1035,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       },
@@ -1179,6 +1259,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -1281,6 +1371,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       },
@@ -1391,6 +1491,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       },
@@ -1525,6 +1635,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -1688,6 +1808,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -1790,6 +1920,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -1884,6 +2024,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       },
@@ -2010,6 +2160,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       },
@@ -2329,7 +2489,7 @@
         "tags": [
           "Sessions"
         ],
-        "summary": "Saves the Cleaned Draft with Last-write-wins on the save time. A save that loses keeps its words as a Revision.",
+        "summary": "Saves the Cleaned Draft with Last-write-wins on the save time. A save that loses keeps its words as a Revision.\nA base must be the number of a Draft whose words the client holds. A higher base loses at any save time.",
         "operationId": "SaveCleanedDraft",
         "parameters": [
           {
@@ -2412,6 +2572,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -2421,7 +2591,7 @@
         "tags": [
           "Sessions"
         ],
-        "summary": "Saves the Raw Draft with Last-write-wins on the save time. A save that loses keeps its words as a Revision.",
+        "summary": "Saves the Raw Draft with Last-write-wins on the save time. A save that loses keeps its words as a Revision.\nA base must be the number of a Draft whose words the client holds. A higher base loses at any save time.",
         "operationId": "SaveRawDraft",
         "parameters": [
           {
@@ -2504,6 +2674,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -2596,6 +2776,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -2787,6 +2977,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       },
@@ -2947,6 +3147,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       },
@@ -3089,6 +3299,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -3173,6 +3393,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       },
@@ -3289,6 +3519,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       },
@@ -3486,6 +3726,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -3561,6 +3811,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       },
@@ -3713,6 +3973,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -3885,6 +4155,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -3975,6 +4255,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -4077,6 +4367,16 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -4535,7 +4835,7 @@
           },
           "savedAt": {
             "type": "string",
-            "description": "When the person saved. A time in the future becomes the time of the server.",
+            "description": "When the person saved. A time in the future becomes the time of the server. A replay sends the same time. A merge after `Lost` is a new save and sends a new time.",
             "format": "date-time"
           }
         }
@@ -4543,7 +4843,6 @@
       "DraftSaveResultDto": {
         "required": [
           "outcome",
-          "draftRevision",
           "latestRevision",
           "cleanupStatus",
           "version"
@@ -4554,17 +4853,23 @@
             "enum": [
               "Unchanged",
               "Won",
-              "Lost"
+              "Lost",
+              "Kept"
             ],
             "type": "string",
-            "description": "A save with the outcome `Lost` did not change the Draft, and its words stay as the newest Revision."
+            "description": "`Won` and `Unchanged` say that the Draft holds these words. `Kept` says that the Draft took these words at the number in `draftRevision`, and that a chunk or a later save moved the Draft after it. `Lost` says that the Draft did not take this save, and its words are in a Revision."
           },
           "draftRevision": {
-            "type": "integer",
+            "type": [
+              "null",
+              "integer"
+            ],
+            "description": "After `Won` or `Unchanged`, the base of the next save. After `Kept`, the number at which the Draft took these words, which is older than the Draft and is not a base: read the Session before the next save. After `Lost`, null: read the Session, merge, and save from the number of the read, with a new `savedAt`.",
             "format": "int32"
           },
           "latestRevision": {
             "type": "integer",
+            "description": "The number of the newest Revision. It is never a base.",
             "format": "int32"
           },
           "savedAt": {
@@ -4836,7 +5141,10 @@
               "WaitingForModel",
               "AudioUnreadable",
               "AudioMissing",
+              "DiskFull",
+              "DiskRefused",
               "OutOfMemory",
+              "EngineKilled",
               "EngineCrashed",
               "EngineStalled",
               "EngineNotInstalled",

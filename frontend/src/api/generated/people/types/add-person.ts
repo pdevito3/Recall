@@ -26,6 +26,8 @@ export type AddPersonStatus403 = ProblemDetails;
 
 export type AddPersonStatus422 = ValidationProblemDetails;
 
+export type AddPersonStatus507 = ProblemDetails;
+
 export type AddPersonBody = PersonLabelDto;
 
 export type AddPersonOptions = {
@@ -41,6 +43,7 @@ export type AddPersonResponses = {
     "401": AddPersonStatus401;
     "403": AddPersonStatus403;
     "422": AddPersonStatus422;
+    "507": AddPersonStatus507;
 };
 
 /**

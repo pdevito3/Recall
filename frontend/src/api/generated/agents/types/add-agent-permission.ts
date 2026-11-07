@@ -32,6 +32,8 @@ export type AddAgentPermissionStatus404 = ProblemDetails;
 
 export type AddAgentPermissionStatus422 = ValidationProblemDetails;
 
+export type AddAgentPermissionStatus507 = ProblemDetails;
+
 export type AddAgentPermissionBody = AgentPermissionDto;
 
 export type AddAgentPermissionOptions = {
@@ -48,6 +50,7 @@ export type AddAgentPermissionResponses = {
     "403": AddAgentPermissionStatus403;
     "404": AddAgentPermissionStatus404;
     "422": AddAgentPermissionStatus422;
+    "507": AddAgentPermissionStatus507;
 };
 
 /**

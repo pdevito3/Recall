@@ -2,6 +2,7 @@ namespace Recall.FunctionalTests.TestUtilities;
 
 using System.Collections.Concurrent;
 using Recall.Server.Domain;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
@@ -11,12 +12,20 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 /// </summary>
 public sealed class FailingSaves : SaveChangesInterceptor
 {
+    private const int SqliteFullErrorCode = 13;
+
     private readonly ConcurrentDictionary<string, byte> _armedIds = new();
+    private readonly ConcurrentDictionary<string, byte> _fullDiskIds = new();
     private readonly ConcurrentBag<Func<BaseEntity, bool>> _armedMatches = [];
     private readonly ConcurrentBag<Func<BaseEntity, bool>> _armedAfterCommit = [];
     private readonly ConcurrentDictionary<DbContext, byte> _committing = new();
 
     public void Arm(string entityId) => _armedIds.TryAdd(entityId, 0);
+
+    /// <summary>Fails each save of the entity as SQLite does on a disk with no free space, until <see cref="FreeDisk"/>.</summary>
+    public void FillDisk(string entityId) => _fullDiskIds.TryAdd(entityId, 0);
+
+    public void FreeDisk(string entityId) => _fullDiskIds.TryRemove(entityId, out _);
 
     /// <summary>
     /// Arms the entities that the handler makes, so the test cannot know their IDs. Match on a parent ID that only
@@ -63,6 +72,8 @@ public sealed class FailingSaves : SaveChangesInterceptor
             .Where(e => e.State is not (EntityState.Unchanged or EntityState.Detached))
             .Select(e => e.Entity)
             .ToList();
+        if (written.Any(entity => _fullDiskIds.ContainsKey(entity.Id)))
+            throw new DbUpdateException("An error occurred while saving the entity changes.", new SqliteException("SQLite Error 13: 'database or disk is full'.", SqliteFullErrorCode));
         if (written.Any(IsArmed))
             throw new InvalidOperationException("The test failed this save.");
         if (written.Any(entity => _armedAfterCommit.Any(matches => matches(entity))))

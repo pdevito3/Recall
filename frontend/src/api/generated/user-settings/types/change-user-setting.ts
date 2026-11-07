@@ -28,6 +28,8 @@ export type ChangeUserSettingStatus409 = ValidationProblemDetails;
 
 export type ChangeUserSettingStatus422 = ValidationProblemDetails;
 
+export type ChangeUserSettingStatus507 = ProblemDetails;
+
 export type ChangeUserSettingBody = UserSettingChangeDto;
 
 export type ChangeUserSettingOptions = {
@@ -44,6 +46,7 @@ export type ChangeUserSettingResponses = {
     "403": ChangeUserSettingStatus403;
     "409": ChangeUserSettingStatus409;
     "422": ChangeUserSettingStatus422;
+    "507": ChangeUserSettingStatus507;
 };
 
 /**

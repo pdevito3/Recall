@@ -30,6 +30,8 @@ export type DeleteTenantStatus409 = ValidationProblemDetails;
 
 export type DeleteTenantStatus422 = ValidationProblemDetails;
 
+export type DeleteTenantStatus507 = ProblemDetails;
+
 export type DeleteTenantOptions = {
     body?: never;
     path: DeleteTenantPath;
@@ -44,6 +46,7 @@ export type DeleteTenantResponses = {
     "404": DeleteTenantStatus404;
     "409": DeleteTenantStatus409;
     "422": DeleteTenantStatus422;
+    "507": DeleteTenantStatus507;
 };
 
 /**

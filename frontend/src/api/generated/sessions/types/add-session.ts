@@ -30,6 +30,8 @@ export type AddSessionStatus409 = ValidationProblemDetails;
 
 export type AddSessionStatus422 = ValidationProblemDetails;
 
+export type AddSessionStatus507 = ProblemDetails;
+
 export type AddSessionBody = SessionForCreationDto;
 
 export type AddSessionOptions = {
@@ -47,6 +49,7 @@ export type AddSessionResponses = {
     "403": AddSessionStatus403;
     "409": AddSessionStatus409;
     "422": AddSessionStatus422;
+    "507": AddSessionStatus507;
 };
 
 /**

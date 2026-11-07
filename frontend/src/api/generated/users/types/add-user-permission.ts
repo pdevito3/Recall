@@ -34,6 +34,8 @@ export type AddUserPermissionStatus409 = ValidationProblemDetails;
 
 export type AddUserPermissionStatus422 = ValidationProblemDetails;
 
+export type AddUserPermissionStatus507 = ProblemDetails;
+
 export type AddUserPermissionBody = UserPermissionDto;
 
 export type AddUserPermissionOptions = {
@@ -51,6 +53,7 @@ export type AddUserPermissionResponses = {
     "404": AddUserPermissionStatus404;
     "409": AddUserPermissionStatus409;
     "422": AddUserPermissionStatus422;
+    "507": AddUserPermissionStatus507;
 };
 
 /**

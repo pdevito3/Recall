@@ -38,6 +38,7 @@ public static class DomainProblemDetails
             DomainErrorKind.Forbidden => StatusCodes.Status403Forbidden,
             DomainErrorKind.Conflict or DomainErrorKind.StaleVersion or DomainErrorKind.ConcurrentChange
                 => StatusCodes.Status409Conflict,
+            DomainErrorKind.DiskFull => StatusCodes.Status507InsufficientStorage,
             DomainErrorKind.Unexpected => StatusCodes.Status500InternalServerError,
         };
     }

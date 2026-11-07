@@ -25,8 +25,10 @@ export const setSessionMetadataStatus409Schema = validationProblemDetailsSchema
 
 export const setSessionMetadataStatus422Schema = validationProblemDetailsSchema
 
+export const setSessionMetadataStatus507Schema = problemDetailsSchema
+
 export const setSessionMetadataResponseSchema = setSessionMetadataStatus200Schema
 
-export const setSessionMetadataErrorSchema = z.union([setSessionMetadataStatus400Schema, setSessionMetadataStatus401Schema, setSessionMetadataStatus404Schema, setSessionMetadataStatus409Schema, setSessionMetadataStatus422Schema])
+export const setSessionMetadataErrorSchema = z.union([setSessionMetadataStatus400Schema, setSessionMetadataStatus401Schema, setSessionMetadataStatus404Schema, setSessionMetadataStatus409Schema, setSessionMetadataStatus422Schema, setSessionMetadataStatus507Schema])
 
 export const setSessionMetadataBodySchema = sessionMetadataChangeDtoSchema

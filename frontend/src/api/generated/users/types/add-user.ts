@@ -28,6 +28,8 @@ export type AddUserStatus409 = ValidationProblemDetails;
 
 export type AddUserStatus422 = ValidationProblemDetails;
 
+export type AddUserStatus507 = ProblemDetails;
+
 export type AddUserBody = UserForCreationDto;
 
 export type AddUserOptions = {
@@ -44,6 +46,7 @@ export type AddUserResponses = {
     "403": AddUserStatus403;
     "409": AddUserStatus409;
     "422": AddUserStatus422;
+    "507": AddUserStatus507;
 };
 
 /**

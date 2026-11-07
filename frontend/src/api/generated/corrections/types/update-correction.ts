@@ -32,6 +32,8 @@ export type UpdateCorrectionStatus409 = ValidationProblemDetails;
 
 export type UpdateCorrectionStatus422 = ValidationProblemDetails;
 
+export type UpdateCorrectionStatus507 = ProblemDetails;
+
 export type UpdateCorrectionBody = CorrectionForUpdateDto;
 
 export type UpdateCorrectionOptions = {
@@ -48,6 +50,7 @@ export type UpdateCorrectionResponses = {
     "404": UpdateCorrectionStatus404;
     "409": UpdateCorrectionStatus409;
     "422": UpdateCorrectionStatus422;
+    "507": UpdateCorrectionStatus507;
 };
 
 /**

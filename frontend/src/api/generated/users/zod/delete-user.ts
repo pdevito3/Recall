@@ -23,6 +23,8 @@ export const deleteUserStatus409Schema = validationProblemDetailsSchema
 
 export const deleteUserStatus422Schema = validationProblemDetailsSchema
 
+export const deleteUserStatus507Schema = problemDetailsSchema
+
 export const deleteUserResponseSchema = deleteUserStatus204Schema
 
-export const deleteUserErrorSchema = z.union([deleteUserStatus401Schema, deleteUserStatus403Schema, deleteUserStatus404Schema, deleteUserStatus409Schema, deleteUserStatus422Schema])
+export const deleteUserErrorSchema = z.union([deleteUserStatus401Schema, deleteUserStatus403Schema, deleteUserStatus404Schema, deleteUserStatus409Schema, deleteUserStatus422Schema, deleteUserStatus507Schema])

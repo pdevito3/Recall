@@ -26,8 +26,10 @@ export const storeRecordingSliceStatus413Schema = problemDetailsSchema
 
 export const storeRecordingSliceStatus422Schema = validationProblemDetailsSchema
 
+export const storeRecordingSliceStatus507Schema = problemDetailsSchema
+
 export const storeRecordingSliceResponseSchema = storeRecordingSliceStatus200Schema
 
-export const storeRecordingSliceErrorSchema = z.union([storeRecordingSliceStatus401Schema, storeRecordingSliceStatus404Schema, storeRecordingSliceStatus409Schema, storeRecordingSliceStatus413Schema, storeRecordingSliceStatus422Schema])
+export const storeRecordingSliceErrorSchema = z.union([storeRecordingSliceStatus401Schema, storeRecordingSliceStatus404Schema, storeRecordingSliceStatus409Schema, storeRecordingSliceStatus413Schema, storeRecordingSliceStatus422Schema, storeRecordingSliceStatus507Schema])
 
 export const storeRecordingSliceBodySchema = z.instanceof(File)

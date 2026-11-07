@@ -13,7 +13,7 @@ public sealed record DraftSaveDto
     [SchemaMinimum(typeof(DraftSlot), nameof(DraftSlot.NoRevision))]
     public required int BaseRevision { get; init; }
 
-    /// <summary>When the person saved. A time in the future becomes the time of the server.</summary>
+    /// <summary>When the person saved. A time in the future becomes the time of the server. A replay sends the same time. A merge after <c>Lost</c> is a new save and sends a new time.</summary>
     [JsonConverter(typeof(InstantWithOffsetConverter))]
     public required DateTimeOffset SavedAt { get; init; }
 }
