@@ -8,8 +8,8 @@ import type { SaveRawDraftOptions, SaveRawDraftResponses } from '../types/save-r
 import { client, unwrapResult } from '../../.kubb/client'
 
 /**
- * @summary Saves the Raw Draft with Last-write-wins on the save time. A save that loses keeps its words as a Revision.
- * A base must be the number of a Draft whose words the client holds. A higher base loses at any save time.
+ * @summary Saves the Raw Draft. A save wins only when its base is the number of the current Draft. Any other save loses and keeps its words as a Revision.
+ * A base must be the number of a Draft whose words the client holds. The save time decides no save.
  * {@link /api/v1/sessions/:id/draft}
  */
 export function saveRawDraft<ThrowOnError extends boolean = true>(options: Options<SaveRawDraftOptions, ThrowOnError>): Promise<UnwrappedResult<SaveRawDraftResponses, ThrowOnError>> {

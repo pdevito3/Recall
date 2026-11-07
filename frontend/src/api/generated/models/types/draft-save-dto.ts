@@ -10,7 +10,7 @@ export type DraftSaveDto = {
     */
     text: string;
     /**
-     * @description The Revision that the person edited. It is `0` for a Draft with no Revision.
+     * @description The number of the Draft that the person edited. It is `0` for a Draft with no Revision. Only the number of the current Draft wins.
      *
      * Format: `int32`
      * @minLength 0
@@ -18,7 +18,7 @@ export type DraftSaveDto = {
     */
     baseRevision: number;
     /**
-     * @description When the person saved. A time in the future becomes the time of the server. A replay sends the same time. A merge after `Lost` is a new save and sends a new time.
+     * @description When the person saved. This time decides no save. With the words, it says that a save is a replay, so a replay sends the same time, and a new save sends a new time.
      *
      * Format: `date-time`
      * @type string
