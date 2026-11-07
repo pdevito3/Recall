@@ -10,7 +10,7 @@ const longText = 'river stone morning coffee '.repeat(4000)
 let client: QueryClient
 
 const noPeople = {
-  method: 'GET',
+  method: 'GET' as const,
   path: '/api/v1/people',
   body: [],
   headers: {
