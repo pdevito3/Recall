@@ -236,6 +236,8 @@ The app cannot change this delay. No web API forces the commit.
 
 **Tags.** A change of tags has no key, so a reload or a crash loses a change that did not reach the Server. A sign-out asks first. A reload with an open prompt about the same field drops the choice in the prompt, and the row keeps the value that the Server has.
 
+**A reload while the server is down.** No app code runs, so the app cannot show a message. A plain HTTP origin cannot have a service worker, because a service worker needs a secure context. A reverse proxy that stays up shows its own error page. Caddy sends a 502 with an empty body, and the person sees a white page. With nothing listening, the person sees the connection error page of the browser. The words stay in their keys, and they go out when the page opens again after the server returns.
+
 **A tab of a person who signed out.** A frozen tab cannot report words that only its memory holds, so a sign-out in another tab cannot name them. Words that a tab types after the dialog opened stay in the key of that tab, and they return with a notice at the next sign-in.
 
 ## Routes
