@@ -5,6 +5,7 @@ export const journal = (page: Page) => ({
   done: page.getByRole('button', { name: 'Done', exact: true }),
   status: (text: string) => page.getByRole('status').filter({ hasText: text }),
   conflict: (text: string) => page.getByRole('alert').filter({ hasText: text }),
+  backgroundWorkNotice: page.getByRole('alert', { name: 'Background work' }),
   loadingEntry: page.getByRole('status').filter({ hasText: 'Loading your entry' }),
   savedAtStart: page.getByRole('status').filter({ hasText: /^Saved at/ }),
   movedNotice: page.getByRole('status', { name: 'Your words moved' }),

@@ -16,7 +16,7 @@ test.describe('writing a new entry', () => {
 
     await journal.open()
 
-    await expect(page.getByRole('alert', { name: 'Background work' })).toHaveText('The background work stopped. The Owner must restart the server.')
+    await expect(journal.at.backgroundWorkNotice).toHaveText('The background work stopped. The Owner must restart the server.')
   })
 
   test('opens with the cursor in the composer, and asks for nothing first', async ({ page }) => {
