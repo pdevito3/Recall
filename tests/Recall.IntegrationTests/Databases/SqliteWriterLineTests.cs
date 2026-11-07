@@ -85,7 +85,7 @@ public sealed class SqliteWriterLineTests
 
         // Assert
         await Task.WhenAll(first, delete).WaitAsync(Limit);
-        SqliteWriterLine.WritersFor(database.ConnectionString).ShouldBe(0);
+        SqliteWriterLine.WritersInLineWithTurnHolder(database.ConnectionString).ShouldBe(0);
     }
 
     [Test]
@@ -147,13 +147,13 @@ public sealed class SqliteWriterLineTests
         await WaitForWritersAsync(database, 2);
         hold.Release.SetResult();
         await Task.WhenAll(first, second).WaitAsync(Limit);
-        SqliteWriterLine.WritersFor(database.ConnectionString).ShouldBe(0);
+        SqliteWriterLine.WritersInLineWithTurnHolder(database.ConnectionString).ShouldBe(0);
     }
 
     private static async Task WaitForWritersAsync(SqliteTestDatabase database, int count)
     {
         using var limit = new CancellationTokenSource(Limit);
-        while (SqliteWriterLine.WritersFor(database.ConnectionString) != count)
+        while (SqliteWriterLine.WritersInLineWithTurnHolder(database.ConnectionString) != count)
             await Task.Delay(TimeSpan.FromMilliseconds(5), limit.Token);
     }
 

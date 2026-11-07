@@ -7,17 +7,14 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 
 /// <summary>
-/// One line of writers for each data file in this process. SQLite has no line for its write lock. A writer that finds the
-/// lock taken sleeps and tries again, and its sleep grows to 100 ms, so a writer that just came tries far more often than
-/// one that has waited for a long time. When the lock is seldom free, the oldest writer can lose each try until
-/// <c>busy_timeout</c> ends, and it gets "database is locked". It also holds a thread for all of that wait. In this line
-/// the first writer goes first, and a writer that waits holds no thread. A save takes its turn in
-/// <see cref="AppDbContext"/>, and this interceptor takes the turn of a write that does not go through a save.
-/// <c>busy_timeout</c> still covers each writer outside this line: BackWave workers, a checkpoint, and another process.
+/// One line of writers for each connection string. SQLite has no line for its write lock. A writer that finds the lock
+/// taken sleeps and tries again, and its sleep grows to 100 ms, so a writer that just came tries far more often than one
+/// that has waited for a long time. When the lock is seldom free, the oldest writer can lose each try until
+/// <c>busy_timeout</c> ends, and it gets "database is locked". See docs/backend/concurrency.md.
 /// </summary>
 public sealed class SqliteWriterLine : DbCommandInterceptor
 {
-    private static readonly ConcurrentDictionary<string, Line> Lines = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, Line> LinesByConnectionString = new(StringComparer.Ordinal);
 
     private readonly ConcurrentDictionary<DbCommand, Turn> _turns = new();
 
@@ -29,7 +26,7 @@ public sealed class SqliteWriterLine : DbCommandInterceptor
 
     internal static async Task<Turn> WaitForTurnAsync(DatabaseFacade database, CancellationToken cancellationToken)
     {
-        var line = Lines.GetOrAdd(database.GetConnectionString() ?? "", _ => new Line(new SemaphoreSlim(1, 1)));
+        var line = LinesByConnectionString.GetOrAdd(database.GetConnectionString() ?? "", _ => new Line(new SemaphoreSlim(1, 1)));
         Interlocked.Increment(ref line.Writers);
         try
         {
@@ -44,14 +41,13 @@ public sealed class SqliteWriterLine : DbCommandInterceptor
         return new Turn(line);
     }
 
-    /// <summary>How many writers are in the line for this file. The writer that has the turn counts.</summary>
-    internal static int WritersFor(string connectionString)
-        => Lines.TryGetValue(connectionString, out var line) ? Volatile.Read(ref line.Writers) : 0;
+    internal static int WritersInLineWithTurnHolder(string connectionString)
+        => LinesByConnectionString.TryGetValue(connectionString, out var line) ? Volatile.Read(ref line.Writers) : 0;
 
     public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command,
         CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
     {
-        // A write in a transaction of its caller holds the write lock, so it must not wait for a writer that waits for that lock.
+        // An open transaction holds the write lock or the turn of its save, so a wait here would not end.
         if (eventData.CommandSource is CommandSource.ExecuteUpdate or CommandSource.ExecuteDelete or CommandSource.ExecuteSqlRaw
             && eventData.Context is { Database.CurrentTransaction: null } context)
             _turns[command] = await WaitForTurnAsync(context.Database, cancellationToken);

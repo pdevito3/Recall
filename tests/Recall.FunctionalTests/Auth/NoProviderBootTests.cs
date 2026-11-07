@@ -24,9 +24,8 @@ public partial class NoProviderBootTests
         | UnixFileMode.GroupRead | UnixFileMode.GroupExecute
         | UnixFileMode.OtherRead | UnixFileMode.OtherExecute;
 
-    // Limits on a hang, not on speed. A boot and a request of a server of its own take far longer on a machine with no idle CPU.
-    private static readonly TimeSpan BootLimit = TimeSpan.FromMinutes(2);
-    private static readonly TimeSpan RequestLimit = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan BootHangLimit = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan RequestHangLimit = TimeSpan.FromMinutes(1);
 
     private static readonly string[] ClearedPrefixes = ["Auth__", "Mcp__", "Tenancy__", "OTEL_", "ConnectionStrings__", "FileStore__", "ASPNETCORE_", "DOTNET_ENVIRONMENT"];
 
@@ -115,7 +114,7 @@ public partial class NoProviderBootTests
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
-            var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = RequestLimit };
+            var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = RequestHangLimit };
             return new ServerProcess(process, output, root, client);
         }
 
@@ -132,7 +131,7 @@ public partial class NoProviderBootTests
 
         public async Task WaitUntilUpAsync()
         {
-            for (var waited = Stopwatch.StartNew(); waited.Elapsed < BootLimit;)
+            for (var waited = Stopwatch.StartNew(); waited.Elapsed < BootHangLimit;)
             {
                 _process.HasExited.ShouldBeFalse($"The server stopped during its boot. Its output: {Output}");
                 if (Client.BaseAddress is null)
@@ -156,7 +155,7 @@ public partial class NoProviderBootTests
                 await Task.Delay(TimeSpan.FromMilliseconds(100));
             }
 
-            throw new InvalidOperationException($"The server did not answer in {BootLimit}. Its output: {Output}");
+            throw new InvalidOperationException($"The server did not answer in {BootHangLimit}. Its output: {Output}");
         }
 
         /// <summary>A SIGKILL, so the last connection runs no checkpoint on its close, and the files stay as a crash leaves them.</summary>
