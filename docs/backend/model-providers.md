@@ -11,6 +11,7 @@ A connect does not change which provider a Cleanup uses. A provider is active on
 - A provider that loses its model stops being active, and a person must choose it again.
 - The newest choice of a tenant is the active provider. If that provider is deleted, the choice before it is active again.
 - With no active provider, a Cleanup start gets 422, the page says why, and its button stays off.
+- Each try of a run reads the active provider again. If an Admin deletes the active provider while a run waits to try again, the next try sends the words to the provider that was active before it. The Cleanup card reads the active provider every 2 s while a run lasts and names it, so the person sees where the words go. A person who closed the page does not see the change.
 
 ## Limits of a call
 
@@ -20,6 +21,7 @@ A connect does not change which provider a Cleanup uses. A provider is active on
 |---|---|---|
 | Connect | 10 s | A host that answers on a network answers in this time. A person waits for the test button. |
 | No progress on a read, also for the headers | 3 min | A local model can load and read a long prompt before its first byte. Anthropic sends `ping` events during a stream. A hung call ends here. |
+| No words in a stream | 10 min | Only a word or a thought of the model counts. A `ping`, a space, or an empty delta does not. A model can think before it writes, and Anthropic sends only pings during a thinking block when the thoughts are not shown, so the limit must be longer than a long thought. No API reference gives an upper bound: Anthropic asks for a stream for a request that can take over 10 minutes, and OpenAI says that a reasoning model can take several minutes. Then a provider that sends only pings holds a slot of the queue for 10 min, and the run ends as `ProviderUnavailable` with no new try. |
 | A whole call for words, and all tries of one run | 40 min | The longest answer is 64 000 tokens. At 30 tokens each second, this is about 36 min. A wait before the first claim does not count. A wait between tries and a stop of the server do count, so a run that passes the limit in a long stop ends with no new call, and a person can run it again. |
 | A call for the model list | 30 s | A person waits for it, and no model runs. |
 | A body that is not a stream | 16 MiB | A list of models or an error is far smaller. The read ends when the bytes pass the limit. |
@@ -28,7 +30,9 @@ A connect does not change which provider a Cleanup uses. A provider is active on
 | The words of an answer | 2 x the limit of a Draft | The longest answer that can give a Draft, with an escape for each character. |
 | Pages of the Anthropic model list | 10 pages of 1000, and 2000 models | `has_more` comes from the provider, so a list that never ends must stop. |
 
-A hung provider ends a run in about 19 minutes: 6 tries of 3 minutes, and 62 s of waits between them. A stream that makes progress can run for the full 40 minutes.
+A hung provider ends a run in about 19 minutes: 6 tries of 3 minutes, and 62 s of waits between them. A provider that sends only pings ends a run in 10 minutes. A stream that sends words can run for the full 40 minutes.
+
+Sources for the limit of no words, read on 7 November 2026: [Anthropic streaming](https://platform.claude.com/docs/en/build-with-claude/streaming), [Anthropic extended thinking](https://platform.claude.com/docs/en/build-with-claude/thinking), [Anthropic errors](https://platform.claude.com/docs/en/api/errors), and [OpenAI background mode](https://developers.openai.com/api/docs/guides/background).
 
 ## What a failure means
 
@@ -38,6 +42,22 @@ A hung provider ends a run in about 19 minutes: 6 tries of 3 minutes, and 62 s o
 | Another status | `Refused` | Ends at once as `ProviderRefused`. |
 | Invalid JSON, an HTML body with status 200, a bad charset, a body or a stream over its limit, an empty stream, a cut answer (`max_tokens` or `length`), a refusal | `BadOutput` | Ends at once as `BadModelOutput`. The same bytes come again on a retry. |
 | A refused address | `Refused` | Ends at once as `ProviderRefused`. |
+| Bytes that are not UTF-8 in a body with a 2xx status, on a stream or in a whole body | `BadOutput` | Ends at once as `BadModelOutput`, so no `U+FFFD` takes the place of a word. A model list with such bytes is a failure and not an empty list. |
+| A stream with status 200 that closes with no event | `BadOutput` | Ends at once as `BadModelOutput` after 1 call, on each kind. |
+| No word for the limit above | `NoWords` | Ends at once as `ProviderUnavailable`, with no new try. |
+
+## The cost of an answer
+
+An answer is Markdown, and the server turns it into the stored document. The time and the memory of Markdig grow faster than the length for some forms, so `MarkdownCost` checks each text before the conversion, on each path: the answer of a model provider, the result of a device, and each other caller of `MarkdownToProseMirror`.
+
+| Bound | Value | Why |
+|---|---|---|
+| The length of an answer | The limit of a Draft | A longer text cannot be a Draft. The run ends as `BadModelOutput`, and a device result gets 422. |
+| Marks: line ends, the backtick, and the signs `\|`, `*`, `_`, `~`, `=`, `+`, `[`, `]`, `<`, `&`, `#`, `!`, and `\` | 33 333, the limit of a Draft / 30 | Each mark can make a node, and each node takes at least 30 characters of the stored form. So a text with more marks cannot fit in a Draft. A table of 990 000 pipes took 1 GB before this bound. |
+| The work of links: for each block between blank lines, the count of `](` and `]:` times the length of the block | 500 000 000 | Markdig reads to the end of the block for each open link, so `[a](` repeated takes time that grows with the square of the length: 371 s for 1 M characters. One unit took about 1.5 ns, so the bound is under 1 s. |
+| Marks nested in marks | 64 levels | A deeper tree ended the process with a stack overflow, which no `catch` can stop. |
+
+A text over a bound is stored as the source: each line is a paragraph of plain text, and no word is lost. A conversion that throws `OutOfMemoryException`, a parse error, or a time-out of a regular expression also stores the source, with no new try. The rule of the words then compares the shown words with the source, and a form that would change them stays as the source too.
 
 The test button always answers with 200 and with one of these kinds. A person can also stop a run: see [The Cleanup job](background-jobs.md#the-cleanup-job).
 
@@ -67,7 +87,9 @@ The HTTP client follows no redirect and uses no proxy, so a provider cannot send
 The test button shows the words of a provider only when the body has the error format of that kind:
 
 - `Anthropic`: `{"type":"error","error":{"type":"...","message":"..."}}`.
-- `OpenAiCompatible`: `{"error":{"message":"...", ...}}` with a `type` or a `code` in `error`.
+- `OpenAiCompatible`: `{"error":{"message":"...", ...}}` with a `type` or a `code` in `error`. This kind also takes the Anthropic form `{"type":"error",...}`, because some servers of this kind send it.
+
+The app sends no `anthropic-workspace-id` header. A key of a workspace works, because the key holds its workspace. An Admin cannot choose another workspace for a key.
 
 Any other body gets the status and a fixed text. So the page of an internal service does not reach the person. Each message loses each hidden character, and each form of the key: as it is, in any case, base64, base64url, URL-encoded, HTML-encoded, and each cut of 8 characters or more. A failed run stores only a closed code.
 
@@ -78,7 +100,8 @@ An Admin can type any address that the rules allow, so the test button is still 
 - If a port is open, closed, or silent, from the fixed text and the time that the answer takes.
 - The HTTP status of a service on that port.
 - The `error.message` of a service whose body has the error format above.
-- The model IDs of a service whose body has the shape of a model list. An ID with a hidden character or bad bytes is not offered.
+- The model IDs of a service whose body has the shape of a model list. An ID with a hidden character or bad bytes is not offered. An ID or a display name that holds a form of the key is not offered.
+- The services of the server of the app itself. Loopback is refused in a container, but the private address of the container or of its host on the network reaches the app and each port that the host opens. So an Admin can probe the app through its own hostname. This is the same reach that an Admin has from a shell on the network.
 
 An Admin cannot learn the body of any other answer, and cannot make the app follow a redirect.
 
