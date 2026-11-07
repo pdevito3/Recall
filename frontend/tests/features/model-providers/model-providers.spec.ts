@@ -175,17 +175,22 @@ test.describe('a page of model providers on a 390 px phone', () => {
     expect(await at.pageOverflow()).toBe(0)
   })
 
-  test('a long Topic takes the width of the card', async ({ page, api }) => {
+  test('a long Topic and a long Person name take the width of the card on each phone', async ({ page, api }) => {
     const topic = 'a long topic that a person keeps for each of the things that a week holds'
-    const session = aSession({ cleanupStatus: 'Clean', cleanedText: 'Done.', suggestions: [{ kind: 'Topic', value: topic }] })
+    const person = 'a long name of a person that a model takes from each of the things in a week'
+    const session = aSession({ cleanupStatus: 'Clean', cleanedText: 'Done.', peopleProposals: [{ label: person, isNew: true, contexts: [] }], suggestions: [{ kind: 'Topic', value: topic }] })
     api.mock(signedInAs('User'), modelProvidersApi.sessionIs(session), modelProvidersApi.activeIs('Home lab'))
     const at = modelProviders(page)
 
     await page.goto(`/model-providers?session=${session.id}`)
     await expect(at.text(topic)).toBeVisible()
 
-    expect((await at.text(topic).boundingBox())?.height).toBeLessThanOrEqual(60)
-    expect(await at.pageOverflow()).toBe(0)
+    for (const width of [390, 430]) {
+      await page.setViewportSize({ width, height: 800 })
+      expect((await at.text(topic).boundingBox())?.height, `the Topic at ${width} px`).toBeLessThanOrEqual(60)
+      expect((await at.text(person).boundingBox())?.height, `the Person at ${width} px`).toBeLessThanOrEqual(60)
+      expect(await at.pageOverflow()).toBe(0)
+    }
   })
 })
 
