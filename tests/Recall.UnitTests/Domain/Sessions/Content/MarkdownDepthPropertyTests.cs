@@ -66,13 +66,22 @@ public class MarkdownDepthPropertyTests
         return line.ToString();
     }
 
-    /// <summary>A cell of a grid table holds blocks, and the parser reads them as a document of their own.</summary>
+    /// <summary>
+    /// A cell of a grid table holds blocks, and the parser reads them as a document of their own. A cell of the second column
+    /// can go on over the border of the first, between two "+".
+    /// </summary>
     private static string GridTable(Random random)
     {
-        var cell = Line(random).Replace("\t", " ", StringComparison.Ordinal).Replace("|", " ", StringComparison.Ordinal);
-        var border = "+" + new string('-', cell.Length + 2) + "+";
+        var cell = Line(random).Replace("\t", " ", StringComparison.Ordinal).Replace("|", " ", StringComparison.Ordinal).Replace("+", " ", StringComparison.Ordinal);
         var prefix = random.Next(3) == 0 ? "> " : "";
-        return $"{prefix}{border}\n{prefix}| {cell} |\n{prefix}{border}";
+        var border = "+" + new string('-', cell.Length + 2) + "+";
+        if (random.Next(2) == 0)
+            return string.Join('\n', new[] { border, $"| {cell} |", border }.Select(line => prefix + line));
+
+        var spans = $"+---+ {cell} +";
+        var wide = "+---" + border;
+        var blank = new string(' ', cell.Length + 1);
+        return string.Join('\n', new[] { wide, $"| a |c{blank}|", spans, $"| b |d{blank}|", wide }.Select(line => prefix + line));
     }
 
     private static int Nesting(Block block)

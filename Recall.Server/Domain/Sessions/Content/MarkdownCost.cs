@@ -82,12 +82,15 @@ internal static class MarkdownCost
         return deepest;
     }
 
-    /// <summary>A cell of a grid table holds blocks of its own, so the blocks of a line can start again after each "|".</summary>
+    /// <summary>
+    /// A cell of a grid table holds blocks of its own, and its edge is a "|", or a "+" on a line where the cell goes on over a
+    /// border. So the blocks of a line can start again after each of them. A "+" can also open a list item, so each one counts.
+    /// </summary>
     private static int Depth(ReadOnlySpan<char> line)
     {
         line = line[..ThematicBreakStart(line)];
-        var depth = 0;
-        foreach (var cell in line.Split('|'))
+        var depth = line.Count('+');
+        foreach (var cell in line.SplitAny('|', '+'))
             depth += DepthFromStart(line[cell]);
         return depth;
     }

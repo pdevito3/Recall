@@ -20,6 +20,14 @@ public class MarkdownCostTests
         return $"{border}\n| {cell} |\n{border}";
     }
 
+    /// <summary>The cell of the second column goes on over the border of the first, so its edges are "+".</summary>
+    private static string CellOverABorder(string cell)
+    {
+        var border = "+--+" + Repeat("-", cell.Length + 2) + "+";
+        var blank = Repeat(" ", cell.Length + 1);
+        return $"{border}\n|a |c{blank}|\n+--+ {cell} +\n{border}";
+    }
+
     public static IEnumerable<Func<string>> EachCostlyText()
     {
         string[] texts =
@@ -60,6 +68,7 @@ public class MarkdownCostTests
             string.Concat(Enumerable.Range(0, 170).Select(line => Repeat(" ", line * 64) + Repeat("- ", 32) + "x\r")),
             GridTable(Repeat("- ", 150_000) + "x"),
             "> " + GridTable(Repeat("> ", 150_000) + "x").Replace("\n", "\n> ", StringComparison.Ordinal),
+            CellOverABorder(Repeat("- ", 120_000) + "x"),
         ];
         return texts.Select<string, Func<string>>(text => () => text);
     }
