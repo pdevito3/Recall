@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 
 import type { ModelProviderDto } from '@/api/generated/models/types/model-provider-dto'
 import { Badge } from '@/components/ui/badge'
@@ -46,6 +46,15 @@ export function ModelProviderCard({ provider }: { provider: ModelProviderDto }) 
   const urlChanged = newUrl.trim() !== (provider.baseUrl ?? '')
   const urlNeedsKey = urlChanged && provider.keyState !== 'None' && newKey.trim() === ''
 
+  // Make active goes away when it works, so the focus goes to the name of the provider and not to the page.
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  const isActivatedHere = useRef(false)
+  useEffect(() => {
+    if (!provider.isActive || !isActivatedHere.current) return
+    isActivatedHere.current = false
+    headingRef.current?.focus()
+  }, [provider.isActive])
+
   const handleSaveKey = () =>
     update.mutate({ ...savedChange(provider), apiKey: newKey }, { onSuccess: () => setNewKey('') })
 
@@ -64,7 +73,9 @@ export function ModelProviderCard({ provider }: { provider: ModelProviderDto }) 
     <Card>
       <CardHeader>
         <CardTitle className="flex flex-wrap items-center gap-2 text-lg">
-          <h3 className="wrap-anywhere">{provider.name}</h3>
+          <h3 ref={headingRef} tabIndex={-1} className="wrap-anywhere outline-none">
+            {provider.name}
+          </h3>
           <Badge variant="outline">{KIND_LABELS[provider.kind]}</Badge>
           {provider.isActive && <Badge>Active</Badge>}
         </CardTitle>
@@ -119,7 +130,14 @@ export function ModelProviderCard({ provider }: { provider: ModelProviderDto }) 
               variant="outline"
               isDisabled={!provider.model}
               isPending={update.isPending}
-              onPress={() => update.mutate({ ...savedChange(provider), makeActive: true })}
+              onPress={() => {
+                isActivatedHere.current = true
+                update.mutate({ ...savedChange(provider), makeActive: true }, {
+                  onError: () => {
+                    isActivatedHere.current = false
+                  },
+                })
+              }}
             >
               Make active
             </Button>
@@ -155,7 +173,7 @@ export function ModelProviderCard({ provider }: { provider: ModelProviderDto }) 
               }}
               className="flex w-full flex-col gap-2"
             >
-              <Label>Model of {provider.name}</Label>
+              <Label className="wrap-anywhere">Model of {provider.name}</Label>
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>

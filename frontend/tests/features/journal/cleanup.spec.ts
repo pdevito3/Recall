@@ -118,6 +118,25 @@ test.describe('the Cleanup of an entry', () => {
     await expect(at.at.words('um I met sam today')).toBeVisible()
   })
 
+  test('a run turns Run Cleanup off, so the focus goes to Stop Cleanup, and a stop gives it back to Run Cleanup', async ({ page, api }) => {
+    const entry = aSession().saying('um I met sam today')
+    const running = entry.cleanupRunning().build()
+    const stopped = entry.cleanupFailed('Stopped').build()
+    api.mock(sessionsApi.oneIs(entry.build()), sessionsApi.cleanupStarts(running), sessionsApi.cleanupStops(stopped))
+    const at = entryPage(page)
+    await at.open(running.id)
+
+    api.mock(sessionsApi.oneIs(running))
+    await at.runCleanup(running.id)
+    await expect(at.at.runCleanup).toBeDisabled()
+    await expect(at.at.stopCleanup).toBeFocused()
+
+    api.mock(sessionsApi.oneIs(stopped))
+    await at.stopCleanup(running.id)
+    await expect(at.at.stopCleanup).toHaveCount(0)
+    await expect(at.at.runCleanup).toBeFocused()
+  })
+
   test('a finished run has no stop button', async ({ page, api }) => {
     const clean = aSession().cleaned('Done.').build()
     api.mock(sessionsApi.oneIs(clean))

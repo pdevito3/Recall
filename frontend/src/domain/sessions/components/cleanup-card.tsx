@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
 import { QueryError } from '@/components/query-error'
@@ -130,6 +130,16 @@ export function CleanupCard({ session }: CleanupPartProps) {
     if (!isRunning) resetApply()
   }, [isRunning, resetApply])
 
+  // A run turns Run Cleanup off, and its end removes Stop Cleanup. The focus goes to the other button, so it does not fall to the page.
+  const runRef = useRef<HTMLButtonElement>(null)
+  const stopRef = useRef<HTMLButtonElement>(null)
+  const lastFocused = useRef<'run' | 'stop' | null>(null)
+  useEffect(() => {
+    const target = isRunning && lastFocused.current === 'run' ? stopRef.current : !isRunning && lastFocused.current === 'stop' ? runRef.current : null
+    const focused = document.activeElement
+    if (target && (focused === null || focused === document.body || focused === runRef.current)) target.focus()
+  }, [isRunning])
+
   const isStop = session.cleanupStatus === 'Failed' && session.cleanupFailure === 'Stopped'
   const failure = isStop ? null : FAILURE_TEXT[session.cleanupFailure]
   const hasNoProvider = provider.isSuccess && !provider.data.name
@@ -200,8 +210,12 @@ export function CleanupCard({ session }: CleanupPartProps) {
       <RefusedSaveAlert problem={startProblem ?? stopProblem ?? applyProblem} />
       <div className="flex flex-wrap gap-2">
         <Button
+          ref={runRef}
           isPending={start.isPending}
           isDisabled={isRunning || hasNoProvider}
+          onFocus={() => {
+            lastFocused.current = 'run'
+          }}
           onPress={() => {
             apply.reset()
             start.mutate()
@@ -210,7 +224,15 @@ export function CleanupCard({ session }: CleanupPartProps) {
           {session.cleanupStatus === 'NotRun' || isRunning ? 'Run Cleanup' : 'Run Cleanup again'}
         </Button>
         {isRunning && (
-          <Button variant="outline" isPending={stop.isPending} onPress={() => stop.mutate()}>
+          <Button
+            ref={stopRef}
+            variant="outline"
+            isPending={stop.isPending}
+            onFocus={() => {
+              lastFocused.current = 'stop'
+            }}
+            onPress={() => stop.mutate()}
+          >
             Stop Cleanup
           </Button>
         )}

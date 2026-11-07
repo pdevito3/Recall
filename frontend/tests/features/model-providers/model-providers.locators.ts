@@ -12,6 +12,7 @@ export const modelProviders = (page: Page) => ({
   connectFailed: page.getByRole('alert').filter({ hasText: 'The connection failed.' }),
   modelSelect: (provider: string) => page.getByRole('button', { name: new RegExp(`Model of ${provider}`) }),
   modelOption: (name: string) => page.getByRole('option', { name }),
+  modelLabel: (provider: string) => page.getByText(`Model of ${provider}`, { exact: true }),
   noAdminNote: page.getByText('An Admin connects the model provider of this install.'),
   keyRingWarning: page.getByRole('alert').filter({ hasText: 'The key ring changed' }),
   providerHeading: (name: string) => page.getByRole('heading', { level: 3, name }),

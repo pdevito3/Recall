@@ -103,6 +103,20 @@ test.describe('the model providers page', () => {
     await expect.poll(() => api.last('put', modelProviderPaths.record(provider.id))?.body).toMatchObject({ makeActive: true, model: 'model-a' })
   })
 
+  test('after Make active, the focus goes to the name of the provider, because the button goes away', async ({ page, api }) => {
+    const provider = aProvider({ isActive: false, model: 'model-a' })
+    api.mock(signedInAs('Admin'), modelProvidersApi.listHolds([provider]), modelProvidersApi.updateAnswers({ ...provider, isActive: true }))
+    const at = modelProviders(page)
+    await page.goto('/model-providers')
+    await expect(at.makeActive).toBeEnabled()
+
+    api.mock(modelProvidersApi.listHolds([{ ...provider, isActive: true }]))
+    await at.makeActive.click()
+
+    await expect(at.makeActive).toHaveCount(0)
+    await expect(at.providerHeading('Mine')).toBeFocused()
+  })
+
   test('a new URL of a provider with a key needs the key again, and both go in one save', async ({ page, api }) => {
     const provider = aProvider({ kind: 'OpenAiCompatible', baseUrl: 'http://192.168.1.20:11434/v1', model: 'model-a' })
     api.mock(signedInAs('Admin'), modelProvidersApi.listHolds([provider]), modelProvidersApi.updateAnswers(provider))
@@ -215,6 +229,24 @@ test.describe('a page of model providers on a 390 px phone', () => {
 
     expect((await at.text(address).boundingBox())?.height).toBeGreaterThan(24)
     expect(await at.addressPartsThatBreak(address)).toEqual([])
+  })
+
+  test('a long name of a provider breaks in the label of its model, so no text runs out of the card', async ({ page, api }) => {
+    const name = `Maximilian${'bartholomew'.repeat(8)}`
+    const provider = aProvider({ name, model: 'model-a' })
+    api.mock(
+      signedInAs('Admin'),
+      modelProvidersApi.listHolds([provider]),
+      modelProvidersApi.testAnswers(provider, { ok: true, models: [{ id: 'model-a', displayName: 'Model A' }] }),
+    )
+    const at = modelProviders(page)
+    await page.goto('/model-providers')
+
+    await at.test.click()
+    await expect(at.modelLabel(name)).toBeVisible()
+
+    expect(await at.modelLabel(name).evaluate((label) => label.scrollWidth - label.clientWidth)).toBe(0)
+    expect(await at.pageOverflow()).toBe(0)
   })
 
   test('Save URL and Save key each sit under their input', async ({ page, api }) => {
