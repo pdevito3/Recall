@@ -27,10 +27,12 @@ public sealed class SqliteWriterLine : DbCommandInterceptor
     internal static async Task<Turn> WaitForTurnAsync(DatabaseFacade database, CancellationToken cancellationToken)
     {
         var line = LinesByConnectionString.GetOrAdd(database.GetConnectionString() ?? "", _ => new Line(new SemaphoreSlim(1, 1)));
+        var wait = line.Gate.WaitAsync(cancellationToken);
+        // After the wait has its place, so a writer that a test counts cannot lose its place to a later writer.
         Interlocked.Increment(ref line.Writers);
         try
         {
-            await line.Gate.WaitAsync(cancellationToken);
+            await wait;
         }
         catch
         {
@@ -48,7 +50,7 @@ public sealed class SqliteWriterLine : DbCommandInterceptor
         CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
     {
         // An open transaction holds the write lock or the turn of its save, so a wait here would not end.
-        if (eventData.CommandSource is CommandSource.ExecuteUpdate or CommandSource.ExecuteDelete or CommandSource.ExecuteSqlRaw
+        if (eventData.CommandSource is CommandSource.ExecuteUpdate or CommandSource.ExecuteDelete
             && eventData.Context is { Database.CurrentTransaction: null } context)
             _turns[command] = await WaitForTurnAsync(context.Database, cancellationToken);
         return result;

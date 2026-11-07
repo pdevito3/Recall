@@ -105,7 +105,7 @@ public sealed class SqliteWriterLineTests
     }
 
     [Test]
-    public async Task a_write_that_the_guard_refuses_takes_no_turn()
+    public async Task a_write_that_the_guard_refuses_leaves_the_line_working()
     {
         // Arrange
         await using var database = await MigratedDatabaseAsync();
