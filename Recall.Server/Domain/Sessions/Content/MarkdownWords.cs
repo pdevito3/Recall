@@ -18,13 +18,21 @@ internal static partial class MarkdownWords
         CountDocument(document, inDocument);
 
         var missing = new Dictionary<string, int>(StringComparer.Ordinal);
-        CountWords(EntityForm().Replace(ItemMarker().Replace(markdown, string.Empty), string.Empty), missing, 1);
+        CountWords(EntityForm().Replace(ItemMarker().Replace(markdown, " "), " "), missing, 1);
 
         // The label of "[text][label]" stays in the definition, and the document needs it only once.
         foreach (var link in parsed.Descendants<LinkInline>().Where(link => link.Label is not null))
             CountWords(link.Label!, missing, -1);
 
-        return missing.All(word => word.Value <= inDocument.GetValueOrDefault(word.Key));
+        return missing.All(word => word.Value <= inDocument.GetValueOrDefault(word.Key))
+            && parsed.Descendants<ListBlock>().Where(list => list.IsOrdered).All(NumbersFollowTheStart);
+    }
+
+    /// <summary>A list holds only its start, and a page counts from there. So "1999. 2003. 2011." would show other years, and only a list that counts up or repeats its start can go in the document.</summary>
+    private static bool NumbersFollowTheStart(ListBlock list)
+    {
+        var numbers = list.OfType<ListItemBlock>().Select(item => item.Order).ToList();
+        return numbers.Distinct().Count() <= 1 || numbers.Select((number, index) => number - index).Distinct().Count() == 1;
     }
 
     private static void CountDocument(JsonObject node, Dictionary<string, int> counts)
@@ -73,7 +81,7 @@ internal static partial class MarkdownWords
         word.Clear();
     }
 
-    // The marker of a list item, with the "[x]" of a task. The start of an ordered list is an attribute, and a later number is not kept.
+    // The marker of a list item, with the "[x]" of a task. The start of an ordered list is an attribute, and a later number follows from it.
     [GeneratedRegex(@"^(?:[ \t>]*(?:[-+*]|[0-9]{1,9}[.)])[ \t]+(?:\[[ xX]\][ \t]+)?)+", RegexOptions.Multiline, matchTimeoutMilliseconds: 5_000)]
     private static partial Regex ItemMarker();
 

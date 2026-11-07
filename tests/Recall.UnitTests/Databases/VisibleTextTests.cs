@@ -22,6 +22,7 @@ public class VisibleTextTests
         VisibleText.OneLine($"می{NonJoiner}روم").ShouldBe($"می{NonJoiner}روم");
         VisibleText.OneLine($"a{Joiner}b").ShouldBe($"a{Joiner}b");
         VisibleText.Without($"line{Bidi}\nend").ShouldBe("line\nend");
+        VisibleText.Without("two\twords").ShouldBe("two words");
     }
 
     [Test]

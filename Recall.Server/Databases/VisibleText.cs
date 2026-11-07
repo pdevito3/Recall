@@ -16,7 +16,7 @@ public static class VisibleText
     private const char ParagraphSeparator = (char)0x2029;
 
     public static string Without(string value)
-        => new(value.Where(c => !IsHidden(c) || c == '\n').ToArray());
+        => new(value.Select(c => c != '\n' && IsHidden(c) && char.IsWhiteSpace(c) ? ' ' : c).Where(c => !IsHidden(c) || c == '\n').ToArray());
 
     /// <summary>The text with no hidden character, and its runs of white space as one space.</summary>
     public static string OneLine(string value)

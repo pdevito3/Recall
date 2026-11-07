@@ -82,6 +82,9 @@ public static class JobHosting
             // stops after it gets no time to give back its jobs.
             host.ServicesStopConcurrently = true;
         });
+        // A hosted service starts in the order of its registration, so each limit is in place before a worker group can claim.
+        if (settingsAtRegistration.RunWorkers || !inDevelopmentOrTest)
+            builder.Services.AddHostedService<CleanupQueueLimits>();
         builder.Services.AddBackWave(backwave =>
         {
             backwave.UseStore(services => new SqliteJobStore(new SqliteStoreOptions
@@ -97,7 +100,6 @@ public static class JobHosting
                 backwave.AddWorkerGroup(SystemWorkers(settingsAtRegistration));
                 backwave.AddWorkerGroup(CleanupWorkers(settingsAtRegistration));
                 backwave.AddWorkerGroup(TranscriptionWorkers(settingsAtRegistration));
-                builder.Services.AddHostedService<CleanupQueueLimits>();
                 builder.Services.AddHostedService<JobHostWatch>();
                 builder.Services.AddSingleton<CleanupJobWatch>();
                 builder.Services.AddHostedService(services => services.GetRequiredService<CleanupJobWatch>());

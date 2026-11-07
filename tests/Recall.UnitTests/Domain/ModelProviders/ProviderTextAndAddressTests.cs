@@ -161,6 +161,16 @@ public class ProviderTextAndAddressTests
     }
 
     [Test]
+    [Arguments("fd20:ce::254")]
+    [Arguments("64:ff9b:1::a9fe:a9fe")]
+    [Arguments("::ffff:0:a9fe:a9fe")]
+    public void each_other_form_of_a_metadata_address_is_refused(string address)
+    {
+        // Act and Assert
+        ProviderAddressRule.Refuses(IPAddress.Parse(address), false).ShouldBeTrue();
+    }
+
+    [Test]
     [Arguments("http://169.254.169.254/v1")]
     [Arguments("http://[fe80::1]:8080/v1")]
     [Arguments("http://[::ffff:169.254.169.254]/v1")]

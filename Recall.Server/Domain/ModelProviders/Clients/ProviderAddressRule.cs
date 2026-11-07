@@ -13,6 +13,7 @@ public static class ProviderAddressRule
     private static readonly IPAddress[] MetadataAddresses =
     [
         IPAddress.Parse("fd00:ec2::254"), // AWS over IPv6.
+        IPAddress.Parse("fd20:ce::254"), // Google Cloud over IPv6.
         IPAddress.Parse("100.100.100.200"), // Alibaba Cloud.
         IPAddress.Parse("168.63.129.16"), // Azure.
         IPAddress.Parse("192.0.0.192"), // Oracle Cloud.
@@ -94,9 +95,11 @@ public static class ProviderAddressRule
             return address.MapToIPv4();
 
         var bytes = address.GetAddressBytes();
-        var isNat64 = bytes[0] == 0x00 && bytes[1] == 0x64 && bytes[2] == 0xff && bytes[3] == 0x9b && bytes[4..12].All(b => b == 0);
+        var isNat64 = bytes[0] == 0x00 && bytes[1] == 0x64 && bytes[2] == 0xff && bytes[3] == 0x9b
+            && (bytes[4..12].All(b => b == 0) || (bytes[4] == 0x00 && bytes[5] == 0x01));
+        var isTranslated = bytes[..8].All(b => b == 0) && bytes[8] == 0xff && bytes[9] == 0xff && bytes[10] == 0 && bytes[11] == 0;
         var isCompatible = bytes[..12].All(b => b == 0) && (bytes[12] | bytes[13]) != 0;
-        if (isNat64 || isCompatible)
+        if (isNat64 || isTranslated || isCompatible)
             return new IPAddress(bytes[12..]);
         return bytes[0] == 0x20 && bytes[1] == 0x02 ? new IPAddress(bytes[2..6]) : address; // 6to4.
     }

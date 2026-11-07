@@ -89,7 +89,7 @@ public sealed class CleanupJob(
         await scope.ServiceProvider.GetRequiredService<IMediator>().Send(new FailCleanupRun.Command(sessionId, runId, failure), cancellationToken);
     }
 
-    /// <summary>The time since the first claim. A wait in the queue does not count, because a person can wait behind other work.</summary>
+    /// <summary>The time since the first claim. A wait before that claim does not count, because a run can wait behind other work. A wait between tries and a stop of the server do count.</summary>
     private async Task<TimeSpan> TimeInRunAsync(JobContext context, CancellationToken cancellationToken)
     {
         if (context.Attempt <= 1)

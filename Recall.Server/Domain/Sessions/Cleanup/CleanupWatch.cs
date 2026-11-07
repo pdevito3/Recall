@@ -56,7 +56,7 @@ public sealed class CleanupWatch(AppDbContext dbContext, TimeProvider timeProvid
     public static string TextOf(CleanupFailure failure) => failure switch
     {
         CleanupFailure.None => string.Empty,
-        CleanupFailure.NoModelProvider => "No model provider is ready. An Admin must connect one and pick a model.",
+        CleanupFailure.NoModelProvider => "No model provider is ready. An Admin must connect one, pick a model, and make it active.",
         CleanupFailure.KeyUnreadable => "The server cannot read the API key of the model provider. An Admin must enter the key again.",
         CleanupFailure.ProviderRefused => "The model provider refused the request. An Admin can test the connection on the model provider page.",
         CleanupFailure.ProviderUnavailable => "The model provider did not answer after several tries. Try again later.",

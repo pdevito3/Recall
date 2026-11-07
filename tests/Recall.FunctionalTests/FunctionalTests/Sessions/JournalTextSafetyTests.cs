@@ -37,6 +37,44 @@ public class JournalTextSafetyTests : TestBase
     }
 
     [Test]
+    [Arguments("""{"type":"doc","content":[{"type":"text","text":"x","marks":[{"type":"link","attrs":{"href":"http://a","href":"javascript:x"}}]}]}""")]
+    [Arguments("""{"type":"text","type":"doc","content":[{"type":"text","text":"x","marks":[{"type":"link","attrs":{"href":"javascript:x"}}]}]}""")]
+    [Arguments("""{"type":"doc","content":[{"type":"text","text":"x","marks":[{"type":"link","attrs":{"href":["javascript:x"]}}]}]}""")]
+    [Arguments("""{"type":"doc","content":[{"type":"text","text":"x","marks":[{"type":"link","attrs":{"hr\u0065f":"java\u0073cript:x"}}]}]}""")]
+    public async Task a_draft_that_hides_a_refused_link_from_a_tree_is_refused(string document)
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+
+        // Act
+        var cleaned = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Cleaned(session.Id), new { text = document, baseRevision = 0, savedAt = JournalScenario.Morning });
+
+        // Assert
+        cleaned.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Test]
+    [Arguments("ftp://files.example/a")]
+    [Arguments("sms:+15551234")]
+    [Arguments("example.com:8080/a")]
+    public async Task a_raw_draft_with_a_link_of_another_scheme_saves_with_its_words(string address)
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        var document = """{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"mine","marks":[{"type":"link","attrs":{"href":ADDRESS}}]}]}]}""".Replace("ADDRESS", System.Text.Json.JsonSerializer.Serialize(address));
+
+        // Act
+        var raw = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Draft(session.Id), new { text = document, baseRevision = 0, savedAt = JournalScenario.Morning });
+
+        // Assert
+        raw.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Test]
     public async Task a_draft_with_a_web_link_saves()
     {
         // Arrange

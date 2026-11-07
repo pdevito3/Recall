@@ -20,7 +20,7 @@ A connect does not change which provider a Cleanup uses. A provider is active on
 |---|---|---|
 | Connect | 10 s | A host that answers on a network answers in this time. A person waits for the test button. |
 | No progress on a read, also for the headers | 3 min | A local model can load and read a long prompt before its first byte. Anthropic sends `ping` events during a stream. A hung call ends here. |
-| A whole call for words, and all tries of one run | 40 min | The longest answer is 64 000 tokens. At 30 tokens each second, this is about 36 min. A wait in the queue does not count. |
+| A whole call for words, and all tries of one run | 40 min | The longest answer is 64 000 tokens. At 30 tokens each second, this is about 36 min. A wait before the first claim does not count. A wait between tries and a stop of the server do count, so a run that passes the limit in a long stop ends with no new call, and a person can run it again. |
 | A call for the model list | 30 s | A person waits for it, and no model runs. |
 | A body that is not a stream | 16 MiB | A list of models or an error is far smaller. A `Content-Length` above the limit ends the call before a read. |
 | A stream | 64 MiB | 250 000 tokens with an envelope of up to 250 bytes for each. |
