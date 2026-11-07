@@ -533,7 +533,6 @@ export class DraftSaver {
   }
 
   private noteWordsOnlyInHistory(words: string) {
-    this.reportsArrival = false
     this.wordsInHistory = words
     this.update({ conflict: 'wordsMovedToHistory' })
   }
