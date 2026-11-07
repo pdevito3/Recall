@@ -86,6 +86,7 @@ public partial class MarkdownWordsTests
             ("w1\n: w2", ["w1", "w2"], "paragraph"),
             (":::note\nw1\n:::", ["note", "w1"], "paragraph"),
             ("# w1 {#w2 .w3}", ["w1", "w2", "w3"], "heading"),
+            ("# R&amp;D don&#39;t w1", ["R", "D", "don", "t", "w1"], "heading"),
             ("-\n\n>\n\nw1", ["w1"], "paragraph"),
         ];
         return forms.Select<(string, string[], string), Func<(string, string[], string)>>(form => () => form);

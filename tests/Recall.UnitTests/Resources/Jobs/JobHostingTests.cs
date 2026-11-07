@@ -5,6 +5,7 @@ using BackWave.Core;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Recall.Server.Resources.Entrypoints.Jobs;
 using Recall.Server.Resources.Jobs;
@@ -92,6 +93,23 @@ public class JobHostingTests
         // Assert
         group.PoolSize.ShouldBe(1);
         group.Policy.ShouldBeOfType<DispatchPolicy.Strict>().Queues.ShouldBe([JobHosting.TranscriptionQueue]);
+    }
+
+    [Test]
+    public void each_cleanup_limit_is_written_before_a_worker_group_can_claim()
+    {
+        // Arrange
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Production" });
+
+        // Act
+        builder.AddJobs();
+
+        // Assert
+        var hosted = builder.Services.Where(service => service.ServiceType == typeof(IHostedService)).ToList();
+        Console.WriteLine(string.Join(" | ", hosted.Select(service => service.ImplementationType?.FullName ?? service.ImplementationFactory?.Method.ToString() ?? "?")));
+        var limits = hosted.FindIndex(service => service.ImplementationType == typeof(CleanupQueueLimits));
+        limits.ShouldBeGreaterThanOrEqualTo(0);
+        hosted.Take(limits).ShouldBeEmpty();
     }
 
     [Test]
