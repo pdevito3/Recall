@@ -1011,6 +1011,122 @@
         }
       }
     },
+    "/api/v1/transcription-engine": {
+      "put": {
+        "tags": [
+          "ModelProviders"
+        ],
+        "summary": "Sends the audio of each new Recording to a model provider that takes audio, or keeps it on the server with no provider.\nA provider of a kind that takes no audio gets 422.",
+        "operationId": "ChooseTranscriptionEngine",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TranscriptionEngineForUpdateDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscriptionEngineDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "ModelProviders"
+        ],
+        "summary": "Gets the engine that makes the text of the next Recording of the caller, with the reason for a person.",
+        "operationId": "GetTranscriptionEngine",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscriptionEngineDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
     "/api/v1/model-providers/{id}": {
       "delete": {
         "tags": [
@@ -6320,7 +6436,8 @@
           },
           "engine": {
             "enum": [
-              "Local"
+              "Local",
+              "Cloud"
             ],
             "type": "string"
           },
@@ -6350,7 +6467,11 @@
               "TooManyAttempts",
               "TooLong",
               "TextTooLong",
-              "NoWordsFound"
+              "NoWordsFound",
+              "ProviderUnavailable",
+              "ProviderRefused",
+              "ProviderBadAnswer",
+              "ProviderKeyUnreadable"
             ],
             "type": "string"
           },
@@ -7126,6 +7247,74 @@
             "minimum": 0,
             "type": "integer",
             "description": "The version of the tenant that the caller loaded. A stale version gives 409."
+          }
+        }
+      },
+      "TranscriptionEngineDto": {
+        "required": [
+          "engine",
+          "reason",
+          "text"
+        ],
+        "type": "object",
+        "properties": {
+          "engine": {
+            "enum": [
+              "Local",
+              "Cloud"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "ProviderChosen",
+              "NoProviderTakesAudio",
+              "NoProviderChosen"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string",
+            "description": "What it means for the audio, for a person."
+          },
+          "modelProviderId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "modelProviderName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "model": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Where the audio of the tenant becomes text, and why."
+      },
+      "TranscriptionEngineForUpdateDto": {
+        "type": "object",
+        "properties": {
+          "modelProviderId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The provider that gets the audio. Null sends no audio out, and the local engine makes the text."
+          },
+          "model": {
+            "maxLength": 200,
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The model that turns audio into text, such as `gpt-transcribe` or `whisper-large-v3-turbo`."
           }
         }
       },

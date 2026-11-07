@@ -1,6 +1,7 @@
 namespace Recall.FunctionalTests.FunctionalTests.Recordings;
 
 using System.Net;
+using BackWave.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
@@ -27,7 +28,7 @@ public class RecordingSweepTests : TestBase
         public SweptFolder()
         {
             Store = new FileStore(Options.Create(new FileStoreOptions { Root = _root }));
-            Sweep = new RecordingSweep(Services.GetRequiredService<IServiceScopeFactory>(), Store, TimeProvider.System);
+            Sweep = new RecordingSweep(Services.GetRequiredService<IServiceScopeFactory>(), Store, Services.GetRequiredService<IJobStore>(), TimeProvider.System);
         }
 
         public FileStore Store { get; }
@@ -144,7 +145,7 @@ public class RecordingSweepTests : TestBase
         var recording = await FactoryClient.AddFinishedRecordingAsync(session.Id);
         using var folder = new SweptFolder();
         var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        var sweep = new RecordingSweep(Services.GetRequiredService<IServiceScopeFactory>(), folder.Store, clock);
+        var sweep = new RecordingSweep(Services.GetRequiredService<IServiceScopeFactory>(), folder.Store, Services.GetRequiredService<IJobStore>(), clock);
         using var service = new RecordingSweepService(sweep, clock);
         var before = await CountJobsAsync("transcribe-recording", recording.Id);
 

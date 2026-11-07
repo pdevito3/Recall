@@ -5,17 +5,21 @@ using Databases;
 using Jobs;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using ModelProviders;
+using ModelProviders.Clients;
 using Resources;
 using Resources.Storage;
 using Serilog;
+using Transcription;
 
 public static class BeginTranscription
 {
-    public sealed record Start(string AudioPath, string WorkFolder, long StartSample);
+    public sealed record Start(string AudioPath, string WorkFolder, long StartSample, AudioProvider? Provider);
 
-    public sealed record Command(string Id, bool EngineIsReady) : IRequest<Start?>, IRunsAgainWhenRaced;
+    /// <summary>A job of another engine does nothing, so two engines never work on one Recording at a time.</summary>
+    public sealed record Command(string Id, TranscriptionEngineKind Engine, bool EngineIsReady) : IRequest<Start?>, IRunsAgainWhenRaced;
 
-    public sealed class Handler(AppDbContext dbContext, FileStore fileStore) : IRequestHandler<Command, Start?>
+    public sealed class Handler(AppDbContext dbContext, FileStore fileStore, ApiKeyProtector keys, TimeProvider timeProvider) : IRequestHandler<Command, Start?>
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
 
@@ -26,14 +30,37 @@ public static class BeginTranscription
             var recording = await dbContext.Recordings
                 .TagWithOperationCallSite("recordings.transcribe.begin")
                 .GetById(request.Id, cancellationToken);
-            if (!recording.WaitsForTranscription)
+            if (!recording.WaitsForTranscription || recording.Engine != request.Engine)
                 return null;
 
             RecordingWork.TryDeleteSlices(fileStore, recording, _logger);
+            AudioProvider? provider = null;
+            if (recording.Engine == TranscriptionEngineKind.Cloud)
+            {
+                var chosen = await dbContext.ModelProviders.AsNoTracking()
+                    .TagWithOperationCallSite("recordings.transcribe.provider")
+                    .TranscriptionFirst()
+                    .FirstOrDefaultAsync(cancellationToken);
+                if (chosen is null)
+                {
+                    await HandToLocalEngineAsync(recording, cancellationToken);
+                    return null;
+                }
+
+                var read = keys.Read(chosen.ProtectedApiKey);
+                provider = read is ProtectedKeyRead.Unreadable
+                    ? null
+                    : new AudioProvider(new ModelEndpoint(chosen.Kind, chosen.BaseUrl, (read as ProtectedKeyRead.Readable)?.ApiKey), chosen.TranscriptionModel!);
+            }
+
             Start? start = null;
             if (!request.EngineIsReady)
             {
                 recording.WaitForModel();
+            }
+            else if (recording.Engine == TranscriptionEngineKind.Cloud && provider is null)
+            {
+                recording.Fail(RecordingProblem.ProviderKeyUnreadable);
             }
             else if (!fileStore.Exists(RecordingFiles.Audio(recording)))
             {
@@ -44,19 +71,58 @@ public static class BeginTranscription
                 start = new Start(
                     fileStore.LocalPathOf(RecordingFiles.Audio(recording)),
                     fileStore.LocalPathOf(RecordingFiles.Folder(recording)),
-                    recording.TranscribedSamples);
+                    recording.TranscribedSamples,
+                    provider);
             }
 
             await dbContext.SaveChangesAsync(cancellationToken);
             _logger.Here().Information("Recording {RecordingId} is {Status}, {Problem}", recording.Id, recording.Status, recording.Problem);
             return start;
         }
+
+        // The Admin took the choice of a provider back after this Recording was queued. The audio does not leave the server
+        // with no choice in force, so the local engine makes the text from the saved pointer on.
+        private async Task HandToLocalEngineAsync(Recording recording, CancellationToken cancellationToken)
+        {
+            recording.HandToLocalEngine();
+            var now = timeProvider.GetUtcNow();
+            await dbContext.SaveAndEnqueueAsync(
+                (jobs, ct) => RecordingWork.EnqueueAsync(jobs, recording, cloudQueue: null, now, ct),
+                cancellationToken);
+            _logger.Here().Information("Recording {RecordingId} has no provider for audio, so the local engine makes its text", recording.Id);
+        }
+    }
+}
+
+public static class WaitForTranscriptionProvider
+{
+    public sealed record Command(string Id, TranscriptionEngineKind Engine) : IRequest, IRunsAgainWhenRaced;
+
+    public sealed class Handler(AppDbContext dbContext) : IRequestHandler<Command>
+    {
+        private readonly ILogger _logger = Log.ForContext<Handler>();
+
+        public async Task Handle(Command request, CancellationToken cancellationToken)
+        {
+            Activity.Current?.SetTag("app.recording_id", request.Id);
+
+            var recording = await dbContext.Recordings
+                .TagWithOperationCallSite("recordings.transcribe.wait_for_provider")
+                .GetById(request.Id, cancellationToken);
+            if (!recording.WaitsForTranscription || recording.Engine != request.Engine)
+                return;
+
+            recording.WaitForProvider();
+            await dbContext.SaveChangesAsync(cancellationToken);
+            _logger.Here().Information("Recording {RecordingId} waits for its provider", recording.Id);
+        }
     }
 }
 
 public static class SaveTranscriptChunk
 {
-    public sealed record Command(string Id, long EndSample, long TotalSamples, string Words) : IRequest<bool>, IRunsAgainWhenRaced;
+    /// <summary>A chunk of an engine that no longer has the Recording is refused, so a hand-over repeats no text.</summary>
+    public sealed record Command(string Id, TranscriptionEngineKind Engine, long EndSample, long TotalSamples, string Words) : IRequest<bool>, IRunsAgainWhenRaced;
 
     public sealed class Handler(AppDbContext dbContext, TimeProvider timeProvider) : IRequestHandler<Command, bool>
     {
@@ -69,6 +135,8 @@ public static class SaveTranscriptChunk
             var recording = await dbContext.Recordings
                 .TagWithOperationCallSite("recordings.transcribe.chunk")
                 .GetById(request.Id, cancellationToken);
+            if (recording.Engine != request.Engine)
+                return false;
 
             var words = request.Words.Trim();
             if (!StorableText.CanStore(words))

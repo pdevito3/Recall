@@ -19,7 +19,7 @@ public class RecordingTests
     {
         var recording = Receiving();
         recording.StoreSlice(0, 10);
-        recording.Finish([0], 1, 10);
+        recording.Finish([0], 1, 10, TranscriptionEngineKind.Local);
         return recording;
     }
 
@@ -71,7 +71,7 @@ public class RecordingTests
         recording.BeginAttempt();
 
         // Act
-        recording.Retry();
+        recording.Retry(TranscriptionEngineKind.Local);
 
         // Assert
         recording.Status.ShouldBe(RecordingStatus.Transcribing);
@@ -89,7 +89,7 @@ public class RecordingTests
         recording.Problem.ShouldBe(RecordingProblem.NoWordsFound);
 
         // Act
-        recording.Retry();
+        recording.Retry(TranscriptionEngineKind.Local);
 
         // Assert
         recording.TranscribedSamples.ShouldBe(0);
@@ -154,7 +154,7 @@ public class RecordingTests
         recording.StoreSlice(2, 1);
 
         // Act and assert
-        Should.Throw<ConflictException>(() => recording.Finish([0, 2], 3, 2));
+        Should.Throw<ConflictException>(() => recording.Finish([0, 2], 3, 2, TranscriptionEngineKind.Local));
         recording.Status.ShouldBe(RecordingStatus.Receiving);
         Recording.MissingSlices([0, 2], 3).ShouldBe([1]);
     }
@@ -167,7 +167,7 @@ public class RecordingTests
         recording.StoreSlice(0, 4);
 
         // Act and assert
-        Should.Throw<ConflictException>(() => recording.Finish([0], 1, 5));
+        Should.Throw<ConflictException>(() => recording.Finish([0], 1, 5, TranscriptionEngineKind.Local));
         recording.Status.ShouldBe(RecordingStatus.Receiving);
     }
 
@@ -180,7 +180,7 @@ public class RecordingTests
         recording.StoreSlice(1, 4);
 
         // Act and assert
-        Should.Throw<ConflictException>(() => recording.Finish([0, 1], 1, 8));
+        Should.Throw<ConflictException>(() => recording.Finish([0, 1], 1, 8, TranscriptionEngineKind.Local));
     }
 
     [Test]
@@ -219,7 +219,7 @@ public class RecordingTests
     public void the_payload_of_a_job_holds_only_ids()
     {
         // Arrange
-        Type[] payloads = [typeof(TranscribeRecording), typeof(DeleteRecordingAudio)];
+        Type[] payloads = [typeof(TranscribeRecording), typeof(TranscribeRecordingInCloud), typeof(DeleteRecordingAudio)];
 
         // Act
         var fields = payloads.SelectMany(p => p.GetProperties()).Select(p => p.Name).Distinct().Order();
@@ -321,7 +321,7 @@ public class RecordingTests
         recording.Fail(RecordingProblem.EngineCrashed);
 
         // Act
-        recording.Retry();
+        recording.Retry(TranscriptionEngineKind.Local);
 
         // Assert
         recording.Status.ShouldBe(RecordingStatus.Received);
@@ -339,7 +339,7 @@ public class RecordingTests
         recording.Complete(Now);
 
         // Act and assert
-        Should.Throw<ConflictException>(recording.Retry);
+        Should.Throw<ConflictException>(() => recording.Retry(TranscriptionEngineKind.Local));
     }
 
     [Test]

@@ -361,7 +361,7 @@ public class EndpointAccessSweepTests : TestBase
         await InsertAsync(provider);
         var recording = Recording.Create(tenant.Id, admin.Id, session.Id, $"sweep-{Guid.NewGuid():N}", RecordingFormat.Webm);
         recording.StoreSlice(0, 1);
-        recording.Finish([0], 1, 1);
+        recording.Finish([0], 1, 1, TranscriptionEngineKind.Local);
         await InsertAsync(recording);
         await using (var audio = new MemoryStream([1]))
             await TestingWebApplicationFactory.Instance.Services.GetRequiredService<FileStore>().WriteAsync(RecordingFiles.Audio(recording), audio, CancellationToken.None);

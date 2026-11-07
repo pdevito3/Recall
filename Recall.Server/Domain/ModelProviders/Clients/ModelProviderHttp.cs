@@ -6,6 +6,8 @@ public static class ModelProviderHttp
 {
     public const string ClientName = "model-provider";
 
+    public const string AudioClientName = "model-provider-audio";
+
     public static void AddModelProviders(this IServiceCollection services)
     {
         services.AddSingleton<ApiKeyProtector>();
@@ -18,8 +20,14 @@ public static class ModelProviderHttp
         services.AddSingleton<AnthropicModelClient>();
         services.AddSingleton<IModelProviderClient, ModelProviderClient>();
 
+        AddProviderClient(services, ClientName, provider => provider.GetRequiredService<ProviderReadGuard>());
+        AddProviderClient(services, AudioClientName, provider => new ProviderReadGuard(provider.GetRequiredService<ProviderLimits>().ForAudio()));
+    }
+
+    private static void AddProviderClient(IServiceCollection services, string name, Func<IServiceProvider, DelegatingHandler> readGuard)
+    {
 #pragma warning disable EXTEXP0001 // The call is the documented way to take the retries of the defaults off one client.
-        services.AddHttpClient(ClientName, client => client.Timeout = Timeout.InfiniteTimeSpan) // Each adapter sets the limit of its call.
+        services.AddHttpClient(name, client => client.Timeout = Timeout.InfiniteTimeSpan) // Each adapter sets the limit of its call.
             .ConfigurePrimaryHttpMessageHandler(provider => new SocketsHttpHandler
             {
                 // A redirect sends the key to another address, so the client does not follow one.
@@ -29,7 +37,7 @@ public static class ModelProviderHttp
                 ConnectTimeout = provider.GetRequiredService<ProviderLimits>().Connect,
                 ConnectCallback = ProviderAddressRule.ConnectAsync,
             })
-            .AddHttpMessageHandler<ProviderReadGuard>()
+            .AddHttpMessageHandler(readGuard)
             // The logger of a client writes each header at its lowest level. Its message shows `Authorization: *`, but a field of the
             // record holds `Bearer <key>`, and a file and OTLP write each field. A header here holds the key.
             .RemoveAllLoggers()
