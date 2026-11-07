@@ -27,7 +27,7 @@ public class StrikeInPlainTextTests : TestBase
         // Arrange
         await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
         var session = await scenario.SessionWithWordsAsync("raw words about Ann");
-        var stored = await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = Struck, peopleProposal = Ann, baseRawRevision = 1 });
+        var stored = await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = Struck, peopleProposal = Ann, baseRawRevision = 1, baseCleanedRevision = 0 });
 
         // Act
         var tagged = await PostAsync(ApiRoutes.Sessions.RespondToPersonProposal(session.Id), new { label = "Ann", approve = true, createNew = false });
