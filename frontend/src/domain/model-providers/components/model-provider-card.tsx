@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 
 import type { ModelProviderDto } from '@/api/generated/models/types/model-provider-dto'
 import { Badge } from '@/components/ui/badge'
@@ -19,6 +19,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 import { useDeleteModelProvider, useTestModelProvider, useUpdateModelProvider } from '../apis/model-providers'
 import { KIND_LABELS } from './model-provider-kind'
+
+/** An address breaks after a slash first, so that a line does not end a character or two short of the address. */
+function withBreaksAfterSlashes(address: string) {
+  return address.split(/(?<=\/)(?!\/)/).map((part, index) => (
+    <Fragment key={index}>
+      {index > 0 && <wbr />}
+      {part}
+    </Fragment>
+  ))
+}
 
 function savedChange(provider: ModelProviderDto) {
   return { name: provider.name, baseUrl: provider.baseUrl, model: provider.model, makeActive: false, version: provider.version }
@@ -85,7 +95,7 @@ export function ModelProviderCard({ provider }: { provider: ModelProviderDto }) 
           {provider.baseUrl && (
             <>
               <dt className="text-muted-foreground">Base URL</dt>
-              <dd className="wrap-anywhere max-sm:mb-2">{provider.baseUrl}</dd>
+              <dd className="wrap-anywhere max-sm:mb-2">{withBreaksAfterSlashes(provider.baseUrl)}</dd>
             </>
           )}
           <dt className="text-muted-foreground">Model</dt>
@@ -185,7 +195,7 @@ export function ModelProviderCard({ provider }: { provider: ModelProviderDto }) 
               id={keyFieldId}
               type="password"
               autoComplete="off"
-              className="min-w-0 flex-1 basis-48"
+              className="min-w-0 flex-1 basis-48 max-sm:basis-full"
               value={newKey}
               onChange={(event) => setNewKey(event.target.value)}
             />

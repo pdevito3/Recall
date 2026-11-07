@@ -175,6 +175,55 @@ test.describe('a page of model providers on a 390 px phone', () => {
     expect(await at.pageOverflow()).toBe(0)
   })
 
+  test('each control of the Cleanup card is 44 px high and wide', async ({ page, api }) => {
+    const session = aSession({
+      cleanupStatus: 'Clean',
+      cleanedText: 'Done.',
+      suggestions: [{ kind: 'Mood', value: 'Calm' }],
+      peopleProposals: [{ label: 'Ann', isNew: true, contexts: [] }],
+    })
+    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(session), modelProvidersApi.activeIs('Home lab'))
+    const at = modelProviders(page)
+
+    await page.goto(`/model-providers?session=${session.id}`)
+    await expect(at.tagPerson('Ann')).toBeVisible()
+
+    for (const control of await at.controls.all()) {
+      const box = await control.boundingBox()
+      expect(Math.min(box!.width, box!.height), await control.textContent() ?? '').toBeGreaterThanOrEqual(44)
+    }
+  })
+
+  test('a base URL longer than a line breaks after a slash, not one character short of its end', async ({ page, api }) => {
+    const address = 'http://host.docker.internal:31742/m/gate_mid/v1'
+    const provider = aProvider({ kind: 'OpenAiCompatible', baseUrl: address, model: 'model-a' })
+    api.mock(signedInAs('Admin'), noSessions, modelProvidersApi.listHolds([provider]))
+    const at = modelProviders(page)
+
+    await page.goto('/model-providers')
+    await expect(at.text(address)).toBeVisible()
+
+    expect((await at.text(address).boundingBox())?.height).toBeGreaterThan(24)
+    expect(await at.addressPartsThatBreak(address)).toEqual([])
+  })
+
+  test('Save URL and Save key each sit under their input', async ({ page, api }) => {
+    const provider = aProvider({ kind: 'OpenAiCompatible', baseUrl: 'http://host.docker.internal:26662/v1', model: 'model-a' })
+    api.mock(signedInAs('Admin'), noSessions, modelProvidersApi.listHolds([provider]))
+    const at = modelProviders(page)
+
+    await page.goto('/model-providers')
+    await expect(at.saveKey).toBeVisible()
+
+    const below = async (input: typeof at.newUrl, button: typeof at.saveUrl) => {
+      const field = (await input.boundingBox())!
+      const action = (await button.boundingBox())!
+      return { under: action.y >= field.y + field.height, sameLeft: action.x === field.x }
+    }
+    expect(await below(at.newUrl, at.saveUrl)).toEqual({ under: true, sameLeft: true })
+    expect(await below(at.newApiKey, at.saveKey)).toEqual({ under: true, sameLeft: true })
+  })
+
   test('each Session link is a touch target of 44 px', async ({ page, api }) => {
     const summary = aSessionSummary({ preview: 'a short entry' })
     api.mock(signedInAs('User'), modelProvidersApi.sessionsAre([summary]))

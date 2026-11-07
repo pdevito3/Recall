@@ -17,12 +17,27 @@ export const modelProviders = (page: Page) => ({
   fieldError: (text: string) => page.getByText(text),
   text: (words: string) => page.getByText(words),
   pageOverflow: () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
+  /** Each part of a shown address, between two slashes, that the page breaks over two lines. */
+  addressPartsThatBreak: (address: string) =>
+    page.evaluate((shown) => {
+      const element = [...document.querySelectorAll('dd')].find((dd) => dd.textContent === shown)
+      if (!element) throw new Error(`no address ${shown}`)
+      const range = document.createRange()
+      return [...element.childNodes]
+        .filter((node) => node.nodeType === Node.TEXT_NODE)
+        .filter((node) => {
+          range.selectNodeContents(node)
+          return range.getClientRects().length > 1
+        })
+        .map((node) => node.textContent)
+    }, address),
   runCleanup: page.getByRole('button', { name: /^Run Cleanup/ }),
   stopCleanup: page.getByRole('button', { name: 'Stop Cleanup' }),
   makeActive: page.getByRole('button', { name: 'Make active' }),
   newUrl: page.getByLabel('New URL'),
   newApiKey: page.getByLabel('New API key'),
   saveUrl: page.getByRole('button', { name: 'Save URL' }),
+  saveKey: page.getByRole('button', { name: 'Save key' }),
   noProviderNote: page.getByText('An Admin must connect a model provider, pick a model, and make it active first.'),
   controls: page.locator('main').getByRole('button').or(page.locator('main input:not([type=hidden])')),
   wordsGoTo: (name: string) => page.getByText(`A Cleanup sends your words to ${name}.`),
