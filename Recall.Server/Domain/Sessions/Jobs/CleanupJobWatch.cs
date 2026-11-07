@@ -2,6 +2,7 @@ namespace Recall.Server.Domain.Sessions.Jobs;
 
 using System.Text.Json;
 using BackWave.Storage;
+using Databases;
 using Features;
 using MediatR;
 using Resources;
@@ -81,7 +82,7 @@ public sealed class CleanupJobWatch(IJobStore store, IServiceScopeFactory scopeF
             return;
         }
 
-        await using var scope = scopeFactory.CreateJournalScope(payload.TenantId, payload.UserId);
+        await using var scope = scopeFactory.CreateJournalScope(new JournalOwner(payload.UserId, payload.TenantId));
         await scope.ServiceProvider.GetRequiredService<IMediator>()
             .Send(new FailCleanupRun.Command(payload.SessionId, payload.RunId, CleanupFailure.Interrupted), cancellationToken);
     }

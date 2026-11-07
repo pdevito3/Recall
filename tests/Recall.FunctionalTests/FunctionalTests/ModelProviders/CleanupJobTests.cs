@@ -12,7 +12,7 @@ using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Cleanup;
 using Recall.Server.Domain.Sessions.Dtos;
 using Recall.Server.Domain.Sessions.Jobs;
-using Recall.Server.Domain.Users;
+using Recall.Server.Domain.Tenants;
 using Recall.Server.Resources.Jobs;
 using Shouldly;
 using TestUtilities;
@@ -410,7 +410,7 @@ public class CleanupJobTests : TestBase
         var tenantId = await CleanupScenario.TenantIdOfAsync(mine.Id);
 
         // Act
-        await using var scope = Services.GetRequiredService<IServiceScopeFactory>().CreateJournalScope(tenantId, scenario.Member.Id);
+        await using var scope = Services.GetRequiredService<IServiceScopeFactory>().CreateJournalScope(new Recall.Server.Databases.JournalOwner(scenario.Member.Id, tenantId));
         var db = scope.ServiceProvider.GetRequiredService<Recall.Server.Databases.AppDbContext>();
         var seen = await db.Sessions.AsNoTracking().Select(s => s.Id).ToListAsync();
 

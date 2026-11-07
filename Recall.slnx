@@ -19,5 +19,6 @@
   </Project>
   <Project Path="Recall.AppHost/Recall.AppHost.csproj" />
   <Project Path="Recall.Server/Recall.Server.csproj" />
+  <Project Path="Recall.Transcriber/Recall.Transcriber.csproj" />
   <Project Path="Recall.SourceGenerators/Recall.SourceGenerators.csproj" />
 </Solution>

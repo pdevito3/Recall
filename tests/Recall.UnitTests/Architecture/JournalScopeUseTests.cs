@@ -3,16 +3,17 @@ namespace Recall.UnitTests.Architecture;
 using Shouldly;
 
 /// <summary>
-/// A journal scope reads the rows of a User with nobody signed in. Only a job that the owner started may open one, so no
-/// other code can read a journal by passing an id.
+/// A journal scope reads the rows of a User with nobody signed in. Only the background work of a Session or a Recording
+/// may open one, so no other code can read a journal by passing an id.
 /// </summary>
 public class JournalScopeUseTests
 {
-    private const string JobsFolder = "Domain/Sessions/Jobs/";
-    private const string DefinitionFile = "Domain/Users/JournalWorkAccess.cs";
+    private const string DefinitionFile = "Domain/Tenants/SystemTenantAccess.cs";
+
+    private static readonly string[] JobFolders = ["Domain/Sessions/Jobs/", "Domain/Recordings/Jobs/"];
 
     [Test]
-    public void only_a_job_of_a_session_opens_a_journal_scope()
+    public void only_a_job_folder_opens_a_journal_scope()
     {
         // Arrange
         var server = Path.Combine(FindRepositoryRoot(), "Recall.Server");
@@ -22,7 +23,7 @@ public class JournalScopeUseTests
             .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
             .Select(file => Path.GetRelativePath(server, file).Replace(Path.DirectorySeparatorChar, '/'))
             .Where(file => File.ReadAllText(Path.Combine(server, file)).Contains("CreateJournalScope(", StringComparison.Ordinal))
-            .Where(file => file != DefinitionFile && !file.StartsWith(JobsFolder, StringComparison.Ordinal))
+            .Where(file => file != DefinitionFile && !JobFolders.Any(folder => file.StartsWith(folder, StringComparison.Ordinal)))
             .ToList();
 
         // Assert

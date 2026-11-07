@@ -5,12 +5,15 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Recall.FunctionalTests.FunctionalTests.Recordings;
 using Recall.Server.Domain;
 using Recall.Server.Domain.Corrections;
 using Recall.Server.Domain.ModelProviders;
 using Recall.Server.Domain.People;
+using Recall.Server.Domain.Recordings;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Users;
+using Recall.Server.Resources.Storage;
 using Recall.Server.Resources.Entrypoints;
 using Recall.Server.Resources.Entrypoints.Auth;
 using Recall.Server.Resources.Entrypoints.Http;
@@ -69,6 +72,15 @@ public class EndpointAccessSweepTests : TestBase
         ["DeleteCorrection"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetUserSetting"] = new(JournalOfEachMember, OwnerOnly: true),
         ["ChangeUserSetting"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["AddRecording"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["StoreRecordingSlice"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["FinishRecording"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetRecording"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetSessionRecordings"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetRecordingFile"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["RetryRecording"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["DeleteRecording"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetTranscriptionStatus"] = new(JournalOfEachMember, OwnerOnly: false),
         // new-feature:open-to-each-member
     };
 
@@ -310,6 +322,8 @@ public class EndpointAccessSweepTests : TestBase
                     + $"Make a record of this kind in {nameof(AddTenantAsync)} and add its ID under '{kind}/{name}'."),
             "permission" => PermissionName,
             "number" => "1",
+            "index" => "0",
+            "name" => "audio.webm",
             _ => null,
         };
     }
@@ -341,6 +355,12 @@ public class EndpointAccessSweepTests : TestBase
         var provider = ModelProvider.Connect(tenant.Id, ModelProviderKind.OpenAiCompatible, "Sweep provider", "http://127.0.0.1:9/v1", null, DateTimeOffset.UnixEpoch);
         provider.Update("Sweep provider", "http://127.0.0.1:9/v1", null, "sweep-model", provider.Version);
         await InsertAsync(provider);
+        var recording = Recording.Create(tenant.Id, admin.Id, session.Id, $"sweep-{Guid.NewGuid():N}", RecordingFormat.Webm);
+        recording.StoreSlice(0, 1);
+        recording.Finish([0], 1, 1);
+        await InsertAsync(recording);
+        await using (var audio = new MemoryStream([1]))
+            await TestingWebApplicationFactory.Instance.Services.GetRequiredService<FileStore>().WriteAsync(RecordingFiles.Audio(recording), audio, CancellationToken.None);
         // new-feature:sweep-inserts
 
         var idsByKind = new Dictionary<string, string>
@@ -352,6 +372,7 @@ public class EndpointAccessSweepTests : TestBase
             ["people"] = person.Id,
             ["corrections"] = correction.Id,
             ["model-providers"] = provider.Id,
+            ["recordings"] = recording.Id,
             // new-feature:sweep-ids
         };
         return new TenantRecords(member, admin, new RecordIds(idsByKind, otherUser.Identifier));
@@ -398,6 +419,8 @@ public class EndpointAccessSweepTests : TestBase
     {
         public bool IsDelete => Method == HttpMethods.Delete;
 
+        public bool HasBinaryBody { get; init; }
+
         public static HttpEntrypoint From(RouteEndpoint endpoint, JsonNode document)
         {
             var route = endpoint.RoutePattern.RawText![EndpointDiscovery.VersionedRoutePrefix.Length..];
@@ -422,7 +445,10 @@ public class EndpointAccessSweepTests : TestBase
                 .ToList();
             var content = operation.Operation["requestBody"]?["content"];
             return new HttpEntrypoint(target with { Label = $"{method} {operation.Path}" },
-                method, operation.Path, kind, parameters, content?["application/json"]?["schema"], document);
+                method, operation.Path, kind, parameters, content?["application/json"]?["schema"], document)
+            {
+                HasBinaryBody = content?["application/octet-stream"] is not null,
+            };
         }
 
         /// <param name="ids">The records that the route values name.</param>
@@ -453,6 +479,12 @@ public class EndpointAccessSweepTests : TestBase
             if (Body is not null)
                 request.Content = new StringContent(
                     SchemaSample.Of(Body, Document)?.ToJsonString() ?? "null", Encoding.UTF8, "application/json");
+            if (HasBinaryBody)
+            {
+                request.Content = new ByteArrayContent(RecordingScenario.WebmStart);
+                request.Content.Headers.ContentType = new("application/octet-stream");
+            }
+
             return request;
         }
 

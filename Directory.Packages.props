@@ -4,6 +4,8 @@
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Speech: the worker that turns audio into text -->
+    <PackageVersion Include="org.k2fsa.sherpa.onnx" Version="2.0.1" />
     <!-- Aspire -->
     <PackageVersion Include="Aspire.Hosting.JavaScript" Version="13.6.4" />
     <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.6.4" />

@@ -21,11 +21,27 @@ public class OpenApiDocumentTests
     [
     ];
 
-    private static readonly Dictionary<string, string> NonJsonSuccessResponses = new()
+    private static readonly Dictionary<string, string[]> NonJsonSuccessResponses = new()
     {
-        ["GET /api/v1/support-bundle 200"] = "application/zip",
-        ["POST /api/v1/sessions/{id}/cleanup/stream 200"] = "text/event-stream",
+        ["GET /api/v1/support-bundle 200"] = ["application/zip"],
+        ["POST /api/v1/sessions/{id}/cleanup/stream 200"] = ["text/event-stream"],
+        ["GET /api/v1/recordings/{id}/files/{name} 200"] = ["audio/webm", "audio/mp4"],
+        ["PUT /api/v1/recordings/{id}/slices/{index} request body"] = ["application/octet-stream"],
     };
+
+    [Test]
+    public async Task a_slice_body_is_binary_and_required_in_the_document()
+    {
+        // Arrange
+        var root = await LoadDocumentAsync();
+
+        // Act
+        var schema = root["paths"]?["/api/v1/recordings/{id}/slices/{index}"]?["put"]?["requestBody"]?["content"]?["application/octet-stream"]?["schema"];
+
+        // Assert
+        schema.ShouldNotBeNull();
+        schema["format"]?.GetValue<string>().ShouldBe("byte");
+    }
 
     [Test]
     public async Task tenant_list_documents_the_pagination_header()
@@ -98,7 +114,7 @@ public class OpenApiDocumentTests
         // Assert
         contents.ShouldNotBeEmpty();
         foreach (var (name, content) in contents)
-            content.Select(c => c.Key).ShouldBe([NonJsonSuccessResponses.GetValueOrDefault(name, "application/json")], name);
+            content.Select(c => c.Key).ShouldBe(NonJsonSuccessResponses.GetValueOrDefault(name, ["application/json"]), name);
     }
 
     // The keys of the errors of the problem are camelCase, so the parameter names must be camelCase too

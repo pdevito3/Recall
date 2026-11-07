@@ -67,7 +67,6 @@ public sealed class CallerIdentityResolverTests : IDisposable
         }));
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<SystemTenantAccess>();
-        services.AddScoped<JournalWorkAccess>();
         services.AddScoped<ICallerIdentityResolver, CallerIdentityResolver>();
         _services = services.BuildServiceProvider();
 

@@ -24,6 +24,25 @@ public class SessionTests
         => "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Lunch with \"},"
             + "{\"type\":\"mention\",\"attrs\":{\"personId\":\"" + PersonId + "\",\"label\":\"" + label + "\"}}]}]}";
 
+    [Test]
+    public void only_a_save_from_a_base_older_than_the_last_chunk_misses_the_transcript()
+    {
+        // Arrange
+        var session = NewSession();
+        session.SaveRaw(Save("typed", 0), false);
+        session.TryAppendTranscript("heard", Now).ShouldBeTrue();
+        var chunk = session.Raw.DraftRevision;
+
+        // Act
+        var old = session.SaveRaw(Save("old copy", chunk - 1, Now.AddHours(1)), false);
+        var current = session.SaveRaw(Save("merged", chunk, Now.AddHours(2)), false);
+
+        // Assert
+        old.ShouldBe(DraftSaveOutcome.Lost);
+        current.ShouldBe(DraftSaveOutcome.Won);
+        session.Raw.Text.ShouldBe("merged");
+    }
+
     private static Session CleanSession()
     {
         var session = NewSession();

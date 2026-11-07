@@ -1,15 +1,22 @@
 namespace Recall.Server.Domain.Tenants;
 
+using Databases;
+
 /// <summary>
-/// Marks one DI scope as system work. In a system scope, <see cref="TenantScopeProvider"/> gives
-/// <see cref="TenantScope.AllTenants"/> and lets the caller manage all tenants.
-/// Only <see cref="SystemScopeExtensions.CreateSystemScope"/> sets it, when it creates the scope.
+/// Marks one DI scope as system work, or as work for one journal owner. In a system scope,
+/// <see cref="TenantScopeProvider"/> gives <see cref="TenantScope.AllTenants"/> and lets the caller manage all tenants.
+/// Only <see cref="SystemScopeExtensions.CreateSystemScope"/> and <see cref="SystemScopeExtensions.CreateJournalScope"/>
+/// set it, when they create the scope.
 /// </summary>
 public sealed class SystemTenantAccess
 {
     public bool IsGranted { get; private set; }
 
+    public JournalOwner? JournalOwner { get; private set; }
+
     internal void Grant() => IsGranted = true;
+
+    internal void GrantJournal(JournalOwner owner) => JournalOwner = owner;
 }
 
 public static class SystemScopeExtensions
@@ -27,6 +34,18 @@ public static class SystemScopeExtensions
     {
         var scope = scopeFactory.CreateAsyncScope();
         scope.ServiceProvider.GetRequiredService<SystemTenantAccess>().Grant();
+        return scope;
+    }
+
+    /// <summary>
+    /// A job has no caller, and a system scope sees no journal, because no one reads the journal of another person. This
+    /// scope sees the rows of the owner and no others, with the query filters on. The IDs come from the payload that the
+    /// request of the owner enqueued, or from the rows of the sweep.
+    /// </summary>
+    public static AsyncServiceScope CreateJournalScope(this IServiceScopeFactory scopeFactory, JournalOwner owner)
+    {
+        var scope = scopeFactory.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<SystemTenantAccess>().GrantJournal(owner);
         return scope;
     }
 }

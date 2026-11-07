@@ -728,6 +728,157 @@ namespace Recall.Server.Databases.Migrations
                     b.ToTable("people", (string)null);
                 });
 
+            modelBuilder.Entity("Recall.Server.Domain.Recordings.Recording", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id")
+                        .UseCollation("BINARY");
+
+                    b.Property<int>("AttemptsWithoutProgress")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("attempts_without_progress");
+
+                    b.Property<string>("AudioDeletedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("audio_deleted_at");
+
+                    b.Property<string>("AudioKeptUntil")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("audio_kept_until");
+
+                    b.Property<long>("ByteLength")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("byte_length");
+
+                    b.Property<string>("ClientRecordingId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("client_recording_id");
+
+                    b.Property<long?>("DurationMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("duration_ms");
+
+                    b.Property<string>("Engine")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("engine");
+
+                    b.Property<string>("Format")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("format");
+
+                    b.Property<bool>("HasText")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("has_text");
+
+                    b.Property<int?>("HighestStoredSlice")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("highest_stored_slice");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("LastModifiedOn")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_modified_on");
+
+                    b.Property<string>("Problem")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("problem");
+
+                    b.Property<string>("SessionId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("session_id")
+                        .UseCollation("BINARY");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("tenant_id")
+                        .UseCollation("BINARY");
+
+                    b.Property<long>("TranscribedSamples")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("transcribed_samples");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id")
+                        .UseCollation("BINARY");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_recordings");
+
+                    b.HasIndex("SessionId")
+                        .HasDatabaseName("ix_recordings_session_id");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_recordings_tenant_id");
+
+                    b.HasIndex("UserId", "ClientRecordingId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_recordings_user_id_client_recording_id");
+
+                    b.HasIndex("UserId", "Status")
+                        .HasDatabaseName("ix_recordings_user_id_status");
+
+                    b.ToTable("recordings", (string)null);
+                });
+
+            modelBuilder.Entity("Recall.Server.Domain.Recordings.RecordingSlice", b =>
+                {
+                    b.Property<string>("RecordingId")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("recording_id")
+                        .UseCollation("BINARY");
+
+                    b.Property<int>("Index")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("index");
+
+                    b.Property<long>("ByteLength")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("byte_length");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("sha256");
+
+                    b.HasKey("RecordingId", "Index")
+                        .HasName("pk_recording_slices");
+
+                    b.ToTable("recording_slices", (string)null);
+                });
+
             modelBuilder.Entity("Recall.Server.Domain.Sessions.CleanedRevision", b =>
                 {
                     b.Property<string>("SessionId")
@@ -855,6 +1006,10 @@ namespace Recall.Server.Databases.Migrations
                     b.Property<string>("LastModifiedOn")
                         .HasColumnType("TEXT")
                         .HasColumnName("last_modified_on");
+
+                    b.Property<int?>("LastTranscriptRevision")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("last_transcript_revision");
 
                     b.Property<double?>("Latitude")
                         .HasColumnType("REAL")
@@ -1384,6 +1539,42 @@ namespace Recall.Server.Databases.Migrations
                         .OnDelete(DeleteBehavior.ClientNoAction)
                         .IsRequired()
                         .HasConstraintName("fk_people_users_user_id");
+                });
+
+            modelBuilder.Entity("Recall.Server.Domain.Recordings.Recording", b =>
+                {
+                    b.HasOne("Recall.Server.Domain.Sessions.Session", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.ClientNoAction)
+                        .IsRequired()
+                        .HasConstraintName("fk_recordings_sessions_session_id");
+
+                    b.HasOne("Recall.Server.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.ClientNoAction)
+                        .IsRequired()
+                        .HasConstraintName("fk_recordings_tenants_tenant_id");
+
+                    b.HasOne("Recall.Server.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.ClientNoAction)
+                        .IsRequired()
+                        .HasConstraintName("fk_recordings_users_user_id");
+                });
+
+            modelBuilder.Entity("Recall.Server.Domain.Recordings.RecordingSlice", b =>
+                {
+                    b.HasOne("Recall.Server.Domain.Recordings.Recording", "Recording")
+                        .WithMany()
+                        .HasForeignKey("RecordingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_recording_slices_recordings_recording_id");
+
+                    b.Navigation("Recording");
                 });
 
             modelBuilder.Entity("Recall.Server.Domain.Sessions.CleanedRevision", b =>

@@ -1,0 +1,52 @@
+namespace Recall.Server.Domain.Recordings.Dtos;
+
+using Transcription;
+
+public static class RecordingViews
+{
+    public static RecordingDto ToDto(this Recording recording, IReadOnlyList<int> storedSlices, ModelStatus model) => new()
+    {
+        Id = recording.Id,
+        SessionId = recording.SessionId,
+        ClientRecordingId = recording.ClientRecordingId,
+        Format = recording.Format.ToString(),
+        Engine = recording.Engine.ToString(),
+        Status = recording.Status.ToString(),
+        Problem = recording.Problem.ToString(),
+        ProblemText = ProblemTextOf(recording.Problem, model),
+        HighestStoredSlice = recording.HighestStoredSlice,
+        StoredSlices = storedSlices,
+        ByteLength = recording.ByteLength,
+        DurationMs = recording.DurationMs,
+        TranscribedMs = recording.TranscribedSamples * 1000 / Recording.SamplesPerSecond,
+        AudioFileName = recording.Status == RecordingStatus.Receiving || recording.AudioDeletedAt is not null ? null : recording.AudioFileName,
+        AudioKeptUntil = recording.AudioKeptUntil,
+        Version = recording.Version,
+    };
+
+    public static string? ProblemTextOf(RecordingProblem problem, ModelStatus model) => problem switch
+    {
+        RecordingProblem.None => null,
+        RecordingProblem.WaitingForModel => ModelTextOf(model) ?? "The audio is stored and waits for its turn.",
+        RecordingProblem.AudioUnreadable => "The audio is stored, but the server cannot read it. Download it to keep a copy, then record again.",
+        RecordingProblem.AudioMissing => "The server cannot find the audio of this Recording. Tell the Owner of this server.",
+        RecordingProblem.OutOfMemory => "The audio is stored, but the server ran out of memory while it made the text. Ask the Owner to give the server more memory, then try again.",
+        RecordingProblem.EngineCrashed => "The audio is stored, but the speech engine stopped with an error. Try again. If it stops again, tell the Owner of this server.",
+        RecordingProblem.EngineStalled => "The audio is stored, but the speech engine stopped making progress. Try again when the server has less work.",
+        RecordingProblem.EngineNotInstalled => "The audio is stored, but this server has no speech engine. The Owner must install the release image.",
+        RecordingProblem.TooManyAttempts => "The audio is stored, but the server restarted during each try to make the text. Ask the Owner to check the server, then try again.",
+        RecordingProblem.TooLong => "The audio is stored, but it is longer than the 4 hours that the server can turn into text. Download it to keep a copy.",
+        RecordingProblem.TextTooLong => "The audio is stored, but its text does not fit in this Session. The text so far is saved. Download the audio to keep a copy.",
+        RecordingProblem.NoWordsFound => "The audio is stored, but the server heard no words in it. Listen to it to check, or try again.",
+        _ => null,
+    };
+
+    public static string? ModelTextOf(ModelStatus model) => model switch
+    {
+        ModelStatus.Missing => "The audio is stored. The server must get the speech model first, and then it makes the text.",
+        ModelStatus.Downloading => "The audio is stored. The server is downloading the speech model, and then it makes the text.",
+        ModelStatus.DownloadFailed => "The audio is stored. The server could not download the speech model, so it makes no text yet. It tries again every 15 minutes. Ask the Owner to check the network of the server.",
+        ModelStatus.HashRejected => "The audio is stored. The speech model that the server downloaded did not pass its hash check, so the server did not use it. It tries again every 15 minutes.",
+        _ => null,
+    };
+}

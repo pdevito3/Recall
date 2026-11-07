@@ -14,6 +14,14 @@ public static class AssemblyHooks
         _factory = new TestingWebApplicationFactory();
         await _factory.InitializeAsync();
         AuthHosts.Start();
+
+        await SeatTheOwnerSoThatNoTwoFirstLoginsRaceAsync();
+    }
+
+    private static async Task SeatTheOwnerSoThatNoTwoFirstLoginsRaceAsync()
+    {
+        using var owner = new AuthBrowser(AuthHosts.Closed);
+        await owner.LoginWebAsync("owner");
     }
 
     [After(Assembly)]

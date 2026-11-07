@@ -16,7 +16,7 @@ public abstract record CallerIdentity
 
     public sealed record User(string Subject, LiveUser? LiveUser) : CallerIdentity;
 
-    /// <summary>Work for one journal owner in a scope from <see cref="JournalWorkScopeExtensions.CreateJournalScope"/>, such as a job.</summary>
+    /// <summary>Work for one journal owner in a scope from <see cref="SystemScopeExtensions.CreateJournalScope"/>, such as a job.</summary>
     public sealed record JournalWork(string UserId, string TenantId) : CallerIdentity;
 
     /// <summary>

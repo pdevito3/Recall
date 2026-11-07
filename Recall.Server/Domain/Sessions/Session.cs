@@ -58,6 +58,7 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
     [Sensitive] public IReadOnlyList<string> MoodSuggestions { get; private set; } = [];
 
     [Sensitive] public IReadOnlyList<PersonProposal> PeopleProposals { get; private set; } = [];
+    public int? LastTranscriptRevision { get; private set; }
 
     public uint MetadataVersion { get; private set; }
 
@@ -115,7 +116,7 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
 
     public DraftSaveOutcome SaveRaw(DraftSave save, bool isReplay)
     {
-        var decision = Raw.Decide(save, isReplay);
+        var decision = Raw.Decide(save, isReplay, missesTranscript: save.BaseRevision < LastTranscriptRevision);
         Raw = decision.Next;
         if (decision.MintedRevision is { } number)
             _appendedRawRevisions.Add(new RawRevision(Id, number, save.SavedAt, save.ClaimedSavedAt, save.Text));
@@ -135,6 +136,20 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
 
         RefreshFromDrafts();
         return decision.Outcome;
+    }
+
+    public bool TryAppendTranscript(string words, DateTimeOffset now)
+    {
+        var text = RawTranscript.Append(Raw.Text, words);
+        if (text.Length > DraftMaxLength)
+            return false;
+
+        var number = Raw.LatestRevision + 1;
+        Raw = new DraftSlot(text, number, number, now);
+        LastTranscriptRevision = number;
+        _appendedRawRevisions.Add(new RawRevision(Id, number, now, now, text));
+        RefreshFromDrafts();
+        return true;
     }
 
     public void RenamePerson(string personId, string label, DateTimeOffset now)

@@ -8,7 +8,7 @@ public sealed record DraftSlot(string Text, int DraftRevision, int LatestRevisio
 
     public bool NeedsReplayLookup(DraftSave save) => save.Text != Text && save.BaseRevision != DraftRevision;
 
-    public DraftDecision Decide(DraftSave save, bool isReplay)
+    public DraftDecision Decide(DraftSave save, bool isReplay, bool missesTranscript = false)
     {
         if (save.Text == Text)
             return new DraftDecision(this, DraftSaveOutcome.Unchanged, null);
@@ -17,7 +17,7 @@ public sealed record DraftSlot(string Text, int DraftRevision, int LatestRevisio
             return new DraftDecision(this, DraftSaveOutcome.Unchanged, null);
 
         var number = LatestRevision + 1;
-        return Beats(save)
+        return !missesTranscript && Beats(save)
             ? new DraftDecision(new DraftSlot(save.Text, number, number, LaterOf(SavedAt, save.SavedAt)), DraftSaveOutcome.Won, number)
             : new DraftDecision(this with { LatestRevision = number }, DraftSaveOutcome.Lost, number);
     }

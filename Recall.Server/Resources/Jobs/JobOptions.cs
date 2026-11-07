@@ -11,6 +11,8 @@ public sealed class JobOptions
     public bool RunWorkers { get; init; } = true;
 
     public HealthJobOptions HealthJob { get; set; } = new();
+
+    public bool KillBeforeTenantFolderDelete { get; set; }
 }
 
 /// <summary>

@@ -12,7 +12,7 @@ using ModelProviders.Clients;
 using Recall.Server.Resources.Jobs;
 using Resources;
 using Serilog;
-using Users;
+using Tenants;
 
 public sealed class CleanupJob(IServiceScopeFactory scopeFactory, IModelProviderClient client, ApiKeyProtector keys)
 {
@@ -47,7 +47,7 @@ public sealed class CleanupJob(IServiceScopeFactory scopeFactory, IModelProvider
         switch (step)
         {
             case CleanupStep.Fail fail:
-                await using (var scope = scopeFactory.CreateJournalScope(tenantId, userId))
+                await using (var scope = scopeFactory.CreateJournalScope(new JournalOwner(userId, tenantId)))
                     await scope.ServiceProvider.GetRequiredService<IMediator>().Send(new FailCleanupRun.Command(sessionId, runId, fail.Failure), cancellationToken);
                 break;
             case CleanupStep.TryAgainLater:
@@ -57,14 +57,14 @@ public sealed class CleanupJob(IServiceScopeFactory scopeFactory, IModelProvider
 
     private async Task<CleanupStep> CompleteAsync(string sessionId, string userId, string tenantId, string runId, int rawRevision, CleanupOutput output, CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateJournalScope(tenantId, userId);
+        await using var scope = scopeFactory.CreateJournalScope(new JournalOwner(userId, tenantId));
         await scope.ServiceProvider.GetRequiredService<IMediator>().Send(new CompleteCleanupRun.Command(sessionId, runId, rawRevision, output), cancellationToken);
         return new CleanupStep.Skip();
     }
 
     private async Task<Work> ReadWorkAsync(string sessionId, string userId, string tenantId, string runId, int attempt, CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateJournalScope(tenantId, userId);
+        await using var scope = scopeFactory.CreateJournalScope(new JournalOwner(userId, tenantId));
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var session = await dbContext.Sessions.AsNoTracking()
