@@ -294,7 +294,7 @@ test.describe('the status line', () => {
 
     await page.clock.fastForward(31_000)
 
-    await expect(journal.at.status('The save waits for a connection')).toBeVisible()
+    await expect(journal.at.status('Recall keeps trying')).toBeVisible()
   })
 })
 

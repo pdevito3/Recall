@@ -425,7 +425,7 @@ test.describe('an entry', () => {
     await entry.open(session.id)
 
     await entry.edit(session.id, ' offline words')
-    await expect(entry.at.status('The save waits for a connection')).toBeVisible()
+    await expect(entry.at.status('Recall keeps trying')).toBeVisible()
     const claimed = (api.last('put', sessionsPaths.rawDraft(session.id))?.body as { savedAt: string }).savedAt
 
     api.mock(sessionsApi.draftSaveWins(session, 2))

@@ -12,7 +12,7 @@ The app opens on the journal. A person writes at once, and each entry saves as t
 - `history` lists the versions. A version opens in a dialog with `Restore this version`.
 - `tags` changes moods, activity, and topics after `Edit tags`.
 - `delete` asks in a dialog with `Delete entry` and `Keep entry`.
-- `offline` shows `Not saved yet. The save waits for a connection to the server. Keep this page open.` until the save ends.
+- `offline` shows `Not saved yet. Recall keeps trying. Keep this page open.` until the save ends.
 - `file-store` shows a notice with what to do when `GET /api/v1/file-store/status` gives `canWrite: false`.
 
 ## How to get to it (user POV)
@@ -33,7 +33,7 @@ Preconditions:
 - **Two tabs.** Open one entry in two pages of the context. Type and save in one, then in the other. The second page shows `These words replaced a save that this page had not shown.` `Show history` lists each save.
 - **Restore.** Choose an earlier version, then `Restore this version`. `Your words` has the words of that version, also after a reload.
 - **Delete.** Choose `Delete`, then `Delete entry`. The page goes to the journal, and `GET /api/v1/sessions/<id>` gives 404.
-- **Offline.** Run `context.setOffline(true)`, then type. The status region shows `The save waits for a connection`. Run `context.setOffline(false)`. The status region shows `Saved at <time>` within 35 seconds.
+- **Offline.** Run `context.setOffline(true)`, then type. The status region shows `Recall keeps trying`. Run `context.setOffline(false)`. The status region shows `Saved at <time>` within 35 seconds.
 - **Phone.** Set the viewport to 390x844. The page has no side scroll, and each control is at least 44 px in each direction.
 - **Keyboard.** Use only `Tab`, `Enter`, `Space`, and `Escape`. Each stop shows a focus ring.
 - **Proof.** Run `node $S/scripts/browse.mjs $S/recipes/journal.mjs`. The captures `r12-create`, `r12-autosave`, `r12-conflict-notice`, `r12-conflict`, `r12-revision`, `r12-delete`, `r12-offline`, `r12-phone`, and `r12-keyboard` show each state.

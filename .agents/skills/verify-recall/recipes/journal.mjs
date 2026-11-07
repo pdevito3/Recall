@@ -150,7 +150,7 @@ export default async ({ page, context, step, capture, expect, login }) => {
     await context.route('**/api/**', noNetwork)
     await context.setOffline(true)
     await typeAtEnd(page, editor(page), ' Words in the tunnel.')
-    await expect(page.getByRole('status').filter({ hasText: 'The save waits for a connection' })).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByRole('status').filter({ hasText: 'Recall keeps trying' })).toBeVisible({ timeout: 15_000 })
   })
   await capture('r12-offline')
   await step('lane 9: the save ends after the network returns', async () => {
