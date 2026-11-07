@@ -13,6 +13,26 @@ A connect does not change which provider a Cleanup uses. A provider is active on
 - With no active provider, a Cleanup start gets 422, the page says why, and its button stays off.
 - Each try of a run reads the active provider again. If an Admin deletes the active provider while a run waits to try again, the next try sends the words to the provider that was active before it. The Cleanup card reads the active provider every 2 s while a run lasts and names it, so the person sees where the words go. A person who closed the page does not see the change.
 
+## The provider that makes text
+
+A provider can also turn the audio of a Recording into text. The choice is apart from the active provider of a Cleanup, so an Admin can send words to one provider and audio to another.
+
+- Only a kind that takes audio can make text. `OpenAiCompatible` takes audio through `POST {base}/audio/transcriptions`. Anthropic takes no audio, and a choice of it gets 422.
+- An Admin chooses a provider and a model with `PUT /api/v1/transcription-engine`. A body with no provider sends no audio out. The newest choice of a tenant holds, and a choice clears the others.
+- Each person who owns a journal reads `GET /api/v1/transcription-engine`, which names the engine and the reason for a person: a provider is chosen, no provider takes audio, or none is chosen. The page `/transcription-engine` shows it.
+- A Recording takes the engine of the tenant at its finish. A cloud job reads the chosen provider again at each claim. With no choice, the Recording goes to the local engine and no audio leaves the server.
+
+The client sends each part as a WAV file of 16 kHz mono PCM, with `response_format=json`, and reads `{"text": ...}`. A part holds at most 25,000,000 bytes, about 13 minutes. These facts were read on 7 November 2026:
+
+| Provider | Route | Formats | Limit of a file | Source |
+|---|---|---|---|---|
+| OpenAI | `POST /v1/audio/transcriptions` | flac, mp3, mp4, mpeg, mpga, m4a, ogg, wav, webm | 25 MB | [Speech to text](https://developers.openai.com/api/docs/guides/speech-to-text), [Create transcription](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create) |
+| Groq | `POST /openai/v1/audio/transcriptions` | flac, mp3, mp4, mpeg, mpga, m4a, ogg, wav, webm | 25 MB on the free tier, 100 MB on the dev tier | [Speech to text](https://console.groq.com/docs/speech-to-text) |
+| Anthropic | none | The Messages API has no audio block | | [Messages](https://platform.claude.com/docs/en/api/messages) |
+| Gemini | Not in its OpenAI layer, which documents audio only as `input_audio` in a chat | | 20 MB inline | [Audio](https://aistudio.google.com/docs/audio), [OpenAI compatibility](https://aistudio.google.com/docs/openai) |
+
+No page says whether a MB is 10^6 or 2^20 bytes, so the smaller one holds. WAV is the one format that each of them takes, and the server already decodes each Recording to it, so a part never needs a second conversion. OpenAI marks `whisper-1` and the `gpt-4o` transcribe models as deprecated, with a shutdown on 26 February 2027 ([deprecations](https://developers.openai.com/api/docs/deprecations)), so the model is a field that an Admin types and not a fixed value.
+
 ## Limits of a call
 
 `ProviderLimits` holds each value. Each read on each adapter goes through `ProviderReadGuard`, which is a handler of the HTTP client. So the limits also hold for the stream of the Anthropic SDK, the model list, and each error body.
@@ -29,6 +49,8 @@ A connect does not change which provider a Cleanup uses. A provider is active on
 | One line of a stream | 4 MiB | The text of one event goes to memory as a whole. |
 | The words of an answer | 2 x the limit of a Draft | The longest answer that can give a Draft, with an escape for each character. |
 | Pages of the Anthropic model list | 10 pages of 1000, and 2000 models | `has_more` comes from the provider, so a list that never ends must stop. |
+| No progress on a read of an audio part, also for the headers | 10 min | A provider reads the whole part before its first byte. A part of 13 minutes takes far less than this on each provider above. A hung call ends here. |
+| A whole call for one audio part | 15 min | A part that took longer is a hung call. The job tries again from the last saved part. |
 
 A hung provider ends a run in about 19 minutes: 6 tries of 3 minutes, and 62 s of waits between them. A provider that sends only pings ends a run in 10 minutes. A stream that sends words can run for the full 40 minutes.
 
@@ -45,6 +67,8 @@ Sources for the limit of no words, read on 7 November 2026: [Anthropic streaming
 | Bytes that are not UTF-8 in a body with a 2xx status, on a stream or in a whole body | `BadOutput` | Ends at once as `BadModelOutput`, so no `U+FFFD` takes the place of a word. A model list with such bytes is a failure and not an empty list. |
 | A stream with status 200 that closes with no event | `BadOutput` | Ends at once as `BadModelOutput` after 1 call, on each kind. |
 | No word for the limit above | `NoWords` | Ends at once as `ProviderUnavailable`, with no new try. |
+
+An audio part follows the same kinds, with the problems of a Recording. `Unavailable` leaves the Recording Received with `ProviderUnavailable`, and the job tries again by rule 7 of the jobs. After 5 tries with no saved part it fails with `ProviderUnavailable`. `Refused` fails it with `ProviderRefused`, and `BadOutput` with `ProviderBadAnswer`. A key that the server cannot read fails it with `ProviderKeyUnreadable`, and no audio goes out. In each case the audio stays.
 
 ## The cost of an answer
 
@@ -114,4 +138,4 @@ An Admin cannot learn the body of any other answer, and cannot make the app foll
 
 ## The mismatch with the fakes
 
-`tests/Recall.FakeModelProvider` checks what the two real APIs check, but it is not the real API. Its model list ignores `after_id` and the page size, and its model objects hold fewer fields than the real ones. A change to the adapters must also read the current API reference.
+`tests/Recall.FakeModelProvider` checks what the two real APIs check, but it is not the real API. Its model list ignores `after_id` and the page size, and its model objects hold fewer fields than the real ones. Its route of transcriptions checks the multipart form, the `file` and `model` fields, the limit of 25,000,000 bytes, and `response_format`, and it answers with the part number and the seconds that it heard. It does not hear words. A change to the adapters must also read the current API reference.
