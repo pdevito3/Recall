@@ -311,3 +311,19 @@ describe('a sign-out in another tab', () => {
     expect(channel.postMessage).toHaveBeenCalledOnce()
   })
 })
+
+describe('a browser with no BroadcastChannel', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('still guards the page, because a tab with no channel must open', async () => {
+    vi.stubGlobal('window', { location: { replace: vi.fn(), reload: vi.fn() }, addEventListener: () => undefined })
+    vi.stubGlobal('document', { documentElement: { style: {} }, addEventListener: () => undefined })
+    vi.stubGlobal('BroadcastChannel', undefined)
+    vi.resetModules()
+    const actions = await import('./auth-actions')
+
+    expect(() => actions.guardPageAgainstEndedSession(new QueryClient())).not.toThrow()
+  })
+})

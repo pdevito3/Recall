@@ -4,7 +4,7 @@ import type { DraftConflict } from '../autosave/draft-saver'
 
 const messages: Record<NonNullable<DraftConflict>, string> = {
   wordsMovedToHistory: 'A newer save, or a recording, changed this entry first. The words on this page are safe in History.',
-  discardedInAnotherTab: 'Another tab took these words, and you may have discarded them there. They are now only on this page.',
+  discardedInAnotherTab: 'Another tab took these words, and you may have discarded them there. They may now be only on this page.',
 }
 
 interface ConflictNoticeProps {

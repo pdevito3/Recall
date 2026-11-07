@@ -811,6 +811,45 @@ test.each(secondOrders.map((order) => [order.map(([click, tab]) => `${tab} ${cli
   saver.dispose()
 })
 
+test.each([401, 408, 429])('a click on that gets a %i is not sent again: the page asks', async (status) => {
+  const api = server({ capture: false })
+  const copy = { current: api.row.current }
+  let puts = 0
+  const { saver } = saverOn({ ...api, put: (values, version) => {
+    puts += 1
+    return puts === 1 ? Promise.reject(new ProblemDetailsError({ type: 'about:blank', title: 'No', status })) : api.put(values, version)
+  } }, copy, { rules: rulesOfLocation })
+
+  saver.edit({ capture: true })
+  await vi.advanceTimersByTimeAsync(40_000)
+
+  expect(puts).toBe(1)
+  expect(saver.asks()).toMatchObject([{ field: 'capture', yours: true, didNotReachTheServer: true }])
+  expect(api.row.current.capture).toBe(false)
+  saver.dispose()
+})
+
+test('a click on that waits behind a save that fails is not sent: the page asks', async () => {
+  const api = server({ capture: false })
+  const copy = { current: api.row.current }
+  let fail: (error: Error) => void = () => undefined
+  let puts = 0
+  const { saver } = saverOn({ ...api, put: (values, version) => {
+    puts += 1
+    return puts === 1 ? new Promise((_, reject) => { fail = reject }) : api.put(values, version)
+  } }, copy, { rules: rulesOfLocation })
+
+  saver.edit({ zone: 'Asia/Tokyo' })
+  await vi.advanceTimersByTimeAsync(10)
+  saver.edit({ capture: true })
+  fail(new Error('Network Error'))
+  await vi.advanceTimersByTimeAsync(40_000)
+
+  expect(api.row.current.capture).toBe(false)
+  expect(saver.asks()).toMatchObject([{ field: 'capture', yours: true }])
+  saver.dispose()
+})
+
 test('a click on with the Server up goes at once', async () => {
   const api = server({ capture: false })
   const { saver } = saverOn(api, { current: api.row.current }, { rules: rulesOfLocation })

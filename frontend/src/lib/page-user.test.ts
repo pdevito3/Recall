@@ -120,3 +120,11 @@ test('a refused write of a person does not hide the return of the earlier person
 
   expect(messages).toHaveBeenLastCalledWith({ signedInAs: 'person-a' })
 })
+
+test('a browser with no BroadcastChannel still notes the person of the page', async () => {
+  vi.stubGlobal('BroadcastChannel', undefined)
+  const page = await freshPage()
+
+  expect(() => page.notePageUser('person-a')).not.toThrow()
+  expect(localStorage.getItem('recall.lastPerson')).toBe('person-a')
+})

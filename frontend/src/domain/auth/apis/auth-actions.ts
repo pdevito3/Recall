@@ -2,6 +2,7 @@ import { useMutation, type QueryClient } from '@tanstack/react-query'
 
 import { Notification, toastQueue } from '@/components/notification'
 import { apiClient } from '@/lib/api-client'
+import { openChannel } from '@/lib/browser-channel'
 import { checkLastPersonOfThisBrowser, noteSignInOfAnotherTab, sessionChannelName } from '@/lib/page-user'
 import { authUserQuery, getUser } from './get-user'
 
@@ -23,7 +24,7 @@ let afterSignOut: string | undefined
 /** A call that answers 401 while the logout runs also starts a login, and that navigation would lose the answer of the logout. */
 let logoutInFlight: Promise<unknown> | undefined
 
-let otherTabs: BroadcastChannel | undefined
+let otherTabs: BroadcastChannel | null = null
 
 let sessionOfHiddenPage: string | undefined
 
@@ -132,10 +133,12 @@ async function checkSessionOfRestoredPage(queryClient: QueryClient) {
  * guard for that cache acts in a browser that still restores, as a WKWebView did. docs/authentication.md has the runs.
  */
 export function guardPageAgainstEndedSession(queryClient: QueryClient) {
-  otherTabs = new BroadcastChannel(sessionChannelName)
-  otherTabs.onmessage = ({ data }: MessageEvent<'signed-out' | { signedInAs: string }>) => {
-    if (data === 'signed-out') leaveAsSignedOut(queryClient)
-    else noteSignInOfAnotherTab(data.signedInAs)
+  otherTabs = openChannel(sessionChannelName)
+  if (otherTabs) {
+    otherTabs.onmessage = ({ data }: MessageEvent<'signed-out' | { signedInAs: string }>) => {
+      if (data === 'signed-out') leaveAsSignedOut(queryClient)
+      else noteSignInOfAnotherTab(data.signedInAs)
+    }
   }
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') checkLastPersonOfThisBrowser()

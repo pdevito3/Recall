@@ -48,7 +48,7 @@ function locationOfNewEntry(queryClient: QueryClient) {
   }
 }
 
-const idleSnapshot: DraftSnapshot = { status: { kind: 'idle' }, conflict: null, sessionId: null, baseRevision: 0, movedFromDeletedEntry: false, isOnlyInMemory: false }
+const idleSnapshot: DraftSnapshot = { status: { kind: 'idle' }, conflict: null, sessionId: null, baseRevision: 0, movedFromDeletedEntry: false, isOnlyInMemory: false, areWordsWithAnotherTab: false }
 const noSubscription = () => () => undefined
 
 const isTheEntryGone = (error: unknown) => isProblemDetailsError(error) && error.status === 404
@@ -229,11 +229,10 @@ export function useComposer() {
     openEditorWith(finished.saver.newestWords() ?? finished.words)
   }, [needsThePersonAfterDone, finished, setSaver, openEditorWith])
 
-  const canFinish = saver !== null && !isReading && snapshot.status.kind !== 'refused'
+  const canFinish = saver !== null && !isReading && snapshot.status.kind !== 'refused' && snapshot.conflict === null
   const finish = useCallback(() => {
     if (!saver || !canFinish) return
     saver.flush()
-    saver.dismissConflict()
     setFinished({ saver, words: currentWords.current, pointer: readPointer(owner) })
     writePointer(null)
     setSaver(null)

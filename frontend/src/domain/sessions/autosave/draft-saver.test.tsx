@@ -440,6 +440,20 @@ test('a key with words that the same draft key of this tab holds is removed, and
   saver.stop()
 })
 
+test('a key that another tab took from this tab is not a copy, so it stays when that tab leaves', () => {
+  vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
+  const saver = aSaver()
+  saver.edit('the same words')
+  const own = readOutbox(owner)[0]
+  if (!own) throw new Error('no key')
+
+  removeEachKey()
+  storedByAnotherTab(own.entry)
+
+  expect(saver.keepsTheSameWordsAs(own.entry)).toBe(false)
+  saver.stop()
+})
+
 test('a loss keeps the base behind, so a next save cannot push a chunk of a recording out of the Draft', async () => {
   vi.mocked(saveRawDraft).mockResolvedValue(lostAt(5))
   const saver = new DraftSaver(target, clientAnswering('a chunk', 5))
@@ -503,6 +517,7 @@ test('keep after a loss stops when the person typed during the read', async () =
   await vi.waitFor(() => expect(saver.getSnapshot().conflict).toBe('wordsMovedToHistory'))
 
   const keeping = saver.keepWords('my words')
+  await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2))
   saver.edit('my words and a key')
   answer(entryWithWords('a chunk', 5))
 
@@ -786,6 +801,138 @@ test('with no page, a discarded word goes with no notice', async () => {
   expect(saver.notice()).toBeNull()
   saver.stop()
   vi.useRealTimers()
+})
+
+test('a tab that wakes does not save later words of a key that is gone', async () => {
+  vi.useFakeTimers()
+  vi.mocked(saveRawDraft).mockRejectedValueOnce(new Error('Network Error'))
+  const saver = new DraftSaver(target, clientAnswering('the Draft', 1))
+  saver.subscribe(() => undefined)
+  saver.edit('first words')
+  saver.flush()
+  await vi.advanceTimersByTimeAsync(10)
+  saver.edit('first words and more')
+
+  removeEachKey()
+  await vi.advanceTimersByTimeAsync(10_000)
+
+  expect(saveRawDraft).toHaveBeenCalledOnce()
+  expect(readOutbox(owner)).toEqual([])
+  expect(saver.getSnapshot().conflict).toBe('discardedInAnotherTab')
+  saver.stop()
+  vi.useRealTimers()
+})
+
+test('a tab that wakes names the newest words when it asks if another tab holds them, and it does not say Saved', async () => {
+  vi.useFakeTimers()
+  vi.mocked(saveRawDraft).mockRejectedValueOnce(new Error('Network Error'))
+  const saver = new DraftSaver(target, clientAnswering('the Draft', 1))
+  saver.subscribe(() => undefined)
+  saver.edit('first words')
+  saver.flush()
+  await vi.advanceTimersByTimeAsync(10)
+  saver.edit('first words and more')
+
+  removeEachKey()
+  storedByAnotherTab(entryWith('first words and more'))
+  await vi.advanceTimersByTimeAsync(10_000)
+
+  expect(saver.getSnapshot().conflict).toBeNull()
+  expect(saver.getSnapshot().status.kind).toBe('saved')
+  expect(shownStatusOf(saver.getSnapshot()).kind).toBe('idle')
+  saver.stop()
+  vi.useRealTimers()
+})
+
+test('a tab that wakes on an entry that is gone says that the words may be only on the page, and no new entry is promised', async () => {
+  vi.useFakeTimers()
+  vi.mocked(saveRawDraft).mockRejectedValueOnce(new Error('Network Error'))
+  const queryClient = new QueryClient()
+  vi.spyOn(queryClient, 'fetchQuery').mockRejectedValue(new ProblemDetailsError({ type: 'about:blank', title: 'Gone', status: 404 }))
+  const saver = new DraftSaver(target, queryClient)
+  saver.subscribe(() => undefined)
+  saver.edit('my words')
+  saver.flush()
+  await vi.advanceTimersByTimeAsync(10)
+
+  removeEachKey()
+  await vi.advanceTimersByTimeAsync(10_000)
+
+  expect(saver.getSnapshot()).toMatchObject({ movedFromDeletedEntry: false, conflict: 'discardedInAnotherTab' })
+  expect(addSession).not.toHaveBeenCalled()
+  saver.stop()
+  vi.useRealTimers()
+})
+
+test('with no entry yet, both answers of a wake end the notice: mine saves the words, and newest empties the page', async () => {
+  vi.useFakeTimers()
+  vi.mocked(addSession).mockRejectedValueOnce(new Error('Network Error'))
+  const newTarget = { ...target, sessionId: null, baseRevision: 0 }
+  const queryClient = new QueryClient()
+  const one = new DraftSaver(newTarget, queryClient)
+  one.subscribe(() => undefined)
+  one.edit('my words')
+  one.flush()
+  await vi.advanceTimersByTimeAsync(10)
+  removeEachKey()
+  await vi.advanceTimersByTimeAsync(10_000)
+  expect(one.getSnapshot().conflict).toBe('discardedInAnotherTab')
+
+  await expect(one.takeNewestWords()).resolves.toBe('')
+  expect(one.getSnapshot().conflict).toBeNull()
+  one.stop()
+
+  vi.mocked(addSession).mockRejectedValueOnce(new Error('Network Error'))
+  const two = new DraftSaver({ ...newTarget, clientSessionId: 'another-entry' }, queryClient)
+  two.subscribe(() => undefined)
+  two.edit('my words')
+  two.flush()
+  await vi.advanceTimersByTimeAsync(10)
+  removeEachKey()
+  await vi.advanceTimersByTimeAsync(10_000)
+  vi.mocked(addSession).mockReturnValue(new Promise(() => undefined))
+  const calls = vi.mocked(addSession).mock.calls.length
+
+  await expect(two.keepWords('my words')).resolves.toBe('my words')
+  await vi.advanceTimersByTimeAsync(10)
+
+  expect(two.getSnapshot().conflict).toBeNull()
+  expect(vi.mocked(addSession).mock.calls.length).toBeGreaterThan(calls)
+  two.stop()
+  vi.useRealTimers()
+})
+
+test('a key with only a notice about History does not go to an untouched page, because the page does not show those words', () => {
+  vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
+  const saver = aSaver()
+  const stored = storedByAnotherTab({ ...entryWith('x'), change: null, wordsInHistory: 'words in History' })
+
+  expect(saver.takeEntryIfUntouched(stored)).toBe(false)
+
+  expect(saver.getSnapshot().conflict).toBeNull()
+  saver.stop()
+})
+
+test('a read after a save stops an older read that still runs, so it does not take the older answer', async () => {
+  vi.mocked(saveRawDraft).mockResolvedValue(lostWithNoNumber())
+  const queryClient = new QueryClient()
+  const order: string[] = []
+  vi.spyOn(queryClient, 'cancelQueries').mockImplementation(() => {
+    order.push('cancel')
+    return Promise.resolve()
+  })
+  vi.spyOn(queryClient, 'fetchQuery').mockImplementation(() => {
+    order.push('read')
+    return Promise.resolve(entryWithWords('newer words', 7))
+  })
+  const saver = new DraftSaver(target, queryClient)
+
+  saver.edit('my words')
+  saver.flush()
+  await vi.waitFor(() => expect(order).toContain('read'))
+
+  expect(order.slice(0, 2)).toEqual(['cancel', 'read'])
+  saver.stop()
 })
 
 test('a tab that wakes after another tab saved its key raises no notice', async () => {

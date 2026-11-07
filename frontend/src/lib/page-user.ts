@@ -1,3 +1,5 @@
+import { openChannel } from './browser-channel'
+
 export const pageUserHeader = 'X-Recall-User'
 
 export const sessionChannelName = 'recall.session'
@@ -28,9 +30,9 @@ function announceAChangeOfPerson(sub: string) {
   } catch {
     // With no room to store the person, the message still goes.
   }
-  const otherTabs = new BroadcastChannel(sessionChannelName)
-  otherTabs.postMessage({ signedInAs: sub })
-  otherTabs.close()
+  const otherTabs = openChannel(sessionChannelName)
+  otherTabs?.postMessage({ signedInAs: sub })
+  otherTabs?.close()
 }
 
 export function notePageUser(sub: string) {

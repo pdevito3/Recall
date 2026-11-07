@@ -254,7 +254,7 @@ export class RowSaver<F extends object, R> {
     if (moved.length > 0) this.addAsks(moved.map((field) => ({ field, yours: queued[field] as F[keyof F], now: values[field] })))
   }
 
-  /** The save of this click can have reached the Server, so a read decides. Any later try is no longer a live click. */
+  /** The save of this click failed in a way that the app would try again, or a click waits behind that save. A later try is no longer a live click, so a read decides and the person answers. */
   private askAboutClicksThatGotNoReply(sent: Partial<F>, { values }: RowBase<F>) {
     const asks = this.fieldsOnlyFromALiveClick(sent).filter((field) => !isSame(sent[field], values[field])).map((field) => ({ field, yours: sent[field] as F[keyof F], now: values[field], didNotReachTheServer: true }))
     if (asks.length === 0) return
@@ -289,10 +289,8 @@ export class RowSaver<F extends object, R> {
         return reply
       } catch (error) {
         if (!isStaleVersionError(error)) {
-          if (!isProblemDetailsError(error) || (error.status ?? 500) >= 500) {
-            this.attempt = { base, hadNoReply: true }
-            this.askAboutClicksThatGotNoReply(fields, base)
-          }
+          if (!isProblemDetailsError(error) || (error.status ?? 500) >= 500) this.attempt = { base, hadNoReply: true }
+          if (!isFinalRefusal(error)) this.askAboutClicksThatGotNoReply({ ...this.queuedFields(), ...fields }, base)
           throw error
         }
       }

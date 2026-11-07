@@ -83,3 +83,10 @@ test('merged words keep each block of the newest Draft, and add only the blocks 
 
   expect(JSON.parse(mergeWords(draft, mine))).toEqual({ type: 'doc', content: [paragraph('mine'), paragraph('a chunk'), paragraph('more of mine')] })
 })
+
+test('a block that the person wrote twice stays twice when the Draft holds it once', () => {
+  const draft = doc(paragraph('yes'))
+  const mine = doc(paragraph('yes'), paragraph('yes'))
+
+  expect(JSON.parse(mergeWords(draft, mine))).toEqual({ type: 'doc', content: [paragraph('yes'), paragraph('yes')] })
+})

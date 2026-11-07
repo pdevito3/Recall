@@ -52,11 +52,18 @@ export function joinWords(first: string, second: string): string {
   return JSON.stringify({ type: 'doc', content: [...childrenOf(one), ...childrenOf(two)] })
 }
 
-/** The Draft comes first, and then each block of mine that the Draft does not hold. A changed block appears twice, because no word may go. */
+/** The Draft comes first, and then each block of mine that the Draft does not hold. Each block of the Draft answers for one block of mine, so a repeated block stays. A changed block appears twice, because no word may go. */
 export function mergeWords(draft: string, mine: string): string {
   const blocks = childrenOf(asDocument(draft))
-  const inDraft = new Set(blocks.map((block) => JSON.stringify(block)))
-  return JSON.stringify({ type: 'doc', content: [...blocks, ...childrenOf(asDocument(mine)).filter((block) => !inDraft.has(JSON.stringify(block)))] })
+  const inDraft = new Map<string, number>()
+  for (const block of blocks) inDraft.set(JSON.stringify(block), (inDraft.get(JSON.stringify(block)) ?? 0) + 1)
+  const onlyMine = childrenOf(asDocument(mine)).filter((block) => {
+    const key = JSON.stringify(block)
+    const count = inDraft.get(key) ?? 0
+    inDraft.set(key, count - 1)
+    return count <= 0
+  })
+  return JSON.stringify({ type: 'doc', content: [...blocks, ...onlyMine] })
 }
 
 const plainWordCounts = (text: string) => {

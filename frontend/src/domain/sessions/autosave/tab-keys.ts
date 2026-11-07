@@ -1,3 +1,4 @@
+import { openChannel } from '@/lib/browser-channel'
 import { newUuid } from '@/lib/new-uuid'
 
 /**
@@ -64,11 +65,8 @@ function hear({ data: message }: MessageEvent<Message>) {
 /** With no channel in this browser no tab answers, so a tab takes the keys of each other tab. The same text then goes out twice, and it cannot be lost. */
 function channelToOtherTabs() {
   if (channel !== undefined) return channel
-  try {
-    channel = Object.assign(new BroadcastChannel(channelName), { onmessage: hear })
-  } catch {
-    channel = null
-  }
+  channel = openChannel(channelName)
+  if (channel) channel.onmessage = hear
   return channel
 }
 

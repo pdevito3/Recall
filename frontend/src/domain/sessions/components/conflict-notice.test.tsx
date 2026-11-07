@@ -19,7 +19,7 @@ test('a save that lost says where the words are, and offers the newest words', a
 test('words that another tab took say that they are only on this page, and offer the same two answers', async () => {
   const screen = await render(<ConflictNotice conflict="discardedInAnotherTab" onShowNewest={vi.fn()} onKeep={vi.fn()} />)
 
-  await expect.element(screen.getByRole('alert').getByText('Another tab took these words, and you may have discarded them there. They are now only on this page.')).toBeVisible()
+  await expect.element(screen.getByRole('alert').getByText('Another tab took these words, and you may have discarded them there. They may now be only on this page.')).toBeVisible()
   await expect.element(screen.getByRole('button', { name: 'Show the newest words' })).toBeVisible()
   await expect.element(screen.getByRole('button', { name: 'Add my words to the newest words' })).toBeVisible()
 })

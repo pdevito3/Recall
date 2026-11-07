@@ -335,7 +335,7 @@ class Tab {
 
   done() {
     const page = this.page
-    if (!page || page.editor === null) return
+    if (!page || page.editor === null || page.saver.hasConflict()) return
     this.run(() => {
       page.saver.flush()
       page.stopListening()
