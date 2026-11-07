@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExter
 import { flushSync } from 'react-dom'
 
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
-import { useUserSetting } from '@/domain/settings/apis/user-setting'
+import { useLocationCaptureIsOn } from '@/domain/settings/apis/user-setting'
 import { mayTakeFocusOnThisPage } from '@/lib/first-page'
 import { isProblemDetailsError } from '@/lib/problem-details'
 import { newUuid } from '@/lib/new-uuid'
@@ -52,7 +52,7 @@ const openingWords = (saver: DraftSaver | null, sessionId: string | null, cached
 export function useComposer() {
   const queryClient = useQueryClient()
   const owner = useOwner()
-  const captureOn = useUserSetting().data?.locationCaptureEnabled ?? false
+  const captureOn = useLocationCaptureIsOn()
 
   const [saver, setSaverState] = useState<DraftSaver | null>(() => {
     const pointer = readPointer(owner)

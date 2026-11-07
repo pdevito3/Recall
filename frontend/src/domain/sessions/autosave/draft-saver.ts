@@ -457,12 +457,20 @@ export class DraftSaver {
 
   /** A replay of a save answers Unchanged, also when the first answer was Lost and never came. Only the Draft can tell where the words of the replay went. */
   private async readNewest(id: string, wordsOfAReplay: string | null) {
+    const repliesAtRead = this.replyCount
     const newest = await this.queryClient.fetchQuery({ ...sessionQueryOptions(id), staleTime: 0 }).catch(() => null)
     const isRaw = this.target.channel === 'raw'
     if (newest && isRaw) this.patchRow(id, newest.rawText, newest)
-    if (wordsOfAReplay === null) return
-    if (newest && wordsOfAReplay === (isRaw ? newest.rawText : newest.cleanedText)) this.moveBaseTo(isRaw ? newest.rawDraftRevision : newest.cleanedDraftRevision, isRaw ? newest.rawLatestRevision : newest.cleanedLatestRevision)
-    else if (this.snapshot.conflict === null) this.noteWordsOnlyInHistory(wordsOfAReplay)
+    // A later reply knows more than this read.
+    if (wordsOfAReplay === null || this.replyCount !== repliesAtRead) return
+    if (newest && wordsOfAReplay === (isRaw ? newest.rawText : newest.cleanedText)) {
+      this.moveBaseTo(isRaw ? newest.rawDraftRevision : newest.cleanedDraftRevision, isRaw ? newest.rawLatestRevision : newest.cleanedLatestRevision)
+      this.wordsOnServer = wordsOfAReplay
+      if (this.snapshot.conflict === 'wordsMovedToHistory') this.update({ conflict: null })
+    } else if (this.saver.newestUnsettled() === null) {
+      // The Draft can already hold a later save of this page, and the Server tells a loss of that save too.
+      this.noteWordsOnlyInHistory(wordsOfAReplay)
+    }
   }
 
   private patchRow(id: string, words: string, current: Pick<SessionDto, 'cleanupStatus' | 'version'>) {

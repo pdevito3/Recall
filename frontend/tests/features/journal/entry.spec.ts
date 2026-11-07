@@ -56,6 +56,22 @@ test.describe('an entry', () => {
     await expect(entry.at.words('Mine edited')).toBeVisible()
   })
 
+  test('a replay of a save that lost keeps the words on the page also under another notice', async ({ page, api }) => {
+    const session = aSession().atRevision(4).saying('Mine').build()
+    const withChunk = { ...aSession().saying('Words of a recording').build(), id: session.id, clientSessionId: session.clientSessionId, rawDraftRevision: 8, rawLatestRevision: 9 }
+    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveWins(session, 7))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+    await entry.edit(session.id, ' one')
+    await expect(entry.at.conflict('These words replaced a save that this page had not shown.')).toBeVisible()
+
+    api.mock(sessionsApi.oneIs(withChunk), sessionsApi.draftSaveIsUnchanged(session, { draftRevision: 8, latestRevision: 9 }))
+    await entry.edit(session.id, ' two')
+
+    await expect(entry.at.conflict('The words on this page are safe in History.')).toBeVisible()
+    await expect(entry.at.words('Mine one two')).toBeVisible()
+  })
+
   test('a save that loses keeps the words on the page, says where they are, and can show the newest', async ({ page, api }) => {
     const session = aSession().atRevision(4).saying('Mine').build()
     api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }))

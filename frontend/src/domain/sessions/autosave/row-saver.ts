@@ -111,7 +111,10 @@ export class RowSaver<F extends object, R> {
           if (isFinalRefusal(error)) this.appliedWithNoAsk = []
           throw error
         }),
-      onReply: (row) => this.options.onReply(row),
+      onReply: (row) => {
+        this.options.onReply(row)
+        this.showRowInAsks(row)
+      },
       refusalMessage: options.refusalMessage,
       onQueueChange: () => this.keep(),
     })
@@ -144,7 +147,11 @@ export class RowSaver<F extends object, R> {
   /** The "now" of a stale key is old, and an answer must not replace a value that the person never saw. */
   private async readRowForAsks() {
     const row = await this.options.read(new AbortController().signal).catch(() => null)
-    if (row === null || this.isDisposed) return
+    if (row !== null) this.showRowInAsks(row)
+  }
+
+  private showRowInAsks(row: R) {
+    if (this.isDisposed || this.currentAsks.length === 0) return
     const fresh = this.options.fieldsOf(row)
     this.currentAsks = this.currentAsks.flatMap((ask) => (isSame(ask.yours, fresh[ask.field]) ? [] : { ...ask, now: fresh[ask.field] }))
     this.keep()

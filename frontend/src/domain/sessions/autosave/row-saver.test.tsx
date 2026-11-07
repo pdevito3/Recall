@@ -654,6 +654,21 @@ test('an ask of a stale key shows the value that the row has now', async () => {
   saver.dispose()
 })
 
+test('an ask of a stale key takes the value of the row from a reply, when the read for the ask failed', async () => {
+  const api = server({ zone: 'Africa/Cairo' })
+  api.otherClientSets({ zone: 'Asia/Tokyo' })
+  const { saver } = saverOn(api, { current: api.row.current })
+  const read = api.read
+  api.read = () => Promise.reject(new Error('The read stopped.'))
+
+  saver.adopt({ change: { value: { topics: ['work'] }, savedAt: '2026-11-06T00:00:00.000Z' }, attempt: null, asks: [{ field: 'zone', yours: 'Europe/Paris', now: 'Africa/Cairo' }] })
+  await vi.advanceTimersByTimeAsync(0)
+  api.read = read
+
+  expect(saver.asks()).toEqual([{ field: 'zone', yours: 'Europe/Paris', now: 'Asia/Tokyo' }])
+  saver.dispose()
+})
+
 test('an ask of a stale key goes when the row already has that choice', async () => {
   const api = server({ zone: 'Africa/Cairo' })
   const { saver } = saverOn(api, { current: api.row.current })

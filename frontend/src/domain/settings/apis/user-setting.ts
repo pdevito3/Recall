@@ -1,4 +1,5 @@
-import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
+import { queryOptions, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useSyncExternalStore } from 'react'
 
 import type { UserSettingDto } from '@/api/generated/models/types/user-setting-dto'
 import { changeUserSetting } from '@/api/generated/user-settings/clients/change-user-setting'
@@ -22,6 +23,16 @@ export const userSettingOptions = queryOptions({
 
 export function useUserSetting() {
   return useQuery(userSettingOptions)
+}
+
+/** A change to off can wait for a save or for an answer on Settings. This device saves no location while it waits, so the choice holds also on a page with no prompt. */
+export function useLocationCaptureIsOn() {
+  const saver = settingSaver(useQueryClient())
+  const isOffWaiting = useSyncExternalStore(
+    saver.subscribe,
+    () => saver.pendingFields().locationCaptureEnabled === false || saver.asks().some(({ field, yours }) => field === 'locationCaptureEnabled' && yours === false),
+  )
+  return (useUserSetting().data?.locationCaptureEnabled ?? false) && !isOffWaiting
 }
 
 export function journalZoneOf(setting: UserSettingDto | undefined): TimeZone {

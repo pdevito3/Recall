@@ -52,6 +52,7 @@ class ModelServer {
   refusesACreate = false
   clockOfTheServer: string | null = null
   latencyMs = () => 50
+  readsTakeMs: number | null = null
 
   private fault() {
     return new ProblemDetailsError({ type: 'about:blank', title: 'The server failed.', status: 503 })
@@ -117,7 +118,7 @@ class ModelServer {
   }
 
   async getSession({ path }: { path: { id: string } }) {
-    const latency = this.latencyMs()
+    const latency = this.readsTakeMs ?? this.latencyMs()
     await delay(latency)
     const row = this.rows.find((other) => other.id === path.id)
     if (!row) throw new ProblemDetailsError({ type: 'about:blank', title: 'Gone', status: 404 })
@@ -813,6 +814,93 @@ test('a won save whose reply did not come raises no notice, also when the clock 
   expect(tokensIn(row.text)).toContain('w3x')
   expect(tab.page?.saver.getSnapshot().conflict).toBeNull()
   expect(tab.page?.saver.getSnapshot().baseRevision).toBe(row.draftRevision)
+  expect(tab.page?.saver.lastSavedWords()).toBe(row.text)
+  tab.run(() => tab.mod.stopDraftSavers())
+})
+
+test('a lost save whose reply did not come raises the notice also over another notice of the page', async () => {
+  aScene()
+  const tab = await aTabOn('entry-1')
+  tab.type('w1x')
+  await pass(2000)
+  const row = world.rows[0] as Row
+  row.revisions.push({ text: 'other', claimedAt: 'other' })
+  row.latestRevision += 1
+  tab.type('w2x')
+  await pass(2000)
+  expect(tab.page?.saver.getSnapshot().conflict).toBe('replacedUnseenSave')
+  world.appendChunk(row, 'c3x')
+  world.losesNextReply = true
+  tab.type('w4x')
+  await pass(10_000)
+
+  expect(tokensIn(row.text)).not.toContain('w4x')
+  expect(tab.page?.saver.getSnapshot().conflict).toBe('wordsMovedToHistory')
+  expect(tab.page?.saver.newestWords()).toContain('w4x')
+  expect(tab.page?.editor).toContain('w4x')
+  tab.run(() => tab.mod.stopDraftSavers())
+})
+
+test('a replay that finds its words in the Draft ends a notice of a loss', async () => {
+  aScene()
+  const tab = await aTabOn('entry-1')
+  tab.type('w1x')
+  await pass(2000)
+  const row = world.rows[0] as Row
+  world.appendChunk(row, 'c2x')
+  tab.type('w3x')
+  await pass(2000)
+  expect(tab.page?.saver.getSnapshot().conflict).toBe('wordsMovedToHistory')
+  tab.run(() => (tab.page as Page).saver.moveBaseTo(row.draftRevision, row.latestRevision))
+  world.losesNextReply = true
+  world.clockOfTheServer = '2020-01-01T00:00:00.000Z'
+  tab.type('w4x')
+  await pass(10_000)
+
+  expect(tokensIn(row.text)).toContain('w4x')
+  expect(tab.page?.saver.getSnapshot().conflict).toBeNull()
+  tab.run(() => tab.mod.stopDraftSavers())
+})
+
+test('a read after a replay that sees a later save of this page raises no notice of a loss', async () => {
+  aScene()
+  const tab = await aTabOn('entry-1')
+  tab.type('w1x')
+  await pass(2000)
+  const row = world.rows[0] as Row
+  world.losesNextReply = true
+  world.clockOfTheServer = '2020-01-01T00:00:00.000Z'
+  tab.type('w2x')
+  await pass(1000)
+  tab.type('w3x')
+  world.readsTakeMs = 1500
+  await pass(10_000)
+
+  expect(tokensIn(row.text)).toContain('w3x')
+  expect(tab.page?.saver.getSnapshot().conflict).not.toBe('wordsMovedToHistory')
+  tab.run(() => tab.mod.stopDraftSavers())
+})
+
+test('a read after a replay that sees a later save before its reply raises no notice of a loss', async () => {
+  aScene()
+  const tab = await aTabOn('entry-1')
+  tab.type('w1x')
+  await pass(2000)
+  const row = world.rows[0] as Row
+  world.losesNextReply = true
+  world.clockOfTheServer = '2020-01-01T00:00:00.000Z'
+  tab.type('w2x')
+  await pass(1000)
+  tab.type('w3x')
+  world.latencyMs = () => 2000
+  world.readsTakeMs = 1500
+  const saver = (tab.page as Page).saver
+  const conflicts: unknown[] = []
+  saver.subscribe(() => conflicts.push(saver.getSnapshot().conflict))
+  await pass(15_000)
+
+  expect(tokensIn(row.text)).toContain('w3x')
+  expect(conflicts).not.toContain('wordsMovedToHistory')
   tab.run(() => tab.mod.stopDraftSavers())
 })
 

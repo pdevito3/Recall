@@ -139,6 +139,7 @@ describe('a login after a sign-out', () => {
 
     const signingOut = logout()
     login('/about')
+    await vi.waitFor(() => expect(post).toHaveBeenCalled())
     reject(new Error('no answer'))
     await expect(signingOut).rejects.toThrow('no answer')
 
@@ -190,6 +191,7 @@ describe('a login after a sign-out', () => {
 
     const first = logout()
     const second = logout()
+    await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(2))
     failFirst(new Error('no answer'))
     await expect(first).rejects.toThrow('no answer')
     login('/about')

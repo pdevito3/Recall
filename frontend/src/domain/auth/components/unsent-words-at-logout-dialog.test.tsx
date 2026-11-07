@@ -66,9 +66,10 @@ test('words that only a page holds cannot be kept, and the person can stay', asy
   const { screen, finished } = await dialogFor([words('words in memory', { isOnlyInMemory: true })])
 
   await expect.element(screen.getByRole('button', { name: 'Keep words and sign out' })).not.toBeInTheDocument()
+  const stayed = expect(finished).rejects.toThrow()
   await screen.getByRole('button', { name: 'Stay signed in' }).click()
 
-  await expect(finished).rejects.toThrow()
+  await stayed
 })
 
 test('a list of many long texts stays in its box, and the buttons stay in view', async () => {
