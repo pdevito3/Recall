@@ -746,6 +746,26 @@ test('a discard at sign-out leaves no readable text of the words that it named',
   leaving.run(() => leaving.mod.stopDraftSavers())
 })
 
+test('a discard at sign-out removes the key of a tab that still lives, with the words that it named', async () => {
+  const storage = aScene()
+  world.isDown = true
+  const live = await aTabOn('entry-1')
+  live.type('w1x')
+  await pass(1000)
+
+  const leaving = await aTabOn('entry-2')
+  await pass(1000)
+  const shown = leaving.run(() => leaving.mod.unsentWordsOnThisDevice(owner, []))
+  expect(tokensIn(shown.map(({ words }) => words).join(' '))).toEqual(['w1x'])
+  leaving.run(() => {
+    for (const { discard } of shown) discard()
+  })
+
+  expect(tokensIn(allKeys(storage))).toEqual([])
+  live.run(() => live.mod.stopDraftSavers())
+  leaving.run(() => leaving.mod.stopDraftSavers())
+})
+
 test('a save with an old base after a chunk stays in History, keeps the words on screen, and a merge keeps the chunk', async () => {
   aScene()
   const tab = await aTabOn('entry-1')

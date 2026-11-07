@@ -582,7 +582,7 @@ test('the base of a change is the row at the change, so a stale tab that sends l
 
   saver.edit({ capture: true })
   await vi.advanceTimersByTimeAsync(0)
-  const kept = [...states].reverse().find((state) => state?.change)
+  const kept = states.find((state) => state?.change)
 
   expect(kept?.attempt?.base.version).toBe(1)
   saver.dispose()
