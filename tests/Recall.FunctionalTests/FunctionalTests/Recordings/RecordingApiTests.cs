@@ -2,8 +2,11 @@ namespace Recall.FunctionalTests.FunctionalTests.Recordings;
 
 using System.Net;
 using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using BackWave.Hosting;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Recall.Server.Databases;
@@ -77,6 +80,69 @@ public class RecordingApiTests : TestBase
         // Assert
         answers.ShouldNotContain(HttpStatusCode.InternalServerError);
         answers.ShouldContain(HttpStatusCode.NotFound);
+    }
+
+    [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ReportHalted")]
+    private static extern void ReportHalted(BackWaveHealth health, string workerGroup, string pump, int groupPumpCount, Exception exception);
+
+    [Test]
+    [Property("Rule", "REC-14")]
+    [Arguments(JobHosting.TranscriptionQueue, true)]
+    [Arguments(JobHosting.SystemQueue, false)]
+    public async Task the_status_says_that_the_jobs_stopped_only_when_the_group_that_makes_text_stopped(string group, bool stopped)
+    {
+        // Arrange
+        var (_, owner, _) = await SignedInWithSessionAsync();
+        var services = TestingWebApplicationFactory.Instance.Services;
+        var health = new BackWaveHealth();
+        var status = new JobHostStatus(health);
+        ReportHalted(health, group, "pump", 1, new InvalidOperationException());
+        await using var scope = services.GetRequiredService<IServiceScopeFactory>().CreateJournalScope(new JournalOwner(owner.Id, owner.TenantId));
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var modelStore = scope.ServiceProvider.GetRequiredService<ModelStore>();
+
+        // Act
+        var read = await new GetTranscriptionStatus.Handler(dbContext, status, modelStore).Handle(new GetTranscriptionStatus.Query(), CancellationToken.None);
+
+        // Assert
+        read.JobsStopped.ShouldBe(stopped);
+        read.JobsStoppedText.ShouldBe(stopped ? GetTranscriptionStatus.JobsStoppedText : null);
+    }
+
+    [Test]
+    [Property("Rule", "REC-7")]
+    public async Task a_retry_on_a_full_disk_says_that_the_disk_is_full_and_works_after_space_is_free()
+    {
+        // Arrange
+        var (sessionId, owner, _) = await SignedInWithSessionAsync();
+        var recording = await FactoryClient.AddFinishedRecordingAsync(sessionId);
+        var services = TestingWebApplicationFactory.Instance.Services;
+        await using (var scope = services.GetRequiredService<IServiceScopeFactory>().CreateJournalScope(new JournalOwner(owner.Id, owner.TenantId)))
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var row = await dbContext.Recordings.SingleAsync(r => r.Id == recording.Id);
+            row.Fail(RecordingProblem.EngineKilled);
+            await dbContext.SaveChangesAsync();
+        }
+
+        var failingSaves = TestingWebApplicationFactory.Instance.FailingSaves;
+        failingSaves.FillDisk(recording.Id);
+
+        // Act
+        var full = await FactoryClient.PostAsync(ApiRoutes.Recordings.Retry(recording.Id), null);
+        var problem = await full.Content.ReadFromJsonAsync<ProblemDetails>();
+        var afterFull = await FactoryClient.GetFromJsonAsync<RecordingDto>(ApiRoutes.Recordings.GetRecord(recording.Id));
+        failingSaves.FreeDisk(recording.Id);
+        var retry = await FactoryClient.PostAsync(ApiRoutes.Recordings.Retry(recording.Id), null);
+        var afterRetry = await FactoryClient.GetFromJsonAsync<RecordingDto>(ApiRoutes.Recordings.GetRecord(recording.Id));
+
+        // Assert
+        full.StatusCode.ShouldBe(HttpStatusCode.InsufficientStorage);
+        problem!.Title.ShouldBe("The disk of the server is full.");
+        problem.Detail.ShouldNotBeNull().ShouldContain("free some space");
+        afterFull!.Status.ShouldBe(nameof(RecordingStatus.Failed));
+        retry.StatusCode.ShouldBe(HttpStatusCode.OK);
+        afterRetry!.Status.ShouldNotBe(nameof(RecordingStatus.Failed));
     }
 
     [Test]

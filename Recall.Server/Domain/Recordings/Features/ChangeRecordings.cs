@@ -46,6 +46,7 @@ public sealed class RetryRecordingEndpoint : IEndpoint
         .MapToApiVersion(ApiVersions.V1)
         .RequireAuthorization()
         .ProducesProblem(StatusCodes.Status404NotFound)
+        .ProducesProblem(StatusCodes.Status507InsufficientStorage)
         .ProducesValidationProblem(StatusCodes.Status409Conflict)
         .ProducesValidationProblem(StatusCodes.Status422UnprocessableEntity);
 

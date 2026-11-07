@@ -52,9 +52,10 @@ Each `outcome` tells the client this:
 |-----------|-----------|------------------------|-----------------|
 | `Won` | Holds these words | In the Draft, and in a new Revision | The number of the Draft |
 | `Unchanged` | Holds these words | In the Draft. No new Revision | The number of the Draft |
-| `Lost` | Does not hold these words | In a Revision | `null` |
+| `Kept` | Took these words at an earlier save. It can hold more words now, or other words | In an earlier Revision. No new Revision | The number at which the Draft took these words |
+| `Lost` | Never took these words in this save | In a Revision | `null` |
 
-A replay of a save that is not in the Draft gives `Lost`, with no new Revision. So a client that lost a reply gets the true answer when it sends the save again.
+A replay of a save that won gives `Kept`, and a replay of a save that lost gives `Lost`. Neither makes a new Revision. So a client that lost a reply gets the true answer when it sends the save again. After `Kept`, do not merge these words into the Draft again, because the Draft already took them. Read the Session to see what changed. A Revision from before the `was_draft` column reads as a loss, so a replay of an older win can still give `Lost`.
 
 A base above the number of the Draft gives `Lost`, also with a later `savedAt`. The server keeps the words as the newest Revision, and it does not refuse the save with a 4xx.
 

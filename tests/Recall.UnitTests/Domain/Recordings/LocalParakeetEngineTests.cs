@@ -222,7 +222,7 @@ public class LocalParakeetEngineTests
     {
         // Arrange
         using var rig = new Rig();
-        var engine = rig.Engine(rig.Script("worker", ChunkLine), rig.Script("ffmpeg", "exit 1"));
+        var engine = rig.Engine(rig.Script("worker", ChunkLine), rig.Script("ffmpeg", "echo 'Error opening input files: Invalid data found when processing input' >&2; exit 183"));
 
         // Act
         var problem = await ProblemOfAsync(engine, rig.Input());
@@ -311,6 +311,110 @@ public class LocalParakeetEngineTests
 
         // Assert
         fault.ToString().ShouldNotContain("secret-title");
+    }
+
+    [Test]
+    [Property("Rule", "REC-15")]
+    [Arguments("Error opening output /work/work.wav.part: Read-only file system", 226)]
+    [Arguments("Error opening output /work/work.wav.part: Permission denied", 243)]
+    public async Task a_disk_that_refuses_the_decode_says_so_and_not_that_the_audio_is_bad(string words, int exitCode)
+    {
+        // Arrange
+        using var rig = new Rig();
+        var engine = rig.Engine(rig.Script("worker", ChunkLine), rig.Script("ffmpeg", $"echo '{words}' >&2; exit {exitCode}"));
+
+        // Act
+        var problem = await ProblemOfAsync(engine, rig.Input());
+
+        // Assert
+        problem.ShouldBe(RecordingProblem.DiskRefused);
+    }
+
+    [Test]
+    [Property("Rule", "REC-15")]
+    [Arguments("kill -TERM $$")]
+    [Arguments("kill -SEGV $$")]
+    [Arguments("kill -ABRT $$")]
+    [Arguments("exit 255")]
+    [Arguments("echo 'A wording that no run has seen' >&2; exit 1")]
+    public async Task ffmpeg_that_stops_with_no_known_words_claims_nothing_about_the_audio(string script)
+    {
+        // Arrange
+        using var rig = new Rig();
+        var engine = rig.Engine(rig.Script("worker", ChunkLine), rig.Script("ffmpeg", script));
+
+        // Act
+        var problem = await ProblemOfAsync(engine, rig.Input());
+
+        // Assert
+        problem.ShouldBe(RecordingProblem.EngineCrashed);
+    }
+
+    [Test]
+    [Property("Rule", "REC-15")]
+    [Arguments("Error opening input files: Invalid data found when processing input", 183)]
+    [Arguments("Error opening input files: End of file", 187)]
+    [Arguments("[aost#0:0 @ 0x1] Decoding requested, but no decoder found for: flac", 234)]
+    [Arguments("[out#0/wav @ 0x1] Output file does not contain any stream", 234)]
+    public async Task each_wording_that_ffmpeg_uses_for_bad_audio_is_unreadable(string words, int exitCode)
+    {
+        // Arrange
+        using var rig = new Rig();
+        var engine = rig.Engine(rig.Script("worker", ChunkLine), rig.Script("ffmpeg", $"echo '{words}' >&2; exit {exitCode}"));
+
+        // Act
+        var problem = await ProblemOfAsync(engine, rig.Input());
+
+        // Assert
+        problem.ShouldBe(RecordingProblem.AudioUnreadable);
+    }
+
+    [Test]
+    [Property("Rule", "REC-15")]
+    public async Task a_worker_killed_in_the_middle_of_a_line_is_killed_and_not_a_crash()
+    {
+        // Arrange
+        using var rig = new Rig();
+        var engine = rig.Engine(rig.Script("worker", """printf '{"endSample":16'; kill -9 $$"""));
+
+        // Act
+        var problem = await ProblemOfAsync(engine, rig.Input());
+
+        // Assert
+        problem.ShouldBe(RecordingProblem.EngineKilled);
+    }
+
+    [Test]
+    [Property("Rule", "REC-15")]
+    public async Task a_worker_killed_for_memory_in_the_middle_of_a_line_is_out_of_memory()
+    {
+        // Arrange
+        using var rig = new Rig();
+        rig.WriteMemoryEvents();
+        var engine = rig.Engine(rig.Script("worker", $$"""printf '{"endSample":16'; {{rig.KilledForMemory()}}"""));
+
+        // Act
+        var problem = await ProblemOfAsync(engine, rig.Input());
+
+        // Assert
+        problem.ShouldBe(RecordingProblem.OutOfMemory);
+    }
+
+    [Test]
+    [Property("Rule", "REC-15")]
+    public async Task a_broken_line_with_more_after_it_is_a_crash_with_no_wait_for_the_worker()
+    {
+        // Arrange
+        using var rig = new Rig();
+        var engine = rig.Engine(rig.Script("worker", $"echo not-json; {ChunkLine}; sleep 60"));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        // Act
+        var problem = await ProblemOfAsync(engine, rig.Input());
+
+        // Assert
+        problem.ShouldBe(RecordingProblem.EngineCrashed);
+        clock.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(30));
     }
 
     [Test]

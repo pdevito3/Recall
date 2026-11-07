@@ -51,6 +51,7 @@ public static partial class McpDomainErrors
         DomainErrorKind.Forbidden => "permission_denied",
         DomainErrorKind.Conflict => "already_exists",
         DomainErrorKind.StaleVersion or DomainErrorKind.ConcurrentChange => "aborted",
+        DomainErrorKind.DiskFull => "resource_exhausted",
         DomainErrorKind.Unexpected => "internal",
     };
 #pragma warning restore FSTMSG001

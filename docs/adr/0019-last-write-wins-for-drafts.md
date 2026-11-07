@@ -7,7 +7,7 @@ So a save of a Draft sends no `Version`. It sends a base Revision and the save t
 - A save that is based on the current Draft wins.
 - A save that is based on an older Revision wins when its save time is not before the save time of the Draft.
 - A save that loses changes no Draft, and its words stay as the newest Revision. No words go away.
-- A replay of a save makes no Revision.
+- A replay of a save makes no Revision. A replay of a save that won says `Kept` with the number at which it won, and a replay of a save that lost says `Lost`. The column `WasDraft` on a Revision is the least data that tells them apart.
 - A save time in the future becomes the time of the server, so a fast clock cannot win each later save.
 
 The server marks the save commands `IRunsAgainWhenRaced`, so the `Version` of the Session row still orders two saves at the same moment. The row version protects the server, and the save time decides between the words of the person.

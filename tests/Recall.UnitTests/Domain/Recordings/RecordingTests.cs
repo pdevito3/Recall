@@ -375,6 +375,31 @@ public class RecordingTests
     }
 
     [Test]
+    [Property("Rule", "REC-15")]
+    public void only_bad_audio_tells_a_person_to_record_again()
+    {
+        // Arrange
+        var problems = Enum.GetValues<RecordingProblem>().Where(p => p is not (RecordingProblem.None or RecordingProblem.AudioUnreadable));
+
+        // Act and assert
+        RecordingViews.ProblemTextOf(RecordingProblem.AudioUnreadable, ModelStatus.DownloadFailed).ShouldNotBeNull().ShouldContain("record again");
+        foreach (var problem in problems)
+            RecordingViews.ProblemTextOf(problem, ModelStatus.DownloadFailed).ShouldNotBeNull().ShouldNotContain("record again", Case.Insensitive, problem.ToString());
+    }
+
+    [Test]
+    [Property("Rule", "REC-15")]
+    public void a_kill_with_a_memory_kill_in_the_same_try_does_not_claim_that_the_memory_kill_hit_the_engine()
+    {
+        // Act
+        var text = RecordingViews.ProblemTextOf(RecordingProblem.OutOfMemory, ModelStatus.DownloadFailed);
+
+        // Assert
+        text.ShouldNotBeNull().ShouldContain("during the same try");
+        text.ShouldNotContain("needs more memory", Case.Insensitive);
+    }
+
+    [Test]
     public void each_problem_tells_a_person_what_happened()
     {
         // Arrange

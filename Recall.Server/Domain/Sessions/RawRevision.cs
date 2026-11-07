@@ -13,15 +13,19 @@ public class RawRevision
 
     [Sensitive] public string Text { get; private set; } = default!;
 
+    /// <summary>True when the Draft took these words at this number. False for a save that lost, and for each row from before this column.</summary>
+    public bool WasDraft { get; private set; }
+
     public Session Session { get; private set; } = default!;
 
-    internal RawRevision(string sessionId, int number, DateTimeOffset savedAt, DateTimeOffset claimedSavedAt, string text)
+    internal RawRevision(string sessionId, int number, DateTimeOffset savedAt, DateTimeOffset claimedSavedAt, string text, bool wasDraft)
     {
         SessionId = sessionId;
         Number = number;
         SavedAt = savedAt;
         ClaimedSavedAt = claimedSavedAt;
         Text = text;
+        WasDraft = wasDraft;
     }
 
     private RawRevision()

@@ -226,6 +226,7 @@ public enum RecordingProblem
     AudioUnreadable,
     AudioMissing,
     DiskFull,
+    DiskRefused,
     OutOfMemory,
     EngineKilled,
     EngineCrashed,

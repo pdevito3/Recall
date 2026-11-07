@@ -13,8 +13,23 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
     private const int BytesPerSample = 2;
     private const int SigkillExitCode = 137;
     private const int ErrorTailLength = 4096;
-    private static readonly string[] DiskFullErrors = ["No space left on device", "Disk quota exceeded"];
     private const string OomKillCounter = "oom_kill ";
+
+    // The words of ffmpeg 7.1.3 on its error stream, under the C locale of the clean environment of Start. The exit code
+    // is not stable across ffmpeg versions, and 134 is both SIGABRT and the quota error, so only these words name a cause.
+    // Bad audio is named last and only by the words that were seen for it, so a new wording reads EngineCrashed and never
+    // asks a person to record again.
+    private static readonly (string Words, RecordingProblem Problem)[] DecodeErrors =
+    [
+        ("No space left on device", RecordingProblem.DiskFull),
+        ("Disk quota exceeded", RecordingProblem.DiskFull),
+        ("Read-only file system", RecordingProblem.DiskRefused),
+        ("Permission denied", RecordingProblem.DiskRefused),
+        ("Error opening input files: Invalid data found when processing input", RecordingProblem.AudioUnreadable),
+        ("Error opening input files: End of file", RecordingProblem.AudioUnreadable),
+        ("no decoder found for", RecordingProblem.AudioUnreadable),
+        ("does not contain any stream", RecordingProblem.AudioUnreadable),
+    ];
 
     private static readonly JsonSerializerOptions WorkerLines = new(JsonSerializerDefaults.Web);
 
@@ -34,20 +49,29 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
         var discardErrors = DiscardAsync(process.StandardError);
         try
         {
-            while (true)
+            var endedOnBrokenLine = false;
+            while (await ReadLineBeforeStallAsync(process, settings, cancellationToken) is { } line)
             {
-                var line = await ReadLineBeforeStallAsync(process, settings, cancellationToken);
-                if (line is null)
-                    break;
+                if (ParseChunk(line) is { } chunk)
+                {
+                    yield return chunk;
+                    continue;
+                }
 
-                yield return ParseChunk(line);
+                // A kill can cut the last line, and then the exit code says what happened. A broken line with more after it
+                // comes from a worker that still runs, so it is a crash with no need to wait.
+                if (await ReadLineBeforeStallAsync(process, settings, cancellationToken) is not null)
+                    throw new TranscriptionEngineException(RecordingProblem.EngineCrashed);
+
+                endedOnBrokenLine = true;
+                break;
             }
 
             await process.WaitForExitAsync(cancellationToken);
-            if (process.ExitCode != 0)
-                throw new TranscriptionEngineException(process.ExitCode == SigkillExitCode
-                    ? ProblemOfKill(oomKillsBefore)
-                    : RecordingProblem.EngineCrashed);
+            if (process.ExitCode == SigkillExitCode)
+                throw new TranscriptionEngineException(ProblemOfKill(oomKillsBefore));
+            if (process.ExitCode != 0 || endedOnBrokenLine)
+                throw new TranscriptionEngineException(RecordingProblem.EngineCrashed);
         }
         finally
         {
@@ -114,12 +138,21 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
             File.Delete(partial);
             throw new TranscriptionEngineException(process.ExitCode == SigkillExitCode
                 ? ProblemOfKill(oomKillsBefore)
-                : DiskFullErrors.Any(error => errorTail.Contains(error, StringComparison.Ordinal))
-                    ? RecordingProblem.DiskFull
-                    : RecordingProblem.AudioUnreadable);
+                : ProblemOfDecodeError(errorTail));
         }
 
         File.Move(partial, wav, overwrite: true);
+    }
+
+    private static RecordingProblem ProblemOfDecodeError(string errorTail)
+    {
+        foreach (var (words, problem) in DecodeErrors)
+        {
+            if (errorTail.Contains(words, StringComparison.Ordinal))
+                return problem;
+        }
+
+        return RecordingProblem.EngineCrashed;
     }
 
     private string[] WorkerCommand(TranscriptionOptions settings, string wav, long startSample)
@@ -190,16 +223,15 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
         }
     }
 
-    private static TranscriptChunk ParseChunk(string line)
+    private static TranscriptChunk? ParseChunk(string line)
     {
         try
         {
-            return JsonSerializer.Deserialize<TranscriptChunk>(line, WorkerLines)
-                ?? throw new TranscriptionEngineException(RecordingProblem.EngineCrashed);
+            return JsonSerializer.Deserialize<TranscriptChunk>(line, WorkerLines);
         }
         catch (JsonException)
         {
-            throw new TranscriptionEngineException(RecordingProblem.EngineCrashed);
+            return null;
         }
     }
 

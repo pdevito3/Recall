@@ -4,8 +4,13 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Recall.Server.Databases;
 using Recall.Server.Domain.People.Dtos;
+using Recall.Server.Domain.Sessions.Content;
 using Recall.Server.Domain.Sessions.Dtos;
+using Recall.Server.Domain.Tenants;
 using Recall.Server.Domain.UserSettings.Dtos;
 using Serilog.Events;
 using Shouldly;
@@ -127,7 +132,7 @@ public class SessionApiTests : TestBase
     [Property("Rule", "SES-8")]
     [Arguments(true)]
     [Arguments(false)]
-    public async Task a_replay_from_a_fast_clock_makes_no_revision_and_does_not_undo_a_newer_save(bool raw)
+    public async Task a_replay_of_a_win_from_a_fast_clock_says_kept_and_makes_no_revision_and_does_not_undo_a_newer_save(bool raw)
     {
         // Arrange
         var (_, member) = await JournalScenario.AddPeopleAsync();
@@ -145,10 +150,146 @@ public class SessionApiTests : TestBase
 
         // Assert
         replay.StatusCode.ShouldBe(HttpStatusCode.OK);
-        result!.Outcome.ShouldBe("Lost");
-        result.DraftRevision.ShouldBeNull();
+        result!.Outcome.ShouldBe("Kept");
+        result.DraftRevision.ShouldBe(1);
         result.LatestRevision.ShouldBe(2);
         (raw ? read!.RawText : read!.CleanedText).ShouldBe("newer words");
+    }
+
+    private static async Task AppendChunkAsync(string sessionId, Recall.Server.Domain.Users.User owner, string words, DateTimeOffset? now = null)
+    {
+        var services = TestingWebApplicationFactory.Instance.Services;
+        await using var scope = services.GetRequiredService<IServiceScopeFactory>().CreateJournalScope(new JournalOwner(owner.Id, owner.TenantId));
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var row = await dbContext.Sessions.SingleAsync(s => s.Id == sessionId);
+        row.TryAppendTranscript(words, now ?? DateTimeOffset.UtcNow).ShouldBeTrue();
+        await dbContext.SaveChangesAsync();
+    }
+
+    [Test]
+    [Property("Rule", "SES-36")]
+    public async Task a_replay_of_a_save_that_won_under_a_chunk_says_kept_and_the_draft_keeps_its_words_and_the_chunk()
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        var route = ApiRoutes.Sessions.Draft(session.Id);
+        var savedAt = DateTimeOffset.UtcNow;
+        await FactoryClient.PutAsJsonAsync(route, new { text = "typed words", baseRevision = 0, savedAt });
+        await AppendChunkAsync(session.Id, member, "heard words");
+
+        // Act
+        var replay = await FactoryClient.PutAsJsonAsync(route, new { text = "typed words", baseRevision = 0, savedAt });
+        var result = await replay.Content.ReadFromJsonAsync<DraftSaveResultDto>();
+        var read = await FactoryClient.GetFromJsonAsync<SessionDto>(ApiRoutes.Sessions.GetRecord(session.Id));
+
+        // Assert
+        result!.Outcome.ShouldBe("Kept");
+        result.DraftRevision.ShouldBe(1);
+        result.LatestRevision.ShouldBe(2);
+        var plain = ProseMirrorToPlainText.Render(read!.RawText);
+        plain.ShouldContain("typed words");
+        plain.ShouldContain("heard words");
+    }
+
+    [Test]
+    [Property("Rule", "SES-36")]
+    public async Task a_replay_of_a_draft_that_a_chunk_made_says_kept()
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        var route = ApiRoutes.Sessions.Draft(session.Id);
+        var chunkAt = DateTimeOffset.UtcNow;
+        await AppendChunkAsync(session.Id, member, "first words", chunkAt);
+        var afterFirst = await FactoryClient.GetFromJsonAsync<SessionDto>(ApiRoutes.Sessions.GetRecord(session.Id));
+        await AppendChunkAsync(session.Id, member, "second words");
+
+        // Act
+        var replay = await FactoryClient.PutAsJsonAsync(route, new { text = afterFirst!.RawText, baseRevision = 0, savedAt = chunkAt });
+        var result = await replay.Content.ReadFromJsonAsync<DraftSaveResultDto>();
+
+        // Assert
+        result!.Outcome.ShouldBe("Kept");
+        result.DraftRevision.ShouldBe(1);
+    }
+
+    [Test]
+    [Property("Rule", "SES-36")]
+    public async Task a_replay_of_a_save_that_lost_under_a_chunk_says_lost()
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        var route = ApiRoutes.Sessions.Draft(session.Id);
+        var savedAt = DateTimeOffset.UtcNow;
+        await AppendChunkAsync(session.Id, member, "heard words");
+        var first = await FactoryClient.PutAsJsonAsync(route, new { text = "typed words", baseRevision = 0, savedAt });
+
+        // Act
+        var replay = await FactoryClient.PutAsJsonAsync(route, new { text = "typed words", baseRevision = 0, savedAt });
+        var result = await replay.Content.ReadFromJsonAsync<DraftSaveResultDto>();
+
+        // Assert
+        (await first.Content.ReadFromJsonAsync<DraftSaveResultDto>())!.Outcome.ShouldBe("Lost");
+        result!.Outcome.ShouldBe("Lost");
+        result.DraftRevision.ShouldBeNull();
+    }
+
+    [Test]
+    [Property("Rule", "SES-36")]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task a_replay_of_words_that_lost_once_and_then_won_says_kept_with_the_number_of_the_win(bool raw)
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        var route = raw ? ApiRoutes.Sessions.Draft(session.Id) : ApiRoutes.Sessions.Cleaned(session.Id);
+        var now = DateTimeOffset.UtcNow;
+        await FactoryClient.PutAsJsonAsync(route, new { text = "words of the draft", baseRevision = 0, savedAt = now });
+        await FactoryClient.PutAsJsonAsync(route, new { text = "the words", baseRevision = 0, savedAt = now.AddHours(-1) });
+        await FactoryClient.PutAsJsonAsync(route, new { text = "the words", baseRevision = 1, savedAt = now.AddHours(-1) });
+        await FactoryClient.PutAsJsonAsync(route, new { text = "newer words", baseRevision = 3, savedAt = now.AddMinutes(2) });
+
+        // Act
+        var replay = await FactoryClient.PutAsJsonAsync(route, new { text = "the words", baseRevision = 0, savedAt = now.AddHours(-1) });
+        var result = await replay.Content.ReadFromJsonAsync<DraftSaveResultDto>();
+
+        // Assert
+        result!.Outcome.ShouldBe("Kept");
+        result.DraftRevision.ShouldBe(3);
+    }
+
+    [Test]
+    [Property("Rule", "SES-36")]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task words_that_lost_can_win_from_the_number_of_a_read_so_a_client_does_not_lose_them_in_a_loop(bool raw)
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        var route = raw ? ApiRoutes.Sessions.Draft(session.Id) : ApiRoutes.Sessions.Cleaned(session.Id);
+        var now = DateTimeOffset.UtcNow;
+        await FactoryClient.PutAsJsonAsync(route, new { text = "words of the draft", baseRevision = 0, savedAt = now });
+        var lost = await FactoryClient.PutAsJsonAsync(route, new { text = "words of the slow phone", baseRevision = 0, savedAt = now.AddHours(-1) });
+
+        // Act
+        var again = await FactoryClient.PutAsJsonAsync(route, new { text = "words of the slow phone", baseRevision = 1, savedAt = now.AddHours(-1) });
+        var result = await again.Content.ReadFromJsonAsync<DraftSaveResultDto>();
+        var read = await FactoryClient.GetFromJsonAsync<SessionDto>(ApiRoutes.Sessions.GetRecord(session.Id));
+
+        // Assert
+        (await lost.Content.ReadFromJsonAsync<DraftSaveResultDto>())!.Outcome.ShouldBe("Lost");
+        result!.Outcome.ShouldBe("Won");
+        result.DraftRevision.ShouldBe(3);
+        (raw ? read!.RawText : read!.CleanedText).ShouldBe("words of the slow phone");
     }
 
     [Test]
