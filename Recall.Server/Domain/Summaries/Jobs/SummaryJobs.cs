@@ -144,7 +144,10 @@ public sealed class SummaryJobs(IServiceScopeFactory scopeFactory, IModelProvide
         if (!stored.Any(s => s.Period == SummaryPeriod.Day && s.StartDate == yesterday.Start) && sources.StateOf(yesterday).HasSources)
             targets.Add(yesterday);
 
-        return new RefreshPlan(targets.OrderBy(k => k.Period).ThenBy(k => k.Start).ToList(), first, end);
+        // A Summary that failed can fail again in the same way, for example when no words come in time, and that ends the calls
+        // of the claim. So it goes after the other work of the night.
+        var failed = stored.Where(s => s.RunState == SummaryRunState.Failed).Select(s => new PeriodKey(s.Period, s.StartDate)).ToHashSet();
+        return new RefreshPlan(targets.OrderBy(failed.Contains).ThenBy(k => k.Period).ThenBy(k => k.Start).ToList(), first, end);
     }
 
     private async Task<SummaryGeneration> StartAsync(JournalOwner owner, PeriodKey from, PeriodKey to, JobContext context, CancellationToken cancellationToken)
@@ -199,8 +202,8 @@ public sealed class SummaryJobs(IServiceScopeFactory scopeFactory, IModelProvide
     {
         private readonly Dictionary<PeriodKey, bool> _ready = [];
 
-        // A provider that refused a request or gave no words fails each later run of the claim in the same way, so a roll-up of
-        // many sources does not wait on each call in turn or send the words of each source to a provider that refuses them.
+        // A failure of the provider fails each later run of the claim in the same way (see StopsTheClaim), so a roll-up of many
+        // sources does not wait on each call in turn or send the words of each source to a provider that refuses them all.
         private SummaryFailure? _providerFailure;
 
         public ModelEndpoint? Endpoint { get; private set; }
@@ -297,7 +300,7 @@ public sealed class SummaryJobs(IServiceScopeFactory scopeFactory, IModelProvide
             if (failure is null)
                 return true;
 
-            if (failure is SummaryFailure.ProviderRefused or SummaryFailure.ProviderUnavailable)
+            if (reply is ProviderReply<string>.Failed { Failure: var providerFailure } && StopsTheClaim(providerFailure))
                 _providerFailure = failure;
 
             await jobs.SendAsync(owner, new FailSummaryRun.Command(run.SummaryId, run.RunId, failure.Value), cancellationToken);
@@ -313,6 +316,18 @@ public sealed class SummaryJobs(IServiceScopeFactory scopeFactory, IModelProvide
             ProviderFailureKind.Unavailable when context.Attempt >= MaxClaims => SummaryFailure.ProviderUnavailable,
             ProviderFailureKind.Unavailable => throw new JobSafeTextException(TryAgainText),
             _ => throw new ArgumentOutOfRangeException(nameof(failure)),
+        };
+
+        /// <summary>
+        /// A failure of the provider and not of one request: a key or a model that the provider does not take, an address that
+        /// the app does not call, no words in time, or a provider that is still down on the last claim. A 400, 413, or 422 is
+        /// about the words of one request, such as a content filter or a context that is too long, so each other run still calls.
+        /// </summary>
+        private static bool StopsTheClaim(ProviderFailure failure) => failure.Kind switch
+        {
+            ProviderFailureKind.Refused => failure.StatusCode is null or 401 or 403 or 404,
+            ProviderFailureKind.NoWords or ProviderFailureKind.Unavailable => true,
+            _ => false,
         };
 
         private async Task<bool> IsReadyAsync(PeriodKey key, SourceState state, CancellationToken cancellationToken)

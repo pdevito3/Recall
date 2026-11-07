@@ -32,15 +32,17 @@ public sealed class SummarySchedules(BackWaveClient client, IJobStore store)
     /// As <see cref="EnsureAsync"/>, but a fault of the job store does not fail the work that asked for the schedule, such as an
     /// open of a period or a settings save. The next open of a period or the next start puts the schedule in place.
     /// </summary>
-    public async Task TryEnsureAsync(string userId, string tenantId, TimeZoneId zone, CancellationToken cancellationToken)
+    public async Task<bool> TryEnsureAsync(string userId, string tenantId, TimeZoneId zone, CancellationToken cancellationToken)
     {
         try
         {
             await EnsureAsync(userId, tenantId, zone, cancellationToken);
+            return true;
         }
         catch (Exception fault) when (!cancellationToken.IsCancellationRequested)
         {
             _logger.Here().Warning("The nightly summary schedule of user {UserId} was not put in place ({FaultType})", userId, fault.GetType().FullName);
+            return false;
         }
     }
 

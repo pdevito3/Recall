@@ -42,14 +42,16 @@ public sealed class SummaryScheduleSync(IServiceScopeFactory scopeFactory, Summa
                 .ToListAsync(cancellationToken);
         }
 
+        var inPlace = 0;
         foreach (var owner in owners)
         {
             await using var scope = scopeFactory.CreateJournalScope(owner);
             var zone = await scope.ServiceProvider.GetRequiredService<AppDbContext>().LoadJournalZoneAsync(cancellationToken);
-            await schedules.TryEnsureAsync(owner.UserId, owner.TenantId, zone, cancellationToken);
+            if (await schedules.TryEnsureAsync(owner.UserId, owner.TenantId, zone, cancellationToken))
+                inPlace++;
         }
 
         await schedules.RemoveAllButAsync(owners.Select(o => o.UserId).ToHashSet(), cancellationToken);
-        _logger.Here().Information("Put the nightly summary schedules of {UserCount} users in place", owners.Count);
+        _logger.Here().Information("Put the nightly summary schedules of {SummaryScheduleCount} of {UserCount} users in place", inPlace, owners.Count);
     }
 }

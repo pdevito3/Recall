@@ -198,15 +198,17 @@ public class SummaryJobTests : TestBase
     }
 
     [Test]
-    public async Task a_roll_up_calls_a_provider_that_refused_once_and_fails_each_source()
+    [Arguments(401, 1)]
+    [Arguments(400, 3)]
+    public async Task a_roll_up_stops_calling_a_provider_that_refuses_its_key_but_not_one_that_refuses_one_request(int status, int calls)
     {
         // Arrange
         await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
         await FactoryClient.SessionOnAsync(Monday, "first day");
         await FactoryClient.SessionOnAsync(Monday.AddDays(9), "tenth day");
         await FactoryClient.SessionOnAsync(Monday.AddDays(29), "last day");
-        scenario.Fake.Behavior.Mode = FakeMode.EchoError;
-        scenario.Fake.Behavior.Status = 400;
+        scenario.Fake.Behavior.Mode = FakeMode.Status;
+        scenario.Fake.Behavior.Status = status;
 
         // Act
         var month = await FactoryClient.OpenAndRunAsync(SummaryPeriod.Month, Monday);
@@ -215,8 +217,35 @@ public class SummaryJobTests : TestBase
         // Assert
         month.Status.ShouldBe(nameof(SummaryStatus.Failed));
         month.Failure.ShouldBe(nameof(SummaryFailure.SourceFailed));
-        scenario.Fake.CompletionCalls.ShouldBe(1);
+        scenario.Fake.CompletionCalls.ShouldBe(calls);
         rows.Where(r => r.Period == SummaryPeriod.Day).Select(r => r.Failure).ShouldBe([SummaryFailure.ProviderRefused, SummaryFailure.ProviderRefused, SummaryFailure.ProviderRefused]);
+    }
+
+    [Test]
+    public async Task the_nightly_job_runs_a_failed_summary_after_the_other_work()
+    {
+        // Arrange: the Day that failed comes first by date, and the provider refuses its key again tonight, so it gets one call.
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        var tuesday = Monday.AddDays(1);
+        await FactoryClient.SessionOnAsync(Monday, "failed words");
+        var fresh = await FactoryClient.SessionOnAsync(tuesday, "fresh words");
+        scenario.Fake.Behavior.Mode = FakeMode.Status;
+        scenario.Fake.Behavior.Status = 401;
+        await FactoryClient.OpenAndRunAsync(SummaryPeriod.Day, Monday);
+        scenario.Fake.Behavior.Mode = FakeMode.Normal;
+        await FactoryClient.OpenAndRunAsync(SummaryPeriod.Day, tuesday);
+        (await FactoryClient.SaveDraftAsync(fresh.Id, "fresh words, edited", 1, SummaryScenario.NoonOf(tuesday).AddMinutes(5))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        scenario.Fake.Behavior.Mode = FakeMode.Status;
+        var callsBefore = scenario.Fake.RequestBodies.Count;
+
+        // Act
+        await SummaryScenario.RefreshAsync(scenario.Member.Id, scenario.Member.TenantId);
+
+        // Assert
+        var tonight = scenario.Fake.RequestBodies.Skip(callsBefore).ToList();
+        tonight.Count.ShouldBe(1);
+        tonight[0].ShouldContain("fresh words, edited");
+        (await FactoryClient.ReadAsync(SummaryPeriod.Day, Monday)).Failure.ShouldBe(nameof(SummaryFailure.ProviderRefused));
     }
 
     [Test]

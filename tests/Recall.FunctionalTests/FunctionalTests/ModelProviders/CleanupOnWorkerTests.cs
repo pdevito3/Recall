@@ -310,12 +310,18 @@ public class CleanupOnWorkerTests
         used.WaitingCleanupRevision.ShouldBeNull();
     }
 
+    /// <summary>A job that waits for a later try is cancelled, because its backoff can be longer than the wait. A leased job ends soon.</summary>
     private static async Task WaitUntilNoCleanupIsUnfinishedAsync(IJobStore store)
     {
         var deadline = DateTimeOffset.UtcNow + WaitLimit;
-        while ((await store.ListJobsAsync(new JobQuery { WireName = CleanupJob.WireName, MaxResults = 1000 }))
-               .Any(job => job.State is JobState.Scheduled or JobState.AwaitingParent or JobState.Leased))
+        while (true)
         {
+            foreach (var state in new[] { JobState.Scheduled, JobState.AwaitingParent })
+            foreach (var waiting in await store.ListJobsAsync(new JobQuery { State = state, WireName = CleanupJob.WireName }))
+                await store.CancelJobAsync(waiting.JobId, "test", DateTimeOffset.UtcNow);
+
+            if ((await store.ListJobsAsync(new JobQuery { State = JobState.Leased, WireName = CleanupJob.WireName })).Count == 0)
+                return;
             if (DateTimeOffset.UtcNow > deadline)
                 throw new TimeoutException($"A Cleanup of an earlier test did not end in {WaitLimit}.");
             await Task.Delay(TimeSpan.FromMilliseconds(50));
