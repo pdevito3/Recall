@@ -38,6 +38,12 @@ function shownFor(status: ShownSaveStatus, zone: TimeZone): Shown | null {
         text: `Saved at ${timeOf(status.at, zone)}`,
         tone: 'text-muted-foreground',
       }
+    case 'waitingForAnotherWriter':
+      return {
+        icon: Clock01Icon,
+        text: 'Another tab or device keeps changing this entry. Your words are safe, and they wait to save.',
+        tone: 'text-foreground',
+      }
     case 'savedInHistory':
       return { icon: Clock01Icon, text: `Saved in History at ${timeOf(status.at, zone)}`, tone: 'text-foreground' }
     case 'refused':

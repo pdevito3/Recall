@@ -48,7 +48,7 @@ function locationOfNewEntry(queryClient: QueryClient) {
   }
 }
 
-const idleSnapshot: DraftSnapshot = { status: { kind: 'idle' }, conflict: null, sessionId: null, baseRevision: 0, movedFromDeletedEntry: false, isOnlyInMemory: false, areWordsWithAnotherTab: false }
+const idleSnapshot: DraftSnapshot = { status: { kind: 'idle' }, conflict: null, sessionId: null, baseRevision: 0, movedFromDeletedEntry: false, isOnlyInMemory: false, areWordsWithAnotherTab: false, waitsForAnotherWriter: false }
 const noSubscription = () => () => undefined
 
 const isTheEntryGone = (error: unknown) => isProblemDetailsError(error) && error.status === 404
@@ -78,6 +78,7 @@ export function useComposer() {
     const cached = resumedSessionId ? queryClient.getQueryData<SessionDto>(SessionKeys.detail(resumedSessionId)) : undefined
     return { key: 0, words: openingWords(saver, resumedSessionId, cached), takesFocus: false }
   })
+  const [isMergeNoted, setIsMergeNoted] = useState(false)
   const currentWords = useRef(editor.words ?? '')
   const heldAtOpen = useRef(saver?.wordsInHold() ?? null)
   const readsAtOpen = useRef(editor.words === null)
@@ -113,7 +114,7 @@ export function useComposer() {
     }
     const open = (session: SessionDto) => {
       if (!isCurrent) return
-      saver?.moveBaseTo(session.rawDraftRevision)
+      saver?.moveBaseTo(session.rawDraftRevision, session.rawText)
       openWords(session.rawText)
     }
     const openWithNoRead = () => {
@@ -166,9 +167,12 @@ export function useComposer() {
 
   useLayoutEffect(
     () =>
-      saver?.subscribeToNewWords((joined) => {
+      saver?.subscribeToNewWords((joined, why) => {
         currentWords.current = joined
-        flushSync(() => setEditor(({ key }) => ({ key: key + 1, words: joined, takesFocus: isWritingNow() })))
+        flushSync(() => {
+          setEditor(({ key }) => ({ key: key + 1, words: joined, takesFocus: isWritingNow() }))
+          if (why === 'mergedIntoNewest') setIsMergeNoted(true)
+        })
       }),
     [saver],
   )
@@ -262,6 +266,8 @@ export function useComposer() {
     handleChange,
     finish,
     keepWords,
+    isMergeNoted,
+    dismissMergeNote: () => setIsMergeNoted(false),
     showNewest,
   }
 }

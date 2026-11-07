@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import type { DraftConflict } from '../autosave/draft-saver'
 
 const messages: Record<NonNullable<DraftConflict>, string> = {
-  wordsMovedToHistory: 'A newer save, or a recording, changed this entry first. The words on this page are safe in History.',
+  wordsMovedToHistory: 'A newer save, or a recording, changed this entry after your words saved. The words on this page are safe in History.',
   discardedInAnotherTab: 'Another tab took these words, and you may have discarded them there. They may now be only on this page.',
 }
 
@@ -23,6 +23,18 @@ export function ConflictNotice({ conflict, onShowNewest, onKeep }: ConflictNotic
         <Button variant="outline" className={wrapping} onPress={onShowNewest}>Show the newest words</Button>
         <Button variant="ghost" className={wrapping} onPress={onKeep}>Add my words to the newest words</Button>
       </div>
+    </div>
+  )
+}
+
+export const mergedNote = 'Another tab, device, or recording changed this entry while you wrote. Your words are now in the newest words, and the words before the merge are in History.'
+
+/** A merge changes the words on the page, so the note stays until the person dismisses it. */
+export function MergedNotice({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <div role="status" className="flex flex-col gap-2 rounded-lg border bg-muted p-3 text-sm dark:bg-card wrap-anywhere sm:flex-row sm:items-center sm:justify-between">
+      <p>{mergedNote}</p>
+      <Button variant="ghost" className={`${wrapping} self-end sm:self-auto`} onPress={onDismiss}>Dismiss</Button>
     </div>
   )
 }

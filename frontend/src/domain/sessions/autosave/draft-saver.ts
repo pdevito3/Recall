@@ -12,6 +12,7 @@ import { sessionQueryOptions } from '../apis/get-session'
 import { SessionKeys, type DraftChannel } from '../apis/session.keys'
 import { patchTimelineRow, refreshTimelineHead } from '../apis/timeline-cache'
 import { holdsEachWordOf, joinWords, mentionedPersonIds, mergeWords, plainPreviewOf } from '../editor/content'
+import { mergeDraft } from '../editor/merge-draft'
 import { pointAtCreatedSession, pointAtNewEntry } from './composer-pointer'
 import { prefixOfOutbox, readOutbox, removeFromOutbox, storedEntriesIn, writeToOutbox, type OutboxEntry, type StoredEntry } from './outbox'
 import { queueWithRefusal, queueWithUnanswered, type SaveStatus, type Stamped } from './save-queue'
@@ -20,7 +21,7 @@ import { hasWriterLeft, isKeyStored, takeKeysOfTabsThatLeft, thisTab, type Other
 
 export type DraftConflict = 'wordsMovedToHistory' | 'discardedInAnotherTab' | null
 
-export type ShownSaveStatus = SaveStatus | { kind: 'savedInHistory'; at: string }
+export type ShownSaveStatus = SaveStatus | { kind: 'savedInHistory'; at: string } | { kind: 'waitingForAnotherWriter' }
 
 export interface DraftSnapshot {
   status: SaveStatus
@@ -30,6 +31,7 @@ export interface DraftSnapshot {
   movedFromDeletedEntry: boolean
   isOnlyInMemory: boolean
   areWordsWithAnotherTab: boolean
+  waitsForAnotherWriter: boolean
 }
 
 export type DraftNotice =
@@ -40,14 +42,30 @@ export type DraftNotice =
   | { kind: 'waiting'; saver: DraftSaver; words: string }
   | { kind: 'onlyInMemory'; saver: DraftSaver; reason: string | null; canDiscard: boolean; words: string }
 
-export function shownStatusOf({ status, conflict, areWordsWithAnotherTab }: DraftSnapshot): ShownSaveStatus {
+export function shownStatusOf({ status, conflict, areWordsWithAnotherTab, waitsForAnotherWriter }: DraftSnapshot): ShownSaveStatus {
+  if (waitsForAnotherWriter && status.kind !== 'refused') return { kind: 'waitingForAnotherWriter' }
   if (status.kind !== 'saved') return status
   if (areWordsWithAnotherTab) return { kind: 'idle' }
   if (conflict === null) return status
   return conflict === 'wordsMovedToHistory' ? { kind: 'savedInHistory', at: status.at } : { kind: 'idle' }
 }
 
-export type WhyNewWords = 'heldWordsJoined' | 'draftHoldsMore'
+export type WhyNewWords = 'heldWordsJoined' | 'draftHoldsMore' | 'mergedIntoNewest'
+
+const lossesBeforeAWait = 3
+const firstWaitMs = 1_000
+const longestWaitMs = 30_000
+
+/** Step 6 of the steps after `Lost` in `docs/ios-api-changes.md`, as the iOS client does it: a writer slower than another writer loses each save, so after 3 `Lost` in a row the next read waits, 1 s first, twice as long after each later `Lost` up to 30 s, plus a random part of up to half the wait. `jitter` is in 0 to 1. */
+export function waitAfterLosses(lostInARow: number, jitter: number): number {
+  const doublings = lostInARow - lossesBeforeAWait
+  if (doublings < 0) return 0
+  const wait = Math.min(firstWaitMs * 2 ** Math.min(doublings, 8), longestWaitMs)
+  return wait + (wait / 2) * Math.min(Math.max(jitter, 0), 1)
+}
+
+/** A save after a loss needs a new `savedAt`. The same `savedAt` with the same words is a replay, and it gets `Lost` again. */
+const stampAfter = (...stamps: string[]) => new Date(Math.max(Date.now(), ...stamps.map((savedAt) => Date.parse(savedAt) + 1).filter(Number.isFinite))).toISOString()
 
 /** Where the words of a save are, by the text of the Draft. A word of these words that is not in the Draft needs the person. */
 export type WordsFate = 'areTheDraft' | 'areInTheDraft' | 'onlyInHistory'
@@ -57,11 +75,12 @@ export function fateOfWords(words: string, draft: string): WordsFate {
   return holdsEachWordOf(draft, words) ? 'areInTheDraft' : 'onlyInHistory'
 }
 
-/** `reply` is null when no save went, because another tab took or discarded the key. `newest` is the read that a save needs after `Kept` or `Lost`. */
+/** `reply` is null when no save went: another tab took or discarded the key, or the send was the read after `Lost`. `newest` is the read that a save needs after `Kept` or `Lost`. */
 interface SaveAnswer {
   reply: DraftSaveResultDto | null
   newest: SessionDto | null
   isKeyWithAnotherTab?: boolean
+  isReadAfterLoss?: boolean
 }
 
 const doesKeyHoldWords = ({ change, wordsInHistory }: OutboxEntry, words: string) => change?.value === words || wordsInHistory === words
@@ -73,6 +92,8 @@ export interface DraftTarget {
   startedAt: string
   sessionId: string | null
   baseRevision: number
+  /** The text of the Draft at `baseRevision`, so that a merge takes only the change of the person. Unknown for a key of an older version. */
+  baseText?: string | null
   /** Asked at the create, because the person can turn capture off after the first word. */
   location?: () => Promise<{ latitude: number; longitude: number } | null>
 }
@@ -101,11 +122,15 @@ export class DraftSaver {
   private isStopped = false
   private isDiscarded = false
   private isBeingDeleted = false
+  private baseText: string | null
+  private lostInARow = 0
+  private readsBeforeNextSave = false
 
   constructor(target: DraftTarget, queryClient: QueryClient, resumed?: StoredEntry | CopyOfAKey) {
     const entry = resumed?.entry
     this.target = target
     this.queryClient = queryClient
+    this.baseText = target.baseText ?? (target.baseRevision === 0 && !resumed ? '' : null)
     this.snapshot = {
       status: { kind: 'idle' },
       conflict: null,
@@ -114,6 +139,7 @@ export class DraftSaver {
       movedFromDeletedEntry: entry?.movedFromDeletedEntry ?? false,
       isOnlyInMemory: false,
       areWordsWithAnotherTab: false,
+      waitsForAnotherWriter: false,
     }
     this.saver = new SerialSaver({
       debounceMs: pauseInTypingMs,
@@ -145,6 +171,7 @@ export class DraftSaver {
     const { entry } = stored
     // A key that holds only a notice names words that are not on this page. A saver of its own shows them.
     if (this.hasBeenTouched || this.isStopped || entry.refusal || (entry.change === null && entry.wordsInHistory)) return false
+    this.baseText = null
     this.update({ sessionId: entry.sessionId ?? this.snapshot.sessionId, baseRevision: entry.baseRevision })
     this.takeKeyOf(stored)
     if (entry.change) {
@@ -240,7 +267,7 @@ export class DraftSaver {
       }
       if (this.heldWords === null) return
       const unsettled = this.unsettledText()
-      if (session && unsettled === null) this.moveBaseTo(session.rawDraftRevision)
+      if (session && unsettled === null) this.moveBaseTo(session.rawDraftRevision, session.rawText)
       const joined = this.joinHoldInto(unsettled ?? session?.rawText ?? '')
       this.showNewWords(joined, 'heldWordsJoined')
       if (this.newWordsListeners.size === 0) this.reportsArrival = true
@@ -317,7 +344,11 @@ export class DraftSaver {
     this.keep()
   }
 
-  /** The words of the person join the newest Draft. The answer is the words to show, and null means that nothing changed. A page that opened before the notice came does not show the words in History, so they join too. */
+  /**
+   * A notice that stays after a merge: words that left the Draft after a save took them, or words of a tab that another tab discarded.
+   * The person asks for the words of the page in the newest Draft. Only the change of the person since the base goes in, so no paragraph shows twice.
+   * The answer is the words to show, and null means that nothing changed. A page that opened before the notice came does not show the words in History, so they join too.
+   */
   async keepWords(text: string): Promise<string | null> {
     if (this.snapshot.conflict === null) return null
     // With no entry yet there is no Draft to read. The create and the rule of the base decide.
@@ -327,11 +358,12 @@ export class DraftSaver {
       this.saver.flush()
       return text
     }
+    const base = this.baseText
     const newest = await this.readNewestDraft()
     if (newest === null) return null
     const history = this.wordsInHistory
-    const mine = history === null || holdsEachWordOf(text, history) ? text : mergeWords(text, history)
-    const merged = mergeWords(newest, mine)
+    const mine = history === null || holdsEachWordOf(text, history) ? text : mergeDraft(base, history, text)
+    const merged = mergeDraft(base, mine, newest)
     this.dismissConflict()
     this.edit(merged)
     this.saver.flush()
@@ -369,14 +401,15 @@ export class DraftSaver {
   }
 
   private moveBaseToDraftIn(session: SessionDto) {
-    this.moveBaseTo(this.isRaw ? session.rawDraftRevision : session.cleanedDraftRevision)
+    this.moveBaseTo(this.isRaw ? session.rawDraftRevision : session.cleanedDraftRevision, this.draftTextIn(session))
   }
 
   private draftTextIn(session: SessionDto) {
     return this.isRaw ? session.rawText : (session.cleanedText ?? '')
   }
 
-  moveBaseTo(draftRevision: number) {
+  moveBaseTo(draftRevision: number, draftText: string) {
+    this.baseText = draftText
     this.update({ baseRevision: draftRevision })
   }
 
@@ -461,8 +494,9 @@ export class DraftSaver {
       const newest = await this.readForAnswer(signal)
       return { reply: null, newest, isKeyWithAnotherTab: this.isNewestTextInAKey(change) }
     }
+    if (this.readsBeforeNextSave) return { reply: null, newest: await this.readForAnswer(signal), isReadAfterLoss: true }
     const reply = await this.saveWords(change, signal)
-    return { reply, newest: reply.outcome === 'Kept' || reply.outcome === 'Lost' ? await this.readForAnswer(signal) : null }
+    return { reply, newest: reply.outcome === 'Kept' ? await this.readForAnswer(signal) : null }
   }
 
   private isNewestTextInAKey(change: Stamped<string>) {
@@ -521,13 +555,26 @@ export class DraftSaver {
     this.keep(change)
   }
 
-  private handleReply({ reply, newest, isKeyWithAnotherTab }: SaveAnswer, change: Stamped<string>) {
+  private handleReply({ reply, newest, isKeyWithAnotherTab, isReadAfterLoss }: SaveAnswer, change: Stamped<string>) {
     this.replyCount += 1
     // With no reply, each later save of this queue also comes from the key that is gone.
     if (reply) this.forgetAKeyThatIsGone()
     const id = this.snapshot.sessionId
     if (id && reply) void this.queryClient.invalidateQueries({ queryKey: SessionKeys.revisions(id, this.target.channel) })
+    if (reply?.outcome === 'Lost') {
+      this.readBeforeNextSave(change)
+      return
+    }
+    if (reply) {
+      this.lostInARow = 0
+      if (this.snapshot.waitsForAnotherWriter) this.update({ waitsForAnotherWriter: false })
+    }
     if (newest && id && this.isRaw) this.patchRow(id, newest.rawText, newest)
+    if (isReadAfterLoss) {
+      this.readsBeforeNextSave = false
+      if (newest) this.mergeIntoRead(change, newest)
+      return
+    }
     if (reply && !newest) {
       this.noteWordsAreTheDraft(change.value, reply.draftRevision ?? this.snapshot.baseRevision)
       if (id) this.keepSessionCurrent(id, reply, change.value)
@@ -541,12 +588,52 @@ export class DraftSaver {
     else if (this.listeners.size > 0) this.update({ conflict: 'discardedInAnotherTab' })
   }
 
+  /** A lost save does not go again. Its words stay in the queue, and the next send reads the Draft first. After 3 losses in a row, that read waits. */
+  private readBeforeNextSave(change: Stamped<string>) {
+    this.lostInARow += 1
+    this.readsBeforeNextSave = true
+    // A newer edit holds the words of the lost save, and it goes next.
+    if (this.saver.newestUnsettled() === change) this.saver.edit(change.value, change.savedAt)
+    this.saver.flush()
+    const wait = waitAfterLosses(this.lostInARow, Math.random())
+    if (wait > 0) this.saver.holdFor(wait)
+    this.update({ waitsForAnotherWriter: wait > 0 })
+  }
+
+  /** The change of the person since the base goes into the text of the read, one time, and the next save goes from the number of the read. A page shows the merge at once, so a key typed next does not save the older text. */
+  private mergeIntoRead(change: Stamped<string>, newest: SessionDto) {
+    const mine = this.unsettledText() ?? change.value
+    const theirs = this.draftTextIn(newest)
+    if (mine === theirs) {
+      this.noteWordsAreTheDraft(theirs, this.isRaw ? newest.rawDraftRevision : newest.cleanedDraftRevision)
+      return
+    }
+    const merged = mergeDraft(this.baseText, mine, theirs)
+    this.moveBaseToDraftIn(newest)
+    this.wordsInHistory = null
+    this.update({ conflict: null })
+    if (merged === theirs) {
+      // The read holds the change of the person, so nothing goes to the Server. Newer typing holds older words, and the text of the read takes its place.
+      if (this.unsettledText() !== change.value) this.saver.edit(theirs)
+      this.wordsOnServer = theirs
+      this.noteArrival()
+      this.update({ waitsForAnotherWriter: false })
+      this.showNewWords(theirs, 'draftHoldsMore')
+      return
+    }
+    this.saver.edit(merged, stampAfter(change.savedAt, this.saver.newestUnsettled()?.savedAt ?? change.savedAt))
+    this.saver.flush()
+    if (this.listeners.size === 0) this.reportsArrival = true
+    if (merged !== mine) this.showNewWords(merged, 'mergedIntoNewest')
+  }
+
   /** Only a read or a save that holds these words moves the base, so a later save cannot push a chunk of a recording out of the Draft. */
   private noteWordsAreTheDraft(words: string, draftRevision: number) {
     this.wordsOnServer = words
     this.wordsInHistory = null
+    this.baseText = words
     this.noteArrival()
-    this.update({ baseRevision: draftRevision, conflict: null, areWordsWithAnotherTab: false })
+    this.update({ baseRevision: draftRevision, conflict: null, areWordsWithAnotherTab: false, waitsForAnotherWriter: false })
   }
 
   /** The words of this save are safe, and the Draft holds more. The page takes the Draft, unless the person typed since. Then the next save decides. */

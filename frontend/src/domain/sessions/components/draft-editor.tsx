@@ -12,7 +12,7 @@ import { useDraftSaver } from '../autosave/use-draft-saver'
 import { EditorToolbar } from '../editor/editor-toolbar'
 import { focusEditorIn } from '../editor/focus-editor'
 import { JournalEditor } from '../editor/journal-editor'
-import { ConflictNotice } from './conflict-notice'
+import { ConflictNotice, MergedNotice } from './conflict-notice'
 import { SaveStatusLine } from './save-status'
 import { SessionHistory } from './session-history'
 
@@ -24,7 +24,7 @@ const draftRevisionOf = (session: SessionDto, channel: DraftChannel) =>
   channel === 'raw' ? session.rawDraftRevision : session.cleanedDraftRevision
 
 const changedElsewhereNote = 'These words changed in another tab or device. This page now shows the newest words.'
-const notesOfNewWords: Record<WhyNewWords, string> = {
+const notesOfNewWords: Record<Exclude<WhyNewWords, 'mergedIntoNewest'>, string> = {
   heldWordsJoined: 'Words that you typed earlier and that were not saved yet are now on this page.',
   draftHoldsMore: changedElsewhereNote,
 }
@@ -46,7 +46,9 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
     takesFocus: snapshot.movedFromDeletedEntry,
   }))
   const [draftRevisionAtOpen] = useState(() => draftRevisionOf(session, channel))
+  const [textAtOpen] = useState(() => draftOf(session, channel))
   const [changeNote, setChangeNote] = useState<string | null>(null)
+  const [isMergeNoted, setIsMergeNoted] = useState(false)
   const currentText = useRef(opened.text)
   const section = useRef<HTMLElement>(null)
 
@@ -59,11 +61,11 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
   const serverDraft = draftRevisionOf(session, channel)
   useEffect(() => {
     if (saver.hasConflict() || saver.unsettledText() !== null) return
-    saver.moveBaseTo(draftRevisionAtOpen)
-  }, [saver, draftRevisionAtOpen])
+    saver.moveBaseTo(draftRevisionAtOpen, textAtOpen)
+  }, [saver, draftRevisionAtOpen, textAtOpen])
   useEffect(() => {
     if (serverDraft <= saver.getSnapshot().baseRevision || saver.unsettledText() !== null || saver.hasConflict()) return
-    saver.moveBaseTo(serverDraft)
+    saver.moveBaseTo(serverDraft, serverText)
     if (serverText === currentText.current) return
     currentText.current = serverText
     const hadFocus = section.current?.contains(document.activeElement) ?? false
@@ -78,7 +80,8 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
         const hadFocus = section.current?.contains(document.activeElement) ?? false
         flushSync(() => {
           setOpened((previous) => ({ text: joined, key: previous.key + 1, takesFocus: hadFocus }))
-          setChangeNote(notesOfNewWords[why])
+          if (why === 'mergedIntoNewest') setIsMergeNoted(true)
+          else setChangeNote(notesOfNewWords[why])
         })
       }),
     [saver],
@@ -112,6 +115,7 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
         {snapshot.conflict && (
           <ConflictNotice conflict={snapshot.conflict} onShowNewest={() => void showNewest()} onKeep={() => void keep()} />
         )}
+        {isMergeNoted && <MergedNotice onDismiss={() => setIsMergeNoted(false)} />}
         {changeNote && (
           <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted p-3 text-sm dark:bg-card">
             <p>{changeNote}</p>

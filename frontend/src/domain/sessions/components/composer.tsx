@@ -5,7 +5,7 @@ import { useJournalZone } from '@/domain/settings/apis/user-setting'
 
 import { focusEditorIn } from '../editor/focus-editor'
 import { JournalEditor } from '../editor/journal-editor'
-import { ConflictNotice } from './conflict-notice'
+import { ConflictNotice, MergedNotice } from './conflict-notice'
 import { SaveStatusLine } from './save-status'
 import type { Composer } from './use-composer'
 
@@ -29,6 +29,7 @@ export function ComposerForm({ composer }: { composer: Composer }) {
           }}
         />
       )}
+      {composer.isMergeNoted && <MergedNotice onDismiss={composer.dismissMergeNote} />}
       <JournalEditor
         revision={composer.editorKey}
         initialText={composer.words ?? ''}

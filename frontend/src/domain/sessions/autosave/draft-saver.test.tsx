@@ -7,7 +7,7 @@ import { saveRawDraft } from '@/api/generated/sessions/clients/save-raw-draft'
 import { ProblemDetailsError } from '@/lib/problem-details'
 
 import { plainWordsOf } from '../editor/content'
-import { DraftSaver, draftNotices, draftSaverFor, removeNoticesOfWordsInHistory, shownStatusOf, unsentWordsOnThisDevice, type DraftTarget } from './draft-saver'
+import { DraftSaver, draftNotices, waitAfterLosses, draftSaverFor, removeNoticesOfWordsInHistory, shownStatusOf, unsentWordsOnThisDevice, type DraftTarget } from './draft-saver'
 import { readOutbox, writeToOutbox, type OutboxEntry, type StoredEntry } from './outbox'
 
 vi.mock('@/api/generated/sessions/clients/add-session')
@@ -24,6 +24,8 @@ const target: DraftTarget = {
 }
 
 const aSaver = () => new DraftSaver(target, new QueryClient())
+/** A page gives the text of the Draft at the base, so a merge after a loss knows the change of the person. */
+const fromBase: DraftTarget = { ...target, baseText: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'base' }] }] }) }
 
 afterEach(() => {
   localStorage.clear()
@@ -268,9 +270,9 @@ test('a full storage tells the person at once that the words are only in this pa
   saver.stop()
 })
 
-test('a Lost save on a full storage shows the words in History, and no notice with no words', async () => {
+test('a Kept save whose words left the Draft, on a full storage, shows the words in History, and no notice with no words', async () => {
   fullStorage()
-  vi.mocked(saveRawDraft).mockResolvedValue(lostWithNoNumber())
+  vi.mocked(saveRawDraft).mockResolvedValue(keptAt(2))
   const queryClient = new QueryClient()
   vi.spyOn(queryClient, 'fetchQuery').mockResolvedValue(entryWithWords('newer words', 7))
   const saver = new DraftSaver(target, queryClient)
@@ -454,41 +456,135 @@ test('a key that another tab took from this tab is not a copy, so it stays when 
   saver.stop()
 })
 
-test('a loss keeps the base behind, so a next save cannot push a chunk of a recording out of the Draft', async () => {
-  vi.mocked(saveRawDraft).mockResolvedValue(lostAt(5))
-  const saver = new DraftSaver(target, clientAnswering('a chunk', 5))
+test('after a loss, the page reads the Draft, merges the change of the person into it one time, and saves from the number of the read', async () => {
+  vi.mocked(saveRawDraft).mockResolvedValueOnce(lostAt(5))
+  vi.mocked(saveRawDraft).mockResolvedValue(wonAt(6))
+  const saver = new DraftSaver(fromBase, clientAnswering(doc('base', 'a chunk'), 5))
+  const shown = vi.fn()
+  saver.subscribeToNewWords(shown)
 
-  saver.edit('words from an old base')
+  saver.edit(doc('base', 'my words'))
   saver.flush()
-  await vi.waitFor(() => expect(saver.getSnapshot().conflict).toBe('wordsMovedToHistory'))
+  await vi.waitFor(() => expect(saver.getSnapshot().status.kind).toBe('saved'))
 
-  expect(saver.getSnapshot().baseRevision).toBe(1)
-  saver.edit('more words from the old base')
-  saver.flush()
-  await vi.waitFor(() => expect(saveRawDraft).toHaveBeenCalledTimes(2))
-  expect(vi.mocked(saveRawDraft).mock.lastCall?.[0].body.baseRevision).toBe(1)
+  const [lost, merge] = vi.mocked(saveRawDraft).mock.calls.map(([call]) => call.body)
+  expect(saveRawDraft).toHaveBeenCalledTimes(2)
+  expect(merge).toMatchObject({ text: doc('base', 'a chunk', 'my words'), baseRevision: 5 })
+  expect(merge?.savedAt).not.toBe(lost?.savedAt)
+  expect(shown).toHaveBeenCalledWith(doc('base', 'a chunk', 'my words'), 'mergedIntoNewest')
+  expect(saver.getSnapshot()).toMatchObject({ baseRevision: 6, conflict: null })
   saver.stop()
 })
 
-test('keep after a loss reads the Draft, keeps the chunk and the words of the person, and saves from the new base', async () => {
+test('a paragraph that the person changed and another device kept is not added a second time', async () => {
   vi.mocked(saveRawDraft).mockResolvedValueOnce(lostAt(5))
-  vi.mocked(saveRawDraft).mockResolvedValue(wonAt(7))
-  const saver = new DraftSaver(target, clientAnswering('a chunk of a recording', 5))
-  saver.edit('my words')
+  vi.mocked(saveRawDraft).mockResolvedValue(wonAt(6))
+  const saver = new DraftSaver(fromBase, clientAnswering(doc('base', 'OTHERDEVICE', 'CHUNK'), 5))
+
+  saver.edit(doc('base word1'))
   saver.flush()
-  await vi.waitFor(() => expect(saver.getSnapshot().conflict).toBe('wordsMovedToHistory'))
+  await vi.waitFor(() => expect(saveRawDraft).toHaveBeenCalledTimes(2))
 
-  const merged = await saver.keepWords('my words')
+  expect(plainWordsOf(vi.mocked(saveRawDraft).mock.lastCall?.[0].body.text ?? '')).toBe('base word1\nOTHERDEVICE\nCHUNK')
+  saver.stop()
+})
 
-  expect(plainWordsOf(merged ?? '')).toBe('a chunk of a recording\nmy words')
+test('after a loss, the words stay in the key of the tab until a save of the merge answers', async () => {
+  vi.mocked(saveRawDraft).mockResolvedValueOnce(lostAt(5))
+  const queryClient = new QueryClient()
+  vi.spyOn(queryClient, 'fetchQuery').mockReturnValue(new Promise(() => undefined))
+  const saver = new DraftSaver(fromBase, queryClient)
+
+  saver.edit(doc('base', 'my words'))
+  saver.flush()
+  await vi.waitFor(() => expect(queryClient.fetchQuery).toHaveBeenCalledOnce())
+
+  expect(wordsInKeys()).toEqual([doc('base', 'my words')])
   expect(saver.getSnapshot().conflict).toBeNull()
-  await vi.waitFor(() => expect(saveRawDraft).toHaveBeenCalledTimes(2))
-  expect(vi.mocked(saveRawDraft).mock.lastCall?.[0].body).toMatchObject({ text: merged, baseRevision: 5 })
   saver.stop()
 })
 
-test('keep after a loss changes nothing when the read fails, so the words stay on the page and the notice stays', async () => {
+test('after 3 losses in a row, the next read waits from 1 s, the wait doubles, and the page says that the words wait to save', async () => {
+  vi.useFakeTimers()
+  vi.spyOn(Math, 'random').mockReturnValue(0)
+  vi.mocked(saveRawDraft).mockResolvedValue(lostWithNoNumber())
+  const saver = new DraftSaver(fromBase, clientAnswering(doc('base', 'newer words'), 7))
+
+  saver.edit(doc('base', 'my words'))
+  saver.flush()
+  await vi.advanceTimersByTimeAsync(50)
+  expect(saveRawDraft).toHaveBeenCalledTimes(3)
+  expect(shownStatusOf(saver.getSnapshot()).kind).toBe('waitingForAnotherWriter')
+  await vi.advanceTimersByTimeAsync(900)
+  expect(saveRawDraft).toHaveBeenCalledTimes(3)
+  await vi.advanceTimersByTimeAsync(100)
+  expect(saveRawDraft).toHaveBeenCalledTimes(4)
+  await vi.advanceTimersByTimeAsync(1900)
+  expect(saveRawDraft).toHaveBeenCalledTimes(4)
+  await vi.advanceTimersByTimeAsync(150)
+  expect(saveRawDraft).toHaveBeenCalledTimes(5)
+
+  const stamps = vi.mocked(saveRawDraft).mock.calls.map(([call]) => call.body.savedAt)
+  expect(new Set(stamps).size).toBe(stamps.length)
+  expect(wordsInKeys()).toEqual([doc('base', 'newer words', 'my words')])
+  saver.stop()
+  vi.useRealTimers()
+})
+
+test('a won save ends the waits, so a next loss reads at once', async () => {
+  vi.useFakeTimers()
+  vi.spyOn(Math, 'random').mockReturnValue(0)
+  const save = vi.mocked(saveRawDraft)
+  save.mockResolvedValueOnce(lostWithNoNumber()).mockResolvedValueOnce(lostWithNoNumber()).mockResolvedValueOnce(lostWithNoNumber())
+  save.mockResolvedValueOnce(wonAt(8)).mockResolvedValueOnce(lostWithNoNumber()).mockResolvedValue(wonAt(9))
+  const saver = new DraftSaver(fromBase, clientAnswering(doc('base', 'newer words'), 7))
+
+  saver.edit(doc('base', 'my words'))
+  saver.flush()
+  await vi.advanceTimersByTimeAsync(1600)
+  expect(save).toHaveBeenCalledTimes(4)
+  expect(shownStatusOf(saver.getSnapshot()).kind).toBe('saved')
+
+  saver.edit(doc('base', 'newer words', 'my words', 'and more'))
+  saver.flush()
+  await vi.advanceTimersByTimeAsync(50)
+  expect(save).toHaveBeenCalledTimes(6)
+  saver.stop()
+  vi.useRealTimers()
+})
+
+test('a loss with no page merges the words and saves them, and a notice says that they joined the entry', async () => {
   vi.mocked(saveRawDraft).mockResolvedValueOnce(lostAt(5))
+  vi.mocked(saveRawDraft).mockResolvedValue(wonAt(6))
+  const saver = new DraftSaver(fromBase, clientAnswering(doc('base', 'a chunk'), 5))
+  saver.edit(doc('base', 'words of a stale tab'))
+  saver.flush()
+
+  await vi.waitFor(() => expect(saver.notice()).toMatchObject({ kind: 'joined', sessionId: 'session-1' }))
+  expect(vi.mocked(saveRawDraft).mock.lastCall?.[0].body.text).toBe(doc('base', 'a chunk', 'words of a stale tab'))
+  saver.stop()
+})
+
+test('add my words after a Kept save left the Draft puts only the change of the person into the newest words', async () => {
+  vi.mocked(saveRawDraft).mockResolvedValueOnce(keptAt(2))
+  vi.mocked(saveRawDraft).mockResolvedValue(wonAt(8))
+  const queryClient = new QueryClient()
+  vi.spyOn(queryClient, 'fetchQuery').mockResolvedValueOnce(entryWithWords(doc('base', 'OTHERDEVICE'), 7)).mockResolvedValue(entryWithWords(doc('base', 'OTHERDEVICE', 'CHUNK'), 8))
+  const saver = new DraftSaver(fromBase, queryClient)
+  saver.edit(doc('base word1'))
+  saver.flush()
+  await vi.waitFor(() => expect(saver.getSnapshot().conflict).toBe('wordsMovedToHistory'))
+
+  const merged = await saver.keepWords(doc('base word1'))
+
+  expect(plainWordsOf(merged ?? '')).toBe('base word1\nOTHERDEVICE\nCHUNK')
+  await vi.waitFor(() => expect(saveRawDraft).toHaveBeenCalledTimes(2))
+  expect(vi.mocked(saveRawDraft).mock.lastCall?.[0].body).toMatchObject({ text: merged, baseRevision: 8 })
+  saver.stop()
+})
+
+test('add my words changes nothing when the read fails, so the words stay on the page and the notice stays', async () => {
+  vi.mocked(saveRawDraft).mockResolvedValueOnce(keptAt(2))
   const queryClient = new QueryClient()
   const read = vi.spyOn(queryClient, 'fetchQuery').mockResolvedValueOnce(entryWithWords('a chunk', 5))
   read.mockRejectedValue(new Error('Network Error'))
@@ -501,41 +597,6 @@ test('keep after a loss changes nothing when the read fails, so the words stay o
 
   expect(saver.getSnapshot()).toMatchObject({ conflict: 'wordsMovedToHistory', baseRevision: 1 })
   expect(saveRawDraft).toHaveBeenCalledOnce()
-  saver.stop()
-})
-
-test('keep after a loss stops when the person typed during the read', async () => {
-  vi.mocked(saveRawDraft).mockResolvedValueOnce(lostAt(5))
-  vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
-  const queryClient = new QueryClient()
-  let answer: (session: SessionDto) => void = () => undefined
-  const read = vi.spyOn(queryClient, 'fetchQuery').mockResolvedValueOnce(entryWithWords('a chunk', 5))
-  read.mockImplementation(() => new Promise((resolve) => { answer = resolve as typeof answer }))
-  const saver = new DraftSaver(target, queryClient)
-  saver.edit('my words')
-  saver.flush()
-  await vi.waitFor(() => expect(saver.getSnapshot().conflict).toBe('wordsMovedToHistory'))
-
-  const keeping = saver.keepWords('my words')
-  await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2))
-  saver.edit('my words and a key')
-  answer(entryWithWords('a chunk', 5))
-
-  await expect(keeping).resolves.toBeNull()
-  expect(saver.getSnapshot()).toMatchObject({ conflict: 'wordsMovedToHistory', baseRevision: 1 })
-  saver.stop()
-})
-
-test('a loss with no page raises a notice that names History', async () => {
-  vi.mocked(saveRawDraft).mockResolvedValueOnce(lostAt(5))
-  const saver = new DraftSaver(target, clientAnswering('a chunk', 5))
-  saver.edit('words of a stale tab')
-  saver.flush()
-
-  await vi.waitFor(() => expect(saver.notice()).toMatchObject({ kind: 'inHistory', sessionId: 'session-1' }))
-
-  saver.dismissConflict()
-  expect(saver.notice()).toBeNull()
   saver.stop()
 })
 
@@ -613,50 +674,53 @@ test('a Lost save has no number in its reply, and the next save goes only after 
   saver.stop()
 })
 
-test('a failed read after a loss sends the same save again, and it raises no notice until a read answers', async () => {
+test('a failed read after a loss sends no save and raises no notice, and the read goes again', async () => {
   vi.useFakeTimers()
-  vi.mocked(saveRawDraft).mockResolvedValue(lostWithNoNumber())
+  vi.mocked(saveRawDraft).mockResolvedValueOnce(lostWithNoNumber())
+  vi.mocked(saveRawDraft).mockResolvedValue(wonAt(8))
   const queryClient = new QueryClient()
   const read = vi.spyOn(queryClient, 'fetchQuery').mockRejectedValueOnce(new Error('Network Error'))
-  read.mockResolvedValue(entryWithWords('newer words', 7))
-  const saver = new DraftSaver(target, queryClient)
+  read.mockResolvedValue(entryWithWords(doc('base', 'newer words'), 7))
+  const saver = new DraftSaver(fromBase, queryClient)
 
-  saver.edit('my words')
+  saver.edit(doc('base', 'my words'))
   saver.flush()
   await vi.advanceTimersByTimeAsync(10)
+  expect(saveRawDraft).toHaveBeenCalledOnce()
   expect(saver.getSnapshot().conflict).toBeNull()
   expect(saver.getSnapshot().status.kind).toBe('waiting')
 
   await vi.advanceTimersByTimeAsync(3000)
+  expect(read).toHaveBeenCalledTimes(2)
   expect(saveRawDraft).toHaveBeenCalledTimes(2)
-  expect(vi.mocked(saveRawDraft).mock.calls[1]?.[0].body).toEqual(vi.mocked(saveRawDraft).mock.calls[0]?.[0].body)
-  expect(saver.getSnapshot().conflict).toBe('wordsMovedToHistory')
+  expect(vi.mocked(saveRawDraft).mock.lastCall?.[0].body).toMatchObject({ text: doc('base', 'newer words', 'my words'), baseRevision: 7 })
   saver.stop()
   vi.useRealTimers()
 })
 
-test('a refused read after a loss is no refusal of the words, so the same save goes again', async () => {
+test('a refused read after a loss is no refusal of the words, so the read goes again', async () => {
   vi.useFakeTimers()
-  vi.mocked(saveRawDraft).mockResolvedValue(lostWithNoNumber())
+  vi.mocked(saveRawDraft).mockResolvedValueOnce(lostWithNoNumber())
+  vi.mocked(saveRawDraft).mockResolvedValue(wonAt(8))
   const queryClient = new QueryClient()
   const read = vi.spyOn(queryClient, 'fetchQuery').mockRejectedValueOnce(new ProblemDetailsError({ type: 'about:blank', title: 'Not now.', status: 422 }))
-  read.mockResolvedValue(entryWithWords('newer words', 7))
-  const saver = new DraftSaver(target, queryClient)
+  read.mockResolvedValue(entryWithWords(doc('base', 'newer words'), 7))
+  const saver = new DraftSaver(fromBase, queryClient)
 
-  saver.edit('my words')
+  saver.edit(doc('base', 'my words'))
   saver.flush()
   await vi.advanceTimersByTimeAsync(10)
   expect(saver.getSnapshot().status.kind).toBe('waiting')
 
   await vi.advanceTimersByTimeAsync(3000)
   expect(saveRawDraft).toHaveBeenCalledTimes(2)
-  expect(saver.getSnapshot().conflict).toBe('wordsMovedToHistory')
+  expect(vi.mocked(saveRawDraft).mock.lastCall?.[0].body.baseRevision).toBe(7)
   saver.stop()
   vi.useRealTimers()
 })
 
-test('words that the Draft holds raise no notice, and the page takes the Draft', async () => {
-  vi.mocked(saveRawDraft).mockResolvedValue(lostWithNoNumber())
+test('words that the Draft holds raise no notice and send no save, and the page takes the Draft', async () => {
+  vi.mocked(saveRawDraft).mockResolvedValueOnce(lostWithNoNumber())
   const saver = new DraftSaver(target, clientAnswering(doc('my words', 'a chunk'), 7))
   const shown = vi.fn()
   saver.subscribeToNewWords(shown)
@@ -668,6 +732,7 @@ test('words that the Draft holds raise no notice, and the page takes the Draft',
 
   expect(saver.getSnapshot()).toMatchObject({ conflict: null, baseRevision: 7 })
   expect(shown).toHaveBeenCalledWith(doc('my words', 'a chunk'), 'draftHoldsMore')
+  expect(saveRawDraft).toHaveBeenCalledOnce()
   saver.stop()
 })
 
@@ -683,30 +748,31 @@ test('words that the Draft holds with no page raise no notice of History', async
   saver.stop()
 })
 
-test('a person who types during the read keeps the words on the page, and the next save decides', async () => {
+test('a person who types during the read keeps each word: the merge takes the newest typing', async () => {
   vi.mocked(saveRawDraft).mockResolvedValueOnce(lostWithNoNumber())
   vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
   const queryClient = new QueryClient()
   let answer: (session: SessionDto) => void = () => undefined
   vi.spyOn(queryClient, 'fetchQuery').mockImplementation(() => new Promise((resolve) => { answer = resolve as typeof answer }))
-  const saver = new DraftSaver(target, queryClient)
+  const saver = new DraftSaver(fromBase, queryClient)
   const shown = vi.fn()
   saver.subscribeToNewWords(shown)
 
-  saver.edit(doc('my words'))
+  saver.edit(doc('base', 'my words'))
   saver.flush()
   await vi.waitFor(() => expect(queryClient.fetchQuery).toHaveBeenCalledOnce())
-  saver.edit(doc('my words and a key'))
-  answer(entryWithWords(doc('my words', 'a chunk'), 7))
+  saver.edit(doc('base', 'my words and a key'))
+  answer(entryWithWords(doc('base', 'a chunk'), 7))
   await vi.waitFor(() => expect(saveRawDraft).toHaveBeenCalledTimes(2))
 
-  expect(shown).not.toHaveBeenCalled()
-  expect(saver.getSnapshot().baseRevision).toBe(1)
+  const merged = doc('base', 'a chunk', 'my words and a key')
+  expect(vi.mocked(saveRawDraft).mock.lastCall?.[0].body).toMatchObject({ text: merged, baseRevision: 7 })
+  expect(shown).toHaveBeenCalledWith(merged, 'mergedIntoNewest')
   saver.stop()
 })
 
-test('a Lost state keeps its notice after a reload, and the words open on the page', async () => {
-  vi.mocked(saveRawDraft).mockResolvedValue(lostWithNoNumber())
+test('a Kept state keeps its notice after a reload, and the words open on the page', async () => {
+  vi.mocked(saveRawDraft).mockResolvedValue(keptAt(2))
   const before = new DraftSaver(target, clientAnswering('a chunk', 7))
   before.edit('my words')
   before.flush()
@@ -726,7 +792,7 @@ test('a Lost state keeps its notice after a reload, and the words open on the pa
 })
 
 test('a notice of History offers no discard and no word of a sign-out, because the Server holds the words', async () => {
-  vi.mocked(saveRawDraft).mockResolvedValue(lostWithNoNumber())
+  vi.mocked(saveRawDraft).mockResolvedValue(keptAt(2))
   const saver = new DraftSaver(target, clientAnswering('a chunk', 7))
   saver.edit('my words')
   saver.flush()
@@ -762,13 +828,16 @@ test('words of a tab that closed raise no notice when an open page shows them', 
   saver.stop()
 })
 
-test('held words that a newer save pushed out name History, and no notice says that they joined the entry', async () => {
-  vi.mocked(saveRawDraft).mockResolvedValue(lostWithNoNumber())
+test('held words whose save loses go into the newest Draft by a merge, and the notice says that they joined the entry', async () => {
+  vi.mocked(saveRawDraft).mockResolvedValueOnce(lostWithNoNumber())
+  vi.mocked(saveRawDraft).mockResolvedValue(wonAt(8))
   const stored = storedByAnotherTab(entryWith('', { change: null, held: 'words of a hold' }))
 
   const saver = new DraftSaver(target, clientAnswering('other words of another hold', 7), stored)
 
-  await vi.waitFor(() => expect(saver.notice()).toMatchObject({ kind: 'inHistory' }))
+  await vi.waitFor(() => expect(saver.notice()).toMatchObject({ kind: 'joined' }))
+  expect(plainWordsOf(vi.mocked(saveRawDraft).mock.lastCall?.[0].body.text ?? '')).toContain('words of a hold')
+  expect(vi.mocked(saveRawDraft).mock.lastCall?.[0].body.baseRevision).toBe(7)
   saver.stop()
 })
 
@@ -1031,4 +1100,17 @@ test('the sign-out list names one text once, and its discard takes each copy', (
   expect(listed).toHaveLength(1)
   listed[0]?.discard()
   expect(wordsInKeys()).not.toContain('words of two pages')
+})
+
+test.each([
+  [1, 0, 0],
+  [2, 1, 0],
+  [3, 0, 1000],
+  [3, 1, 1500],
+  [4, 0, 2000],
+  [7, 0.5, 20_000],
+  [8, 0, 30_000],
+  [40, 1, 45_000],
+])('after %i losses in a row with a random part of %f, the wait is %i ms', (lostInARow, jitter, ms) => {
+  expect(waitAfterLosses(lostInARow, jitter)).toBe(ms)
 })

@@ -227,3 +227,20 @@ test('settle answers false for words that the Server refused', async () => {
   expect(saver.refusalMessage()).toBe('Too long.')
   saver.dispose()
 })
+
+test('a hold keeps each change back until its time is up, also on a flush, and then the newest goes', async () => {
+  const send = vi.fn<Send>(() => Promise.resolve('ok'))
+  const { saver } = saverWith(send)
+
+  saver.holdFor(1000)
+  saver.edit('a')
+  saver.edit('ab')
+  saver.flush()
+  await vi.advanceTimersByTimeAsync(999)
+  expect(send).not.toHaveBeenCalled()
+
+  await vi.advanceTimersByTimeAsync(1)
+  expect(send).toHaveBeenCalledOnce()
+  expect(send.mock.lastCall?.[0]).toMatchObject({ value: 'ab' })
+  saver.dispose()
+})

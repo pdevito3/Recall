@@ -43,6 +43,7 @@ export class SerialSaver<T, R> {
   private readonly listeners = new Set<() => void>()
   private debounce: ReturnType<typeof setTimeout> | undefined
   private retry: ReturnType<typeof setTimeout> | undefined
+  private hold: ReturnType<typeof setTimeout> | undefined
   private retryMs = firstRetryMs
   private isDisposed = false
   private settleWaiters: ((isSettled: boolean) => void)[] = []
@@ -77,9 +78,19 @@ export class SerialSaver<T, R> {
     this.pump()
   }
 
+  /** No change goes before the time is up, also on a flush. */
+  holdFor(ms: number) {
+    clearTimeout(this.hold)
+    this.hold = setTimeout(() => {
+      this.hold = undefined
+      this.pump()
+    }, ms)
+  }
+
   dispose() {
     this.cancelDebounce()
     clearTimeout(this.retry)
+    clearTimeout(this.hold)
     window.removeEventListener('online', this.retryNow)
     this.listeners.clear()
     this.isDisposed = true
@@ -149,7 +160,7 @@ export class SerialSaver<T, R> {
 
   private pump() {
     const change = nextToSend(this.queue)
-    if (!change || this.isDisposed) return
+    if (!change || this.isDisposed || this.hold !== undefined) return
     this.apply({ type: 'sent' })
     const limit = new AbortController()
     const limitTimer = setTimeout(() => limit.abort(), requestLimitMs)

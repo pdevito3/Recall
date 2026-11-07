@@ -15,6 +15,7 @@ test.each<[ShownSaveStatus, string]>([
   [{ kind: 'saved', at: '2026-11-06T15:30:00Z' }, 'Saved at 9:30 AM'],
   [{ kind: 'savedInHistory', at: '2026-11-06T15:30:00Z' }, 'Saved in History at 9:30 AM'],
   [{ kind: 'refused', message: 'This text is too long.' }, 'Not saved. This text is too long.'],
+  [{ kind: 'waitingForAnotherWriter' }, 'Another tab or device keeps changing this entry. Your words are safe, and they wait to save.'],
 ])('the state %j says what happened', async (status, text) => {
   const screen = await render(<SaveStatusLine status={status} zone={chicago} />)
 

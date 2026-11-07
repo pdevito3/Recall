@@ -312,7 +312,7 @@ class Tab {
           page.editor = page.saver.joinHoldInto('')
           return
         }
-        page.saver.moveBaseTo(session.rawDraftRevision)
+        page.saver.moveBaseTo(session.rawDraftRevision, session.rawText)
         page.editor = page.saver.joinHoldInto(session.rawText)
       })
       return
@@ -371,7 +371,7 @@ class Tab {
     this.run(() => {
       const { baseRevision, conflict } = page.saver.getSnapshot()
       if (session.rawDraftRevision <= baseRevision || page.saver.unsettledText() !== null || conflict !== null) return
-      page.saver.moveBaseTo(session.rawDraftRevision)
+      page.saver.moveBaseTo(session.rawDraftRevision, session.rawText)
       page.editor = session.rawText
     })
   }
@@ -411,17 +411,40 @@ interface Trace {
   knownToBeGone: Set<string>
 }
 
-/** The Draft invariant: at rest, each word that a person typed last into an entry is in the Draft of that entry, or a notice or a conflict on a page names it. A word in a Revision only is not enough, because the person looks at the Draft. */
+/**
+ * The Draft invariant: at rest, each word that a person typed last into an entry is in the Draft of that entry, or a notice or a conflict on a page names it.
+ * A word in a Revision only is not enough, because the person looks at the Draft. A notice of History excuses only words that the Draft took once and that left it later:
+ * the words of a `Lost` save go into the Draft by a merge, with no click, once the other writer stops.
+ */
 function lastWordsThatLeftTheDraftWithNoNotice(tabs: Tab[], storage: Storage, trace: Trace) {
-  const named = new Set(tokensIn(tabs.flatMap((tab) => tab.notices()).map((notice) => ('words' in notice ? notice.words : '')).join(' ')))
+  const notices = tabs.flatMap((tab) => tab.notices())
+  const namedInHistory = new Set(tokensIn(notices.map((notice) => (notice.kind === 'inHistory' ? notice.words : '')).join(' ')))
+  const named = new Set(tokensIn(notices.map((notice) => (notice.kind !== 'inHistory' && 'words' in notice ? notice.words : '')).join(' ')))
   for (const tab of tabs) {
     const { conflict, status, isOnlyInMemory } = tab.page?.saver.getSnapshot() ?? { conflict: null, status: { kind: 'idle' }, isOnlyInMemory: false }
-    if (conflict !== null || status.kind === 'refused' || isOnlyInMemory) for (const token of tokensIn(tab.page?.editor ?? '')) named.add(token)
+    const onScreen = tokensIn(tab.page?.editor ?? '')
+    if (status.kind === 'refused' || isOnlyInMemory || conflict === 'discardedInAnotherTab') for (const token of onScreen) named.add(token)
+    else if (conflict === 'wordsMovedToHistory') for (const token of onScreen) namedInHistory.add(token)
   }
-  const keys = new Set(tokensIn(Object.keys(storage).map((key) => storage.getItem(key)).join(' ')))
+  // A key that holds words only as a notice of History is no queue: no save goes from it.
+  const waiting = (value: string | null) => {
+    const entry = (() => {
+      try {
+        return JSON.parse(value ?? 'null') as unknown
+      } catch {
+        return null
+      }
+    })()
+    if (entry === null || typeof entry !== 'object' || !('change' in entry)) return value ?? ''
+    const { change, held } = entry as { change: { value: string } | null; held?: string | null }
+    return `${change?.value ?? ''} ${held ?? ''}`
+  }
+  const keys = new Set(tokensIn(Object.keys(storage).map((key) => waiting(storage.getItem(key))).join(' ')))
   return [...trace.lastTyped.values()].filter(({ token, clientSessionId }) => {
     const row = world.rows.find((other) => other.clientSessionId === clientSessionId)
-    return !tokensIn(row?.text ?? '').includes(token) && !named.has(token) && !keys.has(token) && !trace.discarded.has(token) && !trace.knownToBeGone.has(token)
+    const tookOnce = tokensIn((row?.revisions ?? []).filter(({ tookAt }) => tookAt !== null).map(({ text }) => text).join(' '))
+    const isExcused = named.has(token) || (namedInHistory.has(token) && tookOnce.includes(token))
+    return !tokensIn(row?.text ?? '').includes(token) && !isExcused && !keys.has(token) && !trace.discarded.has(token) && !trace.knownToBeGone.has(token)
   }).map(({ token, clientSessionId }) => `${token} in ${clientSessionId}`)
 }
 
@@ -737,7 +760,7 @@ test('a reload with a second tab open keeps the words on the screen, whichever t
   other.run(() => other.mod.stopDraftSavers())
 })
 
-test('of two tabs on one entry, the newest words are in the Draft, and the other tab tells the truth', async () => {
+test('of two tabs on one entry, the tab that loses merges, so the words of both tabs are in the Draft once, with no notice', async () => {
   aScene()
   const first = await aTabOn('entry-1')
   first.type('w1x')
@@ -750,9 +773,9 @@ test('of two tabs on one entry, the newest words are in the Draft, and the other
   second.type('w3x')
   await pass(3000)
 
-  const [wonWords, lostTab] = tokensIn(row.text).includes('w2x') ? ['w2x', second] : ['w3x', first]
-  expect(tokensIn(row.text)).toContain(wonWords)
-  expect(lostTab.page?.saver.getSnapshot().conflict).toBe('wordsMovedToHistory')
+  expect([...tokensIn(row.text)].sort()).toEqual(['w1x', 'w2x', 'w3x'])
+  expect(first.page?.saver.getSnapshot().conflict).toBeNull()
+  expect(second.page?.saver.getSnapshot().conflict).toBeNull()
   first.run(() => first.mod.stopDraftSavers())
   second.run(() => second.mod.stopDraftSavers())
 })
@@ -871,7 +894,7 @@ test('a discard at sign-out removes the key of a tab that still lives, with the 
   leaving.run(() => leaving.mod.stopDraftSavers())
 })
 
-test('a lost save whose reply did not come raises the notice at the replay, and the words stay on the screen', async () => {
+test('a lost save whose reply did not come is lost again at the replay, and a merge puts its words and the chunk in the Draft', async () => {
   const storage = aScene()
   const tab = await aTabOn('entry-1')
   tab.type('w1x')
@@ -882,11 +905,10 @@ test('a lost save whose reply did not come raises the notice at the replay, and 
   tab.type('w3x')
   await pass(10_000)
 
-  expect(row.text).toBe('w1x c2x')
-  expect(tab.page?.editor).toBe('w1x w3x')
-  expect(tab.page?.saver.getSnapshot().conflict).toBe('wordsMovedToHistory')
-  expect(tokensIn(row.revisions.map(({ text }) => text).join(' '))).toContain('w3x')
-  expect(JSON.parse(allKeys(storage))).toMatchObject({ change: null, wordsInHistory: 'w1x w3x' })
+  expect(tokensIn(row.text)).toEqual(['w1x', 'c2x', 'w3x'])
+  expect(tokensIn(tab.page?.editor ?? '')).toEqual(['w1x', 'c2x', 'w3x'])
+  expect(tab.page?.saver.getSnapshot().conflict).toBeNull()
+  expect(tokensIn(allKeys(storage))).toEqual([])
   tab.run(() => tab.mod.stopDraftSavers())
 })
 
@@ -897,7 +919,7 @@ test('a won save whose reply did not come raises no notice, and the read gives t
   await pass(2000)
   const row = world.rows[0] as Row
   world.appendChunk(row, 'c2x')
-  tab.run(() => (tab.page as Page).saver.moveBaseTo(row.draftRevision))
+  tab.run(() => (tab.page as Page).saver.moveBaseTo(row.draftRevision, row.text))
   world.losesNextReply = true
   tab.type('w3x')
   await pass(10_000)
@@ -909,7 +931,7 @@ test('a won save whose reply did not come raises no notice, and the read gives t
   tab.run(() => tab.mod.stopDraftSavers())
 })
 
-test('a replay that finds its words in the Draft ends a notice of a loss', async () => {
+test('a merge whose reply did not come finds its words in the Draft at the replay, and nothing repeats', async () => {
   aScene()
   const tab = await aTabOn('entry-1')
   tab.type('w1x')
@@ -917,14 +939,12 @@ test('a replay that finds its words in the Draft ends a notice of a loss', async
   const row = world.rows[0] as Row
   world.appendChunk(row, 'c2x')
   tab.type('w3x')
-  await pass(2000)
-  expect(tab.page?.saver.getSnapshot().conflict).toBe('wordsMovedToHistory')
-  tab.run(() => (tab.page as Page).saver.moveBaseTo(row.draftRevision))
   world.losesNextReply = true
-  tab.type('w4x')
+  await pass(1000)
+  world.losesNextReply = true
   await pass(10_000)
 
-  expect(tokensIn(row.text)).toContain('w4x')
+  expect(tokensIn(row.text)).toEqual(['w1x', 'c2x', 'w3x'])
   expect(tab.page?.saver.getSnapshot().conflict).toBeNull()
   tab.run(() => tab.mod.stopDraftSavers())
 })
@@ -1009,7 +1029,7 @@ test('a saver that took the key of a tab that left and moved to a new entry coun
   tab.run(() => tab.mod.stopDraftSavers())
 })
 
-test('a save with an old base after a chunk stays in History, keeps the words on screen, and a merge keeps the chunk', async () => {
+test('a save with an old base after a chunk merges with no click: the chunk stays, and each word of the person is in the Draft once', async () => {
   aScene()
   const tab = await aTabOn('entry-1')
   tab.type('w1x')
@@ -1018,19 +1038,50 @@ test('a save with an old base after a chunk stays in History, keeps the words on
   world.appendChunk(row, 'c2x')
   tab.type('w3x')
   await pass(2000)
-
-  expect(row.text).toBe('w1x c2x')
-  expect(tab.page?.editor).toBe('w1x w3x')
-  expect(tab.page?.saver.getSnapshot().conflict).toBe('wordsMovedToHistory')
-
   tab.type('w4x')
   await pass(2000)
-  expect(row.text).toBe('w1x c2x')
 
-  const merged = tab.run(() => (tab.page as Page).saver.keepWords((tab.page as Page).editor as string))
-  await pass(2000)
-  tab.page = { ...(tab.page as Page), editor: (await merged) as string }
-  await pass(2000)
-  expect(tokensIn(row.text)).toEqual(expect.arrayContaining(['c2x', 'w4x']))
+  expect(tokensIn(row.text)).toEqual(['w1x', 'c2x', 'w3x', 'w4x'])
+  expect(tokensIn(tab.page?.editor ?? '')).toEqual(['w1x', 'c2x', 'w3x', 'w4x'])
+  expect(tab.page?.saver.getSnapshot().conflict).toBeNull()
   tab.run(() => tab.mod.stopDraftSavers())
 })
+
+for (const paceMs of [1000, 250, 100, 50]) {
+  test(`against a writer that saves each ${paceMs} ms, the words of the page are in the Draft once after the writer stops, and the page waits after 3 losses`, async () => {
+    aScene()
+    world.latencyMs = () => 60
+    const tab = await aTabOn('entry-1')
+    tab.type('w1x')
+    await pass(2000)
+    const row = world.rows[0] as Row
+    const saves: { at: number; outcome: string }[] = []
+    const save = world.saveRaw.bind(world)
+    world.saveRaw = async (request) => {
+      const at = Date.now()
+      const reply = await save(request)
+      saves.push({ at, outcome: reply.outcome })
+      return reply
+    }
+    let writes = 0
+    const writer = setInterval(() => world.appendChunk(row, `c${(writes += 1)}x`), paceMs)
+    for (let word = 2; word <= 7; word += 1) {
+      tab.type(`w${word}x`)
+      await pass(1000)
+    }
+    clearInterval(writer)
+    await pass(120_000)
+
+    const words = tokensIn(row.text).filter((token) => token.startsWith('w'))
+    expect(words).toEqual(['w1x', 'w2x', 'w3x', 'w4x', 'w5x', 'w6x', 'w7x'])
+    expect(tokensIn(row.text).filter((token) => token.startsWith('c'))).toHaveLength(writes)
+    expect(tab.page?.saver.getSnapshot().conflict).toBeNull()
+    let lostInARow = 0
+    for (const [at, { outcome }] of saves.entries()) {
+      if (at > 0 && lostInARow >= 3) expect(saves[at].at - saves[at - 1].at).toBeGreaterThanOrEqual(Math.min(1000 * 2 ** (lostInARow - 3), 30_000))
+      lostInARow = outcome === 'Lost' ? lostInARow + 1 : 0
+    }
+    expect(saves[saves.length - 1]?.outcome).not.toBe('Lost')
+    tab.run(() => tab.mod.stopDraftSavers())
+  })
+}
