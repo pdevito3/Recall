@@ -113,6 +113,28 @@ public class DraftSaveRuleTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-8")]
+    [Arguments(true, true)]
+    [Arguments(true, false)]
+    [Arguments(false, true)]
+    [Arguments(false, false)]
+    public async Task the_words_and_time_of_a_save_in_another_session_are_a_new_save(bool raw, bool samePerson)
+    {
+        // Arrange
+        var earlier = await AddSessionOfNewPersonAsync();
+        var now = DateTimeOffset.UtcNow;
+        await SaveAsync(RouteOf(earlier, raw), "same words", 0, now);
+        var other = samePerson ? await FactoryClient.AddSessionAsync() : await AddSessionOfNewPersonAsync();
+
+        // Act
+        var save = await SaveAsync(RouteOf(other, raw), "same words", 0, now);
+
+        // Assert
+        save.Outcome.ShouldBe("Won");
+        save.DraftRevision.ShouldBe(1);
+    }
+
+    [Test]
     [Property("Rule", "SES-7")]
     [Arguments(true)]
     [Arguments(false)]
