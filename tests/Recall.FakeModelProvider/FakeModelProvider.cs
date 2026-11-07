@@ -97,12 +97,15 @@ public sealed class FakeBehavior
 
     /// <summary>
     /// The output limit of a model such as <c>gpt-4o-transcribe</c>, which documents 2,000 tokens. The fake speaks
-    /// <see cref="FakeModelProvider.TokensPerSecond"/>, bills tokens, and cuts the text of a part that needs more.
+    /// <see cref="AudioTokensPerSecond"/>, bills tokens, and cuts the text of a part that needs more.
     /// </summary>
     public int? AudioOutputTokens { get; set; }
 
     /// <summary>OpenAI refuses a file under 0.1 s with a 400.</summary>
     public double MinAudioSeconds { get; set; } = 0.1;
+
+    /// <summary>The output tokens that a second of audio needs. A higher value stands for denser speech.</summary>
+    public double AudioTokensPerSecond { get; set; } = FakeModelProvider.TokensPerSecond;
 }
 
 /// <summary>
@@ -568,11 +571,11 @@ public sealed class FakeModelProvider : IAsyncDisposable
             return;
         }
 
-        var tokens = (int)Math.Ceiling(seconds * TokensPerSecond);
+        var tokens = (int)Math.Ceiling(seconds * Behavior.AudioTokensPerSecond);
         if (tokens > limit)
         {
             tokens = limit;
-            text = $"Part {AudioFiles.Count} heard {Seconds((double)limit / TokensPerSecond)} of {Seconds(seconds)} seconds";
+            text = $"Part {AudioFiles.Count} heard {Seconds(limit / Behavior.AudioTokensPerSecond)} of {Seconds(seconds)} seconds";
         }
 
         await context.Response.WriteAsJsonAsync(new { text, usage = new { type = "tokens", input_tokens = (int)Math.Ceiling(seconds * 10), output_tokens = tokens, total_tokens = tokens } });
