@@ -126,6 +126,9 @@ The sources of a Summary. Day and Week read Sessions, and each reads Cleaned whe
 **Stale summary**:
 A Summary whose sources changed after it was made. A Person rename counts as a change, so that a Summary does not keep the old name _(agent default)_. The change goes up the chain to each Summary that reads it. A missing or stale Summary generates when a person opens its period, and a nightly job handles the stale periods _(agent default)_.
 
+**Failed summary**:
+A Summary whose last run gave no words. It shows a closed reason, such as no model provider, and never shows as ready with empty words. A person can open the period again to retry.
+
 ### Identity
 
 **User**:

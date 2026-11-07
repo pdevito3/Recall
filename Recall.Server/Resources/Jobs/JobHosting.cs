@@ -8,12 +8,16 @@ using BackWave.Sqlite;
 using Databases;
 using Domain.Recordings.Jobs;
 using Domain.Sessions.Jobs;
+using Domain.Summaries.Jobs;
 
 public static class JobHosting
 {
     public const string SystemQueue = "system";
 
     public const string TranscriptionQueue = "transcription";
+
+    /// <summary>One worker, so two runs of one Summary never call a provider at once, and a roll-up reads its sources in order.</summary>
+    public const string SummaryQueue = "summaries";
 
     public const string HealthCheckName = "backwave";
 
@@ -46,6 +50,16 @@ public static class JobHosting
         Name = TranscriptionQueue,
         PoolSize = TranscriptionsThatFitInMemory,
         Policy = new DispatchPolicy.Strict([TranscriptionQueue]),
+        PollInterval = TimeSpan.FromSeconds(settings.PollSeconds),
+        ShutdownBudget = JobShutdownBudget,
+        Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
+    };
+
+    public static WorkerGroupOptions SummaryWorkers(JobOptions settings) => new()
+    {
+        Name = SummaryQueue,
+        PoolSize = 1,
+        Policy = new DispatchPolicy.Strict([SummaryQueue]),
         PollInterval = TimeSpan.FromSeconds(settings.PollSeconds),
         ShutdownBudget = JobShutdownBudget,
         Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
@@ -100,16 +114,21 @@ public static class JobHosting
                 backwave.AddWorkerGroup(SystemWorkers(settingsAtRegistration));
                 backwave.AddWorkerGroup(CleanupWorkers(settingsAtRegistration));
                 backwave.AddWorkerGroup(TranscriptionWorkers(settingsAtRegistration));
+                backwave.AddWorkerGroup(SummaryWorkers(settingsAtRegistration));
                 builder.Services.AddHostedService<JobHostWatch>();
                 builder.Services.AddSingleton<CleanupJobWatch>();
                 builder.Services.AddHostedService(services => services.GetRequiredService<CleanupJobWatch>());
                 builder.Services.AddHostedService<RecordingSweepService>();
+                builder.Services.AddSingleton<SummaryJobWatch>();
+                builder.Services.AddHostedService(services => services.GetRequiredService<SummaryJobWatch>());
+                builder.Services.AddHostedService<SummaryScheduleSync>();
             }
         });
         builder.Services.AddBackWaveDashboardMetrics();
         builder.Services.AddSingleton<JobHostStatus>();
         builder.Services.AddSingleton<SaveJobs>();
         builder.Services.AddSingleton<RunningCleanups>();
+        builder.Services.AddSingleton<SummarySchedules>();
         builder.Services.AddHealthChecks().AddCheck<JobHostHealthCheck>(HealthCheckName);
     }
 }

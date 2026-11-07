@@ -52,6 +52,7 @@ public class AppDbContext(
     public DbSet<SyncChange> SyncChanges => Set<SyncChange>();
     public DbSet<Recording> Recordings => Set<Recording>();
     public DbSet<RecordingSlice> RecordingSlices => Set<RecordingSlice>();
+    public DbSet<Domain.Summaries.Summary> Summaries => Set<Domain.Summaries.Summary>();
     // new-feature:db-sets
     #endregion
 

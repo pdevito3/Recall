@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -94,7 +95,7 @@ public sealed class FakeBehavior
 /// A local server that speaks the wire formats of a model provider: the Anthropic API under <c>/v1</c>, and an OpenAI-compatible
 /// API under <c>/compat/v1</c>. It checks what the real services check, so a client that sends the wrong request fails here.
 /// </summary>
-public sealed class FakeModelProvider : IAsyncDisposable
+public sealed partial class FakeModelProvider : IAsyncDisposable
 {
     public const string AnthropicVersionHeader = "anthropic-version";
     public const string ModelId = "fake-model-1";
@@ -593,6 +594,10 @@ public sealed class FakeModelProvider : IAsyncDisposable
         if (Behavior.Reply is { } reply)
             return reply;
 
+        // A Summary is prose, so its answer is the words of each source in one line. A check can find each source in it.
+        if (requestText.StartsWith("<summary-sources", StringComparison.Ordinal))
+            return "They wrote: " + string.Join(" | ", SummarySource().Matches(requestText).Select(match => match.Groups[1].Value.Trim()));
+
         var words = requestText.Replace("<raw>", string.Empty, StringComparison.Ordinal).Replace("</raw>", string.Empty, StringComparison.Ordinal).Trim();
         return JsonSerializer.Serialize(new
         {
@@ -603,6 +608,9 @@ public sealed class FakeModelProvider : IAsyncDisposable
             moodSuggestions = DefaultMoods,
         });
     }
+
+    [GeneratedRegex(@"<source [^>]*>\n(.*?)\n</source>", RegexOptions.Singleline)]
+    private static partial Regex SummarySource();
 
     private static string UserTextOfAnthropic(JsonElement root)
     {

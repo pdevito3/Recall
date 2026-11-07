@@ -7,13 +7,14 @@ using Mappings;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Resources;
+using Resources.Jobs;
 using Serilog;
 
 public static class ChangeUserSetting
 {
     public sealed record Command(UserSettingChangeDto Dto) : IRequest<UserSettingDto>;
 
-    public sealed class Handler(AppDbContext dbContext) : IRequestHandler<Command, UserSettingDto>
+    public sealed class Handler(AppDbContext dbContext, SummarySchedules schedules) : IRequestHandler<Command, UserSettingDto>
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
 
@@ -43,6 +44,9 @@ public static class ChangeUserSetting
                 await dbContext.SaveChangesAsync(ct);
                 return row;
             }, cancellationToken);
+
+            if (applied)
+                await schedules.EnsureAsync(owner.UserId, owner.TenantId, UserSetting.ZoneOf(setting.TimeZone), cancellationToken);
 
             _logger.Here().Information("Took a settings change of user {UserId}, applied {Applied}", owner.UserId, applied);
             return setting.ToUserSettingDto();
