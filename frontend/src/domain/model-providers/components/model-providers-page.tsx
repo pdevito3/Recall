@@ -75,7 +75,7 @@ export function ModelProvidersPage() {
       <PageHeading>Model providers</PageHeading>
       {mightBeAnAdmin ? (
         // A button and a field are 44 px high on a phone already, and a select is not.
-        <div className="flex flex-col gap-6 max-md:[&_[data-slot=select-trigger]]:h-11">
+        <div className="flex flex-col gap-6">
           <Providers />
         </div>
       ) : (
