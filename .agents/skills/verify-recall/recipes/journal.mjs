@@ -113,9 +113,10 @@ export default async ({ page, context, step, capture, expect, login }) => {
     await page.getByRole('button', { name: 'Show history', exact: true }).click()
     const versions = page.getByRole('button', { name: /^View version from/ })
     await expect(versions).toHaveCount(3)
-    const earlier = versions.nth(1)
-    await earlier.click()
-    await expect(page.getByRole('dialog').getByText('Words at the start. The first tab.')).toBeVisible()
+    // The newest version is the save that lost. The page shows the version of the save that won.
+    await expect(page.getByRole('listitem').filter({ hasText: '(showing now)' })).toHaveCount(1)
+    await versions.nth(0).click()
+    await expect(page.getByRole('dialog').getByText('Words at the start. The second tab.')).toBeVisible()
     return id
   })
   await capture('r12-conflict', { fullPage: false })
@@ -123,12 +124,12 @@ export default async ({ page, context, step, capture, expect, login }) => {
   await step('lane 4: a restored version gives the same words', async () => {
     await page.getByRole('button', { name: 'Restore this version', exact: true }).click()
     await expect(page.getByRole('dialog')).toHaveCount(0)
-    await expect(editor(page)).toHaveText('Words at the start. The first tab.')
+    await expect(editor(page)).toHaveText('Words at the start. The second tab.')
     await expect(saved(page)).toBeVisible()
     await page.reload()
-    await expect(editor(page)).toHaveText('Words at the start. The first tab.')
+    await expect(editor(page)).toHaveText('Words at the start. The second tab.')
     const read = await api(page, 'GET', `/api/v1/sessions/${twoTabs}`)
-    expect(read.body.rawText).toContain('The first tab.')
+    expect(read.body.rawText).toContain('The second tab.')
   })
   await capture('r12-revision')
 
