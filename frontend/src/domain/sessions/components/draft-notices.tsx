@@ -14,6 +14,9 @@ const entryLinkClass = buttonVariants({ variant: 'ghost', className: 'underline 
 
 const noticeClass = 'mx-4 mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border p-3 text-sm'
 
+// With a large font on a phone, the answers go to a next line and do not push past the edge.
+const actionsClass = 'flex min-w-0 max-w-full flex-wrap items-center gap-2'
+
 async function copyToClipboard(text: string) {
   try {
     await navigator.clipboard.writeText(text)
@@ -33,7 +36,7 @@ function MovedNotice({ notice }: { notice: Extract<DraftNotice, { kind: 'moved' 
   return (
     <section role="status" aria-label="Your words moved" className={`${noticeClass} bg-muted dark:bg-card`}>
       <p className="min-w-0 flex-1 basis-64">An entry that you wrote was deleted in another tab or device. Your words are safe in a new entry.</p>
-      <div className="flex items-center gap-2">
+      <div className={actionsClass}>
         {notice.sessionId && (
           <Link to="/sessions/$id" params={{ id: notice.sessionId }} className={entryLinkClass}>
             Open the new entry
@@ -45,11 +48,11 @@ function MovedNotice({ notice }: { notice: Extract<DraftNotice, { kind: 'moved' 
   )
 }
 
-function EntryNotice({ label, text, sessionId, onDismiss }: { label: string; text: string; sessionId: string | null; onDismiss: () => void }) {
+export function EntryNotice({ label, text, sessionId, onDismiss }: { label: string; text: string; sessionId: string | null; onDismiss: () => void }) {
   return (
     <section role="status" aria-label={label} className={`${noticeClass} bg-muted dark:bg-card`}>
       <p className="min-w-0 flex-1 basis-64">{text}</p>
-      <div className="flex items-center gap-2">
+      <div className={actionsClass}>
         {sessionId && (
           <Link to="/sessions/$id" params={{ id: sessionId }} className={entryLinkClass}>
             Open the entry
@@ -77,7 +80,7 @@ function WaitingNotice({ notice }: { notice: Extract<DraftNotice, { kind: 'waiti
         <p className="font-medium wrap-anywhere">These words are not saved yet. Recall keeps trying while this page is open.</p>
         <p dir="auto" className="line-clamp-2 wrap-anywhere text-muted-foreground">{plainPreviewOf(notice.words, previewLength)}</p>
       </div>
-      <div className="flex items-center gap-2">
+      <div className={actionsClass}>
         <CopyWords words={notice.words} />
         <Button variant="ghost" onPress={() => notice.saver.discard()}>Discard</Button>
       </div>
@@ -92,7 +95,7 @@ function OnlyInMemoryNotice({ notice }: { notice: Extract<DraftNotice, { kind: '
         <p className="font-medium text-destructive wrap-anywhere">This browser has no room to keep these words. They are lost if you close or reload this page before they reach the server. {notice.reason}</p>
         <p dir="auto" className="line-clamp-2 wrap-anywhere text-muted-foreground">{plainPreviewOf(notice.words, previewLength)}</p>
       </div>
-      <div className="flex items-center gap-2">
+      <div className={actionsClass}>
         <CopyWords words={notice.words} />
         {notice.canDiscard && <Button variant="ghost" onPress={() => notice.saver.discard()}>Discard</Button>}
       </div>
@@ -108,7 +111,7 @@ function RefusedNotice({ notice }: { notice: Extract<DraftNotice, { kind: 'refus
         <p dir="auto" className="line-clamp-2 wrap-anywhere text-muted-foreground">{plainPreviewOf(notice.words, previewLength)}</p>
         <p className="text-muted-foreground">Copy the words, make them shorter, and put them in a new entry. They stay here until you discard them.</p>
       </div>
-      <div className="flex items-center gap-2">
+      <div className={actionsClass}>
         <CopyWords words={notice.words} />
         <Button variant="ghost" onPress={() => notice.saver.discard()}>Discard</Button>
       </div>
@@ -120,10 +123,10 @@ function InHistoryNotice({ notice }: { notice: Extract<DraftNotice, { kind: 'inH
   return (
     <section role="status" aria-label="Words saved in History" className={`${noticeClass} bg-muted dark:bg-card`}>
       <div className="min-w-0 flex-1 basis-64 space-y-1">
-        <p className="wrap-anywhere">These words are in the History of an entry and not in its text, because a newer save changed the entry first.</p>
+        <p className="wrap-anywhere">These words are in the History of an entry and not in its text, because a newer save changed the entry after they saved.</p>
         <p dir="auto" className="line-clamp-2 wrap-anywhere text-muted-foreground">{plainPreviewOf(notice.words, previewLength)}</p>
       </div>
-      <div className="flex items-center gap-2">
+      <div className={actionsClass}>
         {notice.sessionId && (
           <Link to="/sessions/$id" params={{ id: notice.sessionId }} className={entryLinkClass}>
             Open the entry
