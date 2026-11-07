@@ -96,22 +96,28 @@ export default async ({ page, step, capture, expect, login }) => {
       return made
     })
 
-    await step('Run Cleanup: the page says that the person can leave', async () => {
-      await page.goto(`/model-providers?session=${session.id}`)
-      await page.getByRole('button', { name: /^Run Cleanup/ }).click()
-      await expect(page.getByRole('status').filter({ hasText: /You can close this page|Cleaned is current/ })).toBeVisible()
+    const cleanup = page.getByRole('region', { name: 'Cleanup', exact: true })
+
+    await step('Run Cleanup on the entry page: the page says that the person can leave', async () => {
+      await page.goto(`/sessions/${session.id}`)
+      await cleanup.getByRole('button', { name: /^Run Cleanup/ }).click()
+      await expect(cleanup.getByRole('status').filter({ hasText: /You can close this page|Cleaned is current/ })).toBeVisible()
     })
     await capture('running')
 
-    await step('a later visit shows Cleaned, and Raw has the words of the draft', async () => {
-      await expect(async () => {
-        await page.reload()
-        await expect(page.getByRole('status').filter({ hasText: 'Cleaned is current.' })).toBeVisible({ timeout: 2000 })
-      }).toPass({ timeout: 60_000 })
-      const raw = page.locator('section', { has: page.getByRole('heading', { level: 3, name: 'Raw' }) })
-      await expect(raw).toContainText('um I walked the dog')
+    await step('the page shows the result with no reload, in the Cleaned tab', async () => {
+      await expect(cleanup.getByRole('status').filter({ hasText: 'Cleaned is current.' })).toBeVisible({ timeout: 60_000 })
+      await page.getByRole('tab', { name: 'Cleaned', exact: true }).click()
+      await expect(page.getByRole('textbox', { name: 'Cleaned version' })).not.toBeEmpty()
     })
     await capture('cleaned')
+
+    await step('a later visit shows Cleaned, and Your words keep the words of the draft', async () => {
+      await page.reload()
+      await expect(cleanup.getByRole('status').filter({ hasText: 'Cleaned is current.' })).toBeVisible()
+      await page.getByRole('tab', { name: 'Your words', exact: true }).click()
+      await expect(page.getByRole('textbox', { name: 'Your words' })).toContainText('um I walked the dog')
+    })
   } finally {
     fake.stop()
   }

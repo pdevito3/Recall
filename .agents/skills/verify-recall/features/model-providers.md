@@ -9,14 +9,13 @@ An Admin connects a model provider with an API key of their own at `/model-provi
 - `model` shows the select `Model of <name>` after a test. A pick saves the model and makes the provider ready.
 - `key-ring` shows an alert when the key ring of the server changed or takes no write, and `The server cannot read this key. Enter it again.` on the provider.
 - `no-admin` shows `An Admin connects the model provider of this install.` to a member with no Admin role.
-- `cleanup` shows the card `Cleanup` for one Session with its status, the button `Run Cleanup`, Cleaned, Raw, the suggestions, and the people.
+- `cleanup` shows the section `Cleanup` on the page of an entry, between History and Tags, with its status, the line `A Cleanup sends your words to <name>.`, the button `Run Cleanup`, the suggestions, and the people to tag. The result shows in the `Cleaned` tab of the editor with no reload.
 - `background` keeps the job running after the page closes. A later visit shows `Cleaned is current.`.
 
 ## How to get to it (user POV)
 
 - Choose `Model providers` in the sidebar.
-- Choose a Session in `Recent Sessions` on that page.
-- Open `/model-providers?session=<id>` directly.
+- For a Cleanup, choose an entry in the Journal, or open `/sessions/<id>` directly.
 
 ## Driving it with browse.mjs
 
@@ -31,8 +30,8 @@ Preconditions:
 - **Test.** Choose `Test connection` on the provider. The status starts with `Connected.`.
 - **Model.** Choose `Model of <name>`, then an option. The hint `Test the connection, then pick a model.` goes away.
 - **Bad key.** Connect a second provider with another key, and choose `Test connection`. The alert holds the words of the fake. The newest provider is active, so choose `Make active` on the first provider before a Cleanup. If you do not, `Run Cleanup` gets a 422 because the active provider has no model.
-- **Cleanup.** Open `/model-providers?session=<id>`, and choose `Run Cleanup`. The status shows `You can close this page`. A reload shows `Cleaned is current.`. Raw shows the words of the draft.
-- **Proof.** Run `node $S/scripts/browse.mjs $S/recipes/model-providers.mjs`. The captures `connected`, `tested`, `bad-key`, `running`, and `cleaned` show each state.
+- **Cleanup.** Open `/sessions/<id>`, and choose `Run Cleanup` in the `Cleanup` section. The status shows `You can close this page`, then `Cleaned is current.` with no reload. The `Cleaned` tab shows the result. A reload shows the same status, and `Your words` still shows the words of the draft.
+- **Proof.** Run `node $S/scripts/browse.mjs $S/recipes/model-providers.mjs`. The captures `connected`, `tested`, `bad-key`, `running`, and `cleaned` show each state. The recipe did not run after the Cleanup moved to the entry page, so check its steps on the first run.
 
 ## Gotchas
 
