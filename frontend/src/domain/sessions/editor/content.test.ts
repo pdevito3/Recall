@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 
-import { joinWords, mentionedPersonIds, plainPreviewOf, plainWordsOf } from './content'
+import { joinWords, mentionedPersonIds, mergeWords, plainPreviewOf, plainWordsOf } from './content'
 import { contentOf } from './content-of'
 
 const doc = (...content: object[]) => JSON.stringify({ type: 'doc', content })
@@ -75,4 +75,11 @@ test('joined words keep the first words and then the second', () => {
   expect(joinWords(doc(paragraph('Before')), doc(paragraph('After')))).toBe(doc(paragraph('Before'), paragraph('After')))
   expect(joinWords('Plain', doc(paragraph('After')))).toBe(doc(paragraph('Plain'), paragraph('After')))
   expect(joinWords('', doc(paragraph('After')))).toBe(doc(paragraph('After')))
+})
+
+test('merged words keep each block of the newest Draft, and add only the blocks of the person that it lacks', () => {
+  const draft = doc(paragraph('mine'), paragraph('a chunk'))
+  const mine = doc(paragraph('mine'), paragraph('more of mine'))
+
+  expect(JSON.parse(mergeWords(draft, mine))).toEqual({ type: 'doc', content: [paragraph('mine'), paragraph('a chunk'), paragraph('more of mine')] })
 })
