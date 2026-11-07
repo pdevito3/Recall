@@ -271,6 +271,34 @@ public class SessionApiTests : TestBase
 
     [Test]
     [Property("Rule", "SES-8")]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task a_replay_of_an_empty_save_at_the_first_base_does_not_empty_the_draft_and_makes_no_revision(bool raw)
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        var route = raw ? ApiRoutes.Sessions.Draft(session.Id) : ApiRoutes.Sessions.Cleaned(session.Id);
+        var now = DateTimeOffset.UtcNow;
+        var empty = new { text = "", baseRevision = 0, savedAt = now.AddMinutes(-1) };
+        var first = await (await FactoryClient.PutAsJsonAsync(route, empty)).Content.ReadFromJsonAsync<DraftSaveResultDto>();
+        await FactoryClient.PutAsJsonAsync(route, new { text = "hello", baseRevision = 0, savedAt = now.AddMinutes(-2) });
+
+        // Act
+        var replay = await (await FactoryClient.PutAsJsonAsync(route, empty)).Content.ReadFromJsonAsync<DraftSaveResultDto>();
+        var read = await FactoryClient.GetFromJsonAsync<SessionDto>(ApiRoutes.Sessions.GetRecord(session.Id));
+
+        // Assert
+        first!.Outcome.ShouldBe("Unchanged");
+        replay!.Outcome.ShouldBe("Kept");
+        replay.DraftRevision.ShouldBe(0);
+        replay.LatestRevision.ShouldBe(1);
+        (raw ? read!.RawText : read!.CleanedText).ShouldBe("hello");
+    }
+
+    [Test]
+    [Property("Rule", "SES-8")]
     [Arguments(true, 1)]
     [Arguments(false, 1)]
     [Arguments(true, 0)]

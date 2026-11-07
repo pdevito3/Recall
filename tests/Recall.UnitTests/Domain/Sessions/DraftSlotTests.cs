@@ -138,7 +138,7 @@ public class DraftSlotTests
 
         // Assert
         decision.Outcome.ShouldBe(DraftSaveOutcome.Lost);
-        decision.NextBase.ShouldBeNull();
+        decision.DraftRevision.ShouldBeNull();
         decision.MintedRevision.ShouldBeNull();
         decision.Next.ShouldBe(slot);
     }
@@ -156,7 +156,7 @@ public class DraftSlotTests
 
         // Assert
         decision.Outcome.ShouldBe(DraftSaveOutcome.Kept);
-        decision.NextBase.ShouldBe(2);
+        decision.DraftRevision.ShouldBe(2);
         decision.MintedRevision.ShouldBeNull();
         decision.Next.ShouldBe(slot);
     }

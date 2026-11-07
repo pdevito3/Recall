@@ -11,7 +11,7 @@ public sealed record DraftSlot(string Text, int DraftRevision, int LatestRevisio
         if (save.Text == Text)
             return new DraftDecision(this, DraftSaveOutcome.Unchanged, null, DraftRevision);
 
-        if (earlier is { DraftTookAt: var number })
+        if ((earlier ?? AnswerOfTheEmptyDraft(save)) is { DraftTookAt: var number })
             return new DraftDecision(this, number is null ? DraftSaveOutcome.Lost : DraftSaveOutcome.Kept, null, number);
 
         var next = LatestRevision + 1;
@@ -21,6 +21,10 @@ public sealed record DraftSlot(string Text, int DraftRevision, int LatestRevisio
     }
 
     public DraftSlot RewrittenKeepingSavedAt(string text) => new(text, LatestRevision + 1, LatestRevision + 1, SavedAt);
+
+    // The empty Draft has the number 0 and no Revision, so no row can answer a replay of its words.
+    private static DraftAnswer? AnswerOfTheEmptyDraft(DraftSave save)
+        => save is { Text: "", BaseRevision: NoRevision } ? new DraftAnswer(NoRevision) : null;
 
     private bool Beats(DraftSave save)
         => save.BaseRevision == DraftRevision
@@ -33,5 +37,5 @@ public sealed record DraftSlot(string Text, int DraftRevision, int LatestRevisio
 /// <summary>The first Revision that already answers a save. <paramref name="DraftTookAt"/> is the number at which the Draft took the words, and null when this save lost. SES-8.</summary>
 public readonly record struct DraftAnswer(int? DraftTookAt);
 
-/// <summary>What a save does to a Draft. <c>NextBase</c> is the number of a Draft whose words the client holds, or null when it holds none. SES-36.</summary>
-public readonly record struct DraftDecision(DraftSlot Next, DraftSaveOutcome Outcome, int? MintedRevision, int? NextBase);
+/// <summary>What a save does to a Draft. <c>DraftRevision</c> is the number that the reply names, or null after a loss. SES-36.</summary>
+public readonly record struct DraftDecision(DraftSlot Next, DraftSaveOutcome Outcome, int? MintedRevision, int? DraftRevision);

@@ -59,7 +59,7 @@ A replay sends the same `text`, the same `baseRevision`, and the same `savedAt`.
 
 Any write can answer 507 when the disk of the server is full. The save did not happen. Keep the words, and send the same save again later.
 
-A base above the number of the Draft gives `Lost`, also with a later `savedAt`. The server keeps the words as the newest Revision, and it does not refuse the save with a 4xx.
+A base that names no Draft, such as a `latestRevision` or a number above the Draft, gives `Lost`, also with a later `savedAt`. The server keeps the words as the newest Revision, and it does not refuse the save with a 4xx.
 
 After `Lost`, do these steps:
 
