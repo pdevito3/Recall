@@ -610,3 +610,164 @@ test('each word that a person typed and did not discard is on the server, in a k
   }
   expect(failures.join('\n\n')).toBe('')
 }, 170_000)
+
+function aScene() {
+  const storage = storageWith(() => false)
+  vi.stubGlobal('localStorage', storage)
+  world = new ModelServer()
+  channels = new ModelChannels()
+  return storage
+}
+
+async function aTabOn(clientSessionId: string) {
+  const tab = new Tab()
+  await tab.load()
+  tab.openDraft(clientSessionId, null, 0)
+  return tab
+}
+
+const pass = (ms: number) => vi.advanceTimersByTimeAsync(ms)
+const allKeys = (storage: Storage) => Object.keys(storage).map((key) => storage.getItem(key)).join(' ')
+
+test('a tab that opens leaves the key of a live tab, so the words of both tabs reach the server', async () => {
+  const storage = aScene()
+  world.isDown = true
+  const first = await aTabOn('entry-1')
+  first.type('w1x')
+  await pass(1000)
+  const keysBefore = Object.keys(storage)
+
+  const second = await aTabOn('entry-1')
+  await pass(1000)
+
+  expect(Object.keys(storage)).toEqual(keysBefore)
+  expect(second.page?.editor).toBe('')
+  first.type('w2x')
+  second.type('w3x')
+  await pass(1000)
+  world.isDown = false
+  await pass(60_000)
+  expect(tokensIn(world.allText())).toEqual(expect.arrayContaining(['w1x', 'w2x', 'w3x']))
+  first.run(() => first.mod.stopDraftSavers())
+  second.run(() => second.mod.stopDraftSavers())
+})
+
+test('a discard removes only the words of its notice, also when a frozen tab wakes and types more', async () => {
+  const storage = aScene()
+  world.isDown = true
+  const frozen = await aTabOn('entry-1')
+  frozen.type('w1x')
+  await pass(1000)
+  channels.closeChannelsOf(frozen)
+
+  const other = await aTabOn('entry-2')
+  await pass(1000)
+  const notice = other.notices().find((one) => 'words' in one && one.words.includes('w1x'))
+  frozen.type('w2x')
+  await pass(1000)
+  other.run(() => notice?.saver.discard())
+
+  expect(tokensIn(allKeys(storage))).toContain('w2x')
+  world.isDown = false
+  await pass(60_000)
+  expect(tokensIn(world.allText())).toContain('w2x')
+  frozen.run(() => frozen.mod.stopDraftSavers())
+  other.run(() => other.mod.stopDraftSavers())
+})
+
+test('a held text that another held text starts with stays, and both reach the server', async () => {
+  const storage = aScene()
+  world.isDown = true
+  const held = (clientSessionId: string, writer: string, words: string) =>
+    storage.setItem(
+      `recall.unsent.${owner}.${writer}.1`,
+      JSON.stringify({ key: `${clientSessionId}.raw`, channel: 'raw', clientSessionId, startedAt: '2026-11-07T00:00:00.000Z', sessionId: null, baseRevision: 0, latestRevision: 0, change: null, held: words }),
+    )
+  held('entry-1', 'tab-gone-1', 'w1x')
+  held('entry-2', 'tab-gone-2', 'w1x w2x')
+
+  const tab = await aTabOn('entry-3')
+  await pass(1000)
+  world.isDown = false
+  await pass(60_000)
+
+  expect(world.rows.map(({ text }) => tokensIn(text).join(' ')).sort()).toEqual(['w1x', 'w1x w2x'])
+  tab.run(() => tab.mod.stopDraftSavers())
+})
+
+test('a sign-out in one tab names the words that only the memory of another tab holds', async () => {
+  let isFull = false
+  const storage = storageWith(() => isFull)
+  vi.stubGlobal('localStorage', storage)
+  world = new ModelServer()
+  channels = new ModelChannels()
+  world.isDown = true
+  const typing = await aTabOn('entry-1')
+  const leaving = await aTabOn('entry-2')
+  await pass(1000)
+  isFull = true
+  typing.type('w1x')
+  await pass(1000)
+
+  const reports = leaving.run(() => leaving.keys.askOtherTabsToSettle(2000))
+  await pass(5000)
+  const shown = leaving.run(() => leaving.mod.unsentWordsOnThisDevice(owner, []))
+  const ofOtherTab = leaving.run(() => leaving.mod.unsentWordsOnThisDevice(owner, []))
+  const otherTabs = await reports
+
+  expect(shown.concat(ofOtherTab).some(({ words }) => words.includes('w1x'))).toBe(false)
+  const named = leaving.run(() => leaving.mod.unsentWordsOnThisDevice(owner, otherTabs))
+  expect(named).toEqual(expect.arrayContaining([expect.objectContaining({ words: 'w1x', isOnlyInMemory: true })]))
+  typing.run(() => typing.mod.stopDraftSavers())
+  leaving.run(() => leaving.mod.stopDraftSavers())
+})
+
+test('a discard at sign-out leaves no readable text of the words that it named', async () => {
+  const storage = aScene()
+  world.isDown = true
+  const gone = await aTabOn('entry-1')
+  gone.type('w1x')
+  await pass(1000)
+  gone.close()
+  storage.setItem(
+    `recall.unsent.${owner}.tab-gone.1`,
+    JSON.stringify({ key: 'entry-2.raw', channel: 'raw', clientSessionId: 'entry-2', startedAt: '2026-11-07T00:00:00.000Z', sessionId: null, baseRevision: 0, latestRevision: 0, change: null, held: 'w2x' }),
+  )
+
+  const leaving = await aTabOn('entry-3')
+  await pass(1000)
+  const shown = leaving.run(() => leaving.mod.unsentWordsOnThisDevice(owner, []))
+  expect(tokensIn(shown.map(({ words }) => words).join(' '))).toEqual(expect.arrayContaining(['w1x', 'w2x']))
+  leaving.run(() => {
+    for (const { discard } of shown) discard()
+  })
+
+  expect(tokensIn(allKeys(storage))).toEqual([])
+  leaving.run(() => leaving.mod.stopDraftSavers())
+})
+
+test('a save with an old base after a chunk stays in History, keeps the words on screen, and a merge keeps the chunk', async () => {
+  aScene()
+  const tab = await aTabOn('entry-1')
+  tab.type('w1x')
+  await pass(2000)
+  const row = world.rows[0] as Row
+  world.appendChunk(row, 'c2x')
+  tab.type('w3x')
+  await pass(2000)
+
+  expect(row.text).toBe('w1x c2x')
+  expect(tab.page?.editor).toBe('w1x w3x')
+  expect(tab.page?.saver.getSnapshot().conflict).toBe('wordsMovedToHistory')
+
+  tab.type('w4x')
+  await pass(2000)
+  expect(row.text).toBe('w1x c2x')
+
+  const merged = tab.run(() => (tab.page as Page).saver.keepWords((tab.page as Page).editor as string))
+  await pass(2000)
+  tab.page = { ...(tab.page as Page), editor: (await merged) as string }
+  await pass(2000)
+  expect(tokensIn(row.text)).toEqual(expect.arrayContaining(['c2x', 'w4x']))
+  tab.run(() => tab.mod.stopDraftSavers())
+})
