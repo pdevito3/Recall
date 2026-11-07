@@ -400,6 +400,28 @@ public class RecordingTests
     }
 
     [Test]
+    [Property("Rule", "REC-14")]
+    public void a_recording_that_waits_says_that_the_jobs_stopped()
+    {
+        // Arrange
+        var waiting = Received();
+        var ended = Received();
+        ended.Fail(RecordingProblem.TooLong);
+
+        // Act
+        var whileStopped = waiting.ToDto([], ModelStatus.Ready, jobsStopped: true);
+        var whileRunning = waiting.ToDto([], ModelStatus.Ready, jobsStopped: false);
+        var endedWhileStopped = ended.ToDto([], ModelStatus.Ready, jobsStopped: true);
+
+        // Assert
+        whileStopped.ProblemText.ShouldBe(GetTranscriptionStatus.JobsStoppedText);
+        whileStopped.Status.ShouldBe(nameof(RecordingStatus.Received));
+        whileStopped.Problem.ShouldBe(nameof(RecordingProblem.None));
+        whileRunning.ProblemText.ShouldBeNull();
+        endedWhileStopped.ProblemText.ShouldBe(RecordingViews.ProblemTextOf(RecordingProblem.TooLong, ModelStatus.Ready));
+    }
+
+    [Test]
     public void each_container_has_its_own_first_bytes()
     {
         // Arrange

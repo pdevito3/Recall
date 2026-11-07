@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Resources;
 using Resources.Entrypoints.Http;
+using Resources.Jobs;
 using Resources.Storage;
 using Serilog;
 using Transcription;
@@ -17,7 +18,7 @@ public static class FinishRecording
 {
     public sealed record Command(string Id, RecordingFinishDto Dto) : IRequest<RecordingDto>, IRunsAgainWhenRaced;
 
-    public sealed class Handler(AppDbContext dbContext, FileStore fileStore, ModelStore modelStore, TimeProvider timeProvider)
+    public sealed class Handler(AppDbContext dbContext, FileStore fileStore, ModelStore modelStore, JobHostStatus jobHostStatus, TimeProvider timeProvider)
         : IRequestHandler<Command, RecordingDto>
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
@@ -41,7 +42,7 @@ public static class FinishRecording
             {
                 if (recording.WaitsForTranscription)
                     await RecordingWork.TryQueueTranscriptionAsync(dbContext, recording, timeProvider, _logger);
-                return recording.ToDto(stored, modelStore.Status);
+                return recording.ToDto(stored, modelStore.Status, jobHostStatus.IsStopped);
             }
 
             recording.Finish(stored, request.Dto.SliceCount, request.Dto.ByteLength);
@@ -60,7 +61,7 @@ public static class FinishRecording
 
             Activity.Current?.SetTag("app.recording.byte_length", recording.ByteLength);
             _logger.Here().Information("Finished the upload of recording {RecordingId}", recording.Id);
-            return recording.ToDto(stored, modelStore.Status);
+            return recording.ToDto(stored, modelStore.Status, jobHostStatus.IsStopped);
         }
     }
 }

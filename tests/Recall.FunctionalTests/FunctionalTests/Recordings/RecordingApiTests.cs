@@ -3,13 +3,16 @@ namespace Recall.FunctionalTests.FunctionalTests.Recordings;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using BackWave.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Recall.Server.Databases;
 using Recall.Server.Domain.Recordings;
 using Recall.Server.Domain.Recordings.Dtos;
 using Recall.Server.Domain.Recordings.Features;
+using Recall.Server.Domain.Recordings.Transcription;
 using Recall.Server.Domain.Tenants;
+using Recall.Server.Resources.Jobs;
 using Recall.Server.Resources.Storage;
 using Sessions;
 using Shouldly;
@@ -74,6 +77,29 @@ public class RecordingApiTests : TestBase
         // Assert
         answers.ShouldNotContain(HttpStatusCode.InternalServerError);
         answers.ShouldContain(HttpStatusCode.NotFound);
+    }
+
+    [Test]
+    [Property("Rule", "REC-14")]
+    public async Task a_read_of_a_waiting_recording_says_that_the_jobs_stopped()
+    {
+        // Arrange
+        var (sessionId, owner, _) = await SignedInWithSessionAsync();
+        var recording = await FactoryClient.AddFinishedRecordingAsync(sessionId);
+        var services = TestingWebApplicationFactory.Instance.Services;
+        var stopped = new JobHostStatus(services.GetRequiredService<BackWaveHealth>());
+        stopped.ReportStartFault(new InvalidOperationException());
+        await using var scope = services.GetRequiredService<IServiceScopeFactory>().CreateJournalScope(new JournalOwner(owner.Id, owner.TenantId));
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var modelStore = scope.ServiceProvider.GetRequiredService<ModelStore>();
+
+        // Act
+        var read = await new GetRecording.Handler(dbContext, modelStore, stopped).Handle(new GetRecording.Query(recording.Id), CancellationToken.None);
+        var list = await new GetSessionRecordings.Handler(dbContext, modelStore, stopped).Handle(new GetSessionRecordings.Query(sessionId), CancellationToken.None);
+
+        // Assert
+        read.ProblemText.ShouldBe(GetTranscriptionStatus.JobsStoppedText);
+        list.Single().ProblemText.ShouldBe(GetTranscriptionStatus.JobsStoppedText);
     }
 
     [Test]

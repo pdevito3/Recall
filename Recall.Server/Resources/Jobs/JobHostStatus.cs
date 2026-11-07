@@ -20,6 +20,8 @@ public sealed class JobHostStatus(BackWaveHealth health)
         return causes.Count == 0 ? null : string.Join("; ", causes);
     }
 
+    public bool IsStopped => StoppedCause() is not null;
+
     public static string StoppedText(string cause) =>
         $"The background jobs stopped ({cause}). The journal still runs. Fix the cause, then restart the server. No job runs until then. " +
         "See \"The background jobs stopped\" in docs/troubleshooting.md.";

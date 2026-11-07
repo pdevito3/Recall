@@ -1,10 +1,11 @@
 namespace Recall.Server.Domain.Recordings.Dtos;
 
+using Features;
 using Transcription;
 
 public static class RecordingViews
 {
-    public static RecordingDto ToDto(this Recording recording, IReadOnlyList<int> storedSlices, ModelStatus model) => new()
+    public static RecordingDto ToDto(this Recording recording, IReadOnlyList<int> storedSlices, ModelStatus model, bool jobsStopped) => new()
     {
         Id = recording.Id,
         SessionId = recording.SessionId,
@@ -13,7 +14,9 @@ public static class RecordingViews
         Engine = recording.Engine.ToString(),
         Status = recording.Status.ToString(),
         Problem = recording.Problem.ToString(),
-        ProblemText = ProblemTextOf(recording.Problem, model),
+        ProblemText = recording.WaitsForTranscription && jobsStopped
+            ? GetTranscriptionStatus.JobsStoppedText
+            : ProblemTextOf(recording.Problem, model),
         HighestStoredSlice = recording.HighestStoredSlice,
         StoredSlices = storedSlices,
         ByteLength = recording.ByteLength,
