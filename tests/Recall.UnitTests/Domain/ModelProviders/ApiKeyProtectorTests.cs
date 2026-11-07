@@ -97,8 +97,8 @@ public class ApiKeyProtectorTests
     public void a_body_that_is_no_error_of_a_provider_is_not_shown()
     {
         // Act
-        var page = ProviderFailureText.ForStatus(502, "<html>the page of a proxy</html>", null);
-        var text = ProviderFailureText.ForStatus(400, "{\"error\":\"a string\"}", null);
+        var page = ProviderFailureText.ForStatus(ModelProviderKind.OpenAiCompatible, 502, "<html>the page of a proxy</html>", null);
+        var text = ProviderFailureText.ForStatus(ModelProviderKind.OpenAiCompatible, 400, "{\"error\":\"a string\"}", null);
 
         // Assert
         page.DisplayMessage.ShouldBe("The model provider answered with the status 502.");
@@ -116,6 +116,6 @@ public class ApiKeyProtectorTests
     public void a_status_gives_the_kind_of_failure(int status, ProviderFailureKind expected)
     {
         // Arrange & Act & Assert
-        ProviderFailureText.ForStatus(status, null, null).Kind.ShouldBe(expected);
+        ProviderFailureText.ForStatus(ModelProviderKind.OpenAiCompatible, status, null, null).Kind.ShouldBe(expected);
     }
 }

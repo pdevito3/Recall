@@ -24,6 +24,7 @@ public static class ModelProviderAddress
             && address.Query.Length == 0
             && address.Fragment.Length == 0;
         ValidationException.Must(isUsable, BaseUrlField, "The base URL must be an http or https address with no user name, no query, and no fragment.");
+        ValidationException.MustNot(Clients.ProviderAddressRule.RefusesLiteral(address!.Host), BaseUrlField, "The app does not connect to this address. Link-local, metadata, and multicast addresses are refused, and a loopback address in a container is the app itself.");
         return trimmed.TrimEnd('/');
     }
 }

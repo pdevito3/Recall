@@ -87,7 +87,7 @@ public class ModelProviderClientTests : TestBase
         var key = CleanupScenario.NewKey();
         await using var fake = await FakeWithAsync(key, new FakeBehavior { Mode = FakeMode.StallMidStream });
         var factory = TestingWebApplicationFactory.Instance.Services.GetRequiredService<IHttpClientFactory>();
-        var client = new AnthropicModelClient(factory) { CallLimit = TimeSpan.FromSeconds(2) };
+        var client = new AnthropicModelClient(factory, new ProviderLimits { Call = TimeSpan.FromSeconds(2) });
 
         // Act
         var reply = await client.CompleteAsync(EndpointOf(fake, ModelProviderKind.Anthropic, key), FakeModelProvider.ModelId, Instructions, "some words", CancellationToken.None)

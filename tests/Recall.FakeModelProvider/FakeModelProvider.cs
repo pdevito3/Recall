@@ -39,8 +39,26 @@ public enum FakeMode
     /// <summary>A redirect to <c>/stolen</c>. A client that follows it sends the key there.</summary>
     Redirect,
 
-    /// <summary>An Anthropic stream with an <c>error</c> event after the 200. The event holds the words of the request.</summary>
+    /// <summary>A stream with an error after the 200. The error holds the words of the request.</summary>
     MidStreamError,
+
+    /// <summary>A 200 with <see cref="FakeBehavior.Reply"/> as its whole body and <see cref="FakeBehavior.ContentType"/>, on each route.</summary>
+    RawBody,
+
+    /// <summary>A 200 with bytes and no end, on each route, in the type <see cref="FakeBehavior.ContentType"/>.</summary>
+    EndlessBody,
+
+    /// <summary>A stream that sends one keep-alive each <see cref="FakeBehavior.DelayMs"/> and no word, with no end.</summary>
+    KeepAliveForever,
+
+    /// <summary>A stream of one word each <see cref="FakeBehavior.DelayMs"/>, and then the whole answer. A model that works looks so.</summary>
+    SlowWords,
+
+    /// <summary>The Anthropic list of models says <c>has_more</c> on each page.</summary>
+    ModelsWithNoEnd,
+
+    /// <summary>A stream that ends with no stop reason, as a connection that closes on the way does.</summary>
+    CutStream,
 }
 
 public sealed class FakeBehavior
@@ -53,6 +71,8 @@ public sealed class FakeBehavior
 
     /// <summary>The words of the answer in place of the object that the fake makes from the request.</summary>
     public string? Reply { get; set; }
+
+    public string ContentType { get; set; } = "application/json";
 }
 
 /// <summary>
@@ -126,6 +146,11 @@ public sealed class FakeModelProvider : IAsyncDisposable
 
     private void MapRoutes()
     {
+        _app.Use(async (context, next) =>
+        {
+            if (!await WroteBodyOfModeAsync(context))
+                await next(context);
+        });
         _app.MapGet("/v1/models", AnthropicModels);
         _app.MapGet("/v1/models/{id}", AnthropicModel);
         _app.MapPost("/v1/messages", AnthropicMessage);
@@ -151,11 +176,49 @@ public sealed class FakeModelProvider : IAsyncDisposable
         _app.MapGet("/control", (HttpContext context) => context.Response.WriteAsJsonAsync(new { completionCalls = CompletionCalls, modelListCalls = ModelListCalls, stolenCalls = StolenCalls }));
     }
 
+    private async Task<bool> WroteBodyOfModeAsync(HttpContext context)
+    {
+        if (Behavior.Mode is not (FakeMode.RawBody or FakeMode.EndlessBody) || context.Request.Path.StartsWithSegments("/control"))
+            return false;
+
+        if (context.Request.Path.Value!.EndsWith("/models", StringComparison.Ordinal))
+            Interlocked.Increment(ref _modelListCalls);
+        else
+            Interlocked.Increment(ref _completionCalls);
+
+        context.Response.Headers.ContentType = Behavior.ContentType;
+        if (Behavior.Mode == FakeMode.RawBody)
+        {
+            await context.Response.WriteAsync(Behavior.Reply ?? string.Empty);
+            return true;
+        }
+
+        var block = new byte[64 * 1024];
+        Array.Fill(block, (byte)'x');
+        while (!context.RequestAborted.IsCancellationRequested)
+            await context.Response.Body.WriteAsync(block, context.RequestAborted);
+        return true;
+    }
+
     private async Task AnthropicModels(HttpContext context)
     {
         Interlocked.Increment(ref _modelListCalls);
         if (await RefusedAnthropicAsync(context))
             return;
+
+        // The API takes "limit" from 1 to 1000, and it refuses any other value.
+        if (context.Request.Query["limit"] is { Count: > 0 } limit && int.Parse(limit[0]!, System.Globalization.CultureInfo.InvariantCulture) is < 1 or > 1000)
+        {
+            await WriteAnthropicErrorAsync(context, 400, "invalid_request_error", "limit: must be between 1 and 1000");
+            return;
+        }
+
+        if (Behavior.Mode == FakeMode.ModelsWithNoEnd)
+        {
+            var id = $"page-model-{ModelListCalls}";
+            await context.Response.WriteAsJsonAsync(new { data = new[] { AnthropicModelBody(id, id) }, has_more = true, first_id = id, last_id = id });
+            return;
+        }
 
         await context.Response.WriteAsJsonAsync(new
         {
@@ -259,7 +322,13 @@ public sealed class FakeModelProvider : IAsyncDisposable
                 usage = new { input_tokens = 1, output_tokens = 1 },
             },
         });
-        await WriteEventAsync(context, "content_block_start", new { type = "content_block_start", index = 0, content_block = new { type = "text", text = string.Empty } });
+        // The API sends these among the rest of a stream, and it can add a new type of event at any time.
+        await WriteEventAsync(context, "ping", new { type = "ping" });
+        await WriteEventAsync(context, "new_kind_of_event", new { type = "new_kind_of_event", detail = "skip this" });
+        await WriteEventAsync(context, "content_block_start", new { type = "content_block_start", index = 0, content_block = new { type = "thinking", thinking = string.Empty, signature = string.Empty } });
+        await WriteEventAsync(context, "content_block_delta", new { type = "content_block_delta", index = 0, delta = new { type = "thinking_delta", thinking = "The fake thinks, and this is no part of the answer." } });
+        await WriteEventAsync(context, "content_block_stop", new { type = "content_block_stop", index = 0 });
+        await WriteEventAsync(context, "content_block_start", new { type = "content_block_start", index = 1, content_block = new { type = "text", text = string.Empty } });
         if (Behavior.Mode == FakeMode.StallMidStream)
         {
             await Task.Delay(Timeout.Infinite, context.RequestAborted);
@@ -272,8 +341,26 @@ public sealed class FakeModelProvider : IAsyncDisposable
             return;
         }
 
-        await WriteEventAsync(context, "content_block_delta", new { type = "content_block_delta", index = 0, delta = new { type = "text_delta", text = reply } });
-        await WriteEventAsync(context, "content_block_stop", new { type = "content_block_stop", index = 0 });
+        if (Behavior.Mode == FakeMode.KeepAliveForever)
+        {
+            while (true)
+            {
+                await Task.Delay(Behavior.DelayMs, context.RequestAborted);
+                await WriteEventAsync(context, "ping", new { type = "ping" });
+            }
+        }
+
+        foreach (var part in PartsOf(reply))
+        {
+            await WriteEventAsync(context, "content_block_delta", new { type = "content_block_delta", index = 1, delta = new { type = "text_delta", text = part } });
+            if (Behavior.Mode == FakeMode.SlowWords)
+                await Task.Delay(Behavior.DelayMs, context.RequestAborted);
+        }
+
+        if (Behavior.Mode == FakeMode.CutStream)
+            return;
+
+        await WriteEventAsync(context, "content_block_stop", new { type = "content_block_stop", index = 1 });
         await WriteEventAsync(context, "message_delta", new
         {
             type = "message_delta",
@@ -282,6 +369,9 @@ public sealed class FakeModelProvider : IAsyncDisposable
         });
         await WriteEventAsync(context, "message_stop", new { type = "message_stop" });
     }
+
+    private IEnumerable<string> PartsOf(string reply)
+        => Behavior.Mode == FakeMode.SlowWords ? reply.Chunk(Math.Max(1, reply.Length / 6)).Select(part => new string(part)) : [reply];
 
     private static async Task WriteEventAsync(HttpContext context, string name, object data)
     {
@@ -363,6 +453,12 @@ public sealed class FakeModelProvider : IAsyncDisposable
             FakeMode.Refusal => "content_filter",
             _ => "stop",
         };
+        if (document.RootElement.TryGetProperty("stream", out var stream) && stream.GetBoolean())
+        {
+            await WriteCompatibleStreamAsync(context, ReplyFor(text), finishReason, text);
+            return;
+        }
+
         await context.Response.WriteAsJsonAsync(new
         {
             id = "chatcmpl-fake",
@@ -374,6 +470,50 @@ public sealed class FakeModelProvider : IAsyncDisposable
                 new { index = 0, message = new { role = "assistant", content = ReplyFor(text) }, finish_reason = finishReason },
             },
         });
+    }
+
+    private async Task WriteCompatibleStreamAsync(HttpContext context, string reply, string finishReason, string requestText)
+    {
+        context.Response.ContentType = "text/event-stream";
+        await WriteCompatibleChunkAsync(context, new { role = "assistant", content = (string?)null, refusal = (string?)null }, null);
+        await context.Response.WriteAsync(": keep-alive\n\n");
+        await context.Response.Body.FlushAsync();
+        switch (Behavior.Mode)
+        {
+            case FakeMode.StallMidStream:
+                await Task.Delay(Timeout.Infinite, context.RequestAborted);
+                return;
+            case FakeMode.MidStreamError:
+                await context.Response.WriteAsync($"data: {JsonSerializer.Serialize(new { error = new { message = $"Stopped at: {requestText} with key {_apiKey}", type = "server_error" } })}\n\n");
+                return;
+            case FakeMode.KeepAliveForever:
+                while (true)
+                {
+                    await Task.Delay(Behavior.DelayMs, context.RequestAborted);
+                    await context.Response.WriteAsync(": keep-alive\n\n");
+                    await context.Response.Body.FlushAsync();
+                }
+        }
+
+        foreach (var part in PartsOf(reply))
+        {
+            await WriteCompatibleChunkAsync(context, new { content = part }, null);
+            if (Behavior.Mode == FakeMode.SlowWords)
+                await Task.Delay(Behavior.DelayMs, context.RequestAborted);
+        }
+
+        if (Behavior.Mode == FakeMode.CutStream)
+            return;
+
+        await WriteCompatibleChunkAsync(context, new { }, finishReason);
+        await context.Response.WriteAsync($"data: {JsonSerializer.Serialize(new { id = "chatcmpl-fake", @object = "chat.completion.chunk", choices = Array.Empty<object>(), usage = new { prompt_tokens = 1, completion_tokens = 1, total_tokens = 2 } })}\n\ndata: [DONE]\n\n");
+    }
+
+    private static async Task WriteCompatibleChunkAsync(HttpContext context, object delta, string? finishReason)
+    {
+        var chunk = new { id = "chatcmpl-fake", @object = "chat.completion.chunk", created = 1_700_000_000, model = ModelId, choices = new[] { new { index = 0, delta, finish_reason = finishReason } } };
+        await context.Response.WriteAsync($"data: {JsonSerializer.Serialize(chunk)}\n\n");
+        await context.Response.Body.FlushAsync();
     }
 
     private async Task<bool> RefusedCompatibleAsync(HttpContext context)
