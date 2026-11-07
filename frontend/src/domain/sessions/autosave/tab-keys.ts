@@ -38,7 +38,7 @@ const keysOfThisTab = new Set<string>()
 const waiters = new Map<string, (message: Message) => void>()
 const otherTabWatchers = new Set<() => void>()
 let answerASettle: (() => Promise<OtherTabReport>) | null = null
-let channel: BroadcastChannel | null = null
+let channel: BroadcastChannel | null | undefined
 
 function hear({ data: message }: MessageEvent<Message>) {
   switch (message.kind) {
@@ -61,15 +61,25 @@ function hear({ data: message }: MessageEvent<Message>) {
   }
 }
 
+/** With no channel in this browser no tab answers, so a tab takes the keys of each other tab. The same text then goes out twice, and it cannot be lost. */
+function channelToOtherTabs() {
+  if (channel !== undefined) return channel
+  try {
+    channel = Object.assign(new BroadcastChannel(channelName), { onmessage: hear })
+  } catch {
+    channel = null
+  }
+  return channel
+}
+
 function talk(message: Message) {
-  channel ??= Object.assign(new BroadcastChannel(channelName), { onmessage: hear })
-  channel.postMessage(message)
+  channelToOtherTabs()?.postMessage(message)
 }
 
 /** The channel must be open before another tab asks, also when this tab has written nothing. */
 export function joinTheOtherTabs(settle: () => Promise<OtherTabReport>) {
   answerASettle = settle
-  channel ??= Object.assign(new BroadcastChannel(channelName), { onmessage: hear })
+  channelToOtherTabs()
 }
 
 export const hasWriterLeft = (writer: string | null) => {
@@ -130,6 +140,15 @@ export function removeKey(storageKey: string) {
 const writerIn = (rest: string) => {
   const [writer, sequenceText, ...more] = rest.split('.')
   return more.length === 0 && /^\d+$/.test(sequenceText ?? '') ? (writer ?? null) : null
+}
+
+/** A failed read says nothing about the key, so it counts as stored. */
+export function isKeyStored(storageKey: string) {
+  try {
+    return localStorage.getItem(storageKey) !== null
+  } catch {
+    return true
+  }
 }
 
 export function keysUnder(prefix: string): KeyOfATab[] {
@@ -206,7 +225,7 @@ export function noteThisTabLeaves() {
   talk({ kind: 'left', writer: thisTab })
 }
 
-/** A page back from the back-forward cache lives again. If another tab took a key meanwhile, the same text goes out twice. */
+/** A page back from the back-forward cache lives again. If another tab took a key meanwhile, this page does not send that text. */
 export function noteThisTabIsBack() {
   try {
     localStorage.removeItem(leftMarkPrefix + thisTab)

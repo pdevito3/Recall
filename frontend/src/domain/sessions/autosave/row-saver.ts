@@ -7,6 +7,8 @@ export interface FieldAsk<F> {
   field: keyof F & string
   yours: F[keyof F]
   now: F[keyof F]
+  /** The save got no reply, so the value did not apply, and nothing has to have changed elsewhere. */
+  didNotReachTheServer?: boolean
 }
 
 export interface RowBase<F> {
@@ -30,6 +32,8 @@ export interface StaleRules<F> {
   neverAsks?: (field: keyof F, value: F[keyof F]) => boolean
   /** The app chose this value and the person did not, so the value of the row wins with no question. */
   yieldsToTheRow?: (field: keyof F, before: F[keyof F]) => boolean
+  /** This value goes to the Server only from a click in the live page. No key holds it, and a failed save never sends it again. */
+  onlyFromALiveClick?: (field: keyof F, value: F[keyof F]) => boolean
 }
 
 interface StaleInput<F> {
@@ -99,6 +103,8 @@ export class RowSaver<F extends object, R> {
   /** The time of each answer to keep a field, so that only a later change clears the answer. */
   private readonly keptAsTheyAre = new Map<string, string>()
   private appliedWithNoAsk: (keyof F & string)[] = []
+  /** The version of the row that the page showed at each click that `onlyFromALiveClick` covers. */
+  private readonly versionAtClick = new Map<string, number>()
   private readonly listeners = new Set<() => void>()
   private isDisposed = false
 
@@ -125,6 +131,7 @@ export class RowSaver<F extends object, R> {
     this.currentAsks = this.currentAsks.filter((ask) => !(ask.field in fields))
     for (const field of fieldsIn(fields)) this.keptAsTheyAre.delete(field)
     this.appliedWithNoAsk = this.appliedWithNoAsk.filter((field) => !(field in fields))
+    this.noteVersionAtClick(fields)
     this.noteBase()
     this.saver.edit(fields)
     this.notify()
@@ -132,10 +139,11 @@ export class RowSaver<F extends object, R> {
 
   /** The state of a tab that left joins this saver. Each field that this tab changed later stays, and the oldest base goes with the save, so a choice made since that tab left makes the Server answer stale. */
   adopt({ change, attempt, asks }: RowSaverState<F>) {
-    this.currentAsks = [...this.currentAsks, ...asks.filter((ask) => !this.currentAsks.some((own) => own.field === ask.field))]
+    const asksToKeep = asks.filter((ask) => !this.isOnlyFromALiveClick(ask.field, ask.yours))
+    this.currentAsks = [...this.currentAsks, ...asksToKeep.filter((ask) => !this.currentAsks.some((own) => own.field === ask.field))]
     const newest = this.saver.newestUnsettled()
     const isOlder = newest !== null && change !== null && newest.savedAt > change.savedAt
-    const fields = change === null ? {} : withoutFields(change.value, [
+    const fields = change === null ? {} : withoutFields(this.withoutLiveClicks(change.value), [
       ...fieldsIn(change.value).filter((field) => (this.keptAsTheyAre.get(field) ?? '') >= change.savedAt),
       ...(isOlder ? fieldsIn(this.pendingFields()) : []),
     ])
@@ -147,7 +155,7 @@ export class RowSaver<F extends object, R> {
       this.saver.edit(fields, isOlder ? newest.savedAt : change.savedAt)
     } else this.keep()
     this.notify()
-    if (asks.length > 0) void this.readRowForAsks()
+    if (asksToKeep.length > 0) void this.readRowForAsks()
   }
 
   /** The "now" of a stale key is old, and an answer must not replace a value that the person never saw. */
@@ -175,8 +183,11 @@ export class RowSaver<F extends object, R> {
   asks = () => this.currentAsks
 
   pendingFields(): Partial<F> {
-    const pending = this.saver.unsettled().reduce<Partial<F>>((fields, { value }) => ({ ...fields, ...value }), {})
-    return withoutFields(pending, [...this.keptAsTheyAre.keys()])
+    return withoutFields(this.queuedFields(), [...this.keptAsTheyAre.keys(), ...this.currentAsks.map((ask) => ask.field)])
+  }
+
+  private queuedFields() {
+    return this.saver.unsettled().reduce<Partial<F>>((fields, { value }) => ({ ...fields, ...value }), {})
   }
 
   hasUnsaved() {
@@ -215,9 +226,57 @@ export class RowSaver<F extends object, R> {
     return { values: this.options.fieldsOf(row), version: this.options.versionOf(row) }
   }
 
+  private isOnlyFromALiveClick(field: keyof F, value: unknown) {
+    return this.options.rules?.onlyFromALiveClick?.(field, value as F[keyof F]) ?? false
+  }
+
+  private fieldsOnlyFromALiveClick(change: Partial<F>) {
+    return fieldsIn(change).filter((field) => this.isOnlyFromALiveClick(field, change[field]))
+  }
+
+  private withoutLiveClicks(change: Partial<F>) {
+    return withoutFields(change, this.fieldsOnlyFromALiveClick(change))
+  }
+
+  private noteVersionAtClick(fields: Partial<F>) {
+    const copy = this.options.copyOf()
+    for (const field of fieldsIn(fields)) this.versionAtClick.delete(field)
+    if (copy === undefined) return
+    for (const field of this.fieldsOnlyFromALiveClick(fields)) this.versionAtClick.set(field, this.options.versionOf(copy))
+  }
+
+  /** The row changed after the click, and the page did not show that change. Only the person can decide. A false off is safe. */
+  private askWhenTheRowMovedSinceTheClick(queued: Partial<F>) {
+    const copy = this.options.copyOf()
+    if (copy === undefined) return
+    const { version, values } = this.baseOf(copy)
+    const moved = this.fieldsOnlyFromALiveClick(queued).filter((field) => (this.versionAtClick.get(field) ?? version) !== version && !isSame(queued[field], values[field]))
+    if (moved.length > 0) this.addAsks(moved.map((field) => ({ field, yours: queued[field] as F[keyof F], now: values[field] })))
+  }
+
+  /** The save of this click can have reached the Server, so a read decides. Any later try is no longer a live click. */
+  private askAboutClicksThatGotNoReply(sent: Partial<F>, { values }: RowBase<F>) {
+    const asks = this.fieldsOnlyFromALiveClick(sent).filter((field) => !isSame(sent[field], values[field])).map((field) => ({ field, yours: sent[field] as F[keyof F], now: values[field], didNotReachTheServer: true }))
+    if (asks.length === 0) return
+    this.addAsks(asks)
+    this.keep()
+    void this.readRowForAsks()
+  }
+
+  /** Your own save moved the row, and the page shows that reply. */
+  private carryClicksPastOwnSave(fromVersion: number, reply: R) {
+    for (const [field, version] of this.versionAtClick) {
+      if (version === fromVersion) this.versionAtClick.set(field, this.options.versionOf(reply))
+    }
+  }
+
   private async send(queued: Partial<F>, signal: AbortSignal): Promise<R> {
+    this.askWhenTheRowMovedSinceTheClick(queued)
     let fields = withoutFields(queued, [...this.currentAsks.map((ask) => ask.field), ...this.keptAsTheyAre.keys()])
-    if (fieldsIn(fields).length === 0) return this.options.copyOf() ?? this.options.read(signal)
+    if (fieldsIn(fields).length === 0) {
+      this.attempt = null
+      return this.currentAsks.length > 0 ? this.options.read(signal) : (this.options.copyOf() ?? this.options.read(signal))
+    }
     this.attempt ??= { base: this.baseOf(this.options.copyOf() ?? (await this.options.read(signal))), hadNoReply: false }
     let { base, hadNoReply } = this.attempt
     this.keep()
@@ -225,11 +284,15 @@ export class RowSaver<F extends object, R> {
       try {
         const reply = await this.options.put({ ...base.values, ...fields }, base.version, signal)
         if (this.attempt?.base === base) this.attempt = null
+        this.carryClicksPastOwnSave(base.version, reply)
         this.tellAppliedWithNoAsk()
         return reply
       } catch (error) {
         if (!isStaleVersionError(error)) {
-          if (!isProblemDetailsError(error) || (error.status ?? 500) >= 500) this.attempt = { base, hadNoReply: true }
+          if (!isProblemDetailsError(error) || (error.status ?? 500) >= 500) {
+            this.attempt = { base, hadNoReply: true }
+            this.askAboutClicksThatGotNoReply(fields, base)
+          }
           throw error
         }
       }
@@ -259,7 +322,7 @@ export class RowSaver<F extends object, R> {
 
   /** The person can have changed the field again while the save ran, and the ask must offer that newest value. */
   private addAsks(asks: FieldAsk<F>[]) {
-    const pending = this.pendingFields()
+    const pending = this.queuedFields()
     const newest = asks.map((ask) => (ask.field in pending ? { ...ask, yours: pending[ask.field] as F[keyof F] } : ask))
     this.currentAsks = [...this.currentAsks.filter((old) => !asks.some((ask) => ask.field === old.field)), ...newest]
     this.notify()
@@ -270,7 +333,9 @@ export class RowSaver<F extends object, R> {
     if (!onStateChange) return
     const newest = this.saver.newestUnsettled()
     const isRefused = this.saver.refusalMessage() !== null
-    const change = newest && !isRefused ? { value: this.pendingFields(), savedAt: newest.savedAt } : null
-    onStateChange(change || this.currentAsks.length > 0 ? { change, attempt: change ? this.attempt : null, asks: this.currentAsks } : null)
+    const value = this.withoutLiveClicks(this.pendingFields())
+    const change = newest && !isRefused && fieldsIn(value).length > 0 ? { value, savedAt: newest.savedAt } : null
+    const asks = this.currentAsks.filter((ask) => !this.isOnlyFromALiveClick(ask.field, ask.yours))
+    onStateChange(change || asks.length > 0 ? { change, attempt: change ? this.attempt : null, asks } : null)
   }
 }

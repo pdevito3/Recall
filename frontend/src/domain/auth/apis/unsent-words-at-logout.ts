@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 
 import { writePointer } from '@/domain/sessions/autosave/composer-pointer'
-import { settleDraftSavers, stopDraftSavers, unsentWordsOnThisDevice, type UnsentWords } from '@/domain/sessions/autosave/draft-saver'
+import { removeNoticesOfWordsInHistory, settleDraftSavers, stopDraftSavers, unsentWordsOnThisDevice, type UnsentWords } from '@/domain/sessions/autosave/draft-saver'
 import { askOtherTabsToSettle } from '@/domain/sessions/autosave/tab-keys'
 import { isAnyTagChangeUnsaved, settleMetadataSavers, stopMetadataSavers } from '@/domain/sessions/autosave/tag-savers'
 import { settleSettingSaver, stopSettingSaver } from '@/domain/settings/apis/user-setting'
@@ -65,6 +65,7 @@ export async function settleUnsentWords(beforeAQuestion: () => void): Promise<()
   return () => {
     stopSaversBeforeLeaving()
     if (choice === 'discard') for (const { discard } of unsent) discard()
+    removeNoticesOfWordsInHistory(pageUserOf())
     writePointer(null)
   }
 }

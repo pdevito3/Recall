@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { useJournalZone } from '@/domain/settings/apis/user-setting'
 
 import type { DraftChannel } from '../apis/session.keys'
-import { shownStatusOf } from '../autosave/draft-saver'
+import { shownStatusOf, type WhyNewWords } from '../autosave/draft-saver'
 import { useDraftSaver } from '../autosave/use-draft-saver'
 import { EditorToolbar } from '../editor/editor-toolbar'
 import { focusEditorIn } from '../editor/focus-editor'
@@ -22,8 +22,12 @@ const draftOf = (session: SessionDto, channel: DraftChannel) =>
   channel === 'raw' ? session.rawText : (session.cleanedText ?? '')
 const draftRevisionOf = (session: SessionDto, channel: DraftChannel) =>
   channel === 'raw' ? session.rawDraftRevision : session.cleanedDraftRevision
-const latestOf = (session: SessionDto, channel: DraftChannel) =>
-  channel === 'raw' ? session.rawLatestRevision : session.cleanedLatestRevision
+
+const changedElsewhereNote = 'These words changed in another tab or device. This page now shows the newest words.'
+const notesOfNewWords: Record<WhyNewWords, string> = {
+  heldWordsJoined: 'Words that you typed earlier and that were not saved yet are now on this page.',
+  draftHoldsMore: changedElsewhereNote,
+}
 
 export function DraftEditor({ session, channel }: { session: SessionDto; channel: DraftChannel }) {
   const zone = useJournalZone()
@@ -33,7 +37,6 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
     startedAt: session.startedAt,
     sessionId: session.id,
     baseRevision: draftRevisionOf(session, channel),
-    latestRevision: latestOf(session, channel),
   })
 
   const navigate = useNavigate()
@@ -42,8 +45,7 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
     key: 0,
     takesFocus: snapshot.movedFromDeletedEntry,
   }))
-  const [revisionsAtOpen] = useState(() => ({ draft: draftRevisionOf(session, channel), latest: latestOf(session, channel) }))
-  const [opensAConflict] = useState(() => saver.hasUnseenConflict())
+  const [draftRevisionAtOpen] = useState(() => draftRevisionOf(session, channel))
   const [changeNote, setChangeNote] = useState<string | null>(null)
   const currentText = useRef(opened.text)
   const section = useRef<HTMLElement>(null)
@@ -55,31 +57,28 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
 
   const serverText = draftOf(session, channel)
   const serverDraft = draftRevisionOf(session, channel)
-  const serverLatest = latestOf(session, channel)
   useEffect(() => {
-    if (opensAConflict || saver.unsettledText() !== null) return
-    saver.dismissConflict()
-    saver.moveBaseTo(revisionsAtOpen.draft, revisionsAtOpen.latest)
-  }, [saver, revisionsAtOpen, opensAConflict])
+    if (saver.hasConflict() || saver.unsettledText() !== null) return
+    saver.moveBaseTo(draftRevisionAtOpen)
+  }, [saver, draftRevisionAtOpen])
   useEffect(() => {
-    const { baseRevision, conflict } = saver.getSnapshot()
-    if (serverDraft <= baseRevision || saver.unsettledText() !== null || conflict === 'wordsMovedToHistory') return
-    saver.moveBaseTo(serverDraft, serverLatest)
+    if (serverDraft <= saver.getSnapshot().baseRevision || saver.unsettledText() !== null || saver.hasConflict()) return
+    saver.moveBaseTo(serverDraft)
     if (serverText === currentText.current) return
     currentText.current = serverText
     const hadFocus = section.current?.contains(document.activeElement) ?? false
     setOpened((previous) => ({ text: serverText, key: previous.key + 1, takesFocus: hadFocus }))
-    setChangeNote('These words changed in another tab or device. This page now shows the newest words.')
-  }, [saver, serverDraft, serverLatest, serverText])
+    setChangeNote(changedElsewhereNote)
+  }, [saver, serverDraft, serverText])
 
   useLayoutEffect(
     () =>
-      saver.subscribeToHoldJoin((joined) => {
+      saver.subscribeToNewWords((joined, why) => {
         currentText.current = joined
         const hadFocus = section.current?.contains(document.activeElement) ?? false
         flushSync(() => {
           setOpened((previous) => ({ text: joined, key: previous.key + 1, takesFocus: hadFocus }))
-          setChangeNote('Words that you typed earlier and that were not saved yet are now on this page.')
+          setChangeNote(notesOfNewWords[why])
         })
       }),
     [saver],

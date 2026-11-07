@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, expect, test } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
-import { askOtherTabsToSettle, keysUnder, noteThisTabLeaves, removeKey, removeLeftMarksWithNoKey, takeKeysOfTabsThatLeft, thisTab, writeKeyOfThisTab, type KeyOfATab } from './tab-keys'
+import { askOtherTabsToSettle, isKeyStored, keysUnder, noteThisTabLeaves, removeKey, removeLeftMarksWithNoKey, takeKeysOfTabsThatLeft, thisTab, writeKeyOfThisTab, type KeyOfATab } from './tab-keys'
 
 const prefix = 'recall.test-keys.'
 
@@ -101,4 +101,35 @@ test('a sign-out waits for each tab that heard, also for a tab slower than the f
   const reports = await askOtherTabsToSettle(3000)
 
   expect(reports).toContainEqual(report)
+})
+
+test('a browser with no BroadcastChannel takes the keys of other tabs, and no call throws', async () => {
+  const realChannel = globalThis.BroadcastChannel
+  vi.resetModules()
+  vi.stubGlobal('BroadcastChannel', undefined)
+  const keys = await import('./tab-keys')
+  localStorage.setItem(`${prefix}another-tab.1`, 'words')
+
+  expect(() => keys.joinTheOtherTabs(() => Promise.resolve({ wordsOnlyInMemory: [], hasUnsavedTags: false }))).not.toThrow()
+  const taken: string[] = []
+  await keys.takeKeysOfTabsThatLeft(prefix, (found) => taken.push(...found.map(({ storageKey }) => storageKey)))
+  await expect(keys.askOtherTabsToSettle(50)).resolves.toEqual([])
+  expect(() => keys.noteThisTabLeaves()).not.toThrow()
+
+  expect(taken).toEqual([`${prefix}another-tab.1`])
+  vi.stubGlobal('BroadcastChannel', realChannel)
+  vi.unstubAllGlobals()
+})
+
+test('a failed read of a key says that the key is still stored, so a tab does not treat its words as gone', () => {
+  const stored = writeKeyOfThisTab(prefix, null, 'words') as string
+  expect(isKeyStored(stored)).toBe(true)
+  removeKey(stored)
+  expect(isKeyStored(stored)).toBe(false)
+
+  vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+    throw new DOMException('blocked', 'SecurityError')
+  })
+  expect(isKeyStored(stored)).toBe(true)
+  vi.restoreAllMocks()
 })

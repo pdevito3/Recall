@@ -10,9 +10,10 @@ export interface OutboxEntry {
   startedAt: string
   sessionId: string | null
   baseRevision: number
-  latestRevision: number
   change: Stamped<string> | null
   held?: string | null
+  /** The words of a save that the Draft does not hold. They are safe in History, and this keeps the notice after a reload. */
+  wordsInHistory?: string | null
   refusal?: string | null
   movedFromDeletedEntry?: boolean
 }
@@ -41,8 +42,7 @@ function parseEntry(stored: string | null): OutboxEntry | null {
       && typeof entry.startedAt === 'string'
       && (entry.sessionId === null || typeof entry.sessionId === 'string')
       && typeof entry.baseRevision === 'number'
-      && typeof entry.latestRevision === 'number'
-      && (isStamped(entry.change) || (typeof entry.held === 'string' && (entry.change ?? null) === null))
+      && (isStamped(entry.change) || ((typeof entry.held === 'string' || typeof entry.wordsInHistory === 'string') && (entry.change ?? null) === null))
     return isEntry ? (entry as OutboxEntry) : null
   } catch {
     return null
@@ -69,7 +69,7 @@ function entryFromWordsOf(stored: string | null): OutboxEntry | null {
   const change = changeIn(stored)
   if (!change?.value) return null
   const clientSessionId = newUuid()
-  return { key: `${clientSessionId}.raw`, channel: 'raw', clientSessionId, startedAt: change.savedAt, sessionId: null, baseRevision: 0, latestRevision: 0, change }
+  return { key: `${clientSessionId}.raw`, channel: 'raw', clientSessionId, startedAt: change.savedAt, sessionId: null, baseRevision: 0, change }
 }
 
 const entryIn = ({ storageKey, writer, stored }: KeyOfATab): StoredEntry | null => {

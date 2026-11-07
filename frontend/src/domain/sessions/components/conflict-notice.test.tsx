@@ -16,9 +16,10 @@ test('a save that lost says where the words are, and offers the newest words', a
   expect(onKeep).toHaveBeenCalledOnce()
 })
 
-test('a save that replaced another says where the other save is, and has nothing newer to show', async () => {
-  const screen = await render(<ConflictNotice conflict="replacedUnseenSave" onShowNewest={vi.fn()} onKeep={vi.fn()} />)
+test('words that another tab took say that they are only on this page, and offer the same two answers', async () => {
+  const screen = await render(<ConflictNotice conflict="discardedInAnotherTab" onShowNewest={vi.fn()} onKeep={vi.fn()} />)
 
-  await expect.element(screen.getByRole('alert').getByText('These words replaced a save that this page had not shown. The other save is safe in History.')).toBeVisible()
-  await expect.element(screen.getByRole('button', { name: 'Show the newest words' })).not.toBeInTheDocument()
+  await expect.element(screen.getByRole('alert').getByText('Another tab took these words, and you may have discarded them there. They are now only on this page.')).toBeVisible()
+  await expect.element(screen.getByRole('button', { name: 'Show the newest words' })).toBeVisible()
+  await expect.element(screen.getByRole('button', { name: 'Add my words to the newest words' })).toBeVisible()
 })

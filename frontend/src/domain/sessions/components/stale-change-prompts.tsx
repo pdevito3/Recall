@@ -19,7 +19,7 @@ export function StaleChangePrompts<F>({ asks, labelOf, onAnswer }: StaleChangePr
   return asks.map((ask) => (
     <section key={ask.field} role="alert" aria-label={`${labelOf(ask.field)} needs your choice`} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border bg-muted p-3 text-sm dark:bg-card">
       <p className="min-w-0 flex-1 basis-64 wrap-anywhere">
-        This changed in another tab or on another device, so your choice did not apply. {labelOf(ask.field)} is now {valueText(ask.now)}. You chose {valueText(ask.yours)}.
+        {ask.didNotReachTheServer ? 'This did not reach the server, so your choice did not apply.' : 'This changed in another tab or on another device, so your choice did not apply.'} {labelOf(ask.field)} is now {valueText(ask.now)}. You chose {valueText(ask.yours)}.
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="outline" onPress={() => onAnswer(ask, true)}>Use my choice</Button>

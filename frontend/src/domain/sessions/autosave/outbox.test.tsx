@@ -10,7 +10,6 @@ const entryWith = (words: string, key = `${words}.raw`): OutboxEntry => ({
   startedAt: '2026-11-06T15:30:00.000Z',
   sessionId: null,
   baseRevision: 0,
-  latestRevision: 0,
   change: { value: words, savedAt: '2026-11-06T15:31:00.000Z' },
 })
 

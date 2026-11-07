@@ -42,6 +42,22 @@ test('the dialog names each text, so a discard removes only words that the perso
   expect(two.discard).toHaveBeenCalledOnce()
 })
 
+test('each text has its own Copy, so a person can take words before a sign-out', async () => {
+  const copied: string[] = []
+  vi.spyOn(navigator.clipboard, 'writeText').mockImplementation((text) => {
+    copied.push(text)
+    return Promise.resolve()
+  })
+  const { screen, finished } = await dialogFor([words('first words'), words('words of another tab')])
+
+  const list = screen.getByRole('list', { name: 'Words that did not reach the server' })
+  await list.getByRole('button', { name: 'Copy words' }).nth(1).click()
+
+  await vi.waitFor(() => expect(copied).toEqual(['words of another tab']))
+  await screen.getByRole('button', { name: 'Keep words and sign out' }).click()
+  ;(await finished)()
+})
+
 test('a keep does not remove a word', async () => {
   const one = words('first words')
   const { screen, finished } = await dialogFor([one])

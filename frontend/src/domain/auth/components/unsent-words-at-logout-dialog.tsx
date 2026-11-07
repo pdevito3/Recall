@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/responsive-dialog'
 
 import type { UnsentWords } from '@/domain/sessions/autosave/draft-saver'
+import { CopyWords } from '@/domain/sessions/components/draft-notices'
 import { plainPreviewOf } from '@/domain/sessions/editor/content'
 
 import { answerAboutUnsentWords, useQuestionAboutUnsentWords } from '../apis/unsent-words-at-logout'
@@ -42,8 +43,9 @@ function WordsThatDidNotGo({ unsent }: { unsent: UnsentWords[] }) {
   return (
     <ul aria-label="Words that did not reach the server" className="mt-3 max-h-48 space-y-2 overflow-y-auto rounded-lg border p-3 text-sm">
       {unsent.map(({ words, isRefused, isOnlyInMemory }, index) => (
-        <li key={index} className="space-y-0.5">
+        <li key={index} className="space-y-1.5">
           <p dir="auto" className="line-clamp-2 wrap-anywhere">{plainPreviewOf(words, previewLength)}</p>
+          <CopyWords words={words} />
           {isRefused && <p className="text-destructive">The server refused these words.</p>}
           {isOnlyInMemory && <p className="text-destructive">Only an open page holds these words.</p>}
         </li>

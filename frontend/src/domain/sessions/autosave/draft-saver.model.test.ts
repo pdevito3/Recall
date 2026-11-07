@@ -38,19 +38,18 @@ interface Row {
   latestRevision: number
   lastChunkRevision: number
   savedAt: string | null
-  revisions: { text: string; claimedAt: string }[]
+  revisions: { text: string; claimedAt: string; tookAt: number | null }[]
   chunks: string[]
 }
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
-/** The rules of `DraftSlot.Decide` and `Session.SaveRaw` on the Server. A request reaches the Server and answers later, also when its tab is gone. */
+/** The rules of `DraftSlot.Decide` on the Server, SES-36: a replay gets the answer of its first try, and only a base that is the current Draft wins. A request reaches the Server and answers later, also when its tab is gone. */
 class ModelServer {
   rows: Row[] = []
   isDown = false
   losesNextReply = false
   refusesACreate = false
-  clockOfTheServer: string | null = null
   latencyMs = () => 50
   readsTakeMs: number | null = null
 
@@ -102,19 +101,19 @@ class ModelServer {
   }
 
   private decide(row: Row, save: { text: string; baseRevision: number; savedAt: string }) {
-    const answer = (outcome: string) => ({ outcome, draftRevision: row.draftRevision, latestRevision: row.latestRevision, savedAt: row.savedAt ?? save.savedAt, cleanupStatus: 'NotRun', version: row.latestRevision })
-    if (save.text === row.text) return answer('Unchanged')
-    if (save.baseRevision !== row.draftRevision && row.revisions.some((old) => old.claimedAt === save.savedAt && old.text === save.text)) return answer('Unchanged')
+    const answer = (outcome: string, draftRevision: number | null) => ({ outcome, draftRevision, latestRevision: row.latestRevision, savedAt: row.savedAt ?? save.savedAt, cleanupStatus: 'NotRun', version: row.latestRevision })
+    const earlier = row.revisions.find((old) => old.claimedAt === save.savedAt && old.text === save.text)
+    if (earlier) return earlier.tookAt === null ? answer('Lost', null) : answer('Kept', earlier.tookAt)
+    if (save.text === row.text) return answer('Unchanged', row.draftRevision)
     const number = row.latestRevision + 1
-    row.revisions.push({ text: save.text, claimedAt: save.savedAt })
+    const wins = save.baseRevision === row.draftRevision
+    row.revisions.push({ text: save.text, claimedAt: save.savedAt, tookAt: wins ? number : null })
     row.latestRevision = number
-    const missesChunk = save.baseRevision < row.lastChunkRevision
-    const beats = save.baseRevision === row.draftRevision || row.savedAt === null || save.savedAt >= row.savedAt
-    if (missesChunk || !beats) return answer('Lost')
+    if (!wins) return answer('Lost', null)
     row.text = save.text
     row.draftRevision = number
-    row.savedAt = this.clockOfTheServer ?? (row.savedAt !== null && row.savedAt > save.savedAt ? row.savedAt : save.savedAt)
-    return answer('Won')
+    row.savedAt = save.savedAt
+    return answer('Won', number)
   }
 
   async getSession({ path }: { path: { id: string } }) {
@@ -128,7 +127,7 @@ class ModelServer {
   appendChunk(row: Row, chunk: string) {
     const number = row.latestRevision + 1
     row.text = row.text ? `${row.text} ${chunk}` : chunk
-    row.revisions.push({ text: row.text, claimedAt: 'chunk' })
+    row.revisions.push({ text: row.text, claimedAt: 'chunk', tookAt: number })
     row.savedAt = new Date().toISOString()
     row.draftRevision = number
     row.latestRevision = number
@@ -241,7 +240,7 @@ interface Page {
   held: string | null
 }
 
-const tokensIn = (text: string) => text.match(/\b[wc]\d+x\b/g) ?? []
+const tokensIn = (text: string): string[] => text.match(/\b[wc]\d+x\b/g) ?? []
 
 class Tab {
   mod!: DraftSaverModule
@@ -281,14 +280,14 @@ class Tab {
   }
 
   openDraft(clientSessionId: string, sessionId: string | null, baseRevision: number) {
-    const target = { owner, channel: 'raw' as const, clientSessionId, startedAt: '2026-11-07T00:00:00.000Z', sessionId, baseRevision, latestRevision: baseRevision }
+    const target = { owner, channel: 'raw' as const, clientSessionId, startedAt: '2026-11-07T00:00:00.000Z', sessionId, baseRevision }
     this.run(() => {
       const saver = this.mod.draftSaverFor(target, this.queryClient)
       const stopListening = saver.subscribe(() => undefined)
       const kept = saver.wordsToOpen()
       const id = saver.getSnapshot().sessionId
       const page: Page = { saver, stopListening, clientSessionId, editor: kept ?? (id ? null : ''), held: saver.wordsInHold() }
-      saver.subscribeToHoldJoin((words) => {
+      saver.subscribeToNewWords((words) => {
         page.editor = words
       })
       this.page = page
@@ -313,7 +312,7 @@ class Tab {
           page.editor = page.saver.joinHoldInto('')
           return
         }
-        page.saver.moveBaseTo(session.rawDraftRevision, session.rawLatestRevision)
+        page.saver.moveBaseTo(session.rawDraftRevision)
         page.editor = page.saver.joinHoldInto(session.rawText)
       })
       return
@@ -344,12 +343,18 @@ class Tab {
     this.page = null
   }
 
-  async answerConflict(random: Random) {
+  /** Show the newest words replaces the words of the notice on the page, so the person knows that those words leave the Draft. */
+  async answerConflict(random: Random, trace: Trace) {
     const page = this.page
-    if (!page || page.editor === null || page.saver.getSnapshot().conflict !== 'wordsMovedToHistory') return
+    if (!page || page.editor === null || page.saver.getSnapshot().conflict === null) return
     if (random.chance(0.5)) {
+      const before = tokensIn(page.editor)
       const newest = await this.run(() => page.saver.takeNewestWords())
-      if (newest !== null && this.page === page) page.editor = newest
+      if (newest !== null && this.page === page) {
+        const after = tokensIn(newest)
+        for (const token of before) if (!after.includes(token)) trace.knownToBeGone.add(token)
+        page.editor = newest
+      }
       return
     }
     const kept: unknown = await this.run(() => page.saver.keepWords(page.editor as string))
@@ -365,8 +370,8 @@ class Tab {
     if (!session || this.isClosed || this.page !== page) return
     this.run(() => {
       const { baseRevision, conflict } = page.saver.getSnapshot()
-      if (session.rawDraftRevision <= baseRevision || page.saver.unsettledText() !== null || conflict === 'wordsMovedToHistory') return
-      page.saver.moveBaseTo(session.rawDraftRevision, session.rawLatestRevision)
+      if (session.rawDraftRevision <= baseRevision || page.saver.unsettledText() !== null || conflict !== null) return
+      page.saver.moveBaseTo(session.rawDraftRevision)
       page.editor = session.rawText
     })
   }
@@ -400,6 +405,24 @@ interface Trace {
   steps: string[]
   discarded: Set<string>
   typed: Set<string>
+  /** The newest word that each tab typed into each entry. */
+  lastTyped: Map<string, { token: string; clientSessionId: string }>
+  /** A notice named these words, and the person answered it. */
+  knownToBeGone: Set<string>
+}
+
+/** The Draft invariant: at rest, each word that a person typed last into an entry is in the Draft of that entry, or a notice or a conflict on a page names it. A word in a Revision only is not enough, because the person looks at the Draft. */
+function lastWordsThatLeftTheDraftWithNoNotice(tabs: Tab[], storage: Storage, trace: Trace) {
+  const named = new Set(tokensIn(tabs.flatMap((tab) => tab.notices()).map((notice) => ('words' in notice ? notice.words : '')).join(' ')))
+  for (const tab of tabs) {
+    const { conflict, status, isOnlyInMemory } = tab.page?.saver.getSnapshot() ?? { conflict: null, status: { kind: 'idle' }, isOnlyInMemory: false }
+    if (conflict !== null || status.kind === 'refused' || isOnlyInMemory) for (const token of tokensIn(tab.page?.editor ?? '')) named.add(token)
+  }
+  const keys = new Set(tokensIn(Object.keys(storage).map((key) => storage.getItem(key)).join(' ')))
+  return [...trace.lastTyped.values()].filter(({ token, clientSessionId }) => {
+    const row = world.rows.find((other) => other.clientSessionId === clientSessionId)
+    return !tokensIn(row?.text ?? '').includes(token) && !named.has(token) && !keys.has(token) && !trace.discarded.has(token) && !trace.knownToBeGone.has(token)
+  }).map(({ token, clientSessionId }) => `${token} in ${clientSessionId}`)
 }
 
 function wordsThatVanished(tabs: Tab[], storage: Storage, trace: Trace) {
@@ -415,7 +438,7 @@ const chunksPushedOut = () => world.rows.flatMap((row) => row.chunks.filter((chu
 class ModelRun {
   private readonly random: Random
   private readonly tabs: Tab[] = []
-  private readonly trace: Trace = { steps: [], discarded: new Set(), typed: new Set() }
+  private readonly trace: Trace = { steps: [], discarded: new Set(), typed: new Set(), lastTyped: new Map(), knownToBeGone: new Set() }
   private storageIsFull = false
   private readonly storage = storageWith(() => this.storageIsFull)
   private readonly pointers = new Map<Tab, string>()
@@ -427,6 +450,14 @@ class ModelRun {
     world = new ModelServer()
     world.latencyMs = () => 20 + this.random.below(1500)
     channels = new ModelChannels()
+  }
+
+  private readonly tabNames = new Map<Tab, number>()
+
+  private nameTab(tab: Tab) {
+    const name = this.tabNames.size
+    this.tabNames.set(tab, name)
+    return name
   }
 
   private note(step: string) {
@@ -469,6 +500,8 @@ class ModelRun {
       if (!tab.page) tab.openDraft(this.newEntryId(), null, 0)
       this.trace.typed.add(token)
       tab.type(token)
+      const entry = tab.page?.clientSessionId as string
+      this.trace.lastTyped.set(`${this.tabNames.get(tab) ?? this.nameTab(tab)} ${entry}`, { token, clientSessionId: entry })
       this.note(`tab ${index} types ${token}`)
     } else if (roll < 62) {
       const ms = this.random.below(2500)
@@ -490,6 +523,8 @@ class ModelRun {
     } else if (roll < 76) {
       // A crash loses what only a page holds, and the person saw the notice about those words before the crash.
       for (const token of tokensIn(tab.run(() => tab.mod.wordsOfThisTabOnlyInMemory()).join(' '))) this.trace.discarded.add(token)
+      for (const notice of tab.notices()) if (notice.kind === 'inHistory') for (const token of tokensIn(notice.words)) this.trace.knownToBeGone.add(token)
+      if (tab.page?.saver.hasConflict()) for (const token of tokensIn(tab.page.editor ?? '')) this.trace.knownToBeGone.add(token)
       tab.kill(this.storage)
       this.removeTab(tab)
       this.note(`tab ${index} crashes`)
@@ -515,7 +550,7 @@ class ModelRun {
       tab.done()
       this.note(`tab ${index} presses Done`)
     } else if (roll < 94) {
-      void tab.answerConflict(this.random)
+      void tab.answerConflict(this.random, this.trace)
       this.note(`tab ${index} answers a conflict`)
     } else if (roll < 95) {
       void tab.refetch()
@@ -540,7 +575,12 @@ class ModelRun {
   }
 
   private async discardANotice() {
-    const canDiscard = (notice: Notice) => 'words' in notice && (notice.kind !== 'onlyInMemory' || notice.canDiscard)
+    for (const notice of this.tabs.flatMap((other) => other.notices())) {
+      if (notice.kind !== 'inHistory' || !this.random.chance(0.5)) continue
+      for (const token of tokensIn(notice.words)) this.trace.knownToBeGone.add(token)
+      notice.saver.dismissConflict()
+    }
+    const canDiscard = (notice: Notice) => 'words' in notice && notice.kind !== 'inHistory' && (notice.kind !== 'onlyInMemory' || notice.canDiscard)
     const tab = this.pick(this.tabs.filter((other) => other.notices().some(canDiscard)))
     if (!tab) return
     const notice = this.pick(tab.notices().filter(canDiscard))
@@ -569,6 +609,12 @@ class ModelRun {
       })
     }
     this.note(`tab ${index} signs out and ${discards ? `discards: ${shown.map(({ words }) => words).join(' | ')}` : 'keeps'}`)
+    // A notice about History ends at a sign-out. The person saw it, and the Server holds the words.
+    for (const other of this.tabs) {
+      for (const notice of other.notices()) if (notice.kind === 'inHistory') for (const token of tokensIn(notice.words)) this.trace.knownToBeGone.add(token)
+      if (other.page?.saver.hasConflict()) for (const token of tokensIn(other.page.editor ?? '')) this.trace.knownToBeGone.add(token)
+    }
+    tab.run(() => tab.mod.removeNoticesOfWordsInHistory(owner))
     for (const other of [...this.tabs]) {
       other.close()
       this.removeTab(other)
@@ -586,6 +632,8 @@ class ModelRun {
     await this.openTab()
     await vi.advanceTimersByTimeAsync(120_000)
     this.check()
+    const gone = lastWordsThatLeftTheDraftWithNoNotice(this.tabs, this.storage, this.trace)
+    if (gone.length > 0) throw new Error(`Last words that left the Draft with no notice: ${gone.join(', ')}.\nLast steps:\n  ${this.trace.steps.slice(-Number(process.env.MODEL_TRAIL ?? 40)).join('\n  ')}`)
     for (const tab of [...this.tabs]) tab.run(() => tab.mod.stopDraftSavers())
   }
 
@@ -643,7 +691,7 @@ async function aTabOn(clientSessionId: string) {
 const pass = (ms: number) => vi.advanceTimersByTimeAsync(ms)
 const allKeys = (storage: Storage) => Object.keys(storage).map((key) => storage.getItem(key)).join(' ')
 
-test('a tab that opens leaves the key of a live tab, so the words of both tabs reach the server', async () => {
+test('a tab that opens leaves the key of a live tab and shows its words, so the words of both tabs reach the server', async () => {
   const storage = aScene()
   world.isDown = true
   const first = await aTabOn('entry-1')
@@ -654,14 +702,57 @@ test('a tab that opens leaves the key of a live tab, so the words of both tabs r
   const second = await aTabOn('entry-1')
   await pass(1000)
 
-  expect(Object.keys(storage)).toEqual(keysBefore)
-  expect(second.page?.editor).toBe('')
+  expect(Object.keys(storage)).toEqual(expect.arrayContaining(keysBefore))
+  expect(second.page?.editor).toBe('w1x')
   first.type('w2x')
   second.type('w3x')
   await pass(1000)
   world.isDown = false
   await pass(60_000)
   expect(tokensIn(world.allText())).toEqual(expect.arrayContaining(['w1x', 'w2x', 'w3x']))
+  first.run(() => first.mod.stopDraftSavers())
+  second.run(() => second.mod.stopDraftSavers())
+})
+
+test('a reload with a second tab open keeps the words on the screen, whichever tab took the key', async () => {
+  const storage = aScene()
+  world.isDown = true
+  const reloading = await aTabOn('entry-1')
+  reloading.type('w1x')
+  await pass(1000)
+  const other = await aTabOn('entry-2')
+  await pass(1000)
+
+  reloading.close()
+  await pass(1000)
+  const back = await aTabOn('entry-1')
+  await pass(1000)
+
+  expect(back.page?.editor).toBe('w1x')
+  expect(tokensIn(allKeys(storage))).toContain('w1x')
+  world.isDown = false
+  await pass(60_000)
+  expect(tokensIn(world.rows.find(({ clientSessionId }) => clientSessionId === 'entry-1')?.text ?? '')).toEqual(['w1x'])
+  back.run(() => back.mod.stopDraftSavers())
+  other.run(() => other.mod.stopDraftSavers())
+})
+
+test('of two tabs on one entry, the newest words are in the Draft, and the other tab tells the truth', async () => {
+  aScene()
+  const first = await aTabOn('entry-1')
+  first.type('w1x')
+  await pass(2000)
+  const row = world.rows[0] as Row
+  const second = await aTabOn('entry-1')
+  await pass(2000)
+  world.latencyMs = () => 10
+  first.type('w2x')
+  second.type('w3x')
+  await pass(3000)
+
+  const [wonWords, lostTab] = tokensIn(row.text).includes('w2x') ? ['w2x', second] : ['w3x', first]
+  expect(tokensIn(row.text)).toContain(wonWords)
+  expect(lostTab.page?.saver.getSnapshot().conflict).toBe('wordsMovedToHistory')
   first.run(() => first.mod.stopDraftSavers())
   second.run(() => second.mod.stopDraftSavers())
 })
@@ -695,7 +786,7 @@ test('a held text that another held text starts with stays, and both reach the s
   const held = (clientSessionId: string, writer: string, words: string) =>
     storage.setItem(
       `recall.unsent.${owner}.${writer}.1`,
-      JSON.stringify({ key: `${clientSessionId}.raw`, channel: 'raw', clientSessionId, startedAt: '2026-11-07T00:00:00.000Z', sessionId: null, baseRevision: 0, latestRevision: 0, change: null, held: words }),
+      JSON.stringify({ key: `${clientSessionId}.raw`, channel: 'raw', clientSessionId, startedAt: '2026-11-07T00:00:00.000Z', sessionId: null, baseRevision: 0, change: null, held: words }),
     )
   held('entry-1', 'tab-gone-1', 'w1x')
   held('entry-2', 'tab-gone-2', 'w1x w2x')
@@ -745,7 +836,7 @@ test('a discard at sign-out leaves no readable text of the words that it named',
   gone.close()
   storage.setItem(
     `recall.unsent.${owner}.tab-gone.1`,
-    JSON.stringify({ key: 'entry-2.raw', channel: 'raw', clientSessionId: 'entry-2', startedAt: '2026-11-07T00:00:00.000Z', sessionId: null, baseRevision: 0, latestRevision: 0, change: null, held: 'w2x' }),
+    JSON.stringify({ key: 'entry-2.raw', channel: 'raw', clientSessionId: 'entry-2', startedAt: '2026-11-07T00:00:00.000Z', sessionId: null, baseRevision: 0, change: null, held: 'w2x' }),
   )
 
   const leaving = await aTabOn('entry-3')
@@ -795,20 +886,19 @@ test('a lost save whose reply did not come raises the notice at the replay, and 
   expect(tab.page?.editor).toBe('w1x w3x')
   expect(tab.page?.saver.getSnapshot().conflict).toBe('wordsMovedToHistory')
   expect(tokensIn(row.revisions.map(({ text }) => text).join(' '))).toContain('w3x')
-  expect(allKeys(storage)).toBe('')
+  expect(JSON.parse(allKeys(storage))).toMatchObject({ change: null, wordsInHistory: 'w1x w3x' })
   tab.run(() => tab.mod.stopDraftSavers())
 })
 
-test('a won save whose reply did not come raises no notice, also when the clock of the device differs', async () => {
+test('a won save whose reply did not come raises no notice, and the read gives the base', async () => {
   aScene()
   const tab = await aTabOn('entry-1')
   tab.type('w1x')
   await pass(2000)
   const row = world.rows[0] as Row
   world.appendChunk(row, 'c2x')
-  tab.run(() => (tab.page as Page).saver.moveBaseTo(row.draftRevision, row.latestRevision))
+  tab.run(() => (tab.page as Page).saver.moveBaseTo(row.draftRevision))
   world.losesNextReply = true
-  world.clockOfTheServer = '2020-01-01T00:00:00.000Z'
   tab.type('w3x')
   await pass(10_000)
 
@@ -816,29 +906,6 @@ test('a won save whose reply did not come raises no notice, also when the clock 
   expect(tab.page?.saver.getSnapshot().conflict).toBeNull()
   expect(tab.page?.saver.getSnapshot().baseRevision).toBe(row.draftRevision)
   expect(tab.page?.saver.lastSavedWords()).toBe(row.text)
-  tab.run(() => tab.mod.stopDraftSavers())
-})
-
-test('a lost save whose reply did not come raises the notice also over another notice of the page', async () => {
-  aScene()
-  const tab = await aTabOn('entry-1')
-  tab.type('w1x')
-  await pass(2000)
-  const row = world.rows[0] as Row
-  row.revisions.push({ text: 'other', claimedAt: 'other' })
-  row.latestRevision += 1
-  tab.type('w2x')
-  await pass(2000)
-  expect(tab.page?.saver.getSnapshot().conflict).toBe('replacedUnseenSave')
-  world.appendChunk(row, 'c3x')
-  world.losesNextReply = true
-  tab.type('w4x')
-  await pass(10_000)
-
-  expect(tokensIn(row.text)).not.toContain('w4x')
-  expect(tab.page?.saver.getSnapshot().conflict).toBe('wordsMovedToHistory')
-  expect(tab.page?.saver.newestWords()).toContain('w4x')
-  expect(tab.page?.editor).toContain('w4x')
   tab.run(() => tab.mod.stopDraftSavers())
 })
 
@@ -852,9 +919,8 @@ test('a replay that finds its words in the Draft ends a notice of a loss', async
   tab.type('w3x')
   await pass(2000)
   expect(tab.page?.saver.getSnapshot().conflict).toBe('wordsMovedToHistory')
-  tab.run(() => (tab.page as Page).saver.moveBaseTo(row.draftRevision, row.latestRevision))
+  tab.run(() => (tab.page as Page).saver.moveBaseTo(row.draftRevision))
   world.losesNextReply = true
-  world.clockOfTheServer = '2020-01-01T00:00:00.000Z'
   tab.type('w4x')
   await pass(10_000)
 
@@ -870,7 +936,6 @@ test('a read after a replay that sees a later save of this page raises no notice
   await pass(2000)
   const row = world.rows[0] as Row
   world.losesNextReply = true
-  world.clockOfTheServer = '2020-01-01T00:00:00.000Z'
   tab.type('w2x')
   await pass(1000)
   tab.type('w3x')
@@ -889,7 +954,6 @@ test('a read after a replay that sees a later save before its reply raises no no
   await pass(2000)
   const row = world.rows[0] as Row
   world.losesNextReply = true
-  world.clockOfTheServer = '2020-01-01T00:00:00.000Z'
   tab.type('w2x')
   await pass(1000)
   tab.type('w3x')
@@ -932,7 +996,7 @@ test('a saver that took the key of a tab that left and moved to a new entry coun
   storage.setItem(`recall.left.tab-gone`, '1')
   storage.setItem(
     `recall.unsent.${owner}.tab-gone.1`,
-    JSON.stringify({ key: 'entry-1.raw', channel: 'raw', clientSessionId: 'entry-1', startedAt: '2026-11-07T00:00:00.000Z', sessionId: row.id, baseRevision: 1, latestRevision: 1, change: { value: 'w2x', savedAt: '2026-11-07T00:00:01.000Z' }, held: null }),
+    JSON.stringify({ key: 'entry-1.raw', channel: 'raw', clientSessionId: 'entry-1', startedAt: '2026-11-07T00:00:00.000Z', sessionId: row.id, baseRevision: 1, change: { value: 'w2x', savedAt: '2026-11-07T00:00:01.000Z' }, held: null }),
   )
   world.rows = []
   world.refusesACreate = true

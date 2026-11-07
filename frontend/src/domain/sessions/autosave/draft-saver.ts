@@ -11,14 +11,14 @@ import { newUuid } from '@/lib/new-uuid'
 import { sessionQueryOptions } from '../apis/get-session'
 import { SessionKeys, type DraftChannel } from '../apis/session.keys'
 import { patchTimelineRow, refreshTimelineHead } from '../apis/timeline-cache'
-import { joinWords, mentionedPersonIds, mergeWords, plainPreviewOf } from '../editor/content'
+import { holdsEachWordOf, joinWords, mentionedPersonIds, mergeWords, plainPreviewOf } from '../editor/content'
 import { pointAtCreatedSession, pointAtNewEntry } from './composer-pointer'
 import { prefixOfOutbox, readOutbox, removeFromOutbox, storedEntriesIn, writeToOutbox, type OutboxEntry, type StoredEntry } from './outbox'
 import { queueWithRefusal, queueWithUnanswered, type SaveStatus, type Stamped } from './save-queue'
 import { isARowThatIsGone, SerialSaver } from './serial-saver'
-import { hasWriterLeft, takeKeysOfTabsThatLeft, thisTab, type OtherTabReport } from './tab-keys'
+import { hasWriterLeft, isKeyStored, takeKeysOfTabsThatLeft, thisTab, type OtherTabReport } from './tab-keys'
 
-export type DraftConflict = 'wordsMovedToHistory' | 'replacedUnseenSave' | null
+export type DraftConflict = 'wordsMovedToHistory' | 'discardedInAnotherTab' | null
 
 export type ShownSaveStatus = SaveStatus | { kind: 'savedInHistory'; at: string }
 
@@ -27,7 +27,6 @@ export interface DraftSnapshot {
   conflict: DraftConflict
   sessionId: string | null
   baseRevision: number
-  latestRevision: number
   movedFromDeletedEntry: boolean
   isOnlyInMemory: boolean
 }
@@ -35,14 +34,34 @@ export interface DraftSnapshot {
 export type DraftNotice =
   | { kind: 'moved'; saver: DraftSaver; sessionId: string | null }
   | { kind: 'joined'; saver: DraftSaver; sessionId: string | null }
-  | { kind: 'inHistory'; saver: DraftSaver; sessionId: string | null }
+  | { kind: 'inHistory'; saver: DraftSaver; sessionId: string | null; words: string }
   | { kind: 'refused'; saver: DraftSaver; reason: string; words: string }
   | { kind: 'waiting'; saver: DraftSaver; words: string }
   | { kind: 'onlyInMemory'; saver: DraftSaver; reason: string | null; canDiscard: boolean; words: string }
 
 export function shownStatusOf({ status, conflict }: DraftSnapshot): ShownSaveStatus {
-  return status.kind === 'saved' && conflict === 'wordsMovedToHistory' ? { kind: 'savedInHistory', at: status.at } : status
+  if (status.kind !== 'saved' || conflict === null) return status
+  return conflict === 'wordsMovedToHistory' ? { kind: 'savedInHistory', at: status.at } : { kind: 'idle' }
 }
+
+export type WhyNewWords = 'heldWordsJoined' | 'draftHoldsMore'
+
+/** Where the words of a save are, by the text of the Draft. A word of these words that is not in the Draft needs the person. */
+export type WordsFate = 'areTheDraft' | 'areInTheDraft' | 'onlyInHistory'
+
+export function fateOfWords(words: string, draft: string): WordsFate {
+  if (words === draft) return 'areTheDraft'
+  return holdsEachWordOf(draft, words) ? 'areInTheDraft' : 'onlyInHistory'
+}
+
+/** `reply` is null when no save went, because another tab took or discarded the key. `newest` is the read that a save needs after `Kept` or `Lost`. */
+interface SaveAnswer {
+  reply: DraftSaveResultDto | null
+  newest: SessionDto | null
+  isKeyWithAnotherTab?: boolean
+}
+
+const doesKeyHoldWords = ({ change, wordsInHistory }: OutboxEntry, words: string) => change?.value === words || wordsInHistory === words
 
 export interface DraftTarget {
   owner: string
@@ -51,7 +70,6 @@ export interface DraftTarget {
   startedAt: string
   sessionId: string | null
   baseRevision: number
-  latestRevision: number
   /** Asked at the create, because the person can turn capture off after the first word. */
   location?: () => Promise<{ latitude: number; longitude: number } | null>
 }
@@ -64,24 +82,24 @@ const previewLength = 200
 export class DraftSaver {
   private target: DraftTarget
   private readonly queryClient: QueryClient
-  private readonly saver: SerialSaver<string, DraftSaveResultDto>
+  private readonly saver: SerialSaver<string, SaveAnswer>
   private snapshot: DraftSnapshot
   private readonly listeners = new Set<() => void>()
   private replyCount = 0
-  private conflictIsUnseen = false
   private wordsInHistory: string | null = null
   private wordsOnServer: string | null = null
   private heldWords: string | null = null
   private ownKey: string | null = null
   private hasBeenTouched = false
   private hasUnseenJoin = false
+  private reportsArrival = false
   private holdRun = 0
-  private readonly holdJoinListeners = new Set<(words: string) => void>()
+  private readonly newWordsListeners = new Set<(words: string, why: WhyNewWords) => void>()
   private isStopped = false
   private isDiscarded = false
   private isBeingDeleted = false
 
-  constructor(target: DraftTarget, queryClient: QueryClient, resumed?: StoredEntry) {
+  constructor(target: DraftTarget, queryClient: QueryClient, resumed?: StoredEntry | CopyOfAKey) {
     const entry = resumed?.entry
     this.target = target
     this.queryClient = queryClient
@@ -90,7 +108,6 @@ export class DraftSaver {
       conflict: null,
       sessionId: target.sessionId,
       baseRevision: target.baseRevision,
-      latestRevision: target.latestRevision,
       movedFromDeletedEntry: entry?.movedFromDeletedEntry ?? false,
       isOnlyInMemory: false,
     }
@@ -110,10 +127,12 @@ export class DraftSaver {
   }
 
   /** The text of a tab that left moves to a key of this tab. The next write replaces the key of that tab, so the text is in a key at each moment. */
-  private takeKeyOf({ storageKey, entry }: StoredEntry) {
+  private takeKeyOf({ storageKey, entry }: StoredEntry | CopyOfAKey) {
     this.hasBeenTouched = true
     this.ownKey = storageKey
     this.heldWords = entry.held ?? null
+    this.reportsArrival = this.heldWords !== null || (entry.change !== null && !entry.refusal)
+    if (entry.wordsInHistory) this.noteWordsOnlyInHistory(entry.wordsInHistory)
     if (this.heldWords !== null) queueMicrotask(() => this.holdRun === 0 && void this.joinHoldWithNoPage())
   }
 
@@ -121,17 +140,18 @@ export class DraftSaver {
   takeEntryIfUntouched(stored: StoredEntry) {
     const { entry } = stored
     if (this.hasBeenTouched || this.isStopped || entry.refusal) return false
-    this.update({ sessionId: entry.sessionId ?? this.snapshot.sessionId, baseRevision: entry.baseRevision, latestRevision: Math.max(entry.latestRevision, this.snapshot.latestRevision) })
+    this.update({ sessionId: entry.sessionId ?? this.snapshot.sessionId, baseRevision: entry.baseRevision })
     this.takeKeyOf(stored)
     if (entry.change) {
       this.saver.edit(entry.change.value, entry.change.savedAt)
-      for (const listener of this.holdJoinListeners) listener(entry.change.value)
+      this.showNewWords(entry.change.value, 'heldWordsJoined')
     } else this.keep()
     return true
   }
 
   edit(text: string) {
     this.hasBeenTouched = true
+    this.forgetAKeyThatIsGone()
     this.saver.edit(text)
   }
 
@@ -159,6 +179,7 @@ export class DraftSaver {
 
   holdInOutbox(text: string) {
     this.hasBeenTouched = true
+    this.forgetAKeyThatIsGone()
     this.heldWords = text
     this.keep()
   }
@@ -173,21 +194,26 @@ export class DraftSaver {
     this.holdRun += 1
   }
 
-  /** Words typed before a read answered go after the words of the entry. One write moves them from the hold to the queue. */
+  /** Words typed before a read answered go after the words of the entry, and a block that the entry already holds does not go twice. One write moves them from the hold to the queue. */
   joinHoldInto(words: string) {
     if (this.heldWords === null) return words
-    const joined = joinWords(words, this.heldWords)
+    const joined = mergeWords(words, this.heldWords)
     this.heldWords = null
+    this.forgetAKeyThatIsGone()
     this.saver.edit(joined)
     return joined
   }
 
-  /** A page that shows this entry opens the joined words at once, and its next key must not save the old text over them. */
-  subscribeToHoldJoin(listener: (words: string) => void) {
-    this.holdJoinListeners.add(listener)
+  /** A page that shows this entry opens these words at once, and its next key must not save the old text over them. */
+  subscribeToNewWords(listener: (words: string, why: WhyNewWords) => void) {
+    this.newWordsListeners.add(listener)
     return () => {
-      this.holdJoinListeners.delete(listener)
+      this.newWordsListeners.delete(listener)
     }
+  }
+
+  private showNewWords(words: string, why: WhyNewWords) {
+    for (const listener of this.newWordsListeners) listener(words, why)
   }
 
   /** Held words were typed before a read answered. They join the words of the entry and must not replace them, also with no page open. */
@@ -209,10 +235,10 @@ export class DraftSaver {
       }
       if (this.heldWords === null) return
       const unsettled = this.unsettledText()
-      if (session && unsettled === null) this.moveBaseTo(session.rawDraftRevision, session.rawLatestRevision)
+      if (session && unsettled === null) this.moveBaseTo(session.rawDraftRevision)
       const joined = this.joinHoldInto(unsettled ?? session?.rawText ?? '')
-      for (const listener of this.holdJoinListeners) listener(joined)
-      this.hasUnseenJoin = this.holdJoinListeners.size === 0
+      this.showNewWords(joined, 'heldWordsJoined')
+      if (this.newWordsListeners.size === 0) this.reportsArrival = true
       refreshDraftNotices()
     }
   }
@@ -227,9 +253,9 @@ export class DraftSaver {
     refreshDraftNotices()
   }
 
-  keepsTheSameWordsAs({ key, change, held }: OutboxEntry) {
+  keepsTheSameWordsAs({ key, change, held, wordsInHistory }: OutboxEntry) {
     const own = this.saver.newestUnsettled()
-    return this.ownKey !== null && !this.snapshot.isOnlyInMemory && key === draftKey(this.target) && own?.value === change?.value && own?.savedAt === change?.savedAt && this.heldWords === (held ?? null)
+    return this.ownKey !== null && !this.snapshot.isOnlyInMemory && key === draftKey(this.target) && own?.value === change?.value && own?.savedAt === change?.savedAt && this.heldWords === (held ?? null) && this.wordsInHistory === (wordsInHistory ?? null)
   }
 
   /** All the words that only this saver holds. */
@@ -243,11 +269,11 @@ export class DraftSaver {
     const words = this.unsentWords() ?? ''
     const hasNoPage = this.listeners.size === 0
     // An open page keeps its saver and its editor, so a discard there would leave a page that saves nothing.
-    if (isOnlyInMemory) return { kind: 'onlyInMemory', saver: this, reason: status.kind === 'refused' ? status.message : null, canDiscard: hasNoPage, words }
+    if (isOnlyInMemory && words !== '') return { kind: 'onlyInMemory', saver: this, reason: status.kind === 'refused' ? status.message : null, canDiscard: hasNoPage, words }
     if (status.kind === 'refused' && hasNoPage) return { kind: 'refused', saver: this, reason: status.message, words }
     if (status.kind === 'waiting' && hasNoPage) return { kind: 'waiting', saver: this, words }
     if (movedFromDeletedEntry) return { kind: 'moved', saver: this, sessionId }
-    if (hasNoPage && this.hasUnseenConflict() && conflict === 'wordsMovedToHistory') return { kind: 'inHistory', saver: this, sessionId }
+    if (hasNoPage && conflict === 'wordsMovedToHistory') return { kind: 'inHistory', saver: this, sessionId, words: this.wordsInHistory ?? '' }
     return hasNoPage && this.hasUnseenJoin ? { kind: 'joined', saver: this, sessionId } : null
   }
 
@@ -257,13 +283,13 @@ export class DraftSaver {
 
   /** A hold can have joined the entry after Done, so these words can be newer than the words at Done. */
   newestWords() {
-    return this.unsettledText() ?? (this.snapshot.conflict === 'wordsMovedToHistory' ? this.wordsInHistory : this.wordsOnServer)
+    const { conflict } = this.snapshot
+    return this.unsettledText() ?? (conflict === null ? this.wordsOnServer : conflict === 'wordsMovedToHistory' ? this.wordsInHistory : null)
   }
 
-  /** The words a page must open with: those not yet settled, or those that lost a save while no page showed them. */
+  /** The words a page must open with: those not yet settled, or those that the Draft does not hold. */
   wordsToOpen() {
-    const hasUnseenLoss = this.conflictIsUnseen && this.snapshot.conflict === 'wordsMovedToHistory'
-    const kept = this.unsettledText() ?? (hasUnseenLoss ? this.wordsInHistory : null)
+    const kept = this.unsettledText() ?? (this.snapshot.conflict === 'wordsMovedToHistory' ? this.wordsInHistory : null)
     return kept === null ? null : this.joinHoldInto(kept)
   }
 
@@ -275,23 +301,24 @@ export class DraftSaver {
     return this.wordsOnServer
   }
 
-  hasUnseenConflict() {
-    return this.conflictIsUnseen && this.snapshot.conflict !== null
+  hasConflict() {
+    return this.snapshot.conflict !== null
   }
 
   dismissConflict() {
+    this.wordsInHistory = null
     this.update({ conflict: null })
+    this.keep()
   }
 
-  /** A save with no read can push a chunk of a recording out of the Draft, so the words of the person join the newest Draft. The answer is the words to show, and null means that nothing changed. */
+  /** The words of the person join the newest Draft. The answer is the words to show, and null means that nothing changed. A page that opened before the notice came does not show the words in History, so they join too. */
   async keepWords(text: string): Promise<string | null> {
-    if (this.snapshot.conflict !== 'wordsMovedToHistory') {
-      this.dismissConflict()
-      return null
-    }
+    if (this.snapshot.conflict === null) return null
     const newest = await this.readNewestDraft()
     if (newest === null) return null
-    const merged = mergeWords(newest, text)
+    const history = this.wordsInHistory
+    const mine = history === null || holdsEachWordOf(text, history) ? text : mergeWords(text, history)
+    const merged = mergeWords(newest, mine)
     this.dismissConflict()
     this.edit(merged)
     this.saver.flush()
@@ -325,19 +352,28 @@ export class DraftSaver {
   }
 
   private moveBaseToDraftIn(session: SessionDto) {
-    this.moveBaseTo(this.isRaw ? session.rawDraftRevision : session.cleanedDraftRevision, this.isRaw ? session.rawLatestRevision : session.cleanedLatestRevision)
+    this.moveBaseTo(this.isRaw ? session.rawDraftRevision : session.cleanedDraftRevision)
   }
 
-  moveBaseTo(draftRevision: number, latestRevision: number) {
-    this.update({ baseRevision: draftRevision, latestRevision: Math.max(latestRevision, this.snapshot.latestRevision) })
+  private draftTextIn(session: SessionDto) {
+    return this.isRaw ? session.rawText : (session.cleanedText ?? '')
   }
 
-  /** The key holds the text that the notice of this saver showed, so a discard removes no other words. */
+  moveBaseTo(draftRevision: number) {
+    this.update({ baseRevision: draftRevision })
+  }
+
+  /** The key holds the text that the notice of this saver showed, so a discard removes no other words. A copy in a key of another tab is the same text, and it must not come back. */
   discard() {
+    const words = this.unsettledText()
+    const key = draftKey(this.target)
     this.isDiscarded = true
     this.stop()
     if (this.ownKey !== null) removeFromOutbox(this.ownKey)
     this.ownKey = null
+    for (const { storageKey, entry } of readOutbox(this.target.owner)) {
+      if (words !== null && entry.key === key && entry.change?.value === words) removeFromOutbox(storageKey)
+    }
     for (const [key, saver] of savers) {
       if (saver === this) savers.delete(key)
     }
@@ -347,10 +383,11 @@ export class DraftSaver {
 
   subscribe = (listener: () => void) => {
     this.listeners.add(listener)
-    this.conflictIsUnseen = false
     refreshDraftNotices()
     return () => {
       this.listeners.delete(listener)
+      // The words of this notice were only on the page that closed.
+      if (this.listeners.size === 0 && this.snapshot.conflict === 'discardedInAnotherTab') this.snapshot = { ...this.snapshot, conflict: null }
       refreshDraftNotices()
     }
   }
@@ -382,20 +419,52 @@ export class DraftSaver {
 
   private afterCreate(created: SessionDto) {
     pointAtCreatedSession(this.target.clientSessionId, created.id)
-    // A replay of the create can bring words that this page never showed, also a chunk of a recording. The base stays, so a next save over them raises the notice.
+    // A replay of the create can bring words that this page never showed, also a chunk of a recording. The base stays, so the Server answers `Lost` to a next save over them.
     this.update({ sessionId: created.id })
     this.queryClient.setQueryData(SessionKeys.detail(created.id), created)
     void refreshTimelineHead(this.queryClient)
   }
 
-  private async send(change: Stamped<string>, signal: AbortSignal) {
+  private async send(change: Stamped<string>, signal: AbortSignal): Promise<SaveAnswer> {
     try {
-      return await this.saveWords(change, signal)
+      return await this.saveAndRead(change, signal)
     } catch (error) {
       // The delete of this tab, or a discard at logout, is the wish of the person. The words must not come back as a new entry.
       if (!isARowThatIsGone(error) || this.isStopped || this.isBeingDeleted) throw error
       this.moveToNewEntry(change)
-      return this.saveWords(change, signal)
+      return this.saveAndRead(change, signal)
+    }
+  }
+
+  /** A failed read throws, so the save goes again and gets the same answer. A later save waits for the read, because its base comes from the read. */
+  private async saveAndRead(change: Stamped<string>, signal: AbortSignal): Promise<SaveAnswer> {
+    if (this.isOwnKeyGone()) {
+      const newest = await this.readForAnswer(signal)
+      return { reply: null, newest, isKeyWithAnotherTab: readOutbox(this.target.owner).some(({ entry }) => doesKeyHoldWords(entry, change.value)) }
+    }
+    const reply = await this.saveWords(change, signal)
+    return { reply, newest: reply.outcome === 'Kept' || reply.outcome === 'Lost' ? await this.readForAnswer(signal) : null }
+  }
+
+  /** A frozen tab can wake after another tab took or discarded its key. If the person typed since, the key is new and this is false. */
+  private isOwnKeyGone() {
+    return this.ownKey !== null && !this.snapshot.isOnlyInMemory && !isKeyStored(this.ownKey)
+  }
+
+  /** New words on this page are new text, and they get a key of their own. */
+  private forgetAKeyThatIsGone() {
+    if (this.isOwnKeyGone()) this.ownKey = null
+  }
+
+  private async readForAnswer(signal: AbortSignal) {
+    const id = this.snapshot.sessionId
+    if (!id) return null
+    const stopRead = () => void this.queryClient.cancelQueries({ queryKey: SessionKeys.detail(id), exact: true })
+    signal.addEventListener('abort', stopRead)
+    try {
+      return await this.queryClient.fetchQuery({ ...sessionQueryOptions(id), staleTime: 0 })
+    } finally {
+      signal.removeEventListener('abort', stopRead)
     }
   }
 
@@ -412,38 +481,64 @@ export class DraftSaver {
   private moveToNewEntry(change: Stamped<string>) {
     const clientSessionId = newUuid()
     pointAtNewEntry(this.target.clientSessionId, clientSessionId)
-    this.target = { ...this.target, clientSessionId, channel: 'raw', sessionId: null, baseRevision: 0, latestRevision: 0 }
+    this.target = { ...this.target, clientSessionId, channel: 'raw', sessionId: null, baseRevision: 0 }
     savers.set(draftKey(this.target), this)
-    this.update({ sessionId: null, baseRevision: 0, latestRevision: 0, conflict: null, movedFromDeletedEntry: true })
+    this.wordsInHistory = null
+    this.update({ sessionId: null, baseRevision: 0, conflict: null, movedFromDeletedEntry: true })
     this.keep(change)
   }
 
-  private handleReply(reply: DraftSaveResultDto, change: Stamped<string>) {
+  private handleReply({ reply, newest, isKeyWithAnotherTab }: SaveAnswer, change: Stamped<string>) {
     this.replyCount += 1
-    const { baseRevision, latestRevision, conflict } = this.snapshot
-    const holdsWords = draftHoldsTheseWords(reply, change, baseRevision, latestRevision)
-    // The base stays behind after a loss, so a next save cannot push a chunk of a recording out of the Draft. Only a read moves it.
-    if (holdsWords) this.update({ baseRevision: reply.draftRevision })
-    if (holdsWords || reply.outcome === 'Lost') this.update({ latestRevision: Math.max(latestRevision, reply.latestRevision) })
-    const nextConflict = conflictAfter(reply, holdsWords, latestRevision, conflict)
-    if (nextConflict !== conflict) this.conflictIsUnseen = this.listeners.size === 0
-    if (holdsWords) this.wordsOnServer = change.value
-    this.update({ conflict: nextConflict })
-    if (reply.outcome === 'Lost') this.noteWordsOnlyInHistory(change.value)
+    this.forgetAKeyThatIsGone()
     const id = this.snapshot.sessionId
-    if (!id) return
-    this.keepSessionCurrent(id, reply, holdsWords ? change.value : null)
-    void this.queryClient.invalidateQueries({ queryKey: SessionKeys.revisions(id, this.target.channel) })
-    if (!holdsWords) void this.readNewest(id, reply.outcome === 'Unchanged' ? change.value : null)
+    if (id && reply) void this.queryClient.invalidateQueries({ queryKey: SessionKeys.revisions(id, this.target.channel) })
+    if (newest && id && this.isRaw) this.patchRow(id, newest.rawText, newest)
+    if (reply && !newest) {
+      this.noteWordsAreTheDraft(change.value, reply.draftRevision ?? this.snapshot.baseRevision)
+      if (id) this.keepSessionCurrent(id, reply, change.value)
+      return
+    }
+    const fate = newest ? fateOfWords(change.value, this.draftTextIn(newest)) : 'onlyInHistory'
+    if (fate === 'areTheDraft' && newest) this.noteWordsAreTheDraft(change.value, this.isRaw ? newest.rawDraftRevision : newest.cleanedDraftRevision)
+    else if (fate === 'areInTheDraft' && newest) this.noteDraftHoldsMoreThan(change.value, newest)
+    else if (reply) this.noteWordsOnlyInHistory(change.value)
+    else if (!isKeyWithAnotherTab && this.listeners.size > 0) this.update({ conflict: 'discardedInAnotherTab' })
+  }
+
+  /** Only a read or a save that holds these words moves the base, so a later save cannot push a chunk of a recording out of the Draft. */
+  private noteWordsAreTheDraft(words: string, draftRevision: number) {
+    this.wordsOnServer = words
+    this.wordsInHistory = null
+    this.noteArrival()
+    this.update({ baseRevision: draftRevision, conflict: null })
+  }
+
+  /** The words of this save are safe, and the Draft holds more. The page takes the Draft, unless the person typed since. Then the next save decides. */
+  private noteDraftHoldsMoreThan(words: string, newest: SessionDto) {
+    this.noteArrival()
+    if (this.unsettledText() !== words) return
+    const draft = this.draftTextIn(newest)
+    this.wordsOnServer = draft
+    this.wordsInHistory = null
+    this.moveBaseToDraftIn(newest)
+    this.update({ conflict: null })
+    this.showNewWords(draft, 'draftHoldsMore')
+  }
+
+  private noteArrival() {
+    if (!this.reportsArrival) return
+    this.reportsArrival = false
+    this.hasUnseenJoin = this.listeners.size === 0
   }
 
   private noteWordsOnlyInHistory(words: string) {
-    this.conflictIsUnseen = this.listeners.size === 0
+    this.reportsArrival = false
     this.wordsInHistory = words
     this.update({ conflict: 'wordsMovedToHistory' })
   }
 
-  private keepSessionCurrent(id: string, reply: DraftSaveResultDto, words: string | null) {
+  private keepSessionCurrent(id: string, reply: DraftSaveResultDto, words: string) {
     const key = SessionKeys.detail(id)
     const isLoaded = this.queryClient.getQueryData(key) !== undefined
     void this.queryClient.cancelQueries({ queryKey: key, exact: true }).then(() => {
@@ -451,32 +546,13 @@ export class DraftSaver {
     })
     this.queryClient.setQueryData<SessionDto>(key, (session) => {
       if (!session) return session
-      const latest = { [this.isRaw ? 'rawLatestRevision' : 'cleanedLatestRevision']: reply.latestRevision }
-      const draft = words === null
-        ? {}
-        : this.isRaw
-          ? { rawDraftRevision: reply.draftRevision, rawText: words, rawSavedAt: reply.savedAt, personIds: mentionedPersonIds(words, session.cleanedText) }
-          : { cleanedDraftRevision: reply.draftRevision, cleanedText: words, cleanedSavedAt: reply.savedAt, personIds: mentionedPersonIds(session.rawText, words) }
-      return { ...session, ...latest, ...draft, cleanupStatus: reply.cleanupStatus, version: reply.version }
+      const draftRevision = reply.draftRevision ?? session.rawDraftRevision
+      const draft = this.isRaw
+        ? { rawLatestRevision: reply.latestRevision, rawDraftRevision: draftRevision, rawText: words, rawSavedAt: reply.savedAt, personIds: mentionedPersonIds(words, session.cleanedText) }
+        : { cleanedLatestRevision: reply.latestRevision, cleanedDraftRevision: draftRevision, cleanedText: words, cleanedSavedAt: reply.savedAt, personIds: mentionedPersonIds(session.rawText, words) }
+      return { ...session, ...draft, cleanupStatus: reply.cleanupStatus, version: reply.version }
     })
-    if (words !== null && this.isRaw) this.patchRow(id, words, reply)
-  }
-
-  /** A replay of a save answers Unchanged, also when the first answer was Lost and never came. Only the Draft can tell where the words of the replay went. */
-  private async readNewest(id: string, wordsOfAReplay: string | null) {
-    const repliesAtRead = this.replyCount
-    const newest = await this.queryClient.fetchQuery({ ...sessionQueryOptions(id), staleTime: 0 }).catch(() => null)
-    if (newest && this.isRaw) this.patchRow(id, newest.rawText, newest)
-    // A later reply knows more than this read.
-    if (wordsOfAReplay === null || this.replyCount !== repliesAtRead) return
-    if (newest && wordsOfAReplay === (this.isRaw ? newest.rawText : newest.cleanedText)) {
-      this.moveBaseToDraftIn(newest)
-      this.wordsOnServer = wordsOfAReplay
-      if (this.snapshot.conflict === 'wordsMovedToHistory') this.update({ conflict: null })
-    } else if (this.saver.newestUnsettled() === null) {
-      // The Draft can already hold a later save of this page, and the Server tells a loss of that save too.
-      this.noteWordsOnlyInHistory(wordsOfAReplay)
-    }
+    if (this.isRaw) this.patchRow(id, words, reply)
   }
 
   private patchRow(id: string, words: string, current: Pick<SessionDto, 'cleanupStatus' | 'version'>) {
@@ -491,9 +567,10 @@ export class DraftSaver {
 
   /** One key holds all the text of this saver. A write replaces the older key, and a failed write leaves it. */
   private keep(fallback: Stamped<string> | null = null) {
-    if (this.isDiscarded) return
+    // A retry must not write back the words of a key that another tab took or discarded.
+    if (this.isDiscarded || this.isOwnKeyGone()) return
     const change = this.saver.newestUnsettled() ?? fallback
-    if (change === null && this.heldWords === null) {
+    if (change === null && this.heldWords === null && this.wordsInHistory === null) {
       if (this.ownKey !== null) removeFromOutbox(this.ownKey)
       this.ownKey = null
       this.noteOutboxWrite(true)
@@ -517,29 +594,13 @@ export class DraftSaver {
       startedAt: this.target.startedAt,
       sessionId: this.snapshot.sessionId,
       baseRevision: this.snapshot.baseRevision,
-      latestRevision: this.snapshot.latestRevision,
       change,
       held: this.heldWords,
+      wordsInHistory: this.wordsInHistory,
       refusal,
       movedFromDeletedEntry: this.snapshot.movedFromDeletedEntry,
     }
   }
-}
-
-export function draftHoldsTheseWords(reply: DraftSaveResultDto, change: Stamped<string>, baseRevision: number, latestRevision: number): boolean {
-  if (reply.outcome !== 'Unchanged') return reply.outcome === 'Won'
-  const isDraftThisPageKnows = reply.draftRevision === baseRevision
-  const nextRevision = latestRevision + 1
-  // A chunk of a recording is also one new revision, and a chunk has its own time.
-  const isThisSaveWithNoReply = reply.draftRevision === nextRevision && reply.latestRevision === nextRevision && Date.parse(reply.savedAt ?? '') === Date.parse(change.savedAt)
-  return isDraftThisPageKnows || isThisSaveWithNoReply
-}
-
-function conflictAfter(reply: DraftSaveResultDto, holdsWords: boolean, latestRevision: number, current: DraftConflict): DraftConflict {
-  if (reply.outcome === 'Lost') return 'wordsMovedToHistory'
-  const wasOnlyInHistory = current === 'wordsMovedToHistory'
-  if (reply.outcome === 'Won' && (wasOnlyInHistory || reply.draftRevision > latestRevision + 1)) return 'replacedUnseenSave'
-  return holdsWords && wasOnlyInHistory ? null : current
 }
 
 const savers = new Map<string, DraftSaver>()
@@ -555,6 +616,9 @@ const draftKey = ({ clientSessionId, channel }: Pick<DraftTarget, 'clientSession
 
 const newestFirst = (one: StoredEntry, other: StoredEntry) =>
   (other.entry.change?.savedAt ?? other.entry.startedAt).localeCompare(one.entry.change?.savedAt ?? one.entry.startedAt)
+
+/** The words of a key that another tab still holds. This saver writes its own key, and the same save from two tabs is a replay. */
+type CopyOfAKey = Omit<StoredEntry, 'storageKey'> & { storageKey: null }
 
 function takeEntry(owner: string, stored: StoredEntry, queryClient: QueryClient) {
   // A key of this tab holds the same words, so a second copy adds only a second notice.
@@ -572,14 +636,16 @@ export function draftSaverFor(target: DraftTarget, queryClient: QueryClient): Dr
   const key = draftKey(target)
   const existing = savers.get(key)
   if (existing) return existing
+  // A page that reloads finds its words also when another tab took its key first. A page never opens with less than a key of its entry holds.
   const [newest, ...older] = readOutbox(target.owner)
-    .filter(({ writer, entry }) => entry.key === key && writer !== thisTab && hasWriterLeft(writer))
+    .filter(({ writer, entry }) => entry.key === key && writer !== thisTab)
     .sort(newestFirst)
-  const saver = newest
-    ? new DraftSaver({ ...target, sessionId: newest.entry.sessionId, baseRevision: newest.entry.baseRevision, latestRevision: newest.entry.latestRevision }, queryClient, newest)
+  const resumed = newest && (hasWriterLeft(newest.writer) ? newest : { ...newest, storageKey: null })
+  const saver = resumed
+    ? new DraftSaver({ ...target, sessionId: resumed.entry.sessionId, baseRevision: resumed.entry.baseRevision }, queryClient, resumed)
     : new DraftSaver(target, queryClient)
   savers.set(key, saver)
-  for (const stored of older) takeEntry(target.owner, stored, queryClient)
+  for (const stored of older.filter(({ writer }) => hasWriterLeft(writer))) takeEntry(target.owner, stored, queryClient)
   return saver
 }
 
@@ -633,6 +699,14 @@ export function stopDraftSavers() {
   for (const saver of everySaver()) saver.stop()
 }
 
+/** A key that only keeps a notice about words in History holds words that the Server has, so no key stays for the next person of this device. */
+export function removeNoticesOfWordsInHistory(owner: string | null) {
+  if (owner === null) return
+  for (const { storageKey, entry } of readOutbox(owner)) {
+    if (entry.change === null && !entry.held) removeFromOutbox(storageKey)
+  }
+}
+
 export const wordsOfThisTabOnlyInMemory = () =>
   everySaver().flatMap((saver) => (saver.isHoldingWordsOnlyInMemory() ? (saver.unsentWords() ?? []) : []))
 
@@ -649,12 +723,20 @@ export function unsentWordsOnThisDevice(owner: string | null, otherTabs: OtherTa
     const words = saver.unsentWords()
     return words === null ? [] : { words, isRefused: saver.getSnapshot().status.kind === 'refused', isOnlyInMemory: saver.isHoldingWordsOnlyInMemory(), discard: () => saver.unsentWords() === words && saver.discard() }
   })
-  const inKeysOfOtherTabs = (owner === null ? [] : readOutbox(owner)).filter(({ writer }) => writer !== thisTab).map(({ storageKey, entry }) => ({
-    words: [entry.change?.value ?? null, entry.held ?? null].filter((text) => text !== null).reduce(joinWords),
-    isRefused: Boolean(entry.refusal),
-    isOnlyInMemory: false,
-    discard: () => removeFromOutbox(storageKey),
-  }))
+  const inKeysOfOtherTabs = (owner === null ? [] : readOutbox(owner)).filter(({ writer }) => writer !== thisTab).flatMap(({ storageKey, entry }) => {
+    const unsent = [entry.change?.value ?? null, entry.held ?? null].filter((text) => text !== null)
+    return unsent.length === 0 ? [] : { words: unsent.reduce(joinWords), isRefused: Boolean(entry.refusal), isOnlyInMemory: false, discard: () => removeFromOutbox(storageKey) }
+  })
   const inMemoryOfOtherTabs = otherTabs.flatMap(({ wordsOnlyInMemory }) => wordsOnlyInMemory.map((words) => ({ words, isRefused: false, isOnlyInMemory: true, discard: () => undefined })))
-  return [...ofThisTab, ...inKeysOfOtherTabs, ...inMemoryOfOtherTabs]
+  return withEachTextOnce([...ofThisTab, ...inKeysOfOtherTabs, ...inMemoryOfOtherTabs])
+}
+
+/** A page that reloads with a second tab open holds a copy of a key. The person sees the words once, and a discard takes each copy. */
+function withEachTextOnce(all: UnsentWords[]): UnsentWords[] {
+  const byText = new Map<string, UnsentWords>()
+  for (const item of all) {
+    const same = byText.get(item.words)
+    byText.set(item.words, same ? { ...same, isRefused: same.isRefused || item.isRefused, isOnlyInMemory: same.isOnlyInMemory || item.isOnlyInMemory, discard: () => { same.discard(); item.discard() } } : item)
+  }
+  return [...byText.values()]
 }

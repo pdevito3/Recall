@@ -81,8 +81,8 @@ export const resumeUnsentSetting = (owner: string, queryClient: QueryClient) =>
     }
   })
 
-const asksAboutOff = ({ asks }: Pick<RowSaverState<SettingChange>, 'asks'>) =>
-  asks.some(({ field, yours }) => field === 'locationCaptureEnabled' && yours === false)
+const asksAboutLocation = ({ asks }: Pick<RowSaverState<SettingChange>, 'asks'>) =>
+  asks.some(({ field }) => field === 'locationCaptureEnabled')
 
 function waitingChanges(queryClient: QueryClient) {
   const saver = settingSaver(queryClient)
@@ -93,11 +93,11 @@ function waitingChanges(queryClient: QueryClient) {
 
 const isOnInTheRow = (queryClient: QueryClient) => queryClient.getQueryData<UserSettingDto>(SettingKeys.mine())?.locationCaptureEnabled === true
 
-/** A change to off can wait for a save or an answer, in this tab or in a key of another tab. The app saves no location while it waits, so the choice holds also on a page with no prompt. */
+/** A change of location can wait for a save or an answer, in this tab or in a key of another tab. The app saves no location while it waits, so the choice holds also on a page with no prompt. */
 export const locationCaptureIsOn = (queryClient: QueryClient) =>
-  isOnInTheRow(queryClient) && !waitingChanges(queryClient).some((waiting) => waiting.fields?.locationCaptureEnabled === false || asksAboutOff(waiting))
+  isOnInTheRow(queryClient) && !waitingChanges(queryClient).some((waiting) => waiting.fields?.locationCaptureEnabled !== undefined || asksAboutLocation(waiting))
 
-export const locationWaitsForAnAnswer = (queryClient: QueryClient) => isOnInTheRow(queryClient) && waitingChanges(queryClient).some(asksAboutOff)
+export const locationWaitsForAnAnswer = (queryClient: QueryClient) => isOnInTheRow(queryClient) && waitingChanges(queryClient).some(asksAboutLocation)
 
 export const settleSettingSaver = () => saver?.settle() ?? Promise.resolve(true)
 
@@ -116,6 +116,7 @@ export function settingSaver(queryClient: QueryClient) {
     rules: {
       asksFirst: (field, value) => field === 'locationCaptureEnabled' && value === true,
       neverAsks: (field, value) => field === 'locationCaptureEnabled' && value === false,
+      onlyFromALiveClick: (field, value) => field === 'locationCaptureEnabled' && value === true,
       // The first save of a zone comes from the browser. A zone on the row is a choice of the person.
       yieldsToTheRow: (field, before) => field === 'timeZone' && !before,
     },

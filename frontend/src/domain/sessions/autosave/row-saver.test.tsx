@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 import { ProblemDetailsError, STALE_VERSION_PROBLEM_TYPE } from '@/lib/problem-details'
 
-import { planAfterStale, RowSaver, type RowSaverState } from './row-saver'
+import { planAfterStale, RowSaver, type RowSaverState, type StaleRules } from './row-saver'
 
 interface Fields {
   capture: boolean
@@ -21,6 +21,8 @@ const rules = {
   neverAsks: (field: keyof Fields, value: Fields[keyof Fields]) => field === 'capture' && value === false,
 }
 
+const rulesOfLocation: StaleRules<Fields> = { ...rules, onlyFromALiveClick: (field, value) => field === 'capture' && value === true }
+
 const fieldsOf = ({ capture, zone, topics }: Row): Fields => ({ capture, zone, topics })
 
 function server(start: Partial<Row> = {}) {
@@ -34,6 +36,9 @@ function server(start: Partial<Row> = {}) {
     reads: () => reads,
     goesDown() {
       isDown = true
+    },
+    comesBack() {
+      isDown = false
     },
     otherClientSets(patch: Partial<Row>) {
       row.current = { ...row.current, ...patch, version: row.current.version + 1 }
@@ -52,7 +57,7 @@ function server(start: Partial<Row> = {}) {
   }
 }
 
-function saverOn(api: ReturnType<typeof server>, copy: { current: Row }, more: { onState?: (state: RowSaverState<Fields> | null) => void } = {}) {
+function saverOn(api: ReturnType<typeof server>, copy: { current: Row }, more: { onState?: (state: RowSaverState<Fields> | null) => void; rules?: StaleRules<Fields> } = {}) {
   const told = vi.fn()
   const saver = new RowSaver<Fields, Row>({
     copyOf: () => copy.current,
@@ -66,7 +71,7 @@ function saverOn(api: ReturnType<typeof server>, copy: { current: Row }, more: {
     onReply: (row) => {
       copy.current = row
     },
-    rules,
+    rules: more.rules ?? rules,
     onAppliedWithNoAsk: told,
     onStateChange: more.onState,
   })
@@ -751,4 +756,209 @@ test('the plan drops a field that the row holds, in any order of the items of a 
   })
 
   expect(plan).toEqual({ apply: { zone: 'B' }, asks: [], appliedWithNoAsk: [] })
+})
+
+type Click = 'on' | 'off' | 'other'
+
+const clicksOf: Record<Click, Partial<Fields>> = { on: { capture: true }, off: { capture: false }, other: { zone: 'Asia/Tokyo' } }
+
+/** Each order of the clicks of two tabs, with the order inside each tab kept. */
+function ordersOf(one: Click[], other: Click[]): [Click, 'A' | 'B'][][] {
+  if (one.length === 0) return [other.map((click) => [click, 'B'])]
+  if (other.length === 0) return [one.map((click) => [click, 'A'])]
+  return [
+    ...ordersOf(one.slice(1), other).map((rest): [Click, 'A' | 'B'][] => [[one[0] as Click, 'A'], ...rest]),
+    ...ordersOf(one, other.slice(1)).map((rest): [Click, 'A' | 'B'][] => [[other[0] as Click, 'B'], ...rest]),
+  ]
+}
+
+async function twoTabsOffline(start: Partial<Row>, order: [Click, 'A' | 'B'][]) {
+  const api = server(start)
+  api.goesDown()
+  const copyA = { current: api.row.current }
+  const copyB = { current: api.row.current }
+  let keyOfA: RowSaverState<Fields> | null = null
+  const a = saverOn(api, copyA, { onState: (state) => { keyOfA = state }, rules: rulesOfLocation }).saver
+  const b = saverOn(api, copyB, { rules: rulesOfLocation }).saver
+  for (const [click, tab] of order) {
+    ;(tab === 'A' ? a : b).edit(clicksOf[click])
+    await vi.advanceTimersByTimeAsync(10)
+  }
+  a.dispose()
+  const taken = keyOfA as RowSaverState<Fields> | null
+  if (taken) b.adopt(taken)
+  api.comesBack()
+  const putsBeforeTheReturn = api.puts.length
+  await vi.advanceTimersByTimeAsync(40_000)
+  return { api, saver: b, putsAfterTheReturn: api.puts.slice(putsBeforeTheReturn) }
+}
+
+const firstOrders = ordersOf(['on', 'other'], ['on', 'off'])
+
+test.each(firstOrders.map((order) => [order.map(([click, tab]) => `${tab} ${click}`).join(', '), order] as const))('row off, offline: %s. No turn on goes over the wire', async (_, order) => {
+  const { api, saver, putsAfterTheReturn } = await twoTabsOffline({ capture: false }, order)
+
+  expect(api.row.current.capture).toBe(false)
+  expect(putsAfterTheReturn.filter(({ values }) => values.capture)).toEqual([])
+  saver.dispose()
+})
+
+const secondOrders = ordersOf(['off', 'on', 'other'], ['off'])
+
+test.each(secondOrders.map((order) => [order.map(([click, tab]) => `${tab} ${click}`).join(', '), order] as const))('row on, offline: %s. The later off holds', async (_, order) => {
+  const { api, saver } = await twoTabsOffline({ capture: true }, order)
+  expect(api.row.current.capture).toBe(false)
+  saver.dispose()
+})
+
+test('a click on with the Server up goes at once', async () => {
+  const api = server({ capture: false })
+  const { saver } = saverOn(api, { current: api.row.current }, { rules: rulesOfLocation })
+
+  saver.edit({ capture: true })
+  await vi.advanceTimersByTimeAsync(10)
+
+  expect(api.row.current.capture).toBe(true)
+  expect(saver.asks()).toEqual([])
+  saver.dispose()
+})
+
+test('a click on that gets no reply does not go again, and the page asks with the row in the question', async () => {
+  const api = server({ capture: false })
+  api.goesDown()
+  const { saver } = saverOn(api, { current: api.row.current }, { rules: rulesOfLocation })
+
+  saver.edit({ capture: true })
+  await vi.advanceTimersByTimeAsync(10)
+  expect(saver.asks()).toEqual([expect.objectContaining({ field: 'capture', yours: true, now: false, didNotReachTheServer: true })])
+  expect(saver.pendingFields()).toEqual({})
+
+  api.comesBack()
+  await vi.advanceTimersByTimeAsync(40_000)
+  expect(api.puts).toHaveLength(1)
+  expect(api.row.current.capture).toBe(false)
+  expect(saver.asks()).toHaveLength(1)
+
+  const [ask] = saver.asks()
+  if (ask) saver.answerAsk(ask, true)
+  await vi.advanceTimersByTimeAsync(10)
+  expect(api.row.current.capture).toBe(true)
+  expect(saver.asks()).toEqual([])
+  saver.dispose()
+})
+
+test('a click on whose reply was lost ends the ask, because the row holds the choice', async () => {
+  const api = server({ capture: false })
+  const copy = { current: api.row.current }
+  let isReplyLost = true
+  const { saver } = saverOn({ ...api, put: (values, version) => {
+    const answer = api.put(values, version)
+    if (!isReplyLost) return answer
+    isReplyLost = false
+    return answer.then(() => Promise.reject(new Error('Network Error')))
+  } }, copy, { rules: rulesOfLocation })
+
+  saver.edit({ capture: true })
+  await vi.advanceTimersByTimeAsync(40_000)
+
+  expect(api.row.current.capture).toBe(true)
+  expect(saver.asks()).toEqual([])
+  saver.dispose()
+})
+
+test('a change of another setting after a failed turn on goes without the turn on', async () => {
+  const api = server({ capture: false })
+  api.goesDown()
+  const { saver } = saverOn(api, { current: api.row.current }, { rules: rulesOfLocation })
+  saver.edit({ capture: true })
+  await vi.advanceTimersByTimeAsync(10)
+  saver.edit({ zone: 'Asia/Tokyo' })
+  await vi.advanceTimersByTimeAsync(10)
+
+  api.comesBack()
+  await vi.advanceTimersByTimeAsync(40_000)
+
+  expect(api.row.current).toMatchObject({ capture: false, zone: 'Asia/Tokyo' })
+  expect(saver.asks()).toHaveLength(1)
+  saver.dispose()
+})
+
+test('no key holds a turn on, and a key from an older version with a turn on does not send it', async () => {
+  const states: (RowSaverState<Fields> | null)[] = []
+  const api = server({ capture: false })
+  api.goesDown()
+  const { saver } = saverOn(api, { current: api.row.current }, { onState: (state) => states.push(state), rules: rulesOfLocation })
+  saver.edit({ capture: true })
+  await vi.advanceTimersByTimeAsync(10)
+  saver.edit({ zone: 'Asia/Tokyo' })
+  await vi.advanceTimersByTimeAsync(10)
+  expect(JSON.stringify(states)).not.toContain('"capture":true')
+  saver.dispose()
+
+  const next = server({ capture: false })
+  const { saver: taker } = saverOn(next, { current: next.row.current }, { rules: rulesOfLocation })
+  taker.adopt({ change: { value: { capture: true, zone: 'Asia/Tokyo' }, savedAt: '2026-11-06T00:00:00.000Z' }, attempt: { base: { values: fieldsOf(next.row.current), version: 1 }, hadNoReply: true }, asks: [{ field: 'capture', yours: true, now: false }] })
+  await vi.advanceTimersByTimeAsync(40_000)
+
+  expect(next.row.current).toMatchObject({ capture: false, zone: 'Asia/Tokyo' })
+  expect(taker.asks()).toEqual([])
+  taker.dispose()
+})
+
+test('a click on after the row moved in a way that the page did not show asks and sends nothing', async () => {
+  const api = server({ capture: false, version: 5 })
+  const copy = { current: api.row.current }
+  const { saver } = saverOn(api, copy, { rules: rulesOfLocation })
+  let release: () => void = () => undefined
+  const held = new Promise<void>((resolve) => { release = resolve })
+  const realPut = api.put
+  const { saver: slow } = saverOn({ ...api, put: async (values, version) => { await held; return realPut(values, version) } }, copy, { rules: rulesOfLocation })
+  slow.edit({ zone: 'Asia/Tokyo' })
+  await vi.advanceTimersByTimeAsync(10)
+  slow.edit({ capture: true })
+  await vi.advanceTimersByTimeAsync(10)
+
+  api.otherClientSets({ capture: true })
+  api.otherClientSets({ capture: false })
+  release()
+  await vi.advanceTimersByTimeAsync(40_000)
+
+  expect(api.row.current.capture).toBe(false)
+  expect(slow.asks()).toEqual([expect.objectContaining({ field: 'capture', yours: true, now: false })])
+  saver.dispose()
+  slow.dispose()
+})
+
+test('your own save does not make your next click on ask', async () => {
+  const api = server({ capture: false })
+  const copy = { current: api.row.current }
+  const { saver } = saverOn(api, copy, { rules: rulesOfLocation })
+  saver.edit({ zone: 'Asia/Tokyo' })
+  saver.edit({ capture: true })
+  await vi.advanceTimersByTimeAsync(10)
+
+  expect(api.row.current).toMatchObject({ capture: true, zone: 'Asia/Tokyo' })
+  expect(saver.asks()).toEqual([])
+  saver.dispose()
+})
+
+test('an answer to a failed turn on leaves no old base, so the next change of another setting raises no false question', async () => {
+  const api = server({ capture: false })
+  api.goesDown()
+  const { saver } = saverOn(api, { current: api.row.current }, { rules: rulesOfLocation })
+  saver.edit({ capture: true })
+  await vi.advanceTimersByTimeAsync(10)
+  api.comesBack()
+  await vi.advanceTimersByTimeAsync(40_000)
+  const [ask] = saver.asks()
+  if (ask) saver.answerAsk(ask, false)
+  await vi.advanceTimersByTimeAsync(10)
+  api.otherClientSets({ topics: ['a'] })
+
+  saver.edit({ zone: 'Asia/Tokyo' })
+  await vi.advanceTimersByTimeAsync(40_000)
+
+  expect(saver.asks()).toEqual([])
+  expect(api.row.current).toMatchObject({ capture: false, zone: 'Asia/Tokyo', topics: ['a'] })
+  saver.dispose()
 })

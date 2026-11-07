@@ -48,7 +48,7 @@ function locationOfNewEntry(queryClient: QueryClient) {
   }
 }
 
-const idleSnapshot: DraftSnapshot = { status: { kind: 'idle' }, conflict: null, sessionId: null, baseRevision: 0, latestRevision: 0, movedFromDeletedEntry: false, isOnlyInMemory: false }
+const idleSnapshot: DraftSnapshot = { status: { kind: 'idle' }, conflict: null, sessionId: null, baseRevision: 0, movedFromDeletedEntry: false, isOnlyInMemory: false }
 const noSubscription = () => () => undefined
 
 const isTheEntryGone = (error: unknown) => isProblemDetailsError(error) && error.status === 404
@@ -70,10 +70,9 @@ export function useComposer() {
   const [saver, setSaverState] = useState<DraftSaver | null>(() => {
     const pointer = readPointer(owner)
     if (!pointer) return null
-    return draftSaverFor({ ...pointer, channel: 'raw', baseRevision: 0, latestRevision: 0 }, queryClient)
+    return draftSaverFor({ ...pointer, channel: 'raw', baseRevision: 0 }, queryClient)
   })
   const [resumedSessionId] = useState(() => saver?.getSnapshot().sessionId ?? readPointer(owner)?.sessionId ?? null)
-  const [opensAConflict] = useState(() => saver?.hasUnseenConflict() ?? false)
   const [finished, setFinished] = useState<{ saver: DraftSaver; words: string; pointer: ComposerPointer | null } | null>(null)
   const [editor, setEditor] = useState(() => {
     const cached = resumedSessionId ? queryClient.getQueryData<SessionDto>(SessionKeys.detail(resumedSessionId)) : undefined
@@ -107,7 +106,6 @@ export function useComposer() {
     let isCurrent = true
     // The answer must reach the screen before the next key, so that the key lands in the words of the entry.
     const openWords = (words: string) => {
-      if (!opensAConflict) saver?.dismissConflict()
       const opened = saver?.joinHoldInto(words) ?? words
       currentWords.current = opened
       flushSync(() => setEditor(({ key }) => ({ key: key + 1, words: opened, takesFocus: isWritingNow() })))
@@ -115,7 +113,7 @@ export function useComposer() {
     }
     const open = (session: SessionDto) => {
       if (!isCurrent) return
-      saver?.moveBaseTo(session.rawDraftRevision, session.rawLatestRevision)
+      saver?.moveBaseTo(session.rawDraftRevision)
       openWords(session.rawText)
     }
     const openWithNoRead = () => {
@@ -158,7 +156,7 @@ export function useComposer() {
       clearInterval(readLimit)
       clearTimeout(readRetry)
     }
-  }, [isReading, resumedSessionId, saver, opensAConflict, queryClient, startOver])
+  }, [isReading, resumedSessionId, saver, queryClient, startOver])
 
   useEffect(() => {
     if (readsAtOpen.current) latestSaver.current?.takeHold()
@@ -168,7 +166,7 @@ export function useComposer() {
 
   useLayoutEffect(
     () =>
-      saver?.subscribeToHoldJoin((joined) => {
+      saver?.subscribeToNewWords((joined) => {
         currentWords.current = joined
         flushSync(() => setEditor(({ key }) => ({ key: key + 1, words: joined, takesFocus: isWritingNow() })))
       }),
@@ -188,7 +186,6 @@ export function useComposer() {
           ...pointer,
           channel: 'raw',
           baseRevision: 0,
-          latestRevision: 0,
           location: locationOfNewEntry(queryClient),
         },
         queryClient,

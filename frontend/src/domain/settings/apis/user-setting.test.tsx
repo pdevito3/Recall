@@ -68,3 +68,17 @@ test('the row stays known when no page reads it, so a create that retries much l
 
   expect(locationCaptureIsOn(queryClient)).toBe(true)
 })
+
+test('no location is saved while any answer about location waits, in either direction', async () => {
+  const row = { timeZone: 'UTC', timeZoneIsKnown: true, locationCaptureEnabled: true, requirePeopleProposalApproval: false, version: 2 }
+  await commands.answerRequests([{ method: 'GET', path: '/api/v1/me/settings', body: row }])
+  const queryClient = new QueryClient()
+  queryClient.setQueryData(SettingKeys.mine(), row)
+  const saver = settingSaver(queryClient)
+
+  saver.adopt({ change: null, attempt: null, asks: [{ field: 'requirePeopleProposalApproval', yours: true, now: false }] })
+  expect(locationCaptureIsOn(queryClient)).toBe(true)
+
+  saver.adopt({ change: null, attempt: null, asks: [{ field: 'locationCaptureEnabled', yours: false, now: true }] })
+  expect(locationCaptureIsOn(queryClient)).toBe(false)
+})

@@ -59,6 +59,18 @@ export function mergeWords(draft: string, mine: string): string {
   return JSON.stringify({ type: 'doc', content: [...blocks, ...childrenOf(asDocument(mine)).filter((block) => !inDraft.has(JSON.stringify(block)))] })
 }
 
+const plainWordCounts = (text: string) => {
+  const counts = new Map<string, number>()
+  for (const word of plainWordsOf(text).split(/\s+/).filter(Boolean)) counts.set(word, (counts.get(word) ?? 0) + 1)
+  return counts
+}
+
+/** True when each word of `words` is in `text`, as often as `words` has it. */
+export function holdsEachWordOf(text: string, words: string): boolean {
+  const held = plainWordCounts(text)
+  return [...plainWordCounts(words)].every(([word, count]) => (held.get(word) ?? 0) >= count)
+}
+
 function personIdsIn(node: JSONContent): string[] {
   const personId: unknown = node.type === 'mention' ? node.attrs?.personId : null
   const own = typeof personId === 'string' && personId ? [personId] : []

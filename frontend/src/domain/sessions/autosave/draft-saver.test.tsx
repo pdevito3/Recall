@@ -7,7 +7,7 @@ import { saveRawDraft } from '@/api/generated/sessions/clients/save-raw-draft'
 import { ProblemDetailsError } from '@/lib/problem-details'
 
 import { plainWordsOf } from '../editor/content'
-import { DraftSaver, draftHoldsTheseWords, draftNotices, draftSaverFor, type DraftTarget } from './draft-saver'
+import { DraftSaver, draftNotices, draftSaverFor, removeNoticesOfWordsInHistory, shownStatusOf, unsentWordsOnThisDevice, type DraftTarget } from './draft-saver'
 import { readOutbox, writeToOutbox, type OutboxEntry, type StoredEntry } from './outbox'
 
 vi.mock('@/api/generated/sessions/clients/add-session')
@@ -21,7 +21,6 @@ const target: DraftTarget = {
   startedAt: '2026-11-06T15:30:00.000Z',
   sessionId: 'session-1',
   baseRevision: 1,
-  latestRevision: 1,
 }
 
 const aSaver = () => new DraftSaver(target, new QueryClient())
@@ -40,7 +39,6 @@ const entryWith = (words: string, more: Partial<OutboxEntry> = {}): OutboxEntry 
   startedAt: target.startedAt,
   sessionId: target.sessionId,
   baseRevision: 1,
-  latestRevision: 1,
   change: { value: words, savedAt: '2026-11-06T15:31:00.000Z' },
   ...more,
 })
@@ -169,12 +167,12 @@ test('a page that opened before a tab left shows the words of that tab, with the
   vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
   const saver = aSaver()
   const shown = vi.fn()
-  saver.subscribeToHoldJoin(shown)
-  const stored = storedByAnotherTab(entryWith('words of a crashed tab', { baseRevision: 3, latestRevision: 3 }))
+  saver.subscribeToNewWords(shown)
+  const stored = storedByAnotherTab(entryWith('words of a crashed tab', { baseRevision: 3 }))
 
   expect(saver.takeEntryIfUntouched(stored)).toBe(true)
 
-  expect(shown).toHaveBeenCalledWith('words of a crashed tab')
+  expect(shown).toHaveBeenCalledWith('words of a crashed tab', 'heldWordsJoined')
   expect(saver.getSnapshot().baseRevision).toBe(3)
   expect(saver.unsettledText()).toBe('words of a crashed tab')
   expect(readOutbox(owner)[0]?.entry.change?.savedAt).toBe('2026-11-06T15:31:00.000Z')
@@ -225,7 +223,7 @@ test('a join with no page puts the held words after the newest words of the pers
   vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
   const saver = new DraftSaver(target, clientAnswering('words on the server'))
   const shown = vi.fn()
-  saver.subscribeToHoldJoin(shown)
+  saver.subscribeToNewWords(shown)
   saver.holdInOutbox('held words')
   saver.edit('a key on the entry page')
 
@@ -234,7 +232,7 @@ test('a join with no page puts the held words after the newest words of the pers
   const joined = readOutbox(owner)[0]?.entry.change?.value ?? ''
   expect(joined).toContain('a key on the entry page')
   expect(joined).toContain('held words')
-  expect(shown).toHaveBeenCalledWith(joined)
+  expect(shown).toHaveBeenCalledWith(joined, 'heldWordsJoined')
   expect(saver.notice()).toBeNull()
   saver.stop()
 })
@@ -246,7 +244,7 @@ test('words that return at a later sign-in and join an entry with no page raise 
   const saver = new DraftSaver(target, clientAnswering('words on the server'), stored)
 
   await vi.waitFor(() => expect(saver.notice()).toMatchObject({ kind: 'joined', sessionId: 'session-1' }))
-  expect(plainWordsOf(saver.unsettledText() ?? '')).toContain('words of an earlier sign-in')
+  expect(plainWordsOf(vi.mocked(saveRawDraft).mock.lastCall?.[0].body.text ?? '')).toContain('words of an earlier sign-in')
   saver.dismissJoinNotice()
   expect(saver.notice()).toBeNull()
   saver.stop()
@@ -267,6 +265,20 @@ test('a full storage tells the person at once that the words are only in this pa
   saver.edit('words with room')
 
   expect(saver.notice()).toBeNull()
+  saver.stop()
+})
+
+test('a Lost save on a full storage shows the words in History, and no notice with no words', async () => {
+  fullStorage()
+  vi.mocked(saveRawDraft).mockResolvedValue(lostWithNoNumber())
+  const queryClient = new QueryClient()
+  vi.spyOn(queryClient, 'fetchQuery').mockResolvedValue(entryWithWords('newer words', 7))
+  const saver = new DraftSaver(target, queryClient)
+
+  saver.edit('my words')
+  saver.flush()
+
+  await vi.waitFor(() => expect(saver.notice()).toMatchObject({ kind: 'inHistory', words: 'my words' }))
   saver.stop()
 })
 
@@ -464,7 +476,8 @@ test('keep after a loss reads the Draft, keeps the chunk and the words of the pe
 test('keep after a loss changes nothing when the read fails, so the words stay on the page and the notice stays', async () => {
   vi.mocked(saveRawDraft).mockResolvedValueOnce(lostAt(5))
   const queryClient = new QueryClient()
-  vi.spyOn(queryClient, 'fetchQuery').mockRejectedValue(new Error('Network Error'))
+  const read = vi.spyOn(queryClient, 'fetchQuery').mockResolvedValueOnce(entryWithWords('a chunk', 5))
+  read.mockRejectedValue(new Error('Network Error'))
   const saver = new DraftSaver(target, queryClient)
   saver.edit('my words')
   saver.flush()
@@ -482,7 +495,8 @@ test('keep after a loss stops when the person typed during the read', async () =
   vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
   const queryClient = new QueryClient()
   let answer: (session: SessionDto) => void = () => undefined
-  vi.spyOn(queryClient, 'fetchQuery').mockImplementation(() => new Promise((resolve) => { answer = resolve as typeof answer }))
+  const read = vi.spyOn(queryClient, 'fetchQuery').mockResolvedValueOnce(entryWithWords('a chunk', 5))
+  read.mockImplementation(() => new Promise((resolve) => { answer = resolve as typeof answer }))
   const saver = new DraftSaver(target, queryClient)
   saver.edit('my words')
   saver.flush()
@@ -513,7 +527,7 @@ test('a loss with no page raises a notice that names History', async () => {
 test('a replay of the create leaves the base, so a chunk in the row stays in the Draft', async () => {
   vi.mocked(addSession).mockResolvedValue({ ...entryWithWords('a chunk', 4), id: 'session-1' })
   vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
-  const saver = new DraftSaver({ ...target, sessionId: null, baseRevision: 0, latestRevision: 0 }, new QueryClient())
+  const saver = new DraftSaver({ ...target, sessionId: null, baseRevision: 0 }, new QueryClient())
 
   saver.edit('words of a tab with no row yet')
   saver.flush()
@@ -521,15 +535,6 @@ test('a replay of the create leaves the base, so a chunk in the row stays in the
   await vi.waitFor(() => expect(saveRawDraft).toHaveBeenCalledOnce())
   expect(vi.mocked(saveRawDraft).mock.lastCall?.[0].body.baseRevision).toBe(0)
   saver.stop()
-})
-
-const change = { value: 'my words', savedAt: '2026-11-06T15:31:00.000Z' }
-const unchangedAt = (revision: number, savedAt: string) => ({ outcome: 'Unchanged', draftRevision: revision, latestRevision: revision, savedAt, cleanupStatus: 'Clean', version: revision }) as never
-
-test('an answer of Unchanged with one new revision holds these words only when the revision has the time of this save', () => {
-  expect(draftHoldsTheseWords(unchangedAt(2, '2026-11-06T15:31:00+00:00'), change, 1, 1)).toBe(true)
-  expect(draftHoldsTheseWords(unchangedAt(2, '2026-11-06T15:40:00+00:00'), change, 1, 1)).toBe(false)
-  expect(draftHoldsTheseWords(unchangedAt(1, '2026-11-06T15:40:00+00:00'), change, 1, 1)).toBe(true)
 })
 
 test('the stale writer of a key keeps its words beside a key written by this tab', () => {
@@ -541,4 +546,320 @@ test('the stale writer of a key keeps its words beside a key written by this tab
   saver.discard()
 
   expect(live && localStorage.getItem(live)).toContain('words of a live page')
+})
+
+const keptAt = (revision: number) => ({ outcome: 'Kept', draftRevision: revision, latestRevision: revision + 3, savedAt: '2026-11-06T15:31:00+00:00', cleanupStatus: 'Clean', version: revision }) as never
+const lostWithNoNumber = () => ({ outcome: 'Lost', draftRevision: null, latestRevision: 9, savedAt: '2026-11-06T15:31:00+00:00', cleanupStatus: 'Clean', version: 9 }) as never
+const doc = (...lines: string[]) => JSON.stringify({ type: 'doc', content: lines.map((text) => ({ type: 'paragraph', content: [{ type: 'text', text }] })) })
+
+test('a Kept number is not a base: the read decides the base, and the page says Saved only when the Draft holds the words', async () => {
+  vi.mocked(saveRawDraft).mockResolvedValue(keptAt(2))
+  const saver = new DraftSaver(target, clientAnswering('my words', 7))
+
+  saver.edit('my words')
+  saver.flush()
+  await vi.waitFor(() => expect(saver.getSnapshot().status.kind).toBe('saved'))
+
+  expect(saver.getSnapshot()).toMatchObject({ baseRevision: 7, conflict: null })
+  saver.stop()
+})
+
+test('a Kept save whose words left the Draft tells the truth, and the base stays', async () => {
+  vi.mocked(saveRawDraft).mockResolvedValue(keptAt(2))
+  const saver = new DraftSaver(target, clientAnswering('newer words of another tab', 7))
+
+  saver.edit('my words')
+  saver.flush()
+  await vi.waitFor(() => expect(saver.getSnapshot().conflict).toBe('wordsMovedToHistory'))
+
+  expect(saver.getSnapshot().baseRevision).toBe(1)
+  expect(shownStatusOf(saver.getSnapshot()).kind).toBe('savedInHistory')
+  saver.stop()
+})
+
+test('a Lost save has no number in its reply, and the next save goes only after the read', async () => {
+  vi.mocked(saveRawDraft).mockResolvedValueOnce(lostWithNoNumber())
+  vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
+  const queryClient = new QueryClient()
+  let answer: (session: SessionDto) => void = () => undefined
+  vi.spyOn(queryClient, 'fetchQuery').mockImplementation(() => new Promise((resolve) => { answer = resolve as typeof answer }))
+  const saver = new DraftSaver(target, queryClient)
+
+  saver.edit('my words')
+  saver.flush()
+  await vi.waitFor(() => expect(queryClient.fetchQuery).toHaveBeenCalledOnce())
+  saver.edit('my words and more')
+  saver.flush()
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  expect(saveRawDraft).toHaveBeenCalledOnce()
+
+  answer(entryWithWords('newer words', 7))
+  await vi.waitFor(() => expect(saveRawDraft).toHaveBeenCalledTimes(2))
+  saver.stop()
+})
+
+test('a failed read after a loss sends the same save again, and it raises no notice until a read answers', async () => {
+  vi.useFakeTimers()
+  vi.mocked(saveRawDraft).mockResolvedValue(lostWithNoNumber())
+  const queryClient = new QueryClient()
+  const read = vi.spyOn(queryClient, 'fetchQuery').mockRejectedValueOnce(new Error('Network Error'))
+  read.mockResolvedValue(entryWithWords('newer words', 7))
+  const saver = new DraftSaver(target, queryClient)
+
+  saver.edit('my words')
+  saver.flush()
+  await vi.advanceTimersByTimeAsync(10)
+  expect(saver.getSnapshot().conflict).toBeNull()
+  expect(saver.getSnapshot().status.kind).toBe('waiting')
+
+  await vi.advanceTimersByTimeAsync(3000)
+  expect(saveRawDraft).toHaveBeenCalledTimes(2)
+  expect(vi.mocked(saveRawDraft).mock.calls[1]?.[0].body).toEqual(vi.mocked(saveRawDraft).mock.calls[0]?.[0].body)
+  expect(saver.getSnapshot().conflict).toBe('wordsMovedToHistory')
+  saver.stop()
+  vi.useRealTimers()
+})
+
+test('words that the Draft holds raise no notice, and the page takes the Draft', async () => {
+  vi.mocked(saveRawDraft).mockResolvedValue(lostWithNoNumber())
+  const saver = new DraftSaver(target, clientAnswering(doc('my words', 'a chunk'), 7))
+  const shown = vi.fn()
+  saver.subscribeToNewWords(shown)
+  saver.subscribe(() => undefined)
+
+  saver.edit(doc('my words'))
+  saver.flush()
+  await vi.waitFor(() => expect(saver.getSnapshot().status.kind).toBe('saved'))
+
+  expect(saver.getSnapshot()).toMatchObject({ conflict: null, baseRevision: 7 })
+  expect(shown).toHaveBeenCalledWith(doc('my words', 'a chunk'), 'draftHoldsMore')
+  saver.stop()
+})
+
+test('words that the Draft holds with no page raise no notice of History', async () => {
+  vi.mocked(saveRawDraft).mockResolvedValue(lostWithNoNumber())
+  const saver = new DraftSaver(target, clientAnswering(doc('my words', 'a chunk'), 7))
+
+  saver.edit(doc('my words'))
+  saver.flush()
+  await vi.waitFor(() => expect(saver.getSnapshot().status.kind).toBe('saved'))
+
+  expect(saver.notice()).toBeNull()
+  saver.stop()
+})
+
+test('a person who types during the read keeps the words on the page, and the next save decides', async () => {
+  vi.mocked(saveRawDraft).mockResolvedValueOnce(lostWithNoNumber())
+  vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
+  const queryClient = new QueryClient()
+  let answer: (session: SessionDto) => void = () => undefined
+  vi.spyOn(queryClient, 'fetchQuery').mockImplementation(() => new Promise((resolve) => { answer = resolve as typeof answer }))
+  const saver = new DraftSaver(target, queryClient)
+  const shown = vi.fn()
+  saver.subscribeToNewWords(shown)
+
+  saver.edit(doc('my words'))
+  saver.flush()
+  await vi.waitFor(() => expect(queryClient.fetchQuery).toHaveBeenCalledOnce())
+  saver.edit(doc('my words and a key'))
+  answer(entryWithWords(doc('my words', 'a chunk'), 7))
+  await vi.waitFor(() => expect(saveRawDraft).toHaveBeenCalledTimes(2))
+
+  expect(shown).not.toHaveBeenCalled()
+  expect(saver.getSnapshot().baseRevision).toBe(1)
+  saver.stop()
+})
+
+test('a Lost state keeps its notice after a reload, and the words open on the page', async () => {
+  vi.mocked(saveRawDraft).mockResolvedValue(lostWithNoNumber())
+  const before = new DraftSaver(target, clientAnswering('a chunk', 7))
+  before.edit('my words')
+  before.flush()
+  await vi.waitFor(() => expect(before.getSnapshot().conflict).toBe('wordsMovedToHistory'))
+  const [kept] = readOutbox(owner)
+  expect(kept?.entry).toMatchObject({ change: null, wordsInHistory: 'my words', baseRevision: 1 })
+  before.stop()
+
+  const after = new DraftSaver({ ...target, baseRevision: 1 }, new QueryClient(), kept)
+
+  expect(after.getSnapshot().conflict).toBe('wordsMovedToHistory')
+  expect(after.wordsToOpen()).toBe('my words')
+  expect(after.notice()).toMatchObject({ kind: 'inHistory', words: 'my words' })
+  after.dismissConflict()
+  expect(readOutbox(owner)).toEqual([])
+  after.stop()
+})
+
+test('a notice of History offers no discard and no word of a sign-out, because the Server holds the words', async () => {
+  vi.mocked(saveRawDraft).mockResolvedValue(lostWithNoNumber())
+  const saver = new DraftSaver(target, clientAnswering('a chunk', 7))
+  saver.edit('my words')
+  saver.flush()
+  await vi.waitFor(() => expect(saver.getSnapshot().conflict).toBe('wordsMovedToHistory'))
+
+  expect(unsentWordsOnThisDevice(owner, []).map(({ words }) => words)).not.toContain('my words')
+  saver.stop()
+  removeNoticesOfWordsInHistory(owner)
+  expect(readOutbox(owner)).toEqual([])
+})
+
+test('words of a tab that closed offline return with a notice when they reach the Draft with no page', async () => {
+  vi.mocked(saveRawDraft).mockResolvedValue(wonAt(2))
+  const stored = storedByAnotherTab(entryWith('words of a closed tab'))
+
+  const saver = new DraftSaver(target, new QueryClient(), stored)
+
+  await vi.waitFor(() => expect(saver.notice()).toMatchObject({ kind: 'joined', sessionId: 'session-1' }))
+  saver.stop()
+})
+
+test('words of a tab that closed raise no notice when an open page shows them', async () => {
+  vi.mocked(saveRawDraft).mockResolvedValue(wonAt(2))
+  const stored = storedByAnotherTab(entryWith('words of a closed tab'))
+
+  const saver = new DraftSaver(target, new QueryClient(), stored)
+  saver.subscribe(() => undefined)
+
+  await vi.waitFor(() => expect(saver.getSnapshot().status.kind).toBe('saved'))
+  expect(saver.notice()).toBeNull()
+  saver.stop()
+})
+
+test('held words that a newer save pushed out name History, and no notice says that they joined the entry', async () => {
+  vi.mocked(saveRawDraft).mockResolvedValue(lostWithNoNumber())
+  const stored = storedByAnotherTab(entryWith('', { change: null, held: 'words of a hold' }))
+
+  const saver = new DraftSaver(target, clientAnswering('other words of another hold', 7), stored)
+
+  await vi.waitFor(() => expect(saver.notice()).toMatchObject({ kind: 'inHistory' }))
+  saver.stop()
+})
+
+test('a block that the entry already holds does not show twice when a hold joins it', () => {
+  vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
+  const saver = aSaver()
+  saver.holdInOutbox(doc('held words'))
+
+  expect(plainWordsOf(saver.joinHoldInto(doc('words of the entry', 'held words')))).toBe('words of the entry\nheld words')
+  saver.stop()
+})
+
+const removeEachKey = () => {
+  for (const { storageKey } of readOutbox(owner)) localStorage.removeItem(storageKey)
+}
+
+test('a discarded word does not go out from a tab that wakes, and the page says that the words are only there', async () => {
+  vi.useFakeTimers()
+  vi.mocked(saveRawDraft).mockRejectedValueOnce(new Error('Network Error'))
+  vi.mocked(saveRawDraft).mockResolvedValue(wonAt(2))
+  const saver = new DraftSaver(target, clientAnswering('the Draft', 1))
+  saver.subscribe(() => undefined)
+  saver.edit('a word that another tab discards')
+  saver.flush()
+  await vi.advanceTimersByTimeAsync(10)
+
+  removeEachKey()
+  await vi.advanceTimersByTimeAsync(3000)
+
+  expect(saveRawDraft).toHaveBeenCalledOnce()
+  expect(saver.getSnapshot().conflict).toBe('discardedInAnotherTab')
+  expect(shownStatusOf(saver.getSnapshot()).kind).toBe('idle')
+  expect(readOutbox(owner)).toEqual([])
+  saver.stop()
+  vi.useRealTimers()
+})
+
+test('with no page, a discarded word goes with no notice', async () => {
+  vi.useFakeTimers()
+  vi.mocked(saveRawDraft).mockRejectedValueOnce(new Error('Network Error'))
+  const saver = new DraftSaver(target, clientAnswering('the Draft', 1))
+  saver.edit('a word that another tab discards')
+  saver.flush()
+  await vi.advanceTimersByTimeAsync(10)
+
+  removeEachKey()
+  await vi.advanceTimersByTimeAsync(3000)
+
+  expect(saveRawDraft).toHaveBeenCalledOnce()
+  expect(saver.notice()).toBeNull()
+  saver.stop()
+  vi.useRealTimers()
+})
+
+test('a tab that wakes after another tab saved its key raises no notice', async () => {
+  vi.useFakeTimers()
+  vi.mocked(saveRawDraft).mockRejectedValueOnce(new Error('Network Error'))
+  const saver = new DraftSaver(target, clientAnswering('words that went', 5))
+  saver.subscribe(() => undefined)
+  saver.edit('words that went')
+  saver.flush()
+  await vi.advanceTimersByTimeAsync(10)
+
+  removeEachKey()
+  await vi.advanceTimersByTimeAsync(3000)
+
+  expect(saver.getSnapshot()).toMatchObject({ conflict: null, baseRevision: 5 })
+  saver.stop()
+  vi.useRealTimers()
+})
+
+test('a tab that wakes while another tab holds its words in a key raises no notice', async () => {
+  vi.useFakeTimers()
+  vi.mocked(saveRawDraft).mockRejectedValueOnce(new Error('Network Error'))
+  const saver = new DraftSaver(target, clientAnswering('the Draft', 1))
+  saver.subscribe(() => undefined)
+  saver.edit('words that another tab took')
+  saver.flush()
+  await vi.advanceTimersByTimeAsync(10)
+
+  removeEachKey()
+  storedByAnotherTab(entryWith('words that another tab took'))
+  await vi.advanceTimersByTimeAsync(3000)
+
+  expect(saveRawDraft).toHaveBeenCalledOnce()
+  expect(saver.getSnapshot().conflict).toBeNull()
+  saver.stop()
+  vi.useRealTimers()
+})
+
+test('a key typed after the wake goes out as new text, which the page shows', async () => {
+  vi.useFakeTimers()
+  vi.mocked(saveRawDraft).mockRejectedValueOnce(new Error('Network Error'))
+  vi.mocked(saveRawDraft).mockResolvedValue(wonAt(2))
+  const saver = new DraftSaver(target, clientAnswering('the Draft', 1))
+  saver.edit('a word')
+  saver.flush()
+  await vi.advanceTimersByTimeAsync(10)
+
+  removeEachKey()
+  saver.edit('a word and a key')
+  await vi.advanceTimersByTimeAsync(4000)
+
+  expect(vi.mocked(saveRawDraft).mock.lastCall?.[0].body.text).toBe('a word and a key')
+  saver.stop()
+  vi.useRealTimers()
+})
+
+test('a discard also removes a copy of the same words in a key of another tab', () => {
+  vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
+  const saver = aSaver()
+  saver.edit('words of two pages')
+  storedByAnotherTab(entryWith('words of two pages'))
+
+  saver.discard()
+
+  expect(readOutbox(owner)).toEqual([])
+})
+
+test('the sign-out list names one text once, and its discard takes each copy', () => {
+  vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
+  const saver = draftSaverFor({ ...target, clientSessionId: 'entry-of-two-pages' }, new QueryClient())
+  saver.edit('words of two pages')
+  storedByAnotherTab(entryWith('words of two pages', { key: 'entry-of-two-pages.raw', clientSessionId: 'entry-of-two-pages' }))
+
+  const listed = unsentWordsOnThisDevice(owner, []).filter(({ words }) => words === 'words of two pages')
+
+  expect(listed).toHaveLength(1)
+  listed[0]?.discard()
+  expect(wordsInKeys()).not.toContain('words of two pages')
 })

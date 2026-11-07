@@ -58,7 +58,7 @@ function EntryNotice({ label, text, sessionId, onDismiss }: { label: string; tex
   )
 }
 
-function CopyWords({ words }: { words: string }) {
+export function CopyWords({ words }: { words: string }) {
   const copy = () =>
     copyToClipboard(plainWordsOf(words)).then(
       () => Notification.success('Words copied'),
@@ -113,6 +113,25 @@ function RefusedNotice({ notice }: { notice: Extract<DraftNotice, { kind: 'refus
   )
 }
 
+function InHistoryNotice({ notice }: { notice: Extract<DraftNotice, { kind: 'inHistory' }> }) {
+  return (
+    <section role="status" aria-label="Words saved in History" className={`${noticeClass} bg-muted dark:bg-card`}>
+      <div className="min-w-0 flex-1 basis-64 space-y-1">
+        <p className="wrap-anywhere">These words are in the History of an entry and not in its text, because a newer save changed the entry first.</p>
+        <p dir="auto" className="line-clamp-2 wrap-anywhere text-muted-foreground">{plainPreviewOf(notice.words, previewLength)}</p>
+      </div>
+      <div className="flex items-center gap-2">
+        {notice.sessionId && (
+          <Link to="/sessions/$id" params={{ id: notice.sessionId }} className="font-medium underline underline-offset-4">
+            Open the entry
+          </Link>
+        )}
+        <Button variant="ghost" onPress={() => notice.saver.dismissConflict()}>Dismiss</Button>
+      </div>
+    </section>
+  )
+}
+
 function Notice({ notice }: { notice: DraftNotice }) {
   switch (notice.kind) {
     case 'moved':
@@ -121,20 +140,13 @@ function Notice({ notice }: { notice: DraftNotice }) {
       return (
         <EntryNotice
           label="Words added to an entry"
-          text="Words that you typed earlier and that were not saved yet are now at the end of an entry."
+          text="Words that you typed earlier and that were not saved yet are now in an entry."
           sessionId={notice.sessionId}
           onDismiss={() => notice.saver.dismissJoinNotice()}
         />
       )
     case 'inHistory':
-      return (
-        <EntryNotice
-          label="Words saved in History"
-          text="Words from a tab that closed reached the server after a newer save. They are in the History of the entry and not in its text."
-          sessionId={notice.sessionId}
-          onDismiss={() => notice.saver.dismissConflict()}
-        />
-      )
+      return <InHistoryNotice notice={notice} />
     case 'refused':
       return <RefusedNotice notice={notice} />
     case 'waiting':
