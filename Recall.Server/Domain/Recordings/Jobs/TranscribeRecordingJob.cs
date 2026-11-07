@@ -66,29 +66,55 @@ public sealed class TranscribeRecordingJob(
     private async Task RunAsync(TranscriptionEngineKind kind, string recordingId, JournalOwner owner, CancellationToken cancellationToken)
     {
         var engine = engines.First(e => e.Kind == kind);
-        var start = await SendAsync(owner, new BeginTranscription.Command(recordingId, kind, engine.IsReady), cancellationToken);
-        if (start is null)
+        while (true)
         {
-            if (!engine.IsReady)
-                await modelDownloads.RequestAsync(cancellationToken);
-            return;
-        }
+            var start = await SendAsync(owner, new BeginTranscription.Command(recordingId, kind, engine.IsReady), cancellationToken);
+            if (start is null)
+            {
+                if (!engine.IsReady)
+                    await modelDownloads.RequestAsync(cancellationToken);
+                return;
+            }
 
+            if (await RunFromAsync(engine, start, recordingId, owner, cancellationToken) == Run.Ended)
+                return;
+        }
+    }
+
+    private enum Run
+    {
+        Ended,
+        ChoiceChanged,
+    }
+
+    /// <summary>
+    /// The choice of a provider is read again after each part, so a part goes out only while the Admin's choice holds. When it
+    /// changed, the next begin reads the new choice, or gives the Recording to the local engine.
+    /// </summary>
+    private async Task<Run> RunFromAsync(ITranscriptionEngine engine, BeginTranscription.Start start, string recordingId, JournalOwner owner, CancellationToken cancellationToken)
+    {
         try
         {
             var input = new TranscriptionInput(start.AudioPath, start.WorkFolder, start.StartSample, start.Provider);
+            var from = start.StartSample;
             await foreach (var chunk in engine.RunAsync(input, cancellationToken))
             {
-                var fits = await SendAsync(owner, new SaveTranscriptChunk.Command(recordingId, kind, chunk.EndSample, chunk.TotalSamples, chunk.Text), cancellationToken);
+                var fits = await SendAsync(owner, new SaveTranscriptChunk.Command(recordingId, engine.Kind, from, chunk.EndSample, chunk.TotalSamples, chunk.Text), cancellationToken);
                 if (!fits)
-                    return;
+                    return Run.Ended;
+                from = Math.Max(from, chunk.EndSample);
+                if (start.Choice is { } choice && !await SendAsync(owner, new TranscriptionChoiceHolds.Query(choice.ModelProviderId, choice.Version), cancellationToken))
+                {
+                    _logger.Here().Information("The provider choice changed during recording {RecordingId}, so it begins again from its saved text", recordingId);
+                    return Run.ChoiceChanged;
+                }
             }
 
             await SendAsync(owner, new CompleteTranscription.Command(recordingId), cancellationToken);
         }
         catch (TranscriptionEngineException exception) when (exception.TryAgain)
         {
-            await SendAsync(owner, new WaitForTranscriptionProvider.Command(recordingId, kind), cancellationToken);
+            await SendAsync(owner, new WaitForTranscriptionProvider.Command(recordingId, engine.Kind), cancellationToken);
             _logger.Here().Information("Recording {RecordingId} waits for its provider, problem {Problem}", recordingId, exception.Problem);
             throw new JobSafeTextException(TryAgainText);
         }
@@ -96,6 +122,8 @@ public sealed class TranscribeRecordingJob(
         {
             await SendAsync(owner, new FailTranscription.Command(recordingId, exception.Problem), cancellationToken);
         }
+
+        return Run.Ended;
     }
 
     private async Task<TResponse> SendAsync<TResponse>(JournalOwner owner, IRequest<TResponse> command, CancellationToken cancellationToken)

@@ -1,5 +1,6 @@
 namespace Recall.Server.Resources.Jobs;
 
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using BackWave.Core;
 using BackWave.Storage;
@@ -73,32 +74,56 @@ public static class CleanupQueues
         var unfinished = new List<(string, string)>();
         foreach (var wireName in ProviderJobs)
         {
-            foreach (var state in UnfinishedStates)
+            await foreach (var (queue, payload) in UnfinishedOfAsync(store, wireName, cancellationToken))
             {
-                long? after = null;
-                while (true)
-                {
-                    var page = await store.ListJobsAsync(new JobQuery { State = state, WireName = wireName, AfterSequence = after, MaxResults = PageSize }, cancellationToken);
-                    if (page.Count == 0)
-                        break;
-                    unfinished.AddRange(page
-                        .Select(job => (job.Queue, TenantId: TenantOf(job.Payload)))
-                        .Where(job => job.TenantId is not null)
-                        .Select(job => (job.Queue, job.TenantId!)));
-                    after = page[^1].Sequence;
-                }
+                if (payload?.TenantId is { } tenantId)
+                    unfinished.Add((queue, tenantId));
             }
         }
 
         return unfinished;
     }
 
+    /// <summary>
+    /// Each Recording with a cloud job that has not ended. A queue runs <see cref="JobsAtOnceInAQueue"/> jobs at once, so a
+    /// second job of one Recording would send each part to the provider twice, and the provider bills each call.
+    /// </summary>
+    public static async Task<IReadOnlySet<string>> RecordingsInCloudJobsAsync(IJobStore store, CancellationToken cancellationToken)
+    {
+        var recordings = new HashSet<string>(StringComparer.Ordinal);
+        await foreach (var (_, payload) in UnfinishedOfAsync(store, TranscribeRecordingJob.CloudWireName, cancellationToken))
+        {
+            if (payload?.RecordingId is { } recordingId)
+                recordings.Add(recordingId);
+        }
+
+        return recordings;
+    }
+
+    private static async IAsyncEnumerable<(string Queue, ProviderJobPayload? Payload)> UnfinishedOfAsync(
+        IJobStore store, string wireName, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        foreach (var state in UnfinishedStates)
+        {
+            long? after = null;
+            while (true)
+            {
+                var page = await store.ListJobsAsync(new JobQuery { State = state, WireName = wireName, AfterSequence = after, MaxResults = PageSize }, cancellationToken);
+                if (page.Count == 0)
+                    break;
+                foreach (var job in page)
+                    yield return (job.Queue, PayloadOf(job.Payload));
+                after = page[^1].Sequence;
+            }
+        }
+    }
+
     // A payload that does not read holds no tenant, so it takes no queue, and it does not stop the start of each other job.
-    private static string? TenantOf(ReadOnlyMemory<byte> payload)
+    private static ProviderJobPayload? PayloadOf(ReadOnlyMemory<byte> payload)
     {
         try
         {
-            return JsonSerializer.Deserialize<TenantOfPayload>(payload.Span)?.TenantId;
+            return JsonSerializer.Deserialize<ProviderJobPayload>(payload.Span);
         }
         catch (JsonException)
         {
@@ -106,7 +131,7 @@ public static class CleanupQueues
         }
     }
 
-    private sealed record TenantOfPayload(string? TenantId);
+    private sealed record ProviderJobPayload(string? TenantId, string? RecordingId);
 }
 
 /// <summary>A queue limit is a row in the job store. This writes it once, so a start with the limits in place writes nothing.</summary>

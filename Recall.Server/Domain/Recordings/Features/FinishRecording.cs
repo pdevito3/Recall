@@ -128,7 +128,13 @@ public static class RecordingWork
         try
         {
             await dbContext.SaveAndEnqueueAsync(
-                async (jobs, ct) => await EnqueueAsync(jobs, recording, await CloudQueueOfAsync(jobStore, recording.TenantId, recording.Engine, ct), timeProvider.GetUtcNow(), ct),
+                async (jobs, ct) =>
+                {
+                    // A retry or a repeat finish of a Recording whose cloud job still runs must not start a second one beside it.
+                    if (recording.Engine == TranscriptionEngineKind.Cloud && (await CleanupQueues.RecordingsInCloudJobsAsync(jobStore, ct)).Contains(recording.Id))
+                        return;
+                    await EnqueueAsync(jobs, recording, await CloudQueueOfAsync(jobStore, recording.TenantId, recording.Engine, ct), timeProvider.GetUtcNow(), ct);
+                },
                 CancellationToken.None);
         }
         catch (Exception exception)

@@ -14,7 +14,7 @@ using Transcription;
 
 public static class BeginTranscription
 {
-    public sealed record Start(string AudioPath, string WorkFolder, long StartSample, AudioProvider? Provider);
+    public sealed record Start(string AudioPath, string WorkFolder, long StartSample, AudioProvider? Provider, TranscriptionChoice? Choice);
 
     /// <summary>A job of another engine does nothing, so two engines never work on one Recording at a time.</summary>
     public sealed record Command(string Id, TranscriptionEngineKind Engine, bool EngineIsReady) : IRequest<Start?>, IRunsAgainWhenRaced;
@@ -35,6 +35,7 @@ public static class BeginTranscription
 
             RecordingWork.TryDeleteSlices(fileStore, recording, _logger);
             AudioProvider? provider = null;
+            TranscriptionChoice? choice = null;
             if (recording.Engine == TranscriptionEngineKind.Cloud)
             {
                 var chosen = await dbContext.ModelProviders.AsNoTracking()
@@ -47,6 +48,7 @@ public static class BeginTranscription
                     return null;
                 }
 
+                choice = new TranscriptionChoice(chosen.Id, chosen.Version);
                 var read = keys.Read(chosen.ProtectedApiKey);
                 provider = read is ProtectedKeyRead.Unreadable
                     ? null
@@ -72,7 +74,8 @@ public static class BeginTranscription
                     fileStore.LocalPathOf(RecordingFiles.Audio(recording)),
                     fileStore.LocalPathOf(RecordingFiles.Folder(recording)),
                     recording.TranscribedSamples,
-                    provider);
+                    provider,
+                    choice);
             }
 
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -119,10 +122,35 @@ public static class WaitForTranscriptionProvider
     }
 }
 
+/// <summary>The provider that a cloud job began with. Each change of the provider row, a new choice included, gives a new version.</summary>
+public sealed record TranscriptionChoice(string ModelProviderId, uint Version);
+
+public static class TranscriptionChoiceHolds
+{
+    public sealed record Query(string ModelProviderId, uint Version) : IRequest<bool>;
+
+    public sealed class Handler(AppDbContext dbContext) : IRequestHandler<Query, bool>
+    {
+        public async Task<bool> Handle(Query request, CancellationToken cancellationToken)
+        {
+            var now = await dbContext.ModelProviders.AsNoTracking()
+                .TagWithOperationCallSite("recordings.transcribe.choice_holds")
+                .TranscriptionFirst()
+                .Select(p => new { p.Id, p.Version })
+                .FirstOrDefaultAsync(cancellationToken);
+            return now is not null && now.Id == request.ModelProviderId && now.Version == request.Version;
+        }
+    }
+}
+
 public static class SaveTranscriptChunk
 {
-    /// <summary>A chunk of an engine that no longer has the Recording is refused, so a hand-over repeats no text.</summary>
-    public sealed record Command(string Id, TranscriptionEngineKind Engine, long EndSample, long TotalSamples, string Words) : IRequest<bool>, IRunsAgainWhenRaced;
+    /// <summary>
+    /// A chunk of an engine that no longer has the Recording is refused, so a hand-over repeats no text. A chunk that does not
+    /// start where the saved text ends is refused too, so text joins with no repeat and no gap whatever the cuts of the run.
+    /// </summary>
+    public sealed record Command(string Id, TranscriptionEngineKind Engine, long FromSample, long EndSample, long TotalSamples, string Words)
+        : IRequest<bool>, IRunsAgainWhenRaced;
 
     public sealed class Handler(AppDbContext dbContext, TimeProvider timeProvider) : IRequestHandler<Command, bool>
     {
@@ -137,6 +165,12 @@ public static class SaveTranscriptChunk
                 .GetById(request.Id, cancellationToken);
             if (recording.Engine != request.Engine)
                 return false;
+            if (!recording.Joins(request.FromSample, request.EndSample))
+            {
+                _logger.Here().Warning("A chunk of recording {RecordingId} from sample {FromSample} does not join its text at {TranscribedSamples}, so its run stops",
+                    recording.Id, request.FromSample, recording.TranscribedSamples);
+                return false;
+            }
 
             var words = request.Words.Trim();
             if (!StorableText.CanStore(words))

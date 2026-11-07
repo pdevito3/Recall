@@ -159,6 +159,12 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
         AttemptsWithoutProgress = 0;
     }
 
+    /// <summary>
+    /// A chunk that the saved text already holds joins as nothing. Any other chunk must start where the text ends, so a run with
+    /// other cuts, or a second run, repeats no word and leaves no gap.
+    /// </summary>
+    public bool Joins(long fromSample, long endSample) => endSample <= TranscribedSamples || fromSample == TranscribedSamples;
+
     public bool AdvanceTo(long endSample, long totalSamples, bool hasWords)
     {
         DurationMs = totalSamples * 1000 / SamplesPerSecond;

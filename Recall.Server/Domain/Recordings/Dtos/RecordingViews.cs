@@ -16,7 +16,9 @@ public static class RecordingViews
         Problem = recording.Problem.ToString(),
         ProblemText = recording.WaitsForTranscription && jobsStopped
             ? GetTranscriptionStatus.JobsStoppedText
-            : ProblemTextOf(recording.Problem, model),
+            : recording is { Status: RecordingStatus.Failed, Problem: RecordingProblem.ProviderUnavailable }
+                ? ProviderGaveUpText
+                : ProblemTextOf(recording.Problem, model),
         HighestStoredSlice = recording.HighestStoredSlice,
         StoredSlices = storedSlices,
         ByteLength = recording.ByteLength,
@@ -26,6 +28,10 @@ public static class RecordingViews
         AudioKeptUntil = recording.AudioKeptUntil,
         Version = recording.Version,
     };
+
+    /// <summary>The tries of the job ended, so no new try comes unless a person asks for one.</summary>
+    public const string ProviderGaveUpText = "The audio is stored, but the provider that makes the text did not answer on any try. "
+        + "Try again later. If it keeps failing, ask an Admin to check the provider.";
 
     public static string? ProblemTextOf(RecordingProblem problem, ModelStatus model) => problem switch
     {

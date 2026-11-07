@@ -1,10 +1,14 @@
 namespace Recall.FunctionalTests.FunctionalTests.Recordings;
 
 using System.Net;
+using System.Net.Http.Json;
 using BackWave.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
+using ModelProviders;
+using Recall.FakeModelProvider;
+using Recall.Server.Domain.ModelProviders;
 using Recall.Server.Domain.Recordings;
 using Recall.Server.Domain.Recordings.Jobs;
 using Recall.Server.Domain.Tenants;
@@ -190,6 +194,33 @@ public class RecordingSweepTests : TestBase
 
         // Assert
         (await CountJobsAsync("transcribe-recording", recording.Id)).ShouldBeGreaterThan(before);
+    }
+
+    [Test]
+    [Property("Rule", "REC-20")]
+    public async Task the_sweep_gives_a_cloud_recording_a_job_only_when_it_has_none_so_no_part_goes_out_twice()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient, ModelProviderKind.OpenAiCompatible, pickModel: false);
+        scenario.Client.SignInAsAppUser(scenario.Admin.Identifier);
+        (await scenario.Client.PutAsJsonAsync(
+            ApiRoutes.ModelProviders.TranscriptionEngine,
+            new { modelProviderId = scenario.Provider.Id, model = FakeModelProvider.TranscriptionModelId })).EnsureSuccessStatusCode();
+        scenario.Client.SignInAsAppUser(scenario.Member.Identifier);
+        var session = await scenario.Client.AddSessionAsync();
+        var queued = await scenario.Client.AddFinishedRecordingAsync(session.Id);
+        var jobGone = await scenario.Client.AddFinishedRecordingAsync(session.Id);
+        await JournalScenario.ExecuteOutOfBandAsync(
+            "DELETE FROM backwave_jobs WHERE wire_name = $kind AND CAST(payload AS TEXT) LIKE $id",
+            ("$kind", TranscribeRecordingJob.CloudWireName), ("$id", $"%{jobGone.Id}%"));
+        using var folder = new SweptFolder();
+
+        // Act
+        await folder.Sweep.RunAsync(CancellationToken.None);
+
+        // Assert
+        (await CountJobsAsync(TranscribeRecordingJob.CloudWireName, queued.Id)).ShouldBe(1);
+        (await CountJobsAsync(TranscribeRecordingJob.CloudWireName, jobGone.Id)).ShouldBe(1);
     }
 
     [Test]

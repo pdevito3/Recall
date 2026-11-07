@@ -212,6 +212,8 @@ public class RecordingTests
             recording.WaitForProvider();
         }
 
+        var waitingText = recording.ToDto([], ModelStatus.Ready, jobsStopped: false).ProblemText;
+
         // Act
         var began = recording.BeginAttempt();
 
@@ -219,6 +221,31 @@ public class RecordingTests
         began.ShouldBeFalse();
         recording.Status.ShouldBe(RecordingStatus.Failed);
         recording.Problem.ShouldBe(RecordingProblem.ProviderUnavailable);
+        waitingText.ShouldNotBeNull().ShouldContain("tries again on its own");
+        var failedText = recording.ToDto([], ModelStatus.Ready, jobsStopped: false).ProblemText.ShouldNotBeNull();
+        failedText.ShouldNotContain("tries again on its own");
+        failedText.ShouldContain("Try again later");
+    }
+
+    [Test]
+    [Property("Rule", "REC-19")]
+    [Arguments(0L, 100L, true)]
+    [Arguments(50L, 150L, false)]
+    [Arguments(100L, 200L, true)]
+    [Arguments(150L, 200L, false)]
+    [Arguments(0L, 80L, true)]
+    public void a_chunk_joins_only_where_the_saved_text_ends(long from, long end, bool joins)
+    {
+        // Arrange
+        var recording = Received();
+        recording.BeginAttempt();
+        recording.AdvanceTo(100, 1000, hasWords: true);
+
+        // Act
+        var result = recording.Joins(from, end);
+
+        // Assert
+        result.ShouldBe(joins);
     }
 
     [Test]
