@@ -81,7 +81,7 @@ export default async ({ page, context, step, capture, expect, login }) => {
   })
   await capture('r12-autosave')
 
-  const twoTabs = await step('lane 3: two tabs edit one entry, the first save wins, and the other save is in the history with a notice', async () => {
+  const twoTabs = await step('lane 3: two tabs edit one entry, the first save wins, the other joins the newest words once, and History keeps the save before the merge', async () => {
     const id = await addEntry(page, 'Words at the start.')
     const other = await context.newPage()
     await page.goto(`/sessions/${id}`)
@@ -92,30 +92,31 @@ export default async ({ page, context, step, capture, expect, login }) => {
     await typeAtEnd(other, editor(other), ' The first tab.')
     await expect(saved(other)).toBeVisible()
     await typeAtEnd(page, editor(page), ' The second tab.')
-    await expect(page.getByRole('status').filter({ hasText: /^Saved in History at/ })).toBeVisible()
-    await expect(page.getByRole('alert').filter({ hasText: 'The words on this page are safe in History.' })).toBeVisible()
-    await expect(editor(page)).toContainText('Words at the start. The second tab.')
+    await expect(page.getByRole('status').filter({ hasText: 'Your words are now in the newest words' })).toBeVisible()
+    await expect(saved(page)).toBeVisible()
+    await expect(editor(page)).toHaveText('Words at the start. The first tab. The second tab.')
     await capture('r12-conflict-notice')
 
+    const row = await api(page, 'GET', `/api/v1/sessions/${id}`)
+    expect(row.body.rawText.split('The first tab.')).toHaveLength(2)
+    expect(row.body.rawText.split('The second tab.')).toHaveLength(2)
     const list = await api(page, 'GET', `/api/v1/sessions/${id}/raw-revisions`)
     expect(list.status).toBe(200)
     const revisions = []
     for (const { number } of list.body.items) revisions.push(JSON.stringify((await api(page, 'GET', `/api/v1/sessions/${id}/raw-revisions/${number}`)).body))
-    expect(revisions.join('\n')).toContain('The second tab.')
-    await page.getByRole('button', { name: 'Show the newest words', exact: true }).click()
-    await expect(editor(page)).toHaveText('Words at the start. The first tab.')
+    // The save that lost is a version of its own, before the merge.
+    expect(revisions.some((revision) => revision.includes('Words at the start. The second tab.'))).toBe(true)
 
     await other.bringToFront()
     await other.reload()
-    await expect(editor(other)).toContainText('Words at the start. The first tab.')
+    await expect(editor(other)).toHaveText('Words at the start. The first tab. The second tab.')
     await other.close()
     await page.bringToFront()
     await page.getByRole('button', { name: 'Show history', exact: true }).click()
     const versions = page.getByRole('button', { name: /^View version from/ })
-    await expect(versions).toHaveCount(3)
-    // The newest version is the save that lost. The page shows the version of the save that won.
+    await expect(versions).toHaveCount(4)
     await expect(page.getByRole('listitem').filter({ hasText: '(showing now)' })).toHaveCount(1)
-    await versions.nth(0).click()
+    await versions.nth(1).click()
     await expect(page.getByRole('dialog').getByText('Words at the start. The second tab.')).toBeVisible()
     return id
   })

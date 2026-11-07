@@ -26,10 +26,10 @@ Preconditions:
 - The recipe starts `tests/Recall.FakeModelProvider` with a key that it makes at run time, and stops it at the end. Build the solution first. No real provider and no real key are necessary.
 - The SPA has no page to write a Session in this map yet. The recipe adds a Session and its draft with `fetch` in the page.
 
-- **Connect.** Choose `Model providers`. Fill `Name`, `Base URL`, and `API key`. Choose `Connect`. The level 3 heading of the provider shows, and `API key` is empty.
+- **Connect.** Choose `Model providers`. Fill `Name`, `Base URL`, and `API key`. Choose `Connect`. The level 3 heading of the provider shows, and `API key` is empty. A sweep gives each name in an answer a long value, so the recipe reads the name of the heading from the answer to `Connect`.
 - **Test.** Choose `Test connection` on the provider. The status starts with `Connected.`.
 - **Model.** Choose `Model of <name>`, then an option. The hint `Test the connection, then pick a model.` goes away.
-- **Bad key.** Connect a second provider with another key, and choose `Test connection`. The alert holds the words of the fake. The newest provider is active, so choose `Make active` on the first provider before a Cleanup. If you do not, `Run Cleanup` gets a 422 because the active provider has no model.
+- **Bad key.** Connect a second provider with another key, and choose `Test connection`. The alert holds the words of the fake. The newest provider is active, so choose `Make active` on the first provider before a Cleanup. If you do not, `Run Cleanup` gets a 422 because the active provider has no model. A sweep gives the name a new value in each answer, so the recipe finds the first provider by its select `Model of <name>`.
 - **Cleanup.** Open `/sessions/<id>`, and choose `Run Cleanup` in the `Cleanup` section. The status shows `You can close this page`, then `Cleaned is current.` with no reload. The `Cleaned` tab shows the result. A reload shows the same status, and `Your words` still shows the words of the draft.
 - **Proof.** Run `node $S/scripts/browse.mjs $S/recipes/model-providers.mjs`. The captures `connected`, `tested`, `bad-key`, `running`, and `cleaned` show each state. The recipe did not run after the Cleanup moved to the entry page, so check its steps on the first run.
 
