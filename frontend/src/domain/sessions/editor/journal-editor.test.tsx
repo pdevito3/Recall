@@ -9,11 +9,20 @@ const longText = 'river stone morning coffee '.repeat(4000)
 
 let client: QueryClient
 
+const noPeople = {
+  method: 'GET',
+  path: '/api/v1/people',
+  body: [],
+  headers: {
+    'x-pagination': JSON.stringify({ totalCount: 0, pageSize: 100, currentPageSize: 0, currentStartIndex: 0, currentEndIndex: 0, pageNumber: 1, totalPages: 0, hasPrevious: false, hasNext: false }),
+  },
+}
+
 // A read that ends after this test would count as a request of the next test, which has no answer for it yet.
 afterEach(() => vi.waitFor(() => expect(client.isFetching()).toBe(0)))
 
 const renderEditor = async (isBounded: boolean) => {
-  await commands.answerRequests([{ method: 'GET', path: '/api/v1/people', body: [] }])
+  await commands.answerRequests([noPeople])
   client = new QueryClient()
   return render(
     <QueryClientProvider client={client}>
