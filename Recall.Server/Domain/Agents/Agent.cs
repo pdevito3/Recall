@@ -23,6 +23,8 @@ public class Agent : BaseEntity, ITenantable
     public const int ClientIdMaxLength = 255;
     public const string ClientIdInUseMessage = "An agent with this client ID already exists.";
 
+    private const string PermissionField = "permission";
+
     [NotSensitive] public string TenantId { get; private set; } = default!;
     [NotSensitive] public string Name { get; private set; } = default!;
 
@@ -99,6 +101,7 @@ public class Agent : BaseEntity, ITenantable
     private bool AddToGrant(Permission permission, Caller grantor)
     {
         grantor.Require(permission);
+        ValidationException.MustNot(permission == Permission.ManageModelProviders(), PermissionField, "An agent cannot manage the model providers.");
         if (_permissions.Any(p => p.Permission == permission))
             return false;
 
