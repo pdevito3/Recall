@@ -614,7 +614,8 @@ afterEach(() => {
 
 test('each word that a person typed and did not discard is on the server, in a key, in a notice, or on a screen', async () => {
   const seed = Number(process.env.MODEL_SEED ?? defaultSeed)
-  console.log(`draft saver model: seed ${seed}, ${runs} runs of ${stepsInARun} steps. Set MODEL_SEED to run another seed.`)
+  // Vitest hides the console of a test that passes.
+  process.stdout.write(`draft saver model: seed ${seed}, ${runs} runs of ${stepsInARun} steps. Set MODEL_SEED to run another seed.\n`)
   const failures: string[] = []
   for (let run = 0; run < runs; run += 1) {
     await new ModelRun(seed + run).play().catch((error: unknown) => failures.push(`Run ${run}, seed ${seed + run}: ${error instanceof Error ? error.message : String(error)}`))
