@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { skipToken, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import type { PersonProposalResponseDto } from '@/api/generated/models/types/person-proposal-response-dto'
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
@@ -6,6 +6,7 @@ import type { SuggestionResponseDto } from '@/api/generated/models/types/suggest
 import type { WaitingCleanupApplyDto } from '@/api/generated/models/types/waiting-cleanup-apply-dto'
 import { acceptSuggestion } from '@/api/generated/sessions/clients/accept-suggestion'
 import { applyWaitingCleanup } from '@/api/generated/sessions/clients/apply-waiting-cleanup'
+import { getCleanedRevision } from '@/api/generated/sessions/clients/get-cleaned-revision'
 import { getSession } from '@/api/generated/sessions/clients/get-session'
 import { getSessionPage } from '@/api/generated/sessions/clients/get-session-page'
 import { rejectSuggestion } from '@/api/generated/sessions/clients/reject-suggestion'
@@ -55,6 +56,17 @@ export function useStopCleanup(id: string) {
   return useMutation({
     mutationFn: () => stopCleanup({ path: { id }, options: { suppressErrorToast: true } }),
     onSuccess: put,
+  })
+}
+
+export function useWaitingCleanupText(id: string, revision: number | null) {
+  return useQuery({
+    queryKey: [...CleanupKeys.session(id), 'waiting', revision] as const,
+    queryFn:
+      revision === null
+        ? skipToken
+        : ({ signal }) => getCleanedRevision({ path: { id, number: revision }, signal, options: { suppressErrorToast: true } }),
+    select: (waiting) => waiting.text,
   })
 }
 

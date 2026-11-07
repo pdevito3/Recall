@@ -14,9 +14,10 @@ import {
   useRespondToSuggestion,
   useStartCleanup,
   useStopCleanup,
+  useWaitingCleanupText,
 } from '../apis/cleanup'
 import { useActiveModelProvider } from '../apis/model-providers'
-import { plainTextOf } from './plain-text'
+import { plainTextOf, tagsOf } from './plain-text'
 
 const STATUS_TEXT: Record<SessionDto['cleanupStatus'], string> = {
   NotRun: 'No Cleanup ran yet.',
@@ -29,6 +30,10 @@ const STATUS_TEXT: Record<SessionDto['cleanupStatus'], string> = {
 const STOPPED_TEXT = 'You stopped the last Cleanup. Your words did not change, and you can run it again.'
 
 const WAITING_TEXT = 'The last Cleanup ended, and Cleaned kept your words.'
+
+const HAND_EDITED_TEXT = 'You edited Cleaned by hand after the last Cleanup.'
+
+const names = new Intl.ListFormat('en', { type: 'conjunction' })
 
 const NO_PROVIDER_TEXT = 'An Admin must connect a model provider, pick a model, and make it active first.'
 
@@ -64,11 +69,9 @@ function Suggestions({ session }: { session: SessionDto }) {
             key={`${kind}-${value}`}
             className="grid grid-cols-[auto_1fr_auto] items-center gap-x-2 gap-y-1 text-sm max-sm:grid-cols-[auto_1fr]"
           >
-            <Badge variant="outline" className="max-sm:row-start-2">
-              {kind}
-            </Badge>
-            <span className="min-w-0 wrap-anywhere max-sm:col-span-2 max-sm:row-start-1">{value}</span>
-            <div className="flex items-center gap-2 justify-self-end max-sm:row-start-2">
+            <Badge variant="outline">{kind}</Badge>
+            <span className="min-w-0 wrap-anywhere">{value}</span>
+            <div className="flex items-center gap-2 justify-self-end max-sm:col-span-2">
               <Button size="sm" variant="outline" aria-label={`Accept ${value}`} onPress={() => respond.mutate({ accept: true, kind, value })}>
                 Accept
               </Button>
@@ -118,6 +121,8 @@ export function CleanupCard({ sessionId }: { sessionId: string }) {
   const start = useStartCleanup(sessionId)
   const stop = useStopCleanup(sessionId)
   const apply = useApplyWaitingCleanup(sessionId)
+  const waiting = session.data?.cleanupStatus === 'Running' ? null : (session.data?.waitingCleanupRevision ?? null)
+  const waitingText = useWaitingCleanupText(sessionId, waiting)
   // Each try of a run reads the active model provider again, so the line follows a change while the run lasts.
   const provider = useActiveModelProvider(session.data?.cleanupStatus === 'Running' ? pollWhileRunningMs : false)
   const startProblem = start.error ? refusalOf(start.error, []).problem : null
@@ -140,14 +145,23 @@ export function CleanupCard({ sessionId }: { sessionId: string }) {
   const isStop = data.cleanupStatus === 'Failed' && data.cleanupFailure === 'Stopped'
   const failure = isStop ? null : FAILURE_TEXT[data.cleanupFailure]
   const hasNoProvider = provider.isSuccess && !provider.data.name
-  const waiting = isRunning ? null : (data.waitingCleanupRevision ?? null)
+  const isClean = data.cleanupStatus === 'Clean'
+  const saysHandEdit = isClean && waiting === null && data.cleanedHasHandEdits
   const cleanedMovedInRun = isRunning && data.cleanedDraftRevision !== data.cleanupBaseCleanedRevision
   const handEditNote = cleanedMovedInRun
     ? 'Cleaned changed during this Cleanup. Cleaned keeps your words, and the result will wait in History.'
     : data.cleanedHasHandEdits && waiting === null
-      ? `You edited Cleaned by hand. ${isRunning ? 'This' : 'A new'} Cleanup replaces Cleaned, and your edit stays as a Revision.`
+      ? `${saysHandEdit ? '' : 'You edited Cleaned by hand. '}${isRunning ? 'This' : 'A new'} Cleanup replaces Cleaned, and your edit stays as a Revision.`
       : null
-  const statusText = isStop ? STOPPED_TEXT : waiting !== null ? WAITING_TEXT : STATUS_TEXT[data.cleanupStatus]
+  const statusText = isStop
+    ? STOPPED_TEXT
+    : isClean && waiting !== null
+      ? WAITING_TEXT
+      : saysHandEdit
+        ? HAND_EDITED_TEXT
+        : STATUS_TEXT[data.cleanupStatus]
+  const resultTags = waitingText.data === undefined ? null : tagsOf(waitingText.data)
+  const droppedTags = resultTags ? [...tagsOf(data.cleanedText)].filter(([personId]) => !resultTags.has(personId)).map(([, label]) => label) : []
 
   return (
     <Card>
@@ -169,13 +183,20 @@ export function CleanupCard({ sessionId }: { sessionId: string }) {
         {waiting !== null && (
           <div className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
             <p>
-              Cleaned changed during the last Cleanup, so the result waits in History as Revision {waiting}. Use it to replace
+              A Cleanup result waits in History as Revision {waiting}, because Cleaned changed during its run. Use it to replace
               Cleaned, and your words stay as a Revision.
             </p>
+            {droppedTags.length > 0 && (
+              <p className="wrap-anywhere">
+                Cleaned tags {names.format(droppedTags)}, and this result does not. If you use it, Cleaned loses{' '}
+                {droppedTags.length === 1 ? 'that tag' : 'those tags'}.
+              </p>
+            )}
             <Button
               variant="outline"
               className="self-start"
               isPending={apply.isPending}
+              isDisabled={waitingText.isPending}
               onPress={() => apply.mutate({ revision: waiting, baseCleanedRevision: data.cleanedDraftRevision })}
             >
               Use the Cleanup result

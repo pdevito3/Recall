@@ -2,7 +2,7 @@ interface ProseNode {
   type?: unknown
   text?: unknown
   content?: unknown
-  attrs?: { label?: unknown; start?: unknown; checked?: unknown; language?: unknown }
+  attrs?: { label?: unknown; personId?: unknown; start?: unknown; checked?: unknown; language?: unknown }
   marks?: unknown
 }
 
@@ -111,6 +111,24 @@ function blockOf(node: ProseNode): string {
 
 function blocksOf(node: ProseNode): string {
   return childrenOf(node).map(blockOf).join('\n\n')
+}
+
+/** The label of each Person that a stored document tags, by the ID of the Person. Plain words tag no one. */
+export function tagsOf(stored: string): Map<string, string> {
+  const tags = new Map<string, string>()
+  const visit = (node: ProseNode) => {
+    if (node.type === 'mention' && typeof node.attrs?.personId === 'string' && typeof node.attrs.label === 'string') {
+      tags.set(node.attrs.personId, node.attrs.label)
+    }
+    childrenOf(node).forEach(visit)
+  }
+  try {
+    const parsed: unknown = JSON.parse(stored)
+    if (typeof parsed === 'object' && parsed !== null) visit(parsed as ProseNode)
+  } catch {
+    return tags
+  }
+  return tags
 }
 
 /** A Revision holds a ProseMirror document or plain words, and each form shows as words with what they mean: the sign of an item, its number, and the state of a task. */

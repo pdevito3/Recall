@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { expect, test } from 'vitest'
-import { commands, userEvent } from 'vitest/browser'
+import { commands, page, userEvent } from 'vitest/browser'
 import { render } from 'vitest-browser-react'
 
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
@@ -37,6 +37,8 @@ const session = (change: Partial<SessionDto>): SessionDto => ({
   ...change,
 })
 
+const revision = (number: number, text: string) => ({ number, savedAt: '2026-11-07T10:00:00Z', text })
+
 async function renderCard(answers: Parameters<typeof commands.answerRequests>[0]) {
   await commands.answerRequests([{ method: 'GET', path: '/api/v1/model-providers/active', body: { name: 'Mine' } }, ...answers])
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -72,11 +74,12 @@ test('a result that waits in History is not called current, and the person can u
   const waiting = session({ cleanedHasHandEdits: true, cleanedDraftRevision: 2, cleanedLatestRevision: 3, cleanupBaseCleanedRevision: 1, waitingCleanupRevision: 3, cleanedText: doc('my own words') })
   const screen = await renderCard([
     { method: 'GET', path: '/api/v1/sessions/ses_1', body: waiting },
+    { method: 'GET', path: '/api/v1/sessions/ses_1/cleaned-revisions/3', body: revision(3, doc('second clean words')) },
     { method: 'POST', path: '/api/v1/sessions/ses_1/cleanup/waiting/apply', body: session({ cleanedDraftRevision: 4, cleanedLatestRevision: 4, cleanedText: doc('second clean words') }) },
   ])
 
   await expect.element(screen.getByText('The last Cleanup ended, and Cleaned kept your words.')).toBeVisible()
-  await expect.element(screen.getByText(/the result waits in History as Revision 3/)).toBeVisible()
+  await expect.element(screen.getByText(/A Cleanup result waits in History as Revision 3/)).toBeVisible()
   await expect.element(screen.getByText('Cleaned is current.')).not.toBeInTheDocument()
   await expect.element(screen.getByText(/You edited Cleaned by hand/)).not.toBeInTheDocument()
 
@@ -85,3 +88,85 @@ test('a result that waits in History is not called current, and the person can u
   await expect.element(screen.getByText('second clean words')).toBeVisible()
   await expect.element(screen.getByText('Cleaned is current.')).toBeVisible()
 })
+
+const waitingSince = (change: Partial<SessionDto>) =>
+  session({ cleanedHasHandEdits: true, cleanedDraftRevision: 2, cleanedLatestRevision: 3, cleanupBaseCleanedRevision: 2, waitingCleanupRevision: 3, cleanedText: doc('my own words'), ...change })
+
+for (const { name, change, status } of [
+  { name: 'Raw changed', change: { cleanupStatus: 'Stale', rawDraftRevision: 2 }, status: 'Raw changed after the last Cleanup.' },
+  { name: 'a later run failed', change: { cleanupStatus: 'Failed', cleanupFailure: 'ProviderRefused' }, status: 'The last Cleanup did not finish. Your words did not change.' },
+  { name: 'a later run was stopped', change: { cleanupStatus: 'Failed', cleanupFailure: 'Stopped' }, status: 'You stopped the last Cleanup. Your words did not change, and you can run it again.' },
+] satisfies { name: string; change: Partial<SessionDto>; status: string }[]) {
+  test(`when ${name}, the card says so first, and the waiting result is a fact of its own`, async () => {
+    // Arrange
+    const screen = await renderCard([
+      { method: 'GET', path: '/api/v1/sessions/ses_1', body: waitingSince(change) },
+      { method: 'GET', path: '/api/v1/sessions/ses_1/cleaned-revisions/3', body: revision(3, doc('second clean words')) },
+    ])
+
+    // Assert
+    await expect.element(screen.getByRole('status')).toHaveTextContent(status)
+    await expect.element(screen.getByText(/A Cleanup result waits in History as Revision 3, because Cleaned changed during its run/)).toBeVisible()
+    await expect.element(screen.getByText(/Cleaned changed during the last Cleanup/)).not.toBeInTheDocument()
+    await expect.element(screen.getByText('The last Cleanup ended, and Cleaned kept your words.')).not.toBeInTheDocument()
+  })
+}
+
+const tagged = (before: string, label: string) =>
+  JSON.stringify({
+    type: 'doc',
+    content: [{ type: 'paragraph', content: [{ type: 'text', text: before }, { type: 'mention', attrs: { personId: 'per_1', label } }] }],
+  })
+
+test('a waiting result that does not tag a Person whom Cleaned tags says so before the use', async () => {
+  // Arrange
+  const screen = await renderCard([
+    { method: 'GET', path: '/api/v1/sessions/ses_1', body: waitingSince({ cleanedText: tagged('I met ', 'Zed Renamed') }) },
+    { method: 'GET', path: '/api/v1/sessions/ses_1/cleaned-revisions/3', body: revision(3, doc('I met Zed')) },
+  ])
+
+  // Assert
+  await expect.element(screen.getByText('Cleaned tags Zed Renamed, and this result does not. If you use it, Cleaned loses that tag.')).toBeVisible()
+})
+
+test('a waiting result that keeps each tag of Cleaned says nothing of tags', async () => {
+  // Arrange
+  const screen = await renderCard([
+    { method: 'GET', path: '/api/v1/sessions/ses_1', body: waitingSince({ cleanedText: tagged('I met ', 'Zed') }) },
+    { method: 'GET', path: '/api/v1/sessions/ses_1/cleaned-revisions/3', body: revision(3, tagged('Today I met ', 'Zed')) },
+  ])
+
+  // Assert
+  await expect.element(screen.getByRole('button', { name: 'Use the Cleanup result' })).toBeEnabled()
+  await expect.element(screen.getByText(/Cleaned tags/)).not.toBeInTheDocument()
+})
+
+test('a hand edit after a Cleanup shows one status, and it does not say that Cleaned is current', async () => {
+  // Arrange
+  const screen = await renderCard([{ method: 'GET', path: '/api/v1/sessions/ses_1', body: session({ cleanedHasHandEdits: true, cleanedDraftRevision: 2, cleanedLatestRevision: 2 }) }])
+
+  // Assert
+  await expect.element(screen.getByRole('status')).toHaveTextContent('You edited Cleaned by hand after the last Cleanup.')
+  await expect.element(screen.getByText('A new Cleanup replaces Cleaned, and your edit stays as a Revision.')).toBeVisible()
+  await expect.element(screen.getByText('Cleaned is current.')).not.toBeInTheDocument()
+})
+
+for (const width of [390, 1280]) {
+  test(`at ${width} px, the kind of a suggestion comes before its value on the same line`, async () => {
+    // Arrange
+    await page.viewport(width, 900)
+    const screen = await renderCard([
+      { method: 'GET', path: '/api/v1/sessions/ses_1', body: session({ suggestions: [{ kind: 'Topic', value: 'work' }] }) },
+    ])
+
+    await expect.element(screen.getByText('work', { exact: true })).toBeVisible()
+
+    // Act
+    const chip = screen.getByText('Topic', { exact: true }).element().getBoundingClientRect()
+    const value = screen.getByText('work', { exact: true }).element().getBoundingClientRect()
+
+    // Assert
+    expect(chip.right).toBeLessThanOrEqual(value.left)
+    expect(Math.abs(chip.top + chip.height / 2 - (value.top + value.height / 2))).toBeLessThan(4)
+  })
+}
