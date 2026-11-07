@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { expect, test } from 'vitest'
+import { afterEach, expect, test, vi } from 'vitest'
 import { commands } from 'vitest/browser'
 import { render } from 'vitest-browser-react'
 
@@ -7,10 +7,16 @@ import { JournalEditor } from './journal-editor'
 
 const longText = 'river stone morning coffee '.repeat(4000)
 
+let client: QueryClient
+
+// A read that ends after this test would count as a request of the next test, which has no answer for it yet.
+afterEach(() => vi.waitFor(() => expect(client.isFetching()).toBe(0)))
+
 const renderEditor = async (isBounded: boolean) => {
   await commands.answerRequests([{ method: 'GET', path: '/api/v1/people', body: [] }])
+  client = new QueryClient()
   return render(
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={client}>
       <JournalEditor initialText={longText} revision={1} label="New entry" isBounded={isBounded} onChange={() => undefined} />
     </QueryClientProvider>,
   )
