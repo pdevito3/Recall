@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ModelProvidersRouteImport } from './routes/model-providers'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UsersIndexRouteImport } from './routes/users/index'
@@ -17,6 +18,11 @@ import { Route as PeopleIndexRouteImport } from './routes/people/index'
 import { Route as UsersIdIndexRouteImport } from './routes/users/$id/index'
 import { Route as SessionsIdIndexRouteImport } from './routes/sessions/$id/index'
 
+const ModelProvidersRoute = ModelProvidersRouteImport.update({
+  id: '/model-providers',
+  path: '/model-providers',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AboutRoute = AboutRouteImport.update({
   id: '/about',
   path: '/about',
@@ -56,6 +62,7 @@ const SessionsIdIndexRoute = SessionsIdIndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/model-providers': typeof ModelProvidersRoute
   '/people': typeof PeopleIndexRoute
   '/settings': typeof SettingsIndexRoute
   '/users': typeof UsersIndexRoute
@@ -65,6 +72,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/model-providers': typeof ModelProvidersRoute
   '/people': typeof PeopleIndexRoute
   '/settings': typeof SettingsIndexRoute
   '/users': typeof UsersIndexRoute
@@ -75,6 +83,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/model-providers': typeof ModelProvidersRoute
   '/people/': typeof PeopleIndexRoute
   '/settings/': typeof SettingsIndexRoute
   '/users/': typeof UsersIndexRoute
@@ -86,6 +95,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/about'
+    | '/model-providers'
     | '/people'
     | '/settings'
     | '/users'
@@ -95,6 +105,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/about'
+    | '/model-providers'
     | '/people'
     | '/settings'
     | '/users'
@@ -104,6 +115,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/about'
+    | '/model-providers'
     | '/people/'
     | '/settings/'
     | '/users/'
@@ -114,6 +126,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
+  ModelProvidersRoute: typeof ModelProvidersRoute
   PeopleIndexRoute: typeof PeopleIndexRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
   UsersIndexRoute: typeof UsersIndexRoute
@@ -123,6 +136,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/model-providers': {
+      id: '/model-providers'
+      path: '/model-providers'
+      fullPath: '/model-providers'
+      preLoaderRoute: typeof ModelProvidersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/about': {
       id: '/about'
       path: '/about'
@@ -178,6 +198,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
+  ModelProvidersRoute: ModelProvidersRoute,
   PeopleIndexRoute: PeopleIndexRoute,
   SettingsIndexRoute: SettingsIndexRoute,
   UsersIndexRoute: UsersIndexRoute,

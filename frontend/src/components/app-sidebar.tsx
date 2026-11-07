@@ -1,4 +1,5 @@
 import {
+  AiBrain01Icon,
   Book02Icon,
   InformationCircleIcon,
   Settings01Icon,
@@ -56,6 +57,11 @@ const navItems = [
     icon: UserGroupIcon,
   },
   {
+    title: "Model providers",
+    url: "/model-providers",
+    icon: AiBrain01Icon,
+  },
+  {
     title: "About",
     url: "/about",
     icon: InformationCircleIcon,
@@ -71,6 +77,8 @@ export function AppSidebar() {
   const { setOpenMobile } = useSidebar()
   const membership = useMembership()
   const canReadUsers = membership.status === "member" && membership.user.permissions.includes("read_users")
+  const canManageModelProviders =
+    membership.status === "member" && membership.user.permissions.includes("manage_model_providers")
 
   // On mobile the sidebar is a sheet over the page. Close it when a link is
   // pressed, so the user sees the new page. On desktop the sheet is not used.
@@ -100,6 +108,7 @@ export function AppSidebar() {
               <SidebarMenu>
                 {navItems.map((item) => {
                   if (item.url === "/users" && !canReadUsers) return null
+                  if (item.url === "/model-providers" && !canManageModelProviders) return null
                   return (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuLink

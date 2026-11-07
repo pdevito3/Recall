@@ -35,6 +35,23 @@ public class AgentTests
     }
 
     [Test]
+    public void an_agent_cannot_get_the_permission_to_manage_the_model_providers()
+    {
+        // Arrange
+        var agent = Agent.Create(ForCreation(), TenantAdmin);
+        var forCreation = ForCreation() with { Permissions = [Permission.Names.ManageModelProviders] };
+
+        // Act
+        var grant = () => agent.Grant(Permission.ManageModelProviders(), TenantAdmin);
+        var create = () => Agent.Create(forCreation, TenantAdmin);
+
+        // Assert
+        grant.ShouldThrow<ValidationException>();
+        create.ShouldThrow<ValidationException>();
+        agent.Permissions.ShouldBeEmpty();
+    }
+
+    [Test]
     public void tenant_admin_cannot_create_a_machine_agent()
     {
         // Arrange

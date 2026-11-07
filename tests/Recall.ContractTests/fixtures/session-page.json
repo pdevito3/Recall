@@ -8,6 +8,7 @@
       "preview": "",
       "synopsis": null,
       "cleanupStatus": "NotRun",
+      "cleanupFailure": "None",
       "activity": "None",
       "moods": [],
       "topics": [],
@@ -23,6 +24,7 @@
       "preview": "Lunch with Sam",
       "synopsis": null,
       "cleanupStatus": "NotRun",
+      "cleanupFailure": "None",
       "activity": "Walking",
       "moods": [
         "Calm"

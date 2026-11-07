@@ -9,6 +9,12 @@ export const appShell = (page: Page) => ({
   headerSeparator: page.getByRole('main').getByRole('separator'),
   routerDevtoolsButton: page.getByRole('button', { name: 'Open TanStack Router Devtools' }),
   mobileSidebar: page.locator('[data-slot="sidebar"][data-mobile="true"]'),
+  // The Dismiss button of a React Aria overlay is for a screen reader only, and it has no size on the screen.
+  mobileSidebarControls: page
+    .locator('[data-slot="sidebar"][data-mobile="true"]')
+    .getByRole('button')
+    .and(page.locator(':not([aria-label="Dismiss"])'))
+    .or(page.locator('[data-slot="sidebar"][data-mobile="true"]').getByRole('link')),
   mobileSidebarAppName: page.locator('[data-slot="sidebar"][data-mobile="true"]').getByText('Recall', { exact: true }),
   journalNavigationLink: page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Journal' }),
   peopleNavigationLink: page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'People' }),

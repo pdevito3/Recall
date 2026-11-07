@@ -53,6 +53,22 @@ public static class ApiRoutes
         public static string RawRevision(string id, int number) => $"{Base}/sessions/{id}/raw-revisions/{number}";
         public static string CleanedRevisions(string id) => $"{Base}/sessions/{id}/cleaned-revisions";
         public static string CleanedRevision(string id, int number) => $"{Base}/sessions/{id}/cleaned-revisions/{number}";
+        public static string Cleanup(string id) => $"{Base}/sessions/{id}/cleanup";
+        public static string StopCleanup(string id) => $"{Base}/sessions/{id}/cleanup/stop";
+        public static string ApplyWaitingCleanup(string id) => $"{Base}/sessions/{id}/cleanup/waiting/apply";
+        public static string CleanupStream(string id) => $"{Base}/sessions/{id}/cleanup/stream";
+        public static string CleanupResult(string id) => $"{Base}/sessions/{id}/cleanup/result";
+        public static string AcceptSuggestion(string id) => $"{Base}/sessions/{id}/suggestions/accept";
+        public static string RejectSuggestion(string id) => $"{Base}/sessions/{id}/suggestions/reject";
+        public static string RespondToPersonProposal(string id) => $"{Base}/sessions/{id}/people-proposals/respond";
+    }
+
+    public static class ModelProviders
+    {
+        public static string Root => $"{Base}/model-providers";
+        public static string Active => $"{Base}/model-providers/active";
+        public static string GetRecord(string id) => $"{Base}/model-providers/{id}";
+        public static string Test(string id) => $"{Base}/model-providers/{id}/test";
     }
 
     public static class Sync

@@ -38,6 +38,7 @@ internal sealed record AuditActor(string? Subject, string? ClientId, string? Use
         caller switch
         {
             CallerIdentity.User { LiveUser: { } liveUser } => liveUser.UserId,
+            CallerIdentity.JournalWork work => work.UserId,
             CallerIdentity.DelegatedAgent agent => agent.LiveUser.UserId,
             _ => null,
         },

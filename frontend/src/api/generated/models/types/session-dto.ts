@@ -3,6 +3,8 @@
 * Do not edit manually.
 */
 
+import type { PersonProposalDto } from './person-proposal-dto'
+import type { SessionSuggestionDto } from './session-suggestion-dto'
 import type { SessionTopicDto } from './session-topic-dto'
 
 export const sessionDtoCleanupStatusEnum = {
@@ -14,6 +16,19 @@ export const sessionDtoCleanupStatusEnum = {
 } as const;
 
 export type SessionDtoCleanupStatusEnumKey = (typeof sessionDtoCleanupStatusEnum)[keyof typeof sessionDtoCleanupStatusEnum];
+
+export const sessionDtoCleanupFailureEnum = {
+    None: "None",
+    NoModelProvider: "NoModelProvider",
+    KeyUnreadable: "KeyUnreadable",
+    ProviderRefused: "ProviderRefused",
+    ProviderUnavailable: "ProviderUnavailable",
+    BadModelOutput: "BadModelOutput",
+    Interrupted: "Interrupted",
+    Stopped: "Stopped"
+} as const;
+
+export type SessionDtoCleanupFailureEnumKey = (typeof sessionDtoCleanupFailureEnum)[keyof typeof sessionDtoCleanupFailureEnum];
 
 export type SessionDto = {
     id: string;
@@ -78,6 +93,27 @@ export type SessionDto = {
      * @type integer | undefined
     */
     lastCleanupRawRevision?: number | null;
+    /**
+     * @description The number of the Cleaned Draft at the start of the last run. While the run runs, a newer Cleaned means its result will wait in History.
+     *
+     * Format: `int32`
+     * @type integer | undefined
+    */
+    cleanupBaseCleanedRevision?: number | null;
+    /**
+     * @description The Cleaned Revision that holds a Cleanup result that did not replace Cleaned, because Cleaned moved during its run. Null when none waits.
+     *
+     * Format: `int32`
+     * @type integer | undefined
+    */
+    waitingCleanupRevision?: number | null;
+    /**
+     * @description Why the last Cleanup failed. It is a closed code, and the words of a model provider never come here.
+     * @type string
+    */
+    cleanupFailure: SessionDtoCleanupFailureEnumKey;
+    suggestions: SessionSuggestionDto[];
+    peopleProposals: PersonProposalDto[];
     activity: string;
     moods: string[];
     topics: SessionTopicDto[];

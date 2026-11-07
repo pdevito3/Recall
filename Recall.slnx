@@ -10,6 +10,7 @@
     <Project Path="tests/Recall.EntityGraphs.Generators/Recall.EntityGraphs.Generators.csproj" />
     <Project Path="tests/Recall.FunctionalTests/Recall.FunctionalTests.csproj" />
     <Project Path="tests/Recall.IntegrationTests/Recall.IntegrationTests.csproj" />
+    <Project Path="tests/Recall.FakeModelProvider/Recall.FakeModelProvider.csproj" />
     <Project Path="tests/Recall.SharedTestHelpers/Recall.SharedTestHelpers.csproj" />
     <Project Path="tests/Recall.UnitTests/Recall.UnitTests.csproj" />
   </Folder>

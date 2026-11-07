@@ -36,6 +36,9 @@ class SessionBuilder {
       synopsis: null,
       cleanupStatus: 'NotRun',
       lastCleanupRawRevision: 0,
+      cleanupFailure: 'None',
+      suggestions: [],
+      peopleProposals: [],
       activity: 'None',
       moods: [],
       topics: [],
@@ -92,9 +95,9 @@ class SessionBuilder {
   }
 
   summary(preview: string): SessionSummaryDto {
-    const { id, clientSessionId, startedAt, journalingDay, synopsis, cleanupStatus, activity, moods, topics, personIds, version, metadataVersion } =
+    const { id, clientSessionId, startedAt, journalingDay, synopsis, cleanupStatus, cleanupFailure, activity, moods, topics, personIds, version, metadataVersion } =
       this.session
-    return { id, clientSessionId, startedAt, journalingDay, preview, synopsis, cleanupStatus, activity, moods, topics, personIds, version, metadataVersion }
+    return { id, clientSessionId, startedAt, journalingDay, preview, synopsis, cleanupStatus, cleanupFailure, activity, moods, topics, personIds, version, metadataVersion }
   }
 }
 

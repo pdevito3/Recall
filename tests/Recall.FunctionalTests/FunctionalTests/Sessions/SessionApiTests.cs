@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Recall.Server.Databases;
 using Recall.Server.Domain.People.Dtos;
+using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Content;
 using Recall.Server.Domain.Sessions.Dtos;
 using Recall.Server.Domain.Tenants;
@@ -465,7 +466,7 @@ public class SessionApiTests : TestBase
             var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var row = await dbContext.Sessions.SingleAsync(s => s.Id == session.Id);
             row.BeginCleanup();
-            row.CompleteCleanup("words of the cleanup", "synopsis", 0, now.AddMinutes(-3));
+            row.CompleteCleanup(new CleanupOutcome("words of the cleanup", "synopsis", [], [], []), 0, now.AddMinutes(-3));
             await dbContext.SaveChangesAsync();
         }
 

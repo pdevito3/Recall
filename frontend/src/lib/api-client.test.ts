@@ -151,7 +151,7 @@ describe('apiClient with a response that is not problem details', () => {
   it.each([
     ['the message field', { message: 'Down for maintenance.' }, 'Down for maintenance.'],
     ['the error field', { error: 'Bad gateway.' }, 'Bad gateway.'],
-    ['the axios message when the body has neither field', { reason: 'x' }, 'Request failed with status code 503'],
+    ['words for a person when the body has neither field', { reason: 'x' }, 'The Server could not do this, and it answered with error 503. Try again later.'],
   ])('rejects with %s', async (_, body, message) => {
     adapter.mockImplementation((config) => respond(config, 503, body))
 
@@ -170,7 +170,7 @@ describe('apiClient with a response that is not problem details', () => {
     const error = await getTenant({ path: { id: tenantId } }).catch((e: unknown) => e)
 
     expect(error).not.toBeInstanceOf(ProblemDetailsError)
-    expect((error as Error).message).toBe('Request failed with status code 401')
+    expect((error as Error).message).toBe('The Server could not do this, and it answered with error 401. Try again later.')
     expect(checkSession).toHaveBeenCalledOnce()
     expect(Notification.error).not.toHaveBeenCalled()
   })
@@ -181,7 +181,7 @@ describe('apiClient with a response that is not problem details', () => {
 
     const error = await getTenant({ path: { id: tenantId } }).catch((e: unknown) => e)
 
-    expect((error as Error).message).toBe('Request failed with status code 401')
+    expect((error as Error).message).toBe('The Server could not do this, and it answered with error 401. Try again later.')
     expect(checkSession).toHaveBeenCalledOnce()
     expect(Notification.error).toHaveBeenCalledExactlyOnceWith(
       'The Server did not accept your sign-in for this request. Try again in a moment. If it fails again, log out and log in again.',
@@ -193,11 +193,11 @@ describe('apiClient with a response that is not problem details', () => {
 
     const error = await apiClient.get('/auth/me', { suppressErrorToast: true }).catch((e: unknown) => e)
 
-    expect((error as Error).message).toBe('Request failed with status code 401')
+    expect((error as Error).message).toBe('The Server could not do this, and it answered with error 401. Try again later.')
     expect(checkSession).not.toHaveBeenCalled()
   })
 
-  it('rejects with the axios message for a network error', async () => {
+  it('rejects with words for a person for a network error', async () => {
     adapter.mockImplementation((config) =>
       Promise.reject(new AxiosError('Network Error', AxiosError.ERR_NETWORK, config)),
     )
@@ -205,7 +205,7 @@ describe('apiClient with a response that is not problem details', () => {
     const error = await getTenant({ path: { id: tenantId } }).catch((e: unknown) => e)
 
     expect(error).not.toBeInstanceOf(ProblemDetailsError)
-    expect((error as Error).message).toBe('Network Error')
-    expect(Notification.error).toHaveBeenCalledExactlyOnceWith('Network Error')
+    expect((error as Error).message).toBe('The Server did not answer. Check your connection, and try again.')
+    expect(Notification.error).toHaveBeenCalledExactlyOnceWith('The Server did not answer. Check your connection, and try again.')
   })
 })

@@ -23,6 +23,13 @@ public sealed class SessionConfiguration : IEntityTypeConfiguration<Session>
         builder.Property(e => e.Synopsis).HasMaxLength(Session.SynopsisMaxLength);
         builder.Property(e => e.Activity).IsRequired().HasMaxLength(Session.MetadataValueMaxLength);
         builder.Property(e => e.CleanupRun).HasConversion<string>().HasMaxLength(20);
+        builder.Property(e => e.CleanupRunId).HasMaxLength(EntityId.MaxLength).UseCollation(EntityId.Collation);
+        builder.Property(e => e.CleanupFailure).HasConversion<string>().HasMaxLength(30);
+        builder.PrimitiveCollection(e => e.TopicSuggestions).HasMaxLength(Session.MetadataListColumnMaxLength);
+        builder.PrimitiveCollection(e => e.MoodSuggestions).HasMaxLength(Session.MetadataListColumnMaxLength);
+        builder.Property(e => e.PeopleProposals)
+            .HasConversion(new PersonProposalListConverter(), PersonProposalListConverter.Comparer)
+            .HasMaxLength(PersonProposalListConverter.ColumnMaxLength);
         builder.PrimitiveCollection(e => e.Moods).HasMaxLength(Session.MetadataListColumnMaxLength);
         builder.PrimitiveCollection(e => e.UserTopics).HasMaxLength(Session.MetadataListColumnMaxLength);
         builder.PrimitiveCollection(e => e.AiTopics).HasMaxLength(Session.MetadataListColumnMaxLength);

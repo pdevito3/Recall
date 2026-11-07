@@ -9,7 +9,7 @@ public class PermissionTests
     private static readonly string[] AllNames =
     [
         "manage_users", "manage_user_access", "manage_tenant", "manage_agents", "read_audit_log", "read_audit_log_sensitive",
-        "read_users", "read_agents",
+        "read_users", "read_agents", "manage_model_providers",
         // new-feature:permission-names
     ];
 

@@ -58,6 +58,13 @@ function getErrorMessage(problemDetails: ProblemDetails): string {
   return problemDetails.title || 'An error occurred'
 }
 
+/** The words for a person when the answer has no message of its own. The message of axios is for a developer. */
+function failureWords(error: AxiosError): string {
+  return error.response
+    ? `The Server could not do this, and it answered with error ${error.response.status}. Try again later.`
+    : 'The Server did not answer. Check your connection, and try again.'
+}
+
 /**
  * Handles error responses, converting to ProblemDetailsError when applicable
  */
@@ -78,12 +85,12 @@ function handleErrorResponse(error: AxiosError): ProblemDetailsError | Error {
         ? data.message
         : typeof data.error === 'string'
           ? data.error
-          : error.message
+          : failureWords(error)
 
     return new Error(message)
   }
 
-  return new Error(error.message || 'An unexpected error occurred')
+  return new Error(failureWords(error))
 }
 
 const signInRejectedMessage =
