@@ -1,14 +1,17 @@
 namespace Recall.Server.Domain.Sessions.Content;
 
+using System.Net;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Markdig.Extensions.Tables;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 
 /// <summary>
-/// The check behind the rule of <see cref="MarkdownToProseMirror"/>. A word is a run of letters and digits, so the marks of
-/// Markdown are not words. It counts each word, because a lost line can hold only words that stay elsewhere.
+/// The check behind the rule of <see cref="MarkdownToProseMirror"/>. It counts each word and each sign that is not a mark of
+/// Markdown, because a lost line can hold only words that stay elsewhere. It reads the words of a block over the edges of
+/// its text nodes, because a mark inside a word changes the word: "2*3*4" must not show as "234".
 /// </summary>
 internal static partial class MarkdownWords
 {
@@ -18,7 +21,7 @@ internal static partial class MarkdownWords
         CountDocument(document, inDocument);
 
         var missing = new Dictionary<string, int>(StringComparer.Ordinal);
-        CountWords(EntityForm().Replace(ItemMarker().Replace(markdown, " "), " "), missing, 1);
+        CountWords(EntityForm().Replace(ItemMarker().Replace(markdown, " "), entity => WebUtility.HtmlDecode(entity.Value)), missing, 1);
 
         foreach (var link in parsed.Descendants<LinkInline>())
             CountCopiesOf(link, missing);
@@ -29,7 +32,8 @@ internal static partial class MarkdownWords
 
         return missing.All(word => word.Value <= inDocument.GetValueOrDefault(word.Key))
             && !parsed.Descendants<FencedCodeBlock>().Any(fence => !string.IsNullOrEmpty(fence.Arguments))
-            && parsed.Descendants<ListBlock>().Where(list => list.IsOrdered).All(NumbersStayOnAPage);
+            && parsed.Descendants<ListBlock>().All(ItemsKeepTheirMeaning)
+            && parsed.Descendants<Table>().All(EachCellHoldsWords);
     }
 
     /// <summary>The document can hold a word of a link twice when the source has it once, and that must not hide a lost word.</summary>
@@ -49,33 +53,55 @@ internal static partial class MarkdownWords
     }
 
     /// <summary>A list holds no number of an item, and a page counts from 1 or shows no number. So only "1. 2. 3." and "1. 1. 1." can go in the document, and an ordered task list cannot.</summary>
-    private static bool NumbersStayOnAPage(ListBlock list)
+    private static bool NumbersStayOnAPage(List<ListItemBlock> items)
+        => !items.All(MarkdownToProseMirror.IsTaskItem)
+            && (items.All(item => item.Order == 1) || items.Select((item, index) => item.Order == index + 1).All(counts => counts));
+
+    /// <summary>A list that mixes tasks has no place for the state of a task, and "+ 5" reads as a sum and not as an item.</summary>
+    private static bool ItemsKeepTheirMeaning(ListBlock list)
     {
         var items = list.OfType<ListItemBlock>().ToList();
-        return !items.All(MarkdownToProseMirror.IsTaskItem)
-            && (items.All(item => item.Order == 1) || items.Select((item, index) => item.Order == index + 1).All(counts => counts));
+        if (list.IsOrdered)
+            return NumbersStayOnAPage(items);
+
+        return list.BulletType != '+' && (items.All(MarkdownToProseMirror.IsTaskItem) || !items.Any(MarkdownToProseMirror.IsTaskItem));
+    }
+
+    /// <summary>A row is words with a space between cells, so an empty cell moves each later word to another column.</summary>
+    private static bool EachCellHoldsWords(Table table)
+    {
+        var rows = table.OfType<TableRow>().ToList();
+        return rows.All(row => row.Count == rows[0].Count
+            && row.OfType<TableCell>().All(cell => cell.Descendants<LeafBlock>().Any(leaf => leaf.Inline?.FirstChild is not null)));
     }
 
     private static void CountDocument(JsonObject node, Dictionary<string, int> counts)
     {
-        if (node["text"] is JsonValue text)
-            CountWords(text.GetValue<string>(), counts, 1);
         if (node["attrs"] is JsonObject attrs && attrs["language"] is JsonValue language)
             CountWords(language.GetValue<string>(), counts, 1);
 
-        if (node["content"] is JsonArray children)
+        if (node["content"] is not JsonArray children)
+            return;
+
+        var shown = new StringBuilder();
+        // One link can be many text nodes, and its address counts once.
+        string? address = null;
+        foreach (var child in children.OfType<JsonObject>())
         {
-            // One link can be many text nodes, and its address counts once.
-            string? address = null;
-            foreach (var child in children.OfType<JsonObject>())
+            if (child["text"] is not JsonValue text)
             {
-                var next = AddressOf(child);
-                if (next is not null && next != address)
-                    CountWords(next, counts, 1);
-                address = next;
                 CountDocument(child, counts);
+                continue;
             }
+
+            shown.Append(text.GetValue<string>());
+            var next = AddressOf(child);
+            if (next is not null && next != address)
+                CountWords(next, counts, 1);
+            address = next;
         }
+
+        CountWords(shown.ToString(), counts, 1);
     }
 
     private static string? AddressOf(JsonObject node)
@@ -86,17 +112,27 @@ internal static partial class MarkdownWords
         var word = new StringBuilder();
         foreach (var rune in text.EnumerateRunes())
         {
-            if (Rune.IsLetterOrDigit(rune))
+            if (Rune.IsLetterOrDigit(rune) && !HasNoSpaces(rune))
             {
                 word.Append(rune.ToString());
                 continue;
             }
 
             Add(word, counts, change);
+            if (!Rune.IsWhiteSpace(rune) && !IsMarkOfTheForm(rune))
+            {
+                word.Append(rune.ToString());
+                Add(word, counts, change);
+            }
         }
 
         Add(word, counts, change);
     }
+
+    private static bool IsMarkOfTheForm(Rune rune) => rune.IsAscii && "*_~=+\\#><-|[]()!:`".Contains((char)rune.Value);
+
+    /// <summary>Thai, Lao, and the scripts of East Asia write no space between words, so a mark there does not join two words. Each letter is its own count.</summary>
+    private static bool HasNoSpaces(Rune rune) => rune.Value is (>= 0x0E00 and <= 0x0EFF) or >= 0x2E80;
 
     private static void Add(StringBuilder word, Dictionary<string, int> counts, int change)
     {

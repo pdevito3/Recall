@@ -17,9 +17,10 @@ namespace Recall.Server.Domain.Sessions.Content;
 /// MentionInsertion, never here.) The AI is never asked to emit schema-valid editor JSON - it emits
 /// markdown and the server converts here. No DB, no network.
 ///
-/// Unsupported markdown never throws: it degrades to the nearest supported node. The rule for each input: each word of
-/// the markdown is in the document, as text, as the address of a link, or as the language of a code block. Two things are
-/// not words: the number of an item of a list that counts from 1, and an HTML entity, which becomes its character.
+/// Unsupported markdown never throws: it degrades to the nearest supported node. The rule for each input: each word and
+/// each sign of the markdown is in the document, as text, as the address of a link, or as the language of a code block, and
+/// a mark does not join two words. Three things are not words: a mark of the form, the number of an item of a list that
+/// counts from 1, and an HTML entity, which becomes its character.
 /// <see cref="MarkdownWords"/> checks the rule on each conversion, and a document that breaks it gives way to the source
 /// as text. So a person can see the marks of the source, and cannot lose a word.
 /// </summary>
@@ -178,8 +179,7 @@ public static class MarkdownToProseMirror
     {
         // A list is a TASK list when its items carry task markers ("- [ ]" / "- [x]"): Markdig puts a
         // TaskList inline as the first inline of each such item's leading paragraph. We treat a list as
-        // a task list when every (non-empty) item is a task item - mixed lists fall back to bullet/
-        // ordered with the markers stripped from the task rows.
+        // a task list when every (non-empty) item is a task item. MarkdownWords sends a mixed list to the source.
         var itemBlocks = list.OfType<ListItemBlock>().ToList();
         var isTaskList = itemBlocks.Count > 0 && itemBlocks.All(IsTaskItem);
 

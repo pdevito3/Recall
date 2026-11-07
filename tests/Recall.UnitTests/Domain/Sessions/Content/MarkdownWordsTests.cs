@@ -54,7 +54,20 @@ public partial class MarkdownWordsTests
             ("1. w1\n1. w2\n1. w3", ["w1", "w2", "w3"], "orderedList"),
             ("1999. w1\n2003. w2\n2011. w3", ["1999", "2003", "2011", "w1", "w2", "w3"], "paragraph"),
             ("- [ ] w1\n- [x] w2", ["w1", "w2"], "taskList"),
-            ("- [ ] w1\n- w2", ["w1", "w2"], "bulletList"),
+            ("- [ ] w1\n- w2", ["w1", "w2"], "paragraph"),
+            ("+ 5 degrees\n+ 6", ["5", "6"], "paragraph"),
+            ("Multiply 2*3*4 to get 24, and 5*3=15", ["2", "3", "4", "5", "15"], "paragraph"),
+            ("10**2**3", ["10", "2", "3"], "paragraph"),
+            ("a~~b~~c", ["a", "b", "c"], "paragraph"),
+            ("x++y++z", ["x", "y", "z"], "paragraph"),
+            ("p==q==r", ["p", "q", "r"], "paragraph"),
+            ("2*3 + 4*5", ["2", "3", "4", "5"], "paragraph"),
+            ("w1**w2**", ["w1", "w2"], "paragraph"),
+            ("[w1](https://example.com)w2", ["w1", "w2"], "paragraph"),
+            ("| w1 | | w3 |\n|---|---|---|\n| w4 | w5 | w6 |", ["w1", "w3", "w6"], "paragraph"),
+            ("|w1|w2|\n|-|-|\n|w3|", ["w1", "w2", "w3"], "paragraph"),
+            ("**w1**'s w2, *w3*.", ["w1", "s", "w2", "w3"], "paragraph"),
+            ("\u8FD9\u662F**\u7C97\u4F53**\u6587\u672C", ["\u8FD9\u662F", "\u7C97\u4F53", "\u6587\u672C"], "paragraph"),
             ("```js\nw1\n```", ["js", "w1"], "codeBlock"),
             ("~~~\nw1\n~~~", ["w1"], "codeBlock"),
             ("    w1 indented", ["w1", "indented"], "codeBlock"),
@@ -109,6 +122,51 @@ public partial class MarkdownWordsTests
         foreach (var word in form.Words)
             words.ShouldContain(word, form.Markdown);
         TypesIn(JsonNode.Parse(json)!.AsObject()).ShouldContain(form.NodeType, form.Markdown);
+    }
+
+    [Test]
+    [Arguments("Multiply 2*3*4 to get 24, and 5*3=15")]
+    [Arguments("10**2**3")]
+    [Arguments("a~~b~~c")]
+    [Arguments("x++y++z")]
+    [Arguments("p==q==r")]
+    [Arguments("[w1](https://example.com)w2")]
+    [Arguments("- [ ] w1\n- w2")]
+    [Arguments("+ 5 degrees")]
+    [Arguments("| w1 | | w3 |\n|---|---|---|\n| w4 | w5 | w6 |")]
+    public void a_form_that_would_change_what_is_shown_stays_as_the_source(string markdown)
+    {
+        // Act
+        var plain = ProseMirrorToPlainText.Render(MarkdownToProseMirror.ConvertToJson(markdown));
+
+        // Assert
+        plain.Trim().ShouldBe(markdown);
+    }
+
+    [Test]
+    [Arguments("Costs 5% of $10, say 2/3.")]
+    [Arguments("caf&eacute; don&#39;t")]
+    [Arguments("# Title\n\n**Bold** and *it* and ~~gone~~ with [a](https://example.com) here")]
+    [Arguments("\u8FD9\u662F**\u7C97\u4F53**\u6587\u672C")]
+    public void a_form_with_only_clear_marks_stays_in_its_nodes(string markdown)
+    {
+        // Act
+        var plain = ProseMirrorToPlainText.Render(MarkdownToProseMirror.ConvertToJson(markdown));
+
+        // Assert
+        plain.ShouldNotContain("**");
+        plain.ShouldNotContain("&#");
+        plain.ShouldNotContain("&eacute");
+    }
+
+    [Test]
+    public void a_sign_that_the_document_loses_sends_it_to_the_source()
+    {
+        // Act
+        var plain = ProseMirrorToPlainText.Render(MarkdownToProseMirror.ConvertToJson("[w1](https://example.com/a 'w2')"));
+
+        // Assert
+        plain.ShouldContain("'w2'");
     }
 
     [Test]
@@ -218,12 +276,19 @@ public partial class MarkdownWordsTests
 
             var source = markdown.ToString();
             // A word can touch the letters of the next mark, as in "w5xjavascript:", and the form "wNx" holds no other.
-            var kept = string.Join(' ', WordsIn(MarkdownToProseMirror.ConvertToJson(source)));
+            var json = MarkdownToProseMirror.ConvertToJson(source);
+            var kept = string.Join(' ', WordsIn(json));
             foreach (var word in written)
                 kept.ShouldContain(word, Case.Sensitive, $"Seed {RandomSeed}, input {input}: {source}");
+
+            // A mark always stands between two written words, so no block of the document may show them as one.
+            JoinedWord().IsMatch(ProseMirrorToPlainText.Render(json)).ShouldBeFalse($"Seed {RandomSeed}, input {input}: {source}");
         }
     }
 
     [GeneratedRegex(@"[\p{L}\p{Nd}]+")]
     private static partial Regex Word();
+
+    [GeneratedRegex(@"w[0-9]+xw[0-9]+x")]
+    private static partial Regex JoinedWord();
 }
