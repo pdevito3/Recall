@@ -2193,7 +2193,7 @@
         "tags": [
           "Sessions"
         ],
-        "summary": "Saves the Cleaned Draft with Last-write-wins on the save time. A save that loses keeps its words as a Revision.",
+        "summary": "Saves the Cleaned Draft with Last-write-wins on the save time. A save that loses keeps its words as a Revision.\nA base must be the number of a Draft whose words the client holds. A higher base loses at any save time.",
         "operationId": "SaveCleanedDraft",
         "parameters": [
           {
@@ -2277,7 +2277,7 @@
         "tags": [
           "Sessions"
         ],
-        "summary": "Saves the Raw Draft with Last-write-wins on the save time. A save that loses keeps its words as a Revision.",
+        "summary": "Saves the Raw Draft with Last-write-wins on the save time. A save that loses keeps its words as a Revision.\nA base must be the number of a Draft whose words the client holds. A higher base loses at any save time.",
         "operationId": "SaveRawDraft",
         "parameters": [
           {
@@ -4263,7 +4263,6 @@
       "DraftSaveResultDto": {
         "required": [
           "outcome",
-          "draftRevision",
           "latestRevision",
           "cleanupStatus",
           "version"
@@ -4277,14 +4276,19 @@
               "Lost"
             ],
             "type": "string",
-            "description": "A save with the outcome `Lost` did not change the Draft, and its words stay as the newest Revision."
+            "description": "`Unchanged` says that the Draft holds these words. `Lost` says that it does not, and the words are in a Revision, also on a replay."
           },
           "draftRevision": {
-            "type": "integer",
+            "type": [
+              "null",
+              "integer"
+            ],
+            "description": "The base of the next save. It is null after `Lost`, because the client does not hold the words of the Draft: read the Draft, merge, and save from the number of the read.",
             "format": "int32"
           },
           "latestRevision": {
             "type": "integer",
+            "description": "The number of the newest Revision. It is never a base.",
             "format": "int32"
           },
           "savedAt": {

@@ -97,6 +97,25 @@ public class DraftSlotTests
     }
 
     [Test]
+    [Property("Rule", "SES-5")]
+    [Arguments(5)]
+    [Arguments(6)]
+    [Arguments(999_999)]
+    public void a_base_above_the_draft_loses_at_any_time_and_stays_as_a_revision(int baseRevision)
+    {
+        // Arrange
+        var slot = new DraftSlot("current words", 4, 6, Noon);
+
+        // Act
+        var decision = slot.Decide(Save("guessed base", baseRevision, Noon.AddHours(1)), false);
+
+        // Assert
+        decision.Outcome.ShouldBe(DraftSaveOutcome.Lost);
+        decision.Next.Text.ShouldBe("current words");
+        decision.MintedRevision.ShouldBe(7);
+    }
+
+    [Test]
     [Property("Rule", "SES-7")]
     public void a_save_time_in_the_future_becomes_the_time_of_the_server()
     {
@@ -109,7 +128,7 @@ public class DraftSlotTests
 
     [Test]
     [Property("Rule", "SES-8")]
-    public void a_replay_of_a_kept_save_makes_no_revision()
+    public void a_replay_of_a_kept_save_makes_no_revision_and_says_that_it_lost()
     {
         // Arrange
         var slot = At(4, Noon);
@@ -118,7 +137,7 @@ public class DraftSlotTests
         var decision = slot.Decide(Save("older words", 1, Noon.AddHours(-1)), isReplay: true);
 
         // Assert
-        decision.Outcome.ShouldBe(DraftSaveOutcome.Unchanged);
+        decision.Outcome.ShouldBe(DraftSaveOutcome.Lost);
         decision.MintedRevision.ShouldBeNull();
         decision.Next.ShouldBe(slot);
     }

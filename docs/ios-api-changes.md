@@ -19,7 +19,7 @@ This document compares each of the 22 routes that the POC iOS client calls (`Jou
 | 5 | `POST api/sessions` | `POST /api/v1/sessions` | Send `clientSessionId` in place of `id`, and add `startedAt`. The server makes `id`. A replay gives 200 with the same Session. A replay after a delete gives 409, so drop the local copy. Fixtures: `session-created`, `session-replayed`, `error-replay-after-delete`. |
 | 6 | `GET api/sessions` | `GET /api/v1/sessions` | The body is `{ items, nextCursor }`, not a list. Send `cursor` and `pageSize`. A row has `startedAt`, not `createdAt`, and `personIds`, not `people`. `topics` holds `{ name, provenance }`. A row adds `metadataVersion`, the base of the next metadata save. Fixtures: `session-page`, `session-page-with-next-cursor`. |
 | 7 | `GET api/sessions/{id}` | `GET /api/v1/sessions/{id}` | Fields as in `session`, also `metadataVersion`, the base of the next metadata save. Another person's Session gives 404. |
-| 8 | `PUT api/sessions/{id}/draft` | `PUT /api/v1/sessions/{id}/draft` | Send `text`, `baseRevision`, and `savedAt`. `baseRevision` is required. Send 0 when no Revision exists. The reply has `outcome`, which is `Won`, `Lost`, or `Unchanged`. Fixtures: `draft-save-won`, `draft-save-lost`. |
+| 8 | `PUT api/sessions/{id}/draft` | `PUT /api/v1/sessions/{id}/draft` | Send `text`, `baseRevision`, and `savedAt`. `baseRevision` is required. Send 0 when no Revision exists. The reply has `outcome`, which is `Won`, `Lost`, or `Unchanged`. See [the base of a Draft save](#the-base-of-a-draft-save). Fixtures: `draft-save-won`, `draft-save-lost`. |
 | 9 | `GET api/summaries/{period}/{date}` | R10 builds it | No route in this unit. |
 | 10 | `POST api/summaries/{period}/{date}/generate` | R10 builds it | No route in this unit. |
 | 11 | `GET api/me/settings` | `GET /api/v1/me/settings` | `timeZone`, not `timeZoneId`, and `requirePeopleProposalApproval`, not `requirePeopleTagApproval`. `version` is the base of the next settings save, and it is 0 when the User has no row. `timeZoneIsKnown` is false when the host does not know the stored zone, for example after a restore onto other tzdata. The Journaling day then comes from UTC. Show the zone and ask the person for a new one. Fixture: `user-settings`. |
@@ -34,6 +34,38 @@ This document compares each of the 22 routes that the POC iOS client calls (`Jou
 | 20 | `PUT api/sessions/{id}/metadata` | `PUT /api/v1/sessions/{id}/metadata` | Send `userTopics`, not `topics`, and `metadataVersion`. Only `metadataVersion` is required, and a body without it gives 400. It is not the `version` of the Session, which moves on each Draft save. The PUT replaces Activity, Moods, and User Topics, and AI Topics stay. So a body with only `userTopics` and `metadataVersion` sets Activity to `None` and Moods to empty, and a body with only `metadataVersion`, or with `topics` in place of `userTopics`, also empties the User Topics. Moods and Topics return trimmed and in one spelling. Build `userTopics` only from the Topics with the provenance `UserSet`, because `topics` also holds AI Topics, and a save of an AI Topic in `userTopics` makes it a Topic of the User. A stale `metadataVersion` gives 409, and the words of the Session stay. Do not send `savedAt`, because the server ignores it. See [Settings and metadata saves](#settings-and-metadata-saves). The People of a Session come from its mentions, so the body has no list of people. Fixtures: `session-metadata`, `error-stale-metadata`. |
 | 21 | `GET api/sessions/{id}/revisions` and `.../cleaned-revisions` | `GET /api/v1/sessions/{id}/raw-revisions` and `.../cleaned-revisions` | The body is `{ items, nextCursor }`, newest first. An item has `number` and `savedAt`, not `revisionNumber` and `createdAt`, and adds `length`. Fixtures: `raw-revision-page`, `cleaned-revision-page`. |
 | 22 | `GET api/sessions/{id}/{revisions path}/{number}` | `GET /api/v1/sessions/{id}/raw-revisions/{number}` and `.../cleaned-revisions/{number}` | `text`, not `content`. Fixtures: `raw-revision`, `cleaned-revision`. |
+
+## The base of a Draft save
+
+The rules are SES-5, SES-6, SES-8, and SES-36 in the [sessions spec](specs/sessions.md). They apply to the `draft` route and to the `cleaned` route.
+
+`baseRevision` is the number of a Draft whose text the client holds. Get this number from one of these sources:
+
+- A read of the Session: `rawDraftRevision` with `rawText`, or `cleanedDraftRevision` with `cleanedText`.
+- A `Won` reply or an `Unchanged` reply: `draftRevision`.
+
+Do not use `latestRevision` as a base. It can name a Revision that lost.
+
+Each `outcome` tells the client this:
+
+| `outcome` | The Draft | The words of this save | `draftRevision` |
+|-----------|-----------|------------------------|-----------------|
+| `Won` | Holds these words | In the Draft, and in a new Revision | The number of the Draft |
+| `Unchanged` | Holds these words | In the Draft. No new Revision | The number of the Draft |
+| `Lost` | Does not hold these words | In a Revision | `null` |
+
+A replay of a save that is not in the Draft gives `Lost`, with no new Revision. So a client that lost a reply gets the true answer when it sends the save again.
+
+A base above the number of the Draft gives `Lost`, also with a later `savedAt`. The server keeps the words as the newest Revision, and it does not refuse the save with a 4xx.
+
+After `Lost`, do these steps:
+
+1. Read the Session.
+2. Merge the words of the client into the text of the read.
+3. Save the merge, with the number of the read as `baseRevision`.
+4. If the reply is `Lost` again, go back to step 1.
+
+Do not send a new save from the old base and expect it to win. While a transcript moves the Draft, a save from a base older than the last chunk loses at any `savedAt`.
 
 ## Settings and metadata saves
 

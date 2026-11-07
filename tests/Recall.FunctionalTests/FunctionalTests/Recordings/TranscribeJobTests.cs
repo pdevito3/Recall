@@ -294,6 +294,48 @@ public class TranscribeJobTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-36")]
+    public async Task a_client_that_does_not_read_after_a_lost_save_cannot_push_a_chunk_out_of_the_draft()
+    {
+        // Arrange
+        var (recording, admin) = await FinishedRecordingAsync();
+        var session = await FactoryClient.GetFromJsonAsync<SessionDto>(ApiRoutes.Sessions.GetRecord(recording.SessionId));
+        await RunAsync(JobWith(Saying("heard words")), recording, admin);
+        var save = await FactoryClient.SaveDraftAsync(recording.SessionId, "typed before the read", session!.RawDraftRevision, DateTimeOffset.UtcNow.AddSeconds(1));
+        var lost = await save.Content.ReadFromJsonAsync<DraftSaveResultDto>();
+
+        // Act
+        var fromTheReply = await FactoryClient.SaveDraftAsync(recording.SessionId, "typed from the reply", lost!.DraftRevision ?? session.RawDraftRevision, DateTimeOffset.UtcNow.AddSeconds(2));
+        var fromTheLatest = await FactoryClient.SaveDraftAsync(recording.SessionId, "typed from the latest", lost.LatestRevision, DateTimeOffset.UtcNow.AddSeconds(3));
+
+        // Assert
+        lost.Outcome.ShouldBe("Lost");
+        lost.DraftRevision.ShouldBeNull();
+        (await fromTheReply.Content.ReadFromJsonAsync<DraftSaveResultDto>())!.Outcome.ShouldBe("Lost");
+        (await fromTheLatest.Content.ReadFromJsonAsync<DraftSaveResultDto>())!.Outcome.ShouldBe("Lost");
+        (await PlainRawAsync(recording.SessionId)).ShouldBe("heard words");
+    }
+
+    [Test]
+    [Property("Rule", "SES-36")]
+    public async Task a_client_that_reads_after_a_lost_save_can_save_its_merge()
+    {
+        // Arrange
+        var (recording, admin) = await FinishedRecordingAsync();
+        var session = await FactoryClient.GetFromJsonAsync<SessionDto>(ApiRoutes.Sessions.GetRecord(recording.SessionId));
+        await RunAsync(JobWith(Saying("heard words")), recording, admin);
+        await FactoryClient.SaveDraftAsync(recording.SessionId, "typed before the read", session!.RawDraftRevision, DateTimeOffset.UtcNow.AddSeconds(1));
+
+        // Act
+        var read = await FactoryClient.GetFromJsonAsync<SessionDto>(ApiRoutes.Sessions.GetRecord(recording.SessionId));
+        var merge = await FactoryClient.SaveDraftAsync(recording.SessionId, "heard words and typed words", read!.RawDraftRevision);
+
+        // Assert
+        (await merge.Content.ReadFromJsonAsync<DraftSaveResultDto>())!.Outcome.ShouldBe("Won");
+        (await PlainRawAsync(recording.SessionId)).ShouldBe("heard words and typed words");
+    }
+
+    [Test]
     [Property("Rule", "REC-6")]
     public async Task a_chunk_at_or_before_the_pointer_adds_no_text()
     {

@@ -145,9 +145,67 @@ public class SessionApiTests : TestBase
 
         // Assert
         replay.StatusCode.ShouldBe(HttpStatusCode.OK);
-        result!.Outcome.ShouldBe("Unchanged");
+        result!.Outcome.ShouldBe("Lost");
+        result.DraftRevision.ShouldBeNull();
         result.LatestRevision.ShouldBe(2);
         (raw ? read!.RawText : read!.CleanedText).ShouldBe("newer words");
+    }
+
+    [Test]
+    [Property("Rule", "SES-8")]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task a_replay_of_a_save_that_lost_says_lost_and_a_repeat_of_the_draft_says_unchanged(bool raw)
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        var route = raw ? ApiRoutes.Sessions.Draft(session.Id) : ApiRoutes.Sessions.Cleaned(session.Id);
+        var now = DateTimeOffset.UtcNow;
+        await FactoryClient.PutAsJsonAsync(route, new { text = "words of the Draft", baseRevision = 0, savedAt = now });
+        var lost = new { text = "words that lost", baseRevision = 0, savedAt = now.AddHours(-1) };
+        var first = await (await FactoryClient.PutAsJsonAsync(route, lost)).Content.ReadFromJsonAsync<DraftSaveResultDto>();
+
+        // Act
+        var replay = await (await FactoryClient.PutAsJsonAsync(route, lost)).Content.ReadFromJsonAsync<DraftSaveResultDto>();
+        var repeat = await (await FactoryClient.PutAsJsonAsync(route, new { text = "words of the Draft", baseRevision = 1, savedAt = now })).Content.ReadFromJsonAsync<DraftSaveResultDto>();
+
+        // Assert
+        first!.Outcome.ShouldBe("Lost");
+        replay!.Outcome.ShouldBe("Lost");
+        replay.LatestRevision.ShouldBe(first.LatestRevision);
+        repeat!.Outcome.ShouldBe("Unchanged");
+        repeat.DraftRevision.ShouldBe(1);
+        repeat.LatestRevision.ShouldBe(first.LatestRevision);
+    }
+
+    [Test]
+    [Property("Rule", "SES-5")]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task a_base_that_no_draft_had_changes_no_draft_and_keeps_the_words_as_a_revision(bool raw)
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        var route = raw ? ApiRoutes.Sessions.Draft(session.Id) : ApiRoutes.Sessions.Cleaned(session.Id);
+        await FactoryClient.PutAsJsonAsync(route, new { text = "words of the Draft", baseRevision = 0, savedAt = DateTimeOffset.UtcNow });
+
+        // Act
+        var reply = await FactoryClient.PutAsJsonAsync(route, new { text = "words from a guess", baseRevision = 999_999, savedAt = DateTimeOffset.UtcNow });
+        var result = await reply.Content.ReadFromJsonAsync<DraftSaveResultDto>();
+        var read = await FactoryClient.GetFromJsonAsync<SessionDto>(ApiRoutes.Sessions.GetRecord(session.Id));
+        var revision = await FactoryClient.GetFromJsonAsync<System.Text.Json.JsonElement>(
+            (raw ? ApiRoutes.Sessions.RawRevisions(session.Id) : ApiRoutes.Sessions.CleanedRevisions(session.Id)) + $"/{result!.LatestRevision}");
+
+        // Assert
+        reply.StatusCode.ShouldBe(HttpStatusCode.OK);
+        result.Outcome.ShouldBe("Lost");
+        result.DraftRevision.ShouldBeNull();
+        (raw ? read!.RawText : read!.CleanedText).ShouldBe("words of the Draft");
+        revision.GetProperty("text").GetString().ShouldBe("words from a guess");
     }
 
     [Test]

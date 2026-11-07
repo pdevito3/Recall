@@ -14,7 +14,7 @@ public sealed record DraftSlot(string Text, int DraftRevision, int LatestRevisio
             return new DraftDecision(this, DraftSaveOutcome.Unchanged, null);
 
         if (isReplay)
-            return new DraftDecision(this, DraftSaveOutcome.Unchanged, null);
+            return new DraftDecision(this, DraftSaveOutcome.Lost, null);
 
         var number = LatestRevision + 1;
         return !missesTranscript && Beats(save)
@@ -25,7 +25,8 @@ public sealed record DraftSlot(string Text, int DraftRevision, int LatestRevisio
     public DraftSlot RewrittenKeepingSavedAt(string text) => new(text, LatestRevision + 1, LatestRevision + 1, SavedAt);
 
     private bool Beats(DraftSave save)
-        => save.BaseRevision == DraftRevision || SavedAt is not { } draftSavedAt || save.SavedAt >= draftSavedAt;
+        => save.BaseRevision == DraftRevision
+           || (save.BaseRevision < DraftRevision && (SavedAt is not { } draftSavedAt || save.SavedAt >= draftSavedAt));
 
     private static DateTimeOffset LaterOf(DateTimeOffset? first, DateTimeOffset second)
         => first is { } value && value > second ? value : second;

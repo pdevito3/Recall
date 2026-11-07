@@ -23,18 +23,20 @@ export type DraftSaveResultDtoCleanupStatusEnumKey = (typeof draftSaveResultDtoC
 
 export type DraftSaveResultDto = {
     /**
-     * @description A save with the outcome `Lost` did not change the Draft, and its words stay as the newest Revision.
+     * @description `Unchanged` says that the Draft holds these words. `Lost` says that it does not, and the words are in a Revision, also on a replay.
      * @type string
     */
     outcome: DraftSaveResultDtoOutcomeEnumKey;
     /**
-     * @description
+     * @description The base of the next save. It is null after `Lost`, because the client does not hold the words of the Draft: read the Draft, merge, and save from the number of the read.
+     *
      * Format: `int32`
-     * @type integer
+     * @type integer | undefined
     */
-    draftRevision: number;
+    draftRevision?: number | null;
     /**
-     * @description
+     * @description The number of the newest Revision. It is never a base.
+     *
      * Format: `int32`
      * @type integer
     */

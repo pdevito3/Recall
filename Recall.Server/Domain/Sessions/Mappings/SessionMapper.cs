@@ -22,7 +22,7 @@ public static partial class SessionMapper
     public static DraftSaveResultDto ToSaveResult(this Session session, DraftSlot slot, DraftSaveOutcome outcome) => new()
     {
         Outcome = outcome.ToString(),
-        DraftRevision = slot.DraftRevision,
+        DraftRevision = outcome == DraftSaveOutcome.Lost ? null : slot.DraftRevision,
         LatestRevision = slot.LatestRevision,
         SavedAt = slot.SavedAt,
         CleanupStatus = session.CleanupStatus.ToString(),
