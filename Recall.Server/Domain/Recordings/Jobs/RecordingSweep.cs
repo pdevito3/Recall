@@ -97,7 +97,7 @@ public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore 
             RecordingWork.TryDeleteFolder(fileStore, RecordingFiles.Folder(owner.TenantId, owner.UserId, folder), folder, _logger);
 
         foreach (var ended in rows.Where(r => r.Status is RecordingStatus.Transcribed or RecordingStatus.Failed))
-            RecordingWork.TryDeleteWorkAudio(fileStore, RecordingFiles.WorkAudio(owner.TenantId, owner.UserId, ended.Id), ended.Id, _logger);
+            RecordingWork.TryDeleteWorkAudio(fileStore, owner.TenantId, owner.UserId, ended.Id, _logger);
 
         var overdue = rows
             .Where(r => r.Status == RecordingStatus.Transcribed && r.AudioDeletedAt is null && r.AudioKeptUntil <= now)

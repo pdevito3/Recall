@@ -8,6 +8,10 @@ public static class RecordingFiles
 
     public const int SliceSignatureBytes = 8;
 
+    public const string WorkAudioName = "work.wav";
+
+    public const string PartialWorkAudioName = WorkAudioName + ".part";
+
     private const string SlicesFolder = "slices";
 
     public static FileKey OwnerFolder(string tenantId, string userId) => FileKey.ForTenant(tenantId, RootFolder, userId);
@@ -24,7 +28,10 @@ public static class RecordingFiles
         => FileKey.ForTenant(recording.TenantId, RootFolder, recording.UserId, recording.Id, SlicesFolder, $"{index:D6}-{sha256}");
 
     public static FileKey WorkAudio(string tenantId, string userId, string recordingId)
-        => FileKey.ForTenant(tenantId, RootFolder, userId, recordingId, "work.wav");
+        => FileKey.ForTenant(tenantId, RootFolder, userId, recordingId, WorkAudioName);
+
+    public static FileKey PartialWorkAudio(string tenantId, string userId, string recordingId)
+        => FileKey.ForTenant(tenantId, RootFolder, userId, recordingId, PartialWorkAudioName);
 
     public static FileKey WorkAudio(Recording recording) => WorkAudio(recording.TenantId, recording.UserId, recording.Id);
 

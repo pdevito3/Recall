@@ -10,11 +10,10 @@ using Microsoft.Extensions.Options;
 
 public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<TranscriptionOptions> options) : ITranscriptionEngine
 {
-    private const string WorkAudioName = "work.wav";
     private const int BytesPerSample = 2;
     private const int SigkillExitCode = 137;
     private const int ErrorTailLength = 4096;
-    private const string DiskFullError = "No space left on device";
+    private static readonly string[] DiskFullErrors = ["No space left on device", "Disk quota exceeded"];
     private const string OomKillCounter = "oom_kill ";
 
     private static readonly JsonSerializerOptions WorkerLines = new(JsonSerializerDefaults.Web);
@@ -81,9 +80,9 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
 
     private async Task<string> WorkAudioAsync(TranscriptionInput input, CancellationToken cancellationToken)
     {
-        var wav = Path.Combine(input.WorkFolder, WorkAudioName);
+        var wav = Path.Combine(input.WorkFolder, RecordingFiles.WorkAudioName);
         if (!File.Exists(wav))
-            await DecodeAsync(input.AudioPath, wav, cancellationToken);
+            await DecodeAsync(input.AudioPath, wav, Path.Combine(input.WorkFolder, RecordingFiles.PartialWorkAudioName), cancellationToken);
 
         var samples = new FileInfo(wav).Length / BytesPerSample;
         if (samples > Recording.MaxDuration.TotalSeconds * Recording.SamplesPerSecond)
@@ -92,9 +91,8 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
         return wav;
     }
 
-    private async Task DecodeAsync(string audio, string wav, CancellationToken cancellationToken)
+    private async Task DecodeAsync(string audio, string wav, string partial, CancellationToken cancellationToken)
     {
-        var partial = wav + ".part";
         var longest = ((int)Recording.MaxDuration.TotalSeconds + 1).ToString(CultureInfo.InvariantCulture);
         string[] command =
         [
@@ -116,7 +114,7 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
             File.Delete(partial);
             throw new TranscriptionEngineException(process.ExitCode == SigkillExitCode
                 ? ProblemOfKill(oomKillsBefore)
-                : errorTail.Contains(DiskFullError, StringComparison.Ordinal)
+                : DiskFullErrors.Any(error => errorTail.Contains(error, StringComparison.Ordinal))
                     ? RecordingProblem.DiskFull
                     : RecordingProblem.AudioUnreadable);
         }

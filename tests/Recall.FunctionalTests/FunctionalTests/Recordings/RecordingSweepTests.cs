@@ -227,7 +227,9 @@ public class RecordingSweepTests : TestBase
         using var folder = new SweptFolder();
         var workAudio = RecordingFiles.WorkAudio(admin.TenantId, admin.Id, recording.Id);
         var audio = FileKey.ForTenant(admin.TenantId, RecordingFiles.RootFolder, admin.Id, recording.Id, "audio.webm");
+        var partial = RecordingFiles.PartialWorkAudio(admin.TenantId, admin.Id, recording.Id);
         await folder.WriteAsync(workAudio);
+        await folder.WriteAsync(partial);
         await folder.WriteAsync(audio);
 
         // Act
@@ -235,6 +237,7 @@ public class RecordingSweepTests : TestBase
 
         // Assert
         folder.Holds(workAudio).ShouldBe(stays);
+        folder.Holds(partial).ShouldBe(stays);
         folder.Holds(audio).ShouldBeTrue();
     }
 

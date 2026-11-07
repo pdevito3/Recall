@@ -32,7 +32,7 @@ public static class RetryRecording
             await RecordingWork.TryQueueTranscriptionAsync(dbContext, recording, timeProvider, _logger);
 
             _logger.Here().Information("Queued recording {RecordingId} again", recording.Id);
-            return recording.ToDto([], modelStore.Status, jobHostStatus.IsStopped);
+            return recording.ToDto([], modelStore.Status, jobHostStatus.TranscriptionIsStopped);
         }
     }
 }

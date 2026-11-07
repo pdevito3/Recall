@@ -44,12 +44,12 @@ public static class AddRecording
                     .AsNoTracking()
                     .FirstOrDefaultAsync(r => r.ClientRecordingId == dto.ClientRecordingId, ct);
                 if (existing is not null)
-                    return new Result(existing.ToDto([], modelStore.Status, jobHostStatus.IsStopped), false);
+                    return new Result(existing.ToDto([], modelStore.Status, jobHostStatus.TranscriptionIsStopped), false);
 
                 var recording = Recording.Create(owner.TenantId, owner.UserId, session.Id, dto.ClientRecordingId, format);
                 await dbContext.Recordings.AddAsync(recording, ct);
                 await dbContext.SaveChangesAsync(ct);
-                return new Result(recording.ToDto([], modelStore.Status, jobHostStatus.IsStopped), true);
+                return new Result(recording.ToDto([], modelStore.Status, jobHostStatus.TranscriptionIsStopped), true);
             }, cancellationToken);
 
             Activity.Current?.SetTag("app.recording_id", result.Recording.Id);

@@ -168,7 +168,7 @@ public static class RemoveEndedWorkAudio
                 .AsNoTracking()
                 .GetById(request.Id, cancellationToken);
             if (!recording.WaitsForTranscription)
-                RecordingWork.TryDeleteWorkAudio(fileStore, RecordingFiles.WorkAudio(recording), recording.Id, _logger);
+                RecordingWork.TryDeleteWorkAudio(fileStore, recording.TenantId, recording.UserId, recording.Id, _logger);
         }
     }
 }

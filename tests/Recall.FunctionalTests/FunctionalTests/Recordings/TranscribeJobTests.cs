@@ -295,7 +295,8 @@ public class TranscribeJobTests : TestBase
 
     private static async IAsyncEnumerable<TranscriptChunk> WriteWorkAudioThen(IAsyncEnumerable<TranscriptChunk> chunks, TranscriptionInput input)
     {
-        await File.WriteAllBytesAsync(Path.Combine(input.WorkFolder, "work.wav"), [1]);
+        await File.WriteAllBytesAsync(Path.Combine(input.WorkFolder, RecordingFiles.WorkAudioName), [1]);
+        await File.WriteAllBytesAsync(Path.Combine(input.WorkFolder, RecordingFiles.PartialWorkAudioName), [1]);
         await foreach (var chunk in chunks)
             yield return chunk;
     }
@@ -317,11 +318,13 @@ public class TranscribeJobTests : TestBase
         // Act
         await RunAsync(job, recording, admin);
         var removed = !Exists(WorkAudioOf(recording, admin));
+        var partialRemoved = !Exists(RecordingFiles.PartialWorkAudio(admin.TenantId, admin.Id, recording.Id));
         var retry = await FactoryClient.PostAsync(ApiRoutes.Recordings.Retry(recording.Id), null);
         await RunAsync(JobWith(WritingWorkAudio(Saying("first words", "next words"))), recording, admin);
 
         // Assert
         removed.ShouldBeTrue();
+        partialRemoved.ShouldBeTrue();
         retry.StatusCode.ShouldBe(HttpStatusCode.OK);
         (await FactoryClient.GetAsync(ApiRoutes.Recordings.File(recording.Id, "audio.webm"))).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await FactoryClient.GetRecordingAsync(recording.Id)).Status.ShouldBe(nameof(RecordingStatus.Transcribed));
@@ -358,6 +361,25 @@ public class TranscribeJobTests : TestBase
         await Should.ThrowAsync<OperationCanceledException>(() => RunAsync(job, recording, admin, stop.Token));
 
         // Assert
+        Exists(WorkAudioOf(recording, admin)).ShouldBeTrue();
+    }
+
+    [Test]
+    [Property("Rule", "REC-16")]
+    public async Task a_job_with_no_model_keeps_the_decoded_audio_for_the_next_attempt()
+    {
+        // Arrange
+        var (recording, admin) = await FinishedRecordingAsync();
+        using var stop = new CancellationTokenSource();
+        var stopping = JobWith(WritingWorkAudio(new FakeEngine(true, (input, token) => CancelAfterFirst(input, stop, token))));
+        await Should.ThrowAsync<OperationCanceledException>(() => RunAsync(stopping, recording, admin, stop.Token));
+        var noModel = JobWith(new FakeEngine(false, (_, _) => throw new InvalidOperationException("An engine that is not ready must not run.")));
+
+        // Act
+        await RunAsync(noModel, recording, admin);
+
+        // Assert
+        (await FactoryClient.GetRecordingAsync(recording.Id)).Problem.ShouldBe(nameof(RecordingProblem.WaitingForModel));
         Exists(WorkAudioOf(recording, admin)).ShouldBeTrue();
     }
 

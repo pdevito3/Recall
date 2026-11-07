@@ -50,7 +50,7 @@ public static class RecordingViews
     {
         ModelStatus.Missing => "The audio is stored. The server must get the speech model first, and then it makes the text.",
         ModelStatus.Downloading => "The audio is stored. The server is downloading the speech model, and then it makes the text.",
-        ModelStatus.DownloadFailed => "The audio is stored. The server could not download the speech model, so it makes no text yet. It tries again on its own. Ask the Owner to check the network of the server.",
+        ModelStatus.DownloadFailed => "The audio is stored. The server could not download the speech model, so it makes no text yet. It tries again on its own. Ask the Owner to check the network and the free disk space of the server.",
         ModelStatus.HashRejected => "The audio is stored. The speech model that the server downloaded did not pass its hash check, so the server did not use it. It tries again on its own.",
         _ => null,
     };

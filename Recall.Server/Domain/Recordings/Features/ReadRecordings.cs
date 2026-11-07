@@ -32,7 +32,7 @@ public static class GetRecording
                 .OrderBy(s => s.Index)
                 .Select(s => s.Index)
                 .ToListAsync(cancellationToken);
-            return recording.ToDto(stored, modelStore.Status, jobHostStatus.IsStopped);
+            return recording.ToDto(stored, modelStore.Status, jobHostStatus.TranscriptionIsStopped);
         }
     }
 }
@@ -72,7 +72,7 @@ public static class GetSessionRecordings
                 .Where(r => r.SessionId == session.Id)
                 .OrderBy(r => r.Id)
                 .ToListAsync(cancellationToken);
-            return recordings.Select(r => r.ToDto([], modelStore.Status, jobHostStatus.IsStopped)).ToList();
+            return recordings.Select(r => r.ToDto([], modelStore.Status, jobHostStatus.TranscriptionIsStopped)).ToList();
         }
     }
 }
@@ -105,7 +105,7 @@ public static class GetTranscriptionStatus
         public Task<TranscriptionStatusDto> Handle(Query request, CancellationToken cancellationToken)
         {
             dbContext.RequireJournalOwner();
-            return Task.FromResult(StatusOf(jobHostStatus.StoppedCause(), modelStore.Status));
+            return Task.FromResult(StatusOf(jobHostStatus.TranscriptionIsStopped ? jobHostStatus.StoppedCause() : null, modelStore.Status));
         }
     }
 

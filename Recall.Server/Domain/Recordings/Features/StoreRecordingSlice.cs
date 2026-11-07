@@ -89,7 +89,7 @@ public static class StoreRecordingSlice
                     throw;
 
                 RecordingWork.TryDeleteFolder(fileStore, RecordingFiles.Folder(recording), recording.Id, _logger);
-                _logger.Here().Information("Removed a late file of deleted recording {RecordingId}", recording.Id);
+                _logger.Here().Information("A slice write lost the race with the delete of recording {RecordingId}", recording.Id);
                 throw new NotFoundException("The recording was not found.");
             }
         }

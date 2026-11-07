@@ -42,7 +42,7 @@ public static class FinishRecording
             {
                 if (recording.WaitsForTranscription)
                     await RecordingWork.TryQueueTranscriptionAsync(dbContext, recording, timeProvider, _logger);
-                return recording.ToDto(stored, modelStore.Status, jobHostStatus.IsStopped);
+                return recording.ToDto(stored, modelStore.Status, jobHostStatus.TranscriptionIsStopped);
             }
 
             recording.Finish(stored, request.Dto.SliceCount, request.Dto.ByteLength);
@@ -61,7 +61,7 @@ public static class FinishRecording
 
             Activity.Current?.SetTag("app.recording.byte_length", recording.ByteLength);
             _logger.Here().Information("Finished the upload of recording {RecordingId}", recording.Id);
-            return recording.ToDto(stored, modelStore.Status, jobHostStatus.IsStopped);
+            return recording.ToDto(stored, modelStore.Status, jobHostStatus.TranscriptionIsStopped);
         }
     }
 }
@@ -118,11 +118,12 @@ public static class RecordingWork
         }
     }
 
-    public static void TryDeleteWorkAudio(FileStore fileStore, FileKey workAudio, string recordingId, ILogger logger)
+    public static void TryDeleteWorkAudio(FileStore fileStore, string tenantId, string userId, string recordingId, ILogger logger)
     {
         try
         {
-            fileStore.Delete(workAudio);
+            fileStore.Delete(RecordingFiles.WorkAudio(tenantId, userId, recordingId));
+            fileStore.Delete(RecordingFiles.PartialWorkAudio(tenantId, userId, recordingId));
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

@@ -263,6 +263,22 @@ public class LocalParakeetEngineTests
 
     [Test]
     [Property("Rule", "REC-15")]
+    public async Task a_disk_quota_during_the_decode_is_a_full_disk()
+    {
+        // Arrange
+        using var rig = new Rig();
+        var ffmpeg = rig.Script("ffmpeg", "echo 'Error closing file: Disk quota exceeded' >&2; exit 1");
+        var engine = rig.Engine(rig.Script("worker", ChunkLine), ffmpeg);
+
+        // Act
+        var problem = await ProblemOfAsync(engine, rig.Input());
+
+        // Assert
+        problem.ShouldBe(RecordingProblem.DiskFull);
+    }
+
+    [Test]
+    [Property("Rule", "REC-15")]
     public async Task a_full_disk_stays_in_view_past_a_long_error_stream()
     {
         // Arrange

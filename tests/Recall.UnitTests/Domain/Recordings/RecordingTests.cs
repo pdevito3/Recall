@@ -410,6 +410,9 @@ public class RecordingTests
 
         // Act
         var whileStopped = waiting.ToDto([], ModelStatus.Ready, jobsStopped: true);
+        var attempting = Received();
+        attempting.BeginAttempt();
+        var attemptingWhileStopped = attempting.ToDto([], ModelStatus.Ready, jobsStopped: true);
         var whileRunning = waiting.ToDto([], ModelStatus.Ready, jobsStopped: false);
         var endedWhileStopped = ended.ToDto([], ModelStatus.Ready, jobsStopped: true);
 
@@ -417,6 +420,8 @@ public class RecordingTests
         whileStopped.ProblemText.ShouldBe(GetTranscriptionStatus.JobsStoppedText);
         whileStopped.Status.ShouldBe(nameof(RecordingStatus.Received));
         whileStopped.Problem.ShouldBe(nameof(RecordingProblem.None));
+        attemptingWhileStopped.Status.ShouldBe(nameof(RecordingStatus.Transcribing));
+        attemptingWhileStopped.ProblemText.ShouldBe(GetTranscriptionStatus.JobsStoppedText);
         whileRunning.ProblemText.ShouldBeNull();
         endedWhileStopped.ProblemText.ShouldBe(RecordingViews.ProblemTextOf(RecordingProblem.TooLong, ModelStatus.Ready));
     }
