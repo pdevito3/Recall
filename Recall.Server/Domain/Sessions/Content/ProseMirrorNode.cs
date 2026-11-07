@@ -32,6 +32,21 @@ internal static class ProseMirrorNode
 
     public static string? TypeOf(JsonObject element) => StringOf(element["type"]);
 
+    /// <summary>
+    /// For each inline node, whether a run of struck words opens before it and closes after it. The plain text shows a run as
+    /// "~~words~~", because "I do not" and "I do ~~not~~" say opposite things. The web page reads a card the same way.
+    /// </summary>
+    public static (bool Opens, bool Closes)[] StrikeEdgesOf(IReadOnlyList<JsonObject> inlines)
+    {
+        var struck = inlines.Select(IsStruck).ToArray();
+        return struck.Select((isStruck, at) => (
+            isStruck && (at == 0 || !struck[at - 1]),
+            isStruck && (at == struck.Length - 1 || !struck[at + 1]))).ToArray();
+    }
+
+    private static bool IsStruck(JsonObject inline)
+        => inline["marks"] is JsonArray marks && marks.OfType<JsonObject>().Any(mark => TypeOf(mark) == "strike");
+
     public static string? StringOf(JsonNode? node)
     {
         try

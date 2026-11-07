@@ -157,10 +157,13 @@ public static class MentionInsertion
         if (content is not JsonArray array)
             return;
 
-        foreach (var child in array)
+        var inlines = array.OfType<JsonObject>().ToList();
+        var strikes = ProseMirrorNode.StrikeEdgesOf(inlines);
+        for (var at = 0; at < inlines.Count; at++)
         {
-            if (child is not JsonObject obj)
-                continue;
+            var obj = inlines[at];
+            if (strikes[at].Opens)
+                AddSigns(line);
 
             switch ((obj["type"] as JsonValue)?.GetValue<string>())
             {
@@ -180,7 +183,17 @@ public static class MentionInsertion
                     WalkInline(obj["content"], line);
                     break;
             }
+
+            if (strikes[at].Closes)
+                AddSigns(line);
         }
+    }
+
+    // The signs of a strike occupy plaintext and are not wrappable.
+    private static void AddSigns(List<(char, JsonObject?, int)> line)
+    {
+        foreach (var sign in ProseMirrorToPlainText.StrikeSign)
+            line.Add((sign, null, 0));
     }
 
     // ---- rebuild ------------------------------------------------------------------------------
@@ -236,7 +249,7 @@ public static class MentionInsertion
                 continue;
             if (ins.Start > cursor)
                 pieces.Add(TextPiece(text[cursor..ins.Start], marks));
-            pieces.Add(MentionNode(ins.PersonId, ins.Label));
+            pieces.Add(MentionNode(ins.PersonId, ins.Label, marks));
             cursor = ins.Start + ins.Length;
         }
         if (cursor < text.Length)
@@ -253,9 +266,16 @@ public static class MentionInsertion
         return node;
     }
 
-    private static JsonObject MentionNode(string personId, string label) => new()
+    // The tag keeps the marks of its words, so a struck name stays struck.
+    private static JsonObject MentionNode(string personId, string label, JsonNode? marks)
     {
-        ["type"] = "mention",
-        ["attrs"] = new JsonObject { ["personId"] = personId, ["label"] = label },
-    };
+        var node = new JsonObject
+        {
+            ["type"] = "mention",
+            ["attrs"] = new JsonObject { ["personId"] = personId, ["label"] = label },
+        };
+        if (marks is not null)
+            node["marks"] = marks.DeepClone();
+        return node;
+    }
 }
