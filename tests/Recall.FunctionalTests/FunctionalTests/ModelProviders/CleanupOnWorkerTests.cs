@@ -1,6 +1,7 @@
 namespace Recall.FunctionalTests.FunctionalTests.ModelProviders;
 
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using BackWave.Monitor;
@@ -10,8 +11,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Recall.FakeModelProvider;
 using Recall.FunctionalTests.Auth;
+using Recall.FunctionalTests.FunctionalTests.Recordings;
 using Recall.Server.Domain.ModelProviders;
 using Recall.Server.Domain.ModelProviders.Dtos;
+using Recall.Server.Domain.Recordings.Dtos;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Dtos;
 using Recall.Server.Domain.Sessions.Jobs;
@@ -154,6 +157,49 @@ public class CleanupOnWorkerTests
         finished.CleanedText.ShouldContain("teh market (cleaned)");
         finished.RawText.ShouldBe(raw);
         fake.RequestBodies.Count(body => body.Contains("teh market", StringComparison.Ordinal)).ShouldBe(1);
+    }
+
+    [Test]
+    [Property("Rule", "REC-13")]
+    public async Task a_long_transcription_does_not_delay_a_cleanup_and_its_later_chunk_makes_the_result_stale()
+    {
+        // Arrange
+        var key = CleanupScenario.NewKey();
+        await using var fake = await FakeModelProvider.StartAsync(key);
+        var engine = AuthHosts.HeldTranscription;
+        engine.Hold();
+        using var owner = await OwnerAsync();
+        await ConnectAsync(owner, fake, key);
+        var session = await SessionWithWordsAsync(owner, "words beside a long transcription");
+        var recording = await ReadAsync<RecordingDto>(
+            await SendAsync(owner, HttpMethod.Post, ApiRoutes.Recordings.OfSession(session.Id), new { clientRecordingId = Guid.NewGuid().ToString(), format = "Webm" }),
+            HttpStatusCode.Created);
+        using var slice = new HttpRequestMessage(HttpMethod.Put, $"/{ApiRoutes.Recordings.Slice(recording.Id, 0)}") { Content = new ByteArrayContent(RecordingScenario.WebmStart) };
+        slice.Headers.Add("X-CSRF", "1");
+        slice.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        (await owner.SendAsync(slice)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await SendAsync(owner, HttpMethod.Post, ApiRoutes.Recordings.Finish(recording.Id), new { sliceCount = 1, byteLength = RecordingScenario.WebmStart.Length })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await engine.Entered.WaitAsync(WaitLimit);
+
+        // Act
+        await ReadAsync<SessionDto>(await SendAsync(owner, HttpMethod.Post, ApiRoutes.Sessions.Cleanup(session.Id)), HttpStatusCode.Accepted);
+        var cleaned = await SessionAfterRunAsync(owner, session.Id);
+        var transcriptionWasHeld = !engine.IsReleased;
+        engine.Release();
+        var deadline = DateTimeOffset.UtcNow + WaitLimit;
+        var afterChunk = await ReadSessionAsync(owner, session.Id);
+        while (!afterChunk.RawText.Contains(HeldTranscriptionEngine.Words, StringComparison.Ordinal) && DateTimeOffset.UtcNow < deadline)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+            afterChunk = await ReadSessionAsync(owner, session.Id);
+        }
+
+        // Assert
+        transcriptionWasHeld.ShouldBeTrue();
+        cleaned.CleanupStatus.ShouldBe(nameof(CleanupStatus.Clean));
+        afterChunk.RawText.ShouldContain(HeldTranscriptionEngine.Words);
+        afterChunk.CleanedText.ShouldBe(cleaned.CleanedText);
+        afterChunk.CleanupStatus.ShouldBe(nameof(CleanupStatus.Stale));
     }
 
     [Test]

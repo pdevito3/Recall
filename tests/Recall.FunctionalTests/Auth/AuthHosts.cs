@@ -32,6 +32,8 @@ public static class AuthHosts
 
     public static AuthFlowFactory Cleanups { get; private set; } = null!;
 
+    public static HeldTranscriptionEngine HeldTranscription { get; } = new();
+
     public static AuthFlowFactory FailingJobs { get; private set; } = null!;
 
     public static AuthFlowFactory HaltedJobs { get; private set; } = null!;
@@ -84,7 +86,10 @@ public static class AuthHosts
         var bundleLogger = Log.Logger;
         Log.Logger = main;
         Jobs = StartWithWorker();
-        Cleanups = StartWithWorker();
+        Cleanups = Start(new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts, ["Jobs:RunWorkers"] = "true" })
+        {
+            TranscriptionEngine = HeldTranscription,
+        });
         FailingJobs = Start(new Dictionary<string, string?>
         {
             ["Auth:OpenSignup"] = "true",
