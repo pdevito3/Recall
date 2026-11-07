@@ -153,11 +153,15 @@ public class ProviderTextAndAddressTests
         var network = ProviderCall.FailureFor(new HttpRequestException("reset"));
         var other = ProviderCall.FailureFor(new InvalidOperationException("no such shape"));
         var wrapped = ProviderCall.FailureFor(new InvalidOperationException("wrapped", new System.Text.Json.JsonException("bad")));
+        var inStream = ProviderCall.FailureFor(new IOException("read", new System.Text.Json.JsonException("bad")));
+        var badHttp = ProviderCall.FailureFor(new HttpRequestException(HttpRequestError.InvalidResponse, "not http"));
 
         // Assert
         network.Kind.ShouldBe(ProviderFailureKind.Unavailable);
         other.Kind.ShouldBe(ProviderFailureKind.BadOutput);
         wrapped.Kind.ShouldBe(ProviderFailureKind.BadOutput);
+        inStream.Kind.ShouldBe(ProviderFailureKind.BadOutput);
+        badHttp.Kind.ShouldBe(ProviderFailureKind.BadOutput);
     }
 
     [Test]
