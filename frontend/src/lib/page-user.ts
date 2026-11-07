@@ -39,6 +39,17 @@ export function notePageUser(sub: string) {
   if (pageUser !== sub) refuseThePage()
 }
 
+/** A frozen tab can miss the message of a sign-in, and the key of the last person still tells when the person sees the tab again. */
+export function checkLastPersonOfThisBrowser() {
+  let lastPerson: string | null = null
+  try {
+    lastPerson = localStorage.getItem(lastPersonKey)
+  } catch {
+    // With no storage, the message and the header of each request still guard the page.
+  }
+  if (lastPerson !== null) noteSignInOfAnotherTab(lastPerson)
+}
+
 /** A tab of another person must not keep showing its words after a second person signs in on this browser. */
 export function noteSignInOfAnotherTab(sub: string) {
   if (pageUser !== null && pageUser !== sub) refuseThePage()

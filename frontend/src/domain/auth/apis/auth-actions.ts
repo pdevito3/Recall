@@ -1,8 +1,8 @@
 import { useMutation, type QueryClient } from '@tanstack/react-query'
 
-import { Notification } from '@/components/notification'
+import { Notification, toastQueue } from '@/components/notification'
 import { apiClient } from '@/lib/api-client'
-import { noteSignInOfAnotherTab, sessionChannelName } from '@/lib/page-user'
+import { checkLastPersonOfThisBrowser, noteSignInOfAnotherTab, sessionChannelName } from '@/lib/page-user'
 import { authUserQuery, getUser } from './get-user'
 
 import { settleUnsentWords, StayedSignedIn, stopSaversBeforeLeaving } from './unsent-words-at-logout'
@@ -12,6 +12,8 @@ const serverMaxReturnPathLength = 2048
 const signedOutPage = '/auth/login?signedOut=1'
 
 const restoredPageCheckLimitMs = 3000
+
+const signOutWorkMs = 60_000
 
 type LogoutAnswer = { provider_logout_url: string } | undefined
 
@@ -57,14 +59,23 @@ export async function logout(): Promise<void> {
   }
 }
 
+const showSigningOut = () => Notification.info('Signing out', { description: 'Recall tries to send your last words first. This can take a few seconds.', duration: signOutWorkMs })
+
 async function settleUnsentWordsAndSignOut() {
-  const leaveNoSign = await settleUnsentWords()
-  const { data } = await apiClient.post<LogoutAnswer>('/auth/logout', undefined, { suppressErrorToast: true })
-  leaveNoSign()
-  afterSignOut = data?.provider_logout_url ?? afterSignOut ?? signedOutPage
-  otherTabs?.postMessage('signed-out')
-  hidePage()
-  window.location.replace(afterSignOut)
+  let working = showSigningOut()
+  const stopShowingWork = () => toastQueue.close(working)
+  try {
+    const leaveNoSign = await settleUnsentWords(stopShowingWork)
+    working = showSigningOut()
+    const { data } = await apiClient.post<LogoutAnswer>('/auth/logout', undefined, { suppressErrorToast: true })
+    leaveNoSign()
+    afterSignOut = data?.provider_logout_url ?? afterSignOut ?? signedOutPage
+    otherTabs?.postMessage('signed-out')
+    hidePage()
+    window.location.replace(afterSignOut)
+  } finally {
+    stopShowingWork()
+  }
 }
 
 /**
@@ -126,6 +137,9 @@ export function guardPageAgainstEndedSession(queryClient: QueryClient) {
     if (data === 'signed-out') leaveAsSignedOut(queryClient)
     else noteSignInOfAnotherTab(data.signedInAs)
   }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkLastPersonOfThisBrowser()
+  })
   window.addEventListener('pagehide', (event) => {
     if (!event.persisted) return
     hidePage()

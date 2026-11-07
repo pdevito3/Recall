@@ -60,6 +60,21 @@ describe('a login after a sign-out', () => {
     expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?signedOut=1')
   })
 
+  it('shows that the app works at once, and stops when the page leaves', async () => {
+    const { logout, post } = await freshActions()
+    const { toastQueue } = await import('@/components/notification')
+    let answer: (value: { status: number }) => void = () => undefined
+    post.mockReturnValue(new Promise((resolve) => (answer = resolve)))
+
+    const running = logout()
+
+    expect(toastQueue.visibleToasts.map(({ content }) => content.message)).toEqual(['Signing out'])
+    await vi.waitFor(() => expect(post).toHaveBeenCalled(), { timeout: 3000 })
+    answer({ status: 204 })
+    await running
+    expect(toastQueue.visibleToasts).toEqual([])
+  })
+
   const providerLogoutUrl = 'https://idp.test/logout?client_id=recall&post_logout_redirect_uri=https%3A%2F%2Frecall.test%2Fauth%2Fsigned-out'
 
   it('goes to the logout of the provider when the Server names one', async () => {
@@ -198,7 +213,7 @@ describe('a sign-out in another tab', () => {
     const listeners = new Map<string, (event: { persisted: boolean }) => void>()
     const addEventListener = (type: string, listener: (event: { persisted: boolean }) => void) => listeners.set(type, listener)
     vi.stubGlobal('window', { location: { replace, reload }, addEventListener })
-    vi.stubGlobal('document', { documentElement: { style: {} } })
+    vi.stubGlobal('document', { documentElement: { style: {} }, addEventListener: () => undefined })
     vi.stubGlobal('BroadcastChannel', function (this: (typeof channels)[number]) {
       this.postMessage = vi.fn()
       this.close = vi.fn()

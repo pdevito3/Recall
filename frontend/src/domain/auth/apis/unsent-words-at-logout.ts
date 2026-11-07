@@ -53,12 +53,14 @@ export function stopSaversBeforeLeaving() {
 }
 
 /** Each tab tries to send its words, and then the person sees all the words that did not go, also those of another tab. */
-export async function settleUnsentWords(): Promise<() => void> {
+export async function settleUnsentWords(beforeAQuestion: () => void): Promise<() => void> {
   const [otherTabs] = await Promise.all([askOtherTabsToSettle(settleLimitMs), withinLimit(settleDraftSavers()), withinLimit(settleSettingSaver()), withinLimit(settleMetadataSavers())])
   const unsent = unsentWordsOnThisDevice(pageUserOf(), otherTabs)
   // Tags have no outbox, so a sign-out loses a change of a tag that the Server did not take.
   const isATagUnsaved = isAnyTagChangeUnsaved() || otherTabs.some(({ hasUnsavedTags }) => hasUnsavedTags)
-  const choice = unsent.length === 0 && !isATagUnsaved ? 'keep' : await new Promise<Choice>((answer) => setQuestion({ unsent, isATagUnsaved, answer }))
+  const hasNoQuestion = unsent.length === 0 && !isATagUnsaved
+  if (!hasNoQuestion) beforeAQuestion()
+  const choice = hasNoQuestion ? 'keep' : await new Promise<Choice>((answer) => setQuestion({ unsent, isATagUnsaved, answer }))
   if (choice === 'stay') throw new StayedSignedIn()
   return () => {
     stopSaversBeforeLeaving()

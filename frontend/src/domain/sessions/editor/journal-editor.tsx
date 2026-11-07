@@ -19,6 +19,8 @@ interface JournalEditorProps {
   label: string
   placeholder?: string
   autoFocus?: boolean
+  /** A text that the Server refused can be very long, so it scrolls in its box and the page stays usable. */
+  isBounded?: boolean
   onChange: (text: string, isEmpty: boolean) => void
   onSubmit?: () => void
   toolbar?: (editor: Editor) => ReactNode
@@ -40,7 +42,7 @@ function useMentionSource(): MentionSource {
   )
 }
 
-export function JournalEditor({ initialText, revision, label, placeholder, autoFocus, onChange, onSubmit, toolbar }: JournalEditorProps) {
+export function JournalEditor({ initialText, revision, label, placeholder, autoFocus, isBounded, onChange, onSubmit, toolbar }: JournalEditorProps) {
   const mentionSource = useMentionSource()
   const callbacks = useRef({ onChange, onSubmit, placeholder })
   useLayoutEffect(() => {
@@ -84,7 +86,7 @@ export function JournalEditor({ initialText, revision, label, placeholder, autoF
   return (
     <div className="flex flex-col rounded-lg border bg-card focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
       {editor && toolbar?.(editor)}
-      <EditorContent editor={editor} />
+      <EditorContent editor={editor} className={isBounded ? 'max-h-[60svh] overflow-y-auto' : undefined} />
     </div>
   )
 }

@@ -30,6 +30,7 @@ export function ComposerForm({ composer }: { composer: Composer }) {
         label="New entry"
         placeholder={composer.words === null ? '' : 'What is on your mind?'}
         autoFocus={composer.autoFocus}
+        isBounded={composer.status.kind === 'refused'}
         onChange={composer.handleChange}
         onSubmit={composer.finish}
       />

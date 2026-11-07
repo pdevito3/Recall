@@ -192,17 +192,51 @@ Thus a page always has a session. Do not add a Login button or a signed-out stat
 
 ### Unsent words
 
-The words of an entry save in the background. Until the Server holds them, they stay in `localStorage` under `recall.unsent.<owner>.<entry>.<channel>`. A setting that did not reach the Server stays under `recall.unsent-setting.<owner>`. The tab keeps a pointer to the open entry in `sessionStorage` under `recall.composer`. The pointer holds no words. Only the person of the key reads or sends these words.
+The words of an entry save in the background. Until the Server holds them, they stay in `localStorage` under `recall.unsent.<owner>.<writer>.<number>`. A setting that did not reach the Server stays under `recall.unsent-setting.<owner>.<writer>.<number>`. `<writer>` names one load of a page. The tab keeps a pointer to the open entry in `sessionStorage` under `recall.composer`. The pointer holds no words. Only the person of the key reads or sends these words.
 
 | What happens | What the app does |
 |---|---|
 | A save gets no answer in 30 s | The request ends, the status says that the save waits, and the save tries again. |
 | A save meets an entry that is gone (404, or a 409 that is not a conflict of a save) | The words become a new entry. A notice says so on each page, also on a later load with no page open. The entry page goes to the new entry. |
 | The Server refuses the words (another 4xx) | The words stay, with the reason, and they do not go out again on the next load. The page of the words shows the reason. With no such page open, a notice gives the reason, a Copy, and a Discard. |
-| A person logs out | The app sends the unsent words and waits up to 5 s. If the Server holds them, the logout goes on. If not, an alert dialog asks to keep them on this device or to discard them. The logout then clears the pointer and ends the session. |
+| A save loses to a newer save or to a chunk of a recording | The Server keeps the words in a Revision and the Draft stays. The page keeps the words on the screen and says so. `Add my words to the newest words` reads the Draft, joins the words, and saves with the new revision. A later save cannot push a chunk out of the Draft with no read. With no page open, a notice links to History. |
+| A person logs out | A toast says that the app works. Each tab sends its unsent words, and the wait is up to 5 s. If the Server holds them all, the logout goes on. If not, an alert dialog names the words, also those of another tab. The person can keep them on this device or discard them. A discard removes the exact keys that the dialog named. Words that only the memory of a tab holds cannot stay, so the dialog offers `Stay signed in` in place of `Keep`. The logout then clears the pointer and ends the session. |
 | The session belongs to another person (see [One browser, two people](authentication.md#one-browser-two-people)) | The tab stops each saver, clears the query cache and the toasts, keeps the words under the key of the first person, and goes to `/auth/login?anotherPerson=1`. |
 
-Kept words go out when the same person signs in on this browser again. The next person sees no sign of them in the app. The browser tools of the device can still read them, and the dialog says so.
+Kept words go out when the same person signs in on this browser again. A refused text cannot go, so it returns as a notice with a Copy and a Discard. The next person sees no sign of them in the app. The browser tools of the device can still read them, and the dialog says so.
+
+#### One owner for each key
+
+Each load of a page has a new writer id. A page writes its text under keys that name that id. A key never changes: a newer text gets a new key, and the page then removes its previous key. So a remove takes only the exact text that the remover read. One saver has at most one key, and that key holds the change in the queue and the held words as one entry. Another tab takes a key only after its writer left, or after its writer did not answer a ping for 500 ms. A writer that leaves writes `recall.left.<writer>` in `pagehide` and sends a message on the `recall.tabs` channel. A wrong guess about a frozen tab sends the same text twice, and the Server takes the second as a replay or as a Revision. No word goes, because safety does not depend on who is alive. `frontend/src/domain/sessions/autosave/tab-keys.ts` holds this rule.
+
+The app runs on plain HTTP on a LAN, so it must not need a secure context. It uses `localStorage` and `BroadcastChannel`, which plain HTTP has. It does not use Web Locks.
+
+#### Limits of the unsent words
+
+**A kill of the browser.** `localStorage` writes reach the memory of the browser at once, and the disk later. Chromium delays the commit to disk. So a kill of the browser process, or a power cut, can lose the last words. A close of a tab or of the browser loses nothing. The table has the runs on Chromium on macOS. Each run typed a word, waited, and killed the process with `SIGKILL`.
+
+| Server state | Wait before the kill | Result |
+|---|---|---|
+| Saves fail | 0, 500, or 2,000 ms | The word is lost. |
+| Saves fail | 6,000 ms or more | The word survives, and it goes out at the next load. |
+| Online | 0 or 500 ms | The word is lost, because the 800 ms pause in typing had not ended. |
+| Online | After `Saved` shows | The word is on the Server. |
+
+The app cannot change this delay. No web API forces the commit.
+
+**One very long text with no spaces.** Blink and the editor take time that grows faster than the size of one unbroken text. No word goes, and the tab does not answer during that time. The server limit is 1,000,000 characters. A text with spaces of 1.1 M characters takes 244 ms. A change of the wrap rule to `break-word` did not help (200,000 characters: 9.4 s).
+
+| Unbroken text | Paste |
+|---|---|
+| 10,000 characters | 0.1 s |
+| 50,000 characters | 1.8 s |
+| 100,000 characters | 4.9 s |
+| 200,000 characters | 11.2 s |
+| 1,100,000 characters | 50 s, and 98 s at a reload |
+
+**Tags.** A change of tags has no key, so a reload or a crash loses a change that did not reach the Server. A sign-out asks first. A reload with an open prompt about the same field drops the choice in the prompt, and the row keeps the value that the Server has.
+
+**A tab of a person who signed out.** A frozen tab cannot report words that only its memory holds, so a sign-out in another tab cannot name them. Words that a tab types after the dialog opened stay in the key of that tab, and they return with a notice at the next sign-in.
 
 ## Routes
 

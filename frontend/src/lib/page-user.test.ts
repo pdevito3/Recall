@@ -23,6 +23,27 @@ function countTheMessages() {
   return postMessage
 }
 
+test('a tab that the person sees again leaves when another person signed in while the tab slept', async () => {
+  countTheMessages()
+  const page = await freshPage()
+  page.notePageUser('person-a')
+  localStorage.setItem('recall.lastPerson', 'person-b')
+
+  page.checkLastPersonOfThisBrowser()
+
+  expect(page.onMismatch).toHaveBeenCalledOnce()
+})
+
+test('a tab of the last person stays when the person sees it again', async () => {
+  countTheMessages()
+  const page = await freshPage()
+  page.notePageUser('person-a')
+
+  page.checkLastPersonOfThisBrowser()
+
+  expect(page.onMismatch).not.toHaveBeenCalled()
+})
+
 async function freshPage() {
   const pageUser = await import('./page-user')
   const onMismatch = vi.fn()

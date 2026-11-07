@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.WebUtilities;
 using Recall.Server.Auth;
+using Recall.Server.Resources.Entrypoints.Auth;
 using Shouldly;
 
 public partial class AuthPagesTests
@@ -150,6 +151,28 @@ public partial class AuthPagesTests
         style.ShouldContain("main{box-sizing:border-box;width:100%;max-width:28rem;");
         var hash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(style)));
         response.Headers.GetValues("Content-Security-Policy").Single().ShouldContain($"style-src 'sha256-{hash}'");
+    }
+
+    [Test]
+    [Arguments("dark", "<html lang=\"en\" class=\"dark\">")]
+    [Arguments("light", "<html lang=\"en\" class=\"light\">")]
+    [Arguments("system", "<html lang=\"en\">")]
+    [Arguments("\"><script>", "<html lang=\"en\">")]
+    public async Task a_page_follows_the_theme_that_the_person_chose_in_the_app(string cookie, string html)
+    {
+        // Arrange
+        using var browser = NewBrowser();
+        browser.SetCookie(AuthPages.ThemeCookie, cookie);
+
+        // Act
+        var response = await browser.GetAsync("/auth/login?signedOut=1");
+
+        // Assert
+        var page = await response.Content.ReadAsStringAsync();
+        page.ShouldContain(html);
+        var style = StyleBlock().Match(page).Groups["style"].Value;
+        style.ShouldContain("html.dark{color-scheme:dark;");
+        style.ShouldContain("html.light{color-scheme:light;");
     }
 
     [GeneratedRegex("<a class=\"button\" href=\"(?<href>[^\"]+)\">Use another account</a>")]
