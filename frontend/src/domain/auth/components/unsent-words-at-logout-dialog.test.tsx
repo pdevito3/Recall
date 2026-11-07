@@ -32,8 +32,9 @@ test('the dialog names each text, so a discard removes only words that the perso
   const two = words('words of another tab')
   const { screen, finished } = await dialogFor([one, two])
 
-  await expect.element(screen.getByRole('list', { name: 'Words that did not reach the server' })).toHaveTextContent(/first words/)
-  await expect.element(screen.getByRole('list', { name: 'Words that did not reach the server' })).toHaveTextContent(/words of another tab/)
+  const list = screen.getByRole('list', { name: 'Words that did not reach the server' })
+  await expect.element(list.getByText('first words')).toBeVisible()
+  await expect.element(list.getByText('words of another tab')).toBeVisible()
   await screen.getByRole('button', { name: 'Discard words and sign out' }).click()
 
   ;(await finished)()
@@ -53,10 +54,9 @@ test('a keep does not remove a word', async () => {
 
 test('a refused text is not said to go to the journal at a sign-in', async () => {
   const { screen, finished } = await dialogFor([words('too many words', { isRefused: true })])
-  const dialog = screen.getByRole('alertdialog')
 
-  await expect.element(dialog).toHaveTextContent(/The server refused the words marked below, so they cannot go to your journal as they are\./)
-  await expect.element(dialog).not.toHaveTextContent(/They go to your journal when you sign in here again\./)
+  await expect.element(screen.getByText(/The server refused the words marked below, so they cannot go to your journal as they are\./)).toBeVisible()
+  await expect.element(screen.getByText(/They go to your journal when you sign in here again\./)).not.toBeInTheDocument()
 
   await screen.getByRole('button', { name: 'Keep words and sign out' }).click()
   await finished

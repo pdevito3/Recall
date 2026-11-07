@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, expect, test } from 'vitest'
 
-import { askOtherTabsToSettle, keysUnder, removeLeftMarksWithNoKey, takeKeysOfTabsThatLeft, writeKeyOfThisTab, type KeyOfATab } from './tab-keys'
+import { askOtherTabsToSettle, keysUnder, noteThisTabLeaves, removeKey, removeLeftMarksWithNoKey, takeKeysOfTabsThatLeft, thisTab, writeKeyOfThisTab, type KeyOfATab } from './tab-keys'
 
 const prefix = 'recall.test-keys.'
 
@@ -13,6 +13,7 @@ beforeEach(() => {
 
 afterEach(() => {
   otherTab.close()
+  for (const { storageKey } of keysUnder(prefix)) removeKey(storageKey)
   localStorage.clear()
 })
 
@@ -78,17 +79,14 @@ test('a mark of a tab that left goes when no key of that tab stays', () => {
   expect(localStorage.getItem('recall.left.tab-with-key')).toBe('1')
 })
 
-test('a tab that leaves with a key says so, and a tab with no key leaves no mark', async () => {
-  vi.resetModules()
-  const fresh = await import('./tab-keys')
+test('a tab that leaves with a key says so, and a tab with no key leaves no mark', () => {
+  noteThisTabLeaves()
+  expect(localStorage.getItem(`recall.left.${thisTab}`)).toBeNull()
 
-  fresh.noteThisTabLeaves()
-  expect(localStorage.getItem(`recall.left.${fresh.thisTab}`)).toBeNull()
+  writeKeyOfThisTab(prefix, null, 'words')
+  noteThisTabLeaves()
 
-  fresh.writeKeyOfThisTab(prefix, null, 'words')
-  fresh.noteThisTabLeaves()
-
-  expect(localStorage.getItem(`recall.left.${fresh.thisTab}`)).toBe('1')
+  expect(localStorage.getItem(`recall.left.${thisTab}`)).toBe('1')
 })
 
 test('a sign-out waits for each tab that heard, also for a tab slower than the first answer', async () => {
