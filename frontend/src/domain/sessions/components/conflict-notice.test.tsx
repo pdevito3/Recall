@@ -1,4 +1,5 @@
-import { expect, test, vi } from 'vitest'
+import { expect, onTestFinished, test, vi } from 'vitest'
+import { page } from 'vitest/browser'
 import { render } from 'vitest-browser-react'
 
 import { ConflictNotice } from './conflict-notice'
@@ -14,6 +15,21 @@ test('a save that lost says where the words are, and offers the newest words', a
 
   expect(onShowNewest).toHaveBeenCalledOnce()
   expect(onKeep).toHaveBeenCalledOnce()
+})
+
+test('at 320 px with a font of 24 px each answer stays inside the notice', async () => {
+  await page.viewport(320, 640)
+  document.documentElement.style.fontSize = '24px'
+  onTestFinished(() => {
+    document.documentElement.style.fontSize = ''
+  })
+  const screen = await render(<ConflictNotice conflict="wordsMovedToHistory" onShowNewest={vi.fn()} onKeep={vi.fn()} />)
+
+  const notice = screen.getByRole('alert').element().getBoundingClientRect()
+  for (const name of ['Show the newest words', 'Add my words to the newest words']) {
+    expect(screen.getByRole('button', { name }).element().getBoundingClientRect().right).toBeLessThanOrEqual(notice.right)
+  }
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(320)
 })
 
 test('words that another tab took say that they are only on this page, and offer the same two answers', async () => {
