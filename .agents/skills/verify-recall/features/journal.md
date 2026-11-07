@@ -30,7 +30,7 @@ Preconditions:
 
 - **Capture.** Run `page.keyboard.type(words)` on `/`. `New entry` has the focus. The status region shows `Saved at <time>`. Choose `Done`. A link with the words shows in the timeline.
 - **Autosave.** Type, wait for `Saved at <time>`, and run `page.reload()`. `New entry` has the same words.
-- **Two tabs.** Open one entry in two pages of the context. Type and save in one, then in the other. The second page shows `These words replaced a save that this page had not shown.` `Show history` lists each save.
+- **Two tabs.** Open one entry in two pages of the context. Type and save in one, then in the other. The first save wins. The second page shows `Saved in History at <time>` and `The words on this page are safe in History.`, and its words stay on the page. `Show the newest words` shows the words of the first page. `Show history` lists each save.
 - **Restore.** Choose an earlier version, then `Restore this version`. `Your words` has the words of that version, also after a reload.
 - **Delete.** Choose `Delete`, then `Delete entry`. The page goes to the journal, and `GET /api/v1/sessions/<id>` gives 404.
 - **Offline.** Run `context.setOffline(true)`, then type. The status region shows `Recall keeps trying`. Run `context.setOffline(false)`. The status region shows `Saved at <time>` within 35 seconds.

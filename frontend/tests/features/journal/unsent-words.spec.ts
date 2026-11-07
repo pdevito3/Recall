@@ -561,7 +561,7 @@ test.describe('a logout', () => {
 })
 
 test.describe('a setting that did not reach the Server', () => {
-  test('goes out on the next load', async ({ page, api }) => {
+  test('to turn location on does not go out on the next load, because only a click in a live page turns location on', async ({ page, api }) => {
     const unsent = unsentWords(page)
     api.mock({ method: 'put', path: settingsPaths.mine, status: 503 })
     await unsent.openSettings()
@@ -569,14 +569,15 @@ test.describe('a setting that did not reach the Server', () => {
     await expect.poll(() => api.all('put', settingsPaths.mine).length).toBeGreaterThan(0)
 
     api.mock(settingsApi.saves(aSetting({ locationCaptureEnabled: true })))
+    const putsBefore = api.all('put', settingsPaths.mine).length
     await page.reload()
 
-    await expect.poll(() => JSON.stringify(api.last('put', settingsPaths.mine)?.body)).toContain('"locationCaptureEnabled":true')
-    await expect(unsent.at.locationCapture).toBeChecked()
     await expect.poll(() => unsent.settingKeys()).toEqual([])
+    await expect(unsent.at.locationCapture).not.toBeChecked()
+    for (const put of api.all('put', settingsPaths.mine).slice(putsBefore)) expect(JSON.stringify(put.body)).not.toContain('"locationCaptureEnabled":true')
   })
 
-  test('is not lost to the time zone seed of the next load', async ({ page, api }) => {
+  test('to turn location on, from a tab that died, is dropped at the next load', async ({ page, api }) => {
     const unsent = unsentWords(page)
     api.mock(settingsApi.are(aSetting({ timeZone: null })), { method: 'put', path: settingsPaths.mine, status: 503 })
     await unsent.leftInStorage(`recall.unsent-setting.${actorSubject}.tab-that-died.1`, JSON.stringify({
@@ -587,8 +588,9 @@ test.describe('a setting that did not reach the Server', () => {
 
     await unsent.openSettings()
 
-    await expect.poll(() => api.all('put', settingsPaths.mine).length).toBeGreaterThan(0)
-    for (const put of api.all('put', settingsPaths.mine)) expect(JSON.stringify(put.body)).toContain('"locationCaptureEnabled":true')
+    await expect.poll(() => unsent.settingKeys()).toEqual([])
+    await expect(unsent.at.locationCapture).not.toBeChecked()
+    expect(api.all('put', settingsPaths.mine)).toHaveLength(0)
   })
 })
 

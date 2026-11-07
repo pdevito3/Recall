@@ -42,36 +42,6 @@ test.describe('an entry', () => {
     expect(save.text).toContain('more')
   })
 
-  test('a replay of a save that lost, with no first reply, keeps the words on the page and says where they are', async ({ page, api }) => {
-    const session = aSession().atRevision(4).saying('Mine').build()
-    const withChunk = { ...aSession().saying('Words of a recording').build(), id: session.id, clientSessionId: session.clientSessionId, rawDraftRevision: 5, rawLatestRevision: 6 }
-    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveIsUnchanged(session, { draftRevision: 5, latestRevision: 6 }))
-    const entry = entryPage(page)
-    await entry.open(session.id)
-    api.mock(sessionsApi.oneIs(withChunk))
-
-    await entry.edit(session.id, ' edited')
-
-    await expect(entry.at.conflict('The words on this page are safe in History.')).toBeVisible()
-    await expect(entry.at.words('Mine edited')).toBeVisible()
-  })
-
-  test('a replay of a save that lost keeps the words on the page also under another notice', async ({ page, api }) => {
-    const session = aSession().atRevision(4).saying('Mine').build()
-    const withChunk = { ...aSession().saying('Words of a recording').build(), id: session.id, clientSessionId: session.clientSessionId, rawDraftRevision: 8, rawLatestRevision: 9 }
-    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveWins(session, 7))
-    const entry = entryPage(page)
-    await entry.open(session.id)
-    await entry.edit(session.id, ' one')
-    await expect(entry.at.conflict('These words replaced a save that this page had not shown.')).toBeVisible()
-
-    api.mock(sessionsApi.oneIs(withChunk), sessionsApi.draftSaveIsUnchanged(session, { draftRevision: 8, latestRevision: 9 }))
-    await entry.edit(session.id, ' two')
-
-    await expect(entry.at.conflict('The words on this page are safe in History.')).toBeVisible()
-    await expect(entry.at.words('Mine one two')).toBeVisible()
-  })
-
   test('a save that loses keeps the words on the page, says where they are, and can show the newest', async ({ page, api }) => {
     const session = aSession().atRevision(4).saying('Mine').build()
     api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }))
@@ -127,22 +97,6 @@ test.describe('an entry', () => {
     await entry.editWithoutWaiting(' and more')
     await entry.letAnAnswerHeldForHalfASecondLand()
 
-    await expect(entry.at.words('Mine edited and more')).toBeVisible()
-  })
-
-  test('a save reply during a read of the newest words leaves the words on the page and says what happened', async ({ page, api }) => {
-    const session = aSession().atRevision(4).saying('Mine').build()
-    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }))
-    const entry = entryPage(page)
-    await entry.open(session.id)
-    await entry.edit(session.id, ' edited')
-    await expect(entry.at.showNewest).toBeVisible()
-
-    api.mock({ ...sessionsApi.oneIs(session), delayMs: 5000 }, sessionsApi.draftSaveWins(session, 7))
-    await entry.at.showNewest.click()
-    await entry.edit(session.id, ' and more')
-
-    await expect(entry.at.conflict('The other save is safe in History.')).toBeVisible()
     await expect(entry.at.words('Mine edited and more')).toBeVisible()
   })
 
@@ -212,22 +166,6 @@ test.describe('an entry', () => {
     await expect(entry.at.updatedNotice).toHaveCount(0)
   })
 
-  test('Keep on a notice leaves the cursor in place', async ({ page, api }) => {
-    const session = aSession().atRevision(4).saying('Mine').build()
-    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveWins(session, 9))
-    const entry = entryPage(page)
-    await entry.open(session.id)
-    await entry.edit(session.id, ' edited')
-    await expect(entry.at.keepWords).toBeVisible()
-    await entry.moveTheCursorOneBack()
-
-    await entry.at.keepWords.click()
-    await expect(entry.at.keepWords).toHaveCount(0)
-    await entry.typeAfterTheCursor('X')
-
-    await expect(entry.at.words('Mine editeXd')).toBeVisible()
-  })
-
   test('a save reply that lands before the first read of a reload still opens the entry', async ({ page, api }) => {
     const session = aSession().atRevision(4).saying('Mine').build()
     api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveHasNoReply(session))
@@ -243,9 +181,9 @@ test.describe('an entry', () => {
     await expect(entry.at.words('Mine edited')).toBeVisible()
   })
 
-  test('the words of a save that won open after the person comes back, when the read after the lost save failed', async ({ page, api }) => {
+  test('a lost save whose read fails goes again, and says where the words are once a read works', async ({ page, api }) => {
     const session = aSession().atRevision(4).saying('Mine').build()
-    api.mock(sessionsApi.oneIs(session), sessionsApi.timelineIs([]))
+    api.mock(sessionsApi.oneIs(session))
     const entry = entryPage(page)
     await entry.open(session.id)
 
@@ -254,13 +192,15 @@ test.describe('an entry', () => {
       sessionsApi.oneFails(session.id, aProblem().refusing('Not now.')),
     )
     await entry.edit(session.id, ' edited')
-    await expect(entry.at.status('Saved in History at')).toBeVisible()
-    await entry.goToTheJournal()
+    await expect(entry.at.status('Not saved yet')).toBeVisible()
 
     const newest = { ...aSession().atRevision(5).saying('From the other device').build(), id: session.id, clientSessionId: session.clientSessionId }
     api.mock(sessionsApi.oneIs(newest))
-    await entry.goBack()
 
+    // The first retry waits 2 s, and the second 4 s.
+    await expect(entry.at.conflict('The words on this page are safe in History.')).toBeVisible({ timeout: 10_000 })
+    await expect(entry.at.words('Mine edited')).toBeVisible()
+    await entry.at.showNewest.click()
     await expect(entry.at.words('From the other device')).toBeVisible()
   })
 
@@ -333,7 +273,7 @@ test.describe('an entry', () => {
 
     await expect(entry.at.status('Saved at')).toBeVisible()
     expect((api.last('put', sessionsPaths.rawDraft(session.id))?.body as { baseRevision: number }).baseRevision).toBe(5)
-    await expect(entry.at.conflict('The other save is safe in History.')).toHaveCount(0)
+    await expect(entry.at.conflict('safe in History')).toHaveCount(0)
   })
 
   test('a retry that finds its first try on the Server is a plain save, with no notice', async ({ page, api }) => {
@@ -350,24 +290,7 @@ test.describe('an entry', () => {
     api.mock(sessionsApi.draftSaveWins(session, 6))
     await entry.edit(session.id, ' again')
     await expect.poll(() => (api.last('put', sessionsPaths.rawDraft(session.id))?.body as { baseRevision: number }).baseRevision).toBe(5)
-    await expect(entry.at.conflict('The other save is safe in History.')).toHaveCount(0)
-  })
-
-  test('a retry that another save overtook keeps the words of the person and says so, and the newest words are one press away', async ({ page, api }) => {
-    const session = aSession().atRevision(5).saying('Mine').build()
-    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveIsUnchanged(session, { draftRevision: 7, latestRevision: 7 }))
-    const entry = entryPage(page)
-    await entry.open(session.id)
-    const newest = { ...aSession().atRevision(7).saying('From the other device').build(), id: session.id, clientSessionId: session.clientSessionId }
-    api.mock(sessionsApi.oneIs(newest))
-
-    await entry.editWithoutWaiting(' edited')
-
-    await expect(entry.at.conflict('The words on this page are safe in History.')).toBeVisible()
-    await expect(entry.at.words('Mine edited')).toBeVisible()
-    await expect(entry.at.editor).toBeFocused()
-    await entry.at.showNewest.click()
-    await expect(entry.at.words('From the other device')).toBeVisible()
+    await expect(entry.at.conflict('safe in History')).toHaveCount(0)
   })
 
   test('refused words are on the page again after a reload, with the refusal', async ({ page, api }) => {
@@ -396,19 +319,6 @@ test.describe('an entry', () => {
     await entry.goBackTwoPages()
 
     await expect(entry.at.words('Words of the first entry')).toBeVisible()
-  })
-
-  test('a save that wins over an unseen save says where the other save is', async ({ page, api }) => {
-    const session = aSession().atRevision(4).build()
-    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveWins(session, 7))
-    const entry = entryPage(page)
-    await entry.open(session.id)
-
-    await entry.edit(session.id, ' edited')
-
-    await expect(entry.at.conflict('The other save is safe in History.')).toBeVisible()
-    await entry.at.keepWords.click()
-    await expect(entry.at.conflict('The other save is safe in History.')).toHaveCount(0)
   })
 
   test('a save that the Server refuses says why, and does not go again', async ({ page, api }) => {

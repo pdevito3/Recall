@@ -71,7 +71,7 @@ test.describe('the user menu of a signed-in user', () => {
 test.describe('a logout that fails on a phone', () => {
   test.use({ actor: as.user('Bob Smith'), viewport: { width: 390, height: 844 } })
 
-  test('leaves the user menu free at once, so that the person can try again, and breaks no word of its message', async ({ page, api }) => {
+  test('leaves the user menu free, so that the person can try again, and breaks no word of its message', async ({ page, api }) => {
     api.mock(usersApi.currentIs({ identifier: '1', name: 'Robert Smith' }), authApi.logoutFails())
     const home = homePage(page)
     await home.open()
@@ -82,7 +82,8 @@ test.describe('a logout that fails on a phone', () => {
 
     await expect(home.at.logoutFailed).toBeVisible()
     expect(await home.wordsBrokenInTheLogoutMessage()).toEqual([])
-    // A toast over the button would take this click, and it closes only after 6 seconds.
+    // The sign-out closes the drawer, so that its toast shows. A toast over the button would take this click, and it closes only after 6 seconds.
+    await appShellPage(page).openMobileSidebar()
     await home.at.userMenu('Bob Smith').click({ timeout: 2000 })
     await expect(home.at.userMenuLogout).toBeVisible()
   })

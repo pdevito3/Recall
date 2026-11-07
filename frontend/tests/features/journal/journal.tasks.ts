@@ -163,14 +163,6 @@ export function entryPage(page: Page) {
       return putTo(sessionsPaths.rawDraft(id))
     },
 
-    async moveTheCursorOneBack() {
-      await page.keyboard.press('ArrowLeft')
-    },
-
-    async typeAfterTheCursor(words: string) {
-      await page.keyboard.type(words)
-    },
-
     async startARead(id: string) {
       const read = page.waitForRequest((r) => r.method() === 'GET' && new URL(r.url()).pathname === sessionsPaths.one(id))
       await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')))

@@ -36,7 +36,6 @@ export const entry = (page: Page) => ({
   status: (text: string) => page.getByRole('status').filter({ hasText: text }),
   conflict: (text: string) => page.getByRole('alert').filter({ hasText: text }),
   showNewest: page.getByRole('button', { name: 'Show the newest words', exact: true }),
-  keepWords: page.getByRole('button', { name: 'Keep these words', exact: true }),
   addMyWords: page.getByRole('button', { name: 'Add my words to the newest words', exact: true }),
   newestWordsFailure: page.getByRole('alertdialog').filter({ hasText: 'The newest words did not load.' }),
   updatedNotice: page.getByRole('status').filter({ hasText: 'These words changed in another tab or device.' }),
