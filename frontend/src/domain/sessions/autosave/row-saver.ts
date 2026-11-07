@@ -57,7 +57,8 @@ export function planAfterStale<F extends object>({ changed, before, fresh, hadNo
     const yours = changed[field] as F[keyof F]
     const now = fresh[field]
     if (isSame(yours, now) || rules?.yieldsToTheRow?.(field, before[field])) continue
-    if (rules?.neverAsks?.(field, yours)) {
+    // A save with no reply can be a key from days ago, so even a choice that never asks must not go over a later choice.
+    if (rules?.neverAsks?.(field, yours) && !hadNoReply) {
       plan.apply[field] = yours as F[typeof field]
       plan.appliedWithNoAsk.push(field)
     } else if (rules?.asksFirst?.(field, yours) || hadNoReply || !isSame(before[field], now)) {
@@ -136,6 +137,17 @@ export class RowSaver<F extends object, R> {
     const fields = change && (isOlder ? withoutFields(change.value, fieldsIn(this.pendingFields())) : change.value)
     if (fields && change && fieldsIn(fields).length > 0) this.saver.edit(fields, isOlder ? newest.savedAt : change.savedAt)
     else this.keep()
+    this.notify()
+    if (asks.length > 0) void this.readRowForAsks()
+  }
+
+  /** The "now" of a stale key is old, and an answer must not replace a value that the person never saw. */
+  private async readRowForAsks() {
+    const row = await this.options.read(new AbortController().signal).catch(() => null)
+    if (row === null || this.isDisposed) return
+    const fresh = this.options.fieldsOf(row)
+    this.currentAsks = this.currentAsks.flatMap((ask) => (isSame(ask.yours, fresh[ask.field]) ? [] : { ...ask, now: fresh[ask.field] }))
+    this.keep()
     this.notify()
   }
 

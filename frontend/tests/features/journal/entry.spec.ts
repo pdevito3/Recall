@@ -42,6 +42,20 @@ test.describe('an entry', () => {
     expect(save.text).toContain('more')
   })
 
+  test('a replay of a save that lost, with no first reply, keeps the words on the page and says where they are', async ({ page, api }) => {
+    const session = aSession().atRevision(4).saying('Mine').build()
+    const withChunk = { ...aSession().saying('Words of a recording').build(), id: session.id, clientSessionId: session.clientSessionId, rawDraftRevision: 5, rawLatestRevision: 6 }
+    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveIsUnchanged(session, { draftRevision: 5, latestRevision: 6 }))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+    api.mock(sessionsApi.oneIs(withChunk))
+
+    await entry.edit(session.id, ' edited')
+
+    await expect(entry.at.conflict('The words on this page are safe in History.')).toBeVisible()
+    await expect(entry.at.words('Mine edited')).toBeVisible()
+  })
+
   test('a save that loses keeps the words on the page, says where they are, and can show the newest', async ({ page, api }) => {
     const session = aSession().atRevision(4).saying('Mine').build()
     api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }))

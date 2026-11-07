@@ -1,4 +1,5 @@
 import { aPerson, peopleApi, peoplePaths } from '@tests/support/api/people-api'
+import { recordingsApi } from '@tests/support/api/recordings-api'
 import { sessionsApi, sessionsPaths } from '@tests/support/api/sessions-api'
 import { aProblem } from '@tests/support/builders/problem-details-builder'
 import { aSession } from '@tests/support/builders/session-builder'
@@ -9,6 +10,15 @@ import { entryPage, journalPage } from './journal.tasks'
 const created = aSession().build()
 
 test.describe('writing a new entry', () => {
+  test('tells the person when the jobs that turn audio into text stopped', async ({ page, api }) => {
+    api.mock(recordingsApi.jobsStopped('The background work stopped. The Owner must restart the server.'))
+    const journal = journalPage(page)
+
+    await journal.open()
+
+    await expect(page.getByRole('alert', { name: 'Background work' })).toHaveText('The background work stopped. The Owner must restart the server.')
+  })
+
   test('opens with the cursor in the composer, and asks for nothing first', async ({ page }) => {
     const journal = journalPage(page)
 
@@ -502,6 +512,21 @@ test.describe('the timeline', () => {
 
     await expect(journal.at.status('Not saved. This text is too long.')).toBeVisible()
     await expect(journal.at.done).toBeDisabled()
+  })
+
+  test('a refused long text leaves the composer, the reason, and Done on the screen', async ({ page, api }) => {
+    const session = aSession().build()
+    const rows = Array.from({ length: 30 }, (_, row) => ({ ...aSession().summary(`Older words ${row}`), id: `ses_${row}` }))
+    api.mock(sessionsApi.timelineIs(rows), sessionsApi.creates(session), sessionsApi.draftSaveIsRefused(session, aProblem().refusing('This text is too long.')))
+    const journal = journalPage(page)
+    await journal.open()
+    await journal.at.composer.click()
+
+    await page.keyboard.insertText(Array.from({ length: 200 }, (_, line) => `line ${line}`).join('\n'))
+
+    await expect(journal.at.status('Not saved. This text is too long.')).toBeInViewport()
+    await expect(journal.at.composer).toBeInViewport()
+    await expect(journal.at.done).toBeInViewport()
   })
 
   test('a refusal that answers after Done brings the words back, and Done stays off', async ({ page, api }) => {

@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { useJournalZone } from '@/domain/settings/apis/user-setting'
@@ -12,6 +12,11 @@ import type { Composer } from './use-composer'
 export function ComposerForm({ composer }: { composer: Composer }) {
   const zone = useJournalZone()
   const section = useRef<HTMLElement>(null)
+  const isRefused = composer.status.kind === 'refused'
+  // The bound of a refused text makes the page shorter, and that can leave the composer above the screen.
+  useEffect(() => {
+    if (isRefused) section.current?.scrollIntoView({ block: 'nearest' })
+  }, [isRefused])
   return (
     <section ref={section} aria-label="Write a new entry" className="flex flex-col gap-2">
       {composer.conflict && (
@@ -30,7 +35,7 @@ export function ComposerForm({ composer }: { composer: Composer }) {
         label="New entry"
         placeholder={composer.words === null ? '' : 'What is on your mind?'}
         autoFocus={composer.autoFocus}
-        isBounded={composer.status.kind === 'refused'}
+        isBounded={isRefused}
         onChange={composer.handleChange}
         onSubmit={composer.finish}
       />

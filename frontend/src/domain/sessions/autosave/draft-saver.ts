@@ -418,15 +418,21 @@ export class DraftSaver {
     if (holdsWords) this.update({ baseRevision: reply.draftRevision })
     if (holdsWords || reply.outcome === 'Lost') this.update({ latestRevision: Math.max(latestRevision, reply.latestRevision) })
     const nextConflict = conflictAfter(reply, holdsWords, latestRevision, conflict)
-    if (nextConflict !== conflict || reply.outcome === 'Lost') this.conflictIsUnseen = this.listeners.size === 0
-    if (reply.outcome === 'Lost') this.wordsInHistory = change.value
+    if (nextConflict !== conflict) this.conflictIsUnseen = this.listeners.size === 0
     if (holdsWords) this.wordsOnServer = change.value
     this.update({ conflict: nextConflict })
+    if (reply.outcome === 'Lost') this.noteWordsOnlyInHistory(change.value)
     const id = this.snapshot.sessionId
     if (!id) return
     this.keepSessionCurrent(id, reply, holdsWords ? change.value : null)
     void this.queryClient.invalidateQueries({ queryKey: SessionKeys.revisions(id, this.target.channel) })
-    if (!holdsWords) void this.readNewest(id)
+    if (!holdsWords) void this.readNewest(id, reply.outcome === 'Unchanged' ? change.value : null)
+  }
+
+  private noteWordsOnlyInHistory(words: string) {
+    this.conflictIsUnseen = this.listeners.size === 0
+    this.wordsInHistory = words
+    this.update({ conflict: 'wordsMovedToHistory' })
   }
 
   private keepSessionCurrent(id: string, reply: DraftSaveResultDto, words: string | null) {
@@ -449,9 +455,14 @@ export class DraftSaver {
     if (words !== null && this.target.channel === 'raw') this.patchRow(id, words, reply)
   }
 
-  private async readNewest(id: string) {
+  /** A replay of a save answers Unchanged, also when the first answer was Lost and never came. Only the Draft can tell where the words of the replay went. */
+  private async readNewest(id: string, wordsOfAReplay: string | null) {
     const newest = await this.queryClient.fetchQuery({ ...sessionQueryOptions(id), staleTime: 0 }).catch(() => null)
-    if (newest && this.target.channel === 'raw') this.patchRow(id, newest.rawText, newest)
+    const isRaw = this.target.channel === 'raw'
+    if (newest && isRaw) this.patchRow(id, newest.rawText, newest)
+    if (wordsOfAReplay === null) return
+    if (newest && wordsOfAReplay === (isRaw ? newest.rawText : newest.cleanedText)) this.moveBaseTo(isRaw ? newest.rawDraftRevision : newest.cleanedDraftRevision, isRaw ? newest.rawLatestRevision : newest.cleanedLatestRevision)
+    else if (this.snapshot.conflict === null) this.noteWordsOnlyInHistory(wordsOfAReplay)
   }
 
   private patchRow(id: string, words: string, current: Pick<SessionDto, 'cleanupStatus' | 'version'>) {
@@ -577,7 +588,7 @@ export const resumeUnsentDrafts = (owner: string, queryClient: QueryClient) =>
     refreshDraftNotices()
   })
 
-const everySaver = () => [...new Set(savers.values()), ...sendingForATabThatLeft]
+const everySaver = () => [...new Set([...savers.values(), ...sendingForATabThatLeft])]
 
 let shownNotices: DraftNotice[] = []
 const noticeListeners = new Set<() => void>()
@@ -618,11 +629,11 @@ export interface UnsentWords {
   discard: () => void
 }
 
-/** All the words that a sign-out leaves on this device or loses. A discard removes the exact keys of this list, so it removes no word that the list did not show. */
+/** All the words that a sign-out leaves on this device or loses. A discard removes only the text of this list. Words typed after the list stay in their key, and they return with a notice. */
 export function unsentWordsOnThisDevice(owner: string | null, otherTabs: OtherTabReport[]): UnsentWords[] {
   const ofThisTab = everySaver().flatMap((saver) => {
     const words = saver.unsentWords()
-    return words === null ? [] : { words, isRefused: saver.getSnapshot().status.kind === 'refused', isOnlyInMemory: saver.isHoldingWordsOnlyInMemory(), discard: () => saver.discard() }
+    return words === null ? [] : { words, isRefused: saver.getSnapshot().status.kind === 'refused', isOnlyInMemory: saver.isHoldingWordsOnlyInMemory(), discard: () => saver.unsentWords() === words && saver.discard() }
   })
   const inKeysOfOtherTabs = (owner === null ? [] : readOutbox(owner)).filter(({ writer }) => writer !== thisTab).map(({ storageKey, entry }) => ({
     words: [entry.change?.value ?? null, entry.held ?? null].filter((text) => text !== null).reduce(joinWords),

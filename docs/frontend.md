@@ -200,6 +200,7 @@ The words of an entry save in the background. Until the Server holds them, they 
 | A save meets an entry that is gone (404, or a 409 that is not a conflict of a save) | The words become a new entry. A notice says so on each page, also on a later load with no page open. The entry page goes to the new entry. |
 | The Server refuses the words (another 4xx) | The words stay, with the reason, and they do not go out again on the next load. The page of the words shows the reason. With no such page open, a notice gives the reason, a Copy, and a Discard. |
 | A save loses to a newer save or to a chunk of a recording | The Server keeps the words in a Revision and the Draft stays. The page keeps the words on the screen and says so. `Add my words to the newest words` reads the Draft, joins the words, and saves with the new revision. A later save cannot push a chunk out of the Draft with no read. With no page open, a notice links to History. |
+| A retry or another tab sends a save whose first reply did not come | The Server answers `Unchanged` when it knows that save. The app reads the Draft. With the same text, the base moves on. With other text, the words of the save are only in a Revision, and the page says so as for a loss. |
 | A person logs out | A toast says that the app works. Each tab sends its unsent words, and the wait is up to 5 s. If the Server holds them all, the logout goes on. If not, an alert dialog names the words, also those of another tab. The person can keep them on this device or discard them. A discard removes the exact keys that the dialog named. Words that only the memory of a tab holds cannot stay, so the dialog offers `Stay signed in` in place of `Keep`. The logout then clears the pointer and ends the session. |
 | The session belongs to another person (see [One browser, two people](authentication.md#one-browser-two-people)) | The tab stops each saver, clears the query cache and the toasts, keeps the words under the key of the first person, and goes to `/auth/login?anotherPerson=1`. |
 
@@ -238,7 +239,9 @@ The app cannot change this delay. No web API forces the commit.
 
 **A reload while the server is down.** No app code runs, so the app cannot show a message. A plain HTTP origin cannot have a service worker, because a service worker needs a secure context. A reverse proxy that stays up shows its own error page. Caddy sends a 502 with an empty body, and the person sees a white page. With nothing listening, the person sees the connection error page of the browser. The words stay in their keys, and they go out when the page opens again after the server returns.
 
-**A tab of a person who signed out.** A frozen tab cannot report words that only its memory holds, so a sign-out in another tab cannot name them. Words that a tab types after the dialog opened stay in the key of that tab, and they return with a notice at the next sign-in.
+**A sign-out in another tab.** A tab that does not answer within 500 ms cannot report words that only its memory holds, so the sign-out in another tab cannot name them. A frozen tab, or a tab in a long paste, does this. Words that a tab types after the dialog opened stay in the key of that tab, and they return with a notice at the next sign-in. With no room in storage, those later words have no key, and they go with the page, with no warning.
+
+**One entry open in two composers.** A composer that already reads the entry does not join the held words of a key of another tab. This needs Duplicate Tab, because the pointer of a composer is in `sessionStorage`. The words stay in the key, and they join at a later load.
 
 ## Routes
 

@@ -626,6 +626,46 @@ test('an ask of a stale key joins the asks of this saver', () => {
   saver.dispose()
 })
 
+test('a stale key that turns capture off asks, and does not go over a later choice of on', async () => {
+  const api = server({ capture: true })
+  const base = { values: fieldsOf(api.row.current), version: api.row.current.version }
+  api.otherClientSets({ zone: 'Africa/Cairo' })
+  api.otherClientSets({ capture: true })
+  const { saver } = saverOn(api, { current: api.row.current })
+
+  saver.adopt({ change: { value: { capture: false }, savedAt: '2026-11-06T00:00:00.000Z' }, attempt: { base, hadNoReply: true }, asks: [] })
+  await vi.advanceTimersByTimeAsync(0)
+
+  expect(api.row.current.capture).toBe(true)
+  expect(saver.asks()).toEqual([{ field: 'capture', yours: false, now: true }])
+  saver.dispose()
+})
+
+test('an ask of a stale key shows the value that the row has now', async () => {
+  const api = server({ zone: 'Africa/Cairo' })
+  const copy = { current: api.row.current }
+  const { saver } = saverOn(api, copy)
+  api.otherClientSets({ zone: 'Asia/Tokyo' })
+
+  saver.adopt({ change: null, attempt: null, asks: [{ field: 'zone', yours: 'Europe/Paris', now: 'Africa/Cairo' }] })
+  await vi.advanceTimersByTimeAsync(0)
+
+  expect(saver.asks()).toEqual([{ field: 'zone', yours: 'Europe/Paris', now: 'Asia/Tokyo' }])
+  saver.dispose()
+})
+
+test('an ask of a stale key goes when the row already has that choice', async () => {
+  const api = server({ zone: 'Africa/Cairo' })
+  const { saver } = saverOn(api, { current: api.row.current })
+  api.otherClientSets({ zone: 'Europe/Paris' })
+
+  saver.adopt({ change: null, attempt: null, asks: [{ field: 'zone', yours: 'Europe/Paris', now: 'Africa/Cairo' }] })
+  await vi.advanceTimersByTimeAsync(0)
+
+  expect(saver.asks()).toEqual([])
+  saver.dispose()
+})
+
 test('the state to keep holds the base of a save and the asks, and is empty when all is settled', async () => {
   const api = server({ topics: ['a'] })
   const states: (RowSaverState<Fields> | null)[] = []

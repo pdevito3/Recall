@@ -48,6 +48,9 @@ const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 class ModelServer {
   rows: Row[] = []
   isDown = false
+  losesNextReply = false
+  refusesACreate = false
+  clockOfTheServer: string | null = null
   latencyMs = () => 50
 
   private fault() {
@@ -65,6 +68,7 @@ class ModelServer {
       await delay(latency / 2)
       throw this.fault()
     }
+    if (this.refusesACreate) throw this.fault()
     let row = this.rows.find((other) => other.clientSessionId === body.clientSessionId)
     if (!row) {
       row = { id: `ses_${this.rows.length + 1}`, clientSessionId: body.clientSessionId, text: '', draftRevision: 0, latestRevision: 0, lastChunkRevision: 0, savedAt: null, revisions: [], chunks: [] }
@@ -82,9 +86,17 @@ class ModelServer {
       throw this.fault()
     }
     const row = this.rows.find((other) => other.id === path.id)
-    if (!row) throw new ProblemDetailsError({ type: 'about:blank', title: 'Gone', status: 404 })
+    if (!row) {
+      // A load of a tab resets the modules, so the error must come from the module of the newest load, or the saver does not know it.
+      const current = await import('@/lib/problem-details')
+      throw new current.ProblemDetailsError({ type: 'about:blank', title: 'Gone', status: 404 })
+    }
     const reply = this.decide(row, body)
     await delay(latency / 2)
+    if (this.losesNextReply) {
+      this.losesNextReply = false
+      throw this.fault()
+    }
     return reply
   }
 
@@ -100,7 +112,7 @@ class ModelServer {
     if (missesChunk || !beats) return answer('Lost')
     row.text = save.text
     row.draftRevision = number
-    row.savedAt = row.savedAt !== null && row.savedAt > save.savedAt ? row.savedAt : save.savedAt
+    row.savedAt = this.clockOfTheServer ?? (row.savedAt !== null && row.savedAt > save.savedAt ? row.savedAt : save.savedAt)
     return answer('Won')
   }
 
@@ -764,6 +776,84 @@ test('a discard at sign-out removes the key of a tab that still lives, with the 
   expect(tokensIn(allKeys(storage))).toEqual([])
   live.run(() => live.mod.stopDraftSavers())
   leaving.run(() => leaving.mod.stopDraftSavers())
+})
+
+test('a lost save whose reply did not come raises the notice at the replay, and the words stay on the screen', async () => {
+  const storage = aScene()
+  const tab = await aTabOn('entry-1')
+  tab.type('w1x')
+  await pass(2000)
+  const row = world.rows[0] as Row
+  world.appendChunk(row, 'c2x')
+  world.losesNextReply = true
+  tab.type('w3x')
+  await pass(10_000)
+
+  expect(row.text).toBe('w1x c2x')
+  expect(tab.page?.editor).toBe('w1x w3x')
+  expect(tab.page?.saver.getSnapshot().conflict).toBe('wordsMovedToHistory')
+  expect(tokensIn(row.revisions.map(({ text }) => text).join(' '))).toContain('w3x')
+  expect(allKeys(storage)).toBe('')
+  tab.run(() => tab.mod.stopDraftSavers())
+})
+
+test('a won save whose reply did not come raises no notice, also when the clock of the device differs', async () => {
+  aScene()
+  const tab = await aTabOn('entry-1')
+  tab.type('w1x')
+  await pass(2000)
+  const row = world.rows[0] as Row
+  world.appendChunk(row, 'c2x')
+  tab.run(() => (tab.page as Page).saver.moveBaseTo(row.draftRevision, row.latestRevision))
+  world.losesNextReply = true
+  world.clockOfTheServer = '2020-01-01T00:00:00.000Z'
+  tab.type('w3x')
+  await pass(10_000)
+
+  expect(tokensIn(row.text)).toContain('w3x')
+  expect(tab.page?.saver.getSnapshot().conflict).toBeNull()
+  expect(tab.page?.saver.getSnapshot().baseRevision).toBe(row.draftRevision)
+  tab.run(() => tab.mod.stopDraftSavers())
+})
+
+test('a discard at sign-out leaves words that the person typed after the list', async () => {
+  const storage = aScene()
+  world.isDown = true
+  const tab = await aTabOn('entry-1')
+  tab.type('w1x')
+  await pass(1000)
+  const shown = tab.run(() => tab.mod.unsentWordsOnThisDevice(owner, []))
+  tab.type('w2x')
+  await pass(1000)
+
+  tab.run(() => {
+    tab.mod.stopDraftSavers()
+    for (const { discard } of shown) discard()
+  })
+
+  expect(tokensIn(allKeys(storage))).toContain('w2x')
+})
+
+test('a saver that took the key of a tab that left and moved to a new entry counts once', async () => {
+  const storage = aScene()
+  const tab = await aTabOn('entry-1')
+  tab.type('w1x')
+  await pass(2000)
+  const row = world.rows[0] as Row
+  storage.setItem(`recall.left.tab-gone`, '1')
+  storage.setItem(
+    `recall.unsent.${owner}.tab-gone.1`,
+    JSON.stringify({ key: 'entry-1.raw', channel: 'raw', clientSessionId: 'entry-1', startedAt: '2026-11-07T00:00:00.000Z', sessionId: row.id, baseRevision: 1, latestRevision: 1, change: { value: 'w2x', savedAt: '2026-11-07T00:00:01.000Z' }, held: null }),
+  )
+  world.rows = []
+  world.refusesACreate = true
+
+  tab.resume()
+  await pass(40_000)
+
+  const shown = tab.run(() => tab.mod.unsentWordsOnThisDevice(owner, [])).map(({ words }) => words)
+  expect(shown.filter((words) => words === 'w2x')).toEqual(['w2x'])
+  tab.run(() => tab.mod.stopDraftSavers())
 })
 
 test('a save with an old base after a chunk stays in History, keeps the words on screen, and a merge keeps the chunk', async () => {
