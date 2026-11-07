@@ -386,6 +386,20 @@ public class RecordingTests
     }
 
     [Test]
+    [Arguments(ModelStatus.DownloadFailed)]
+    [Arguments(ModelStatus.HashRejected)]
+    public void the_model_text_names_no_retry_time_because_the_owner_sets_it(ModelStatus model)
+    {
+        // Act
+        var text = RecordingViews.ModelTextOf(model);
+
+        // Assert
+        text.ShouldNotBeNull();
+        text.ShouldContain("tries again");
+        text.ShouldNotContain("minutes");
+    }
+
+    [Test]
     public void each_container_has_its_own_first_bytes()
     {
         // Arrange
