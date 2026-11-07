@@ -43,10 +43,10 @@ public static partial class SessionMapper
             .Concat(aiTopics.Select(name => new SessionTopicDto { Name = name, Provenance = nameof(TopicProvenance.AiSuggested) }))
             .ToList();
 
-    public static DraftSaveResultDto ToSaveResult(this Session session, DraftSlot slot, DraftSaveOutcome outcome) => new()
+    public static DraftSaveResultDto ToSaveResult(this Session session, DraftSlot slot, DraftDecision decision) => new()
     {
-        Outcome = outcome.ToString(),
-        DraftRevision = slot.DraftRevision,
+        Outcome = decision.Outcome.ToString(),
+        DraftRevision = decision.DraftRevision,
         LatestRevision = slot.LatestRevision,
         SavedAt = slot.SavedAt,
         CleanupStatus = session.CleanupStatus.ToString(),

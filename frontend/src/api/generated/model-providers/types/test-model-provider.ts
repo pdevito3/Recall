@@ -25,6 +25,8 @@ export type TestModelProviderStatus404 = ProblemDetails;
 
 export type TestModelProviderStatus422 = ValidationProblemDetails;
 
+export type TestModelProviderStatus507 = ProblemDetails;
+
 export type TestModelProviderOptions = {
     body?: never;
     path: TestModelProviderPath;
@@ -38,6 +40,7 @@ export type TestModelProviderResponses = {
     "403": TestModelProviderStatus403;
     "404": TestModelProviderStatus404;
     "422": TestModelProviderStatus422;
+    "507": TestModelProviderStatus507;
 };
 
 /**

@@ -75,7 +75,7 @@ public class CleanupJobTests : TestBase
     }
 
     [Test]
-    [Property("Rule", "SES-36")]
+    [Property("Rule", "SES-37")]
     public async Task a_job_payload_holds_no_words_and_no_key()
     {
         // Arrange
@@ -94,7 +94,7 @@ public class CleanupJobTests : TestBase
     }
 
     [Test]
-    [Property("Rule", "SES-36")]
+    [Property("Rule", "SES-37")]
     public async Task a_second_run_of_a_finished_job_changes_nothing_and_calls_no_provider()
     {
         // Arrange
@@ -114,7 +114,7 @@ public class CleanupJobTests : TestBase
     }
 
     [Test]
-    [Property("Rule", "SES-36")]
+    [Property("Rule", "SES-37")]
     public async Task a_job_of_an_older_run_cannot_end_the_newer_run()
     {
         // Arrange
@@ -131,7 +131,7 @@ public class CleanupJobTests : TestBase
     }
 
     [Test]
-    [Property("Rule", "SES-36")]
+    [Property("Rule", "SES-37")]
     public async Task two_starts_at_once_make_one_run_and_one_job()
     {
         // Arrange
@@ -195,7 +195,7 @@ public class CleanupJobTests : TestBase
     }
 
     [Test]
-    [Property("Rule", "SES-37")]
+    [Property("Rule", "SES-38")]
     public async Task the_last_call_to_an_unavailable_provider_ends_the_run()
     {
         // Arrange
@@ -222,7 +222,7 @@ public class CleanupJobTests : TestBase
     }
 
     [Test]
-    [Property("Rule", "SES-37")]
+    [Property("Rule", "SES-38")]
     public async Task a_later_try_past_the_time_of_the_whole_run_ends_with_no_call()
     {
         // Arrange
@@ -241,7 +241,7 @@ public class CleanupJobTests : TestBase
     }
 
     [Test]
-    [Property("Rule", "SES-37")]
+    [Property("Rule", "SES-38")]
     public async Task a_later_try_has_only_the_time_that_the_run_has_left()
     {
         // Arrange
@@ -262,7 +262,7 @@ public class CleanupJobTests : TestBase
     }
 
     [Test]
-    [Property("Rule", "SES-37")]
+    [Property("Rule", "SES-38")]
     public async Task a_claim_above_the_limit_ends_the_run_with_no_call()
     {
         // Arrange
@@ -432,7 +432,7 @@ public class CleanupJobTests : TestBase
     }
 
     [Test]
-    [Property("Rule", "SES-37")]
+    [Property("Rule", "SES-38")]
     public async Task a_stop_of_the_host_returns_the_lease_and_the_next_claim_stores_the_result()
     {
         // Arrange
@@ -456,7 +456,7 @@ public class CleanupJobTests : TestBase
     }
 
     [Test]
-    [Property("Rule", "SES-37")]
+    [Property("Rule", "SES-38")]
     [Arguments(JobState.DeadLettered)]
     [Arguments(JobState.Cancelled)]
     [Arguments(JobState.Quarantined)]
@@ -500,7 +500,7 @@ public class CleanupJobTests : TestBase
     }
 
     [Test]
-    [Property("Rule", "SES-37")]
+    [Property("Rule", "SES-38")]
     [Arguments("not json")]
     [Arguments("{}")]
     [Arguments("null")]
@@ -529,7 +529,7 @@ public class CleanupJobTests : TestBase
     }
 
     [Test]
-    [Property("Rule", "SES-37")]
+    [Property("Rule", "SES-38")]
     public async Task the_watch_leaves_a_run_that_got_a_result_before_the_job_ended()
     {
         // Arrange

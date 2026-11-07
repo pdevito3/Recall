@@ -20,6 +20,8 @@ export const testModelProviderStatus404Schema = problemDetailsSchema
 
 export const testModelProviderStatus422Schema = validationProblemDetailsSchema
 
+export const testModelProviderStatus507Schema = problemDetailsSchema
+
 export const testModelProviderResponseSchema = testModelProviderStatus200Schema
 
-export const testModelProviderErrorSchema = z.union([testModelProviderStatus401Schema, testModelProviderStatus403Schema, testModelProviderStatus404Schema, testModelProviderStatus422Schema])
+export const testModelProviderErrorSchema = z.union([testModelProviderStatus401Schema, testModelProviderStatus403Schema, testModelProviderStatus404Schema, testModelProviderStatus422Schema, testModelProviderStatus507Schema])

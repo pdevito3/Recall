@@ -6,7 +6,8 @@
 export const draftSaveResultDtoOutcomeEnum = {
     Unchanged: "Unchanged",
     Won: "Won",
-    Lost: "Lost"
+    Lost: "Lost",
+    Kept: "Kept"
 } as const;
 
 export type DraftSaveResultDtoOutcomeEnumKey = (typeof draftSaveResultDtoOutcomeEnum)[keyof typeof draftSaveResultDtoOutcomeEnum];
@@ -23,18 +24,20 @@ export type DraftSaveResultDtoCleanupStatusEnumKey = (typeof draftSaveResultDtoC
 
 export type DraftSaveResultDto = {
     /**
-     * @description A save with the outcome `Lost` did not change the Draft, and its words stay as the newest Revision.
+     * @description `Won` and `Unchanged` say that the Draft holds these words. `Kept` says that the Draft took these words at the number in `draftRevision`, and that a chunk or a later save moved the Draft after it. `Lost` says that the Draft did not take this save, and its words are in a Revision.
      * @type string
     */
     outcome: DraftSaveResultDtoOutcomeEnumKey;
     /**
-     * @description
+     * @description After `Won` or `Unchanged`, the base of the next save. After `Kept`, the number at which the Draft took these words, which is older than the Draft and is not a base: read the Session before the next save. After `Lost`, null: read the Session, merge, and save from the number of the read, with a new `savedAt`.
+     *
      * Format: `int32`
-     * @type integer
+     * @type integer | undefined
     */
-    draftRevision: number;
+    draftRevision?: number | null;
     /**
-     * @description
+     * @description The number of the newest Revision. It is never a base.
+     *
      * Format: `int32`
      * @type integer
     */

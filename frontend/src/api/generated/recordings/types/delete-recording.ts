@@ -20,6 +20,8 @@ export type DeleteRecordingStatus409 = ValidationProblemDetails;
 
 export type DeleteRecordingStatus422 = ValidationProblemDetails;
 
+export type DeleteRecordingStatus507 = ProblemDetails;
+
 export type DeleteRecordingOptions = {
     body?: never;
     path: DeleteRecordingPath;
@@ -33,6 +35,7 @@ export type DeleteRecordingResponses = {
     "404": DeleteRecordingStatus404;
     "409": DeleteRecordingStatus409;
     "422": DeleteRecordingStatus422;
+    "507": DeleteRecordingStatus507;
 };
 
 /**

@@ -20,6 +20,8 @@ export const streamCleanupStatus409Schema = validationProblemDetailsSchema
 
 export const streamCleanupStatus422Schema = validationProblemDetailsSchema
 
+export const streamCleanupStatus507Schema = problemDetailsSchema
+
 export const streamCleanupResponseSchema = streamCleanupStatus200Schema
 
-export const streamCleanupErrorSchema = z.union([streamCleanupStatus401Schema, streamCleanupStatus404Schema, streamCleanupStatus409Schema, streamCleanupStatus422Schema])
+export const streamCleanupErrorSchema = z.union([streamCleanupStatus401Schema, streamCleanupStatus404Schema, streamCleanupStatus409Schema, streamCleanupStatus422Schema, streamCleanupStatus507Schema])

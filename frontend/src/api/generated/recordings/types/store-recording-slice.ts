@@ -29,6 +29,8 @@ export type StoreRecordingSliceStatus413 = ProblemDetails;
 
 export type StoreRecordingSliceStatus422 = ValidationProblemDetails;
 
+export type StoreRecordingSliceStatus507 = ProblemDetails;
+
 /**
  * @description
  * Format: `byte`
@@ -50,6 +52,7 @@ export type StoreRecordingSliceResponses = {
     "409": StoreRecordingSliceStatus409;
     "413": StoreRecordingSliceStatus413;
     "422": StoreRecordingSliceStatus422;
+    "507": StoreRecordingSliceStatus507;
 };
 
 /**

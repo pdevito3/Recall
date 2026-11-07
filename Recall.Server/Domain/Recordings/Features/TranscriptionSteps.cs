@@ -4,6 +4,7 @@ using System.Diagnostics;
 using Databases;
 using Jobs;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using Resources;
 using Resources.Storage;
 using Serilog;
@@ -121,7 +122,7 @@ public static class CompleteTranscription
 {
     public sealed record Command(string Id) : IRequest, IRunsAgainWhenRaced;
 
-    public sealed class Handler(AppDbContext dbContext, FileStore fileStore, TimeProvider timeProvider) : IRequestHandler<Command>
+    public sealed class Handler(AppDbContext dbContext, TimeProvider timeProvider) : IRequestHandler<Command>
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
 
@@ -147,8 +148,27 @@ public static class CompleteTranscription
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
 
-            fileStore.Delete(RecordingFiles.WorkAudio(recording));
             _logger.Here().Information("Recording {RecordingId} is {Status}, {Problem}", recording.Id, recording.Status, recording.Problem);
+        }
+    }
+}
+
+public static class RemoveEndedWorkAudio
+{
+    public sealed record Command(string Id) : IRequest;
+
+    public sealed class Handler(AppDbContext dbContext, FileStore fileStore) : IRequestHandler<Command>
+    {
+        private readonly ILogger _logger = Log.ForContext<Handler>();
+
+        public async Task Handle(Command request, CancellationToken cancellationToken)
+        {
+            var recording = await dbContext.Recordings
+                .TagWithOperationCallSite("recordings.transcribe.ended")
+                .AsNoTracking()
+                .GetById(request.Id, cancellationToken);
+            if (!recording.WaitsForTranscription)
+                RecordingWork.TryDeleteWorkAudio(fileStore, recording.TenantId, recording.UserId, recording.Id, _logger);
         }
     }
 }

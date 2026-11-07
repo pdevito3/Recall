@@ -21,6 +21,8 @@ export type StopCleanupStatus409 = ValidationProblemDetails;
 
 export type StopCleanupStatus422 = ValidationProblemDetails;
 
+export type StopCleanupStatus507 = ProblemDetails;
+
 export type StopCleanupOptions = {
     body?: never;
     path: StopCleanupPath;
@@ -34,6 +36,7 @@ export type StopCleanupResponses = {
     "404": StopCleanupStatus404;
     "409": StopCleanupStatus409;
     "422": StopCleanupStatus422;
+    "507": StopCleanupStatus507;
 };
 
 /**

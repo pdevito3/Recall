@@ -24,6 +24,8 @@ export type RecordCleanupResultStatus409 = ValidationProblemDetails;
 
 export type RecordCleanupResultStatus422 = ValidationProblemDetails;
 
+export type RecordCleanupResultStatus507 = ProblemDetails;
+
 /**
  * @description A Cleanup that a model on the device did. The server does the same work on it as on the answer of a model provider.
  * @type object
@@ -44,6 +46,7 @@ export type RecordCleanupResultResponses = {
     "404": RecordCleanupResultStatus404;
     "409": RecordCleanupResultStatus409;
     "422": RecordCleanupResultStatus422;
+    "507": RecordCleanupResultStatus507;
 };
 
 /**

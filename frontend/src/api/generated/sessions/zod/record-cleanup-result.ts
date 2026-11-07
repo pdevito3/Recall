@@ -23,8 +23,10 @@ export const recordCleanupResultStatus409Schema = validationProblemDetailsSchema
 
 export const recordCleanupResultStatus422Schema = validationProblemDetailsSchema
 
+export const recordCleanupResultStatus507Schema = problemDetailsSchema
+
 export const recordCleanupResultResponseSchema = recordCleanupResultStatus200Schema
 
-export const recordCleanupResultErrorSchema = z.union([recordCleanupResultStatus400Schema, recordCleanupResultStatus401Schema, recordCleanupResultStatus404Schema, recordCleanupResultStatus409Schema, recordCleanupResultStatus422Schema])
+export const recordCleanupResultErrorSchema = z.union([recordCleanupResultStatus400Schema, recordCleanupResultStatus401Schema, recordCleanupResultStatus404Schema, recordCleanupResultStatus409Schema, recordCleanupResultStatus422Schema, recordCleanupResultStatus507Schema])
 
 export const recordCleanupResultBodySchema = cleanupResultDtoSchema.describe('A Cleanup that a model on the device did. The server does the same work on it as on the answer of a model provider.')

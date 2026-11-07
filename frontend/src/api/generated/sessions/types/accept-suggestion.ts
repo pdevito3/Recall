@@ -24,6 +24,8 @@ export type AcceptSuggestionStatus409 = ValidationProblemDetails;
 
 export type AcceptSuggestionStatus422 = ValidationProblemDetails;
 
+export type AcceptSuggestionStatus507 = ProblemDetails;
+
 export type AcceptSuggestionBody = SuggestionResponseDto;
 
 export type AcceptSuggestionOptions = {
@@ -40,6 +42,7 @@ export type AcceptSuggestionResponses = {
     "404": AcceptSuggestionStatus404;
     "409": AcceptSuggestionStatus409;
     "422": AcceptSuggestionStatus422;
+    "507": AcceptSuggestionStatus507;
 };
 
 /**

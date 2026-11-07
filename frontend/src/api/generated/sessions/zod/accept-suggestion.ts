@@ -23,8 +23,10 @@ export const acceptSuggestionStatus409Schema = validationProblemDetailsSchema
 
 export const acceptSuggestionStatus422Schema = validationProblemDetailsSchema
 
+export const acceptSuggestionStatus507Schema = problemDetailsSchema
+
 export const acceptSuggestionResponseSchema = acceptSuggestionStatus200Schema
 
-export const acceptSuggestionErrorSchema = z.union([acceptSuggestionStatus400Schema, acceptSuggestionStatus401Schema, acceptSuggestionStatus404Schema, acceptSuggestionStatus409Schema, acceptSuggestionStatus422Schema])
+export const acceptSuggestionErrorSchema = z.union([acceptSuggestionStatus400Schema, acceptSuggestionStatus401Schema, acceptSuggestionStatus404Schema, acceptSuggestionStatus409Schema, acceptSuggestionStatus422Schema, acceptSuggestionStatus507Schema])
 
 export const acceptSuggestionBodySchema = suggestionResponseDtoSchema

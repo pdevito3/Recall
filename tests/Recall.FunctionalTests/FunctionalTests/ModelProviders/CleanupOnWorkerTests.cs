@@ -130,7 +130,7 @@ public class CleanupOnWorkerTests
     }
 
     [Test]
-    [Property("Rule", "SES-36")]
+    [Property("Rule", "SES-37")]
     public async Task a_person_leaves_during_the_run_and_later_finds_the_cleaned_words_with_raw_unchanged()
     {
         // Arrange
@@ -162,7 +162,7 @@ public class CleanupOnWorkerTests
     }
 
     [Test]
-    [Property("Rule", "SES-42")]
+    [Property("Rule", "SES-43")]
     public async Task a_person_stops_a_hung_call_on_the_page_and_runs_it_again_on_a_worker()
     {
         // Arrange
@@ -193,7 +193,7 @@ public class CleanupOnWorkerTests
     }
 
     [Test]
-    [Property("Rule", "SES-43")]
+    [Property("Rule", "SES-44")]
     public async Task hung_calls_of_one_queue_hold_its_limit_and_leave_the_others_to_other_queues()
     {
         // Arrange
@@ -317,7 +317,7 @@ public class CleanupOnWorkerTests
     }
 
     [Test]
-    [Property("Rule", "SES-38")]
+    [Property("Rule", "SES-39")]
     [Property("Rule", "SES-19")]
     public async Task a_failed_claim_leaves_no_words_and_no_key_in_the_job_tables_or_on_the_dashboard()
     {
@@ -374,7 +374,7 @@ public class CleanupOnWorkerTests
     }
 
     [Test]
-    [Property("Rule", "SES-37")]
+    [Property("Rule", "SES-38")]
     public async Task a_job_on_the_dead_letter_list_ends_its_run_through_the_watch()
     {
         // Arrange

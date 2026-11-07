@@ -31,7 +31,7 @@ public class WordsThatAreNotADocumentTests
         var session = NewSession();
 
         // Act
-        session.SaveRaw(Save(words), false);
+        session.SaveRaw(Save(words));
 
         // Assert
         session.Raw.Text.ShouldBe(words);
@@ -46,7 +46,7 @@ public class WordsThatAreNotADocumentTests
         // Arrange
         var words = """{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"cut \ud83d"},{"type":"mention","attrs":{"personId":"per_01","label":"Old"}}]}]}""";
         var session = NewSession();
-        session.SaveRaw(Save(words), false);
+        session.SaveRaw(Save(words));
 
         // Act
         session.RenamePerson(PersonId, "New", Now);
@@ -63,7 +63,7 @@ public class WordsThatAreNotADocumentTests
         // Arrange
         var words = """{"type":"doc","content":[{"type":"paragraph","content":[{"type":"mention","attrs":{"personId":"per_01","label":"\ud83d"}}]}]}""";
         var session = NewSession();
-        session.SaveRaw(Save(words), false);
+        session.SaveRaw(Save(words));
 
         // Act
         session.RenamePerson(PersonId, "New", Now);
@@ -82,7 +82,7 @@ public class WordsThatAreNotADocumentTests
         var session = NewSession();
 
         // Act
-        session.SaveRaw(Save(words), false);
+        session.SaveRaw(Save(words));
 
         // Assert
         session.Raw.Text.ShouldBe(words);
@@ -98,7 +98,7 @@ public class WordsThatAreNotADocumentTests
         var session = NewSession();
 
         // Act
-        session.SaveRaw(Save(words), false);
+        session.SaveRaw(Save(words));
 
         // Assert
         session.Raw.Text.ShouldBe(words);
@@ -113,7 +113,7 @@ public class WordsThatAreNotADocumentTests
         // Arrange
         const string words = """{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"cut \ud83d"},{"type":"mention","attrs":{"personId":"per_01","label":"Old"}}]}]}""";
         var session = NewSession();
-        session.SaveCleaned(Save(words), false);
+        session.SaveCleaned(Save(words));
 
         // Act
         session.RenamePerson(PersonId, "New", Now);
@@ -130,7 +130,7 @@ public class WordsThatAreNotADocumentTests
         // Arrange
         const string words = """{"type":"doc","content":[{"type":"paragraph","content":[{"type":"mention","attrs":{"personId":"per_01","label":"\ud83d"}}]}]}""";
         var session = NewSession();
-        session.SaveCleaned(Save(words), false);
+        session.SaveCleaned(Save(words));
 
         // Act
         session.RenamePerson(PersonId, "New", Now);
@@ -148,7 +148,7 @@ public class WordsThatAreNotADocumentTests
         var session = NewSession();
 
         // Act
-        session.SaveRaw(Save(words), false);
+        session.SaveRaw(Save(words));
 
         // Assert
         session.Preview.ShouldBe("ab");

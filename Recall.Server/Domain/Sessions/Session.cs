@@ -114,28 +114,28 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         };
     }
 
-    public DraftSaveOutcome SaveRaw(DraftSave save, bool isReplay)
+    public DraftDecision SaveRaw(DraftSave save, DraftAnswer? earlier = null, bool baseWasDraft = true)
     {
-        var decision = Raw.Decide(save, isReplay, missesTranscript: save.BaseRevision < LastTranscriptRevision);
+        var decision = Raw.Decide(save, earlier, baseWasDraft && !(save.BaseRevision < LastTranscriptRevision));
         Raw = decision.Next;
         if (decision.MintedRevision is { } number)
-            _appendedRawRevisions.Add(new RawRevision(Id, number, save.SavedAt, save.ClaimedSavedAt, save.Text));
+            _appendedRawRevisions.Add(new RawRevision(Id, number, save.SavedAt, save.ClaimedSavedAt, save.Text, decision.Outcome == DraftSaveOutcome.Won));
 
         RefreshFromDrafts();
-        return decision.Outcome;
+        return decision;
     }
 
-    public DraftSaveOutcome SaveCleaned(DraftSave save, bool isReplay)
+    public DraftDecision SaveCleaned(DraftSave save, DraftAnswer? earlier = null, bool baseWasDraft = true)
     {
-        var decision = Cleaned.Decide(save, isReplay);
+        var decision = Cleaned.Decide(save, earlier, baseWasDraft);
         Cleaned = decision.Next;
         if (decision.MintedRevision is { } number)
-            _appendedCleanedRevisions.Add(new CleanedRevision(Id, number, save.SavedAt, save.ClaimedSavedAt, save.Text));
+            _appendedCleanedRevisions.Add(new CleanedRevision(Id, number, save.SavedAt, save.ClaimedSavedAt, save.Text, decision.Outcome == DraftSaveOutcome.Won));
         if (decision.Outcome == DraftSaveOutcome.Won)
             CleanedHasHandEdits = true;
 
         RefreshFromDrafts();
-        return decision.Outcome;
+        return decision;
     }
 
     public bool TryAppendTranscript(string words, DateTimeOffset now)
@@ -147,7 +147,7 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         var number = Raw.LatestRevision + 1;
         Raw = new DraftSlot(text, number, number, now);
         LastTranscriptRevision = number;
-        _appendedRawRevisions.Add(new RawRevision(Id, number, now, now, text));
+        _appendedRawRevisions.Add(new RawRevision(Id, number, now, now, text, wasDraft: true));
         RefreshFromDrafts();
         return true;
     }
@@ -160,7 +160,7 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         if (raw != Raw.Text)
         {
             Raw = Raw.RewrittenKeepingSavedAt(raw);
-            _appendedRawRevisions.Add(new RawRevision(Id, Raw.DraftRevision, now, now, raw));
+            _appendedRawRevisions.Add(new RawRevision(Id, Raw.DraftRevision, now, now, raw, wasDraft: true));
             if (LastCleanupRawRevision is not null && !wasStale)
                 LastCleanupRawRevision = Raw.DraftRevision;
         }
@@ -169,7 +169,7 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         if (cleaned != Cleaned.Text)
         {
             Cleaned = Cleaned.RewrittenKeepingSavedAt(cleaned);
-            _appendedCleanedRevisions.Add(new CleanedRevision(Id, Cleaned.DraftRevision, now, now, cleaned));
+            _appendedCleanedRevisions.Add(new CleanedRevision(Id, Cleaned.DraftRevision, now, now, cleaned, wasDraft: true));
         }
 
         RefreshFromDrafts();
@@ -206,7 +206,7 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
     {
         RequireRunningCleanup();
         Cleaned = new DraftSlot(outcome.CleanedText, Cleaned.LatestRevision + 1, Cleaned.LatestRevision + 1, now);
-        _appendedCleanedRevisions.Add(new CleanedRevision(Id, Cleaned.DraftRevision, now, now, outcome.CleanedText));
+        _appendedCleanedRevisions.Add(new CleanedRevision(Id, Cleaned.DraftRevision, now, now, outcome.CleanedText, wasDraft: true));
         Synopsis = outcome.Synopsis;
         CleanedHasHandEdits = false;
         LastCleanupRawRevision = rawRevisionRead;
@@ -291,7 +291,7 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         if (cleaned != Cleaned.Text)
         {
             Cleaned = Cleaned.RewrittenKeepingSavedAt(cleaned);
-            _appendedCleanedRevisions.Add(new CleanedRevision(Id, Cleaned.DraftRevision, now, now, cleaned));
+            _appendedCleanedRevisions.Add(new CleanedRevision(Id, Cleaned.DraftRevision, now, now, cleaned, wasDraft: true));
         }
 
         RefreshFromDrafts();

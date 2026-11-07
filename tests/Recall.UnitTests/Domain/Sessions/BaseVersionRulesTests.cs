@@ -135,7 +135,7 @@ public class BaseVersionRulesTests
         var session = NewSession();
 
         // Act
-        session.SaveRaw(DraftSave.Of("words", 0, Noon, Noon), false);
+        session.SaveRaw(DraftSave.Of("words", 0, Noon, Noon));
 
         // Assert
         session.MetadataVersion.ShouldBe(0u);

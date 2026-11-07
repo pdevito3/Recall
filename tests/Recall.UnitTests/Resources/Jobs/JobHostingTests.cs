@@ -112,7 +112,7 @@ public class JobHostingTests
     }
 
     [Test]
-    [Property("Rule", "SES-43")]
+    [Property("Rule", "SES-44")]
     public void a_cleanup_has_its_own_workers_and_a_system_job_never_waits_behind_one()
     {
         // Act

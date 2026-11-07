@@ -80,7 +80,7 @@ public class ModelProviderClientTests : TestBase
     }
 
     [Test]
-    [Property("Rule", "SES-37")]
+    [Property("Rule", "SES-38")]
     public async Task an_anthropic_stream_that_stalls_after_its_first_events_ends_at_the_call_limit()
     {
         // Arrange
@@ -98,7 +98,7 @@ public class ModelProviderClientTests : TestBase
     }
 
     [Test]
-    [Property("Rule", "SES-37")]
+    [Property("Rule", "SES-38")]
     public async Task a_stop_of_the_host_during_a_stalled_stream_is_a_cancel_and_no_failure_of_the_provider()
     {
         // Arrange

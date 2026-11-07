@@ -906,6 +906,10 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("text");
 
+                    b.Property<bool>("WasDraft")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("was_draft");
+
                     b.HasKey("SessionId", "Number")
                         .HasName("pk_cleaned_revisions");
 
@@ -939,6 +943,10 @@ namespace Recall.Server.Databases.Migrations
                         .HasMaxLength(1000000)
                         .HasColumnType("TEXT")
                         .HasColumnName("text");
+
+                    b.Property<bool>("WasDraft")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("was_draft");
 
                     b.HasKey("SessionId", "Number")
                         .HasName("pk_raw_revisions");

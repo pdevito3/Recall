@@ -13,7 +13,7 @@ public class SessionCleanupTests
     private static Session SessionWithRaw()
     {
         var session = Session.Create("ten_1", "usr_1", "device-1", Noon, null, Noon);
-        session.SaveRaw(DraftSave.Of("raw words", 0, Noon, Noon), false);
+        session.SaveRaw(DraftSave.Of("raw words", 0, Noon, Noon));
         return session;
     }
 
@@ -127,7 +127,7 @@ public class SessionCleanupTests
     }
 
     [Test]
-    [Property("Rule", "SES-39")]
+    [Property("Rule", "SES-40")]
     public void an_accept_of_a_value_that_is_not_offered_changes_nothing()
     {
         // Arrange

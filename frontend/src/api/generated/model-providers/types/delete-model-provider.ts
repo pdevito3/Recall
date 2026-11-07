@@ -20,6 +20,8 @@ export type DeleteModelProviderStatus404 = ProblemDetails;
 
 export type DeleteModelProviderStatus422 = ValidationProblemDetails;
 
+export type DeleteModelProviderStatus507 = ProblemDetails;
+
 export type DeleteModelProviderOptions = {
     body?: never;
     path: DeleteModelProviderPath;
@@ -33,6 +35,7 @@ export type DeleteModelProviderResponses = {
     "403": DeleteModelProviderStatus403;
     "404": DeleteModelProviderStatus404;
     "422": DeleteModelProviderStatus422;
+    "507": DeleteModelProviderStatus507;
 };
 
 /**

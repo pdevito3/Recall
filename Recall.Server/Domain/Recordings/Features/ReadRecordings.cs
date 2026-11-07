@@ -15,7 +15,7 @@ public static class GetRecording
 {
     public sealed record Query(string Id) : IRequest<RecordingDto>;
 
-    public sealed class Handler(AppDbContext dbContext, ModelStore modelStore) : IRequestHandler<Query, RecordingDto>
+    public sealed class Handler(AppDbContext dbContext, ModelStore modelStore, JobHostStatus jobHostStatus) : IRequestHandler<Query, RecordingDto>
     {
         public async Task<RecordingDto> Handle(Query request, CancellationToken cancellationToken)
         {
@@ -32,7 +32,7 @@ public static class GetRecording
                 .OrderBy(s => s.Index)
                 .Select(s => s.Index)
                 .ToListAsync(cancellationToken);
-            return recording.ToDto(stored, modelStore.Status);
+            return recording.ToDto(stored, modelStore.Status, jobHostStatus.TranscriptionIsStopped);
         }
     }
 }
@@ -56,7 +56,7 @@ public static class GetSessionRecordings
 {
     public sealed record Query(string SessionId) : IRequest<IReadOnlyList<RecordingDto>>;
 
-    public sealed class Handler(AppDbContext dbContext, ModelStore modelStore) : IRequestHandler<Query, IReadOnlyList<RecordingDto>>
+    public sealed class Handler(AppDbContext dbContext, ModelStore modelStore, JobHostStatus jobHostStatus) : IRequestHandler<Query, IReadOnlyList<RecordingDto>>
     {
         public async Task<IReadOnlyList<RecordingDto>> Handle(Query request, CancellationToken cancellationToken)
         {
@@ -72,7 +72,7 @@ public static class GetSessionRecordings
                 .Where(r => r.SessionId == session.Id)
                 .OrderBy(r => r.Id)
                 .ToListAsync(cancellationToken);
-            return recordings.Select(r => r.ToDto([], modelStore.Status)).ToList();
+            return recordings.Select(r => r.ToDto([], modelStore.Status, jobHostStatus.TranscriptionIsStopped)).ToList();
         }
     }
 }
@@ -105,7 +105,7 @@ public static class GetTranscriptionStatus
         public Task<TranscriptionStatusDto> Handle(Query request, CancellationToken cancellationToken)
         {
             dbContext.RequireJournalOwner();
-            return Task.FromResult(StatusOf(jobHostStatus.StoppedCause(), modelStore.Status));
+            return Task.FromResult(StatusOf(jobHostStatus.TranscriptionIsStopped ? jobHostStatus.StoppedCause() : null, modelStore.Status));
         }
     }
 

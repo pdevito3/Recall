@@ -30,6 +30,8 @@ export type UpdateModelProviderStatus409 = ValidationProblemDetails;
 
 export type UpdateModelProviderStatus422 = ValidationProblemDetails;
 
+export type UpdateModelProviderStatus507 = ProblemDetails;
+
 export type UpdateModelProviderBody = ModelProviderForUpdateDto;
 
 export type UpdateModelProviderOptions = {
@@ -47,6 +49,7 @@ export type UpdateModelProviderResponses = {
     "404": UpdateModelProviderStatus404;
     "409": UpdateModelProviderStatus409;
     "422": UpdateModelProviderStatus422;
+    "507": UpdateModelProviderStatus507;
 };
 
 /**

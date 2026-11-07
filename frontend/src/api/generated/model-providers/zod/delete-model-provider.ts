@@ -19,6 +19,8 @@ export const deleteModelProviderStatus404Schema = problemDetailsSchema
 
 export const deleteModelProviderStatus422Schema = validationProblemDetailsSchema
 
+export const deleteModelProviderStatus507Schema = problemDetailsSchema
+
 export const deleteModelProviderResponseSchema = deleteModelProviderStatus204Schema
 
-export const deleteModelProviderErrorSchema = z.union([deleteModelProviderStatus401Schema, deleteModelProviderStatus403Schema, deleteModelProviderStatus404Schema, deleteModelProviderStatus422Schema])
+export const deleteModelProviderErrorSchema = z.union([deleteModelProviderStatus401Schema, deleteModelProviderStatus403Schema, deleteModelProviderStatus404Schema, deleteModelProviderStatus422Schema, deleteModelProviderStatus507Schema])

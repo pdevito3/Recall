@@ -18,7 +18,7 @@ export type DraftSaveDto = {
     */
     baseRevision: number;
     /**
-     * @description When the person saved. A time in the future becomes the time of the server.
+     * @description When the person saved. A time in the future becomes the time of the server. A replay sends the same time. A merge after `Lost` is a new save and sends a new time.
      *
      * Format: `date-time`
      * @type string

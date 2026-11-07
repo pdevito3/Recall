@@ -25,6 +25,8 @@ export type StreamCleanupStatus409 = ValidationProblemDetails;
 
 export type StreamCleanupStatus422 = ValidationProblemDetails;
 
+export type StreamCleanupStatus507 = ProblemDetails;
+
 export type StreamCleanupOptions = {
     body?: never;
     path: StreamCleanupPath;
@@ -38,6 +40,7 @@ export type StreamCleanupResponses = {
     "404": StreamCleanupStatus404;
     "409": StreamCleanupStatus409;
     "422": StreamCleanupStatus422;
+    "507": StreamCleanupStatus507;
 };
 
 /**

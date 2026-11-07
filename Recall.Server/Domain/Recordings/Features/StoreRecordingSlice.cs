@@ -59,8 +59,7 @@ public static class StoreRecordingSlice
             dbContext.RecordingSlices.Add(RecordingSlice.Of(recording, request.Index, request.Body.Length, sha256));
 
             using var content = new MemoryStream(request.Body, writable: false);
-            await fileStore.WriteAsync(RecordingFiles.Slice(recording, request.Index, sha256), content, cancellationToken);
-            await SaveOrRemoveLateFilesAsync(recording, cancellationToken);
+            await WriteAndSaveOrRemoveLateFilesAsync(recording, RecordingFiles.Slice(recording, request.Index, sha256), content, cancellationToken);
 
             Activity.Current?.SetTag("app.recording.highest_slice", recording.HighestStoredSlice);
             _logger.Here().Information("Stored slice {SliceIndex} of recording {RecordingId}", request.Index, recording.Id);
@@ -73,23 +72,24 @@ public static class StoreRecordingSlice
             };
         }
 
-        private async Task SaveOrRemoveLateFilesAsync(Recording recording, CancellationToken cancellationToken)
+        private async Task WriteAndSaveOrRemoveLateFilesAsync(Recording recording, FileKey slice, Stream content, CancellationToken cancellationToken)
         {
             try
             {
+                await fileStore.WriteAsync(slice, content, cancellationToken);
                 if (!await IsStillLiveAsync(recording, cancellationToken))
                     throw new NotFoundException("The recording was not found.");
 
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
-            catch (Exception exception) when (exception is NotFoundException or StaleVersionException or DbUpdateException)
+            catch (Exception exception) when (exception is NotFoundException or StaleVersionException or DbUpdateException or IOException)
             {
                 dbContext.DiscardLostRace();
                 if (await IsStillLiveAsync(recording, cancellationToken))
                     throw;
 
-                fileStore.DeleteUnder(RecordingFiles.Folder(recording));
-                _logger.Here().Information("Removed a late file of deleted recording {RecordingId}", recording.Id);
+                RecordingWork.TryDeleteFolder(fileStore, RecordingFiles.Folder(recording), recording.Id, _logger);
+                _logger.Here().Information("A slice write lost the race with the delete of recording {RecordingId}", recording.Id);
                 throw new NotFoundException("The recording was not found.");
             }
         }

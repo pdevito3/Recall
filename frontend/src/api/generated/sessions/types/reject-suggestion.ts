@@ -24,6 +24,8 @@ export type RejectSuggestionStatus409 = ValidationProblemDetails;
 
 export type RejectSuggestionStatus422 = ValidationProblemDetails;
 
+export type RejectSuggestionStatus507 = ProblemDetails;
+
 export type RejectSuggestionBody = SuggestionResponseDto;
 
 export type RejectSuggestionOptions = {
@@ -40,6 +42,7 @@ export type RejectSuggestionResponses = {
     "404": RejectSuggestionStatus404;
     "409": RejectSuggestionStatus409;
     "422": RejectSuggestionStatus422;
+    "507": RejectSuggestionStatus507;
 };
 
 /**

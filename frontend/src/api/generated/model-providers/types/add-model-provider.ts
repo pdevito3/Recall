@@ -22,6 +22,8 @@ export type AddModelProviderStatus403 = ProblemDetails;
 
 export type AddModelProviderStatus422 = ValidationProblemDetails;
 
+export type AddModelProviderStatus507 = ProblemDetails;
+
 export type AddModelProviderBody = ModelProviderForCreationDto;
 
 export type AddModelProviderOptions = {
@@ -37,6 +39,7 @@ export type AddModelProviderResponses = {
     "401": AddModelProviderStatus401;
     "403": AddModelProviderStatus403;
     "422": AddModelProviderStatus422;
+    "507": AddModelProviderStatus507;
 };
 
 /**

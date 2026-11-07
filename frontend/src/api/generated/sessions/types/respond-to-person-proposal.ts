@@ -24,6 +24,8 @@ export type RespondToPersonProposalStatus409 = ValidationProblemDetails;
 
 export type RespondToPersonProposalStatus422 = ValidationProblemDetails;
 
+export type RespondToPersonProposalStatus507 = ProblemDetails;
+
 export type RespondToPersonProposalBody = PersonProposalResponseDto;
 
 export type RespondToPersonProposalOptions = {
@@ -40,6 +42,7 @@ export type RespondToPersonProposalResponses = {
     "404": RespondToPersonProposalStatus404;
     "409": RespondToPersonProposalStatus409;
     "422": RespondToPersonProposalStatus422;
+    "507": RespondToPersonProposalStatus507;
 };
 
 /**

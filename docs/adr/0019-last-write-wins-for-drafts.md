@@ -5,9 +5,12 @@ A person dictates on a phone that can stay offline for days. Each other command 
 So a save of a Draft sends no `Version`. It sends a base Revision and the save time on the client. The server applies these rules ([sessions spec](../specs/sessions.md), SES-5 to SES-8):
 
 - A save that is based on the current Draft wins.
-- A save that is based on an older Revision wins when its save time is not before the save time of the Draft.
+- A save that is based on an older Draft wins when its save time is not before the save time of the Draft.
+- A save with a base that names no Draft loses at any save time. The column `was_draft` on a Revision says which numbers were a Draft. A lost save takes a number, so a base of `latestRevision` would otherwise win under the time rule and push a chunk out of the Draft.
+- A Raw save from a base older than the last chunk loses at any save time, so a chunk stays in the Draft ([REC-6](../specs/recordings.md)).
+- A win never moves the save time of the Draft back.
 - A save that loses changes no Draft, and its words stay as the newest Revision. No words go away.
-- A replay of a save makes no Revision.
+- A replay of a save makes no Revision. The first Revision that holds the words answers it. A Revision that was a Draft at the base or later says `Kept` with its number, and a Revision that lost with the same `savedAt` says `Lost`. So the answers come from the Revisions, and no new table holds them. A replay of a save that first said `Unchanged` wrote no row, and it says `Kept` from the Revision of the same words. The empty Draft has the number 0 and no Revision, so it answers an empty save at base 0 in the same way. SES-8 states the replays of `Unchanged` that do not give this answer.
 - A save time in the future becomes the time of the server, so a fast clock cannot win each later save.
 
 The server marks the save commands `IRunsAgainWhenRaced`, so the `Version` of the Session row still orders two saves at the same moment. The row version protects the server, and the save time decides between the words of the person.
@@ -36,6 +39,7 @@ These saves differ from a Draft save because of what a refusal costs. A refusal 
 
 - `GuardVersion` is not on the Draft routes, and `SessionDto.Version` is only for a client that wants it. A later write command on a Session that has no save time must use `GuardVersion`, or a version of its own part of the row, as `metadataVersion` is.
 - The clock of a phone can decide a Draft. A slow clock can lose to an older save. The words of that save stay as a Revision, so a person can get them back.
+- Two writers from an older base can each get `Won`, and a word of one writer leaves the Draft with no signal. SES-5 states this limit.
 - Revisions grow with each losing save and each autosave, and nothing prunes them.
 - On a settings save or a metadata save, a 200 means that the row holds the values that the client sent, and a 409 means that nothing changed. A client that is offline for a long time gets a 409 when another device changed the row, and it must ask the person or apply the change again on the new row.
 - A client that does not send a version gets 400 on these two routes. The POC client and any client of the body before this change fail this way until they send a version.

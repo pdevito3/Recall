@@ -20,6 +20,8 @@ export type AddAgentStatus409 = ValidationProblemDetails;
 
 export type AddAgentStatus422 = ValidationProblemDetails;
 
+export type AddAgentStatus507 = ProblemDetails;
+
 export type AddAgentBody = AgentForCreationDto;
 
 export type AddAgentOptions = {
@@ -36,6 +38,7 @@ export type AddAgentResponses = {
     "403": AddAgentStatus403;
     "409": AddAgentStatus409;
     "422": AddAgentStatus422;
+    "507": AddAgentStatus507;
 };
 
 /**

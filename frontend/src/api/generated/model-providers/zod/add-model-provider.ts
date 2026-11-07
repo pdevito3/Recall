@@ -19,8 +19,10 @@ export const addModelProviderStatus403Schema = problemDetailsSchema
 
 export const addModelProviderStatus422Schema = validationProblemDetailsSchema
 
+export const addModelProviderStatus507Schema = problemDetailsSchema
+
 export const addModelProviderResponseSchema = addModelProviderStatus200Schema
 
-export const addModelProviderErrorSchema = z.union([addModelProviderStatus400Schema, addModelProviderStatus401Schema, addModelProviderStatus403Schema, addModelProviderStatus422Schema])
+export const addModelProviderErrorSchema = z.union([addModelProviderStatus400Schema, addModelProviderStatus401Schema, addModelProviderStatus403Schema, addModelProviderStatus422Schema, addModelProviderStatus507Schema])
 
 export const addModelProviderBodySchema = modelProviderForCreationDtoSchema
