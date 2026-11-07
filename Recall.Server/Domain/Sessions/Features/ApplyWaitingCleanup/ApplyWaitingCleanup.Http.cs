@@ -15,6 +15,7 @@ public sealed class ApplyWaitingCleanupEndpoint : IEndpoint
         .RequireAuthorization()
         .ProducesValidationProblem()
         .ProducesProblem(StatusCodes.Status404NotFound)
+        .ProducesValidationProblem(StatusCodes.Status422UnprocessableEntity)
         .ProducesValidationProblem(StatusCodes.Status409Conflict);
 
     /// <summary>

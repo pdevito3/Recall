@@ -22,6 +22,8 @@ export type ApplyWaitingCleanupStatus404 = ProblemDetails;
 
 export type ApplyWaitingCleanupStatus409 = ValidationProblemDetails;
 
+export type ApplyWaitingCleanupStatus422 = ValidationProblemDetails;
+
 export type ApplyWaitingCleanupStatus507 = ProblemDetails;
 
 export type ApplyWaitingCleanupBody = WaitingCleanupApplyDto;
@@ -39,6 +41,7 @@ export type ApplyWaitingCleanupResponses = {
     "401": ApplyWaitingCleanupStatus401;
     "404": ApplyWaitingCleanupStatus404;
     "409": ApplyWaitingCleanupStatus409;
+    "422": ApplyWaitingCleanupStatus422;
     "507": ApplyWaitingCleanupStatus507;
 };
 

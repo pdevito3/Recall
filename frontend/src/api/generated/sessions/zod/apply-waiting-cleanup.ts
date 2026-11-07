@@ -21,10 +21,12 @@ export const applyWaitingCleanupStatus404Schema = problemDetailsSchema
 
 export const applyWaitingCleanupStatus409Schema = validationProblemDetailsSchema
 
+export const applyWaitingCleanupStatus422Schema = validationProblemDetailsSchema
+
 export const applyWaitingCleanupStatus507Schema = problemDetailsSchema
 
 export const applyWaitingCleanupResponseSchema = applyWaitingCleanupStatus200Schema
 
-export const applyWaitingCleanupErrorSchema = z.union([applyWaitingCleanupStatus400Schema, applyWaitingCleanupStatus401Schema, applyWaitingCleanupStatus404Schema, applyWaitingCleanupStatus409Schema, applyWaitingCleanupStatus507Schema])
+export const applyWaitingCleanupErrorSchema = z.union([applyWaitingCleanupStatus400Schema, applyWaitingCleanupStatus401Schema, applyWaitingCleanupStatus404Schema, applyWaitingCleanupStatus409Schema, applyWaitingCleanupStatus422Schema, applyWaitingCleanupStatus507Schema])
 
 export const applyWaitingCleanupBodySchema = waitingCleanupApplyDtoSchema
