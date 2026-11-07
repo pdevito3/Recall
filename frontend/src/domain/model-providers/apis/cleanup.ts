@@ -8,26 +8,16 @@ import { acceptSuggestion } from '@/api/generated/sessions/clients/accept-sugges
 import { applyWaitingCleanup } from '@/api/generated/sessions/clients/apply-waiting-cleanup'
 import { getCleanedRevision } from '@/api/generated/sessions/clients/get-cleaned-revision'
 import { getSession } from '@/api/generated/sessions/clients/get-session'
-import { getSessionPage } from '@/api/generated/sessions/clients/get-session-page'
 import { rejectSuggestion } from '@/api/generated/sessions/clients/reject-suggestion'
 import { respondToPersonProposal } from '@/api/generated/sessions/clients/respond-to-person-proposal'
 import { startCleanup } from '@/api/generated/sessions/clients/start-cleanup'
 import { stopCleanup } from '@/api/generated/sessions/clients/stop-cleanup'
 
 export const pollWhileRunningMs = 2_000
-const sessionsShown = 10
 
 const CleanupKeys = {
   all: ['cleanup-sessions'] as const,
-  recent: () => [...CleanupKeys.all, 'recent'] as const,
   session: (id: string) => [...CleanupKeys.all, 'session', id] as const,
-}
-
-export function useRecentSessions() {
-  return useQuery({
-    queryKey: CleanupKeys.recent(),
-    queryFn: ({ signal }) => getSessionPage({ query: { pageSize: sessionsShown }, signal, options: { suppressErrorToast: true } }),
-  })
 }
 
 export function useCleanupSession(id: string) {

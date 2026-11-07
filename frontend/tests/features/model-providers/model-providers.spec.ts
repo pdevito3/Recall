@@ -1,7 +1,7 @@
 import { membershipPaths } from '@tests/support/api/membership-api'
-import { aProvider, aSession, aSessionSummary, modelProviderPaths, modelProvidersApi } from '@tests/support/api/model-providers-api'
+import { aProvider, modelProviderPaths, modelProvidersApi } from '@tests/support/api/model-providers-api'
+import { sessionsPaths } from '@tests/support/api/sessions-api'
 import { actorSubject, as } from '@tests/support/auth/actors'
-import { aProblem } from '@tests/support/builders/problem-details-builder'
 import { aUser } from '@tests/support/builders/user-builder'
 import { expect, test } from '@tests/support/fixtures'
 import { modelProviders } from './model-providers.locators'
@@ -13,14 +13,12 @@ const signedInAs = (role: 'Admin' | 'User') => ({
   body: aUser().identifiedBy(actorSubject).inRole(role).build(),
 })
 
-const noSessions = { method: 'get' as const, path: '/api/v1/sessions', status: 200, body: { items: [], nextCursor: null } }
-
 test.describe('the model providers page', () => {
   test.use({ actor: as.user('Bob Smith') })
 
   test('an Admin connects a model provider, sends the key once, and no page shows the key again', async ({ page, api }) => {
     const provider = aProvider()
-    api.mock(signedInAs('Admin'), noSessions, modelProvidersApi.listHolds([]), modelProvidersApi.addAnswers(provider))
+    api.mock(signedInAs('Admin'), modelProvidersApi.listHolds([]), modelProvidersApi.addAnswers(provider))
     const at = modelProviders(page)
     await page.goto('/model-providers')
     await expect(at.heading).toBeVisible()
@@ -39,7 +37,7 @@ test.describe('the model providers page', () => {
 
   test('a refused connect shows the message on its field', async ({ page, api }) => {
     const message = 'Please provide the API key of the model provider.'
-    api.mock(signedInAs('Admin'), noSessions, modelProvidersApi.listHolds([]), modelProvidersApi.addRefuses({ apiKey: [message] }))
+    api.mock(signedInAs('Admin'), modelProvidersApi.listHolds([]), modelProvidersApi.addRefuses({ apiKey: [message] }))
     const at = modelProviders(page)
     await page.goto('/model-providers')
 
@@ -53,7 +51,6 @@ test.describe('the model providers page', () => {
     const provider = aProvider()
     api.mock(
       signedInAs('Admin'),
-      noSessions,
       modelProvidersApi.listHolds([provider]),
       modelProvidersApi.testAnswers(provider, { ok: true, models: [{ id: 'model-a', displayName: 'Model A' }] }),
       modelProvidersApi.updateAnswers({ ...provider, model: 'model-a' }),
@@ -74,7 +71,6 @@ test.describe('the model providers page', () => {
     const words = 'Your API key is not valid.'
     api.mock(
       signedInAs('Admin'),
-      noSessions,
       modelProvidersApi.listHolds([provider]),
       modelProvidersApi.testAnswers(provider, { ok: false, models: [], failure: { kind: 'Refused', statusCode: 401, message: words } }),
     )
@@ -87,7 +83,7 @@ test.describe('the model providers page', () => {
   })
 
   test('a provider with no model cannot be made active, and the page says why', async ({ page, api }) => {
-    api.mock(signedInAs('Admin'), noSessions, modelProvidersApi.listHolds([aProvider({ isActive: false })]))
+    api.mock(signedInAs('Admin'), modelProvidersApi.listHolds([aProvider({ isActive: false })]))
     const at = modelProviders(page)
 
     await page.goto('/model-providers')
@@ -98,7 +94,7 @@ test.describe('the model providers page', () => {
 
   test('a provider with a model becomes active only when a person chooses it', async ({ page, api }) => {
     const provider = aProvider({ isActive: false, model: 'model-a' })
-    api.mock(signedInAs('Admin'), noSessions, modelProvidersApi.listHolds([provider]), modelProvidersApi.updateAnswers({ ...provider, isActive: true }))
+    api.mock(signedInAs('Admin'), modelProvidersApi.listHolds([provider]), modelProvidersApi.updateAnswers({ ...provider, isActive: true }))
     const at = modelProviders(page)
     await page.goto('/model-providers')
 
@@ -109,7 +105,7 @@ test.describe('the model providers page', () => {
 
   test('a new URL of a provider with a key needs the key again, and both go in one save', async ({ page, api }) => {
     const provider = aProvider({ kind: 'OpenAiCompatible', baseUrl: 'http://192.168.1.20:11434/v1', model: 'model-a' })
-    api.mock(signedInAs('Admin'), noSessions, modelProvidersApi.listHolds([provider]), modelProvidersApi.updateAnswers(provider))
+    api.mock(signedInAs('Admin'), modelProvidersApi.listHolds([provider]), modelProvidersApi.updateAnswers(provider))
     const at = modelProviders(page)
     await page.goto('/model-providers')
     await expect(at.saveUrl).toBeDisabled()
@@ -126,7 +122,7 @@ test.describe('the model providers page', () => {
   })
 
   test('a changed key ring shows a warning', async ({ page, api }) => {
-    api.mock(signedInAs('Admin'), noSessions, modelProvidersApi.listHolds([aProvider({ keyState: 'Unreadable' })], 'Changed'))
+    api.mock(signedInAs('Admin'), modelProvidersApi.listHolds([aProvider({ keyState: 'Unreadable' })], 'Changed'))
     const at = modelProviders(page)
 
     await page.goto('/model-providers')
@@ -136,7 +132,7 @@ test.describe('the model providers page', () => {
   })
 
   test('a key folder that takes no write says that each saved key still works', async ({ page, api }) => {
-    api.mock(signedInAs('Admin'), noSessions, modelProvidersApi.listHolds([aProvider()], 'NotWritable'))
+    api.mock(signedInAs('Admin'), modelProvidersApi.listHolds([aProvider()], 'NotWritable'))
     const at = modelProviders(page)
 
     await page.goto('/model-providers')
@@ -146,13 +142,25 @@ test.describe('the model providers page', () => {
   })
 
   test('a member who is no Admin does not ask for the providers', async ({ page, api }) => {
-    api.mock(signedInAs('User'), noSessions)
+    api.mock(signedInAs('User'))
     const at = modelProviders(page)
 
     await page.goto('/model-providers')
 
     await expect(at.noAdminNote).toBeVisible()
     expect(api.last('get', modelProviderPaths.list)).toBeUndefined()
+  })
+
+  test('the page runs no Cleanup and reads no entry, because a Cleanup runs on the page of its entry', async ({ page, api }) => {
+    api.mock(signedInAs('Admin'), modelProvidersApi.listHolds([aProvider()]))
+    const at = modelProviders(page)
+
+    await page.goto('/model-providers?session=ses_1')
+    await expect(at.providerHeading('Mine')).toBeVisible()
+
+    await expect(at.anyCleanup).toHaveCount(0)
+    expect(api.last('get', sessionsPaths.timeline)).toBeUndefined()
+    expect(api.last('get', sessionsPaths.one('ses_1'))).toBeUndefined()
   })
 })
 
@@ -161,7 +169,7 @@ test.describe('a page of model providers on a 390 px phone', () => {
 
   test('a base URL stays whole on one line, and each control is 44 px high', async ({ page, api }) => {
     const provider = aProvider({ kind: 'OpenAiCompatible', baseUrl: 'http://host.docker.internal:26662/v1', model: 'model-a' })
-    api.mock(signedInAs('Admin'), noSessions, modelProvidersApi.listHolds([provider]))
+    api.mock(signedInAs('Admin'), modelProvidersApi.listHolds([provider]))
     const at = modelProviders(page)
 
     await page.goto('/model-providers')
@@ -175,29 +183,10 @@ test.describe('a page of model providers on a 390 px phone', () => {
     expect(await at.pageOverflow()).toBe(0)
   })
 
-  test('each control of the Cleanup card is 44 px high and wide', async ({ page, api }) => {
-    const session = aSession({
-      cleanupStatus: 'Clean',
-      cleanedText: 'Done.',
-      suggestions: [{ kind: 'Mood', value: 'Calm' }],
-      peopleProposals: [{ label: 'Ann', isNew: true, contexts: [] }],
-    })
-    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(session), modelProvidersApi.activeIs('Home lab'))
-    const at = modelProviders(page)
-
-    await page.goto(`/model-providers?session=${session.id}`)
-    await expect(at.tagPerson('Ann')).toBeVisible()
-
-    for (const control of await at.controls.all()) {
-      const box = await control.boundingBox()
-      expect(Math.min(box!.width, box!.height), await control.textContent() ?? '').toBeGreaterThanOrEqual(44)
-    }
-  })
-
   test('a base URL longer than a line breaks after a slash, not one character short of its end', async ({ page, api }) => {
     const address = 'http://host.docker.internal:31742/m/gate_mid/v1'
     const provider = aProvider({ kind: 'OpenAiCompatible', baseUrl: address, model: 'model-a' })
-    api.mock(signedInAs('Admin'), noSessions, modelProvidersApi.listHolds([provider]))
+    api.mock(signedInAs('Admin'), modelProvidersApi.listHolds([provider]))
     const at = modelProviders(page)
 
     await page.goto('/model-providers')
@@ -209,7 +198,7 @@ test.describe('a page of model providers on a 390 px phone', () => {
 
   test('Save URL and Save key each sit under their input', async ({ page, api }) => {
     const provider = aProvider({ kind: 'OpenAiCompatible', baseUrl: 'http://host.docker.internal:26662/v1', model: 'model-a' })
-    api.mock(signedInAs('Admin'), noSessions, modelProvidersApi.listHolds([provider]))
+    api.mock(signedInAs('Admin'), modelProvidersApi.listHolds([provider]))
     const at = modelProviders(page)
 
     await page.goto('/model-providers')
@@ -222,272 +211,5 @@ test.describe('a page of model providers on a 390 px phone', () => {
     }
     expect(await below(at.newUrl, at.saveUrl)).toEqual({ under: true, sameLeft: true })
     expect(await below(at.newApiKey, at.saveKey)).toEqual({ under: true, sameLeft: true })
-  })
-
-  test('each Session link is a touch target of 44 px', async ({ page, api }) => {
-    const summary = aSessionSummary({ preview: 'a short entry' })
-    api.mock(signedInAs('User'), modelProvidersApi.sessionsAre([summary]))
-    const at = modelProviders(page)
-
-    await page.goto('/model-providers')
-
-    await expect(at.sessionLink('a short entry')).toBeVisible()
-    expect((await at.sessionLink('a short entry').boundingBox())?.height).toBeGreaterThanOrEqual(44)
-  })
-
-  test('a Session that does not load shows its card and no toast over it', async ({ page, api }) => {
-    const missing = 'ses_00000000000000000000000000000009'
-    api.mock(signedInAs('User'), modelProvidersApi.activeIs('Home lab'), {
-      method: 'get',
-      path: modelProviderPaths.session(missing),
-      status: 404,
-      body: aProblem().notFound('Session was not found.').build(),
-    })
-    const at = modelProviders(page)
-
-    await page.goto(`/model-providers?session=${missing}`)
-
-    await expect(at.text('The Session did not load.')).toBeVisible()
-    await expect(at.toasts).toHaveCount(0)
-  })
-
-  test('a long Topic and a long Person name take the width of the card on each phone', async ({ page, api }) => {
-    const topic = 'a long topic that a person keeps for each of the things that a week holds'
-    const person = 'a long name of a person that a model takes from each of the things in a week'
-    const session = aSession({ cleanupStatus: 'Clean', cleanedText: 'Done.', peopleProposals: [{ label: person, isNew: true, contexts: [] }], suggestions: [{ kind: 'Topic', value: topic }] })
-    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(session), modelProvidersApi.activeIs('Home lab'))
-    const at = modelProviders(page)
-
-    await page.goto(`/model-providers?session=${session.id}`)
-    await expect(at.text(topic)).toBeVisible()
-
-    for (const width of [390, 430]) {
-      await page.setViewportSize({ width, height: 800 })
-      expect((await at.text(topic).boundingBox())?.height, `the Topic at ${width} px`).toBeLessThanOrEqual(60)
-      expect((await at.text(person).boundingBox())?.height, `the Person at ${width} px`).toBeLessThanOrEqual(60)
-      expect(await at.pageOverflow()).toBe(0)
-    }
-  })
-})
-
-test.describe('the Cleanup card on a 320 px phone', () => {
-  test.use({ actor: as.user('Bob Smith'), viewport: { width: 320, height: 640 } })
-
-  test.beforeEach(({ api }) => {
-    api.mock(modelProvidersApi.activeIs('Home lab'))
-  })
-
-  test('a short suggestion stays on one line, with no sideways scroll', async ({ page, api }) => {
-    const session = aSession({ cleanupStatus: 'Clean', cleanedText: 'Done.', suggestions: [{ kind: 'Mood', value: 'Calm' }] })
-    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(session))
-    const at = modelProviders(page)
-
-    await page.goto(`/model-providers?session=${session.id}`)
-
-    await expect(at.text('Calm')).toBeVisible()
-    expect((await at.text('Calm').boundingBox())?.height).toBeLessThan(24)
-    expect(await at.pageOverflow()).toBe(0)
-  })
-
-  test('the two choices of a row stay on one line', async ({ page, api }) => {
-    const session = aSession({
-      cleanupStatus: 'Clean',
-      cleanedText: 'Done.',
-      suggestions: [{ kind: 'Mood', value: 'Calm' }],
-      peopleProposals: [{ label: 'Sam', isNew: true, contexts: [] }],
-    })
-    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(session))
-    const at = modelProviders(page)
-
-    await page.goto(`/model-providers?session=${session.id}`)
-    await expect(at.rejectSuggestion('Calm')).toBeVisible()
-
-    expect((await at.rejectSuggestion('Calm').boundingBox())?.y).toBe((await at.acceptSuggestion('Calm').boundingBox())?.y)
-    expect((await at.doNotTagPerson('Sam').boundingBox())?.y).toBe((await at.tagPerson('Sam').boundingBox())?.y)
-    expect(await at.pageOverflow()).toBe(0)
-  })
-})
-
-test.describe('the Cleanup card', () => {
-  test.use({ actor: as.user('Bob Smith') })
-
-  const sessionUrl = (id: string) => `/model-providers?session=${id}`
-
-  test.beforeEach(({ api }) => {
-    api.mock(modelProvidersApi.activeIs('Home lab'))
-  })
-
-  test('a run shows that the person can leave, and a later visit finds Cleaned with Raw unchanged', async ({ page, api }) => {
-    const session = aSession()
-    const running = aSession({ cleanupStatus: 'Running' })
-    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(session), modelProvidersApi.cleanupStarts(running))
-    const at = modelProviders(page)
-    await page.goto(sessionUrl(session.id))
-    await expect(at.runCleanup).toBeEnabled()
-
-    api.mock(modelProvidersApi.sessionIs(running))
-    await at.runCleanup.click()
-    await expect(at.cleanupRunning).toBeVisible()
-    await expect(at.runCleanup).toBeDisabled()
-    await expect(at.runCleanup).toHaveText('Run Cleanup')
-
-    await page.goto('/about')
-    api.mock(modelProvidersApi.sessionIs(aSession({ cleanupStatus: 'Clean', cleanedText: 'I met Sam today.' })))
-    await page.goto(sessionUrl(session.id))
-
-    await expect(at.cleanedWords).toContainText('I met Sam today.')
-    await expect(at.rawWords).toContainText('um I met sam today')
-  })
-
-  test('the card names the provider that gets the words, and it names none when no provider takes them', async ({ page, api }) => {
-    const session = aSession()
-    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(session), modelProvidersApi.activeIs('Home lab'))
-    const at = modelProviders(page)
-
-    await page.goto(sessionUrl(session.id))
-    await expect(at.wordsGoTo('Home lab')).toBeVisible()
-
-    api.mock(modelProvidersApi.activeIs(null))
-    await page.reload()
-    await expect(at.noProviderNote).toBeVisible()
-    await expect(at.runCleanup).toBeDisabled()
-    await expect(at.wordsGoToAnyProvider).toHaveCount(0)
-  })
-
-  test('a person stops a running Cleanup, the page says so, and a new run is open', async ({ page, api }) => {
-    const running = aSession({ cleanupStatus: 'Running' })
-    const stopped = aSession({ cleanupStatus: 'Failed', cleanupFailure: 'Stopped' })
-    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(running), modelProvidersApi.cleanupStops(stopped))
-    const at = modelProviders(page)
-    await page.goto(sessionUrl(running.id))
-    await expect(at.stopCleanup).toBeVisible()
-
-    api.mock(modelProvidersApi.sessionIs(stopped))
-    await at.stopCleanup.click()
-
-    await expect(at.cleanupStopped).toBeVisible()
-    await expect(at.cleanupFailure('You stopped')).toHaveCount(0)
-    await expect(at.stopCleanup).toHaveCount(0)
-    await expect(at.runCleanup).toBeEnabled()
-    await expect(at.runCleanup).toHaveText('Run Cleanup again')
-    await expect(at.rawWords).toContainText('um I met sam today')
-    expect(api.last('post', modelProviderPaths.stopCleanup(running.id))).toBeDefined()
-  })
-
-  test('the list of Sessions says Stopped for a stop and Failed for a fault', async ({ page, api }) => {
-    const stopped = aSessionSummary({ id: 'ses_00000000000000000000000000000002', preview: 'a run that I stopped', cleanupStatus: 'Failed', cleanupFailure: 'Stopped' })
-    const failed = aSessionSummary({ id: 'ses_00000000000000000000000000000003', preview: 'a run that failed', cleanupStatus: 'Failed', cleanupFailure: 'ProviderRefused' })
-    api.mock(signedInAs('User'), modelProvidersApi.sessionsAre([stopped, failed]))
-    const at = modelProviders(page)
-    await page.goto('/model-providers')
-
-    await expect(at.sessionRow('a run that I stopped')).toContainText('Stopped')
-    await expect(at.sessionRow('a run that I stopped')).not.toContainText('Failed')
-    await expect(at.sessionRow('a run that failed')).toContainText('Failed')
-  })
-
-  test('a finished run has no stop button', async ({ page, api }) => {
-    const clean = aSession({ cleanupStatus: 'Clean', cleanedText: 'Done.' })
-    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(clean))
-    const at = modelProviders(page)
-
-    await page.goto(sessionUrl(clean.id))
-
-    await expect(at.runCleanup).toHaveText('Run Cleanup again')
-    await expect(at.stopCleanup).toHaveCount(0)
-  })
-
-  test('a Running run polls until the result arrives', async ({ page, api }) => {
-    const running = aSession({ cleanupStatus: 'Running' })
-    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(running))
-    const at = modelProviders(page)
-    await page.goto(sessionUrl(running.id))
-    await expect(at.cleanupRunning).toBeVisible()
-
-    api.mock(modelProvidersApi.sessionIs(aSession({ cleanupStatus: 'Clean', cleanedText: 'Done now.' })))
-
-    await expect(at.cleanedWords).toContainText('Done now.')
-    await expect(at.cleanupRunning).toHaveCount(0)
-  })
-
-  test('a refused start shows why', async ({ page, api }) => {
-    const session = aSession()
-    const message = 'An Admin must connect a model provider and pick a model first.'
-    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(session), modelProvidersApi.cleanupRefuses(session, message))
-    const at = modelProviders(page)
-    await page.goto(sessionUrl(session.id))
-
-    await at.runCleanup.click()
-
-    await expect(at.cleanupRefused(message)).toBeVisible()
-  })
-
-  test('a failed run shows a closed reason', async ({ page, api }) => {
-    const failed = aSession({ cleanupStatus: 'Failed', cleanupFailure: 'ProviderRefused' })
-    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(failed))
-    const at = modelProviders(page)
-
-    await page.goto(sessionUrl(failed.id))
-
-    await expect(at.cleanupFailure('The model provider refused the request.')).toBeVisible()
-  })
-
-  test('a failed new run shows its reason while Raw is newer than Cleaned', async ({ page, api }) => {
-    const failed = aSession({ cleanupStatus: 'Stale', cleanupFailure: 'ProviderRefused' })
-    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(failed))
-    const at = modelProviders(page)
-
-    await page.goto(sessionUrl(failed.id))
-
-    await expect(at.cleanupFailure('The model provider refused the request.')).toBeVisible()
-  })
-
-  test('a tag leaves the choice of the Person to the server, so one name gives one Person', async ({ page, api }) => {
-    const proposal = { label: 'Sam', matchedPersonId: null, isNew: true, contexts: ['I met Sam today.'] }
-    const session = aSession({ cleanupStatus: 'Clean', cleanedText: 'I met Sam today.', peopleProposals: [proposal] })
-    const respondPath = `/api/v1/sessions/${session.id}/people-proposals/respond`
-    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(session), {
-      method: 'post',
-      path: respondPath,
-      status: 200,
-      body: { ...session, peopleProposals: [] },
-    })
-    const at = modelProviders(page)
-    await page.goto(sessionUrl(session.id))
-
-    await at.tagPerson('Sam').click()
-
-    await expect(at.tagPerson('Sam')).toHaveCount(0)
-    expect(api.last('post', respondPath)?.body).toMatchObject({ label: 'Sam', approve: true, createNew: false })
-  })
-
-  test('a refused tag shows the words of the server', async ({ page, api }) => {
-    const message = 'A tag of this name makes Cleaned too long. Choose Do not tag, or run a new Cleanup.'
-    const proposal = { label: 'Sam', matchedPersonId: null, isNew: true, contexts: ['I met Sam today.'] }
-    const session = aSession({ cleanupStatus: 'Clean', cleanedText: 'I met Sam today.', peopleProposals: [proposal] })
-    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(session), {
-      method: 'post',
-      path: `/api/v1/sessions/${session.id}/people-proposals/respond`,
-      status: 422,
-      body: aProblem().saying(message).invalid({ label: [message] }).build(),
-    })
-    const at = modelProviders(page)
-    await page.goto(sessionUrl(session.id))
-
-    await at.tagPerson('Sam').click()
-
-    await expect(at.cleanupRefused(message)).toBeVisible()
-    await expect(at.text(message)).toHaveCount(1)
-  })
-
-  test('hand edits warn before a new run', async ({ page, api }) => {
-    const edited = aSession({ cleanupStatus: 'Clean', cleanedText: 'Mine.', cleanedHasHandEdits: true })
-    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(edited))
-    const at = modelProviders(page)
-
-    await page.goto(sessionUrl(edited.id))
-
-    await expect(at.text('You edited Cleaned by hand after the last Cleanup.')).toBeVisible()
-    await expect(at.text('A new Cleanup replaces Cleaned, and your edit stays as a Revision.')).toBeVisible()
   })
 })
