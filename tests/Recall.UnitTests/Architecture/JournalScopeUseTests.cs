@@ -3,14 +3,14 @@ namespace Recall.UnitTests.Architecture;
 using Shouldly;
 
 /// <summary>
-/// A journal scope reads the rows of a User with nobody signed in. Only the background work of a Session or a Recording
+/// A journal scope reads the rows of a User with nobody signed in. Only the background work of a Session, a Recording, or a Summary
 /// may open one, so no other code can read a journal by passing an id.
 /// </summary>
 public class JournalScopeUseTests
 {
     private const string DefinitionFile = "Domain/Tenants/SystemTenantAccess.cs";
 
-    private static readonly string[] JobFolders = ["Domain/Sessions/Jobs/", "Domain/Recordings/Jobs/"];
+    private static readonly string[] JobFolders = ["Domain/Sessions/Jobs/", "Domain/Recordings/Jobs/", "Domain/Summaries/Jobs/"];
 
     [Test]
     public void only_a_job_folder_opens_a_journal_scope()

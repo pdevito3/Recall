@@ -1,0 +1,379 @@
+namespace Recall.Server.Domain.Summaries.Jobs;
+
+using BackWave.Jobs;
+using Databases;
+using Features;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+using ModelProviders;
+using ModelProviders.Clients;
+using Recall.Server.Resources.Jobs;
+using Resources;
+using Serilog;
+using Sessions.Content;
+using Tenants;
+using TimeZones;
+using UserSettings;
+
+/// <summary>
+/// The jobs of Summaries. Both run in the queue of the tenant in <see cref="SummaryQueues"/>, one job at a time, so two runs
+/// of one Summary never call a provider at the same time. A payload holds IDs only. A provider can echo the text of a
+/// request in an error, so no words of a failure leave this class.
+/// </summary>
+public sealed class SummaryJobs(IServiceScopeFactory scopeFactory, IModelProviderClient client, ApiKeyProtector keys, TimeProvider timeProvider)
+{
+    public const string RunWireName = "summary-run";
+    public const string RefreshWireName = "summaries-refresh";
+
+    /// <summary>The tag of a refresh that made no call, with its <see cref="SummaryFailure"/>, so the dashboard shows why it did nothing.</summary>
+    public const string SkippedTag = "skipped";
+
+    /// <summary>
+    /// The claims that one job can have. Each claim counts, also a stop of the host and a kill, so a job that makes the server
+    /// exit ends here before the group limit of 10. A run that a later claim takes over keeps the words of the runs before it.
+    /// </summary>
+    public const int MaxClaims = 6;
+
+    private const string TryAgainText = "The model provider did not answer. The job tries again.";
+
+    private readonly ILogger _logger = Log.ForContext<SummaryJobs>();
+
+    /// <summary>
+    /// Generates one Summary that a person opened, and each missing or stale source Summary below it. A claim that ends with
+    /// no throw ends each run that the job began and still holds, so an earlier claim that began a source leaves no Summary
+    /// <c>Generating</c>. A claim that throws keeps its runs for the next claim.
+    /// </summary>
+    [Job(RunWireName, Queue = SummaryQueues.First)]
+    public async Task RunSummaryAsync(string summaryId, string userId, string tenantId, string runId, JobContext context, CancellationToken cancellationToken)
+    {
+        var owner = new JournalOwner(userId, tenantId);
+        await RunRequestedAsync(owner, summaryId, runId, context, cancellationToken);
+        await SendAsync(owner, new EndSummaryRunsOfJob.Command(context.JobId), cancellationToken);
+    }
+
+    /// <summary>
+    /// The nightly job of one User. It regenerates each stale or failed Summary, and makes the Day that just ended, and calls
+    /// no provider for a Summary whose sources did not change. With no model provider it changes nothing. It ends its runs as
+    /// <see cref="RunSummaryAsync"/> does.
+    /// </summary>
+    [Job(RefreshWireName, Queue = SummaryQueues.First)]
+    public async Task RefreshSummariesAsync(string userId, string tenantId, JobContext context, CancellationToken cancellationToken)
+    {
+        var owner = new JournalOwner(userId, tenantId);
+        await RefreshAsync(owner, context, cancellationToken);
+        await SendAsync(owner, new EndSummaryRunsOfJob.Command(context.JobId), cancellationToken);
+    }
+
+    private async Task RunRequestedAsync(JournalOwner owner, string summaryId, string runId, JobContext context, CancellationToken cancellationToken)
+    {
+        var run = await ReadRequestedRunAsync(owner, summaryId, runId, cancellationToken);
+        if (run is null)
+            return;
+
+        if (context.Attempt > MaxClaims)
+        {
+            await SendAsync(owner, new FailSummaryRun.Command(summaryId, runId, SummaryFailure.Interrupted), cancellationToken);
+            return;
+        }
+
+        var generation = await StartAsync(owner, run.Value.Key, run.Value.Key, context, cancellationToken);
+        if (generation.Endpoint is not { } endpoint)
+        {
+            await SendAsync(owner, new FailSummaryRun.Command(summaryId, runId, generation.NoEndpointFailure), cancellationToken);
+            return;
+        }
+
+        await generation.EnsureAsync(endpoint, run.Value.Key, runId, cancellationToken);
+    }
+
+    private async Task RefreshAsync(JournalOwner owner, JobContext context, CancellationToken cancellationToken)
+    {
+        var userId = owner.UserId;
+        if (context.Attempt > MaxClaims)
+            return;
+
+        var plan = await ReadRefreshPlanAsync(owner, context.JobId, cancellationToken);
+        if (plan.Targets.Count == 0)
+        {
+            _logger.Here().Information("The summary refresh of user {UserId} found no stale summary", userId);
+            return;
+        }
+
+        var generation = await StartAsync(owner, plan.First, plan.End, context, cancellationToken);
+        if (generation.Endpoint is not { } endpoint)
+        {
+            context.AddTag(SkippedTag, generation.NoEndpointFailure.ToString());
+            _logger.Here().Information("The summary refresh of user {UserId} skipped {SummaryCount} summaries, reason {SummaryFailure}", userId, plan.Targets.Count, generation.NoEndpointFailure);
+            return;
+        }
+
+        foreach (var key in plan.Targets)
+            await generation.EnsureAsync(endpoint, key, requestedRunId: null, cancellationToken);
+        _logger.Here().Information("The summary refresh of user {UserId} checked {SummaryCount} summaries and called the provider {ProviderCallCount} times", userId, plan.Targets.Count, generation.ProviderCalls);
+    }
+
+    private async Task<(PeriodKey Key, string RunId)?> ReadRequestedRunAsync(JournalOwner owner, string summaryId, string runId, CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateJournalScope(owner);
+        var summary = await scope.ServiceProvider.GetRequiredService<AppDbContext>().Summaries.AsNoTracking()
+            .TagWithOperationCallSite("summaries.run_job.summary")
+            .FirstOrDefaultAsync(s => s.Id == summaryId, cancellationToken);
+
+        // A second claim after the end of the run, or a run that a newer one took over, does nothing.
+        return summary is not null && summary.IsRunning(runId) ? (summary.Key, runId) : null;
+    }
+
+    private async Task<RefreshPlan> ReadRefreshPlanAsync(JournalOwner owner, Guid jobId, CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateJournalScope(owner);
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var zone = await dbContext.LoadJournalZoneAsync(cancellationToken);
+        var yesterday = PeriodKey.Holding(SummaryPeriod.Day, ZonedDate.TodayAt(zone, timeProvider.GetUtcNow()).Date.AddDays(-1));
+
+        var stored = await dbContext.Summaries.AsNoTracking()
+            .TagWithOperationCallSite("summaries.refresh_job.summaries")
+            .Select(s => new { s.Period, s.StartDate, s.RunState, s.SourceFingerprint, s.RunJobId })
+            .ToListAsync(cancellationToken);
+        var keys = stored.Select(s => new PeriodKey(s.Period, s.StartDate)).Append(yesterday).ToList();
+        var first = keys.Min(k => k.Start);
+        var end = keys.Max(k => k.End);
+        var sources = await dbContext.LoadSourcesAsync(zone, first, end, cancellationToken);
+
+        var targets = stored
+            .Where(s => s.RunState == SummaryRunState.Failed
+                || (s.RunState == SummaryRunState.Generating && s.RunJobId == jobId)
+                || (s.RunState == SummaryRunState.Ready && s.SourceFingerprint != sources.StateOf(new PeriodKey(s.Period, s.StartDate)).Fingerprint))
+            .Select(s => new PeriodKey(s.Period, s.StartDate))
+            .ToList();
+        if (!stored.Any(s => s.Period == SummaryPeriod.Day && s.StartDate == yesterday.Start) && sources.StateOf(yesterday).HasSources)
+            targets.Add(yesterday);
+
+        // A Summary that failed can fail again in the same way, for example when no words come in time, and that ends the calls
+        // of the claim. So it goes after the other work of the night.
+        var failed = stored.Where(s => s.RunState == SummaryRunState.Failed).Select(s => new PeriodKey(s.Period, s.StartDate)).ToHashSet();
+        return new RefreshPlan(targets.OrderBy(failed.Contains).ThenBy(k => k.Period).ThenBy(k => k.Start).ToList(), first, end);
+    }
+
+    private async Task<SummaryGeneration> StartAsync(JournalOwner owner, PeriodKey from, PeriodKey to, JobContext context, CancellationToken cancellationToken)
+        => await StartAsync(owner, from.Start, to.End, context, cancellationToken);
+
+    private async Task<SummaryGeneration> StartAsync(JournalOwner owner, DateOnly first, DateOnly end, JobContext context, CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateJournalScope(owner);
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var zone = await dbContext.LoadJournalZoneAsync(cancellationToken);
+        var sources = await dbContext.LoadSourcesAsync(zone, first, end, cancellationToken);
+
+        var provider = await dbContext.ModelProviders.AsNoTracking()
+            .TagWithOperationCallSite("summaries.job.provider")
+            .ActiveFirst()
+            .FirstOrDefaultAsync(cancellationToken);
+        var generation = new SummaryGeneration(this, owner, sources, context);
+        if (provider is null)
+            return generation.WithNoEndpoint(SummaryFailure.NoModelProvider);
+
+        return keys.Read(provider.ProtectedApiKey) switch
+        {
+            ProtectedKeyRead.Unreadable => generation.WithNoEndpoint(SummaryFailure.KeyUnreadable),
+            var read => generation.WithEndpoint(new ModelEndpoint(provider.Kind, provider.BaseUrl, (read as ProtectedKeyRead.Readable)?.ApiKey), provider.Model!),
+        };
+    }
+
+    private async Task<T> SendAsync<T>(JournalOwner owner, IRequest<T> request, CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateJournalScope(owner);
+        return await scope.ServiceProvider.GetRequiredService<IMediator>().Send(request, cancellationToken);
+    }
+
+    private async Task SendAsync(JournalOwner owner, IRequest request, CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateJournalScope(owner);
+        await scope.ServiceProvider.GetRequiredService<IMediator>().Send(request, cancellationToken);
+    }
+
+    private AsyncServiceScope JournalScope(JournalOwner owner) => scopeFactory.CreateJournalScope(owner);
+
+    private Task<ProviderReply<string>> CompleteAsync(ModelEndpoint endpoint, string model, string instructions, string text, CancellationToken cancellationToken)
+        => client.CompleteAsync(endpoint, model, instructions, text, cancellationToken);
+
+    private sealed record RefreshPlan(IReadOnlyList<PeriodKey> Targets, DateOnly First, DateOnly End);
+
+    /// <summary>
+    /// The work of one claim on the Summaries of one User. A Summary whose sources did not change since its words calls no
+    /// provider. A roll-up first makes each source Summary that is missing, stale, or failed.
+    /// </summary>
+    private sealed class SummaryGeneration(SummaryJobs jobs, JournalOwner owner, SummarySources sources, JobContext context)
+    {
+        private readonly Dictionary<PeriodKey, bool> _ready = [];
+
+        // A failure of the provider fails each later run of the claim in the same way (see StopsTheClaim), so a roll-up of many
+        // sources does not wait on each call in turn or send the words of each source to a provider that refuses them all.
+        private SummaryFailure? _providerFailure;
+
+        public ModelEndpoint? Endpoint { get; private set; }
+
+        public string? Model { get; private set; }
+
+        public SummaryFailure NoEndpointFailure { get; private set; }
+
+        public int ProviderCalls { get; private set; }
+
+        public SummaryGeneration WithEndpoint(ModelEndpoint endpoint, string model)
+        {
+            Endpoint = endpoint;
+            Model = model;
+            return this;
+        }
+
+        public SummaryGeneration WithNoEndpoint(SummaryFailure failure)
+        {
+            NoEndpointFailure = failure;
+            return this;
+        }
+
+        /// <summary>True when the Summary of the period is ready with words of its sources now.</summary>
+        public async Task<bool> EnsureAsync(ModelEndpoint endpoint, PeriodKey key, string? requestedRunId, CancellationToken cancellationToken)
+        {
+            if (_ready.TryGetValue(key, out var known))
+                return known;
+
+            var ready = await GenerateAsync(endpoint, key, requestedRunId, cancellationToken);
+            _ready[key] = ready;
+            return ready;
+        }
+
+        private async Task<bool> GenerateAsync(ModelEndpoint endpoint, PeriodKey key, string? requestedRunId, CancellationToken cancellationToken)
+        {
+            var state = sources.StateOf(key);
+            if (!state.HasSources)
+            {
+                await jobs.SendAsync(owner, new RemoveSummaryWithNoSources.Command(key), cancellationToken);
+                return false;
+            }
+
+            if (await IsReadyAsync(key, state, cancellationToken))
+                return true;
+
+            var run = await jobs.SendAsync(owner, new BeginSummaryRun.Command(key, requestedRunId, context.JobId), cancellationToken);
+            if (_providerFailure is { } stop)
+            {
+                await jobs.SendAsync(owner, new FailSummaryRun.Command(run.SummaryId, run.RunId, stop), cancellationToken);
+                return false;
+            }
+
+            IReadOnlyList<SummarySourceText> texts;
+            if (key.SourcePeriod is null)
+            {
+                texts = await ReadSessionTextsAsync(key, cancellationToken);
+            }
+            else
+            {
+                var sourceKeys = sources.SourcePeriodsWithSources(key);
+                var allReady = true;
+                foreach (var source in sourceKeys)
+                    allReady &= await EnsureAsync(endpoint, source, requestedRunId: null, cancellationToken);
+                if (!allReady)
+                {
+                    await jobs.SendAsync(owner, new FailSummaryRun.Command(run.SummaryId, run.RunId, SummaryFailure.SourceFailed), cancellationToken);
+                    return false;
+                }
+
+                texts = await ReadSummaryTextsAsync(sourceKeys, cancellationToken);
+            }
+
+            // The sources changed after the read of their state, for example a delete. A run with no words would only invent a
+            // Summary, so it ends, and the next run reads the sources again.
+            if (texts.Count == 0)
+            {
+                await jobs.SendAsync(owner, new FailSummaryRun.Command(run.SummaryId, run.RunId, SummaryFailure.Interrupted), cancellationToken);
+                return false;
+            }
+
+            ProviderCalls++;
+            var reply = await jobs.CompleteAsync(endpoint, Model!, SummaryPrompt.Instructions, SummaryPrompt.TextOf(key, texts), cancellationToken);
+            jobs._logger.Here().Information("Summary run {SummaryRunId} of summary {SummaryId}: attempt {Attempt}, reply {ModelProviderReply}", run.RunId, run.SummaryId, context.Attempt, reply);
+
+            var failure = reply switch
+            {
+                ProviderReply<string>.Answered answered when SummaryPrompt.ContentOf(answered.Value) is { } content
+                    => await jobs.SendAsync(owner, new CompleteSummaryRun.Command(run.SummaryId, run.RunId, content, state), cancellationToken) ? (SummaryFailure?)null : SummaryFailure.Interrupted,
+                ProviderReply<string>.Answered => SummaryFailure.BadModelOutput,
+                ProviderReply<string>.Failed failed => FailureOf(failed.Failure),
+                _ => throw new InvalidOperationException(),
+            };
+            if (failure is null)
+                return true;
+
+            if (reply is ProviderReply<string>.Failed { Failure: var providerFailure } && StopsTheClaim(providerFailure))
+                _providerFailure = failure;
+
+            await jobs.SendAsync(owner, new FailSummaryRun.Command(run.SummaryId, run.RunId, failure.Value), cancellationToken);
+            return false;
+        }
+
+        /// <summary>A provider that a later try can reach makes the job try again, and the Summaries that it made stay made.</summary>
+        private SummaryFailure FailureOf(ProviderFailure failure) => failure.Kind switch
+        {
+            ProviderFailureKind.Refused => SummaryFailure.ProviderRefused,
+            ProviderFailureKind.BadOutput => SummaryFailure.BadModelOutput,
+            ProviderFailureKind.NoWords => SummaryFailure.ProviderUnavailable,
+            ProviderFailureKind.Unavailable when context.Attempt >= MaxClaims => SummaryFailure.ProviderUnavailable,
+            ProviderFailureKind.Unavailable => throw new JobSafeTextException(TryAgainText),
+            _ => throw new ArgumentOutOfRangeException(nameof(failure)),
+        };
+
+        /// <summary>
+        /// A failure of the provider and not of one request: a key or a model that the provider does not take, an address that
+        /// the app does not call, no words in time, or a provider that is still down on the last claim. A 400, 413, or 422 is
+        /// about the words of one request, such as a content filter or a context that is too long, so each other run still calls.
+        /// </summary>
+        private static bool StopsTheClaim(ProviderFailure failure) => failure.Kind switch
+        {
+            ProviderFailureKind.Refused => failure.StatusCode is null or 401 or 403 or 404,
+            ProviderFailureKind.NoWords or ProviderFailureKind.Unavailable => true,
+            _ => false,
+        };
+
+        private async Task<bool> IsReadyAsync(PeriodKey key, SourceState state, CancellationToken cancellationToken)
+        {
+            await using var scope = jobs.JournalScope(owner);
+            return await scope.ServiceProvider.GetRequiredService<AppDbContext>().Summaries.AsNoTracking()
+                .TagWithOperationCallSite("summaries.job.ready")
+                .AnyAsync(s => s.Period == key.Period && s.StartDate == key.Start && s.RunState == SummaryRunState.Ready && s.SourceFingerprint == state.Fingerprint, cancellationToken);
+        }
+
+        /// <summary>Each Session reads Cleaned when it has words, and Raw when it has not.</summary>
+        private async Task<IReadOnlyList<SummarySourceText>> ReadSessionTextsAsync(PeriodKey key, CancellationToken cancellationToken)
+        {
+            var stubs = sources.SessionsIn(key);
+            var ids = stubs.Select(s => s.Id).ToList();
+            await using var scope = jobs.JournalScope(owner);
+            var texts = await scope.ServiceProvider.GetRequiredService<AppDbContext>().Sessions.AsNoTracking()
+                .TagWithOperationCallSite("summaries.job.session_texts")
+                .Where(s => ids.Contains(s.Id))
+                .Select(s => new { s.Id, Raw = s.Raw.Text, Cleaned = s.Cleaned.Text })
+                .ToDictionaryAsync(s => s.Id, cancellationToken);
+
+            return stubs
+                .Where(stub => texts.ContainsKey(stub.Id))
+                .Select(stub => new SummarySourceText(stub.JournalingDay, WordsOf(texts[stub.Id].Cleaned) is { Length: > 0 } cleaned ? cleaned : WordsOf(texts[stub.Id].Raw)))
+                .Where(source => source.Text.Length > 0)
+                .ToList();
+        }
+
+        private async Task<IReadOnlyList<SummarySourceText>> ReadSummaryTextsAsync(IReadOnlyList<PeriodKey> keys, CancellationToken cancellationToken)
+        {
+            var period = keys[0].Period;
+            var starts = keys.Select(k => k.Start).ToList();
+            await using var scope = jobs.JournalScope(owner);
+            var rows = await scope.ServiceProvider.GetRequiredService<AppDbContext>().Summaries.AsNoTracking()
+                .TagWithOperationCallSite("summaries.job.source_summaries")
+                .Where(s => s.Period == period && starts.Contains(s.StartDate) && s.RunState == SummaryRunState.Ready)
+                .Select(s => new { s.StartDate, s.Content })
+                .ToListAsync(cancellationToken);
+            return rows.OrderBy(r => r.StartDate).Select(r => new SummarySourceText(r.StartDate, r.Content ?? string.Empty)).ToList();
+        }
+
+        private static string WordsOf(string draft) => ProseMirrorToPlainText.Render(draft).Trim();
+    }
+}

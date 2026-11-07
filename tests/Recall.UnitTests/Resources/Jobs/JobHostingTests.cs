@@ -106,7 +106,7 @@ public class JobHostingTests
 
         // Assert
         var hosted = builder.Services.Where(service => service.ServiceType == typeof(IHostedService)).ToList();
-        var limits = hosted.FindIndex(service => service.ImplementationType == typeof(CleanupQueueLimits));
+        var limits = hosted.FindIndex(service => service.ImplementationType == typeof(QueueLimits));
         limits.ShouldBeGreaterThanOrEqualTo(0);
         hosted.Take(limits).ShouldBeEmpty();
     }
@@ -123,6 +123,23 @@ public class JobHostingTests
         cleanups.Policy.ShouldBeOfType<DispatchPolicy.Weighted>().Queues.ShouldBe(CleanupQueues.All);
         CleanupQueues.All.ShouldNotContain(JobHosting.SystemQueue);
         JobHosting.SystemWorkers(new JobOptions()).Policy.ShouldBeOfType<DispatchPolicy.Strict>().Queues.ShouldBe([JobHosting.SystemQueue]);
+    }
+
+    [Test]
+    public void a_summary_queue_runs_one_job_at_a_time_and_the_group_has_a_worker_for_each_queue()
+    {
+        // Act
+        var summaries = JobHosting.SummaryWorkers(new JobOptions());
+
+        // Assert
+        summaries.PoolSize.ShouldBe(SummaryQueues.Count);
+        summaries.Policy.ShouldBeOfType<DispatchPolicy.Weighted>().Queues.ShouldBe(SummaryQueues.All);
+        foreach (var queue in SummaryQueues.All)
+            QueueLimits.Wanted.ShouldContain((queue, 1));
+        foreach (var queue in CleanupQueues.All)
+            QueueLimits.Wanted.ShouldContain((queue, CleanupQueues.JobsAtOnceInAQueue));
+        SummaryQueues.All.ShouldNotContain(JobHosting.SystemQueue);
+        SummaryQueues.All.Intersect(CleanupQueues.All).ShouldBeEmpty();
     }
 
     [Test]

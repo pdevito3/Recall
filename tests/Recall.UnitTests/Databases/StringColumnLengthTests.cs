@@ -11,6 +11,7 @@ using Recall.Server.Domain.People;
 using Recall.Server.Domain.Recordings;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Metadata;
+using Recall.Server.Domain.Summaries;
 using Recall.Server.Domain.Sync;
 using Recall.Server.Domain.Users;
 using Recall.Server.Exceptions;
@@ -82,6 +83,9 @@ public class StringColumnLengthTests
         ["recordings.engine"] = Enum.GetNames<TranscriptionEngineKind>(),
         ["recordings.status"] = Enum.GetNames<RecordingStatus>(),
         ["recordings.problem"] = Enum.GetNames<RecordingProblem>(),
+        ["summaries.period"] = Enum.GetNames<SummaryPeriod>(),
+        ["summaries.run_state"] = Enum.GetNames<SummaryRunState>(),
+        ["summaries.failure"] = Enum.GetNames<SummaryFailure>(),
         // new-feature:fixed-option-columns
     };
 
@@ -130,6 +134,9 @@ public class StringColumnLengthTests
         "sessions.preview",
         "sessions.synopsis",
         "sessions.user_topics",
+        "summaries.content",
+        "summaries.run_id",
+        "summaries.source_fingerprint",
         "sync_changes.client_session_id",
         "sync_changes.entity_id",
         "sync_changes.user_id",

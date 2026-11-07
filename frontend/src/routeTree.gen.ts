@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TranscriptionEngineRouteImport } from './routes/transcription-engine'
+import { Route as SummariesRouteImport } from './routes/summaries'
 import { Route as ModelProvidersRouteImport } from './routes/model-providers'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
@@ -19,6 +20,11 @@ import { Route as UsersIdIndexRouteImport } from './routes/users/$id/index'
 const TranscriptionEngineRoute = TranscriptionEngineRouteImport.update({
   id: '/transcription-engine',
   path: '/transcription-engine',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SummariesRoute = SummariesRouteImport.update({
+  id: '/summaries',
+  path: '/summaries',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ModelProvidersRoute = ModelProvidersRouteImport.update({
@@ -51,6 +57,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/model-providers': typeof ModelProvidersRoute
+  '/summaries': typeof SummariesRoute
   '/transcription-engine': typeof TranscriptionEngineRoute
   '/users': typeof UsersIndexRoute
   '/users/$id': typeof UsersIdIndexRoute
@@ -59,6 +66,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/model-providers': typeof ModelProvidersRoute
+  '/summaries': typeof SummariesRoute
   '/transcription-engine': typeof TranscriptionEngineRoute
   '/users': typeof UsersIndexRoute
   '/users/$id': typeof UsersIdIndexRoute
@@ -68,6 +76,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/model-providers': typeof ModelProvidersRoute
+  '/summaries': typeof SummariesRoute
   '/transcription-engine': typeof TranscriptionEngineRoute
   '/users/': typeof UsersIndexRoute
   '/users/$id/': typeof UsersIdIndexRoute
@@ -78,6 +87,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/model-providers'
+    | '/summaries'
     | '/transcription-engine'
     | '/users'
     | '/users/$id'
@@ -86,6 +96,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/model-providers'
+    | '/summaries'
     | '/transcription-engine'
     | '/users'
     | '/users/$id'
@@ -94,6 +105,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/model-providers'
+    | '/summaries'
     | '/transcription-engine'
     | '/users/'
     | '/users/$id/'
@@ -103,6 +115,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   ModelProvidersRoute: typeof ModelProvidersRoute
+  SummariesRoute: typeof SummariesRoute
   TranscriptionEngineRoute: typeof TranscriptionEngineRoute
   UsersIndexRoute: typeof UsersIndexRoute
   UsersIdIndexRoute: typeof UsersIdIndexRoute
@@ -115,6 +128,13 @@ declare module '@tanstack/react-router' {
       path: '/transcription-engine'
       fullPath: '/transcription-engine'
       preLoaderRoute: typeof TranscriptionEngineRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/summaries': {
+      id: '/summaries'
+      path: '/summaries'
+      fullPath: '/summaries'
+      preLoaderRoute: typeof SummariesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/model-providers': {
@@ -159,6 +179,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   ModelProvidersRoute: ModelProvidersRoute,
+  SummariesRoute: SummariesRoute,
   TranscriptionEngineRoute: TranscriptionEngineRoute,
   UsersIndexRoute: UsersIndexRoute,
   UsersIdIndexRoute: UsersIdIndexRoute,
