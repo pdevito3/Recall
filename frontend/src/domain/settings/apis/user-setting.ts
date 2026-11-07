@@ -79,8 +79,8 @@ export const resumeUnsentSetting = (owner: string, queryClient: QueryClient) =>
     }
   })
 
-const holdsAnOff = ({ change, asks }: Pick<RowSaverState<SettingChange>, 'change' | 'asks'>) =>
-  change?.value.locationCaptureEnabled === false || asks.some(({ field, yours }) => field === 'locationCaptureEnabled' && yours === false)
+const holdsAnOff = (change: Partial<SettingChange> | undefined, asks: RowSaverState<SettingChange>['asks']) =>
+  change?.locationCaptureEnabled === false || asks.some(({ field, yours }) => field === 'locationCaptureEnabled' && yours === false)
 
 /** A change to off can wait for a save or an answer, in this tab or in a key of another tab. The app saves no location while it waits, so the choice holds also on a page with no prompt. */
 export function locationCaptureIsOn(queryClient: QueryClient) {
@@ -89,9 +89,9 @@ export function locationCaptureIsOn(queryClient: QueryClient) {
   const owner = pageUserOf()
   const isOffInAKey = owner !== null && keysUnder(prefixOf(owner)).some((key) => {
     const state = stateIn(key)
-    return state !== null && holdsAnOff(state)
+    return state !== null && holdsAnOff(state.change?.value, state.asks)
   })
-  return isOnInRow && !isOffInAKey && !holdsAnOff({ change: { value: saver.pendingFields(), savedAt: '' }, asks: saver.asks() })
+  return isOnInRow && !isOffInAKey && !holdsAnOff(saver.pendingFields(), saver.asks())
 }
 
 export const settleSettingSaver = () => saver?.settle() ?? Promise.resolve(true)

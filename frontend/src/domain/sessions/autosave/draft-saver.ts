@@ -316,9 +316,16 @@ export class DraftSaver {
       return null
     })
     if (!newest || this.unsettledText() !== unsettledBefore || this.replyCount !== repliesBefore) return null
-    const isRaw = this.target.channel === 'raw'
-    this.moveBaseTo(isRaw ? newest.rawDraftRevision : newest.cleanedDraftRevision, isRaw ? newest.rawLatestRevision : newest.cleanedLatestRevision)
-    return isRaw ? newest.rawText : (newest.cleanedText ?? '')
+    this.moveBaseToDraftIn(newest)
+    return this.isRaw ? newest.rawText : (newest.cleanedText ?? '')
+  }
+
+  private get isRaw() {
+    return this.target.channel === 'raw'
+  }
+
+  private moveBaseToDraftIn(session: SessionDto) {
+    this.moveBaseTo(this.isRaw ? session.rawDraftRevision : session.cleanedDraftRevision, this.isRaw ? session.rawLatestRevision : session.cleanedLatestRevision)
   }
 
   moveBaseTo(draftRevision: number, latestRevision: number) {
@@ -396,7 +403,7 @@ export class DraftSaver {
     const id = await this.sessionIdForSave(signal)
     const body = { text: change.value, baseRevision: this.snapshot.baseRevision, savedAt: change.savedAt }
     const options = { suppressErrorToast: true }
-    return this.target.channel === 'raw'
+    return this.isRaw
       ? saveRawDraft({ path: { id }, body, signal, options })
       : saveCleanedDraft({ path: { id }, body, signal, options })
   }
@@ -444,28 +451,26 @@ export class DraftSaver {
     })
     this.queryClient.setQueryData<SessionDto>(key, (session) => {
       if (!session) return session
-      const isRaw = this.target.channel === 'raw'
-      const latest = isRaw ? { rawLatestRevision: reply.latestRevision } : { cleanedLatestRevision: reply.latestRevision }
+      const latest = { [this.isRaw ? 'rawLatestRevision' : 'cleanedLatestRevision']: reply.latestRevision }
       const draft = words === null
         ? {}
-        : isRaw
+        : this.isRaw
           ? { rawDraftRevision: reply.draftRevision, rawText: words, rawSavedAt: reply.savedAt, personIds: mentionedPersonIds(words, session.cleanedText) }
           : { cleanedDraftRevision: reply.draftRevision, cleanedText: words, cleanedSavedAt: reply.savedAt, personIds: mentionedPersonIds(session.rawText, words) }
       return { ...session, ...latest, ...draft, cleanupStatus: reply.cleanupStatus, version: reply.version }
     })
-    if (words !== null && this.target.channel === 'raw') this.patchRow(id, words, reply)
+    if (words !== null && this.isRaw) this.patchRow(id, words, reply)
   }
 
   /** A replay of a save answers Unchanged, also when the first answer was Lost and never came. Only the Draft can tell where the words of the replay went. */
   private async readNewest(id: string, wordsOfAReplay: string | null) {
     const repliesAtRead = this.replyCount
     const newest = await this.queryClient.fetchQuery({ ...sessionQueryOptions(id), staleTime: 0 }).catch(() => null)
-    const isRaw = this.target.channel === 'raw'
-    if (newest && isRaw) this.patchRow(id, newest.rawText, newest)
+    if (newest && this.isRaw) this.patchRow(id, newest.rawText, newest)
     // A later reply knows more than this read.
     if (wordsOfAReplay === null || this.replyCount !== repliesAtRead) return
-    if (newest && wordsOfAReplay === (isRaw ? newest.rawText : newest.cleanedText)) {
-      this.moveBaseTo(isRaw ? newest.rawDraftRevision : newest.cleanedDraftRevision, isRaw ? newest.rawLatestRevision : newest.cleanedLatestRevision)
+    if (newest && wordsOfAReplay === (this.isRaw ? newest.rawText : newest.cleanedText)) {
+      this.moveBaseToDraftIn(newest)
       this.wordsOnServer = wordsOfAReplay
       if (this.snapshot.conflict === 'wordsMovedToHistory') this.update({ conflict: null })
     } else if (this.saver.newestUnsettled() === null) {
