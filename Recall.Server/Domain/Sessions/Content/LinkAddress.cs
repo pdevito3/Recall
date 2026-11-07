@@ -41,14 +41,14 @@ public static class LinkAddress
                 if (reader.TokenType != JsonTokenType.PropertyName)
                     continue;
 
-                var isType = reader.CurrentDepth == 1 && reader.ValueTextEquals("type");
-                var isAddress = reader.ValueTextEquals("href");
+                var isType = reader.CurrentDepth == 1 && TextIs(ref reader, "type");
+                var isAddress = TextIs(ref reader, "href");
                 if (!isType && !isAddress)
                     continue;
 
                 reader.Read();
-                isDocument |= isType && reader.TokenType == JsonTokenType.String && reader.ValueTextEquals("doc");
-                refused |= isAddress && reader.TokenType != JsonTokenType.Null && (reader.TokenType != JsonTokenType.String || !IsAllowed(reader.GetString()));
+                isDocument |= isType && reader.TokenType == JsonTokenType.String && TextIs(ref reader, "doc");
+                refused |= isAddress && reader.TokenType != JsonTokenType.Null && (reader.TokenType != JsonTokenType.String || !AddressCanBeRead(ref reader));
             }
 
             return isDocument && refused;
@@ -57,10 +57,31 @@ public static class LinkAddress
         {
             return false;
         }
+    }
+
+    // A client can cut an emoji in half, and the reader throws on the escape that is left.
+    private static bool TextIs(ref Utf8JsonReader reader, string text)
+    {
+        try
+        {
+            return reader.ValueTextEquals(text);
+        }
         catch (InvalidOperationException)
         {
-            // An address with a broken escape, which a page can still read.
-            return true;
+            return false;
+        }
+    }
+
+    // A page can still open an address with a broken escape, and this reader cannot check its scheme, so it is refused.
+    private static bool AddressCanBeRead(ref Utf8JsonReader reader)
+    {
+        try
+        {
+            return IsAllowed(reader.GetString());
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
         }
     }
 }

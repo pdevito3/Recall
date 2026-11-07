@@ -19,7 +19,7 @@ namespace Recall.Server.Domain.Sessions.Content;
 ///
 /// Unsupported markdown never throws: it degrades to the nearest supported node. The rule for each input: each word of
 /// the markdown is in the document, as text, as the address of a link, or as the language of a code block. Two things are
-/// not words: the number of a list item that follows from the first, and an HTML entity, which becomes its character.
+/// not words: the number of an item of a list that counts from 1, and an HTML entity, which becomes its character.
 /// <see cref="MarkdownWords"/> checks the rule on each conversion, and a document that breaks it gives way to the source
 /// as text. So a person can see the marks of the source, and cannot lose a word.
 /// </summary>
@@ -218,7 +218,7 @@ public static class MarkdownToProseMirror
     }
 
     // A task item's leading paragraph starts with a Markdig TaskList inline.
-    private static bool IsTaskItem(ListItemBlock item) => FindTaskMarker(item) is not null;
+    internal static bool IsTaskItem(ListItemBlock item) => FindTaskMarker(item) is not null;
 
     private static bool TaskItemChecked(ListItemBlock item) => FindTaskMarker(item)?.Checked ?? false;
 

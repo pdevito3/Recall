@@ -40,6 +40,7 @@ public class JournalTextSafetyTests : TestBase
     [Arguments("""{"type":"doc","content":[{"type":"text","text":"x","marks":[{"type":"link","attrs":{"href":"http://a","href":"javascript:x"}}]}]}""")]
     [Arguments("""{"type":"text","type":"doc","content":[{"type":"text","text":"x","marks":[{"type":"link","attrs":{"href":"javascript:x"}}]}]}""")]
     [Arguments("""{"type":"doc","content":[{"type":"text","text":"x","marks":[{"type":"link","attrs":{"href":["javascript:x"]}}]}]}""")]
+    [Arguments("""{"type":"doc","content":[{"type":"text","text":"x","marks":[{"type":"link","attrs":{"href":"javascript:x\ud83d"}}]}]}""")]
     [Arguments("""{"type":"doc","content":[{"type":"text","text":"x","marks":[{"type":"link","attrs":{"hr\u0065f":"java\u0073cript:x"}}]}]}""")]
     public async Task a_draft_that_hides_a_refused_link_from_a_tree_is_refused(string document)
     {
@@ -53,6 +54,24 @@ public class JournalTextSafetyTests : TestBase
 
         // Assert
         cleaned.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Test]
+    [Arguments("""{"\ud83d":1}""")]
+    [Arguments("""{"type":"\ud83d"}""")]
+    [Arguments("""{"type":"doc","content":[{"type":"text","text":"half \ud83d","marks":[{"type":"link","attrs":{"href":"https://a"}}]}]}""")]
+    public async Task words_with_half_an_emoji_are_no_refused_link_and_they_save(string words)
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+
+        // Act
+        var raw = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Draft(session.Id), new { text = words, baseRevision = 0, savedAt = JournalScenario.Morning });
+
+        // Assert
+        raw.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Test]

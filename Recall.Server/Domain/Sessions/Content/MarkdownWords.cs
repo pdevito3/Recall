@@ -20,19 +20,40 @@ internal static partial class MarkdownWords
         var missing = new Dictionary<string, int>(StringComparer.Ordinal);
         CountWords(EntityForm().Replace(ItemMarker().Replace(markdown, " "), " "), missing, 1);
 
-        // The label of "[text][label]" stays in the definition, and the document needs it only once.
-        foreach (var link in parsed.Descendants<LinkInline>().Where(link => link.Label is not null))
-            CountWords(link.Label!, missing, -1);
+        foreach (var link in parsed.Descendants<LinkInline>())
+            CountCopiesOf(link, missing);
+
+        // An autolink is its text and its address, and the source has the words once.
+        foreach (var autolink in parsed.Descendants<AutolinkInline>())
+            CountWords(autolink.IsEmail ? $"mailto:{autolink.Url}" : autolink.Url, missing, 1);
 
         return missing.All(word => word.Value <= inDocument.GetValueOrDefault(word.Key))
-            && parsed.Descendants<ListBlock>().Where(list => list.IsOrdered).All(NumbersFollowTheStart);
+            && !parsed.Descendants<FencedCodeBlock>().Any(fence => !string.IsNullOrEmpty(fence.Arguments))
+            && parsed.Descendants<ListBlock>().Where(list => list.IsOrdered).All(NumbersStayOnAPage);
     }
 
-    /// <summary>A list holds only its start, and a page counts from there. So "1999. 2003. 2011." would show other years, and only a list that counts up or repeats its start can go in the document.</summary>
-    private static bool NumbersFollowTheStart(ListBlock list)
+    /// <summary>The document can hold a word of a link twice when the source has it once, and that must not hide a lost word.</summary>
+    private static void CountCopiesOf(LinkInline link, Dictionary<string, int> missing)
     {
-        var numbers = list.OfType<ListItemBlock>().Select(item => item.Order).ToList();
-        return numbers.Distinct().Count() <= 1 || numbers.Select((number, index) => number - index).Distinct().Count() == 1;
+        // The label of "[text][label]" stays in the definition, and the document needs it only once.
+        if (link.LocalLabel == LocalLabel.Local)
+            CountWords(link.Label!, missing, -1);
+
+        // A link that reads a definition has the address and the title, and the definition stays as text.
+        if (link.Reference is not null)
+            CountWords($"{link.Url} {link.Title}", missing, 1);
+
+        // A link with no visible text has its address as text and as the address.
+        if (link.FirstChild is null && link.Url is not null)
+            CountWords(link.Url, missing, 1);
+    }
+
+    /// <summary>A list holds no number of an item, and a page counts from 1 or shows no number. So only "1. 2. 3." and "1. 1. 1." can go in the document, and an ordered task list cannot.</summary>
+    private static bool NumbersStayOnAPage(ListBlock list)
+    {
+        var items = list.OfType<ListItemBlock>().ToList();
+        return !items.All(MarkdownToProseMirror.IsTaskItem)
+            && (items.All(item => item.Order == 1) || items.Select((item, index) => item.Order == index + 1).All(counts => counts));
     }
 
     private static void CountDocument(JsonObject node, Dictionary<string, int> counts)
@@ -41,18 +62,24 @@ internal static partial class MarkdownWords
             CountWords(text.GetValue<string>(), counts, 1);
         if (node["attrs"] is JsonObject attrs && attrs["language"] is JsonValue language)
             CountWords(language.GetValue<string>(), counts, 1);
-        if (node["marks"] is JsonArray marks)
-        {
-            foreach (var href in marks.OfType<JsonObject>().Select(mark => mark["attrs"]?["href"]).OfType<JsonValue>())
-                CountWords(href.GetValue<string>(), counts, 1);
-        }
 
         if (node["content"] is JsonArray children)
         {
+            // One link can be many text nodes, and its address counts once.
+            string? address = null;
             foreach (var child in children.OfType<JsonObject>())
+            {
+                var next = AddressOf(child);
+                if (next is not null && next != address)
+                    CountWords(next, counts, 1);
+                address = next;
                 CountDocument(child, counts);
+            }
         }
     }
+
+    private static string? AddressOf(JsonObject node)
+        => (node["marks"] as JsonArray)?.OfType<JsonObject>().Select(mark => mark["attrs"]?["href"]).OfType<JsonValue>().FirstOrDefault()?.GetValue<string>();
 
     private static void CountWords(string text, Dictionary<string, int> counts, int change)
     {
@@ -81,7 +108,7 @@ internal static partial class MarkdownWords
         word.Clear();
     }
 
-    // The marker of a list item, with the "[x]" of a task. The start of an ordered list is an attribute, and a later number follows from it.
+    // The marker of a list item, with the "[x]" of a task. NumbersStayOnAPage decides on the number of an ordered list.
     [GeneratedRegex(@"^(?:[ \t>]*(?:[-+*]|[0-9]{1,9}[.)])[ \t]+(?:\[[ xX]\][ \t]+)?)+", RegexOptions.Multiline, matchTimeoutMilliseconds: 5_000)]
     private static partial Regex ItemMarker();
 

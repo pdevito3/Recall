@@ -167,6 +167,7 @@ public class ProviderTextAndAddressTests
     [Test]
     [Arguments("fd20:ce::254")]
     [Arguments("64:ff9b:1::a9fe:a9fe")]
+    [Arguments("64:ff9b:1:a9fe:a9:fe00:808:808")]
     [Arguments("::ffff:0:a9fe:a9fe")]
     public void each_other_form_of_a_metadata_address_is_refused(string address)
     {

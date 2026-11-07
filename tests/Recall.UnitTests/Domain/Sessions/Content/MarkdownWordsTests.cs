@@ -45,7 +45,12 @@ public partial class MarkdownWordsTests
             ("w1\n===\n\nw2\n---", ["w1", "w2"], "heading"),
             ("> w1\n>\n> > w2", ["w1", "w2"], "blockquote"),
             ("- w1\n- w2\n  - w3", ["w1", "w2", "w3"], "bulletList"),
-            ("3. w1\n4. w2", ["w1", "w2"], "orderedList"),
+            ("1. w1\n2. w2", ["w1", "w2"], "orderedList"),
+            ("3. w1\n4. w2", ["3", "4", "w1", "w2"], "paragraph"),
+            ("2003. w1", ["2003", "w1"], "paragraph"),
+            ("1999. w1\n1999. w2", ["1999", "w1", "w2"], "paragraph"),
+            ("1. [ ] w1\n2. [x] w2", ["1", "2", "w1", "w2"], "paragraph"),
+            ("2003. [ ] w1", ["2003", "w1"], "paragraph"),
             ("1. w1\n1. w2\n1. w3", ["w1", "w2", "w3"], "orderedList"),
             ("1999. w1\n2003. w2\n2011. w3", ["1999", "2003", "2011", "w1", "w2", "w3"], "paragraph"),
             ("- [ ] w1\n- [x] w2", ["w1", "w2"], "taskList"),
@@ -129,6 +134,37 @@ public partial class MarkdownWordsTests
         plain.ShouldContain("kept-in-the-info w1");
         plain.ShouldContain("# Heading");
         TypesIn(JsonNode.Parse(json)!.AsObject()).ShouldNotContain("heading");
+    }
+
+    [Test]
+    [Arguments("```js lost\ncode\n```\n\n<http://lost>", "js lost")]
+    [Arguments("```js lost\ncode\n```\n\n&lt;http://lost&gt;", "js lost")]
+    [Arguments("```js lost\ncode\n```\n\n<lost@example.com>", "js lost")]
+    [Arguments("```sql secret\nq\n```\n\n[**a** b](http://secret)", "sql secret")]
+    [Arguments("```sql secret\nq\n```\n\n[](http://secret)", "sql secret")]
+    [Arguments("```sql secret\nq\n```\n\n[a]\n\n[a]: http://secret", "sql secret")]
+    [Arguments("```sql secret\nq\n```\n\n[a]\n\n[a]: http://b \"secret\"", "sql secret")]
+    [Arguments("```js &lost;\ncode\n```", "&lost;")]
+    [Arguments("- foo [x] bar &lt;http://x&gt;", "[x]")]
+    public void a_word_that_the_document_holds_twice_cannot_hide_a_lost_word(string markdown, string kept)
+    {
+        // Act
+        var plain = ProseMirrorToPlainText.Render(MarkdownToProseMirror.ConvertToJson(markdown));
+
+        // Assert
+        plain.ShouldContain(kept);
+    }
+
+    [Test]
+    public void a_link_that_a_definition_gives_stays_a_link_and_its_words_stay()
+    {
+        // Act
+        var json = MarkdownToProseMirror.ConvertToJson("# w1\n\n[w2] and [w3](https://example.com/w4) and <https://example.com/w5>\n\n[w2]: https://example.com/w6 \"w7\"");
+
+        // Assert
+        TypesIn(JsonNode.Parse(json)!.AsObject()).ShouldContain("heading");
+        foreach (var word in new[] { "w1", "w2", "w3", "w4", "w5", "w6", "w7" })
+            WordsIn(json).ShouldContain(word);
     }
 
     [Test]

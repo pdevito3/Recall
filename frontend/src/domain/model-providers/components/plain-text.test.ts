@@ -3,6 +3,27 @@ import { describe, expect, it } from 'vitest'
 import { plainTextOf } from './plain-text'
 
 describe('plainTextOf', () => {
+  it('shows the address of a link once, after the words of the link', () => {
+    const link = { type: 'link', attrs: { href: 'https://sam.example/2003' } }
+    const doc = JSON.stringify({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'see ' },
+            { type: 'text', text: 'the ', marks: [link] },
+            { type: 'text', text: 'site', marks: [{ type: 'bold' }, link] },
+            { type: 'text', text: ' now and ' },
+            { type: 'text', text: 'sam@example.com', marks: [{ type: 'link', attrs: { href: 'mailto:sam@example.com' } }] },
+          ],
+        },
+      ],
+    })
+
+    expect(plainTextOf(doc)).toBe('see the site (https://sam.example/2003) now and sam@example.com')
+  })
+
   it('shows the words of each paragraph and the label of a mention', () => {
     const doc = JSON.stringify({
       type: 'doc',

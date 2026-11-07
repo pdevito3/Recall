@@ -22,10 +22,15 @@ public static class ProviderAddressRule
     /// <summary>In a container, a loopback address is the app itself, and a local model is on another address.</summary>
     public static bool LoopbackIsTheApp { get; } = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
 
+    private static readonly byte[] LocalNat64Prefix = [0x00, 0x64, 0xff, 0x9b, 0x00, 0x01];
+
     public static bool Refuses(IPAddress address) => Refuses(address, LoopbackIsTheApp);
 
     public static bool Refuses(IPAddress address, bool loopbackIsTheApp)
     {
+        if (IsLocalNat64(address))
+            return true;
+
         var plain = Unwrapped(address);
         if (IPAddress.IsLoopback(plain))
             return loopbackIsTheApp;
@@ -86,6 +91,10 @@ public static class ProviderAddressRule
         throw last ?? new SocketException((int)SocketError.HostNotFound);
     }
 
+    // Each site picks where the IPv4 address sits in this prefix, so no check can read it.
+    private static bool IsLocalNat64(IPAddress address)
+        => address.AddressFamily == AddressFamily.InterNetworkV6 && address.GetAddressBytes().AsSpan(0, 6).SequenceEqual(LocalNat64Prefix);
+
     // An IPv6 form that a router or a stack turns into an IPv4 address reaches the same place, so the IPv4 rule decides.
     private static IPAddress Unwrapped(IPAddress address)
     {
@@ -95,8 +104,7 @@ public static class ProviderAddressRule
             return address.MapToIPv4();
 
         var bytes = address.GetAddressBytes();
-        var isNat64 = bytes[0] == 0x00 && bytes[1] == 0x64 && bytes[2] == 0xff && bytes[3] == 0x9b
-            && (bytes[4..12].All(b => b == 0) || (bytes[4] == 0x00 && bytes[5] == 0x01));
+        var isNat64 = bytes[0] == 0x00 && bytes[1] == 0x64 && bytes[2] == 0xff && bytes[3] == 0x9b && bytes[4..12].All(b => b == 0);
         var isTranslated = bytes[..8].All(b => b == 0) && bytes[8] == 0xff && bytes[9] == 0xff && bytes[10] == 0 && bytes[11] == 0;
         var isCompatible = bytes[..12].All(b => b == 0) && (bytes[12] | bytes[13]) != 0;
         if (isNat64 || isTranslated || isCompatible)

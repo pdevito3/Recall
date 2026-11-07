@@ -22,7 +22,7 @@ A connect does not change which provider a Cleanup uses. A provider is active on
 | No progress on a read, also for the headers | 3 min | A local model can load and read a long prompt before its first byte. Anthropic sends `ping` events during a stream. A hung call ends here. |
 | A whole call for words, and all tries of one run | 40 min | The longest answer is 64 000 tokens. At 30 tokens each second, this is about 36 min. A wait before the first claim does not count. A wait between tries and a stop of the server do count, so a run that passes the limit in a long stop ends with no new call, and a person can run it again. |
 | A call for the model list | 30 s | A person waits for it, and no model runs. |
-| A body that is not a stream | 16 MiB | A list of models or an error is far smaller. A `Content-Length` above the limit ends the call before a read. |
+| A body that is not a stream | 16 MiB | A list of models or an error is far smaller. The read ends when the bytes pass the limit. |
 | A stream | 64 MiB | 250 000 tokens with an envelope of up to 250 bytes for each. |
 | One line of a stream | 4 MiB | The text of one event goes to memory as a whole. |
 | The words of an answer | 2 x the limit of a Draft | The longest answer that can give a Draft, with an escape for each character. |
@@ -48,11 +48,12 @@ A private address stays allowed, because a local model on a home network is a re
 | Rule | Addresses | Why |
 |---|---|---|
 | Link-local | `169.254.0.0/16`, `fe80::/10` | This range holds the metadata address of most clouds. |
-| Named metadata addresses | `fd00:ec2::254`, `100.100.100.200`, `168.63.129.16`, `192.0.0.192` | These cloud services are outside the link-local range. |
+| Named metadata addresses | `fd00:ec2::254`, `fd20:ce::254`, `100.100.100.200`, `168.63.129.16`, `192.0.0.192` | These cloud services are outside the link-local range. |
 | Loopback, in a container | `127.0.0.0/8`, `::1`, `localhost` | In a container, a loopback address is the app itself, and a local model is on another address. Outside a container, for example in development, loopback stays allowed. |
 | This network | `0.0.0.0/8`, `::` | On Linux, this reaches the app itself. |
 | Multicast, reserved, broadcast | `224.0.0.0` and above, `ff00::/8` | No model provider is on these. |
-| An IPv6 form of a refused IPv4 address | IPv4-mapped, IPv4-compatible, NAT64 (`64:ff9b::/96`), 6to4 (`2002::/16`) | A stack or a router turns these into the IPv4 address. |
+| An IPv6 form of a refused IPv4 address | IPv4-mapped, IPv4-translated (`::ffff:0:0/96`), IPv4-compatible, NAT64 (`64:ff9b::/96`), 6to4 (`2002::/16`) | A stack or a router turns these into the IPv4 address. |
+| Local-use NAT64 | `64:ff9b:1::/48` | Each site picks where the IPv4 address sits in this prefix, so no check can read it. |
 
 Two checks apply each rule:
 

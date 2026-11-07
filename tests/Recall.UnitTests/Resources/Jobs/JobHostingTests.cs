@@ -106,7 +106,6 @@ public class JobHostingTests
 
         // Assert
         var hosted = builder.Services.Where(service => service.ServiceType == typeof(IHostedService)).ToList();
-        Console.WriteLine(string.Join(" | ", hosted.Select(service => service.ImplementationType?.FullName ?? service.ImplementationFactory?.Method.ToString() ?? "?")));
         var limits = hosted.FindIndex(service => service.ImplementationType == typeof(CleanupQueueLimits));
         limits.ShouldBeGreaterThanOrEqualTo(0);
         hosted.Take(limits).ShouldBeEmpty();
