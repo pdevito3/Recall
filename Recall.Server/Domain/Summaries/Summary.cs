@@ -48,7 +48,10 @@ public class Summary : BaseEntity, ITenantable, IJournalOwned
 
     public SummaryFailure Failure { get; private set; }
 
-    /// <summary>The words of the last run that ended <see cref="SummaryRunState.Ready"/>. A later run keeps them until it ends.</summary>
+    /// <summary>
+    /// The words of the last run that ended <see cref="SummaryRunState.Ready"/>. A later run keeps them until it ends, and a run
+    /// that fails clears them, so no row keeps words that a person cannot see.
+    /// </summary>
     [Sensitive] public string? Content { get; private set; }
 
     /// <summary>The sources that <see cref="Content"/> read: Sessions for a Day or a Week, and source Summaries for a roll-up.</summary>
@@ -130,6 +133,10 @@ public class Summary : BaseEntity, ITenantable, IJournalOwned
         RunState = SummaryRunState.Failed;
         Failure = failure;
         RunJobId = null;
+        Content = null;
+        SourceCount = 0;
+        SourceFingerprint = null;
+        GeneratedAt = null;
         return true;
     }
 
