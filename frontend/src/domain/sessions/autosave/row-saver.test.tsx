@@ -27,10 +27,14 @@ function server(start: Partial<Row> = {}) {
   const row: { current: Row } = { current: { capture: false, zone: 'UTC', topics: [], version: 1, ...start } }
   const puts: { values: Fields; version: number }[] = []
   let reads = 0
+  let isDown = false
   return {
     row,
     puts,
     reads: () => reads,
+    goesDown() {
+      isDown = true
+    },
     otherClientSets(patch: Partial<Row>) {
       row.current = { ...row.current, ...patch, version: row.current.version + 1 }
     },
@@ -40,6 +44,7 @@ function server(start: Partial<Row> = {}) {
     },
     put: (values: Fields, version: number) => {
       puts.push({ values, version })
+      if (isDown) return Promise.reject(new Error('Network Error'))
       if (version !== row.current.version) return Promise.reject(stale())
       row.current = { ...values, version: version + 1 }
       return Promise.resolve(row.current)
@@ -47,7 +52,7 @@ function server(start: Partial<Row> = {}) {
   }
 }
 
-function saverOn(api: ReturnType<typeof server>, copy: { current: Row }, more: { resumed?: RowSaverState<Fields>; onState?: (state: RowSaverState<Fields> | null) => void } = {}) {
+function saverOn(api: ReturnType<typeof server>, copy: { current: Row }, more: { onState?: (state: RowSaverState<Fields> | null) => void } = {}) {
   const told = vi.fn()
   const saver = new RowSaver<Fields, Row>({
     copyOf: () => copy.current,
@@ -63,7 +68,6 @@ function saverOn(api: ReturnType<typeof server>, copy: { current: Row }, more: {
     },
     rules,
     onAppliedWithNoAsk: told,
-    resumed: more.resumed,
     onStateChange: more.onState,
   })
   return { saver, told }
@@ -559,12 +563,65 @@ test('a change that resumes after a reload keeps its base, so a changed row gets
   const api = server({ capture: false })
   const base = { values: fieldsOf(api.row.current), version: api.row.current.version }
   api.otherClientSets({ zone: 'Africa/Cairo' })
-  const resumed: RowSaverState<Fields> = { change: { value: { capture: true }, savedAt: '2026-11-06T00:00:00.000Z' }, attempt: { base, hadNoReply: false }, asks: [] }
-  const { saver } = saverOn(api, { current: api.row.current }, { resumed })
+  const { saver } = saverOn(api, { current: api.row.current })
 
+  saver.adopt({ change: { value: { capture: true }, savedAt: '2026-11-06T00:00:00.000Z' }, attempt: { base, hadNoReply: false }, asks: [] })
   await vi.advanceTimersByTimeAsync(0)
 
   expect(api.row.current.capture).toBe(false)
+  expect(saver.asks()).toEqual([{ field: 'capture', yours: true, now: false }])
+  saver.dispose()
+})
+
+test('the base of a change is the row at the change, so a stale tab that sends later gets a 409', async () => {
+  const api = server({ capture: false })
+  const copy = { current: api.row.current }
+  const states: (RowSaverState<Fields> | null)[] = []
+  const { saver } = saverOn(api, copy, { onState: (state) => states.push(state) })
+  api.goesDown()
+
+  saver.edit({ capture: true })
+  await vi.advanceTimersByTimeAsync(0)
+  const kept = [...states].reverse().find((state) => state?.change)
+
+  expect(kept?.attempt?.base.version).toBe(1)
+  saver.dispose()
+})
+
+test('a stale key with a change of a field does not replace a later choice of the person in another tab', async () => {
+  const api = server({ capture: true })
+  const base = { values: fieldsOf(api.row.current), version: api.row.current.version }
+  api.otherClientSets({ capture: false })
+  const { saver } = saverOn(api, { current: api.row.current })
+
+  saver.adopt({ change: { value: { capture: true }, savedAt: '2026-11-06T00:00:00.000Z' }, attempt: { base, hadNoReply: false }, asks: [] })
+  await vi.advanceTimersByTimeAsync(0)
+
+  expect(api.row.current.capture).toBe(false)
+  expect(saver.asks()).toEqual([{ field: 'capture', yours: true, now: false }])
+  saver.dispose()
+})
+
+test('a field that this tab changed after the stale key stays', async () => {
+  const api = server({ zone: 'Africa/Cairo' })
+  const base = { values: fieldsOf(api.row.current), version: api.row.current.version }
+  api.goesDown()
+  const { saver } = saverOn(api, { current: api.row.current })
+  saver.edit({ zone: 'Asia/Tokyo' })
+  await vi.advanceTimersByTimeAsync(0)
+
+  saver.adopt({ change: { value: { zone: 'Europe/Paris', capture: true }, savedAt: '2000-01-01T00:00:00.000Z' }, attempt: { base, hadNoReply: false }, asks: [] })
+
+  expect(saver.pendingFields()).toEqual({ zone: 'Asia/Tokyo', capture: true })
+  saver.dispose()
+})
+
+test('an ask of a stale key joins the asks of this saver', () => {
+  const api = server({ capture: false })
+  const { saver } = saverOn(api, { current: api.row.current })
+
+  saver.adopt({ change: null, attempt: null, asks: [{ field: 'capture', yours: true, now: false }] })
+
   expect(saver.asks()).toEqual([{ field: 'capture', yours: true, now: false }])
   saver.dispose()
 })

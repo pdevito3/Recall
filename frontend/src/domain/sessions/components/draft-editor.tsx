@@ -79,7 +79,7 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
         const hadFocus = section.current?.contains(document.activeElement) ?? false
         flushSync(() => {
           setOpened((previous) => ({ text: joined, key: previous.key + 1, takesFocus: hadFocus }))
-          setChangeNote('Words that you typed while this entry loaded joined the end of this entry.')
+          setChangeNote('Words that you typed earlier and that were not saved yet are now on this page.')
         })
       }),
     [saver],
@@ -95,9 +95,10 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
     if (newest !== null) reopenWith(newest)
   }
 
-  const keep = () => {
-    saver.keepWords(currentText.current)
-    focusEditorIn(section.current)
+  const keep = async () => {
+    const merged = await saver.keepWords(currentText.current)
+    if (merged !== null) reopenWith(merged)
+    else focusEditorIn(section.current)
   }
 
   const restore = (text: string) => {
@@ -110,7 +111,7 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
     <div className="flex flex-col gap-6">
       <section ref={section} aria-label={channelLabels[channel]} className="flex flex-col gap-2">
         {snapshot.conflict && (
-          <ConflictNotice conflict={snapshot.conflict} onShowNewest={() => void showNewest()} onKeep={keep} />
+          <ConflictNotice conflict={snapshot.conflict} onShowNewest={() => void showNewest()} onKeep={() => void keep()} />
         )}
         {changeNote && (
           <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted p-3 text-sm dark:bg-card">

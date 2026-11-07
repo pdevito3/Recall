@@ -6,6 +6,7 @@ import { getUserSetting } from '@/api/generated/user-settings/clients/get-user-s
 import { refreshTimelineHead } from '@/domain/sessions/apis/timeline-cache'
 import { Notification } from '@/components/notification'
 import { RowSaver, type RowSaverState } from '@/domain/sessions/autosave/row-saver'
+import { removeKey, takeKeysOfTabsThatLeft, writeKeyOfThisTab, type KeyOfATab } from '@/domain/sessions/autosave/tab-keys'
 import { pageUserOf } from '@/lib/page-user'
 import { retryUnlessRefused } from '@/lib/problem-details'
 import { parseTimeZone, type TimeZone } from '@/lib/zoned-time'
@@ -39,7 +40,9 @@ export type SettingChange = Pick<UserSettingDto, 'timeZone' | 'locationCaptureEn
 
 let saver: RowSaver<SettingChange, UserSettingDto> | undefined
 
-const unsentKeyOf = (owner: string) => `recall.unsent-setting.${owner}`
+let ownKey: string | null = null
+
+const prefixOf = (owner: string) => `recall.unsent-setting.${encodeURIComponent(owner).replaceAll('.', '%2E')}.`
 
 const settingFieldsOf = ({ timeZone, locationCaptureEnabled, requirePeopleProposalApproval }: SettingChange): SettingChange => ({
   timeZone,
@@ -47,27 +50,34 @@ const settingFieldsOf = ({ timeZone, locationCaptureEnabled, requirePeoplePropos
   requirePeopleProposalApproval,
 })
 
-function readUnsentSetting(owner: string): RowSaverState<SettingChange> | null {
+function stateIn({ stored }: KeyOfATab): RowSaverState<SettingChange> | null {
   try {
-    const stored = JSON.parse(localStorage.getItem(unsentKeyOf(owner)) ?? 'null') as RowSaverState<SettingChange> | null
-    return Array.isArray(stored?.asks) ? stored : null
+    const state = JSON.parse(stored ?? 'null') as RowSaverState<SettingChange> | null
+    return Array.isArray(state?.asks) ? state : null
   } catch {
     return null
   }
 }
 
 function keepUnsentSetting(owner: string, state: RowSaverState<SettingChange> | null) {
-  try {
-    if (state) localStorage.setItem(unsentKeyOf(owner), JSON.stringify(state))
-    else localStorage.removeItem(unsentKeyOf(owner))
-  } catch {
-    return
+  if (state) ownKey = writeKeyOfThisTab(prefixOf(owner), ownKey, JSON.stringify(state)) ?? ownKey
+  else if (ownKey !== null) {
+    removeKey(ownKey)
+    ownKey = null
   }
 }
 
-export function resumeUnsentSetting(owner: string, queryClient: QueryClient) {
-  if (readUnsentSetting(owner)) settingSaver(queryClient)
-}
+const savedAtOf = (state: RowSaverState<SettingChange> | null) => state?.change?.savedAt ?? ''
+
+export const resumeUnsentSetting = (owner: string, queryClient: QueryClient) =>
+  takeKeysOfTabsThatLeft(prefixOf(owner), (keys) => {
+    const inOrder = [...keys].sort((one, other) => savedAtOf(stateIn(one)).localeCompare(savedAtOf(stateIn(other))))
+    for (const key of inOrder) {
+      const state = stateIn(key)
+      if (state) settingSaver(queryClient).adopt(state)
+      removeKey(key.storageKey)
+    }
+  })
 
 export const settleSettingSaver = () => saver?.settle() ?? Promise.resolve(true)
 
@@ -90,7 +100,6 @@ export function settingSaver(queryClient: QueryClient) {
       yieldsToTheRow: (field, before) => field === 'timeZone' && !before,
     },
     onAppliedWithNoAsk: () => Notification.info('Your location is no longer saved with new entries. Your settings changed elsewhere first, and this change still applied.'),
-    resumed: owner ? readUnsentSetting(owner) : null,
     onStateChange: (state) => {
       if (owner) keepUnsentSetting(owner, state)
     },

@@ -231,8 +231,10 @@ export function useComposer() {
   }, [saver, canFinish, owner, setSaver, openEditorWith])
 
   const keepWords = useCallback(() => {
-    saver?.keepWords(currentWords.current)
-  }, [saver])
+    void saver?.keepWords(currentWords.current).then((merged) => {
+      if (merged !== null && latestSaver.current === saver) openEditorWith(merged)
+    })
+  }, [saver, openEditorWith])
 
   const showNewest = useCallback(() => {
     void saver?.takeNewestWords().then((newest) => {

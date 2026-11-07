@@ -1,16 +1,23 @@
 import { useSyncExternalStore } from 'react'
 
 import { writePointer } from '@/domain/sessions/autosave/composer-pointer'
-import { discardUnsentDrafts, settleDraftSavers, stopDraftSavers } from '@/domain/sessions/autosave/draft-saver'
+import { settleDraftSavers, stopDraftSavers, unsentWordsOnThisDevice, type UnsentWords } from '@/domain/sessions/autosave/draft-saver'
+import { askOtherTabsToSettle } from '@/domain/sessions/autosave/tab-keys'
 import { isAnyTagChangeUnsaved, settleMetadataSavers, stopMetadataSavers } from '@/domain/sessions/autosave/tag-savers'
 import { settleSettingSaver, stopSettingSaver } from '@/domain/settings/apis/user-setting'
+import { pageUserOf } from '@/lib/page-user'
 
 type Choice = 'keep' | 'discard' | 'stay'
 
+interface Question {
+  unsent: UnsentWords[]
+  isATagUnsaved: boolean
+  answer: (choice: Choice) => void
+}
+
 const settleLimitMs = 5_000
 
-let answer: ((choice: Choice) => void) | null = null
-let isOnlyAboutTags = false
+let question: Question | null = null
 const listeners = new Set<() => void>()
 
 const subscribe = (listener: () => void) => {
@@ -20,18 +27,16 @@ const subscribe = (listener: () => void) => {
   }
 }
 
-const setAnswer = (next: typeof answer) => {
-  answer = next
+const setQuestion = (next: Question | null) => {
+  question = next
   for (const listener of listeners) listener()
 }
 
-export const useIsAskingAboutUnsentWords = () => useSyncExternalStore(subscribe, () => answer !== null)
-
-export const useIsAskingOnlyAboutTags = () => useSyncExternalStore(subscribe, () => answer !== null && isOnlyAboutTags)
+export const useQuestionAboutUnsentWords = () => useSyncExternalStore(subscribe, () => question)
 
 export function answerAboutUnsentWords(choice: Choice) {
-  answer?.(choice)
-  setAnswer(null)
+  question?.answer(choice)
+  setQuestion(null)
 }
 
 const withinLimit = (settled: Promise<boolean>) =>
@@ -47,15 +52,17 @@ export function stopSaversBeforeLeaving() {
   stopMetadataSavers()
 }
 
+/** Each tab tries to send its words, and then the person sees all the words that did not go, also those of another tab. */
 export async function settleUnsentWords(): Promise<() => void> {
-  const [areWordsSent] = await Promise.all([withinLimit(settleDraftSavers()), withinLimit(settleSettingSaver()), withinLimit(settleMetadataSavers())])
+  const [otherTabs] = await Promise.all([askOtherTabsToSettle(settleLimitMs), withinLimit(settleDraftSavers()), withinLimit(settleSettingSaver()), withinLimit(settleMetadataSavers())])
+  const unsent = unsentWordsOnThisDevice(pageUserOf(), otherTabs)
   // Tags have no outbox, so a sign-out loses a change of a tag that the Server did not take.
-  isOnlyAboutTags = areWordsSent
-  const choice = areWordsSent && !isAnyTagChangeUnsaved() ? 'keep' : await new Promise<Choice>((resolve) => setAnswer(resolve))
+  const isATagUnsaved = isAnyTagChangeUnsaved() || otherTabs.some(({ hasUnsavedTags }) => hasUnsavedTags)
+  const choice = unsent.length === 0 && !isATagUnsaved ? 'keep' : await new Promise<Choice>((answer) => setQuestion({ unsent, isATagUnsaved, answer }))
   if (choice === 'stay') throw new StayedSignedIn()
   return () => {
     stopSaversBeforeLeaving()
-    if (choice === 'discard') discardUnsentDrafts()
+    if (choice === 'discard') for (const { discard } of unsent) discard()
     writePointer(null)
   }
 }

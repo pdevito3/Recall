@@ -116,6 +116,7 @@ class ModelServer {
     const number = row.latestRevision + 1
     row.text = row.text ? `${row.text} ${chunk}` : chunk
     row.revisions.push({ text: row.text, claimedAt: 'chunk' })
+    row.savedAt = new Date().toISOString()
     row.draftRevision = number
     row.latestRevision = number
     row.lastChunkRevision = number
@@ -131,13 +132,20 @@ let world = new ModelServer()
 
 function storageWith(isFull: () => boolean) {
   const values = new Map<string, string>()
+  // A full storage has room only for what a page removed since it became full, as a browser quota has.
+  let room = 0
   const api = {
     getItem: (key: string) => values.get(key) ?? null,
     setItem: (key: string, value: string) => {
-      if (isFull()) throw new DOMException('full', 'QuotaExceededError')
+      if (!isFull()) room = 0
+      else if (value.length > room) throw new DOMException('full', 'QuotaExceededError')
+      else room -= value.length
       values.set(key, String(value))
     },
-    removeItem: (key: string) => void values.delete(key),
+    removeItem: (key: string) => {
+      if (isFull()) room += values.get(key)?.length ?? 0
+      values.delete(key)
+    },
     clear: () => values.clear(),
     key: (index: number) => [...values.keys()][index] ?? null,
     get length() {
@@ -208,6 +216,7 @@ class ModelChannel {
 }
 
 type DraftSaverModule = typeof import('./draft-saver')
+type TabKeysModule = typeof import('./tab-keys')
 type Saver = ReturnType<DraftSaverModule['draftSaverFor']>
 type Notice = ReturnType<DraftSaverModule['draftNotices']>[number]
 
@@ -223,6 +232,7 @@ const tokensIn = (text: string) => text.match(/\b[wc]\d+x\b/g) ?? []
 
 class Tab {
   mod!: DraftSaverModule
+  keys!: TabKeysModule
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   page: Page | null = null
   isClosed = false
@@ -232,7 +242,19 @@ class Tab {
     channels.tabRunning = this
     vi.resetModules()
     this.mod = await import('./draft-saver')
+    this.keys = await import('./tab-keys')
+    channels.tabRunning = this
+    this.keys.joinTheOtherTabs(async () => {
+      await Promise.race([this.mod.settleDraftSavers(), delay(4000)])
+      return { wordsOnlyInMemory: this.mod.wordsOfThisTabOnlyInMemory(), hasUnsavedTags: false }
+    })
+    this.keys.watchOtherTabs(() => this.resume())
     channels.tabRunning = null
+  }
+
+  /** The effect of the root route: a load, a tab that left, a tab that the person sees again, or a network that returns. */
+  resume() {
+    if (!this.isClosed) void this.run(() => this.mod.resumeUnsentDrafts(owner, this.queryClient))
   }
 
   /** Runs code of this tab, so that a channel that it opens is the channel of this tab. */
@@ -253,19 +275,22 @@ class Tab {
       const kept = saver.wordsToOpen()
       const id = saver.getSnapshot().sessionId
       const page: Page = { saver, stopListening, clientSessionId, editor: kept ?? (id ? null : ''), held: saver.wordsInHold() }
+      saver.subscribeToHoldJoin((words) => {
+        page.editor = words
+      })
       this.page = page
       if (page.editor === null) {
         saver.takeHold()
         void this.readInto(page, id as string)
       }
-      this.mod.resumeUnsentDrafts(owner, this.queryClient)
     })
+    this.resume()
   }
 
   private async readInto(page: Page, id: string) {
     for (;;) {
       const session = await world.getSession({ path: { id } }).catch((error: unknown) => (error instanceof ProblemDetailsError && error.status === 404 ? ('gone' as const) : null))
-      if (this.isClosed || this.page !== page) return
+      if (this.isClosed || this.page !== page || page.editor !== null) return
       if (session === null) {
         await delay(2000)
         continue
@@ -340,7 +365,7 @@ class Tab {
   /** A close that a person makes: the page hears `pagehide`, and its timers and listeners end. */
   close() {
     this.run(() => {
-      ;(this.mod as { noteThisTabLeaves?: () => void }).noteThisTabLeaves?.()
+      this.keys.noteThisTabLeaves()
       this.mod.stopDraftSavers()
     })
     this.isClosed = true
@@ -450,6 +475,8 @@ class ModelRun {
         this.note(`tab ${index} closes`)
       }
     } else if (roll < 76) {
+      // A crash loses what only a page holds, and the person saw the notice about those words before the crash.
+      for (const token of tokensIn(tab.run(() => tab.mod.wordsOfThisTabOnlyInMemory()).join(' '))) this.trace.discarded.add(token)
       tab.kill(this.storage)
       this.removeTab(tab)
       this.note(`tab ${index} crashes`)
@@ -477,9 +504,12 @@ class ModelRun {
     } else if (roll < 94) {
       void tab.answerConflict(this.random)
       this.note(`tab ${index} answers a conflict`)
-    } else if (roll < 96) {
+    } else if (roll < 95) {
       void tab.refetch()
       this.note(`tab ${index} reads the entry`)
+    } else if (roll < 96) {
+      tab.resume()
+      this.note(`the person sees tab ${index} again`)
     } else if (roll < 98) {
       const row = this.pick(world.rows)
       if (row) {
@@ -497,9 +527,10 @@ class ModelRun {
   }
 
   private async discardANotice() {
-    const tab = this.pick(this.tabs.filter((other) => other.notices().some((notice) => notice.kind !== 'moved' && (notice.kind !== 'onlyInMemory' || notice.canDiscard))))
+    const canDiscard = (notice: Notice) => 'words' in notice && (notice.kind !== 'onlyInMemory' || notice.canDiscard)
+    const tab = this.pick(this.tabs.filter((other) => other.notices().some(canDiscard)))
     if (!tab) return
-    const notice = this.pick(tab.notices().filter((other) => other.kind !== 'moved' && (other.kind !== 'onlyInMemory' || other.canDiscard)))
+    const notice = this.pick(tab.notices().filter(canDiscard))
     if (!notice || !('words' in notice)) return
     for (const token of tokensIn(notice.words)) this.trace.discarded.add(token)
     tab.run(() => notice.saver.discard())
@@ -507,18 +538,24 @@ class ModelRun {
   }
 
   private async signOut(tab: Tab) {
-    const settled = tab.run(() => tab.mod.settleDraftSavers())
-    const limit = delay(5000).then(() => false)
+    const index = this.tabs.indexOf(tab)
+    const reports = tab.run(() => tab.keys.askOtherTabsToSettle(5000))
+    void tab.run(() => tab.mod.settleDraftSavers())
     await vi.advanceTimersByTimeAsync(5000)
-    const isSent = await Promise.race([settled, limit])
-    if (!isSent && this.random.chance(0.3)) {
-      const named = (tab.mod as { wordsNamedAtSignOut?: (owner: string) => string[] }).wordsNamedAtSignOut?.(owner) ?? []
-      for (const token of tokensIn(named.join(' '))) this.trace.discarded.add(token)
-      tab.run(() => tab.mod.discardUnsentDrafts())
-      this.note(`tab ${this.tabs.indexOf(tab)} signs out and discards: ${named.join(' | ')}`)
-    } else {
-      this.note(`tab ${this.tabs.indexOf(tab)} signs out and keeps`)
+    const otherTabs = await reports
+    const shown = tab.run(() => tab.mod.unsentWordsOnThisDevice(owner, otherTabs))
+    const discards = this.random.chance(0.3)
+    if (!discards && shown.some(({ isOnlyInMemory }) => isOnlyInMemory)) {
+      this.note(`tab ${index} would sign out, and the dialog names words in memory, so the person stays`)
+      return
     }
+    if (discards) {
+      for (const token of tokensIn(shown.map(({ words }) => words).join(' '))) this.trace.discarded.add(token)
+      tab.run(() => {
+        for (const { discard } of shown) discard()
+      })
+    }
+    this.note(`tab ${index} signs out and ${discards ? `discards: ${shown.map(({ words }) => words).join(' | ')}` : 'keeps'}`)
     for (const other of [...this.tabs]) {
       other.close()
       this.removeTab(other)
@@ -543,7 +580,7 @@ class ModelRun {
     const vanished = wordsThatVanished(this.tabs, this.storage, this.trace)
     const pushedOut = chunksPushedOut()
     if (vanished.length === 0 && pushedOut.length === 0) return
-    const trail = this.trace.steps.slice(-40).join('\n  ')
+    const trail = this.trace.steps.slice(-Number(process.env.MODEL_TRAIL ?? 40)).join('\n  ')
     throw new Error(`${vanished.length > 0 ? `Words that vanished: ${vanished.join(', ')}.` : ''} ${pushedOut.length > 0 ? `Chunks pushed out of the Draft: ${pushedOut.join(', ')}.` : ''}\nLast steps:\n  ${trail}`)
   }
 }

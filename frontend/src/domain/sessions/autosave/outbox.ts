@@ -1,6 +1,7 @@
 import { newUuid } from '@/lib/new-uuid'
 
 import type { Stamped } from './save-queue'
+import { keysUnder, removeKey, writeKeyOfThisTab, type KeyOfATab } from './tab-keys'
 
 export interface OutboxEntry {
   key: string
@@ -10,21 +11,21 @@ export interface OutboxEntry {
   sessionId: string | null
   baseRevision: number
   latestRevision: number
-  change: Stamped<string>
+  change: Stamped<string> | null
+  held?: string | null
   refusal?: string | null
   movedFromDeletedEntry?: boolean
 }
 
-export interface HeldSlot {
-  slot: string
+export interface StoredEntry {
+  storageKey: string
+  writer: string | null
   entry: OutboxEntry
 }
 
 const ownerWithNoDot = (owner: string) => encodeURIComponent(owner).replaceAll('.', '%2E')
 
-const prefixOf = (owner: string) => `recall.unsent.${ownerWithNoDot(owner)}.`
-
-const holdMark = '.hold.'
+export const prefixOfOutbox = (owner: string) => `recall.unsent.${ownerWithNoDot(owner)}.`
 
 const isStamped = (value: unknown): value is Stamped<string> => {
   const change = value as Stamped<string> | null
@@ -41,66 +42,18 @@ function parseEntry(stored: string | null): OutboxEntry | null {
       && (entry.sessionId === null || typeof entry.sessionId === 'string')
       && typeof entry.baseRevision === 'number'
       && typeof entry.latestRevision === 'number'
-      && isStamped(entry.change)
+      && (isStamped(entry.change) || (typeof entry.held === 'string' && (entry.change ?? null) === null))
     return isEntry ? (entry as OutboxEntry) : null
   } catch {
     return null
   }
 }
 
-/** Storage can be full or blocked, and then a reload loses the words. The false answer lets the page tell the person at once. */
-export function writeToOutbox(owner: string, entry: OutboxEntry): boolean {
-  try {
-    localStorage.setItem(prefixOf(owner) + entry.key, JSON.stringify(entry))
-    return true
-  } catch {
-    return false
-  }
-}
+/** The key of the written text. Storage can be full or blocked, and then a reload loses the words: the null answer lets the page tell the person at once. */
+export const writeToOutbox = (owner: string, previousKey: string | null, entry: OutboxEntry) =>
+  writeKeyOfThisTab(prefixOfOutbox(owner), previousKey, JSON.stringify(entry))
 
-/** Each tab has its own slot, so that a tab cannot write over the held words of another tab. */
-export function writeHoldToOutbox(owner: string, entry: OutboxEntry, slot: string): boolean {
-  try {
-    localStorage.setItem(prefixOf(owner) + entry.key + holdMark + slot, JSON.stringify(entry))
-    return true
-  } catch {
-    return false
-  }
-}
-
-export function removeFromOutbox(owner: string, key: string) {
-  try {
-    localStorage.removeItem(prefixOf(owner) + key)
-  } catch {
-    return
-  }
-}
-
-export function removeHoldsFromOutbox(owner: string, key: string, slots: string[]) {
-  for (const slot of slots) removeFromOutbox(owner, key + holdMark + slot)
-}
-
-export function readHoldsFromOutbox(owner: string, key: string): HeldSlot[] {
-  try {
-    const start = prefixOf(owner) + key + holdMark
-    return Object.keys(localStorage)
-      .filter((stored) => stored.startsWith(start))
-      .flatMap((stored) => {
-        const entry = parseEntry(localStorage.getItem(stored))
-        return entry ? { slot: stored.slice(start.length), entry } : []
-      })
-  } catch {
-    return []
-  }
-}
-
-export function readOutboxEntry(owner: string, key: string): OutboxEntry | null {
-  try {
-    return parseEntry(localStorage.getItem(prefixOf(owner) + key))
-  } catch {
-    return null
-  }
-}
+export const removeFromOutbox = removeKey
 
 function changeIn(stored: string | null): Stamped<string> | null {
   try {
@@ -111,37 +64,23 @@ function changeIn(stored: string | null): Stamped<string> | null {
   }
 }
 
-/** An entry that this version cannot read can still hold words, and those go on as a new entry. Only an entry with no words goes. */
-function entryFromWordsOf(owner: string, stored: string | null): OutboxEntry | null {
+/** An entry that this version cannot read can still hold words, and those go on as a new entry. */
+function entryFromWordsOf(stored: string | null): OutboxEntry | null {
   const change = changeIn(stored)
   if (!change?.value) return null
   const clientSessionId = newUuid()
-  const entry: OutboxEntry = {
-    key: `${clientSessionId}.raw`,
-    channel: 'raw',
-    clientSessionId,
-    startedAt: change.savedAt,
-    sessionId: null,
-    baseRevision: 0,
-    latestRevision: 0,
-    change,
-  }
-  return writeToOutbox(owner, entry) ? entry : null
+  return { key: `${clientSessionId}.raw`, channel: 'raw', clientSessionId, startedAt: change.savedAt, sessionId: null, baseRevision: 0, latestRevision: 0, change }
 }
 
-export function readOutbox(owner: string): OutboxEntry[] {
-  try {
-    return Object.keys(localStorage)
-      .filter((key) => key.startsWith(prefixOf(owner)))
-      .flatMap((key) => {
-        const stored = localStorage.getItem(key)
-        const entry = parseEntry(stored)
-        if (entry) return entry
-        const repaired = entryFromWordsOf(owner, stored)
-        if (repaired || !changeIn(stored)?.value) localStorage.removeItem(key)
-        return repaired ?? []
-      })
-  } catch {
-    return []
-  }
+const entryIn = ({ storageKey, writer, stored }: KeyOfATab): StoredEntry | null => {
+  const parsed = parseEntry(stored)
+  if (parsed) return { storageKey, writer, entry: parsed }
+  const repaired = entryFromWordsOf(stored)
+  // A key with no words holds nothing to keep.
+  if (!repaired) removeKey(storageKey)
+  return repaired && { storageKey, writer: null, entry: repaired }
 }
+
+export const storedEntriesIn = (keys: KeyOfATab[]): StoredEntry[] => keys.flatMap((key) => entryIn(key) ?? [])
+
+export const readOutbox = (owner: string) => storedEntriesIn(keysUnder(prefixOfOutbox(owner)))

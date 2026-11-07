@@ -42,6 +42,22 @@ function MovedNotice({ notice }: { notice: Extract<DraftNotice, { kind: 'moved' 
   )
 }
 
+function EntryNotice({ label, text, sessionId, onDismiss }: { label: string; text: string; sessionId: string | null; onDismiss: () => void }) {
+  return (
+    <section role="status" aria-label={label} className={`${noticeClass} bg-muted dark:bg-card`}>
+      <p className="min-w-0 flex-1 basis-64">{text}</p>
+      <div className="flex items-center gap-2">
+        {sessionId && (
+          <Link to="/sessions/$id" params={{ id: sessionId }} className="font-medium underline underline-offset-4">
+            Open the entry
+          </Link>
+        )}
+        <Button variant="ghost" onPress={onDismiss}>Dismiss</Button>
+      </div>
+    </section>
+  )
+}
+
 function CopyWords({ words }: { words: string }) {
   const copy = () =>
     copyToClipboard(plainWordsOf(words)).then(
@@ -101,6 +117,24 @@ function Notice({ notice }: { notice: DraftNotice }) {
   switch (notice.kind) {
     case 'moved':
       return <MovedNotice notice={notice} />
+    case 'joined':
+      return (
+        <EntryNotice
+          label="Words added to an entry"
+          text="Words that you typed earlier and that were not saved yet are now at the end of an entry."
+          sessionId={notice.sessionId}
+          onDismiss={() => notice.saver.dismissJoinNotice()}
+        />
+      )
+    case 'inHistory':
+      return (
+        <EntryNotice
+          label="Words saved in History"
+          text="Words from a tab that closed reached the server after a newer save. They are in the History of the entry and not in its text."
+          sessionId={notice.sessionId}
+          onDismiss={() => notice.saver.dismissConflict()}
+        />
+      )
     case 'refused':
       return <RefusedNotice notice={notice} />
     case 'waiting':

@@ -81,7 +81,6 @@ interface RowSaverOptions<F extends object, R> {
   rules?: StaleRules<F>
   onAppliedWithNoAsk?: (fields: (keyof F & string)[]) => void
   refusalMessage?: (error: ProblemDetailsError) => string
-  resumed?: RowSaverState<F> | null
   onStateChange?: (state: RowSaverState<F> | null) => void
 }
 
@@ -94,8 +93,8 @@ const withoutFields = <F extends object>(change: Partial<F>, fields: string[]) =
 export class RowSaver<F extends object, R> {
   private readonly options: RowSaverOptions<F, R>
   private readonly saver: SerialSaver<Partial<F>, R>
-  private attempt: Attempt<F> | null
-  private currentAsks: FieldAsk<F>[]
+  private attempt: Attempt<F> | null = null
+  private currentAsks: FieldAsk<F>[] = []
   private readonly keptAsTheyAre = new Set<string>()
   private appliedWithNoAsk: (keyof F & string)[] = []
   private readonly listeners = new Set<() => void>()
@@ -103,12 +102,8 @@ export class RowSaver<F extends object, R> {
 
   constructor(options: RowSaverOptions<F, R>) {
     this.options = options
-    const { resumed } = options
-    this.attempt = resumed?.attempt ? { ...resumed.attempt, hadNoReply: true } : null
-    this.currentAsks = resumed?.asks ?? []
     this.saver = new SerialSaver<Partial<F>, R>({
       debounceMs: 0,
-      resumedUnanswered: resumed?.change ?? undefined,
       mergeEdits: mergeFields,
       send: ({ value }, signal) =>
         this.send(value, signal).catch((error: unknown) => {
@@ -125,7 +120,22 @@ export class RowSaver<F extends object, R> {
     this.currentAsks = this.currentAsks.filter((ask) => !(ask.field in fields))
     for (const field of fieldsIn(fields)) this.keptAsTheyAre.delete(field)
     this.appliedWithNoAsk = this.appliedWithNoAsk.filter((field) => !(field in fields))
+    this.noteBase()
     this.saver.edit(fields)
+    this.notify()
+  }
+
+  /** The state of a tab that left joins this saver. Each field that this tab changed later stays, and the oldest base goes with the save, so a choice made since that tab left makes the Server answer stale. */
+  adopt({ change, attempt, asks }: RowSaverState<F>) {
+    const oldest = [this.attempt, attempt].filter((one) => one !== null).sort((one, other) => one.base.version - other.base.version)[0]
+    // A new base outlives the reply of a save that runs now, which has another base.
+    if (oldest) this.attempt = { base: { ...oldest.base }, hadNoReply: true }
+    this.currentAsks = [...this.currentAsks, ...asks.filter((ask) => !this.currentAsks.some((own) => own.field === ask.field))]
+    const newest = this.saver.newestUnsettled()
+    const isOlder = newest !== null && change !== null && newest.savedAt > change.savedAt
+    const fields = change && (isOlder ? withoutFields(change.value, fieldsIn(this.pendingFields())) : change.value)
+    if (fields && change && fieldsIn(fields).length > 0) this.saver.edit(fields, isOlder ? newest.savedAt : change.savedAt)
+    else this.keep()
     this.notify()
   }
 
@@ -170,6 +180,12 @@ export class RowSaver<F extends object, R> {
     for (const listener of this.listeners) listener()
   }
 
+  /** The base is the row that the person saw at the change. A later read must not be the base, or a stale key would replace a later choice with no conflict. */
+  private noteBase() {
+    const copy = this.options.copyOf()
+    if (copy !== undefined) this.attempt ??= { base: this.baseOf(copy), hadNoReply: false }
+  }
+
   private baseOf(row: R): RowBase<F> {
     return { values: this.options.fieldsOf(row), version: this.options.versionOf(row) }
   }
@@ -183,7 +199,7 @@ export class RowSaver<F extends object, R> {
     for (let round = 0; round < staleRoundsInOneSend; round += 1) {
       try {
         const reply = await this.options.put({ ...base.values, ...fields }, base.version, signal)
-        this.attempt = null
+        if (this.attempt?.base === base) this.attempt = null
         this.tellAppliedWithNoAsk()
         return reply
       } catch (error) {
