@@ -1,14 +1,16 @@
 namespace Recall.Server.Domain.Recordings.Jobs;
 
+using BackWave.Storage;
 using Databases;
 using Features;
 using Microsoft.EntityFrameworkCore;
 using Resources;
+using Resources.Jobs;
 using Resources.Storage;
 using Serilog;
 using Tenants;
 
-public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore fileStore, TimeProvider timeProvider)
+public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore fileStore, IJobStore jobStore, TimeProvider timeProvider)
 {
     private readonly ILogger _logger = Log.ForContext<RecordingSweep>();
 
@@ -67,7 +69,7 @@ public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore 
             .TagWithOperationCallSite("recordings.sweep.waiting")
             .AsNoTracking()
             .Where(r => r.Status == RecordingStatus.Received || r.Status == RecordingStatus.Transcribing)
-            .Select(r => r.Id)
+            .Select(r => new { r.Id, r.Engine })
             .ToListAsync(cancellationToken);
         if (waiting.Count == 0)
             return;
@@ -75,8 +77,17 @@ public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore 
         var now = timeProvider.GetUtcNow();
         await dbContext.SaveAndEnqueueAsync(async (jobs, ct) =>
         {
-            foreach (var id in waiting)
-                await jobs.EnqueueAsync(new TranscribeRecording(id, owner.UserId, owner.TenantId), now, ct);
+            // One read for the owner, because a read in this callback does not see the jobs that it enqueued.
+            var engine = waiting.Any(r => r.Engine == TranscriptionEngineKind.Cloud) ? TranscriptionEngineKind.Cloud : TranscriptionEngineKind.Local;
+            var cloudQueue = await RecordingWork.CloudQueueOfAsync(jobStore, owner.TenantId, engine, ct);
+            // A job of the local engine waits for the one before it in its queue, but cloud jobs run side by side, and a job that a
+            // stop gave back is still in the store. This read comes after the read of the Recordings, so a job that a finish
+            // queued with its Recording is seen.
+            var inCloud = engine == TranscriptionEngineKind.Cloud
+                ? await CleanupQueues.RecordingsInCloudJobsAsync(jobStore, ct)
+                : new HashSet<string>();
+            foreach (var recording in waiting.Where(r => r.Engine == TranscriptionEngineKind.Local || !inCloud.Contains(r.Id)))
+                await RecordingWork.EnqueueAsync(jobs, recording.Id, owner.UserId, owner.TenantId, recording.Engine, cloudQueue, now, ct);
         }, cancellationToken);
     }
 

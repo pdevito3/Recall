@@ -46,7 +46,7 @@ public class CleanupAndChunkOrderTests : TestBase
     {
         var owner = new JournalOwner(scenario.Member.Id, await CleanupScenario.TenantIdOfAsync(sessionId));
         await using var scope = Services.GetRequiredService<IServiceScopeFactory>().CreateJournalScope(owner);
-        var fits = await scope.ServiceProvider.GetRequiredService<IMediator>().Send(new SaveTranscriptChunk.Command(recordingId, ChunkEnd, ChunkEnd, ChunkWords));
+        var fits = await scope.ServiceProvider.GetRequiredService<IMediator>().Send(new SaveTranscriptChunk.Command(recordingId, Recall.Server.Domain.Recordings.TranscriptionEngineKind.Local, 0, ChunkEnd, ChunkEnd, ChunkWords));
         fits.ShouldBeTrue();
     }
 
@@ -201,7 +201,7 @@ public class CleanupAndChunkOrderTests : TestBase
                 Task.Run(async () =>
                 {
                     await using var scope = factory.CreateJournalScope(owner);
-                    await scope.ServiceProvider.GetRequiredService<IMediator>().Send(new SaveTranscriptChunk.Command(recording.Id, ChunkEnd, ChunkEnd, ChunkWords));
+                    await scope.ServiceProvider.GetRequiredService<IMediator>().Send(new SaveTranscriptChunk.Command(recording.Id, Recall.Server.Domain.Recordings.TranscriptionEngineKind.Local, 0, ChunkEnd, ChunkEnd, ChunkWords));
                 }));
             var after = await scenario.ReadAsync(session.Id);
 

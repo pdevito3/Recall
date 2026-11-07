@@ -1,12 +1,14 @@
 namespace Recall.Server.Domain.Recordings.Features;
 
 using System.Diagnostics;
+using BackWave.Storage;
 using Databases;
 using Dtos;
 using Jobs;
 using MediatR;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using ModelProviders;
 using Resources;
 using Resources.Entrypoints.Http;
 using Resources.Jobs;
@@ -18,7 +20,7 @@ public static class FinishRecording
 {
     public sealed record Command(string Id, RecordingFinishDto Dto) : IRequest<RecordingDto>, IRunsAgainWhenRaced;
 
-    public sealed class Handler(AppDbContext dbContext, FileStore fileStore, ModelStore modelStore, JobHostStatus jobHostStatus, TimeProvider timeProvider)
+    public sealed class Handler(AppDbContext dbContext, FileStore fileStore, ModelStore modelStore, JobHostStatus jobHostStatus, IJobStore jobStore, TimeProvider timeProvider)
         : IRequestHandler<Command, RecordingDto>
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
@@ -41,11 +43,11 @@ public static class FinishRecording
             if (recording.Status != RecordingStatus.Receiving && request.Dto.SliceCount == stored.Count && request.Dto.ByteLength == recording.ByteLength)
             {
                 if (recording.WaitsForTranscription)
-                    await RecordingWork.TryQueueTranscriptionAsync(dbContext, recording, timeProvider, _logger);
+                    await RecordingWork.TryQueueTranscriptionAsync(dbContext, jobStore, recording, timeProvider, _logger);
                 return recording.ToDto(stored, modelStore.Status, jobHostStatus.TranscriptionIsStopped);
             }
 
-            recording.Finish(stored, request.Dto.SliceCount, request.Dto.ByteLength);
+            recording.Finish(stored, request.Dto.SliceCount, request.Dto.ByteLength, await RecordingWork.ChosenEngineAsync(dbContext, cancellationToken));
             await fileStore.WriteAsync(RecordingFiles.Audio(recording), async (target, ct) =>
             {
                 foreach (var slice in slices)
@@ -56,7 +58,7 @@ public static class FinishRecording
             }, cancellationToken);
 
             await dbContext.SaveChangesAsync(cancellationToken);
-            await RecordingWork.TryQueueTranscriptionAsync(dbContext, recording, timeProvider, _logger);
+            await RecordingWork.TryQueueTranscriptionAsync(dbContext, jobStore, recording, timeProvider, _logger);
             RecordingWork.TryDeleteSlices(fileStore, recording, _logger);
 
             Activity.Current?.SetTag("app.recording.byte_length", recording.ByteLength);
@@ -90,13 +92,49 @@ public sealed class FinishRecordingEndpoint : IEndpoint
 
 public static class RecordingWork
 {
+    /// <summary>The engine of a Recording that is queued now: the provider that an Admin chose for audio, or the local engine.</summary>
+    public static async Task<TranscriptionEngineKind> ChosenEngineAsync(AppDbContext dbContext, CancellationToken cancellationToken)
+        => await dbContext.ModelProviders.AsNoTracking()
+            .TagWithOperationCallSite("recordings.engine.chosen")
+            .TranscriptionFirst()
+            .AnyAsync(cancellationToken)
+            ? TranscriptionEngineKind.Cloud
+            : TranscriptionEngineKind.Local;
+
+    /// <summary>
+    /// The job of the engine of the Recording. A cloud job goes to the queue of the provider calls that <see cref="CleanupQueues.Pick"/>
+    /// gives its tenant, so its caller reads that queue once for each tenant in the callback of the save, where no other start enqueues.
+    /// </summary>
+    public static async Task EnqueueAsync(JobEnqueuer jobs, Recording recording, string? cloudQueue, DateTimeOffset now, CancellationToken cancellationToken)
+        => await EnqueueAsync(jobs, recording.Id, recording.UserId, recording.TenantId, recording.Engine, cloudQueue, now, cancellationToken);
+
+    public static async Task EnqueueAsync(
+        JobEnqueuer jobs, string id, string userId, string tenantId, TranscriptionEngineKind engine, string? cloudQueue, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        if (engine == TranscriptionEngineKind.Cloud)
+            await jobs.EnqueueOnAsync(new TranscribeRecordingInCloud(id, userId, tenantId), now, cloudQueue!, cancellationToken);
+        else
+            await jobs.EnqueueAsync(new TranscribeRecording(id, userId, tenantId), now, cancellationToken);
+    }
+
+    public static async Task<string?> CloudQueueOfAsync(IJobStore jobStore, string tenantId, TranscriptionEngineKind engine, CancellationToken cancellationToken)
+        => engine == TranscriptionEngineKind.Cloud
+            ? CleanupQueues.Pick(tenantId, await CleanupQueues.UnfinishedAsync(jobStore, cancellationToken))
+            : null;
+
     // The status is already saved, so a client that goes away here must not stop the work.
-    public static async Task TryQueueTranscriptionAsync(AppDbContext dbContext, Recording recording, TimeProvider timeProvider, ILogger logger)
+    public static async Task TryQueueTranscriptionAsync(AppDbContext dbContext, IJobStore jobStore, Recording recording, TimeProvider timeProvider, ILogger logger)
     {
         try
         {
             await dbContext.SaveAndEnqueueAsync(
-                (jobs, ct) => jobs.EnqueueAsync(new TranscribeRecording(recording.Id, recording.UserId, recording.TenantId), timeProvider.GetUtcNow(), ct),
+                async (jobs, ct) =>
+                {
+                    // A retry or a repeat finish of a Recording whose cloud job still runs must not start a second one beside it.
+                    if (recording.Engine == TranscriptionEngineKind.Cloud && (await CleanupQueues.RecordingsInCloudJobsAsync(jobStore, ct)).Contains(recording.Id))
+                        return;
+                    await EnqueueAsync(jobs, recording, await CloudQueueOfAsync(jobStore, recording.TenantId, recording.Engine, ct), timeProvider.GetUtcNow(), ct);
+                },
                 CancellationToken.None);
         }
         catch (Exception exception)
