@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Resources;
 using Resources.Storage;
 using Serilog;
+using Summaries;
 
 public static class DeleteSession
 {
@@ -30,6 +31,7 @@ public static class DeleteSession
                 .TagWithOperationCallSite("sessions.delete.recordings")
                 .Where(r => r.SessionId == session.Id)
                 .ToListAsync(cancellationToken);
+            await dbContext.RemoveSummariesThatCanHoldAsync(session.Id, cancellationToken);
             dbContext.Recordings.RemoveRange(recordings);
             dbContext.Sessions.Remove(session);
             await dbContext.SaveChangesAsync(cancellationToken);

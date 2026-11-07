@@ -1,6 +1,7 @@
 namespace Recall.Server.Domain.Recordings.Features;
 
 using System.Diagnostics;
+using BackWave.Storage;
 using Databases;
 using Dtos;
 using MediatR;
@@ -16,7 +17,7 @@ public static class RetryRecording
 {
     public sealed record Command(string Id) : IRequest<RecordingDto>, IRunsAgainWhenRaced;
 
-    public sealed class Handler(AppDbContext dbContext, ModelStore modelStore, JobHostStatus jobHostStatus, TimeProvider timeProvider) : IRequestHandler<Command, RecordingDto>
+    public sealed class Handler(AppDbContext dbContext, ModelStore modelStore, JobHostStatus jobHostStatus, IJobStore jobStore, TimeProvider timeProvider) : IRequestHandler<Command, RecordingDto>
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
 
@@ -27,9 +28,9 @@ public static class RetryRecording
             var recording = await dbContext.Recordings
                 .TagWithOperationCallSite("recordings.retry.load")
                 .GetById(request.Id, cancellationToken);
-            recording.Retry();
+            recording.Retry(await RecordingWork.ChosenEngineAsync(dbContext, cancellationToken));
             await dbContext.SaveChangesAsync(cancellationToken);
-            await RecordingWork.TryQueueTranscriptionAsync(dbContext, recording, timeProvider, _logger);
+            await RecordingWork.TryQueueTranscriptionAsync(dbContext, jobStore, recording, timeProvider, _logger);
 
             _logger.Here().Information("Queued recording {RecordingId} again", recording.Id);
             return recording.ToDto([], modelStore.Status, jobHostStatus.TranscriptionIsStopped);

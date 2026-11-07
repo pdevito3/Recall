@@ -1081,6 +1081,122 @@
         }
       }
     },
+    "/api/v1/transcription-engine": {
+      "put": {
+        "tags": [
+          "ModelProviders"
+        ],
+        "summary": "Sends the audio of each new Recording to a model provider that takes audio, or keeps it on the server with no provider.\nA provider of a kind that takes no audio gets 422.",
+        "operationId": "ChooseTranscriptionEngine",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TranscriptionEngineChoiceDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscriptionEngineDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "ModelProviders"
+        ],
+        "summary": "Gets the engine that makes the text of the next Recording of the caller, with the reason for a person.",
+        "operationId": "GetTranscriptionEngine",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscriptionEngineDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
     "/api/v1/model-providers/{id}": {
       "delete": {
         "tags": [
@@ -3963,6 +4079,174 @@
         }
       }
     },
+    "/api/v1/summaries/{period}/{date}/generate": {
+      "post": {
+        "tags": [
+          "Summaries"
+        ],
+        "summary": "Opens a period. A Summary that is missing, stale, or failed starts a run as a job and answers `Generating` at once.\nA Summary that is ready or that runs stays as it is. A period with no sources gets no Summary.",
+        "operationId": "GenerateSummary",
+        "parameters": [
+          {
+            "name": "period",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/summaries/{id}": {
+      "get": {
+        "tags": [
+          "Summaries"
+        ],
+        "summary": "Reads a Summary of the caller by its ID. The Summary of another person gives 404.",
+        "operationId": "GetSummaryById",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/summaries/{period}/{date}": {
+      "get": {
+        "tags": [
+          "Summaries"
+        ],
+        "summary": "Reads the Summary of the period of the caller that holds the date, as yyyy-MM-dd. It starts no run. A period with no Summary gives `Missing`.",
+        "operationId": "GetSummary",
+        "parameters": [
+          {
+            "name": "period",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
     "/api/v1/support-bundle": {
       "get": {
         "tags": [
@@ -6709,7 +6993,8 @@
           },
           "engine": {
             "enum": [
-              "Local"
+              "Local",
+              "Cloud"
             ],
             "type": "string"
           },
@@ -6739,7 +7024,11 @@
               "TooManyAttempts",
               "TooLong",
               "TextTooLong",
-              "NoWordsFound"
+              "NoWordsFound",
+              "ProviderUnavailable",
+              "ProviderRefused",
+              "ProviderBadAnswer",
+              "ProviderKeyUnreadable"
             ],
             "type": "string"
           },
@@ -7382,6 +7671,88 @@
           }
         }
       },
+      "SummaryDto": {
+        "required": [
+          "period",
+          "periodDate",
+          "periodLastDate",
+          "status",
+          "failure",
+          "content",
+          "sourceCount"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Null while the period has no Summary."
+          },
+          "period": {
+            "enum": [
+              "Day",
+              "Week",
+              "Month",
+              "Quarter",
+              "Year"
+            ],
+            "type": "string"
+          },
+          "periodDate": {
+            "type": "string",
+            "description": "The first Journaling day of the period. A Week starts on a Monday.",
+            "format": "date"
+          },
+          "periodLastDate": {
+            "type": "string",
+            "description": "The last Journaling day of the period.",
+            "format": "date"
+          },
+          "status": {
+            "enum": [
+              "Missing",
+              "Generating",
+              "Ready",
+              "Stale",
+              "Failed"
+            ],
+            "type": "string",
+            "description": "`Missing` and `Stale` come from the sources now. `Failed` is a run that gave no Summary."
+          },
+          "failure": {
+            "enum": [
+              "None",
+              "NoModelProvider",
+              "KeyUnreadable",
+              "ProviderRefused",
+              "ProviderUnavailable",
+              "BadModelOutput",
+              "Interrupted",
+              "SourceFailed"
+            ],
+            "type": "string",
+            "description": "Why the last run failed. It is a closed code, and the words of a model provider never come here."
+          },
+          "content": {
+            "type": "string",
+            "description": "The words of the Summary when the status is `Ready` or `Stale`, and empty otherwise."
+          },
+          "sourceCount": {
+            "type": "integer",
+            "description": "The sources of the period now: Sessions for a Day or a Week, and source periods with Sessions for a roll-up.",
+            "format": "int32"
+          },
+          "generatedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
       "SyncChangePageDto": {
         "required": [
           "cursor",
@@ -7517,6 +7888,74 @@
             "description": "The version of the tenant that the caller loaded. A stale version gives 409."
           }
         }
+      },
+      "TranscriptionEngineChoiceDto": {
+        "type": "object",
+        "properties": {
+          "modelProviderId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The provider that gets the audio. Null sends no audio out, and the local engine makes the text."
+          },
+          "model": {
+            "maxLength": 200,
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The model that turns audio into text, such as `gpt-transcribe` or `whisper-large-v3-turbo`."
+          }
+        }
+      },
+      "TranscriptionEngineDto": {
+        "required": [
+          "engine",
+          "reason",
+          "text"
+        ],
+        "type": "object",
+        "properties": {
+          "engine": {
+            "enum": [
+              "Local",
+              "Cloud"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "ProviderChosen",
+              "NoProviderTakesAudio",
+              "NoProviderChosen"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string",
+            "description": "What it means for the audio, for a person."
+          },
+          "modelProviderId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "modelProviderName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "model": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Where the audio of the tenant becomes text, and why."
       },
       "TranscriptionStatusDto": {
         "required": [
@@ -7926,6 +8365,9 @@
     },
     {
       "name": "Sessions"
+    },
+    {
+      "name": "Summaries"
     },
     {
       "name": "Support"

@@ -69,6 +69,7 @@ public static class ApiRoutes
         public static string Active => $"{Base}/model-providers/active";
         public static string GetRecord(string id) => $"{Base}/model-providers/{id}";
         public static string Test(string id) => $"{Base}/model-providers/{id}/test";
+        public static string TranscriptionEngine => $"{Base}/transcription-engine";
     }
 
     public static class Sync
@@ -86,6 +87,13 @@ public static class ApiRoutes
     {
         public static string Root => $"{Base}/corrections";
         public static string GetRecord(string id) => $"{Base}/corrections/{id}";
+    }
+
+    public static class Summaries
+    {
+        public static string Of(string period, DateOnly date) => $"{Base}/summaries/{period}/{date:yyyy-MM-dd}";
+        public static string Generate(string period, DateOnly date) => $"{Base}/summaries/{period}/{date:yyyy-MM-dd}/generate";
+        public static string GetRecord(string id) => $"{Base}/summaries/{id}";
     }
 
     public static class UserSettings

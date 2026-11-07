@@ -1,11 +1,15 @@
 namespace Recall.Server.Resources.Jobs;
 
+using System.Runtime.CompilerServices;
+using System.Text.Json;
 using BackWave.Core;
 using BackWave.Storage;
-using Serilog;
+using Domain.Recordings.Jobs;
+using Domain.Sessions.Jobs;
 
 /// <summary>
-/// A Cleanup waits on a model, and a model can hang for minutes, so its jobs have their own worker group. Each queue has a limit
+/// A Cleanup and a cloud transcription wait on a model provider, and a provider can hang for minutes, so their jobs have their
+/// own worker group. Each queue has a limit
 /// on the jobs that run at once, and a tenant uses one queue at a time, so a tenant with a hung provider holds only the slots of
 /// its own queue. <see cref="Pick"/> gives a tenant a queue that no other tenant uses, so two tenants share a queue only when
 /// more than <see cref="Count"/> tenants have Cleanups that have not ended. Then the workers are as full as the queues.
@@ -20,9 +24,6 @@ public static class CleanupQueues
 
     /// <summary>Each queue can fill its limit at one time, so a queue at its limit takes no worker from another queue.</summary>
     public const int Workers = Count * JobsAtOnceInAQueue;
-
-    private const uint FnvOffset = 2166136261;
-    private const uint FnvPrime = 16777619;
 
     public static IReadOnlyList<string> All { get; } = Enumerable.Range(0, Count).Select(NameOf).ToArray();
 
@@ -44,39 +45,80 @@ public static class CleanupQueues
         return All.OrderBy(queue => load.GetValueOrDefault(queue)).ThenBy(queue => queue != hashed).First();
     }
 
-    public static string Of(string tenantId)
-    {
-        // The hash of a string differs in each process.
-        var hash = FnvOffset;
-        foreach (var c in tenantId)
-            hash = (hash ^ c) * FnvPrime;
-        return NameOf((int)(hash % Count));
-    }
+    public static string Of(string tenantId) => NameOf(StableHash.BucketOf(tenantId, Count));
 
     private static string NameOf(int index) => $"cleanup-{index}";
-}
 
-/// <summary>A queue limit is a row in the job store. This writes it once, so a start with the limits in place writes nothing.</summary>
-public sealed class CleanupQueueLimits(IJobStore store, TimeProvider timeProvider) : IHostedService
-{
-    private const string Actor = "recall-startup";
+    // The store gives at most 200 jobs a page (StoreBounds.MaxMonitorPageSize), so the read goes on until a page is empty.
+    private const int PageSize = 200;
+    private static readonly JobState[] UnfinishedStates = [JobState.Scheduled, JobState.AwaitingParent, JobState.Leased];
+    private static readonly string[] ProviderJobs = [CleanupJob.WireName, TranscribeRecordingJob.CloudWireName];
 
-    private readonly ILogger _logger = Log.ForContext<CleanupQueueLimits>();
+    /// <summary>
+    /// The queue and the tenant of each job that waits on a provider and has not ended. A cloud transcription counts with a
+    /// Cleanup, so a tenant whose provider hangs holds the slots of one queue for both. A payload that does not read is left out.
+    /// </summary>
+    public static async Task<IReadOnlyCollection<(string Queue, string TenantId)>> UnfinishedAsync(IJobStore store, CancellationToken cancellationToken)
+    {
+        var unfinished = new List<(string, string)>();
+        foreach (var wireName in ProviderJobs)
+        {
+            await foreach (var (queue, payload) in UnfinishedOfAsync(store, wireName, cancellationToken))
+            {
+                if (payload?.TenantId is { } tenantId)
+                    unfinished.Add((queue, tenantId));
+            }
+        }
 
-    public async Task StartAsync(CancellationToken cancellationToken)
+        return unfinished;
+    }
+
+    /// <summary>
+    /// Each Recording with a cloud job that has not ended. A queue runs <see cref="JobsAtOnceInAQueue"/> jobs at once, so a
+    /// second job of one Recording would send each part to the provider twice, and the provider bills each call.
+    /// </summary>
+    public static async Task<IReadOnlySet<string>> RecordingsInCloudJobsAsync(IJobStore store, CancellationToken cancellationToken)
+    {
+        var recordings = new HashSet<string>(StringComparer.Ordinal);
+        await foreach (var (_, payload) in UnfinishedOfAsync(store, TranscribeRecordingJob.CloudWireName, cancellationToken))
+        {
+            if (payload?.RecordingId is { } recordingId)
+                recordings.Add(recordingId);
+        }
+
+        return recordings;
+    }
+
+    private static async IAsyncEnumerable<(string Queue, ProviderJobPayload? Payload)> UnfinishedOfAsync(
+        IJobStore store, string wireName, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        foreach (var state in UnfinishedStates)
+        {
+            long? after = null;
+            while (true)
+            {
+                var page = await store.ListJobsAsync(new JobQuery { State = state, WireName = wireName, AfterSequence = after, MaxResults = PageSize }, cancellationToken);
+                if (page.Count == 0)
+                    break;
+                foreach (var job in page)
+                    yield return (job.Queue, PayloadOf(job.Payload));
+                after = page[^1].Sequence;
+            }
+        }
+    }
+
+    // A payload that does not read holds no tenant, so it takes no queue, and it does not stop the start of each other job.
+    private static ProviderJobPayload? PayloadOf(ReadOnlyMemory<byte> payload)
     {
         try
         {
-            var settings = await store.ListQueueSettingsAsync(cancellationToken);
-            foreach (var queue in CleanupQueues.All.Where(queue => !settings.Any(s => s.Queue == queue && s.ConcurrencyLimit == CleanupQueues.JobsAtOnceInAQueue)))
-                await store.SetConcurrencyLimitAsync(queue, CleanupQueues.JobsAtOnceInAQueue, Actor, timeProvider.GetUtcNow(), cancellationToken);
+            return JsonSerializer.Deserialize<ProviderJobPayload>(payload.Span);
         }
-        catch (Exception fault) when (!cancellationToken.IsCancellationRequested)
+        catch (JsonException)
         {
-            // The app still serves its pages, and the next start writes the limits.
-            _logger.Here().Warning("The limits of the Cleanup queues were not written ({FaultType}).", fault.GetType().FullName);
+            return null;
         }
     }
 
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    private sealed record ProviderJobPayload(string? TenantId, string? RecordingId);
 }

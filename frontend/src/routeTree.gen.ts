@@ -9,6 +9,8 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TranscriptionEngineRouteImport } from './routes/transcription-engine'
+import { Route as SummariesRouteImport } from './routes/summaries'
 import { Route as ModelProvidersRouteImport } from './routes/model-providers'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
@@ -18,6 +20,16 @@ import { Route as PeopleIndexRouteImport } from './routes/people/index'
 import { Route as UsersIdIndexRouteImport } from './routes/users/$id/index'
 import { Route as SessionsIdIndexRouteImport } from './routes/sessions/$id/index'
 
+const TranscriptionEngineRoute = TranscriptionEngineRouteImport.update({
+  id: '/transcription-engine',
+  path: '/transcription-engine',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SummariesRoute = SummariesRouteImport.update({
+  id: '/summaries',
+  path: '/summaries',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ModelProvidersRoute = ModelProvidersRouteImport.update({
   id: '/model-providers',
   path: '/model-providers',
@@ -63,6 +75,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/model-providers': typeof ModelProvidersRoute
+  '/summaries': typeof SummariesRoute
+  '/transcription-engine': typeof TranscriptionEngineRoute
   '/people': typeof PeopleIndexRoute
   '/settings': typeof SettingsIndexRoute
   '/users': typeof UsersIndexRoute
@@ -73,6 +87,8 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/model-providers': typeof ModelProvidersRoute
+  '/summaries': typeof SummariesRoute
+  '/transcription-engine': typeof TranscriptionEngineRoute
   '/people': typeof PeopleIndexRoute
   '/settings': typeof SettingsIndexRoute
   '/users': typeof UsersIndexRoute
@@ -84,6 +100,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/model-providers': typeof ModelProvidersRoute
+  '/summaries': typeof SummariesRoute
+  '/transcription-engine': typeof TranscriptionEngineRoute
   '/people/': typeof PeopleIndexRoute
   '/settings/': typeof SettingsIndexRoute
   '/users/': typeof UsersIndexRoute
@@ -96,6 +114,8 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/model-providers'
+    | '/summaries'
+    | '/transcription-engine'
     | '/people'
     | '/settings'
     | '/users'
@@ -106,6 +126,8 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/model-providers'
+    | '/summaries'
+    | '/transcription-engine'
     | '/people'
     | '/settings'
     | '/users'
@@ -116,6 +138,8 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/model-providers'
+    | '/summaries'
+    | '/transcription-engine'
     | '/people/'
     | '/settings/'
     | '/users/'
@@ -127,6 +151,8 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   ModelProvidersRoute: typeof ModelProvidersRoute
+  SummariesRoute: typeof SummariesRoute
+  TranscriptionEngineRoute: typeof TranscriptionEngineRoute
   PeopleIndexRoute: typeof PeopleIndexRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
   UsersIndexRoute: typeof UsersIndexRoute
@@ -136,6 +162,20 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/transcription-engine': {
+      id: '/transcription-engine'
+      path: '/transcription-engine'
+      fullPath: '/transcription-engine'
+      preLoaderRoute: typeof TranscriptionEngineRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/summaries': {
+      id: '/summaries'
+      path: '/summaries'
+      fullPath: '/summaries'
+      preLoaderRoute: typeof SummariesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/model-providers': {
       id: '/model-providers'
       path: '/model-providers'
@@ -199,6 +239,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   ModelProvidersRoute: ModelProvidersRoute,
+  SummariesRoute: SummariesRoute,
+  TranscriptionEngineRoute: TranscriptionEngineRoute,
   PeopleIndexRoute: PeopleIndexRoute,
   SettingsIndexRoute: SettingsIndexRoute,
   UsersIndexRoute: UsersIndexRoute,

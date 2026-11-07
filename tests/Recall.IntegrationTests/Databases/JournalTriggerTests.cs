@@ -7,6 +7,7 @@ using Recall.Server.Domain;
 using Recall.Server.Domain.Recordings;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Features;
+using Recall.Server.Domain.Summaries;
 using Recall.Server.Domain.Sessions.Dtos;
 using Recall.Server.Domain.Sync;
 using Recall.Server.Domain.Tenants.Features;
@@ -150,7 +151,7 @@ public class JournalTriggerTests : TestBase
         left.Lines.ShouldBe(0);
     }
 
-    private static readonly Type[] JournalTablesOutsideTheFeed = [typeof(SyncChange), typeof(Recording)];
+    private static readonly Type[] JournalTablesOutsideTheFeed = [typeof(SyncChange), typeof(Recording), typeof(Summary)];
 
     [Test]
     public async Task each_journal_table_of_the_model_has_its_triggers()

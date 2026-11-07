@@ -12,6 +12,7 @@ using Recall.Server.Domain.ModelProviders;
 using Recall.Server.Domain.People;
 using Recall.Server.Domain.Recordings;
 using Recall.Server.Domain.Sessions;
+using Recall.Server.Domain.Summaries;
 using Recall.Server.Domain.Users;
 using Recall.Server.Resources.Storage;
 using Recall.Server.Resources.Entrypoints;
@@ -44,8 +45,12 @@ public class EndpointAccessSweepTests : TestBase
         ["get_tenant"] = new("ToolAccessKind.Read. Each member reads the own tenant, and the tenant filter hides the others."),
         ["list_tenants"] = new("ToolAccessKind.Read. Each member lists the own tenant, and the tenant filter hides the others."),
         ["GetActiveModelProvider"] = new("Each member sees where a Cleanup sends the own words. It takes no ID and gives only the name of the provider of the own tenant."),
+        ["GetTranscriptionEngine"] = new("Each member sees where the own audio becomes text. It takes no ID and gives only the name and model of the provider of the own tenant."),
         ["AddSession"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetSession"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetSummary"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetSummaryById"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GenerateSummary"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetSessionPage"] = new(JournalOfEachMember, OwnerOnly: true),
         ["SaveRawDraft"] = new(JournalOfEachMember, OwnerOnly: true),
         ["SaveCleanedDraft"] = new(JournalOfEachMember, OwnerOnly: true),
@@ -328,6 +333,8 @@ public class EndpointAccessSweepTests : TestBase
             "number" => "1",
             "index" => "0",
             "name" => "audio.webm",
+            "period" => "Day",
+            "date" => "1970-01-01",
             _ => null,
         };
     }
@@ -362,10 +369,12 @@ public class EndpointAccessSweepTests : TestBase
         await InsertAsync(provider);
         var recording = Recording.Create(tenant.Id, admin.Id, session.Id, $"sweep-{Guid.NewGuid():N}", RecordingFormat.Webm);
         recording.StoreSlice(0, 1);
-        recording.Finish([0], 1, 1);
+        recording.Finish([0], 1, 1, TranscriptionEngineKind.Local);
         await InsertAsync(recording);
         await using (var audio = new MemoryStream([1]))
             await TestingWebApplicationFactory.Instance.Services.GetRequiredService<FileStore>().WriteAsync(RecordingFiles.Audio(recording), audio, CancellationToken.None);
+        var summary = Summary.WithFirstRun(tenant.Id, admin.Id, PeriodKey.Holding(SummaryPeriod.Day, new DateOnly(1970, 1, 1)), jobId: null);
+        await InsertAsync(summary);
         // new-feature:sweep-inserts
 
         var idsByKind = new Dictionary<string, string>
@@ -378,6 +387,7 @@ public class EndpointAccessSweepTests : TestBase
             ["corrections"] = correction.Id,
             ["model-providers"] = provider.Id,
             ["recordings"] = recording.Id,
+            ["summaries"] = summary.Id,
             // new-feature:sweep-ids
         };
         return new TenantRecords(member, admin, new RecordIds(idsByKind, otherUser.Identifier));

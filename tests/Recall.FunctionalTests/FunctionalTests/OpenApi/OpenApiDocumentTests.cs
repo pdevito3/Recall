@@ -350,6 +350,7 @@ public class OpenApiDocumentTests
         [
             "AgentForCreationDto.tenantId",
             "UserForCreationDto.tenantId",
+            "TranscriptionEngineChoiceDto.modelProviderId",
         ];
 
         static IEnumerable<string> RefsUnder(JsonNode node) =>
