@@ -48,9 +48,16 @@ export const releaseRequests: BrowserCommand<[path: string]> = async ({ page }, 
 
 const isServerRequest = (url: URL) => url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/')
 
+interface SentRequest {
+  method: string
+  path: string
+  body: unknown
+}
+
 interface Answering {
   answers: Answer[]
   unanswered: Set<string>
+  sent: SentRequest[]
 }
 
 const answering = new WeakMap<Page, Answering>()
@@ -69,16 +76,28 @@ const body = (answer: Answer) => {
   return answer.body === undefined ? '' : JSON.stringify(answer.body)
 }
 
+/** A body that is not JSON, such as an upload of audio, counts as no body. */
+const jsonBodyOf = (request: { postDataJSON: () => unknown }) => {
+  try {
+    return request.postDataJSON()
+  } catch {
+    return null
+  }
+}
+
 export const answerRequests: BrowserCommand<[answers: Answer[]]> = async ({ page }, answers) => {
   const current = answering.get(page)
   if (current) {
     current.answers = answers
     return
   }
-  const state: Answering = { answers, unanswered: new Set() }
+  const state: Answering = { answers, unanswered: new Set(), sent: [] }
   answering.set(page, state)
   await page.route(isServerRequest, async (route) => {
     const request = route.request()
+    if (request.method() !== 'GET') {
+      state.sent.push({ method: request.method(), path: new URL(request.url()).pathname, body: jsonBodyOf(request) })
+    }
     const answer = state.answers.findLast(isAnswerFor(request))
     if (!answer) {
       const url = new URL(request.url())
@@ -101,6 +120,13 @@ export const takeUnansweredRequests: BrowserCommand<[]> = async ({ page }) => {
   const unanswered = [...state.unanswered]
   state.unanswered.clear()
   return unanswered
+}
+
+/** The method, pathname, and JSON body of each request other than a GET since the last call. */
+export const takeSentRequests: BrowserCommand<[]> = async ({ page }) => {
+  const state = answering.get(page)
+  if (!state) return []
+  return state.sent.splice(0)
 }
 
 type Role = Parameters<Page['getByRole']>[0]
