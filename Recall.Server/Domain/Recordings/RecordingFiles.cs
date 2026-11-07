@@ -23,8 +23,10 @@ public static class RecordingFiles
     public static FileKey Slice(Recording recording, int index, string sha256)
         => FileKey.ForTenant(recording.TenantId, RootFolder, recording.UserId, recording.Id, SlicesFolder, $"{index:D6}-{sha256}");
 
-    public static FileKey WorkAudio(Recording recording)
-        => FileKey.ForTenant(recording.TenantId, RootFolder, recording.UserId, recording.Id, "work.wav");
+    public static FileKey WorkAudio(string tenantId, string userId, string recordingId)
+        => FileKey.ForTenant(tenantId, RootFolder, userId, recordingId, "work.wav");
+
+    public static FileKey WorkAudio(Recording recording) => WorkAudio(recording.TenantId, recording.UserId, recording.Id);
 
     public static FileKey Audio(Recording recording)
         => FileKey.ForTenant(recording.TenantId, RootFolder, recording.UserId, recording.Id, recording.AudioFileName);

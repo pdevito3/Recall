@@ -46,6 +46,7 @@ The `recordings` table is not in the sync feed. The text of a Recording reaches 
 | REC-13 | At most one transcription runs at a time, in a subprocess that a token stop kills. The memory of the host is out of reach of the worker: the kernel kills the worker first. | The `transcription` worker group with a pool of 1, `LocalParakeetEngine` | |
 | REC-14 | A person can see that the jobs stopped, with what to do. | `GetTranscriptionStatus` | |
 | REC-15 | A failure names a cause only when the server has seen it. `DiskFull` needs the words of the disk error from ffmpeg. `OutOfMemory` needs a rise of `oom_kill` in `memory.events` during the run. Other kills read `EngineKilled`, with no claim of a cause. | `LocalParakeetEngine` | |
+| REC-16 | The decoded copy of the audio lasts only while a Recording waits for its text. The job removes it when the Recording ends as Transcribed or Failed, and the sweep at each start removes one that a kill left. The audio stays by REC-5, and a retry decodes it again. | `RemoveEndedWorkAudio`, `RecordingSweep` | |
 
 ## 4. Rejected rows
 

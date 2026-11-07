@@ -33,7 +33,9 @@ public sealed class TranscribeRecordingJob(
         Activity.Current?.SetTag("app.recording_id", recordingId);
         try
         {
-            await RunAsync(recordingId, new JournalOwner(userId, tenantId), cancellationToken);
+            var owner = new JournalOwner(userId, tenantId);
+            await RunAsync(recordingId, owner, cancellationToken);
+            await SendAsync(owner, new RemoveEndedWorkAudio.Command(recordingId), cancellationToken);
         }
         catch (NotFoundException)
         {

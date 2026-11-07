@@ -293,6 +293,74 @@ public class TranscribeJobTests : TestBase
         (await PlainRawAsync(recording.SessionId)).ShouldBe("heard words");
     }
 
+    private static async IAsyncEnumerable<TranscriptChunk> WriteWorkAudioThen(IAsyncEnumerable<TranscriptChunk> chunks, TranscriptionInput input)
+    {
+        await File.WriteAllBytesAsync(Path.Combine(input.WorkFolder, "work.wav"), [1]);
+        await foreach (var chunk in chunks)
+            yield return chunk;
+    }
+
+    private static FakeEngine WritingWorkAudio(FakeEngine engine) => new(true, (input, token) => WriteWorkAudioThen(engine.RunAsync(input, token), input));
+
+    private static FileKey WorkAudioOf(RecordingDto recording, User owner) => RecordingFiles.WorkAudio(owner.TenantId, owner.Id, recording.Id);
+
+    private static bool Exists(FileKey key) => Services.GetRequiredService<FileStore>().Exists(key);
+
+    [Test]
+    [Property("Rule", "REC-16")]
+    public async Task a_job_that_fails_removes_the_decoded_audio_and_keeps_the_audio_and_a_retry_works()
+    {
+        // Arrange
+        var (recording, admin) = await FinishedRecordingAsync();
+        var job = JobWith(WritingWorkAudio(SayingThenFailing(new TranscriptionEngineException(RecordingProblem.TooLong), "first words")));
+
+        // Act
+        await RunAsync(job, recording, admin);
+        var removed = !Exists(WorkAudioOf(recording, admin));
+        var retry = await FactoryClient.PostAsync(ApiRoutes.Recordings.Retry(recording.Id), null);
+        await RunAsync(JobWith(WritingWorkAudio(Saying("first words", "next words"))), recording, admin);
+
+        // Assert
+        removed.ShouldBeTrue();
+        retry.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await FactoryClient.GetAsync(ApiRoutes.Recordings.File(recording.Id, "audio.webm"))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await FactoryClient.GetRecordingAsync(recording.Id)).Status.ShouldBe(nameof(RecordingStatus.Transcribed));
+        (await PlainRawAsync(recording.SessionId)).ShouldBe("first words\nnext words");
+        Exists(WorkAudioOf(recording, admin)).ShouldBeFalse();
+    }
+
+    [Test]
+    [Property("Rule", "REC-16")]
+    public async Task a_job_that_cannot_fit_its_text_removes_the_decoded_audio()
+    {
+        // Arrange
+        var (recording, admin) = await FinishedRecordingAsync();
+        var job = JobWith(WritingWorkAudio(Saying(new string('a', Recall.Server.Domain.Sessions.Session.DraftMaxLength + 1))));
+
+        // Act
+        await RunAsync(job, recording, admin);
+
+        // Assert
+        (await FactoryClient.GetRecordingAsync(recording.Id)).Problem.ShouldBe(nameof(RecordingProblem.TextTooLong));
+        Exists(WorkAudioOf(recording, admin)).ShouldBeFalse();
+    }
+
+    [Test]
+    [Property("Rule", "REC-16")]
+    public async Task a_job_that_stops_keeps_the_decoded_audio_for_the_next_attempt()
+    {
+        // Arrange
+        var (recording, admin) = await FinishedRecordingAsync();
+        using var stop = new CancellationTokenSource();
+        var job = JobWith(WritingWorkAudio(new FakeEngine(true, (input, token) => CancelAfterFirst(input, stop, token))));
+
+        // Act
+        await Should.ThrowAsync<OperationCanceledException>(() => RunAsync(job, recording, admin, stop.Token));
+
+        // Assert
+        Exists(WorkAudioOf(recording, admin)).ShouldBeTrue();
+    }
+
     [Test]
     [Property("Rule", "SES-36")]
     public async Task a_client_that_does_not_read_after_a_lost_save_cannot_push_a_chunk_out_of_the_draft()

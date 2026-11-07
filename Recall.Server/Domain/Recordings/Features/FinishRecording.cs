@@ -117,6 +117,18 @@ public static class RecordingWork
         }
     }
 
+    public static void TryDeleteWorkAudio(FileStore fileStore, FileKey workAudio, string recordingId, ILogger logger)
+    {
+        try
+        {
+            fileStore.Delete(workAudio);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            logger.Here().Warning("Could not delete the decoded audio of recording {RecordingId}, because of {FaultType}. The next start tries again", recordingId, exception.GetType().Name);
+        }
+    }
+
     public static void TryDeleteFolder(FileStore fileStore, FileKey folder, string ownerOfFolder, ILogger logger)
     {
         try

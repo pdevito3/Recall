@@ -212,6 +212,33 @@ public class RecordingSweepTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "REC-16")]
+    [Arguments("Failed", false)]
+    [Arguments("Transcribed", false)]
+    [Arguments("Transcribing", true)]
+    public async Task the_sweep_removes_the_decoded_audio_of_an_ended_recording_and_keeps_its_audio(string status, bool stays)
+    {
+        // Arrange
+        var (admin, _) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(admin.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        var recording = await FactoryClient.AddFinishedRecordingAsync(session.Id);
+        await JournalScenario.ExecuteOutOfBandAsync("UPDATE recordings SET status = $status WHERE id = $id", ("$status", status), ("$id", recording.Id));
+        using var folder = new SweptFolder();
+        var workAudio = RecordingFiles.WorkAudio(admin.TenantId, admin.Id, recording.Id);
+        var audio = FileKey.ForTenant(admin.TenantId, RecordingFiles.RootFolder, admin.Id, recording.Id, "audio.webm");
+        await folder.WriteAsync(workAudio);
+        await folder.WriteAsync(audio);
+
+        // Act
+        await folder.Sweep.RunAsync(CancellationToken.None);
+
+        // Assert
+        folder.Holds(workAudio).ShouldBe(stays);
+        folder.Holds(audio).ShouldBeTrue();
+    }
+
+    [Test]
     [Property("Rule", "REC-5")]
     public async Task audio_past_its_seven_days_goes_and_the_text_stays()
     {
