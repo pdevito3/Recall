@@ -10,6 +10,8 @@ using Recall.Server.Domain.Corrections.Dtos;
 using Recall.Server.Domain.Corrections.Features;
 using Recall.Server.Domain.Sessions.Dtos;
 using Recall.Server.Domain.Sessions.Features;
+using Recall.Server.Domain.Summaries;
+using Recall.Server.Domain.TimeZones;
 using Recall.Server.Domain.Tenants;
 using Recall.Server.Domain.Tenants.Features;
 using Recall.Server.Domain.Users;
@@ -32,6 +34,25 @@ public class JournalDiskTests
         await using var server = await QuietServer.StartAsync();
         var marker = $"DISKMARKER{Guid.NewGuid():N}";
         var session = await server.SaveWordsAsync(marker);
+        server.FilesHold(marker).ShouldBeTrue();
+
+        // Act
+        await server.AsOwner().SendAsync(new DeleteSession.Command(session));
+
+        // Assert
+        server.FilesHold(marker).ShouldBeFalse();
+    }
+
+    [Test]
+    [Property("Rule", "SES-27")]
+    public async Task after_a_delete_of_a_session_the_words_of_its_summaries_are_not_in_the_database_file_or_the_wal()
+    {
+        // Arrange
+        await using var server = await QuietServer.StartAsync();
+        var marker = $"DISKMARKER{Guid.NewGuid():N}";
+        var session = await server.SaveWordsAsync(marker);
+        await server.SaveWordsAsync("kept");
+        await server.SaveSummariesAsync($"They wrote: {marker} {Words}");
         server.FilesHold(marker).ShouldBeTrue();
 
         // Act
@@ -229,6 +250,21 @@ public class JournalDiskTests
                 SavedAt = DateTimeOffset.UtcNow.AddMinutes(-1),
             }));
             return created.Session.Id;
+        }
+
+        /// <summary>A ready Summary of each period of today, as a run would store it before a source went away.</summary>
+        public async Task SaveSummariesAsync(string content)
+        {
+            var today = ZonedDate.TodayAt(TimeZoneId.Of("UTC"), DateTimeOffset.UtcNow.AddMinutes(-5)).Date;
+            var dbContext = AsOwner().GetService<AppDbContext>();
+            foreach (var period in Enum.GetValues<SummaryPeriod>())
+            {
+                var summary = Summary.WithFirstRun(Tenant.Id, Owner.Id, PeriodKey.Holding(period, today), jobId: null);
+                summary.Complete(summary.RunId!, content, new SourceState(2, new string('a', Summary.FingerprintLength)), DateTimeOffset.UtcNow);
+                dbContext.Summaries.Add(summary);
+            }
+
+            await dbContext.SaveChangesAsync();
         }
 
         public bool FilesHold(string marker)

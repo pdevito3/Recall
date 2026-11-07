@@ -1,6 +1,7 @@
 namespace Recall.UnitTests.Domain.Summaries;
 
 using Recall.Server.Domain.Summaries;
+using Recall.Server.Domain.Summaries.Mappings;
 using Shouldly;
 
 public class SummaryTests
@@ -88,7 +89,7 @@ public class SummaryTests
     }
 
     [Test]
-    public void a_new_run_keeps_the_words_of_the_last_ready_run()
+    public void a_failed_run_keeps_no_words_of_the_last_ready_run()
     {
         // Arrange
         var summary = NewSummary();
@@ -100,8 +101,26 @@ public class SummaryTests
 
         // Assert
         summary.StatusFor(Changed).ShouldBe(SummaryStatus.Failed);
-        summary.Content.ShouldBe("They wrote.");
+        summary.Content.ShouldBeNull();
+        summary.GeneratedAt.ShouldBeNull();
         summary.RunJobId.ShouldBeNull();
+    }
+
+    [Test]
+    public void a_summary_that_runs_again_shows_no_words_of_the_last_ready_run()
+    {
+        // Arrange
+        var summary = NewSummary();
+        summary.Complete(summary.RunId!, "They wrote.", Sources, Now);
+
+        // Act
+        summary.BeginRun(jobId: null);
+        var dto = summary.ToSummaryDto(Day, Changed);
+
+        // Assert
+        dto.Status.ShouldBe(nameof(SummaryStatus.Generating));
+        dto.Content.ShouldBeEmpty();
+        dto.GeneratedAt.ShouldBeNull();
     }
 
     [Test]

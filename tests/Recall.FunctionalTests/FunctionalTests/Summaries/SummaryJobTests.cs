@@ -137,6 +137,56 @@ public class SummaryJobTests : TestBase
     }
 
     [Test]
+    public async Task a_delete_of_a_session_leaves_none_of_its_words_in_a_summary_and_an_open_makes_it_again()
+    {
+        // Arrange
+        var marker = $"DELETEDWORDS{Guid.NewGuid():N}";
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        await FactoryClient.SessionOnAsync(Monday, "kept words");
+        var deleted = await FactoryClient.SessionOnAsync(Monday, Words(marker));
+        var otherDay = Monday.AddDays(40);
+        await FactoryClient.SessionOnAsync(otherDay, "words of another month");
+        await FactoryClient.OpenAndRunAsync(SummaryPeriod.Week, Monday);
+        await FactoryClient.OpenAndRunAsync(SummaryPeriod.Year, Monday);
+        var untouched = await FactoryClient.ReadAsync(SummaryPeriod.Day, otherDay);
+        (await FactoryClient.ReadAsync(SummaryPeriod.Day, Monday)).Content.ShouldContain(marker);
+
+        // Act
+        (await FactoryClient.DeleteAsync(ApiRoutes.Sessions.GetRecord(deleted.Id))).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Assert
+        foreach (var period in new[] { SummaryPeriod.Day, SummaryPeriod.Week, SummaryPeriod.Month, SummaryPeriod.Quarter, SummaryPeriod.Year })
+        {
+            var read = await FactoryClient.ReadAsync(period, Monday);
+            read.Status.ShouldBe(nameof(SummaryStatus.Missing), $"{period}");
+            read.Content.ShouldBeEmpty();
+        }
+        (await SummaryScenario.RowsOfAsync(scenario.Member.Id)).ShouldAllBe(row => row.Content == null || !row.Content.Contains(marker));
+        (await FactoryClient.ReadAsync(SummaryPeriod.Day, otherDay)).ShouldBe(untouched);
+        var again = await FactoryClient.OpenAndRunAsync(SummaryPeriod.Day, Monday);
+        again.Status.ShouldBe(nameof(SummaryStatus.Ready));
+        again.Content.ShouldContain("kept words");
+        again.Content.ShouldNotContain(marker);
+    }
+
+    [Test]
+    public async Task a_summary_whose_last_source_lost_its_words_has_no_row_after_an_open()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        var session = await FactoryClient.SessionOnAsync(Monday, "words that go away");
+        await FactoryClient.OpenAndRunAsync(SummaryPeriod.Day, Monday);
+        (await FactoryClient.SaveDraftAsync(session.Id, "", 1, SummaryScenario.NoonOf(Monday).AddMinutes(5))).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Act
+        var opened = await FactoryClient.OpenAsync(SummaryPeriod.Day, Monday);
+
+        // Assert
+        opened.Status.ShouldBe(nameof(SummaryStatus.Missing));
+        (await SummaryScenario.RowsOfAsync(scenario.Member.Id)).ShouldBeEmpty();
+    }
+
+    [Test]
     public async Task a_person_rename_that_changes_a_source_makes_the_summary_stale()
     {
         // Arrange
@@ -386,6 +436,31 @@ public class SummaryJobTests : TestBase
 
         // Act
         await watch.EndRunsOfEndedJobsAsync(CancellationToken.None);
+        var summary = await FactoryClient.ReadAsync(SummaryPeriod.Day, Monday);
+
+        // Assert
+        summary.Status.ShouldBe(nameof(SummaryStatus.Failed));
+        summary.Failure.ShouldBe(nameof(SummaryFailure.Interrupted));
+    }
+
+    [Test]
+    [Arguments(JobState.Cancelled)]
+    [Arguments(JobState.DeadLettered)]
+    public async Task the_watch_ends_the_runs_of_a_refresh_job_that_ended_with_no_result(JobState ended)
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        await FactoryClient.SessionOnAsync(Monday, "some words");
+        var opened = await FactoryClient.OpenAsync(SummaryPeriod.Day, Monday);
+        var jobId = await Services.GetRequiredService<BackWave.BackWaveClient>().EnqueueAsync(
+            new RefreshSummaries(scenario.Member.Id, scenario.Member.TenantId), DateTimeOffset.UtcNow.AddDays(1), SummaryQueues.Of(scenario.Member.TenantId));
+        await JournalScenario.ExecuteOutOfBandAsync("UPDATE summaries SET run_job_id = $job WHERE id = $id", ("$job", jobId.ToString().ToUpperInvariant()), ("$id", opened.Id!));
+        await JournalScenario.ExecuteOutOfBandAsync(
+            "UPDATE backwave_jobs SET state = $state WHERE wire_name = $wire AND CAST(payload AS TEXT) LIKE $user",
+            ("$state", (int)ended), ("$wire", SummaryJobs.RefreshWireName), ("$user", $"%{scenario.Member.Id}%"));
+
+        // Act
+        await ActivatorUtilities.CreateInstance<SummaryJobWatch>(Services).EndRunsOfEndedJobsAsync(CancellationToken.None);
         var summary = await FactoryClient.ReadAsync(SummaryPeriod.Day, Monday);
 
         // Assert
