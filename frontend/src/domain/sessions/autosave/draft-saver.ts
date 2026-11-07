@@ -462,17 +462,7 @@ export class DraftSaver {
       return { reply: null, newest, isKeyWithAnotherTab: this.isNewestTextInAKey(change) }
     }
     const reply = await this.saveWords(change, signal)
-    return { reply, newest: reply.outcome === 'Kept' || reply.outcome === 'Lost' ? await this.readAfterSave(signal) : null }
-  }
-
-  /** A refused read is no refusal of the words, so the same save goes again. A read of an entry that is gone moves the words. */
-  private async readAfterSave(signal: AbortSignal) {
-    try {
-      return await this.readForAnswer(signal)
-    } catch (error) {
-      if (isFinalRefusal(error) && !isARowThatIsGone(error)) throw new Error(`The read after a save failed: ${error.displayMessage}`)
-      throw error
-    }
+    return { reply, newest: reply.outcome === 'Kept' || reply.outcome === 'Lost' ? await this.readForAnswer(signal) : null }
   }
 
   private isNewestTextInAKey(change: Stamped<string>) {
@@ -497,6 +487,9 @@ export class DraftSaver {
     signal.addEventListener('abort', stopRead)
     try {
       return await this.readSessionNow(id)
+    } catch (error) {
+      // A refused read is no refusal of the words, so the save goes again. A read of an entry that is gone moves the words.
+      throw isFinalRefusal(error) && !isARowThatIsGone(error) ? new Error('The read failed.') : error
     } finally {
       signal.removeEventListener('abort', stopRead)
     }
