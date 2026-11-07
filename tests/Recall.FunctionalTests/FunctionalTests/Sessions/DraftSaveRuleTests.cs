@@ -93,6 +93,26 @@ public class DraftSaveRuleTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-8")]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task other_words_with_the_time_of_an_earlier_save_are_a_new_save(bool raw)
+    {
+        // Arrange
+        var session = await AddSessionOfNewPersonAsync();
+        var route = RouteOf(session, raw);
+        var now = DateTimeOffset.UtcNow;
+        var first = await SaveAsync(route, "first words", 0, now);
+
+        // Act
+        var second = await SaveAsync(route, "second words", first.DraftRevision!.Value, now);
+
+        // Assert
+        second.Outcome.ShouldBe("Won");
+        second.DraftRevision.ShouldBe(2);
+    }
+
+    [Test]
     [Property("Rule", "SES-7")]
     [Arguments(true)]
     [Arguments(false)]
@@ -100,7 +120,7 @@ public class DraftSaveRuleTests : TestBase
     {
         // Arrange
         var session = await AddSessionOfNewPersonAsync();
-        var fast = DateTimeOffset.UtcNow.AddHours(5);
+        var fast = new DateTimeOffset(2099, 1, 2, 3, 4, 5, TimeSpan.Zero);
 
         // Act
         var won = await SaveAsync(RouteOf(session, raw), "words", 0, fast);

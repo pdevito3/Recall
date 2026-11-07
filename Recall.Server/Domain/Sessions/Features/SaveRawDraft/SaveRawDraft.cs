@@ -29,7 +29,6 @@ public static class SaveRawDraft
             var earlier = await dbContext.RawRevisions
                 .TagWithOperationCallSite("sessions.save_raw.earlier")
                 .Where(r => r.SessionId == session.Id && r.SavedAt == save.SavedAt && r.Text == save.Text)
-                .OrderBy(r => r.Number)
                 .Select(r => (DraftAnswer?)new DraftAnswer(r.WasDraft ? r.Number : null))
                 .FirstOrDefaultAsync(cancellationToken);
 

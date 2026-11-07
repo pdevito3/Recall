@@ -170,17 +170,16 @@ public class WordsThatAreNotADocumentTests
 
     [Test]
     [Property("Rule", "SES-8")]
-    public void a_save_holds_the_time_of_the_client_in_utc_at_any_clock_so_a_replay_with_another_offset_is_one_save()
+    public void a_save_holds_the_time_of_the_client_at_any_clock()
     {
         // Arrange
         var fast = Now.AddHours(5);
 
         // Act
-        var save = DraftSave.Of("words", 0, fast.ToOffset(TimeSpan.FromHours(2)));
+        var save = DraftSave.Of("words", 0, fast);
 
         // Assert
         save.SavedAt.ShouldBe(fast);
-        save.SavedAt.Offset.ShouldBe(TimeSpan.Zero);
     }
 
     [Test]

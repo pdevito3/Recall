@@ -28,12 +28,12 @@ namespace Recall.Server.Databases.Migrations
             foreach (var table in new[] { "raw_revisions", "cleaned_revisions" })
             {
                 migrationBuilder.RenameColumn(name: "saved_at", table: table, newName: "claimed_saved_at");
-                migrationBuilder.AddColumn<DateTimeOffset>(
+                migrationBuilder.AddColumn<string>(
                     name: "saved_at",
                     table: table,
                     type: "TEXT",
                     nullable: false,
-                    defaultValue: DateTimeOffset.UnixEpoch);
+                    defaultValue: "1970-01-01T00:00:00.000000Z");
             }
 
             migrationBuilder.AddColumn<int>(

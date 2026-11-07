@@ -28,6 +28,6 @@ public sealed class DraftSave
 
         ValidationException.Must(baseRevision >= DraftSlot.NoRevision, BaseRevisionField, "The base revision must not be negative.");
 
-        return new DraftSave(text, baseRevision, savedAt.ToUniversalTime());
+        return new DraftSave(text, baseRevision, savedAt);
     }
 }

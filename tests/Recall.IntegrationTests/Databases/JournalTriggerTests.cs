@@ -17,6 +17,23 @@ using Shouldly;
 public class JournalTriggerTests : TestBase
 {
     [Test]
+    [Property("Rule", "SES-7")]
+    [Arguments("sessions", "last_transcript_revision")]
+    [Arguments("raw_revisions", "claimed_saved_at")]
+    [Arguments("cleaned_revisions", "claimed_saved_at")]
+    public async Task the_columns_of_the_rule_on_the_save_time_are_gone(string table, string column)
+    {
+        // Arrange
+        var read = () => TestFixture.ExecuteOutOfBandAsync($"SELECT {column} FROM {table}");
+
+        // Act
+        var refused = await Should.ThrowAsync<SqliteException>(read);
+
+        // Assert
+        refused.Message.ShouldContain("no such column");
+    }
+
+    [Test]
     [Property("Rule", "SES-11")]
     [Arguments("raw_revisions")]
     [Arguments("cleaned_revisions")]

@@ -59,13 +59,13 @@ Each `outcome` tells the client this:
 | `Kept` | Took these words in the first try of this save. It can hold other words now | In an earlier Revision. No new Revision | The number at which the Draft took these words |
 | `Lost` | Did not take this save | In a Revision | `null` |
 
-A replay sends the same `text` and the same `savedAt`. Give each new save a new `savedAt`, and keep the `savedAt` of a queued save when you send it again. A replay of a save that won gives `Kept`, and a replay of a save that lost gives `Lost`. Neither makes a new Revision. So a client that lost a reply gets the true answer when it sends the save again. A replay of a save that gave `Unchanged` gives `Unchanged` while the Draft holds the words. After the Draft moved, it is a new save, so from its older base it gets `Lost`. After `Kept`, do not merge these words into the Draft again, because the Draft already took them.
+A replay sends the same `text` and the same `savedAt`. Give each new save a new `savedAt`, to the millisecond or finer, and keep the `savedAt` of a queued save when you send it again. A replay of a save that won gives `Kept`, and a replay of a save that lost gives `Lost`. Neither makes a new Revision. So a client that lost a reply gets the true answer when it sends the save again. A replay of a save that gave `Unchanged` gives `Unchanged` while the Draft holds the words. After the Draft moved, it is a new save, so from its older base it gets `Lost`. After `Kept`, do not merge these words into the Draft again, because the Draft already took them. The Draft can hold other words now, so read the Session before you show its text.
 
 Any write can answer 507 when the disk of the server is full. The save did not happen. Keep the words, and send the same save again later.
 
 A base that is not the number of the current Draft gives `Lost`, also with a later `savedAt`. The server keeps the words as the newest Revision, and it does not refuse the save with a 4xx.
 
-Two devices that edit one Draft see more `Lost` answers, and a chunk of a transcript or a Person rename also moves the number. Each `Lost` costs the client one merge, or one notice to the person. No word leaves the Draft with no signal.
+Two devices that edit one Draft see more `Lost` answers, and a chunk of a transcript or a Person rename also moves the number. Each `Lost` costs the client one merge, or one notice to the person. A `Lost` save does not change the Draft.
 
 After `Lost`, do these steps:
 
@@ -77,6 +77,8 @@ After `Lost`, do these steps:
 6. If the reply is `Lost` again, or the save has no reply, go back to step 2.
 
 These steps stop a repeat of text. A merge from an old queue entry adds the words a second time when the merge before it is in the Draft.
+
+Step 3 finds only words that a save added. A save that only took words out has nothing to find, so show a notice to the person, or make the same change on the text of the read.
 
 Do not send a new save from the old base and expect it to win. It gets `Lost` at any `savedAt`.
 
@@ -112,7 +114,7 @@ The replies are these:
 | 409 with the type `urn:recall:problem:concurrent-change` | A metadata save lost the race on the row 20 times. Nothing changed. Send the same body again with the same base. |
 | 422 | On a settings save, a zone that the host does not know. On a metadata save, a list of more than 50 values, a value of more than 100 characters, or a character that is not storable. Nothing changed. |
 
-An older client sends `savedAt` and no version. The POC client, and any client of the earlier body, gets 400 on these two routes, with the missing field in the reply. Nothing changes on the server, so the older client overwrites no value. It cannot change settings or metadata until it sends a version. Its Draft saves work as before, so it loses no words.
+An older client sends `savedAt` and no version. The POC client, and any client of the earlier body, gets 400 on these two routes, with the missing field in the reply. Nothing changes on the server, so the older client overwrites no value. It cannot change settings or metadata until it sends a version. Its Draft saves follow the rule above, so a save that gets `Lost` keeps its words in a Revision.
 
 ## Fields that this unit does not add
 
