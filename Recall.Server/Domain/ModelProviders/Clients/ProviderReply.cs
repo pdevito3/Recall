@@ -26,6 +26,9 @@ public enum ProviderFailureKind
 
     /// <summary>The provider answered, and the answer is not one that the app can store.</summary>
     BadOutput = 2,
+
+    /// <summary>The connection stays open and no word comes. A later try can wait as long, and other work waits for its slot.</summary>
+    NoWords = 3,
 }
 
 /// <summary>

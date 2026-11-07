@@ -1,4 +1,8 @@
+using System.Buffers;
+using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Markdig;
 using Markdig.Extensions.EmphasisExtras;
 using Markdig.Extensions.Tables;
@@ -22,7 +26,8 @@ namespace Recall.Server.Domain.Sessions.Content;
 /// a mark does not join two words. Three things are not words: a mark of the form, the number of an item of a list that
 /// counts from 1, and an HTML entity, which becomes its character.
 /// <see cref="MarkdownWords"/> checks the rule on each conversion, and a document that breaks it gives way to the source
-/// as text. So a person can see the marks of the source, and cannot lose a word.
+/// as text. So a person can see the marks of the source, and cannot lose a word. <see cref="MarkdownCost"/> bounds the
+/// cost of each input in the same way.
 /// </summary>
 public static class MarkdownToProseMirror
 {
@@ -41,43 +46,84 @@ public static class MarkdownToProseMirror
             .UseTaskLists()
             .Build();
 
-    private static JsonObject Convert(string? markdown)
+    /// <summary>The nesting of marks that the conversion follows. The nesting of emphasis has no limit in the parser, and a stack overflow ends the process.</summary>
+    private const int DeepestInline = 64;
+
+    /// <summary>The characters of the JSON around one line of the source.</summary>
+    private const int JsonAroundALine = 60;
+
+    private static string Convert(string markdown)
     {
         var content = new JsonArray();
         var doc = new JsonObject { ["type"] = "doc", ["content"] = content };
-
-        // Empty/whitespace/null markdown to an empty doc, not an error.
-        if (string.IsNullOrWhiteSpace(markdown))
-            return doc;
 
         var parsed = Markdown.Parse(markdown, Pipeline);
         foreach (var block in parsed)
             AppendBlock(content, block);
 
-        return MarkdownWords.Keeps(markdown, parsed, doc) ? doc : SourceAsText(markdown);
+        return MarkdownWords.Keeps(markdown, parsed, doc) ? doc.ToJsonString(PersonMentions.KeepWords) : SourceAsText(markdown);
     }
 
-    private static JsonObject SourceAsText(string markdown)
+    /// <summary>It writes the JSON with no tree of nodes, because a text of short lines is the input that gives the largest tree.</summary>
+    private static string SourceAsText(string markdown)
     {
-        var content = new JsonArray();
-        foreach (var line in markdown.Split('\n'))
-            AddParagraphFromText(content, line.TrimEnd('\r'));
-        return new JsonObject { ["type"] = "doc", ["content"] = content };
+        var lines = markdown.AsSpan().Count('\n') + 1;
+        var buffer = new ArrayBufferWriter<byte>(markdown.Length + lines * JsonAroundALine);
+        using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Encoder = PersonMentions.KeepWords.Encoder }))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("type", "doc");
+            writer.WriteStartArray("content");
+            for (var start = 0; start <= markdown.Length;)
+            {
+                var end = markdown.IndexOf('\n', start);
+                end = end < 0 ? markdown.Length : end;
+                var line = markdown.AsSpan(start, end - start).TrimEnd('\r');
+                if (!line.IsWhiteSpace())
+                {
+                    writer.WriteStartObject();
+                    writer.WriteString("type", "paragraph");
+                    writer.WriteStartArray("content");
+                    writer.WriteStartObject();
+                    writer.WriteString("type", "text");
+                    writer.WriteString("text", line);
+                    writer.WriteEndObject();
+                    writer.WriteEndArray();
+                    writer.WriteEndObject();
+                }
+
+                start = end + 1;
+            }
+
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
 
     /// <summary>
     /// Converts markdown to the JSON of the canonical Content doc node. Never throws. The parser and the JSON writer each
     /// refuse very deep nesting, and a model can answer with it, so such words stay as the source.
     /// </summary>
-    public static string ConvertToJson(string? markdown)
+    public static string ConvertToJson(string? markdown) => ConvertToJson(markdown, Convert);
+
+    internal static string ConvertToJson(string? markdown, Func<string, string> convert)
     {
+        // Empty/whitespace/null markdown to an empty doc, not an error.
+        if (string.IsNullOrWhiteSpace(markdown))
+            return """{"type":"doc","content":[]}""";
+
+        if (MarkdownCost.IsAboveBound(markdown))
+            return SourceAsText(markdown);
+
         try
         {
-            return Convert(markdown).ToJsonString(PersonMentions.KeepWords);
+            return convert(markdown);
         }
-        catch (Exception fault) when (fault is ArgumentException or InvalidOperationException)
+        catch (Exception fault) when (fault is ArgumentException or InvalidOperationException or OutOfMemoryException or RegexMatchTimeoutException)
         {
-            return SourceAsText(markdown!).ToJsonString(PersonMentions.KeepWords);
+            return SourceAsText(markdown);
         }
     }
 
@@ -269,7 +315,7 @@ public static class MarkdownToProseMirror
                     continue;
                 case LeafBlock { Inline: { } inlines }:
                     foreach (var inline in inlines)
-                        AppendInline(run, inline, marks: null);
+                        AppendInline(run, inline, marks: null, depth: 0);
                     break;
                 case LeafBlock leaf:
                     AddText(run, RawLines(leaf), marks: null);
@@ -308,13 +354,16 @@ public static class MarkdownToProseMirror
             return array;
 
         foreach (var inline in container)
-            AppendInline(array, inline, marks: null);
+            AppendInline(array, inline, marks: null, depth: 0);
         return array;
     }
 
     // marks: the active mark set inherited from enclosing emphasis/code/link wrappers.
-    private static void AppendInline(JsonArray target, Inline inline, MarkSet? marks)
+    private static void AppendInline(JsonArray target, Inline inline, MarkSet? marks, int depth)
     {
+        if (depth > DeepestInline)
+            throw new InvalidOperationException("The marks of this text nest too deep.");
+
         switch (inline)
         {
             // The TaskList marker inline ("[ ]"/"[x]") is structural, not content - never render it as
@@ -355,14 +404,14 @@ public static class MarkdownToProseMirror
 
                 var nested = mark is null ? marks : MarkSet.With(marks, mark);
                 foreach (var child in emphasis)
-                    AppendInline(target, child, nested);
+                    AppendInline(target, child, nested, depth + 1);
                 break;
             }
 
             // A link emits a link mark on its visible text (matching tiptap's Link default attrs). An image has no node in
             // the set, so its alt text does the same.
             case LinkInline link:
-                AppendLink(target, link, link.Url, link.Title, marks);
+                AppendLink(target, link, link.Url, link.Title, marks, depth + 1);
                 break;
 
             case AutolinkInline autolink:
@@ -377,7 +426,7 @@ public static class MarkdownToProseMirror
             case DelimiterInline delimiter:
                 AddText(target, delimiter.ToLiteral(), marks);
                 foreach (var child in delimiter)
-                    AppendInline(target, child, marks);
+                    AppendInline(target, child, marks, depth + 1);
                 break;
 
             // Raw inline HTML (e.g. <span>) degrades to its literal text rather than being dropped.
@@ -388,19 +437,19 @@ public static class MarkdownToProseMirror
             // Any other container inline (e.g. an extension wrapper): recurse.
             case ContainerInline other:
                 foreach (var child in other)
-                    AppendInline(target, child, marks);
+                    AppendInline(target, child, marks, depth + 1);
                 break;
 
             // MarkdownWords catches a leaf inline with words that no case here knows.
         }
     }
 
-    private static void AppendLink(JsonArray target, ContainerInline link, string? url, string? title, MarkSet? marks)
+    private static void AppendLink(JsonArray target, ContainerInline link, string? url, string? title, MarkSet? marks, int depth)
     {
         var kept = target.Count;
         var nested = LinkAddress.IsAllowed(url) ? MarkSet.With(marks, Mark.Link(url)) : marks;
         foreach (var child in link)
-            AppendInline(target, child, nested);
+            AppendInline(target, child, nested, depth);
 
         // A link with no visible text, or an address that no page may open, keeps its address as text.
         if (!string.IsNullOrEmpty(url))

@@ -49,7 +49,7 @@ public sealed class AnthropicModelClient(IHttpClientFactory httpClientFactory, P
                 Messages = [new UserMessageParam { Content = text }],
             };
 
-            return await TextOfStreamAsync(client.Messages.CreateStreaming(parameters, limit), limit);
+            return await WordWatch.RunAsync(limits.NoWords, watch => TextOfStreamAsync(client.Messages.CreateStreaming(parameters, watch.Token), watch), limit);
         }, cancellationToken);
 
     /// <summary>A Cleaned copy has about the length of its Raw. A cap above the size of the model gets a 400.</summary>
@@ -62,19 +62,27 @@ public sealed class AnthropicModelClient(IHttpClientFactory httpClientFactory, P
     // The aggregator of the SDK holds each event in memory, so this keeps only the words. A cut answer ("max_tokens") or a
     // refusal ("refusal") comes with a 200, so the stop reason decides. A stream that ends with no stop reason was cut on the
     // way, and a later try can work. A 200 with no event at all is some other service, and the same bytes come again.
-    private async Task<string?> TextOfStreamAsync(IAsyncEnumerable<RawMessageStreamEvent> stream, CancellationToken cancellationToken)
+    private async Task<string?> TextOfStreamAsync(IAsyncEnumerable<RawMessageStreamEvent> stream, WordWatch watch)
     {
         var words = new StringBuilder();
         var hasEvent = false;
         StopReason? stopReason = null;
-        await foreach (var part in stream.WithCancellation(cancellationToken))
+        await foreach (var part in stream.WithCancellation(watch.Token))
         {
             hasEvent = true;
-            if (part.TryPickContentBlockDelta(out var block) && block.Delta.TryPickText(out var delta))
+            if (part.TryPickContentBlockDelta(out var block))
             {
-                words.Append(delta.Text);
-                if (words.Length > limits.AnswerCharacters)
-                    throw new ProviderAnswerTooLargeException();
+                if (block.Delta.TryPickThinking(out var thought))
+                    watch.Saw(thought.Thinking);
+                else if (block.Delta.TryPickSignature(out var signature))
+                    watch.Saw(signature.Signature);
+                else if (block.Delta.TryPickText(out var delta))
+                {
+                    words.Append(delta.Text);
+                    watch.Saw(delta.Text);
+                    if (words.Length > limits.AnswerCharacters)
+                        throw new ProviderAnswerTooLargeException();
+                }
             }
             else if (part.TryPickDelta(out var end) && end.Delta.StopReason is { } reason)
             {

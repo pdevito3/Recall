@@ -32,7 +32,7 @@ public sealed class OpenAiCompatibleClient(IHttpClientFactory httpClientFactory,
         }, cancellationToken);
 
     public async Task<ProviderReply<string>> CompleteAsync(ModelEndpoint endpoint, string model, string instructions, string text, CancellationToken cancellationToken)
-        => await ProviderCall.RunAsync<string>(limits.Call, async limit =>
+        => await ProviderCall.RunAsync<string>(limits.Call, limit => WordWatch.RunAsync<ProviderReply<string>>(limits.NoWords, async watch =>
         {
             using var request = RequestTo(endpoint, HttpMethod.Post, "chat/completions");
             request.Content = JsonContent.Create(new
@@ -46,17 +46,17 @@ public sealed class OpenAiCompatibleClient(IHttpClientFactory httpClientFactory,
                 },
             });
 
-            using var response = await SendAsync(request, limit);
+            using var response = await SendAsync(request, watch.Token);
             if (!response.IsSuccessStatusCode)
-                return new ProviderReply<string>.Failed(ProviderFailureText.ForStatus(endpoint.Kind, (int)response.StatusCode, await response.Content.ReadAsStringAsync(limit), endpoint.ApiKey));
+                return new ProviderReply<string>.Failed(ProviderFailureText.ForStatus(endpoint.Kind, (int)response.StatusCode, await response.Content.ReadAsStringAsync(watch.Token), endpoint.ApiKey));
 
             var answer = response.Content.Headers.ContentType?.MediaType == StreamMediaType
-                ? await TextOfStreamAsync(response, limit)
-                : TextOf(JsonSerializer.Deserialize<ChatCompletion>(await response.Content.ReadAsStringAsync(limit)));
+                ? await TextOfStreamAsync(response, watch)
+                : TextOf(JsonSerializer.Deserialize<ChatCompletion>(await response.Content.ReadAsStringAsync(watch.Token)));
             return answer is not null
                 ? new ProviderReply<string>.Answered(answer)
                 : new ProviderReply<string>.Failed(ProviderFailureText.Unusable());
-        }, cancellationToken);
+        }, limit), cancellationToken);
 
     private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         => await httpClientFactory.CreateClient(ModelProviderHttp.ClientName).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
@@ -66,18 +66,21 @@ public sealed class OpenAiCompatibleClient(IHttpClientFactory httpClientFactory,
         => completion?.Choices is [{ FinishReason: "stop", Message.Content: { Length: > 0 } content }, ..] ? content : null;
 
     // A comment line is a keep-alive, a chunk can have no choice, and its content can be null. A stream that ends with no
-    // finish reason was cut on the way, and a later try can work.
-    private async Task<string?> TextOfStreamAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    // finish reason was cut on the way, and a later try can work. A 200 with no event at all is some other service, and the
+    // same bytes come again.
+    private async Task<string?> TextOfStreamAsync(HttpResponseMessage response, WordWatch watch)
     {
-        await using var body = await response.Content.ReadAsStreamAsync(cancellationToken);
+        await using var body = await response.Content.ReadAsStreamAsync(watch.Token);
         using var reader = new StreamReader(body, Encoding.UTF8);
         var words = new StringBuilder();
+        var hasEvent = false;
         string? finishReason = null;
-        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        while (await reader.ReadLineAsync(watch.Token) is { } line)
         {
             if (!line.StartsWith(DataPrefix, StringComparison.Ordinal))
                 continue;
 
+            hasEvent = true;
             var data = line[DataPrefix.Length..].Trim();
             if (data == EndOfStream)
                 break;
@@ -89,16 +92,27 @@ public sealed class OpenAiCompatibleClient(IHttpClientFactory httpClientFactory,
                 continue;
 
             words.Append(choice.Delta?.Content);
+            watch.Saw(choice.Delta?.Content);
+            watch.Saw(ThoughtIn(choice.Delta?.ReasoningContent));
+            watch.Saw(ThoughtIn(choice.Delta?.Reasoning));
             if (words.Length > limits.AnswerCharacters)
                 throw new ProviderAnswerTooLargeException();
             finishReason = choice.FinishReason ?? finishReason;
         }
 
-        if (finishReason is null)
+        if (finishReason is null && hasEvent)
             throw new ProviderSilentException();
 
         return finishReason == "stop" && words.Length > 0 ? words.ToString() : null;
     }
+
+    // Servers differ on the form of a thought: a string or an object. Only the progress matters, so any form with content counts.
+    private static string? ThoughtIn(JsonElement? thought) => thought?.ValueKind switch
+    {
+        JsonValueKind.String => thought.Value.GetString(),
+        JsonValueKind.Object or JsonValueKind.Array => thought.Value.GetRawText(),
+        _ => null,
+    };
 
     private static HttpRequestMessage RequestTo(ModelEndpoint endpoint, HttpMethod method, string path)
     {
@@ -118,7 +132,10 @@ public sealed class OpenAiCompatibleClient(IHttpClientFactory httpClientFactory,
         [property: JsonPropertyName("message")] ChoiceMessage? Message,
         [property: JsonPropertyName("finish_reason")] string? FinishReason);
 
-    private sealed record ChoiceMessage([property: JsonPropertyName("content")] string? Content);
+    private sealed record ChoiceMessage(
+        [property: JsonPropertyName("content")] string? Content,
+        [property: JsonPropertyName("reasoning_content")] JsonElement? ReasoningContent = null,
+        [property: JsonPropertyName("reasoning")] JsonElement? Reasoning = null);
 
     private sealed record StreamChunk(
         [property: JsonPropertyName("choices")] IReadOnlyList<StreamChoice>? Choices,

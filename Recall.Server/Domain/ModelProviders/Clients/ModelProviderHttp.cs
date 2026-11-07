@@ -30,6 +30,8 @@ public static class ModelProviderHttp
                 ConnectCallback = ProviderAddressRule.ConnectAsync,
             })
             .AddHttpMessageHandler<ProviderReadGuard>()
+            // The logger of a client writes each header at its lowest level, and that level reaches a file and OTLP. A header here holds the key.
+            .RemoveAllLoggers()
             .RemoveAllResilienceHandlers();
 #pragma warning restore EXTEXP0001
     }
@@ -47,16 +49,20 @@ public sealed class ModelProviderClient(AnthropicModelClient anthropic, OpenAiCo
         });
 
         return reply is ProviderReply<IReadOnlyList<ProviderModel>>.Answered answered
-            ? new ProviderReply<IReadOnlyList<ProviderModel>>.Answered(UsableOf(answered.Value))
+            ? new ProviderReply<IReadOnlyList<ProviderModel>>.Answered(UsableOf(answered.Value, endpoint.ApiKey))
             : reply;
     }
 
-    // A person picks from this list, and the choice goes to the store. An ID with bad bytes or a hidden character is no ID of a model.
-    private List<ProviderModel> UsableOf(IReadOnlyList<ProviderModel> models) => models
-        .Where(model => model.Id.Length <= ModelProvider.ModelMaxLength && VisibleText.IsClean(model.Id))
-        .Select(model => model with { DisplayName = VisibleText.IsClean(model.DisplayName) ? model.DisplayName : model.Id })
+    // A person picks from this list, and the choice goes to the store. An ID with bad bytes, a hidden character, or the key is no
+    // ID of a model. A provider can echo the key in any field, and this list reaches a page.
+    private List<ProviderModel> UsableOf(IReadOnlyList<ProviderModel> models, string? apiKey) => models
+        .Where(model => CanList(model.Id, apiKey))
+        .Select(model => model with { DisplayName = CanList(model.DisplayName, apiKey) ? model.DisplayName : model.Id })
         .Take(limits.Models)
         .ToList();
+
+    private static bool CanList(string value, string? apiKey)
+        => value.Length <= ModelProvider.ModelMaxLength && VisibleText.IsClean(value) && !ProviderFailureText.Holds(value, apiKey);
 
     public Task<ProviderReply<string>> CompleteAsync(ModelEndpoint endpoint, string model, string instructions, string text, CancellationToken cancellationToken)
         => endpoint.Kind switch

@@ -61,28 +61,34 @@ public static class ProviderFailureText
         return scrubbed.Length <= MaxLength ? scrubbed : scrubbed[..MaxLength];
     }
 
+    /// <summary>True when the text holds the key, a form of it, or a cut of a form, as <see cref="Shown"/> would remove it.</summary>
+    public static bool Holds(string text, string? apiKey)
+        => !string.IsNullOrEmpty(apiKey) && FormsOf(apiKey).Any(form => Scrubbed(text, form) != text);
+
     private static IEnumerable<string> FormsOf(string apiKey)
     {
-        var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(apiKey));
+        var bytes = Encoding.UTF8.GetBytes(apiKey);
+        var base64 = Convert.ToBase64String(bytes);
         yield return apiKey;
+        yield return Convert.ToHexString(bytes);
         yield return base64;
         yield return base64.TrimEnd('=').Replace('+', '-').Replace('/', '_');
         yield return Uri.EscapeDataString(apiKey);
         yield return WebUtility.HtmlEncode(apiKey);
     }
 
-    /// <summary>Removes the form in any case, and each run of the message that is a cut of the form.</summary>
-    private static string Scrubbed(string message, string form)
+    /// <summary>Removes the form in any case, and each run of the text that is a cut of the form.</summary>
+    private static string Scrubbed(string text, string form)
     {
         var shortest = Math.Min(ShortestCutOfKey, form.Length);
-        var result = new StringBuilder(message.Length);
+        var result = new StringBuilder(text.Length);
         var at = 0;
-        while (at < message.Length)
+        while (at < text.Length)
         {
-            var run = LongestRunInForm(message, at, form, shortest);
+            var run = LongestRunInForm(text, at, form, shortest);
             if (run == 0)
             {
-                result.Append(message[at]);
+                result.Append(text[at]);
                 at++;
                 continue;
             }
@@ -94,13 +100,13 @@ public static class ProviderFailureText
         return result.ToString();
     }
 
-    private static int LongestRunInForm(string message, int at, string form, int shortest)
+    private static int LongestRunInForm(string text, int at, string form, int shortest)
     {
-        if (at + shortest > message.Length || !form.Contains(message.AsSpan(at, shortest), StringComparison.OrdinalIgnoreCase))
+        if (at + shortest > text.Length || !form.Contains(text.AsSpan(at, shortest), StringComparison.OrdinalIgnoreCase))
             return 0;
 
         var run = shortest;
-        while (at + run < message.Length && form.Contains(message.AsSpan(at, run + 1), StringComparison.OrdinalIgnoreCase))
+        while (at + run < text.Length && form.Contains(text.AsSpan(at, run + 1), StringComparison.OrdinalIgnoreCase))
             run++;
         return run;
     }
@@ -113,6 +119,9 @@ public static class ProviderFailureText
 
     public static ProviderFailure NoAnswer()
         => new(ProviderFailureKind.Unavailable, null, "The model provider did not answer.");
+
+    public static ProviderFailure NoWords()
+        => new(ProviderFailureKind.NoWords, null, "The model provider kept the connection open and sent no words.");
 
     public static ProviderFailure Unusable()
         => new(ProviderFailureKind.BadOutput, null, "The answer of the model provider is not one that the app can use.");

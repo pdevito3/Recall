@@ -121,6 +121,28 @@ public class CleanupOutputTests
     }
 
     [Test]
+    public void a_replacement_stops_growing_a_text_past_the_limit_of_a_draft()
+    {
+        // Arrange: each letter grows 100 times, and two corrections would grow it again.
+        var term = new string('t', Correction.CanonicalTermMaxLength);
+        var text = new System.Text.StringBuilder().Insert(0, "a ", 500_000).ToString();
+        var corrections = new[]
+        {
+            Correction.Create("ten_1", "usr_1", term, ["a"], hardReplace: true),
+            Correction.Create("ten_1", "usr_1", term, [term], hardReplace: true),
+        };
+        var before = GC.GetAllocatedBytesForCurrentThread();
+
+        // Act
+        var replaced = CleanupCompletion.WithHardReplacements(text, corrections);
+
+        // Assert
+        replaced.Length.ShouldBeGreaterThan(Session.DraftMaxLength);
+        replaced.Length.ShouldBeLessThan(3 * Session.DraftMaxLength);
+        (GC.GetAllocatedBytesForCurrentThread() - before).ShouldBeLessThan(64L * 1024 * 1024);
+    }
+
+    [Test]
     public void a_hint_changes_no_word()
     {
         // Arrange

@@ -5836,7 +5836,8 @@
             "enum": [
               "Refused",
               "Unavailable",
-              "BadOutput"
+              "BadOutput",
+              "NoWords"
             ],
             "type": "string"
           },

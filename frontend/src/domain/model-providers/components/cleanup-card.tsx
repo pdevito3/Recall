@@ -25,7 +25,7 @@ const FAILURE_TEXT: Record<SessionDto['cleanupFailure'], string | null> = {
   NoModelProvider: NO_PROVIDER_TEXT,
   KeyUnreadable: 'The server cannot read the API key of the model provider. An Admin must enter the key again.',
   ProviderRefused: 'The model provider refused the request. An Admin can test the connection on this page.',
-  ProviderUnavailable: 'The model provider did not answer after several tries. Try again later.',
+  ProviderUnavailable: 'The model provider did not answer. Try again later.',
   BadModelOutput: 'The answer of the model is not one that the app can use. Try again.',
   Interrupted: 'The Cleanup stopped before it got a result. Try again.',
   Stopped: 'You stopped the Cleanup. You can run it again.',

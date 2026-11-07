@@ -9,6 +9,9 @@ public sealed class ProviderLimits
     /// <summary>A wait for one read of the answer, also for its headers. A model that works sends a byte in this time.</summary>
     public TimeSpan Idle { get; init; } = TimeSpan.FromMinutes(3);
 
+    /// <summary>A wait for the next word or the next thought of the model. A ping is a byte and no progress, and a run with only pings holds a slot of a queue.</summary>
+    public TimeSpan NoWords { get; init; } = TimeSpan.FromMinutes(10);
+
     /// <summary>One call for words with its whole stream, and each retry of the run together.</summary>
     public TimeSpan Call { get; init; } = TimeSpan.FromMinutes(40);
 

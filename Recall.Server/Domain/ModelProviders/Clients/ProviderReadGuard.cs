@@ -1,8 +1,13 @@
 namespace Recall.Server.Domain.ModelProviders.Clients;
 
+using System.Buffers;
+using System.Text;
+
 /// <summary>
 /// The one place that reads the bytes of each provider, so an adapter and an SDK cannot go around a limit. A wait with no
-/// byte ends at <see cref="ProviderLimits.Idle"/>, and an answer above its size ends when the size passes the limit.
+/// byte ends at <see cref="ProviderLimits.Idle"/>, and an answer above its size ends when the size passes the limit. A byte that
+/// is not UTF-8 in an answer with a 2xx status ends the read, because each reader of an answer turns it into U+FFFD, and the
+/// person would read a changed word. An error stays readable, because its status decides and its words are optional.
 /// </summary>
 public sealed class ProviderReadGuard(ProviderLimits limits) : DelegatingHandler
 {
@@ -24,7 +29,7 @@ public sealed class ProviderReadGuard(ProviderLimits limits) : DelegatingHandler
 
         var isStream = response.Content.Headers.ContentType?.MediaType == StreamMediaType;
         var byteLimit = isStream ? limits.StreamBytes : limits.BodyBytes;
-        var body = new GuardedStream(await response.Content.ReadAsStreamAsync(cancellationToken), limits.Idle, byteLimit, isStream ? limits.StreamLineBytes : long.MaxValue);
+        var body = new GuardedStream(await response.Content.ReadAsStreamAsync(cancellationToken), limits.Idle, byteLimit, isStream ? limits.StreamLineBytes : long.MaxValue, response.IsSuccessStatusCode);
         var guarded = new StreamContent(body);
         foreach (var header in response.Content.Headers)
             guarded.Headers.TryAddWithoutValidation(header.Key, header.Value);
@@ -32,8 +37,9 @@ public sealed class ProviderReadGuard(ProviderLimits limits) : DelegatingHandler
         return response;
     }
 
-    private sealed class GuardedStream(Stream inner, TimeSpan idle, long byteLimit, long lineLimit) : Stream
+    private sealed class GuardedStream(Stream inner, TimeSpan idle, long byteLimit, long lineLimit, bool mustBeUtf8) : Stream
     {
+        private readonly Decoder _strict = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetDecoder();
         private long _total;
         private long _line;
 
@@ -66,6 +72,8 @@ public sealed class ProviderReadGuard(ProviderLimits limits) : DelegatingHandler
             }
 
             Count(buffer.Span[..read]);
+            if (mustBeUtf8)
+                CheckUtf8(buffer.Span[..read]);
             return read;
         }
 
@@ -82,6 +90,20 @@ public sealed class ProviderReadGuard(ProviderLimits limits) : DelegatingHandler
             _line = lastLineEnd >= 0 ? bytes.Length - lastLineEnd - 1 : _line + bytes.Length;
             if (_total > byteLimit || _line > lineLimit)
                 throw new ProviderAnswerTooLargeException();
+        }
+
+        /// <summary>The decoder keeps a character that a read cut in two. At the end of the body, a cut character is a bad byte.</summary>
+        private void CheckUtf8(ReadOnlySpan<byte> bytes)
+        {
+            var chars = ArrayPool<char>.Shared.Rent(bytes.Length + 4);
+            try
+            {
+                _strict.GetChars(bytes, chars, flush: bytes.IsEmpty);
+            }
+            finally
+            {
+                ArrayPool<char>.Shared.Return(chars);
+            }
         }
 
         public override void Flush() { }

@@ -37,6 +37,7 @@ public static class CleanupAttempt
     {
         ProviderFailureKind.Refused => new CleanupStep.Fail(CleanupFailure.ProviderRefused),
         ProviderFailureKind.BadOutput => new CleanupStep.Fail(CleanupFailure.BadModelOutput),
+        ProviderFailureKind.NoWords => new CleanupStep.Fail(CleanupFailure.ProviderUnavailable),
         ProviderFailureKind.Unavailable when attempt >= MaxProviderCalls => new CleanupStep.Fail(CleanupFailure.ProviderUnavailable),
         ProviderFailureKind.Unavailable => new CleanupStep.TryAgainLater(),
         _ => throw new ArgumentOutOfRangeException(nameof(failure)),

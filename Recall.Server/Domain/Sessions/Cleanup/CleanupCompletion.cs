@@ -27,7 +27,14 @@ public sealed class CleanupCompletion(AppDbContext dbContext)
             .Select(s => (bool?)s.RequirePeopleProposalApproval)
             .FirstOrDefaultAsync(cancellationToken) ?? true;
 
-        var cleaned = MarkdownToProseMirror.ConvertToJson(WithHardReplacements(output.CleanedMarkdown, corrections));
+        var markdown = WithHardReplacements(output.CleanedMarkdown, corrections);
+        if (markdown.Length > Session.DraftMaxLength)
+            return null;
+
+        var cleaned = MarkdownToProseMirror.ConvertToJson(markdown);
+        if (cleaned.Length > Session.DraftMaxLength)
+            return null;
+
         var plain = ProseMirrorToPlainText.Render(cleaned);
         var names = output.PersonNames.Where(name => PeopleTagSpans.Occurrences(plain, name).Count > 0).ToList();
 
@@ -70,7 +77,11 @@ public sealed class CleanupCompletion(AppDbContext dbContext)
     {
         foreach (var correction in corrections.Where(c => c.HardReplace))
         foreach (var mishearing in correction.Mishearings.Where(m => m.Length > 0))
+        {
             markdown = ReplaceWholeWord(markdown, mishearing, correction.CanonicalTerm);
+            if (markdown.Length > Session.DraftMaxLength)
+                return markdown;
+        }
 
         return markdown;
     }
@@ -89,6 +100,10 @@ public sealed class CleanupCompletion(AppDbContext dbContext)
             var isWhole = (found == 0 || !char.IsLetterOrDigit(text[found - 1])) && (end == text.Length || !char.IsLetterOrDigit(text[end]));
             result.Append(text, position, found - position).Append(isWhole ? term : text.Substring(found, word.Length));
             position = end;
+
+            // A short mishearing and a long term can grow a text 100 times, and a longer text cannot be a Draft.
+            if (result.Length > Session.DraftMaxLength)
+                break;
         }
 
         return result.Append(text, position, text.Length - position).ToString();

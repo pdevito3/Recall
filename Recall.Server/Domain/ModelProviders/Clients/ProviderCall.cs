@@ -1,6 +1,7 @@
 namespace Recall.Server.Domain.ModelProviders.Clients;
 
 using System.Net.Sockets;
+using System.Text;
 using System.Text.Json;
 using Anthropic.Exceptions;
 
@@ -12,6 +13,46 @@ public sealed class ProviderAnswerTooLargeException : Exception;
 
 /// <summary>The address of the provider is one that <see cref="ProviderAddressRule"/> refuses.</summary>
 public sealed class ProviderAddressRefusedException : Exception;
+
+/// <summary>The time of <see cref="ProviderLimits.NoWords"/> ended with no word and no thought of the model.</summary>
+public sealed class ProviderNoWordsException : Exception;
+
+/// <summary>Counts the words and thoughts of a model as its progress, so bytes with no words end at a limit that is far under the limit of the call.</summary>
+public sealed class WordWatch : IDisposable
+{
+    private readonly CancellationTokenSource _wait;
+    private readonly TimeSpan _limit;
+
+    private WordWatch(TimeSpan limit, CancellationToken cancellationToken)
+    {
+        _limit = limit;
+        _wait = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _wait.CancelAfter(limit);
+    }
+
+    public CancellationToken Token => _wait.Token;
+
+    public void Saw(string? words)
+    {
+        if (!string.IsNullOrWhiteSpace(words))
+            _wait.CancelAfter(_limit);
+    }
+
+    public static async Task<T> RunAsync<T>(TimeSpan limit, Func<WordWatch, Task<T>> read, CancellationToken cancellationToken)
+    {
+        using var watch = new WordWatch(limit, cancellationToken);
+        try
+        {
+            return await read(watch);
+        }
+        catch (Exception) when (watch.Token.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new ProviderNoWordsException();
+        }
+    }
+
+    public void Dispose() => _wait.Dispose();
+}
 
 /// <summary>The one way that an adapter runs a call: each fault of the provider becomes a failure, and no exception leaves.</summary>
 public static class ProviderCall
@@ -45,7 +86,9 @@ public static class ProviderCall
         var chain = ChainOf(fault).ToList();
         if (chain.Any(link => link is ProviderAddressRefusedException))
             return ProviderFailureText.AddressRefused();
-        if (chain.Any(link => link is ProviderAnswerTooLargeException or JsonException or AnthropicInvalidDataException))
+        if (chain.Any(link => link is ProviderNoWordsException))
+            return ProviderFailureText.NoWords();
+        if (chain.Any(link => link is ProviderAnswerTooLargeException or JsonException or AnthropicInvalidDataException or DecoderFallbackException))
             return ProviderFailureText.Unusable();
         if (chain.Any(link => link is HttpRequestException { HttpRequestError: HttpRequestError.InvalidResponse }))
             return ProviderFailureText.Unusable();

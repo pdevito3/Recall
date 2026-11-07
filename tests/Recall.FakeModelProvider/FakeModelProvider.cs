@@ -48,8 +48,11 @@ public enum FakeMode
     /// <summary>A 200 with bytes and no end, on each route, in the type <see cref="FakeBehavior.ContentType"/>.</summary>
     EndlessBody,
 
-    /// <summary>A stream that sends one keep-alive each <see cref="FakeBehavior.DelayMs"/> and no word, with no end.</summary>
+    /// <summary>A stream that sends one keep-alive and one delta of a space each <see cref="FakeBehavior.DelayMs"/> and no word, with no end.</summary>
     KeepAliveForever,
+
+    /// <summary>A stream of one thought each <see cref="FakeBehavior.DelayMs"/>, ten times, and then the whole answer. A model that thinks looks so.</summary>
+    Thinking,
 
     /// <summary>A stream of one word each <see cref="FakeBehavior.DelayMs"/>, and then the whole answer. A model that works looks so.</summary>
     SlowWords,
@@ -72,6 +75,15 @@ public sealed class FakeBehavior
     /// <summary>The words of the answer in place of the object that the fake makes from the request.</summary>
     public string? Reply { get; set; }
 
+    /// <summary>The body of <see cref="FakeMode.RawBody"/> as bytes, one write for each byte, so a character crosses each edge of a read.</summary>
+    public byte[]? ReplyBytes { get; set; }
+
+    /// <summary>The status of <see cref="FakeMode.RawBody"/>.</summary>
+    public int RawStatus { get; set; } = 200;
+
+    /// <summary><see cref="FakeMode.RawBody"/> on the route of a completion only, so an adapter that reads the model first gets to its stream.</summary>
+    public bool RawBodyOnWordsOnly { get; set; }
+
     public string ContentType { get; set; } = "application/json";
 
     /// <summary>With <see cref="FakeMode.Hold"/>, only a request that holds these words waits.</summary>
@@ -88,6 +100,8 @@ public sealed class FakeModelProvider : IAsyncDisposable
     public const string ModelId = "fake-model-1";
     public const string SecondModelId = "fake-model-2";
     public const long ModelMaxTokens = 64_000;
+
+    private const int ThoughtsOfAModel = 10;
 
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
 
@@ -184,14 +198,29 @@ public sealed class FakeModelProvider : IAsyncDisposable
         if (Behavior.Mode is not (FakeMode.RawBody or FakeMode.EndlessBody) || context.Request.Path.StartsWithSegments("/control"))
             return false;
 
+        if (Behavior.RawBodyOnWordsOnly && context.Request.Path.Value!.Contains("/models", StringComparison.Ordinal))
+            return false;
+
         if (context.Request.Path.Value!.EndsWith("/models", StringComparison.Ordinal))
             Interlocked.Increment(ref _modelListCalls);
         else
             Interlocked.Increment(ref _completionCalls);
 
+        context.Response.StatusCode = Behavior.RawStatus;
         context.Response.Headers.ContentType = Behavior.ContentType;
         if (Behavior.Mode == FakeMode.RawBody)
         {
+            if (Behavior.ReplyBytes is { } bytes)
+            {
+                for (var at = 0; at < bytes.Length; at++)
+                {
+                    await context.Response.Body.WriteAsync(bytes.AsMemory(at, 1), context.RequestAborted);
+                    await context.Response.Body.FlushAsync(context.RequestAborted);
+                }
+
+                return true;
+            }
+
             await context.Response.WriteAsync(Behavior.Reply ?? string.Empty);
             return true;
         }
@@ -350,6 +379,16 @@ public sealed class FakeModelProvider : IAsyncDisposable
             {
                 await Task.Delay(Behavior.DelayMs, context.RequestAborted);
                 await WriteEventAsync(context, "ping", new { type = "ping" });
+                await WriteEventAsync(context, "content_block_delta", new { type = "content_block_delta", index = 1, delta = new { type = "text_delta", text = " " } });
+            }
+        }
+
+        if (Behavior.Mode == FakeMode.Thinking)
+        {
+            for (var thought = 0; thought < ThoughtsOfAModel; thought++)
+            {
+                await Task.Delay(Behavior.DelayMs, context.RequestAborted);
+                await WriteEventAsync(context, "content_block_delta", new { type = "content_block_delta", index = 0, delta = new { type = "thinking_delta", thinking = "hmm" } });
             }
         }
 
@@ -495,7 +534,16 @@ public sealed class FakeModelProvider : IAsyncDisposable
                     await Task.Delay(Behavior.DelayMs, context.RequestAborted);
                     await context.Response.WriteAsync(": keep-alive\n\n");
                     await context.Response.Body.FlushAsync();
+                    await WriteCompatibleChunkAsync(context, new { content = " " }, null);
                 }
+            case FakeMode.Thinking:
+                for (var thought = 0; thought < ThoughtsOfAModel; thought++)
+                {
+                    await Task.Delay(Behavior.DelayMs, context.RequestAborted);
+                    await WriteCompatibleChunkAsync(context, new { reasoning_content = "hmm" }, null);
+                }
+
+                break;
         }
 
         foreach (var part in PartsOf(reply))
