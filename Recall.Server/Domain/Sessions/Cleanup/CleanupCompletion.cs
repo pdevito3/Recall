@@ -48,6 +48,7 @@ public sealed class CleanupCompletion(AppDbContext dbContext)
         {
             var spans = new List<MentionSpan>();
             var newPeople = new List<Person>();
+            var personOfName = new List<(string Name, Person Person)>();
             foreach (var name in names)
             {
                 var person = MatchOf(people.Concat(newPeople), name);
@@ -57,13 +58,18 @@ public sealed class CleanupCompletion(AppDbContext dbContext)
                     newPeople.Add(person);
                 }
 
+                personOfName.Add((name, person));
                 spans.AddRange(PeopleTagSpans.Spans(plain, name, person.Id, person.Label));
             }
 
-            // A name with a mark across it, or inside a longer name, holds no tag, and a Person with no tag is a change that nothing on the page explains.
+            // A name with a mark across it, or inside a longer name, holds no tag. It adds no Person, which nothing on the page would explain,
+            // and it stays a proposal, so the page shows the name, and a tag of it says why it is refused.
             cleaned = MentionInsertion.Insert(cleaned, spans);
             var tagged = PersonMentions.PersonIdsIn(cleaned);
             added.AddRange(newPeople.Where(person => tagged.Contains(person.Id)));
+            proposals = personOfName.Where(pair => !tagged.Contains(pair.Person.Id))
+                .Select(pair => new PersonProposal(pair.Name, MatchOf(people, pair.Name)?.Id))
+                .ToList();
         }
 
         if (cleaned.Length > Session.DraftMaxLength)

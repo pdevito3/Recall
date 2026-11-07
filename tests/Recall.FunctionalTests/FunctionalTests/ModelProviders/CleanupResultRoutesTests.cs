@@ -532,6 +532,28 @@ public class CleanupResultRoutesTests : TestBase
 
     [Test]
     [Property("Rule", "SES-41")]
+    public async Task with_approval_off_a_name_that_gets_no_tag_stays_a_proposal_and_a_tag_of_it_says_why()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        var settings = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new UserSettingChangeDto { TimeZone = "Europe/Tallinn", LocationCaptureEnabled = false, RequirePeopleProposalApproval = false, Version = 0 });
+        settings.StatusCode.ShouldBe(HttpStatusCode.OK, await settings.Content.ReadAsStringAsync());
+        var session = await scenario.SessionWithWordsAsync("raw words");
+        var stored = await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "I met **Sam** Lee and Ann", peopleProposal = SamLeeAndAnn, baseRawRevision = 1, baseCleanedRevision = 0 });
+
+        // Act
+        var answer = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.RespondToPersonProposal(session.Id), new { label = "Sam Lee", approve = true, createNew = false });
+
+        // Assert
+        var proposal = stored.PeopleProposals.ShouldHaveSingleItem();
+        proposal.Label.ShouldBe("Sam Lee");
+        proposal.Contexts.ShouldBe(["I met Sam Lee and Ann"]);
+        answer.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await answer.Content.ReadAsStringAsync()).ShouldContain("a mark crosses the name");
+    }
+
+    [Test]
+    [Property("Rule", "SES-41")]
     public async Task with_approval_off_a_name_inside_a_longer_name_adds_only_the_person_that_has_a_tag()
     {
         // Arrange
