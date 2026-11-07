@@ -332,6 +332,24 @@ public class LocalParakeetEngineTests
 
     [Test]
     [Property("Rule", "REC-15")]
+    [Arguments("No space left on device", RecordingProblem.DiskFull)]
+    [Arguments("Read-only file system", RecordingProblem.DiskRefused)]
+    public async Task words_of_the_disk_after_words_of_bad_audio_name_the_disk(string diskWords, RecordingProblem problem)
+    {
+        // Arrange
+        using var rig = new Rig();
+        var words = $"Error opening input files: Invalid data found when processing input|Error opening output: {diskWords}".Replace('|', '\n');
+        var engine = rig.Engine(rig.Script("worker", ChunkLine), rig.Script("ffmpeg", $"printf '{words}\n' >&2; exit 1"));
+
+        // Act
+        var actual = await ProblemOfAsync(engine, rig.Input());
+
+        // Assert
+        actual.ShouldBe(problem);
+    }
+
+    [Test]
+    [Property("Rule", "REC-15")]
     public async Task a_disk_that_also_refuses_the_delete_of_the_work_file_still_says_that_it_refused()
     {
         // Arrange
@@ -381,6 +399,9 @@ public class LocalParakeetEngineTests
     [Arguments("Error opening input files: End of file", 187)]
     [Arguments("[aost#0:0 @ 0x1] Decoding requested, but no decoder found for: flac", 234)]
     [Arguments("[out#0/wav @ 0x1] Output file does not contain any stream", 234)]
+    [Arguments("Error opening output files: Not yet implemented in FFmpeg, patches welcome", 176)]
+    [Arguments("[aist#0:0 @ 0x1] Error while opening decoder: Function not implemented", 218)]
+    [Arguments("[af#0:0 @ 0x1] Task finished with error code: -22 (Invalid argument)", 234)]
     public async Task each_wording_that_ffmpeg_uses_for_bad_audio_is_unreadable(string words, int exitCode)
     {
         // Arrange

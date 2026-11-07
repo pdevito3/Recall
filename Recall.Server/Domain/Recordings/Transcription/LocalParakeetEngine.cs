@@ -29,6 +29,9 @@ public sealed class LocalParakeetEngine(ModelStore modelStore, IOptions<Transcri
         ("Error opening input files: End of file", RecordingProblem.AudioUnreadable),
         ("no decoder found for", RecordingProblem.AudioUnreadable),
         ("does not contain any stream", RecordingProblem.AudioUnreadable),
+        ("Not yet implemented in FFmpeg", RecordingProblem.AudioUnreadable),
+        ("Error while opening decoder: Function not implemented", RecordingProblem.AudioUnreadable),
+        ("Task finished with error code: -22 (Invalid argument)", RecordingProblem.AudioUnreadable),
     ];
 
     private static readonly JsonSerializerOptions WorkerLines = new(JsonSerializerDefaults.Web);

@@ -21,7 +21,10 @@ using Serilog;
 public static partial class McpDomainErrors
 {
     public static McpRequestHandler<CallToolRequestParams, CallToolResult> Filter(
-        McpRequestHandler<CallToolRequestParams, CallToolResult> next) =>
+        McpRequestHandler<CallToolRequestParams, CallToolResult> next) => FilterLoggingTo(next, null);
+
+    public static McpRequestHandler<CallToolRequestParams, CallToolResult> FilterLoggingTo(
+        McpRequestHandler<CallToolRequestParams, CallToolResult> next, ILogger? logger) =>
         async (context, cancellationToken) =>
         {
             try
@@ -34,7 +37,7 @@ public static partial class McpDomainErrors
             }
             catch (Exception exception) when (DomainError.From(exception).Kind == DomainErrorKind.DiskFull)
             {
-                Log.ForContext(typeof(McpDomainErrors)).Error(exception, "A tool call failed because the disk is full");
+                (logger ?? Log.ForContext(typeof(McpDomainErrors))).Error(exception, "A tool call failed because the disk is full");
                 return ToToolError(DomainError.From(exception));
             }
             catch (ArgumentException exception) when (MissingArgument(exception) is { } name)

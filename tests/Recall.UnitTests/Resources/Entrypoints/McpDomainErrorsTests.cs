@@ -9,6 +9,9 @@ using ModelContextProtocol.Server;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using NSubstitute;
+using Serilog;
+using Serilog.Core;
+using Serilog.Events;
 using Shouldly;
 
 public class McpDomainErrorsTests
@@ -116,6 +119,23 @@ public class McpDomainErrorsTests
     }
 
     [Test]
+    public async Task a_full_disk_stays_in_the_log_with_its_exception()
+    {
+        // Arrange
+        var failure = new SqliteException("database or disk is full", 13);
+        var sink = new CollectingSink();
+        using var logger = new LoggerConfiguration().WriteTo.Sink(sink).CreateLogger();
+
+        // Act
+        await CallToolThatThrows(failure, logger);
+
+        // Assert
+        var logged = sink.Events.ShouldHaveSingleItem();
+        logged.Level.ShouldBe(LogEventLevel.Error);
+        logged.Exception.ShouldBe(failure);
+    }
+
+    [Test]
     public async Task a_json_error_when_each_argument_converts_stays_a_server_fault()
     {
         // Act
@@ -169,9 +189,16 @@ public class McpDomainErrorsTests
 
     private static string ListItems(int? pageSize, CancellationToken cancellationToken) => $"{pageSize}";
 
-    private static async Task<CallToolResult> CallToolThatThrows(Exception exception)
+    private sealed class CollectingSink : ILogEventSink
     {
-        var handler = McpDomainErrors.Filter((_, _) => throw exception);
+        public List<LogEvent> Events { get; } = [];
+
+        public void Emit(LogEvent logEvent) => Events.Add(logEvent);
+    }
+
+    private static async Task<CallToolResult> CallToolThatThrows(Exception exception, ILogger? logger = null)
+    {
+        var handler = McpDomainErrors.FilterLoggingTo((_, _) => throw exception, logger ?? Logger.None);
         var request = new RequestContext<CallToolRequestParams>(
             Substitute.For<McpServer>(),
             new JsonRpcRequest { Method = RequestMethods.ToolsCall },
