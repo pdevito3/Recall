@@ -10,6 +10,13 @@ export const recordingDtoFormatEnum = {
 
 export type RecordingDtoFormatEnumKey = (typeof recordingDtoFormatEnum)[keyof typeof recordingDtoFormatEnum];
 
+export const recordingDtoEngineEnum = {
+    Local: "Local",
+    Cloud: "Cloud"
+} as const;
+
+export type RecordingDtoEngineEnumKey = (typeof recordingDtoEngineEnum)[keyof typeof recordingDtoEngineEnum];
+
 export const recordingDtoStatusEnum = {
     Receiving: "Receiving",
     Received: "Received",
@@ -35,7 +42,11 @@ export const recordingDtoProblemEnum = {
     TooManyAttempts: "TooManyAttempts",
     TooLong: "TooLong",
     TextTooLong: "TextTooLong",
-    NoWordsFound: "NoWordsFound"
+    NoWordsFound: "NoWordsFound",
+    ProviderUnavailable: "ProviderUnavailable",
+    ProviderRefused: "ProviderRefused",
+    ProviderBadAnswer: "ProviderBadAnswer",
+    ProviderKeyUnreadable: "ProviderKeyUnreadable"
 } as const;
 
 export type RecordingDtoProblemEnumKey = (typeof recordingDtoProblemEnum)[keyof typeof recordingDtoProblemEnum];
@@ -45,7 +56,7 @@ export type RecordingDto = {
     sessionId: string;
     clientRecordingId: string;
     format: RecordingDtoFormatEnumKey;
-    engine: "Local";
+    engine: RecordingDtoEngineEnumKey;
     status: RecordingDtoStatusEnumKey;
     problem: RecordingDtoProblemEnumKey;
     /**
