@@ -8,17 +8,10 @@ import { useJournalZone } from '@/domain/settings/apis/user-setting'
 import { formatInstant, type TimeZone } from '@/lib/zoned-time'
 
 import type { DraftChannel } from '../apis/session.keys'
+import { CleanupCard } from './cleanup-card'
 import { DeleteSession } from './delete-session'
 import { DraftEditor } from './draft-editor'
 import { SessionTags } from './session-tags'
-
-const cleanupLabels: Record<SessionDto['cleanupStatus'], string | null> = {
-  NotRun: null,
-  Running: 'Cleanup is running.',
-  Clean: 'The cleaned version is up to date.',
-  Stale: 'Your words changed after the last cleanup.',
-  Failed: 'The last cleanup did not finish. Your words did not change.',
-}
 
 const tabClass =
   'flex min-h-9 items-center rounded-md px-3 text-sm outline-none data-[focus-visible]:ring-[3px] data-[focus-visible]:ring-ring/50 data-[selected]:bg-background data-[selected]:shadow-sm max-md:min-h-11'
@@ -37,7 +30,6 @@ export function SessionPage({ session }: { session: SessionDto }) {
   const zone = useJournalZone()
   const [channel, setChannel] = useState<DraftChannel>('raw')
   const hasCleaned = session.cleanedLatestRevision > 0
-  const cleanup = cleanupLabels[session.cleanupStatus]
   const heading = headingFor(session, zone)
   useBreadcrumbName(heading)
 
@@ -48,7 +40,6 @@ export function SessionPage({ session }: { session: SessionDto }) {
         <DeleteSession session={session} />
       </div>
       {session.synopsis && <p className="text-muted-foreground wrap-anywhere">{session.synopsis}</p>}
-      {cleanup && <p className="text-sm text-muted-foreground">{cleanup}</p>}
       {hasCleaned && (
         <Tabs selectedKey={channel} onSelectionChange={(key) => setChannel(key as DraftChannel)}>
           <TabList aria-label="Versions of this entry" className="inline-flex gap-1 rounded-lg bg-muted p-1">
@@ -58,6 +49,7 @@ export function SessionPage({ session }: { session: SessionDto }) {
         </Tabs>
       )}
       <DraftEditor key={channel} session={session} channel={channel} />
+      <CleanupCard session={session} />
       <SessionTags session={session} />
     </>
   )

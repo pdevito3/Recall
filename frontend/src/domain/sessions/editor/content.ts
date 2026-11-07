@@ -76,10 +76,18 @@ export function holdsEachWordOf(text: string, words: string): boolean {
   return [...plainWordCounts(words)].every(([word, count]) => (held.get(word) ?? 0) >= count)
 }
 
-function personIdsIn(node: JSONContent): string[] {
+function mentionsIn(node: JSONContent): { personId: string; label: string }[] {
   const personId: unknown = node.type === 'mention' ? node.attrs?.personId : null
-  const own = typeof personId === 'string' && personId ? [personId] : []
-  return [...own, ...childrenOf(node).flatMap(personIdsIn)]
+  const own = typeof personId === 'string' && personId ? [{ personId, label: String(node.attrs?.label ?? '') }] : []
+  return [...own, ...childrenOf(node).flatMap(mentionsIn)]
+}
+
+const personIdsIn = (node: JSONContent) => mentionsIn(node).map(({ personId }) => personId)
+
+/** The label of each Person that a text tags, by the ID of the Person. Plain words tag no one. */
+export function mentionLabelsOf(text: string): Map<string, string> {
+  const document = parseDocument(text)
+  return new Map(document ? mentionsIn(document).map(({ personId, label }) => [personId, label]) : [])
 }
 
 export function mentionedPersonIds(raw: string | null, cleaned: string | null): string[] {

@@ -24,6 +24,11 @@ const draftRevisionOf = (session: SessionDto, channel: DraftChannel) =>
   channel === 'raw' ? session.rawDraftRevision : session.cleanedDraftRevision
 
 const changedElsewhereNote = 'These words changed in another tab or device. This page now shows the newest words.'
+// A Cleanup on the server also writes Cleaned, so the note of Cleaned names it.
+const notesOfServerChange: Record<DraftChannel, string> = {
+  raw: changedElsewhereNote,
+  cleaned: 'Cleaned changed in a Cleanup, another tab, or another device. This page now shows the newest words.',
+}
 const notesOfNewWords: Record<Exclude<WhyNewWords, 'mergedIntoNewest'>, string> = {
   heldWordsJoined: 'Words that you typed earlier and that were not saved yet are now on this page.',
   draftHoldsMore: changedElsewhereNote,
@@ -70,8 +75,8 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
     currentText.current = serverText
     const hadFocus = section.current?.contains(document.activeElement) ?? false
     setOpened((previous) => ({ text: serverText, key: previous.key + 1, takesFocus: hadFocus }))
-    setChangeNote(changedElsewhereNote)
-  }, [saver, serverDraft, serverText])
+    setChangeNote(notesOfServerChange[channel])
+  }, [saver, serverDraft, serverText, channel])
 
   useLayoutEffect(
     () =>

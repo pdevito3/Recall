@@ -86,8 +86,45 @@ class SessionBuilder {
     return this.with({ personIds })
   }
 
-  cleaned(words: string) {
-    return this.with({ cleanedText: documentWith(words), cleanedDraftRevision: 1, cleanedLatestRevision: 1, cleanupStatus: 'Clean' })
+  cleaned(words: string, revision = 1) {
+    return this.with({
+      cleanedText: documentWith(words),
+      cleanedDraftRevision: revision,
+      cleanedLatestRevision: revision,
+      cleanupStatus: 'Clean',
+      cleanupFailure: 'None',
+      cleanupBaseCleanedRevision: revision - 1,
+    })
+  }
+
+  /** A run that started from the Cleaned Draft of the builder, so its result replaces Cleaned. */
+  cleanupRunning() {
+    return this.with({ cleanupStatus: 'Running', cleanupFailure: 'None', cleanupBaseCleanedRevision: this.session.cleanedDraftRevision })
+  }
+
+  cleanupFailed(failure: SessionDto['cleanupFailure']) {
+    return this.with({ cleanupStatus: 'Failed', cleanupFailure: failure })
+  }
+
+  /** Raw is newer than the last Cleanup, and a later run failed. */
+  staleAfterAFailedRun(failure: SessionDto['cleanupFailure']) {
+    return this.with({ cleanupStatus: 'Stale', cleanupFailure: failure })
+  }
+
+  cleanedByHand() {
+    return this.with({ cleanedHasHandEdits: true })
+  }
+
+  suggesting(...suggestions: SessionDto['suggestions']) {
+    return this.with({ suggestions })
+  }
+
+  proposing(...labels: string[]) {
+    return this.with({ peopleProposals: labels.map((label) => ({ label, matchedPersonId: null, isNew: true, contexts: [] })) })
+  }
+
+  withSynopsis(synopsis: string) {
+    return this.with({ synopsis })
   }
 
   build(): SessionDto {

@@ -110,6 +110,8 @@ export function entryPage(page: Page) {
   const at = entry(page)
   const putTo = (path: string) =>
     page.waitForResponse((r) => r.request().method() === 'PUT' && new URL(r.url()).pathname === path)
+  const postTo = (path: string) =>
+    page.waitForResponse((r) => r.request().method() === 'POST' && new URL(r.url()).pathname === path)
 
   return {
     at,
@@ -134,6 +136,44 @@ export function entryPage(page: Page) {
     },
 
     aDraftSaveAnswered: (id: string) => putTo(sessionsPaths.rawDraft(id)),
+
+    async runCleanup(id: string) {
+      const answered = postTo(sessionsPaths.cleanup(id))
+      await at.runCleanup.click()
+      await answered
+    },
+
+    async stopCleanup(id: string) {
+      const answered = postTo(sessionsPaths.stopCleanup(id))
+      await at.stopCleanup.click()
+      await answered
+    },
+
+    async acceptSuggestion(id: string, value: string) {
+      const answered = postTo(sessionsPaths.acceptSuggestion(id))
+      await at.acceptSuggestion(value).click()
+      await answered
+    },
+
+    async tagPerson(id: string, label: string) {
+      const answered = postTo(sessionsPaths.respondToProposal(id))
+      await at.tagPerson(label).click()
+      await answered
+    },
+
+    async showCleaned() {
+      await at.cleanedTab.click()
+      await expect(at.cleanedEditor).toBeVisible()
+    },
+
+    /** A mark in the window of the page, which a reload or a page load clears. */
+    async markThePage() {
+      await page.evaluate(() => {
+        ;(window as unknown as { markedPage: boolean }).markedPage = true
+      })
+    },
+
+    isTheSamePage: () => page.evaluate(() => (window as unknown as { markedPage?: boolean }).markedPage === true),
 
     async goToAnotherEntryThroughTheJournal(preview: string) {
       await at.journalLink.click()

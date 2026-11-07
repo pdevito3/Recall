@@ -1,6 +1,7 @@
 import { test as base, expect, type Request, type Route } from '@playwright/test'
 import { authApi } from './api/auth-api'
 import { membershipApi } from './api/membership-api'
+import { modelProvidersApi } from './api/model-providers-api'
 import { peopleApi } from './api/people-api'
 import { sessionsApi } from './api/sessions-api'
 import { fileStoreApi } from './api/file-store-api'
@@ -45,6 +46,7 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
         recordingsApi.jobsRun(),
         sessionsApi.timelineIs([]),
         peopleApi.listIs([]),
+        modelProvidersApi.activeIs(null),
       ]
       const served = requestRecorder()
       const missed: string[] = []

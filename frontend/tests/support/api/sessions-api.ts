@@ -3,6 +3,7 @@ import type { RevisionDto } from '@/api/generated/models/types/revision-dto'
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
 import type { SessionSummaryDto } from '@/api/generated/models/types/session-summary-dto'
 import type { ProblemDetails } from '@/lib/problem-details'
+import { aProblem } from '../builders/problem-details-builder'
 import type { MockRoute } from './mock-route'
 
 export const sessionsPaths = {
@@ -12,6 +13,10 @@ export const sessionsPaths = {
   metadata: (id: string) => `/api/v1/sessions/${id}/metadata`,
   rawRevisions: (id: string) => `/api/v1/sessions/${id}/raw-revisions`,
   rawRevision: (id: string, number: number) => `/api/v1/sessions/${id}/raw-revisions/${number}`,
+  cleanup: (id: string) => `/api/v1/sessions/${id}/cleanup`,
+  stopCleanup: (id: string) => `/api/v1/sessions/${id}/cleanup/stop`,
+  acceptSuggestion: (id: string) => `/api/v1/sessions/${id}/suggestions/accept`,
+  respondToProposal: (id: string) => `/api/v1/sessions/${id}/people-proposals/respond`,
 }
 
 const won = (session: SessionDto, revision: number): DraftSaveResultDto => ({
@@ -84,6 +89,35 @@ export const sessionsApi = {
   draftSaveIsRefused(session: SessionDto, problem: { build(): ProblemDetails }): MockRoute {
     const body = problem.build()
     return { method: 'put', path: sessionsPaths.rawDraft(session.id), status: body.status ?? 422, body }
+  },
+
+  cleanupStarts(running: SessionDto): MockRoute {
+    return { method: 'post', path: sessionsPaths.cleanup(running.id), status: 202, body: running }
+  },
+
+  cleanupIsRefused(session: SessionDto, message: string): MockRoute {
+    return { method: 'post', path: sessionsPaths.cleanup(session.id), status: 422, body: aProblem().invalid({ cleanup: [message] }).build() }
+  },
+
+  cleanupStops(stopped: SessionDto): MockRoute {
+    return { method: 'post', path: sessionsPaths.stopCleanup(stopped.id), status: 200, body: stopped }
+  },
+
+  suggestionAccepted(after: SessionDto): MockRoute {
+    return { method: 'post', path: sessionsPaths.acceptSuggestion(after.id), status: 200, body: after }
+  },
+
+  proposalAnswered(after: SessionDto): MockRoute {
+    return { method: 'post', path: sessionsPaths.respondToProposal(after.id), status: 200, body: after }
+  },
+
+  proposalIsRefused(session: SessionDto, message: string): MockRoute {
+    return {
+      method: 'post',
+      path: sessionsPaths.respondToProposal(session.id),
+      status: 422,
+      body: aProblem().saying(message).invalid({ label: [message] }).build(),
+    }
   },
 
   metadataSaves(session: SessionDto): MockRoute {
