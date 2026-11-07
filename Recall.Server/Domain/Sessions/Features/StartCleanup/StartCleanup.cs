@@ -19,13 +19,15 @@ using UserSettings;
 
 public static class StartCleanup
 {
+    // The store gives at most 200 jobs a page (StoreBounds.MaxMonitorPageSize), so the read goes on until a page is empty.
+    private const int PageSize = 200;
+    private static readonly JobState[] UnfinishedStates = [JobState.Scheduled, JobState.AwaitingParent, JobState.Leased];
+
     public sealed record Command(string Id) : IRequest<SessionDto>, IRunsAgainWhenRaced;
 
     public sealed class Handler(AppDbContext dbContext, IJobStore store) : IRequestHandler<Command, SessionDto>
     {
         private const string CleanupField = "cleanup";
-        private const int PageSize = 500;
-        private static readonly JobState[] UnfinishedStates = [JobState.Scheduled, JobState.AwaitingParent, JobState.Leased];
 
         private readonly ILogger _logger = Log.ForContext<Handler>();
 
@@ -54,7 +56,7 @@ public static class StartCleanup
                     {
                         // In the callback, because each save of this process waits for its turn, so no other start enqueues
                         // between this read and this enqueue. The read is a plain read of the WAL, so it waits for no lock.
-                        var queue = CleanupQueues.Pick(session.TenantId, await UnfinishedCleanupsAsync(ct));
+                        var queue = CleanupQueues.Pick(session.TenantId, await UnfinishedCleanupsAsync(store, ct));
                         await jobs.EnqueueOnAsync(new CleanupSession(session.Id, session.UserId, session.TenantId, runId), DateTimeOffset.UtcNow, queue, ct);
                     },
                     cancellationToken);
@@ -63,24 +65,41 @@ public static class StartCleanup
 
             return session.ToSessionDto(await dbContext.LoadJournalZoneAsync(cancellationToken));
         }
+    }
 
-        private async Task<IReadOnlyCollection<(string Queue, string TenantId)>> UnfinishedCleanupsAsync(CancellationToken cancellationToken)
+    /// <summary>The queue and the tenant of each Cleanup that has not ended. A payload that does not read is left out.</summary>
+    internal static async Task<IReadOnlyCollection<(string Queue, string TenantId)>> UnfinishedCleanupsAsync(IJobStore store, CancellationToken cancellationToken)
+    {
+        var unfinished = new List<(string, string)>();
+        foreach (var state in UnfinishedStates)
         {
-            var unfinished = new List<(string, string)>();
-            foreach (var state in UnfinishedStates)
+            long? after = null;
+            while (true)
             {
-                long? after = null;
-                while (true)
-                {
-                    var page = await store.ListJobsAsync(new JobQuery { State = state, WireName = CleanupJob.WireName, AfterSequence = after, MaxResults = PageSize }, cancellationToken);
-                    unfinished.AddRange(page.Select(job => (job.Queue, JsonSerializer.Deserialize<CleanupSession>(job.Payload.Span)!.TenantId)));
-                    if (page.Count < PageSize)
-                        break;
-                    after = page[^1].Sequence;
-                }
+                var page = await store.ListJobsAsync(new JobQuery { State = state, WireName = CleanupJob.WireName, AfterSequence = after, MaxResults = PageSize }, cancellationToken);
+                if (page.Count == 0)
+                    break;
+                unfinished.AddRange(page
+                    .Select(job => (job.Queue, TenantId: TenantOf(job.Payload)))
+                    .Where(job => job.TenantId is not null)
+                    .Select(job => (job.Queue, job.TenantId!)));
+                after = page[^1].Sequence;
             }
+        }
 
-            return unfinished;
+        return unfinished;
+    }
+
+    // A payload that does not read holds no tenant, so it takes no queue, and it does not stop the start of each other Cleanup.
+    private static string? TenantOf(ReadOnlyMemory<byte> payload)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<CleanupSession>(payload.Span)?.TenantId;
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 }
