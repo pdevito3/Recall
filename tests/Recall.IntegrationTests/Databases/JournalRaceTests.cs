@@ -91,6 +91,58 @@ public class JournalRaceTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-8")]
+    public async Task a_raw_replay_whose_first_try_saved_after_the_load_runs_again_and_names_a_latest_number_no_older_than_its_draft()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var session = await AddSessionAsync(owner);
+        await ScopeOf(owner).SendAsync(new SaveRawDraft.Command(session.Id, Save("base", Morning)));
+        var words = new DraftSaveDto { Text = "words", BaseRevision = 1, SavedAt = Morning.AddMinutes(1) };
+        var pause = PauseAtQuery.After("sessions.save_raw.load");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var replay = ScopeOf(owner, services).SendAsync(new SaveRawDraft.Command(session.Id, words));
+        await pause.ReachedAsync();
+        var first = await ScopeOf(owner).SendAsync(new SaveRawDraft.Command(session.Id, words));
+        pause.Release();
+        var reply = await replay;
+
+        // Assert
+        first.Outcome.ShouldBe("Won");
+        reply.Outcome.ShouldBe("Kept");
+        reply.DraftRevision.ShouldBe(2);
+        reply.LatestRevision.ShouldBe(2);
+    }
+
+    [Test]
+    [Property("Rule", "SES-8")]
+    public async Task a_cleaned_replay_whose_first_try_saved_after_the_load_runs_again_and_names_a_latest_number_no_older_than_its_draft()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var session = await AddSessionAsync(owner);
+        await ScopeOf(owner).SendAsync(new SaveCleanedDraft.Command(session.Id, Save("base", Morning)));
+        var words = new DraftSaveDto { Text = "words", BaseRevision = 1, SavedAt = Morning.AddMinutes(1) };
+        var pause = PauseAtQuery.After("sessions.save_cleaned.load");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var replay = ScopeOf(owner, services).SendAsync(new SaveCleanedDraft.Command(session.Id, words));
+        await pause.ReachedAsync();
+        var first = await ScopeOf(owner).SendAsync(new SaveCleanedDraft.Command(session.Id, words));
+        pause.Release();
+        var reply = await replay;
+
+        // Assert
+        first.Outcome.ShouldBe("Won");
+        reply.Outcome.ShouldBe("Kept");
+        reply.DraftRevision.ShouldBe(2);
+        reply.LatestRevision.ShouldBe(2);
+    }
+
+    [Test]
     [Property("Rule", "SES-32")]
     public async Task a_metadata_change_that_a_draft_save_beat_after_the_load_runs_again_and_saves()
     {

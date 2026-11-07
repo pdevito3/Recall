@@ -3,6 +3,7 @@ namespace Recall.Server.Domain.Sessions.Features;
 using System.Diagnostics;
 using Databases;
 using Dtos;
+using Exceptions;
 using Mappings;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -29,10 +30,14 @@ public static class SaveCleanedDraft
             var earlier = await dbContext.CleanedRevisions
                 .TagWithOperationCallSite("sessions.save_cleaned.earlier")
                 .Where(r => r.SessionId == session.Id && r.SavedAt == save.SavedAt && r.Text == save.Text)
-                .Select(r => (DraftAnswer?)new DraftAnswer(r.WasDraft ? r.Number : null))
+                .Select(r => new { r.Number, r.WasDraft })
                 .FirstOrDefaultAsync(cancellationToken);
 
-            var decision = session.SaveCleaned(save, earlier);
+            // The Revision committed after the load of the Session, so the load holds an older latest number. Run again on a new load.
+            if (earlier?.Number > session.Cleaned.LatestRevision)
+                throw new StaleVersionException();
+
+            var decision = session.SaveCleaned(save, earlier is null ? null : new DraftAnswer(earlier.WasDraft ? earlier.Number : null));
             await dbContext.SaveChangesAsync(cancellationToken);
 
             Activity.Current?.SetTag("app.session.save_outcome", decision.Outcome.ToString());
