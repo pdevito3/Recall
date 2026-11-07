@@ -29,7 +29,7 @@ public sealed class SqliteWriterLine : DbCommandInterceptor
 
     internal static async Task<Turn> WaitForTurnAsync(DatabaseFacade database, CancellationToken cancellationToken)
     {
-        var line = Lines.GetOrAdd(database.GetConnectionString() ?? "", _ => new Line(new SemaphoreSlim(int.MaxValue, int.MaxValue)));
+        var line = Lines.GetOrAdd(database.GetConnectionString() ?? "", _ => new Line(new SemaphoreSlim(1, 1)));
         Interlocked.Increment(ref line.Writers);
         try
         {
