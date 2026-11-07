@@ -87,4 +87,5 @@ export const unsent = (page: Page) => ({
   logout: page.getByRole('menuitem', { name: 'Logout' }),
   locationCapture: page.getByRole('checkbox', { name: 'Save my location with each new entry' }),
   settingsHeading: page.getByRole('heading', { level: 1, name: 'Settings' }),
+  settingsLink: page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Settings' }),
 })

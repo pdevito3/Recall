@@ -1,10 +1,9 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { commands } from 'vitest/browser'
-import { render } from 'vitest-browser-react'
 
 import { SettingKeys } from './setting.keys'
-import { resumeUnsentSetting, settingSaver, useLocationCaptureIsOn } from './user-setting'
+import { locationCaptureIsOn, resumeUnsentSetting, settingSaver } from './user-setting'
 
 const prefix = 'recall.unsent-setting.person-a.'
 const staleKey = {
@@ -37,26 +36,17 @@ test('a tab that opens leaves the key of a live tab, and sends nothing', async (
   expect(await commands.takeUnansweredRequests()).toEqual([])
 })
 
-function CaptureLine() {
-  return <p>{useLocationCaptureIsOn() ? 'capture on' : 'capture off'}</p>
-}
-
-test('this device saves no location while a change to off waits for an answer', async () => {
+test('this tab saves no location while a change to off waits for an answer', async () => {
   const row = { timeZone: 'UTC', timeZoneIsKnown: true, locationCaptureEnabled: true, requirePeopleProposalApproval: false, version: 2 }
   await commands.answerRequests([{ method: 'GET', path: '/api/v1/me/settings', body: row }])
   const queryClient = new QueryClient()
   queryClient.setQueryData(SettingKeys.mine(), row)
-  const screen = await render(
-    <QueryClientProvider client={queryClient}>
-      <CaptureLine />
-    </QueryClientProvider>,
-  )
-  await expect.element(screen.getByText('capture on')).toBeVisible()
+  expect(locationCaptureIsOn(queryClient)).toBe(true)
   const saver = settingSaver(queryClient)
 
   saver.adopt({ change: null, attempt: null, asks: [{ field: 'locationCaptureEnabled', yours: false, now: true }] })
-  await expect.element(screen.getByText('capture off')).toBeVisible()
+  expect(locationCaptureIsOn(queryClient)).toBe(false)
 
   saver.answerAsk(saver.asks()[0], false)
-  await expect.element(screen.getByText('capture on')).toBeVisible()
+  expect(locationCaptureIsOn(queryClient)).toBe(true)
 })

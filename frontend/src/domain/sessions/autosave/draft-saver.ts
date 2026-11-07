@@ -52,7 +52,8 @@ export interface DraftTarget {
   sessionId: string | null
   baseRevision: number
   latestRevision: number
-  location?: Promise<{ latitude: number; longitude: number } | null>
+  /** Asked at the create, because the person can turn capture off after the first word. */
+  location?: () => Promise<{ latitude: number; longitude: number } | null>
 }
 
 const pauseInTypingMs = 800
@@ -357,7 +358,7 @@ export class DraftSaver {
 
   private async sessionIdForSave(signal: AbortSignal) {
     if (this.snapshot.sessionId) return this.snapshot.sessionId
-    const location = await this.target.location
+    const location = await this.target.location?.()
     const created = await addSession({
       body: {
         clientSessionId: this.target.clientSessionId,

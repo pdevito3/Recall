@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test'
+import type { BrowserContext, Page } from '@playwright/test'
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
 import { authApi } from '@tests/support/api/auth-api'
 import { aSetting, settingsApi, settingsPaths } from '@tests/support/api/settings-api'
@@ -589,6 +589,84 @@ test.describe('a setting that did not reach the Server', () => {
 
     await expect.poll(() => api.all('put', settingsPaths.mine).length).toBeGreaterThan(0)
     for (const put of api.all('put', settingsPaths.mine)) expect(JSON.stringify(put.body)).toContain('"locationCaptureEnabled":true')
+  })
+})
+
+test.describe('the location of a new entry', () => {
+  const place = { latitude: 41.5, longitude: -88.4 }
+  const failingPut = { method: 'put' as const, path: settingsPaths.mine, status: 503 }
+
+  const givePlace = async (context: BrowserContext) => {
+    await context.grantPermissions(['geolocation'])
+    await context.setGeolocation(place)
+  }
+
+  const typeOnTheJournal = async (page: Page, api: Api) => {
+    const journal = journalPage(page)
+    await journal.open()
+    await expect.poll(() => api.all('get', settingsPaths.mine).length).toBeGreaterThan(0)
+    await journal.typeWithoutWaiting('Words at the cafe')
+  }
+
+  const createdLatitude = async (api: Api) => {
+    await expect.poll(() => api.all('post', sessionsPaths.timeline).length, { timeout: 40_000 }).toBeGreaterThan(0)
+    return (api.last('post', sessionsPaths.timeline)?.body as { latitude: number | null }).latitude
+  }
+
+  test('goes with the entry while capture stays on', async ({ page, context, api }) => {
+    await givePlace(context)
+    const session = aSession().build()
+    api.mock(settingsApi.are(aSetting({ locationCaptureEnabled: true })), sessionsApi.creates(session), sessionsApi.draftSaveWins(session, 1))
+
+    await typeOnTheJournal(page, api)
+
+    expect(await createdLatitude(api)).toBe(place.latitude)
+  })
+
+  test('stays out when the person turns capture off after the first word, and the change waits', async ({ page, context, api }) => {
+    await givePlace(context)
+    const session = aSession().build()
+    const unsent = unsentWords(page)
+    api.mock(settingsApi.are(aSetting({ locationCaptureEnabled: true })), { method: 'post', path: sessionsPaths.timeline, status: 503 }, failingPut)
+    await typeOnTheJournal(page, api)
+    await expect.poll(() => api.all('post', sessionsPaths.timeline).length).toBeGreaterThan(0)
+
+    await unsent.at.settingsLink.click()
+    await unsent.at.locationCapture.click({ force: true })
+    await expect(unsent.at.locationCapture).not.toBeChecked()
+    api.mock(sessionsApi.creates(session), sessionsApi.draftSaveWins(session, 1))
+
+    await expect.poll(() => (api.last('post', sessionsPaths.timeline)?.body as { latitude: number | null }).latitude, { timeout: 40_000 }).toBeNull()
+  })
+
+  test('stays out while another tab holds a change to off', async ({ page, context, api }) => {
+    await givePlace(context)
+    const session = aSession().build()
+    const unsent = unsentWords(page)
+    api.mock(settingsApi.are(aSetting({ locationCaptureEnabled: true })), failingPut, sessionsApi.creates(session), sessionsApi.draftSaveWins(session, 1))
+    await unsent.openSettings()
+    await unsent.at.locationCapture.click({ force: true })
+    await expect.poll(() => unsent.settingKeys()).not.toEqual([])
+
+    await typeOnTheJournal(await context.newPage(), api)
+
+    expect(await createdLatitude(api)).toBeNull()
+  })
+
+  test('stays out at the first word when a tab that died left a change to off', async ({ page, context, api }) => {
+    await givePlace(context)
+    const session = aSession().build()
+    const unsent = unsentWords(page)
+    api.mock(settingsApi.are(aSetting({ locationCaptureEnabled: true })), failingPut, sessionsApi.creates(session), sessionsApi.draftSaveWins(session, 1))
+    await unsent.leftInStorage(`recall.unsent-setting.${actorSubject}.tab-that-died.1`, JSON.stringify({
+      change: { value: { locationCaptureEnabled: false }, savedAt: '2026-11-06T15:31:00.000Z' },
+      attempt: null,
+      asks: [],
+    }))
+
+    await typeOnTheJournal(page, api)
+
+    expect(await createdLatitude(api)).toBeNull()
   })
 })
 

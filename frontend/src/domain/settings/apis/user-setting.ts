@@ -1,5 +1,4 @@
-import { queryOptions, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { useSyncExternalStore } from 'react'
+import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 
 import type { UserSettingDto } from '@/api/generated/models/types/user-setting-dto'
 import { changeUserSetting } from '@/api/generated/user-settings/clients/change-user-setting'
@@ -7,7 +6,7 @@ import { getUserSetting } from '@/api/generated/user-settings/clients/get-user-s
 import { refreshTimelineHead } from '@/domain/sessions/apis/timeline-cache'
 import { Notification } from '@/components/notification'
 import { RowSaver, type RowSaverState } from '@/domain/sessions/autosave/row-saver'
-import { removeKey, takeKeysOfTabsThatLeft, writeKeyOfThisTab, type KeyOfATab } from '@/domain/sessions/autosave/tab-keys'
+import { keysUnder, removeKey, takeKeysOfTabsThatLeft, writeKeyOfThisTab, type KeyOfATab } from '@/domain/sessions/autosave/tab-keys'
 import { pageUserOf } from '@/lib/page-user'
 import { retryUnlessRefused } from '@/lib/problem-details'
 import { parseTimeZone, type TimeZone } from '@/lib/zoned-time'
@@ -23,16 +22,6 @@ export const userSettingOptions = queryOptions({
 
 export function useUserSetting() {
   return useQuery(userSettingOptions)
-}
-
-/** A change to off can wait for a save or for an answer on Settings. This device saves no location while it waits, so the choice holds also on a page with no prompt. */
-export function useLocationCaptureIsOn() {
-  const saver = settingSaver(useQueryClient())
-  const isOffWaiting = useSyncExternalStore(
-    saver.subscribe,
-    () => saver.pendingFields().locationCaptureEnabled === false || saver.asks().some(({ field, yours }) => field === 'locationCaptureEnabled' && yours === false),
-  )
-  return (useUserSetting().data?.locationCaptureEnabled ?? false) && !isOffWaiting
 }
 
 export function journalZoneOf(setting: UserSettingDto | undefined): TimeZone {
@@ -89,6 +78,21 @@ export const resumeUnsentSetting = (owner: string, queryClient: QueryClient) =>
       removeKey(key.storageKey)
     }
   })
+
+const holdsAnOff = ({ change, asks }: Pick<RowSaverState<SettingChange>, 'change' | 'asks'>) =>
+  change?.value.locationCaptureEnabled === false || asks.some(({ field, yours }) => field === 'locationCaptureEnabled' && yours === false)
+
+/** A change to off can wait for a save or an answer, in this tab or in a key of another tab. The app saves no location while it waits, so the choice holds also on a page with no prompt. */
+export function locationCaptureIsOn(queryClient: QueryClient) {
+  const saver = settingSaver(queryClient)
+  const isOnInRow = queryClient.getQueryData<UserSettingDto>(SettingKeys.mine())?.locationCaptureEnabled === true
+  const owner = pageUserOf()
+  const isOffInAKey = owner !== null && keysUnder(prefixOf(owner)).some((key) => {
+    const state = stateIn(key)
+    return state !== null && holdsAnOff(state)
+  })
+  return isOnInRow && !isOffInAKey && !holdsAnOff({ change: { value: saver.pendingFields(), savedAt: '' }, asks: saver.asks() })
+}
 
 export const settleSettingSaver = () => saver?.settle() ?? Promise.resolve(true)
 

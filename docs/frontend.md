@@ -245,6 +245,8 @@ The app cannot change this delay. No web API forces the commit.
 
 **A replay with a failed read.** When the read after a replay also fails, the app cannot know where the words went. It shows the notice of a loss, also for a save that won, and the words stay on the screen. `Show the newest words` reads the Draft again. **A save that won with no reply, then a later save.** On a device whose clock differs from the Server, the later save can show that it replaced a save that the page did not show, though that save was its own. Both are false alarms, and no word goes.
 
+**A change of location capture to off that waits.** The app asks at the start of an entry and again at its create. A change to off in the memory of this tab, or in a key of any tab of the person, stops the location. The prompt of a stale change shows only on Settings of the tab that holds it, so a live tab with no answer keeps location off in that browser until the person answers there or that tab closes.
+
 ## Routes
 
 Each file in `routes/` is a route. The router generates `routeTree.gen.ts`. Do not edit that file.

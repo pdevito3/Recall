@@ -1,9 +1,9 @@
-import { isCancelledError, onlineManager, useQueryClient } from '@tanstack/react-query'
+import { isCancelledError, onlineManager, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { flushSync } from 'react-dom'
 
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
-import { useLocationCaptureIsOn } from '@/domain/settings/apis/user-setting'
+import { locationCaptureIsOn, useUserSetting } from '@/domain/settings/apis/user-setting'
 import { mayTakeFocusOnThisPage } from '@/lib/first-page'
 import { isProblemDetailsError } from '@/lib/problem-details'
 import { newUuid } from '@/lib/new-uuid'
@@ -35,6 +35,15 @@ function captureLocation(): Promise<{ latitude: number; longitude: number } | nu
   })
 }
 
+function locationOfNewEntry(queryClient: QueryClient) {
+  if (!locationCaptureIsOn(queryClient)) return undefined
+  const position = captureLocation()
+  return async () => {
+    const found = await position
+    return locationCaptureIsOn(queryClient) ? found : null
+  }
+}
+
 const idleSnapshot: DraftSnapshot = { status: { kind: 'idle' }, conflict: null, sessionId: null, baseRevision: 0, latestRevision: 0, movedFromDeletedEntry: false, isOnlyInMemory: false }
 const noSubscription = () => () => undefined
 
@@ -52,7 +61,7 @@ const openingWords = (saver: DraftSaver | null, sessionId: string | null, cached
 export function useComposer() {
   const queryClient = useQueryClient()
   const owner = useOwner()
-  const captureOn = useLocationCaptureIsOn()
+  useUserSetting()
 
   const [saver, setSaverState] = useState<DraftSaver | null>(() => {
     const pointer = readPointer(owner)
@@ -176,7 +185,7 @@ export function useComposer() {
           channel: 'raw',
           baseRevision: 0,
           latestRevision: 0,
-          location: captureOn ? captureLocation() : undefined,
+          location: locationOfNewEntry(queryClient),
         },
         queryClient,
       )
@@ -184,7 +193,7 @@ export function useComposer() {
       setSaver(started)
       started.edit(text)
     },
-    [owner, captureOn, queryClient, setSaver],
+    [owner, queryClient, setSaver],
   )
 
   const handleChange = useCallback(
