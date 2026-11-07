@@ -2,12 +2,15 @@ import { useSyncExternalStore } from 'react'
 
 import { Notification } from '@/components/notification'
 import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button-variants'
 import { Link } from '@/components/ui/link'
 
 import { draftNotices, subscribeToDraftNotices, type DraftNotice } from '../autosave/draft-saver'
 import { plainPreviewOf, plainWordsOf } from '../editor/content'
 
 const previewLength = 160
+
+const entryLinkClass = buttonVariants({ variant: 'ghost', className: 'underline underline-offset-4' })
 
 const noticeClass = 'mx-4 mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border p-3 text-sm'
 
@@ -32,7 +35,7 @@ function MovedNotice({ notice }: { notice: Extract<DraftNotice, { kind: 'moved' 
       <p className="min-w-0 flex-1 basis-64">An entry that you wrote was deleted in another tab or device. Your words are safe in a new entry.</p>
       <div className="flex items-center gap-2">
         {notice.sessionId && (
-          <Link to="/sessions/$id" params={{ id: notice.sessionId }} className="font-medium underline underline-offset-4">
+          <Link to="/sessions/$id" params={{ id: notice.sessionId }} className={entryLinkClass}>
             Open the new entry
           </Link>
         )}
@@ -48,7 +51,7 @@ function EntryNotice({ label, text, sessionId, onDismiss }: { label: string; tex
       <p className="min-w-0 flex-1 basis-64">{text}</p>
       <div className="flex items-center gap-2">
         {sessionId && (
-          <Link to="/sessions/$id" params={{ id: sessionId }} className="font-medium underline underline-offset-4">
+          <Link to="/sessions/$id" params={{ id: sessionId }} className={entryLinkClass}>
             Open the entry
           </Link>
         )}
@@ -122,7 +125,7 @@ function InHistoryNotice({ notice }: { notice: Extract<DraftNotice, { kind: 'inH
       </div>
       <div className="flex items-center gap-2">
         {notice.sessionId && (
-          <Link to="/sessions/$id" params={{ id: notice.sessionId }} className="font-medium underline underline-offset-4">
+          <Link to="/sessions/$id" params={{ id: notice.sessionId }} className={entryLinkClass}>
             Open the entry
           </Link>
         )}
