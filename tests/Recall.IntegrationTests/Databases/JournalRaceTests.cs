@@ -46,7 +46,7 @@ public class JournalRaceTests : TestBase
 
     [Test]
     [Property("Rule", "SES-5")]
-    public async Task a_raw_save_that_a_rival_beat_after_the_load_runs_again_and_keeps_both()
+    public async Task a_raw_save_that_a_rival_beat_after_the_load_runs_again_and_loses_with_its_words_in_a_revision()
     {
         // Arrange
         var owner = await AddOwnerAsync();
@@ -61,15 +61,15 @@ public class JournalRaceTests : TestBase
         pause.Release();
 
         // Assert
-        (await save).DraftRevision.ShouldBe(2);
+        (await save).Outcome.ShouldBe("Lost");
         var stored = await ScopeOf(owner).SendAsync(new GetSession.Query(session.Id));
-        stored.RawText.ShouldBe("newer");
+        stored.RawText.ShouldBe("older");
         (await RawTextsAsync(owner, session.Id)).ShouldBe(["older", "newer"]);
     }
 
     [Test]
     [Property("Rule", "SES-5")]
-    public async Task a_cleaned_save_that_a_rival_beat_after_the_load_runs_again_and_keeps_both()
+    public async Task a_cleaned_save_that_a_rival_beat_after_the_load_runs_again_and_loses_with_its_words_in_a_revision()
     {
         // Arrange
         var owner = await AddOwnerAsync();
@@ -84,10 +84,62 @@ public class JournalRaceTests : TestBase
         pause.Release();
 
         // Assert
-        (await save).DraftRevision.ShouldBe(2);
+        (await save).Outcome.ShouldBe("Lost");
         var stored = await ScopeOf(owner).SendAsync(new GetSession.Query(session.Id));
-        stored.CleanedText.ShouldBe("newer");
+        stored.CleanedText.ShouldBe("older");
         stored.CleanedLatestRevision.ShouldBe(2);
+    }
+
+    [Test]
+    [Property("Rule", "SES-8")]
+    public async Task a_raw_replay_whose_first_try_saved_after_the_load_runs_again_and_names_a_latest_number_no_older_than_its_draft()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var session = await AddSessionAsync(owner);
+        await ScopeOf(owner).SendAsync(new SaveRawDraft.Command(session.Id, Save("base", Morning)));
+        var words = new DraftSaveDto { Text = "words", BaseRevision = 1, SavedAt = Morning.AddMinutes(1) };
+        var pause = PauseAtQuery.After("sessions.save_raw.load");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var replay = ScopeOf(owner, services).SendAsync(new SaveRawDraft.Command(session.Id, words));
+        await pause.ReachedAsync();
+        var first = await ScopeOf(owner).SendAsync(new SaveRawDraft.Command(session.Id, words));
+        pause.Release();
+        var reply = await replay;
+
+        // Assert
+        first.Outcome.ShouldBe("Won");
+        reply.Outcome.ShouldBe("Kept");
+        reply.DraftRevision.ShouldBe(2);
+        reply.LatestRevision.ShouldBe(2);
+    }
+
+    [Test]
+    [Property("Rule", "SES-8")]
+    public async Task a_cleaned_replay_whose_first_try_saved_after_the_load_runs_again_and_names_a_latest_number_no_older_than_its_draft()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var session = await AddSessionAsync(owner);
+        await ScopeOf(owner).SendAsync(new SaveCleanedDraft.Command(session.Id, Save("base", Morning)));
+        var words = new DraftSaveDto { Text = "words", BaseRevision = 1, SavedAt = Morning.AddMinutes(1) };
+        var pause = PauseAtQuery.After("sessions.save_cleaned.load");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var replay = ScopeOf(owner, services).SendAsync(new SaveCleanedDraft.Command(session.Id, words));
+        await pause.ReachedAsync();
+        var first = await ScopeOf(owner).SendAsync(new SaveCleanedDraft.Command(session.Id, words));
+        pause.Release();
+        var reply = await replay;
+
+        // Assert
+        first.Outcome.ShouldBe("Won");
+        reply.Outcome.ShouldBe("Kept");
+        reply.DraftRevision.ShouldBe(2);
+        reply.LatestRevision.ShouldBe(2);
     }
 
     [Test]

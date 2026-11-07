@@ -339,8 +339,8 @@ public class EndpointAccessSweepTests : TestBase
         await InsertAsync(users);
         await InsertAsync(agent);
         var session = Session.Create(tenant.Id, admin.Id, $"sweep-{Guid.NewGuid():N}", DateTimeOffset.UnixEpoch, null, DateTimeOffset.UtcNow);
-        session.SaveRaw(DraftSave.Of("sweep words", 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UtcNow));
-        session.SaveCleaned(DraftSave.Of("sweep words", 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UtcNow));
+        session.SaveRaw(DraftSave.Of("sweep words", 0, DateTimeOffset.UnixEpoch));
+        session.SaveCleaned(DraftSave.Of("sweep words", 0, DateTimeOffset.UnixEpoch));
         var person = Person.Create(tenant.Id, admin.Id, "Sweep person");
         var correction = Correction.Create(tenant.Id, admin.Id, "Sweep term", [], false);
         await InsertAsync(session);

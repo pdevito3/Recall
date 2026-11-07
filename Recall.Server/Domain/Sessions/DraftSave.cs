@@ -8,11 +8,10 @@ public sealed class DraftSave
     private const string TextField = "text";
     private const string BaseRevisionField = "baseRevision";
 
-    private DraftSave(string text, int baseRevision, DateTimeOffset claimedSavedAt, DateTimeOffset savedAt)
+    private DraftSave(string text, int baseRevision, DateTimeOffset savedAt)
     {
         Text = text;
         BaseRevision = baseRevision;
-        ClaimedSavedAt = claimedSavedAt;
         SavedAt = savedAt;
     }
 
@@ -20,12 +19,9 @@ public sealed class DraftSave
 
     public int BaseRevision { get; }
 
-    /// <summary>The time that the client sent. A replay sends it again, also when the clock of the client is fast.</summary>
-    public DateTimeOffset ClaimedSavedAt { get; }
-
     public DateTimeOffset SavedAt { get; }
 
-    public static DraftSave Of(string text, int baseRevision, DateTimeOffset claimedSavedAt, DateTimeOffset now)
+    public static DraftSave Of(string text, int baseRevision, DateTimeOffset savedAt)
     {
         ValidationException.ThrowWhenLongerThan(text, Session.DraftMaxStoredLength, TextField,
             "The text is too long or has too much formatting to save. Make the text shorter or split the text.");
@@ -35,6 +31,6 @@ public sealed class DraftSave
 
         ValidationException.Must(baseRevision >= DraftSlot.NoRevision, BaseRevisionField, "The base revision must not be negative.");
 
-        return new DraftSave(text, baseRevision, claimedSavedAt, claimedSavedAt < now ? claimedSavedAt : now);
+        return new DraftSave(text, baseRevision, savedAt);
     }
 }

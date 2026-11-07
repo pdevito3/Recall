@@ -51,10 +51,10 @@ public class StringColumnLengthTests
         ["corrections.canonical_term"] = new("canonicalTerm", Text, v => Correction.Create("ten_1", "usr_1", v, [], false)),
         ["sessions.client_session_id"] = new("clientSessionId", Text, v => Session.Create("ten_1", "usr_1", v, DateTimeOffset.UnixEpoch, null, DateTimeOffset.UnixEpoch)),
         ["sessions.activity"] = new("activity", Text, v => SessionMetadata.Of(v, [], [])),
-        ["sessions.raw_text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch), MessageNamesTheLimit: false),
-        ["sessions.cleaned_text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch), MessageNamesTheLimit: false),
-        ["raw_revisions.text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch), MessageNamesTheLimit: false),
-        ["cleaned_revisions.text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch), MessageNamesTheLimit: false),
+        ["sessions.raw_text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch), MessageNamesTheLimit: false),
+        ["sessions.cleaned_text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch), MessageNamesTheLimit: false),
+        ["raw_revisions.text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch), MessageNamesTheLimit: false),
+        ["cleaned_revisions.text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch), MessageNamesTheLimit: false),
         ["recordings.client_recording_id"] = new("clientRecordingId", Text, v => Recording.Create("ten_1", "usr_1", "ses_1", v, RecordingFormat.Webm)),
         // new-feature:caller-columns
     };

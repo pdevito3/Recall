@@ -7,6 +7,6 @@ import * as z from 'zod'
 
 export const draftSaveDtoSchema = z.object({
   text: z.string().max(4000000),
-  baseRevision: z.int32().min(0).describe('The Revision that the person edited. It is `0` for a Draft with no Revision.'),
-  savedAt: z.iso.datetime().describe('When the person saved. A time in the future becomes the time of the server. A replay sends the same time. A merge after `Lost` is a new save and sends a new time.'),
+  baseRevision: z.int32().min(0).describe('The number of the Draft that the person edited. It is `0` for a Draft with no Revision. Only the number of the current Draft wins.'),
+  savedAt: z.iso.datetime().describe('When the person saved. This time decides no save. With the words, it says that a save is a replay, so a replay sends the same time, and a new save sends a new time.'),
 })

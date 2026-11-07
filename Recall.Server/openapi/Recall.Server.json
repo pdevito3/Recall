@@ -2489,7 +2489,7 @@
         "tags": [
           "Sessions"
         ],
-        "summary": "Saves the Cleaned Draft with Last-write-wins on the save time. A save that loses keeps its words as a Revision.\nA base must be the number of a Draft whose words the client holds. A higher base loses at any save time.",
+        "summary": "Saves the Cleaned Draft. A save wins only when its base is the number of the current Draft. Any other save loses and keeps its words as a Revision.\nA base must be the number of a Draft whose words the client holds. The save time decides no save.",
         "operationId": "SaveCleanedDraft",
         "parameters": [
           {
@@ -2591,7 +2591,7 @@
         "tags": [
           "Sessions"
         ],
-        "summary": "Saves the Raw Draft with Last-write-wins on the save time. A save that loses keeps its words as a Revision.\nA base must be the number of a Draft whose words the client holds. A higher base loses at any save time.",
+        "summary": "Saves the Raw Draft. A save wins only when its base is the number of the current Draft. Any other save loses and keeps its words as a Revision.\nA base must be the number of a Draft whose words the client holds. The save time decides no save.",
         "operationId": "SaveRawDraft",
         "parameters": [
           {
@@ -4830,12 +4830,12 @@
           "baseRevision": {
             "minimum": 0,
             "type": "integer",
-            "description": "The Revision that the person edited. It is `0` for a Draft with no Revision.",
+            "description": "The number of the Draft that the person edited. It is `0` for a Draft with no Revision. Only the number of the current Draft wins.",
             "format": "int32"
           },
           "savedAt": {
             "type": "string",
-            "description": "When the person saved. A time in the future becomes the time of the server. A replay sends the same time. A merge after `Lost` is a new save and sends a new time.",
+            "description": "When the person saved. This time decides no save. With the words, it says that a save is a replay, so a replay sends the same time, and a new save sends a new time.",
             "format": "date-time"
           }
         }
@@ -4857,14 +4857,14 @@
               "Kept"
             ],
             "type": "string",
-            "description": "`Won` and `Unchanged` say that the Draft holds these words. `Kept` says that the Draft took these words at the number in `draftRevision`, and that a chunk or a later save moved the Draft after it. `Lost` says that the Draft did not take this save, and its words are in a Revision."
+            "description": "`Won` and `Unchanged` say that the Draft holds these words. `Kept` answers a replay of a save that won, and says that the Draft took these words at the number in `draftRevision`. The Draft can hold other words now. `Lost` says that the Draft did not take this save, and its words are in a Revision."
           },
           "draftRevision": {
             "type": [
               "null",
               "integer"
             ],
-            "description": "After `Won` or `Unchanged`, the base of the next save. After `Kept`, the number at which the Draft took these words, which is older than the Draft and is not a base: read the Session before the next save. After `Lost`, null: read the Session, merge, and save from the number of the read, with a new `savedAt`.",
+            "description": "After `Won`, `Unchanged`, or `Kept`, the number of a Draft that held these words, and the base of the next save. After `Lost`, null: read the Session, merge, and save from the number of the read, with a new `savedAt`.",
             "format": "int32"
           },
           "latestRevision": {

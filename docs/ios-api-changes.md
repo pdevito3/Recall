@@ -38,14 +38,18 @@ This document compares each of the 22 routes that the POC iOS client calls (`Jou
 
 ## The base of a Draft save
 
-The rules are SES-5, SES-6, SES-8, and SES-36 in the [sessions spec](specs/sessions.md). They apply to the `draft` route and to the `cleaned` route.
+The rules are SES-5, SES-6, SES-7, SES-8, and SES-36 in the [sessions spec](specs/sessions.md). They apply to the `draft` route and to the `cleaned` route.
 
-`baseRevision` is the number of a Draft whose text the client holds. Send only a number from one of these sources. SES-36 states what a replay can do when a client sends another number.
+A save wins only when `baseRevision` is the number of the current Draft. A save from any other number gets `Lost`. `savedAt` plays no part in this, so the clock of a device cannot win or lose a save.
+
+`baseRevision` is the number of a Draft whose text the client holds. Send only a number from one of these sources.
 
 - A read of the Session: `rawDraftRevision` with `rawText`, or `cleanedDraftRevision` with `cleanedText`.
-- A `Won` or `Unchanged` reply: `draftRevision`.
+- A `Won`, `Unchanged`, or `Kept` reply: `draftRevision`.
 
-Do not use `latestRevision` as a base. It can name a Revision that lost, and a base that names no Draft loses at any `savedAt`. Do not use the number of a `Kept` reply as a base. It names an older Draft, and a save from it can replace newer words under the time rule.
+Do not use `latestRevision` as a base. It can name a Revision that lost, and that number never wins.
+
+Keep one save in flight for each Draft, and send the next save from the number of the reply. A second save from the same base gets `Lost`. An offline queue holds the newest text for a Draft, and it does not send each older text.
 
 Each `outcome` tells the client this:
 
@@ -53,14 +57,16 @@ Each `outcome` tells the client this:
 |-----------|-----------|------------------------|-----------------|
 | `Won` | Holds these words | In the Draft, and in a new Revision | The number of the Draft |
 | `Unchanged` | Holds these words | In the Draft. No new Revision | The number of the Draft |
-| `Kept` | Took these words at or after the base. It can hold more words now, or other words | In an earlier Revision. No new Revision | The number at which the Draft took these words. It is not a base |
-| `Lost` | Never took these words in this save | In a Revision | `null` |
+| `Kept` | Took these words in the first try of this save. It can hold other words now | In an earlier Revision. No new Revision | The number at which the Draft took these words |
+| `Lost` | Did not take this save | In a Revision | `null` |
 
-A replay sends the same `text`, the same `baseRevision`, and the same `savedAt`. Give each new save a new `savedAt`, and keep the `savedAt` of a queued save when you send it again. A replay of a save that won or gave `Unchanged` gives `Kept`, and a replay of a save that lost gives `Lost`. Neither makes a new Revision. So a client that lost a reply gets the true answer when it sends the save again. SES-8 states the replays of `Unchanged` that give `Lost` or `Kept` with another number. Two writers can also each get `Won` and overwrite words with no signal, as SES-5 states. After `Kept`, do not merge these words into the Draft again, because the Draft already took them. Read the Session before the next save, and use the number of the read as the base.
+A replay sends the same `text` and the same `savedAt`. Give each new save a new `savedAt`, to the millisecond or finer, and keep the `savedAt` of a queued save when you send it again. A replay of a save that won gives `Kept`, and a replay of a save that lost gives `Lost`. Neither makes a new Revision. So a client that lost a reply gets the true answer when it sends the save again. A replay of a save that gave `Unchanged` gives `Unchanged` while the Draft holds the words. After the Draft moved, it is a new save, so from its older base it gets `Lost`. After `Kept`, do not merge these words into the Draft again, because the Draft already took them. The Draft can hold other words now, so read the Session before you show its text.
 
 Any write can answer 507 when the disk of the server is full. The save did not happen. Keep the words, and send the same save again later.
 
-A base that names no Draft, such as a `latestRevision` or a number above the Draft, gives `Lost`, also with a later `savedAt`. The server keeps the words as the newest Revision, and it does not refuse the save with a 4xx.
+A base that is not the number of the current Draft gives `Lost`, also with a later `savedAt`. The server keeps the words as the newest Revision, and it does not refuse the save with a 4xx.
+
+Two devices that edit one Draft see more `Lost` answers, and a chunk of a transcript or a Person rename also moves the number. Each `Lost` costs the client one merge, or one notice to the person. A `Lost` save does not change the Draft.
 
 After `Lost`, do these steps:
 
@@ -69,11 +75,13 @@ After `Lost`, do these steps:
 3. Compare the words with the text of the read. If the text holds them, stop, and use the number of the read as the next base. A merge that lost its reply can be in the Draft.
 4. Merge the words into the text of the read, one time.
 5. Save the merge, with the number of the read as `baseRevision` and a new `savedAt`. The old `savedAt` with the same words is a replay, and it gives `Lost` again.
-6. If the reply is `Lost` again, or the save has no reply, go back to step 2.
+6. If the reply is `Lost` again, or the save has no reply, go back to step 2. A writer whose time from its read to its save is at least the save interval of another writer on the same Session gets `Lost` each time while the other writer keeps its pace. In a 12 s run, a writer with 300 ms from read to save won 0 of 38 saves against a writer that saved every 250 ms ([ADR 0021](adr/0021-a-draft-save-wins-only-from-the-current-draft.md) gives each run). So after 3 `Lost` answers in a row, wait before step 2. Wait 1 s first, then double the wait after each next `Lost`, up to 30 s, and add a random part of up to half the wait. A `Won`, `Unchanged`, or `Kept` reply ends the waits. While the client waits, show the person that the words wait to save. Do not say that the words are lost: each `Lost` save keeps them in a Revision, and the queue still holds them.
 
 These steps stop a repeat of text. A merge from an old queue entry adds the words a second time when the merge before it is in the Draft.
 
-Do not send a new save from the old base and expect it to win. While a transcript moves the Draft, a save from a base older than the last chunk loses at any `savedAt`.
+Step 3 finds only words that a save added. A save that only took words out has nothing to find, so show a notice to the person, or make the same change on the text of the read.
+
+Do not send a new save from the old base and expect it to win. It gets `Lost` at any `savedAt`.
 
 ## Settings and metadata saves
 
@@ -107,7 +115,7 @@ The replies are these:
 | 409 with the type `urn:recall:problem:concurrent-change` | A metadata save lost the race on the row 20 times. Nothing changed. Send the same body again with the same base. |
 | 422 | On a settings save, a zone that the host does not know. On a metadata save, a list of more than 50 values, a value of more than 100 characters, or a character that is not storable. Nothing changed. |
 
-An older client sends `savedAt` and no version. The POC client, and any client of the earlier body, gets 400 on these two routes, with the missing field in the reply. Nothing changes on the server, so the older client overwrites no value. It cannot change settings or metadata until it sends a version. Its Draft saves work as before, so it loses no words.
+An older client sends `savedAt` and no version. The POC client, and any client of the earlier body, gets 400 on these two routes, with the missing field in the reply. Nothing changes on the server, so the older client overwrites no value. It cannot change settings or metadata until it sends a version. Its Draft saves follow the rule above, so a save that gets `Lost` keeps its words in a Revision.
 
 ## Fields that this unit does not add
 
