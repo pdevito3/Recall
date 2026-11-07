@@ -9,8 +9,8 @@ import { client, unwrapResult } from '../../.kubb/client'
 
 /**
  * @summary Puts the Cleanup result that waits in History into Cleaned. A result waits when Cleaned moved during its run. Send the
- * number of the waiting Revision and the number of the Cleaned Draft that you read. A newer Cleaned gets 409, and a result
- * that no longer waits gets 422. Cleaned before it stays as a Revision.
+ * number of the waiting Revision and the number of the Cleaned Draft that you read. A newer Cleaned, or a result that no
+ * longer waits, gets 409, so read the Session again. Cleaned before it stays as a Revision.
  * {@link /api/v1/sessions/:id/cleanup/waiting/apply}
  */
 export function applyWaitingCleanup<ThrowOnError extends boolean = true>(options: Options<ApplyWaitingCleanupOptions, ThrowOnError>): Promise<UnwrappedResult<ApplyWaitingCleanupResponses, ThrowOnError>> {

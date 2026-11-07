@@ -58,6 +58,7 @@ public class EndpointAccessSweepTests : TestBase
         ["RejectSuggestion"] = new(JournalOfEachMember, OwnerOnly: true),
         ["RespondToPersonProposal"] = new(JournalOfEachMember, OwnerOnly: true),
         ["RecordCleanupResult"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["ApplyWaitingCleanup"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetRawRevisionPage"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetRawRevision"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetCleanedRevisionPage"] = new(JournalOfEachMember, OwnerOnly: true),

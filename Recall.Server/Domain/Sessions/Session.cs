@@ -247,7 +247,8 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
     /// <summary>The person takes the waiting result into Cleaned. It is not a hand edit. Like a save, it wins only from the current Draft.</summary>
     public void ApplyWaitingCleanup(int revision, string waitingText, int baseCleanedRevision, DateTimeOffset now)
     {
-        ValidationException.Must(WaitingCleanupRevision == revision, CleanupField, "This Cleanup result no longer waits in History.");
+        if (WaitingCleanupRevision != revision)
+            throw new ConflictException(CleanupField, "This Cleanup result no longer waits in History. Read the Session again.");
         if (baseCleanedRevision != Cleaned.DraftRevision)
             throw new ConflictException(CleanupField, "Cleaned changed after you read it. Read the Session again, and then choose.");
 

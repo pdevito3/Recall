@@ -113,6 +113,6 @@ public class SessionCleanupBaseTests
         session.Cleaned.DraftRevision.ShouldBeGreaterThan(waiting);
         session.CleanedHasHandEdits.ShouldBeFalse();
         session.WaitingCleanupRevision.ShouldBeNull();
-        again.ShouldThrow<ValidationException>();
+        again.ShouldThrow<ConflictException>();
     }
 }
