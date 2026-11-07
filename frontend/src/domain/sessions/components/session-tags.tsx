@@ -45,9 +45,9 @@ export function SessionTags({ session }: { session: SessionDto }) {
       {isEditing ? (
         <TagEditor values={values} onChange={(next) => saver.edit(next)} />
       ) : (
-        <TagSummary values={values} />
+        <TagSummary values={values} hasOtherTags={aiTopics.length + people.length > 0} />
       )}
-      {aiTopics.length > 0 && <TagLine label="Suggested topics" tags={aiTopics} />}
+      {aiTopics.length > 0 && <TagLine label="Topics from AI" tags={aiTopics} />}
       {people.length > 0 && <TagLine label="People" tags={people.map((label) => `@${label}`)} />}
       {(asks.length === 0 || status.kind !== 'saved') && <SaveStatusLine status={status} zone={zone} />}
     </section>
@@ -67,10 +67,11 @@ function TagLine({ label, tags }: { label: string; tags: string[] }) {
   )
 }
 
-function TagSummary({ values }: { values: SessionTagValues }) {
+/** The AI topics and the people show below the summary, so with any of them the entry has tags. */
+function TagSummary({ values, hasOtherTags }: { values: SessionTagValues; hasOtherTags: boolean }) {
   const activity = values.activity && values.activity !== activityNone ? [values.activity] : []
   if (activity.length + values.moods.length + values.userTopics.length === 0) {
-    return <p className="text-sm text-muted-foreground">No tags yet.</p>
+    return hasOtherTags ? null : <p className="text-sm text-muted-foreground">No tags yet.</p>
   }
   return (
     <div className="flex flex-col gap-1.5">

@@ -553,7 +553,18 @@ test.describe('the tags of an entry', () => {
 
     const body = api.last('put', sessionsPaths.metadata(session.id))?.body as { userTopics: string[] }
     expect(body.userTopics).toEqual(['work', 'home'])
-    await expect(entry.at.suggested).toBeVisible()
+    await expect(entry.at.topicsFromAi).toBeVisible()
+  })
+
+  test('an accepted AI topic is a tag of the entry, so the entry does not say it has no tags', async ({ page, api }) => {
+    const session = aSession().withSuggestedTopic('travel').build()
+    api.mock(sessionsApi.oneIs(session))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+
+    await expect(entry.at.topicsFromAi).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Tags' }).getByText('travel', { exact: true })).toBeVisible()
+    await expect(entry.at.noTags).toHaveCount(0)
   })
 })
 
