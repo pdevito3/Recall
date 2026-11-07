@@ -157,7 +157,6 @@ export class DraftSaver {
   edit(text: string) {
     this.hasBeenTouched = true
     this.forgetAKeyThatIsGone()
-    if (this.snapshot.areWordsWithAnotherTab) this.update({ areWordsWithAnotherTab: false })
     this.saver.edit(text)
   }
 
