@@ -660,6 +660,29 @@ test.each([
   saver.dispose()
 })
 
+test('a change older than the answer to keep its field leaves nothing behind', async () => {
+  vi.setSystemTime(new Date('2026-11-06T10:00:00.000Z'))
+  const api = server({ capture: true })
+  const base = { values: fieldsOf(api.row.current), version: api.row.current.version }
+  api.otherClientSets({ zone: 'Africa/Cairo' })
+  const { saver } = saverOn(api, { current: api.row.current })
+  saver.adopt({ change: null, attempt: null, asks: [{ field: 'capture', yours: false, now: true }] })
+  await vi.advanceTimersByTimeAsync(0)
+  saver.answerAsk(saver.asks()[0], false)
+
+  saver.adopt({ change: { value: { capture: false }, savedAt: '2026-11-06T09:00:00.000Z' }, attempt: { base, hadNoReply: true }, asks: [] })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(saver.getStatus().kind).toBe('idle')
+
+  vi.setSystemTime(new Date('2026-11-06T11:00:00.000Z'))
+  saver.edit({ capture: false })
+  await vi.advanceTimersByTimeAsync(0)
+
+  expect(api.row.current.capture).toBe(false)
+  expect(saver.asks()).toEqual([])
+  saver.dispose()
+})
+
 test('an ask of a stale key shows the value that the row has now', async () => {
   const api = server({ zone: 'Africa/Cairo' })
   const copy = { current: api.row.current }

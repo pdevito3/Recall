@@ -132,18 +132,20 @@ export class RowSaver<F extends object, R> {
 
   /** The state of a tab that left joins this saver. Each field that this tab changed later stays, and the oldest base goes with the save, so a choice made since that tab left makes the Server answer stale. */
   adopt({ change, attempt, asks }: RowSaverState<F>) {
-    const oldest = [this.attempt, attempt].filter((one) => one !== null).sort((one, other) => one.base.version - other.base.version)[0]
-    // A new base outlives the reply of a save that runs now, which has another base.
-    if (oldest) this.attempt = { base: { ...oldest.base }, hadNoReply: true }
     this.currentAsks = [...this.currentAsks, ...asks.filter((ask) => !this.currentAsks.some((own) => own.field === ask.field))]
     const newest = this.saver.newestUnsettled()
     const isOlder = newest !== null && change !== null && newest.savedAt > change.savedAt
-    const fields = change && (isOlder ? withoutFields(change.value, fieldsIn(this.pendingFields())) : change.value)
-    for (const field of fieldsIn(fields ?? {})) {
-      if (change && change.savedAt > (this.keptAsTheyAre.get(field) ?? '')) this.keptAsTheyAre.delete(field)
-    }
-    if (fields && change && fieldsIn(fields).length > 0) this.saver.edit(fields, isOlder ? newest.savedAt : change.savedAt)
-    else this.keep()
+    const fields = change === null ? {} : withoutFields(change.value, [
+      ...fieldsIn(change.value).filter((field) => (this.keptAsTheyAre.get(field) ?? '') >= change.savedAt),
+      ...(isOlder ? fieldsIn(this.pendingFields()) : []),
+    ])
+    if (change && fieldsIn(fields).length > 0) {
+      for (const field of fieldsIn(fields)) this.keptAsTheyAre.delete(field)
+      const oldest = [this.attempt, attempt].filter((one) => one !== null).sort((one, other) => one.base.version - other.base.version)[0]
+      // A new base outlives the reply of a save that runs now, which has another base.
+      if (oldest) this.attempt = { base: { ...oldest.base }, hadNoReply: true }
+      this.saver.edit(fields, isOlder ? newest.savedAt : change.savedAt)
+    } else this.keep()
     this.notify()
     if (asks.length > 0) void this.readRowForAsks()
   }

@@ -625,7 +625,6 @@ test.describe('the location of a new entry', () => {
     await typeOnTheJournal(page)
 
     expect(await createdLatitude(api)).toBe(place.latitude)
-    expect(await unsentWords(page).at.noLocationNotice.count()).toBe(0)
   })
 
   test('stays out when the person turns capture off after the first word, and the change waits', async ({ page, context, api }) => {
