@@ -246,9 +246,13 @@ public class CleanupOnWorkerTests
         var session = await SessionWithWordsAsync(owner, $"apart{Guid.NewGuid():N}");
         var tenantId = await Host.WithDatabaseAsync(database => database.Sessions.IgnoreQueryFilters().Where(s => s.Id == session.Id).Select(s => s.TenantId).FirstAsync());
         var hashed = CleanupQueues.Of(tenantId);
+        var store = Host.Services.GetRequiredService<IJobStore>();
+
+        // Each test of this class runs as the same tenant, and a tenant stays in the queue of a Cleanup that has not ended. So a
+        // job of an earlier test that still holds its lease would keep this Cleanup in the hashed queue.
+        await WaitUntilNoCleanupIsUnfinishedAsync(store);
         var otherTenant = new CleanupSession("ses_other", "usr_other", $"ten_other{Guid.NewGuid():N}", "run_other");
         var held = await Host.Services.GetRequiredService<BackWaveClient>().EnqueueAsync(otherTenant, DateTimeOffset.UtcNow.AddDays(1), hashed);
-        var store = Host.Services.GetRequiredService<IJobStore>();
 
         try
         {
@@ -304,6 +308,18 @@ public class CleanupOnWorkerTests
         used.CleanedText.ShouldContain($"{marker} (cleaned)");
         used.CleanedHasHandEdits.ShouldBeFalse();
         used.WaitingCleanupRevision.ShouldBeNull();
+    }
+
+    private static async Task WaitUntilNoCleanupIsUnfinishedAsync(IJobStore store)
+    {
+        var deadline = DateTimeOffset.UtcNow + WaitLimit;
+        while ((await store.ListJobsAsync(new JobQuery { WireName = CleanupJob.WireName, MaxResults = 1000 }))
+               .Any(job => job.State is JobState.Scheduled or JobState.AwaitingParent or JobState.Leased))
+        {
+            if (DateTimeOffset.UtcNow > deadline)
+                throw new TimeoutException($"A Cleanup of an earlier test did not end in {WaitLimit}.");
+            await Task.Delay(TimeSpan.FromMilliseconds(50));
+        }
     }
 
     private static async Task WaitUntilAsync(Func<bool> condition)
