@@ -102,3 +102,11 @@ These options do not fit:
 - **A transaction around the checks and the save.** One save is one transaction ([ADR 0010](../adr/0010-domain-events-in-the-save-transaction.md)), and `AppDbContext` refuses a save inside a transaction that the handler opens.
 - **A write to the shared root row in each write that adds to the set, so that its version catches the race.** Each booking of a clinic then conflicts with each other booking of that clinic, and the caller gets a 409 for a booking that had no problem.
 
+
+## Writer line
+
+SQLite has one write lock for a file, and it has no line for that lock. A writer that finds the lock taken sleeps and tries again, and the sleep grows to 100 ms. A writer that just came tries far more often than a writer that has waited for a long time. When the lock is seldom free, the oldest writer can lose each try until `busy_timeout` ends, and it gets `database is locked`. Its wait also blocks a thread.
+
+`SqliteWriterLine` gives the writers of one process a line for each data file. The first writer goes first, and a writer that waits holds no thread. `SqliteWriterLineTests` holds this order, because the docs of `SemaphoreSlim` do not promise it. `AppDbContext` takes the turn around the write of a save, after the domain event handlers. The interceptor takes the turn of async `ExecuteUpdate` and `ExecuteDelete`. A write in an open transaction takes no turn, because the transaction holds the lock or the turn of its save.
+
+BackWave and `WalScrub` have their own connections and timeouts, and they stay outside the line. When each write stalls for about 100 ms or more and the line is never empty, a BackWave worker can lose each try for 30 s. It logs a store fault and tries again on the next tick. A write inside a turn must not start another write on a new context, because the second write waits for the first.

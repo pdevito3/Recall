@@ -147,7 +147,7 @@ public class AppDbContext(
     {
         base.OnConfiguring(optionsBuilder);
 
-        optionsBuilder.AddInterceptors(WriteGuard.Instance);
+        optionsBuilder.AddInterceptors(WriteGuard.Instance, SqliteWriterLine.Instance);
     }
 
     /// <summary>
@@ -226,6 +226,7 @@ public class AppDbContext(
         var auditEntries = PrepareWrite(await callerIdentityResolver.GetAsync(cancellationToken));
         try
         {
+            using var turn = await SqliteWriterLine.WaitForTurnAsync(Database, cancellationToken);
             var written = enqueue is null
                 ? await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken)
                 : await WriteWithJobsAsync(acceptAllChangesOnSuccess, enqueue, cancellationToken);
