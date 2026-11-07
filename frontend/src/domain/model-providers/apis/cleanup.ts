@@ -11,7 +11,7 @@ import { respondToPersonProposal } from '@/api/generated/sessions/clients/respon
 import { startCleanup } from '@/api/generated/sessions/clients/start-cleanup'
 import { stopCleanup } from '@/api/generated/sessions/clients/stop-cleanup'
 
-const pollWhileRunningMs = 2_000
+export const pollWhileRunningMs = 2_000
 const sessionsShown = 10
 
 const CleanupKeys = {
@@ -23,14 +23,14 @@ const CleanupKeys = {
 export function useRecentSessions() {
   return useQuery({
     queryKey: CleanupKeys.recent(),
-    queryFn: ({ signal }) => getSessionPage({ query: { pageSize: sessionsShown }, signal }),
+    queryFn: ({ signal }) => getSessionPage({ query: { pageSize: sessionsShown }, signal, options: { suppressErrorToast: true } }),
   })
 }
 
 export function useCleanupSession(id: string) {
   return useQuery({
     queryKey: CleanupKeys.session(id),
-    queryFn: ({ signal }) => getSession({ path: { id }, signal }),
+    queryFn: ({ signal }) => getSession({ path: { id }, signal, options: { suppressErrorToast: true } }),
     refetchInterval: (query) => (query.state.data?.cleanupStatus === 'Running' ? pollWhileRunningMs : false),
   })
 }

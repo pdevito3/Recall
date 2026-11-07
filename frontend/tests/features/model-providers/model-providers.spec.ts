@@ -1,5 +1,5 @@
 import { membershipPaths } from '@tests/support/api/membership-api'
-import { aProvider, aSession, modelProviderPaths, modelProvidersApi } from '@tests/support/api/model-providers-api'
+import { aProvider, aSession, aSessionSummary, modelProviderPaths, modelProvidersApi } from '@tests/support/api/model-providers-api'
 import { actorSubject, as } from '@tests/support/auth/actors'
 import { aProblem } from '@tests/support/builders/problem-details-builder'
 import { aUser } from '@tests/support/builders/user-builder'
@@ -175,6 +175,33 @@ test.describe('a page of model providers on a 390 px phone', () => {
     expect(await at.pageOverflow()).toBe(0)
   })
 
+  test('each Session link is a touch target of 44 px', async ({ page, api }) => {
+    const summary = aSessionSummary({ preview: 'a short entry' })
+    api.mock(signedInAs('User'), modelProvidersApi.sessionsAre([summary]))
+    const at = modelProviders(page)
+
+    await page.goto('/model-providers')
+
+    await expect(at.sessionLink('a short entry')).toBeVisible()
+    expect((await at.sessionLink('a short entry').boundingBox())?.height).toBeGreaterThanOrEqual(44)
+  })
+
+  test('a Session that does not load shows its card and no toast over it', async ({ page, api }) => {
+    const missing = 'ses_00000000000000000000000000000009'
+    api.mock(signedInAs('User'), modelProvidersApi.activeIs('Home lab'), {
+      method: 'get',
+      path: modelProviderPaths.session(missing),
+      status: 404,
+      body: aProblem().notFound('Session was not found.').build(),
+    })
+    const at = modelProviders(page)
+
+    await page.goto(`/model-providers?session=${missing}`)
+
+    await expect(at.text('The Session did not load.')).toBeVisible()
+    await expect(at.toasts).toHaveCount(0)
+  })
+
   test('a long Topic and a long Person name take the width of the card on each phone', async ({ page, api }) => {
     const topic = 'a long topic that a person keeps for each of the things that a week holds'
     const person = 'a long name of a person that a model takes from each of the things in a week'
@@ -289,12 +316,25 @@ test.describe('the Cleanup card', () => {
     api.mock(modelProvidersApi.sessionIs(stopped))
     await at.stopCleanup.click()
 
-    await expect(at.cleanupFailure('You stopped the Cleanup.')).toBeVisible()
+    await expect(at.cleanupStopped).toBeVisible()
+    await expect(at.cleanupFailure('You stopped')).toHaveCount(0)
     await expect(at.stopCleanup).toHaveCount(0)
     await expect(at.runCleanup).toBeEnabled()
     await expect(at.runCleanup).toHaveText('Run Cleanup again')
     await expect(at.rawWords).toContainText('um I met sam today')
     expect(api.last('post', modelProviderPaths.stopCleanup(running.id))).toBeDefined()
+  })
+
+  test('the list of Sessions says Stopped for a stop and Failed for a fault', async ({ page, api }) => {
+    const stopped = aSessionSummary({ id: 'ses_00000000000000000000000000000002', preview: 'a run that I stopped', cleanupStatus: 'Failed', cleanupFailure: 'Stopped' })
+    const failed = aSessionSummary({ id: 'ses_00000000000000000000000000000003', preview: 'a run that failed', cleanupStatus: 'Failed', cleanupFailure: 'ProviderRefused' })
+    api.mock(signedInAs('User'), modelProvidersApi.sessionsAre([stopped, failed]))
+    const at = modelProviders(page)
+    await page.goto('/model-providers')
+
+    await expect(at.sessionRow('a run that I stopped')).toContainText('Stopped')
+    await expect(at.sessionRow('a run that I stopped')).not.toContainText('Failed')
+    await expect(at.sessionRow('a run that failed')).toContainText('Failed')
   })
 
   test('a finished run has no stop button', async ({ page, api }) => {

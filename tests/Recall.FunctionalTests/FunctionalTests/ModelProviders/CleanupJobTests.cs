@@ -1,6 +1,7 @@
 namespace Recall.FunctionalTests.FunctionalTests.ModelProviders;
 
 using System.Net;
+using System.Net.Http.Json;
 using BackWave.Monitor;
 using BackWave.Storage;
 using Microsoft.EntityFrameworkCore;
@@ -339,6 +340,7 @@ public class CleanupJobTests : TestBase
         var stopped = await FactoryClient.PostAsync(ApiRoutes.Sessions.StopCleanup(started.Id), null);
         await call.WaitAsync(TimeSpan.FromSeconds(10));
         var afterStop = await scenario.ReadAsync(started.Id);
+        var listed = await FactoryClient.GetFromJsonAsync<SessionPageDto>(ApiRoutes.Sessions.Root);
         scenario.Fake.Behavior.Mode = FakeMode.Normal;
         var again = await FactoryClient.PostAsync(ApiRoutes.Sessions.Cleanup(started.Id), null);
         await scenario.RunJobAsync(started.Id);
@@ -348,6 +350,7 @@ public class CleanupJobTests : TestBase
         stopped.StatusCode.ShouldBe(HttpStatusCode.OK);
         afterStop.CleanupStatus.ShouldBe(nameof(CleanupStatus.Failed));
         afterStop.CleanupFailure.ShouldBe(nameof(CleanupFailure.Stopped));
+        listed!.Items.Single(item => item.Id == started.Id).CleanupFailure.ShouldBe(nameof(CleanupFailure.Stopped));
         afterStop.RawText.ShouldBe(started.RawText);
         afterStop.CleanedLatestRevision.ShouldBe(started.CleanedLatestRevision);
         again.StatusCode.ShouldBe(HttpStatusCode.Accepted);

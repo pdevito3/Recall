@@ -3,7 +3,7 @@ import { useState } from 'react'
 import type { ModelProviderDto } from '@/api/generated/models/types/model-provider-dto'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -58,6 +58,27 @@ export function ModelProviderCard({ provider }: { provider: ModelProviderDto }) 
           <Badge variant="outline">{KIND_LABELS[provider.kind]}</Badge>
           {provider.isActive && <Badge>Active</Badge>}
         </CardTitle>
+        <CardAction>
+            <ResponsiveDialogTrigger>
+              <Button variant="destructive" isPending={remove.isPending}>
+                Delete
+              </Button>
+              <ResponsiveDialog>
+                <ResponsiveDialogHeader>
+                  <ResponsiveDialogTitle>Delete {provider.name}?</ResponsiveDialogTitle>
+                  <ResponsiveDialogDescription>
+                    The server forgets its API key. Sessions keep their Cleaned text.
+                  </ResponsiveDialogDescription>
+                </ResponsiveDialogHeader>
+                <ResponsiveDialogFooter>
+                  <ResponsiveDialogClose>Keep model provider</ResponsiveDialogClose>
+                  <ResponsiveDialogClose variant="destructive" onPress={() => remove.mutate()}>
+                    Delete model provider
+                  </ResponsiveDialogClose>
+                </ResponsiveDialogFooter>
+              </ResponsiveDialog>
+            </ResponsiveDialogTrigger>
+        </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[max-content_1fr]">
@@ -93,25 +114,6 @@ export function ModelProviderCard({ provider }: { provider: ModelProviderDto }) 
               Make active
             </Button>
           )}
-          <ResponsiveDialogTrigger>
-            <Button variant="destructive" isPending={remove.isPending}>
-              Delete
-            </Button>
-            <ResponsiveDialog>
-              <ResponsiveDialogHeader>
-                <ResponsiveDialogTitle>Delete {provider.name}?</ResponsiveDialogTitle>
-                <ResponsiveDialogDescription>
-                  The server forgets its API key. Sessions keep their Cleaned text.
-                </ResponsiveDialogDescription>
-              </ResponsiveDialogHeader>
-              <ResponsiveDialogFooter>
-                <ResponsiveDialogClose>Keep model provider</ResponsiveDialogClose>
-                <ResponsiveDialogClose variant="destructive" onPress={() => remove.mutate()}>
-                  Delete model provider
-                </ResponsiveDialogClose>
-              </ResponsiveDialogFooter>
-            </ResponsiveDialog>
-          </ResponsiveDialogTrigger>
         </div>
 
         {!provider.isActive && (
@@ -165,7 +167,7 @@ export function ModelProviderCard({ provider }: { provider: ModelProviderDto }) 
               id={urlFieldId}
               type="url"
               autoComplete="off"
-              className="min-w-0 flex-1 basis-48"
+              className="min-w-0 flex-1 basis-48 max-sm:basis-full"
               value={newUrl}
               onChange={(event) => setEditedUrl(event.target.value)}
             />

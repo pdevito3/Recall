@@ -1,4 +1,5 @@
 import type { ModelProviderListDto } from '@/api/generated/models/types/model-provider-list-dto'
+import type { SessionSummaryDto } from '@/api/generated/models/types/session-summary-dto'
 import { PageHeading } from '@/components/page-heading'
 import { QueryError } from '@/components/query-error'
 import { Badge } from '@/components/ui/badge'
@@ -27,6 +28,10 @@ const STATUS_LABELS = {
   Stale: 'Stale',
   Failed: 'Failed',
 } as const
+
+function statusLabelOf({ cleanupStatus, cleanupFailure }: SessionSummaryDto) {
+  return cleanupStatus === 'Failed' && cleanupFailure === 'Stopped' ? 'Stopped' : STATUS_LABELS[cleanupStatus]
+}
 
 function Providers() {
   const providers = useModelProviders(true)
@@ -100,13 +105,13 @@ function RecentSessions() {
       </CardHeader>
       <CardContent>
         {sessions.data.items.length === 0 && <p className="text-sm text-muted-foreground">You have no Session yet.</p>}
-        <ul className="flex flex-col gap-2">
+        <ul className="flex flex-col">
           {sessions.data.items.map((session) => (
             <li key={session.id} className="flex items-center gap-2 text-sm">
-              <Link to="/model-providers" search={{ session: session.id }} className="min-w-0 flex-1 truncate">
-                {session.preview || 'A Session with no words'}
+              <Link to="/model-providers" search={{ session: session.id }} className="flex min-h-11 min-w-0 flex-1 items-center sm:min-h-8">
+                <span className="truncate">{session.preview || 'A Session with no words'}</span>
               </Link>
-              <Badge variant="outline">{STATUS_LABELS[session.cleanupStatus]}</Badge>
+              <Badge variant="outline">{statusLabelOf(session)}</Badge>
             </li>
           ))}
         </ul>

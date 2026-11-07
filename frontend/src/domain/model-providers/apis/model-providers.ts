@@ -18,15 +18,16 @@ export const ModelProviderKeys = {
 export function useModelProviders(enabled: boolean) {
   return useQuery({
     queryKey: ModelProviderKeys.lists(),
-    queryFn: ({ signal }) => getModelProviders({ signal }),
+    queryFn: ({ signal }) => getModelProviders({ signal, options: { suppressErrorToast: true } }),
     enabled,
   })
 }
 
-export function useActiveModelProvider() {
+export function useActiveModelProvider(pollMs: number | false = false) {
   return useQuery({
     queryKey: ModelProviderKeys.active(),
     queryFn: ({ signal }) => getActiveModelProvider({ signal }),
+    refetchInterval: pollMs,
   })
 }
 

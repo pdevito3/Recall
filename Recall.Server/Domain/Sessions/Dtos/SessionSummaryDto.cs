@@ -11,6 +11,9 @@ public sealed record SessionSummaryDto
     public string? Synopsis { get; init; }
     [EnumNames<CleanupStatus>]
     public string CleanupStatus { get; init; } = default!;
+    /// <summary>Why the last Cleanup ended with no result. <c>Stopped</c> is a stop that the person asked for, not a fault.</summary>
+    [EnumNames<CleanupFailure>]
+    public string CleanupFailure { get; init; } = nameof(Sessions.CleanupFailure.None);
     public string Activity { get; init; } = default!;
     public IReadOnlyList<string> Moods { get; init; } = [];
     public IReadOnlyList<SessionTopicDto> Topics { get; init; } = [];

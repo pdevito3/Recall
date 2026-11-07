@@ -6739,6 +6739,7 @@
           "journalingDay",
           "preview",
           "cleanupStatus",
+          "cleanupFailure",
           "activity",
           "moods",
           "topics",
@@ -6780,6 +6781,20 @@
               "Failed"
             ],
             "type": "string"
+          },
+          "cleanupFailure": {
+            "enum": [
+              "None",
+              "NoModelProvider",
+              "KeyUnreadable",
+              "ProviderRefused",
+              "ProviderUnavailable",
+              "BadModelOutput",
+              "Interrupted",
+              "Stopped"
+            ],
+            "type": "string",
+            "description": "Why the last Cleanup ended with no result. `Stopped` is a stop that the person asked for, not a fault."
           },
           "activity": {
             "type": "string"

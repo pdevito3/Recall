@@ -111,7 +111,7 @@ An older client sends `savedAt` and no version. The POC client, and any client o
 
 ## Fields of Cleanup
 
-`SessionDto` adds `cleanupFailure`, `suggestions`, and `peopleProposals`. `cleanupFailure` is a closed code: `None`, `NoModelProvider`, `KeyUnreadable`, `ProviderRefused`, `ProviderUnavailable`, `BadModelOutput`, `Interrupted`, or `Stopped`. It never holds words of a model provider. A client that does not read these fields keeps working.
+`SessionDto` adds `cleanupFailure`, `suggestions`, and `peopleProposals`. `cleanupFailure` is a closed code: `None`, `NoModelProvider`, `KeyUnreadable`, `ProviderRefused`, `ProviderUnavailable`, `BadModelOutput`, `Interrupted`, or `Stopped`. It never holds words of a model provider. `SessionSummaryDto`, the row of the Session list, adds `cleanupFailure` too, so a list can show `Stopped` and not `Failed` for a stop that the person asked for. A client that does not read these fields keeps working.
 
 ## Journaling day
 

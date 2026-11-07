@@ -2,6 +2,7 @@ import type { ModelProviderDto } from '@/api/generated/models/types/model-provid
 import type { ModelProviderListDto } from '@/api/generated/models/types/model-provider-list-dto'
 import type { ModelProviderTestResultDto } from '@/api/generated/models/types/model-provider-test-result-dto'
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
+import type { SessionSummaryDto } from '@/api/generated/models/types/session-summary-dto'
 
 import { aProblem } from '../builders/problem-details-builder'
 import type { MockRoute } from './mock-route'
@@ -11,6 +12,7 @@ export const modelProviderPaths = {
   active: '/api/v1/model-providers/active',
   record: (id: string) => `/api/v1/model-providers/${id}`,
   test: (id: string) => `/api/v1/model-providers/${id}/test`,
+  sessions: '/api/v1/sessions',
   session: (id: string) => `/api/v1/sessions/${id}`,
   cleanup: (id: string) => `/api/v1/sessions/${id}/cleanup`,
   stopCleanup: (id: string) => `/api/v1/sessions/${id}/cleanup/stop`,
@@ -41,7 +43,20 @@ export const aSession = (changes: Partial<SessionDto> = {}): SessionDto =>
     ...changes,
   }) as SessionDto
 
+export const aSessionSummary = (changes: Partial<SessionSummaryDto> = {}): SessionSummaryDto =>
+  ({
+    id: 'ses_00000000000000000000000000000001',
+    preview: 'um I met sam today',
+    cleanupStatus: 'NotRun',
+    cleanupFailure: 'None',
+    ...changes,
+  }) as SessionSummaryDto
+
 export const modelProvidersApi = {
+  sessionsAre(items: SessionSummaryDto[]): MockRoute {
+    return { method: 'get', path: modelProviderPaths.sessions, status: 200, body: { items, nextCursor: null } }
+  },
+
   activeIs(name: string | null): MockRoute {
     return { method: 'get', path: modelProviderPaths.active, status: 200, body: { name } }
   },

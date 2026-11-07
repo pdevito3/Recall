@@ -14,6 +14,7 @@ export const sessionSummaryDtoSchema = z.object({
   preview: z.string(),
   synopsis: z.string().nullish(),
   cleanupStatus: z.enum(['NotRun', 'Running', 'Clean', 'Stale', 'Failed']),
+  cleanupFailure: z.enum(['None', 'NoModelProvider', 'KeyUnreadable', 'ProviderRefused', 'ProviderUnavailable', 'BadModelOutput', 'Interrupted', 'Stopped']).describe('Why the last Cleanup ended with no result. `Stopped` is a stop that the person asked for, not a fault.'),
   activity: z.string(),
   moods: z.array(z.string()),
   topics: z.array(sessionTopicDtoSchema),
