@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test'
 
 export const modelProviders = (page: Page) => ({
   heading: page.getByRole('heading', { level: 1, name: 'Model providers' }),
+  aboutHeading: page.getByRole('heading', { level: 1, name: 'About' }),
   name: page.getByLabel('Name'),
   baseUrl: page.getByLabel('Base URL'),
   apiKey: page.getByLabel('API key', { exact: true }),

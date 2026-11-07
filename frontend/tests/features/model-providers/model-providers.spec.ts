@@ -164,6 +164,27 @@ test.describe('the model providers page', () => {
   })
 })
 
+test.describe('the frame of the model providers page', () => {
+  test.use({ actor: as.user('Bob Smith') })
+
+  for (const width of [1280, 390]) {
+    test(`its heading starts where the heading of each page starts, at ${width} px`, async ({ page, api }) => {
+      await page.setViewportSize({ width, height: 800 })
+      api.mock(signedInAs('Admin'), modelProvidersApi.listHolds([]))
+      const at = modelProviders(page)
+
+      await page.goto('/about')
+      await expect(at.aboutHeading).toBeVisible()
+      const aboutX = (await at.aboutHeading.boundingBox())?.x
+      await page.goto('/model-providers')
+      await expect(at.heading).toBeVisible()
+
+      expect((await at.heading.boundingBox())?.x).toBe(aboutX)
+      expect(await at.pageOverflow()).toBe(0)
+    })
+  }
+})
+
 test.describe('a page of model providers on a 390 px phone', () => {
   test.use({ actor: as.user('Bob Smith'), viewport: { width: 390, height: 800 } })
 
@@ -184,7 +205,7 @@ test.describe('a page of model providers on a 390 px phone', () => {
   })
 
   test('a base URL longer than a line breaks after a slash, not one character short of its end', async ({ page, api }) => {
-    const address = 'http://host.docker.internal:31742/m/gate_mid/v1'
+    const address = 'http://host.docker.internal:31742/m/gate_mid/openai/v1'
     const provider = aProvider({ kind: 'OpenAiCompatible', baseUrl: address, model: 'model-a' })
     api.mock(signedInAs('Admin'), modelProvidersApi.listHolds([provider]))
     const at = modelProviders(page)

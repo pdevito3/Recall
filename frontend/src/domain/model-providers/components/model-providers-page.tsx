@@ -1,4 +1,5 @@
 import type { ModelProviderListDto } from '@/api/generated/models/types/model-provider-list-dto'
+import { Page } from '@/components/page'
 import { PageHeading } from '@/components/page-heading'
 import { QueryError } from '@/components/query-error'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -70,15 +71,18 @@ export function ModelProvidersPage() {
   const mightBeAnAdmin = membership.status === 'member' && membership.user.role === 'Admin'
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 max-sm:[&_[data-slot=button]]:h-11 max-sm:[&_[data-slot=button]]:min-w-11 max-sm:[&_[data-slot=input]]:h-11 max-sm:[&_[data-slot=select-trigger]]:h-11">
+    <Page>
       <PageHeading>Model providers</PageHeading>
       {mightBeAnAdmin ? (
-        <Providers />
+        // A button and a field are 44 px high on a phone already, and a select is not.
+        <div className="flex flex-col gap-6 max-md:[&_[data-slot=select-trigger]]:h-11">
+          <Providers />
+        </div>
       ) : (
         membership.status !== 'loading' && (
           <p className="text-sm text-muted-foreground">An Admin connects the model provider of this install.</p>
         )
       )}
-    </div>
+    </Page>
   )
 }
