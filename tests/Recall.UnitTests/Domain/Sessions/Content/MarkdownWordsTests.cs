@@ -134,6 +134,7 @@ public partial class MarkdownWordsTests
     [Arguments("- [ ] w1\n- w2")]
     [Arguments("+ 5 degrees")]
     [Arguments("| w1 | | w3 |\n|---|---|---|\n| w4 | w5 | w6 |")]
+    [Arguments("\uAC00**\uB098**\uB2E4")]
     public void a_form_that_would_change_what_is_shown_stays_as_the_source(string markdown)
     {
         // Act
@@ -148,6 +149,8 @@ public partial class MarkdownWordsTests
     [Arguments("caf&eacute; don&#39;t")]
     [Arguments("# Title\n\n**Bold** and *it* and ~~gone~~ with [a](https://example.com) here")]
     [Arguments("\u8FD9\u662F**\u7C97\u4F53**\u6587\u672C")]
+    [Arguments("\u1780**\u1781**\u1782")]
+    [Arguments("\u1000**\u1001**\u1002")]
     public void a_form_with_only_clear_marks_stays_in_its_nodes(string markdown)
     {
         // Act

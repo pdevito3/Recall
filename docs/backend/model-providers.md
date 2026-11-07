@@ -91,7 +91,7 @@ The test button shows the words of a provider only when the body has the error f
 
 The app sends no `anthropic-workspace-id` header. A key of a workspace works, because the key holds its workspace. An Admin cannot choose another workspace for a key.
 
-Any other body gets the status and a fixed text. So the page of an internal service does not reach the person. Each message loses each hidden character, and each form of the key: as it is, in any case, base64, base64url, URL-encoded, HTML-encoded, and each cut of 8 characters or more. A failed run stores only a closed code.
+Any other body gets the status and a fixed text. So the page of an internal service does not reach the person. Each message loses each hidden character, and each form of the key: as it is, in any case, base64, base64url, hex, URL-encoded, HTML-encoded, and each cut of 8 characters or more. A failed run stores only a closed code.
 
 ## What an Admin can still learn
 
@@ -100,7 +100,7 @@ An Admin can type any address that the rules allow, so the test button is still 
 - If a port is open, closed, or silent, from the fixed text and the time that the answer takes.
 - The HTTP status of a service on that port.
 - The `error.message` of a service whose body has the error format above.
-- The model IDs of a service whose body has the shape of a model list. An ID with a hidden character or bad bytes is not offered. An ID or a display name that holds a form of the key is not offered.
+- The model IDs of a service whose body has the shape of a model list. An ID with a hidden character or bad bytes is not offered. An ID or a display name that holds a form of the key is not offered. A key of fewer than 8 characters, such as a placeholder for a local server, hides no ID, because it is no secret and its letters are in most IDs.
 - The services of the server of the app itself. Loopback is refused in a container, but the private address of the container or of its host on the network reaches the app and each port that the host opens. So an Admin can probe the app through its own hostname. This is the same reach that an Admin has from a shell on the network.
 
 An Admin cannot learn the body of any other answer, and cannot make the app follow a redirect.

@@ -61,9 +61,12 @@ public static class ProviderFailureText
         return scrubbed.Length <= MaxLength ? scrubbed : scrubbed[..MaxLength];
     }
 
-    /// <summary>True when the text holds the key, a form of it, or a cut of a form, as <see cref="Shown"/> would remove it.</summary>
+    /// <summary>
+    /// True when the text holds the key, a form of it, or a cut of a form, as <see cref="Shown"/> would remove it. A key shorter
+    /// than the shortest cut, such as a placeholder of a local server, holds no secret, and it would hide each model ID with its letters.
+    /// </summary>
     public static bool Holds(string text, string? apiKey)
-        => !string.IsNullOrEmpty(apiKey) && FormsOf(apiKey).Any(form => Scrubbed(text, form) != text);
+        => apiKey is { Length: >= ShortestCutOfKey } && FormsOf(apiKey).Any(form => Scrubbed(text, form) != text);
 
     private static IEnumerable<string> FormsOf(string apiKey)
     {

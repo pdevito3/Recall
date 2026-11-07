@@ -284,13 +284,12 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
     {
         var plain = ProseMirrorToPlainText.Render(Cleaned.Text);
         var spans = PeopleTagSpans.Spans(plain, proposal.Label, personId, personLabel);
-        var placed = MentionInsertion.Placeable(Cleaned.Text, spans);
+        var cleaned = MentionInsertion.Insert(Cleaned.Text, spans);
         ValidationException.Must(
-            placed.Count > 0 || PersonMentions.PersonIdsIn(Cleaned.Text).Contains(personId),
+            PersonMentions.PersonIdsIn(cleaned).Contains(personId),
             "label",
             "Cleaned has no place for this tag, because a mark crosses the name or the name is gone. Choose Do not tag, or edit Cleaned first.");
 
-        var cleaned = placed.Count > 0 ? MentionInsertion.Insert(Cleaned.Text, placed) : Cleaned.Text;
         if (cleaned != Cleaned.Text)
             ValidationException.ThrowWhenLongerThan(cleaned, DraftMaxLength, "label", "A tag of this name makes Cleaned too long. Choose Do not tag, or run a new Cleanup.");
 

@@ -44,7 +44,7 @@ public static class MentionInsertion
             if (TryResolve(index, span, out var node, out var insertion))
                 (byNode.TryGetValue(node, out var list) ? list : byNode[node] = []).Add(insertion);
 
-        return Rebuild(doc, byNode);
+        return byNode.Count == 0 ? doc : Rebuild(doc, byNode);
     }
 
     /// <summary>Parses, inserts, re-serializes. Blank/invalid JSON is returned unchanged.</summary>
@@ -57,24 +57,8 @@ public static class MentionInsertion
         try { doc = JsonNode.Parse(json); }
         catch (JsonException) { return json; }
 
-        return Insert(doc, spans)?.ToJsonString(PersonMentions.KeepWords) ?? json;
-    }
-
-    /// <summary>The spans that <see cref="Insert(string?, IReadOnlyCollection{MentionSpan})"/> can wrap in this document.</summary>
-    public static IReadOnlyList<MentionSpan> Placeable(string? json, IReadOnlyCollection<MentionSpan> spans)
-    {
-        if (string.IsNullOrWhiteSpace(json) || spans.Count == 0)
-            return [];
-
-        JsonNode? doc;
-        try { doc = JsonNode.Parse(json); }
-        catch (JsonException) { return []; }
-
-        if (doc is null)
-            return [];
-
-        var index = BuildPlaintextIndex(doc);
-        return spans.Where(span => TryResolve(index, span, out _, out _)).ToList();
+        var inserted = Insert(doc, spans);
+        return inserted is null || ReferenceEquals(inserted, doc) ? json : inserted.ToJsonString(PersonMentions.KeepWords);
     }
 
     // ---- offset to node resolution -------------------------------------------------------------

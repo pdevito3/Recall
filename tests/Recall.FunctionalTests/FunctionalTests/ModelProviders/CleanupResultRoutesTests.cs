@@ -8,6 +8,7 @@ using Recall.FunctionalTests.FunctionalTests.Sessions;
 using Recall.Server.Domain.People;
 using Recall.Server.Domain.People.Dtos;
 using Recall.Server.Domain.Sessions;
+using Recall.Server.Domain.Sessions.Content;
 using Recall.Server.Domain.Sessions.Dtos;
 using Recall.Server.Domain.UserSettings.Dtos;
 using Recall.Server.Exceptions;
@@ -23,6 +24,7 @@ public class CleanupResultRoutesTests : TestBase
     private static readonly string[] Rae = ["Rae"];
     private static readonly string[] SamLee = ["Sam Lee"];
     private static readonly string[] SamLeeAndAnn = ["Sam Lee", "Ann"];
+    private static readonly string[] SamAndSamLee = ["Sam", "Sam Lee"];
 
     private static string ReplyWith(string cleaned, string[]? topics = null, string[]? moods = null, string[]? people = null) => JsonSerializer.Serialize(new
     {
@@ -487,7 +489,7 @@ public class CleanupResultRoutesTests : TestBase
     }
 
     [Test]
-    [Property("Rule", "SES-40")]
+    [Property("Rule", "SES-41")]
     public async Task with_approval_off_a_name_that_a_mark_crosses_adds_no_person()
     {
         // Arrange
@@ -503,6 +505,25 @@ public class CleanupResultRoutesTests : TestBase
         var labels = await ExecuteDbContextAsync(db => db.People.IgnoreQueryFilters().Where(person => person.UserId == scenario.Member.Id).Select(person => person.Label).ToListAsync());
         labels.ShouldBe(["Ann"]);
         stored.CleanedText.ShouldContain("\"label\":\"Ann\"");
+    }
+
+    [Test]
+    [Property("Rule", "SES-41")]
+    public async Task with_approval_off_a_name_inside_a_longer_name_adds_only_the_person_that_has_a_tag()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        var settings = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new UserSettingChangeDto { TimeZone = "Europe/Tallinn", LocationCaptureEnabled = false, RequirePeopleProposalApproval = false, Version = 0 });
+        settings.StatusCode.ShouldBe(HttpStatusCode.OK, await settings.Content.ReadAsStringAsync());
+        var session = await scenario.SessionWithWordsAsync("raw words");
+
+        // Act
+        var stored = await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "I met Sam Lee today", peopleProposal = SamAndSamLee, baseRawRevision = 1 });
+
+        // Assert
+        var people = await ExecuteDbContextAsync(db => db.People.IgnoreQueryFilters().Where(person => person.UserId == scenario.Member.Id).Select(person => person.Id).ToListAsync());
+        people.Count.ShouldBe(1);
+        PersonMentions.PersonIdsIn(stored.CleanedText).ShouldBe(people, ignoreOrder: true);
     }
 
     [Test]

@@ -60,10 +60,10 @@ public sealed class CleanupCompletion(AppDbContext dbContext)
                 spans.AddRange(PeopleTagSpans.Spans(plain, name, person.Id, person.Label));
             }
 
-            // A name with a mark across it can hold no tag, and a Person with no tag is a change that nothing on the page explains.
-            var placed = MentionInsertion.Placeable(cleaned, spans);
-            added.AddRange(newPeople.Where(person => placed.Any(span => span.PersonId == person.Id)));
-            cleaned = MentionInsertion.Insert(cleaned, placed);
+            // A name with a mark across it, or inside a longer name, holds no tag, and a Person with no tag is a change that nothing on the page explains.
+            cleaned = MentionInsertion.Insert(cleaned, spans);
+            var tagged = PersonMentions.PersonIdsIn(cleaned);
+            added.AddRange(newPeople.Where(person => tagged.Contains(person.Id)));
         }
 
         if (cleaned.Length > Session.DraftMaxLength)

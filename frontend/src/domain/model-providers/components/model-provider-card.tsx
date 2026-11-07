@@ -59,25 +59,25 @@ export function ModelProviderCard({ provider }: { provider: ModelProviderDto }) 
           {provider.isActive && <Badge>Active</Badge>}
         </CardTitle>
         <CardAction>
-            <ResponsiveDialogTrigger>
-              <Button variant="destructive" isPending={remove.isPending}>
-                Delete
-              </Button>
-              <ResponsiveDialog>
-                <ResponsiveDialogHeader>
-                  <ResponsiveDialogTitle>Delete {provider.name}?</ResponsiveDialogTitle>
-                  <ResponsiveDialogDescription>
-                    The server forgets its API key. Sessions keep their Cleaned text.
-                  </ResponsiveDialogDescription>
-                </ResponsiveDialogHeader>
-                <ResponsiveDialogFooter>
-                  <ResponsiveDialogClose>Keep model provider</ResponsiveDialogClose>
-                  <ResponsiveDialogClose variant="destructive" onPress={() => remove.mutate()}>
-                    Delete model provider
-                  </ResponsiveDialogClose>
-                </ResponsiveDialogFooter>
-              </ResponsiveDialog>
-            </ResponsiveDialogTrigger>
+          <ResponsiveDialogTrigger>
+            <Button variant="destructive" isPending={remove.isPending}>
+              Delete
+            </Button>
+            <ResponsiveDialog>
+              <ResponsiveDialogHeader>
+                <ResponsiveDialogTitle>Delete {provider.name}?</ResponsiveDialogTitle>
+                <ResponsiveDialogDescription>
+                  The server forgets its API key. Sessions keep their Cleaned text.
+                </ResponsiveDialogDescription>
+              </ResponsiveDialogHeader>
+              <ResponsiveDialogFooter>
+                <ResponsiveDialogClose>Keep model provider</ResponsiveDialogClose>
+                <ResponsiveDialogClose variant="destructive" onPress={() => remove.mutate()}>
+                  Delete model provider
+                </ResponsiveDialogClose>
+              </ResponsiveDialogFooter>
+            </ResponsiveDialog>
+          </ResponsiveDialogTrigger>
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">

@@ -535,6 +535,7 @@ public sealed class FakeModelProvider : IAsyncDisposable
                     await context.Response.WriteAsync(": keep-alive\n\n");
                     await context.Response.Body.FlushAsync();
                     await WriteCompatibleChunkAsync(context, new { content = " " }, null);
+                    await WriteCompatibleChunkAsync(context, new { reasoning = new { text = "" }, reasoning_content = new object[] { "" } }, null);
                 }
             case FakeMode.Thinking:
                 for (var thought = 0; thought < ThoughtsOfAModel; thought++)

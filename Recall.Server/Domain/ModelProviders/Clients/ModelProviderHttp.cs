@@ -30,7 +30,8 @@ public static class ModelProviderHttp
                 ConnectCallback = ProviderAddressRule.ConnectAsync,
             })
             .AddHttpMessageHandler<ProviderReadGuard>()
-            // The logger of a client writes each header at its lowest level, and that level reaches a file and OTLP. A header here holds the key.
+            // The logger of a client writes each header at its lowest level. Its message shows `Authorization: *`, but a field of the
+            // record holds `Bearer <key>`, and a file and OTLP write each field. A header here holds the key.
             .RemoveAllLoggers()
             .RemoveAllResilienceHandlers();
 #pragma warning restore EXTEXP0001

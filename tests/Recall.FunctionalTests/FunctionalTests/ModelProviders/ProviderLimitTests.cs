@@ -14,6 +14,7 @@ public class ProviderLimitTests
 {
     private const string Instructions = "Clean this up.";
     private static readonly TimeSpan TestLimit = TimeSpan.FromSeconds(60);
+    private static readonly string[] ShortKeyModels = ["llama3.1:8b", "mixtral:8x7b", "gemma3:12b"];
 
     private static readonly ProviderLimits Short = new()
     {
@@ -317,6 +318,23 @@ public class ProviderLimitTests
 
         // Assert
         reply.ShouldBeOfType<ProviderReply<IReadOnlyList<ProviderModel>>.Answered>().Value.Select(model => model.Id).ShouldBe(["good-model"]);
+    }
+
+    [Test]
+    public async Task a_short_placeholder_key_hides_no_model()
+    {
+        // Arrange
+        var fake = await FakeModelProvider.StartAsync("a");
+        await using var _ = fake;
+        fake.Behavior.Mode = FakeMode.RawBody;
+        fake.Behavior.Reply = JsonSerializer.Serialize(new { data = ShortKeyModels.Select(id => new { id }) });
+        var endpoint = new ModelEndpoint(ModelProviderKind.OpenAiCompatible, CleanupScenario.BaseUrlOf(fake, ModelProviderKind.OpenAiCompatible), "a");
+
+        // Act
+        var reply = await ClientWith(Short).ListModelsAsync(endpoint, CancellationToken.None).WaitAsync(TestLimit);
+
+        // Assert
+        reply.ShouldBeOfType<ProviderReply<IReadOnlyList<ProviderModel>>.Answered>().Value.Select(model => model.Id).ShouldBe(ShortKeyModels);
     }
 
     [Test]

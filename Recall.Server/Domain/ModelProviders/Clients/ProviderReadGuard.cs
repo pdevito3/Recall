@@ -72,7 +72,8 @@ public sealed class ProviderReadGuard(ProviderLimits limits) : DelegatingHandler
             }
 
             Count(buffer.Span[..read]);
-            if (mustBeUtf8)
+            // A read of 0 bytes into a buffer of 0 bytes waits for data and is not the end of the body.
+            if (mustBeUtf8 && (read > 0 || buffer.Length > 0))
                 CheckUtf8(buffer.Span[..read]);
             return read;
         }

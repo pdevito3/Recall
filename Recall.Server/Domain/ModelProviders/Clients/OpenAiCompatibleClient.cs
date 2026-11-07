@@ -106,12 +106,16 @@ public sealed class OpenAiCompatibleClient(IHttpClientFactory httpClientFactory,
         return finishReason == "stop" && words.Length > 0 ? words.ToString() : null;
     }
 
-    // Servers differ on the form of a thought: a string or an object. Only the progress matters, so any form with content counts.
-    private static string? ThoughtIn(JsonElement? thought) => thought?.ValueKind switch
+    // Servers differ on the form of a thought: a string or an object. Only the progress matters, so any form that holds a word counts,
+    // and an empty object or a list of empty strings in each keep-alive does not.
+    private static string? ThoughtIn(JsonElement? thought) => thought is { } value && HoldsWords(value) ? value.GetRawText() : null;
+
+    private static bool HoldsWords(JsonElement value) => value.ValueKind switch
     {
-        JsonValueKind.String => thought.Value.GetString(),
-        JsonValueKind.Object or JsonValueKind.Array => thought.Value.GetRawText(),
-        _ => null,
+        JsonValueKind.String => !string.IsNullOrWhiteSpace(value.GetString()),
+        JsonValueKind.Object => value.EnumerateObject().Any(field => HoldsWords(field.Value)),
+        JsonValueKind.Array => value.EnumerateArray().Any(HoldsWords),
+        _ => false,
     };
 
     private static HttpRequestMessage RequestTo(ModelEndpoint endpoint, HttpMethod method, string path)

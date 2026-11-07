@@ -131,8 +131,18 @@ internal static partial class MarkdownWords
 
     private static bool IsMarkOfTheForm(Rune rune) => rune.IsAscii && "*_~=+\\#><-|[]()!:`".Contains((char)rune.Value);
 
-    /// <summary>Thai, Lao, and the scripts of East Asia write no space between words, so a mark there does not join two words. Each letter is its own count.</summary>
-    private static bool HasNoSpaces(Rune rune) => rune.Value is (>= 0x0E00 and <= 0x0EFF) or >= 0x2E80;
+    /// <summary>
+    /// Thai, Lao, Tibetan, Myanmar, Khmer, Han, and Kana write no space between words, so a mark there does not join two words. Each letter
+    /// is its own count. Hangul writes spaces, so it counts as Latin does.
+    /// </summary>
+    private static bool HasNoSpaces(Rune rune) => rune.Value is
+        (>= 0x0E00 and <= 0x109F)
+        or (>= 0x1780 and <= 0x17FF)
+        or (>= 0x2E80 and <= 0x312F)
+        or (>= 0x3190 and <= 0x9FFF)
+        or (>= 0xF900 and <= 0xFAFF)
+        or (>= 0xFF65 and <= 0xFF9F)
+        or (>= 0x20000 and <= 0x3FFFF);
 
     private static void Add(StringBuilder word, Dictionary<string, int> counts, int change)
     {
