@@ -407,9 +407,13 @@ public static class MarkdownToProseMirror
                     _ => null,
                 };
 
-                var nested = mark is null ? marks : MarkSet.With(marks, mark);
+                // A mark between two letters joins two words, as "a~~b~~c" would show "abc". Its delimiters stay as text.
+                var delimiters = mark is not null && JoinsTwoWords(target, emphasis) ? new string(emphasis.DelimiterChar, emphasis.DelimiterCount) : null;
+                var nested = mark is null || delimiters is not null ? marks : MarkSet.With(marks, mark);
+                AddText(target, delimiters, marks);
                 foreach (var child in emphasis)
                     AppendInline(target, child, nested, depth + 1);
+                AddText(target, delimiters, marks);
                 break;
             }
 
@@ -448,6 +452,30 @@ public static class MarkdownToProseMirror
             // MarkdownWords catches a leaf inline with words that no case here knows.
         }
     }
+
+    private static bool JoinsTwoWords(JsonArray target, EmphasisInline emphasis)
+        => (EndsAWord(target.LastOrDefault()?["text"]?.GetValue<string>()) && StartsAWord(FirstText(emphasis.FirstChild)))
+            || (EndsAWord(LastText(emphasis.LastChild)) && StartsAWord(FirstText(emphasis.NextSibling)));
+
+    private static string? FirstText(Inline? inline)
+    {
+        while (inline is ContainerInline container)
+            inline = container.FirstChild;
+        return (inline as LiteralInline)?.Content.ToString();
+    }
+
+    private static string? LastText(Inline? inline)
+    {
+        while (inline is ContainerInline container)
+            inline = container.LastChild;
+        return (inline as LiteralInline)?.Content.ToString();
+    }
+
+    private static bool StartsAWord(string? text)
+        => Rune.DecodeFromUtf16(text, out var rune, out _) == OperationStatus.Done && MarkdownWords.JoinsItsNeighbours(rune);
+
+    private static bool EndsAWord(string? text)
+        => Rune.DecodeLastFromUtf16(text, out var rune, out _) == OperationStatus.Done && MarkdownWords.JoinsItsNeighbours(rune);
 
     private static void AppendLink(JsonArray target, ContainerInline link, string? url, string? title, MarkSet? marks, int depth)
     {

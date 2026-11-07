@@ -60,7 +60,7 @@ An answer is Markdown, and the server turns it into the stored document. The tim
 
 On the release image with a limit of 1 GiB, each text that passes the bounds and is the worst of its form was stored, one at a time and four at the same time: 11 000 open links, 33 000 signs of emphasis, and a table of 8 300 rows. The peak was 604 MB, and the slowest took 8.2 s from the request to the answer. With a limit of 512 MiB, one at a time was stored, but four tables at the same time stopped the process with exit 137. So `docs/install.md` asks for 1 GiB.
 
-A text over a bound is stored as the source: each line is a paragraph of plain text, and no word is lost. A conversion that throws `OutOfMemoryException`, a parse error, or a time-out of a regular expression also stores the source, with no new try. The rule of the words then compares the shown words with the source, and a form that would change them stays as the source too.
+A text over a bound is stored as the source: each line is a paragraph of plain text, and no word is lost. A conversion that throws `OutOfMemoryException`, a parse error, or a time-out of a regular expression also stores the source, with no new try. The rule of the words then compares the shown words with the source, and a form that would change them stays as the source too. A pair of emphasis signs between two letters, as in `a~~b~~c` or `2*3*4`, would join two words, so the conversion keeps those signs as text and the rest of the answer keeps its form.
 
 The test button always answers with 200 and with one of these kinds. A person can also stop a run: see [The Cleanup job](background-jobs.md#the-cleanup-job).
 

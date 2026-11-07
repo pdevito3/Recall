@@ -112,7 +112,7 @@ internal static partial class MarkdownWords
         var word = new StringBuilder();
         foreach (var rune in text.EnumerateRunes())
         {
-            if (Rune.IsLetterOrDigit(rune) && !HasNoSpaces(rune))
+            if (JoinsItsNeighbours(rune))
             {
                 word.Append(rune.ToString());
                 continue;
@@ -128,6 +128,9 @@ internal static partial class MarkdownWords
 
         Add(word, counts, change);
     }
+
+    /// <summary>A letter or a digit that makes one word with the letter or digit next to it.</summary>
+    internal static bool JoinsItsNeighbours(Rune rune) => Rune.IsLetterOrDigit(rune) && !HasNoSpaces(rune);
 
     private static bool IsMarkOfTheForm(Rune rune) => rune.IsAscii && "*_~=+\\#><-|[]()!:`".Contains((char)rune.Value);
 

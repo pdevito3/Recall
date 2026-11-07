@@ -55,4 +55,26 @@ public class MarkdownToProseMirrorTests
         var firstTexts = items.Select(item => item!["content"]![0]!["content"]![0]!["text"]!.GetValue<string>());
         string.Join('|', firstTexts).ShouldBe(firstWords);
     }
+
+    [Test]
+    [Arguments("a~~b~~c")]
+    [Arguments("2*3*4")]
+    [Arguments("w1**w2**")]
+    public void a_mark_inside_a_word_stays_as_text_and_the_rest_keeps_its_form(string inWord)
+    {
+        // Arrange
+        var answer = $"## Notes\n\nI do ~~not~~ love Ann.\nA word with tildes: {inWord}, and a literal ~~lit~~ that is not struck.\n~~bold struck~~ then ital and ~~xy~~";
+
+        // Act
+        var json = MarkdownToProseMirror.ConvertToJson(answer);
+
+        // Assert
+        var blocks = JsonNode.Parse(json)!["content"]!.AsArray();
+        blocks.Select(block => block!["type"]!.GetValue<string>()).ShouldBe(["heading", "paragraph"]);
+        var struck = blocks[1]!["content"]!.AsArray()
+            .Where(text => text!["marks"]?.AsArray().Any(mark => mark!["type"]!.GetValue<string>() == "strike") == true)
+            .Select(text => text!["text"]!.GetValue<string>());
+        struck.ShouldBe(["not", "lit", "bold struck", "xy"]);
+        ProseMirrorToPlainText.Render(json).ShouldBe($"Notes\nI do ~~not~~ love Ann. A word with tildes: {inWord}, and a literal ~~lit~~ that is not struck. ~~bold struck~~ then ital and ~~xy~~");
+    }
 }
