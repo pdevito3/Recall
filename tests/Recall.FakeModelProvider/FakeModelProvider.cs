@@ -535,6 +535,7 @@ public sealed class FakeModelProvider : IAsyncDisposable
         using var bytes = new MemoryStream();
         await file.CopyToAsync(bytes, context.RequestAborted);
         AudioFiles.Enqueue(bytes.ToArray());
+        AudioModels.Enqueue(form["model"].ToString());
         if (Math.Max(0, bytes.Length - 44) / 2 / 16_000.0 < Behavior.MinAudioSeconds)
         {
             await WriteCompatibleErrorAsync(context, 400, $"Audio file is too short. Minimum audio length is {Behavior.MinAudioSeconds} seconds.");
@@ -559,7 +560,6 @@ public sealed class FakeModelProvider : IAsyncDisposable
                 return;
         }
 
-        AudioModels.Enqueue(form["model"].ToString());
         var seconds = Math.Max(0, bytes.Length - 44) / 2 / 16_000.0;
         var text = Behavior.Reply ?? $"Part {AudioFiles.Count} heard {Seconds(seconds)} seconds.";
         if (Behavior.AudioOutputTokens is not { } limit)

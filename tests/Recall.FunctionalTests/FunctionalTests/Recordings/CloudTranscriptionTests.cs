@@ -627,7 +627,8 @@ public class CloudTranscriptionTests : TestBase
         var registration = Services.GetRequiredService<BackWave.Jobs.JobRegistry>().Registrations.Single(r => r.WireName == TranscribeRecordingJob.CloudWireName);
 
         // Act
-        var waits = registration.Retry.ShouldNotBeNull().BackoffByAttempt.Take(Recording.MaxAttemptsWithoutProgress).ToArray();
+        // The claim after the last try fails the Recording with no call, so the tries span one wait fewer than their count.
+        var waits = registration.Retry.ShouldNotBeNull().BackoffByAttempt.Take(Recording.MaxAttemptsWithoutProgress - 1).ToArray();
 
         // Assert
         waits.Aggregate(TimeSpan.Zero, (sum, wait) => sum + wait).ShouldBeGreaterThanOrEqualTo(TimeSpan.FromMinutes(30));
@@ -658,7 +659,7 @@ public class CloudTranscriptionTests : TestBase
 
     [Test]
     [Property("Rule", "REC-18")]
-    public async Task a_cut_answer_is_never_saved_and_its_part_goes_again_in_two()
+    public async Task a_cut_answer_is_never_saved_and_the_rest_of_the_run_goes_in_halves()
     {
         // Arrange
         await using var scenario = await ChosenAsync();
@@ -675,7 +676,7 @@ public class CloudTranscriptionTests : TestBase
         var lines = (await PlainRawAsync(scenario.Client, recording.SessionId)).Split('\n');
         lines.ShouldAllBe(line => line.EndsWith(" seconds.") && !line.Contains(" of "));
         lines.Sum(HeardSeconds).ShouldBe(30, lines.Length * 0.01);
-        scenario.Fake.AudioCalls.ShouldBeGreaterThan(lines.Length);
+        scenario.Fake.AudioCalls.ShouldBe(lines.Length + 1);
         (await scenario.Client.GetRecordingAsync(recording.Id)).Status.ShouldBe(nameof(RecordingStatus.Transcribed));
     }
 

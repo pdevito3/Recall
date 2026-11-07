@@ -41,7 +41,8 @@ public sealed class CloudTranscriptionEngine(WorkAudio workAudio, OpenAiCompatib
 
             if (heard.Cut)
             {
-                // The words of a cut part are missing, so none of them is saved, and the part goes again as two.
+                // The words of a cut part are missing, so none of them is saved, and the part goes again at half its length.
+                // Speech that fills one part tends to go on, so the rest of the run keeps the shorter length.
                 limit = end - start >= SmallestPartToSplit
                     ? (end - start) / 2
                     : throw new TranscriptionEngineException(RecordingProblem.ProviderBadAnswer);
@@ -50,7 +51,6 @@ public sealed class CloudTranscriptionEngine(WorkAudio workAudio, OpenAiCompatib
 
             yield return new TranscriptChunk(end, audio.Samples, heard.Text);
             start = end;
-            limit = maxSamples;
         }
     }
 

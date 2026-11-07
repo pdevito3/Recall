@@ -12,6 +12,8 @@ public static class TranscriptionRegistration
                 $"{TranscriptionOptions.SectionName}:ModelRetryMinutes must be 1 or more. A lower value sends a download of the speech model again with no wait.")
             .Validate(o => AudioParts.MaxSamplesIn(o.CloudPartBytes) >= 2 * AudioParts.FrameSamples,
                 $"{TranscriptionOptions.SectionName}:CloudPartBytes is too small to hold a part of audio.")
+            .Validate(o => o.CloudPartSeconds >= 10,
+                $"{TranscriptionOptions.SectionName}:CloudPartSeconds must be 10 or more. A shorter part leaves no room to split a cut answer.")
             .ValidateOnStart();
         builder.Services.AddSingleton<ModelStore>();
         builder.Services.AddSingleton<ModelDownloads>();

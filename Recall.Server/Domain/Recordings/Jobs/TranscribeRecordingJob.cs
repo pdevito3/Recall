@@ -15,7 +15,7 @@ using Transcription;
 
 /// <summary>
 /// One attempt at the text of one Recording. A kill, a stop, or a lease that returns runs this again, and it goes on from
-/// the pointer that the last chunk saved (rules 4, 7, and 8 of the jobs). The default policy applies on purpose:
+/// the pointer that the last chunk saved (rules 4, 7, and 8 of the jobs). The local job keeps the default policy on purpose:
 /// <see cref="Recording.MaxAttemptsWithoutProgress"/> ends the work before the ceiling of 10 attempts does, so a job that
 /// keeps the server from living gets a true status and not a row in the dead letters.
 /// </summary>
@@ -37,11 +37,12 @@ public sealed class TranscribeRecordingJob(
     /// <summary>
     /// A provider can hang for minutes, so this job runs in the queues of the provider calls, one queue for each tenant at a time
     /// (<see cref="CleanupQueues.Pick"/>), and a hung provider of one tenant holds no slot of another. A provider that did not
-    /// answer leaves the Recording waiting with its audio, and the job tries again after 1, 2, 5, 10, and 15 minutes, so an outage
-    /// of half an hour fails no Recording before <see cref="Recording.MaxAttemptsWithoutProgress"/> ends the tries.
+    /// answer leaves the Recording waiting with its audio, and the job tries again after 1, 5, 10, and 15 minutes. So the tries that
+    /// <see cref="Recording.MaxAttemptsWithoutProgress"/> allows span 31 minutes, and an outage of half an hour fails no Recording.
+    /// <c>[Retry]</c> changes only the wait after a throw, so a lease that comes back keeps the default policy.
     /// </summary>
     [Job(CloudWireName, Queue = CleanupQueues.First)]
-    [Retry(10, 60, 120, 300, 600, 900)]
+    [Retry(10, 60, 300, 600, 900)]
     public Task TranscribeRecordingInCloudAsync(string recordingId, string userId, string tenantId, CancellationToken cancellationToken)
         => TranscribeAsync(TranscriptionEngineKind.Cloud, recordingId, userId, tenantId, cancellationToken);
 
