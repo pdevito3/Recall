@@ -31,12 +31,12 @@ The current, autosaved working text of Raw or of Cleaned. A Draft changes, and a
 An append-only snapshot of Raw or of Cleaned, made at a save point. Each change to the text makes one, and that includes the change that a Person rename makes _(agent default)_. Revisions are history inside one Session, and search reads only the current state.
 _Avoid_: Version (the concurrency token of a row), history entry
 
-**Last-write-wins**:
-The rule for two saves of one Draft. The later save time holds the Draft, and the earlier save stays as a Revision, so no words go away. A transcript chunk is not a save, so a save from a base older than the last chunk loses at any save time.
-_Avoid_: Conflict, merge
+**Draft save rule**:
+The rule for two saves of one Draft. A save wins only from the number of the current Draft. Each other save loses and stays as a Revision, so no words go away. A transcript chunk is not a save, and it moves the number, so a save from before the chunk loses.
+_Avoid_: Last-write-wins, which is the older rule on the save time. Conflict, merge
 
 **Stale**:
-The state of a Session whose current Raw Draft is at a newer Revision than the Revision that the last successful Cleanup read. It has this one definition. An edit of Cleaned by hand and a save that lost Last-write-wins do not make a Session stale. A Person rename also does not. If the rename makes a Raw Revision on a Session that is not stale, the Revision that the last Cleanup read moves to the new Revision. A stale Session stays stale. These three rules on a rename are one choice _(agent default)_.
+The state of a Session whose current Raw Draft is at a newer Revision than the Revision that the last successful Cleanup read. It has this one definition. An edit of Cleaned by hand and a save that lost do not make a Session stale. A Person rename also does not. If the rename makes a Raw Revision on a Session that is not stale, the Revision that the last Cleanup read moves to the new Revision. A stale Session stays stale. These three rules on a rename are one choice _(agent default)_.
 _Avoid_: Dirty, outdated
 
 **Client session ID**:

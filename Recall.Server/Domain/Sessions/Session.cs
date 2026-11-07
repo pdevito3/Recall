@@ -58,7 +58,6 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
     [Sensitive] public IReadOnlyList<string> MoodSuggestions { get; private set; } = [];
 
     [Sensitive] public IReadOnlyList<PersonProposal> PeopleProposals { get; private set; } = [];
-    public int? LastTranscriptRevision { get; private set; }
 
     public uint MetadataVersion { get; private set; }
 
@@ -114,23 +113,23 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         };
     }
 
-    public DraftDecision SaveRaw(DraftSave save, DraftAnswer? earlier = null, bool baseWasDraft = true)
+    public DraftDecision SaveRaw(DraftSave save, DraftAnswer? earlier = null)
     {
-        var decision = Raw.Decide(save, earlier, baseWasDraft && !(save.BaseRevision < LastTranscriptRevision));
+        var decision = Raw.Decide(save, earlier);
         Raw = decision.Next;
         if (decision.MintedRevision is { } number)
-            _appendedRawRevisions.Add(new RawRevision(Id, number, save.SavedAt, save.ClaimedSavedAt, save.Text, decision.Outcome == DraftSaveOutcome.Won));
+            _appendedRawRevisions.Add(new RawRevision(Id, number, save.SavedAt, save.Text, decision.Outcome == DraftSaveOutcome.Won));
 
         RefreshFromDrafts();
         return decision;
     }
 
-    public DraftDecision SaveCleaned(DraftSave save, DraftAnswer? earlier = null, bool baseWasDraft = true)
+    public DraftDecision SaveCleaned(DraftSave save, DraftAnswer? earlier = null)
     {
-        var decision = Cleaned.Decide(save, earlier, baseWasDraft);
+        var decision = Cleaned.Decide(save, earlier);
         Cleaned = decision.Next;
         if (decision.MintedRevision is { } number)
-            _appendedCleanedRevisions.Add(new CleanedRevision(Id, number, save.SavedAt, save.ClaimedSavedAt, save.Text, decision.Outcome == DraftSaveOutcome.Won));
+            _appendedCleanedRevisions.Add(new CleanedRevision(Id, number, save.SavedAt, save.Text, decision.Outcome == DraftSaveOutcome.Won));
         if (decision.Outcome == DraftSaveOutcome.Won)
             CleanedHasHandEdits = true;
 
@@ -144,10 +143,8 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         if (text.Length > DraftMaxLength)
             return false;
 
-        var number = Raw.LatestRevision + 1;
-        Raw = new DraftSlot(text, number, number, now);
-        LastTranscriptRevision = number;
-        _appendedRawRevisions.Add(new RawRevision(Id, number, now, now, text, wasDraft: true));
+        Raw = Raw.Rewritten(text, now);
+        _appendedRawRevisions.Add(new RawRevision(Id, Raw.DraftRevision, now, text, wasDraft: true));
         RefreshFromDrafts();
         return true;
     }
@@ -159,8 +156,8 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         var raw = PersonMentions.Relabel(Raw.Text, personId, label);
         if (raw != Raw.Text)
         {
-            Raw = Raw.RewrittenKeepingSavedAt(raw);
-            _appendedRawRevisions.Add(new RawRevision(Id, Raw.DraftRevision, now, now, raw, wasDraft: true));
+            Raw = Raw.Rewritten(raw, now);
+            _appendedRawRevisions.Add(new RawRevision(Id, Raw.DraftRevision, now, raw, wasDraft: true));
             if (LastCleanupRawRevision is not null && !wasStale)
                 LastCleanupRawRevision = Raw.DraftRevision;
         }
@@ -168,8 +165,8 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         var cleaned = PersonMentions.Relabel(Cleaned.Text, personId, label);
         if (cleaned != Cleaned.Text)
         {
-            Cleaned = Cleaned.RewrittenKeepingSavedAt(cleaned);
-            _appendedCleanedRevisions.Add(new CleanedRevision(Id, Cleaned.DraftRevision, now, now, cleaned, wasDraft: true));
+            Cleaned = Cleaned.Rewritten(cleaned, now);
+            _appendedCleanedRevisions.Add(new CleanedRevision(Id, Cleaned.DraftRevision, now, cleaned, wasDraft: true));
         }
 
         RefreshFromDrafts();
@@ -205,8 +202,8 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
     public void CompleteCleanup(CleanupOutcome outcome, int rawRevisionRead, DateTimeOffset now, string? deviceResultHash = null)
     {
         RequireRunningCleanup();
-        Cleaned = new DraftSlot(outcome.CleanedText, Cleaned.LatestRevision + 1, Cleaned.LatestRevision + 1, now);
-        _appendedCleanedRevisions.Add(new CleanedRevision(Id, Cleaned.DraftRevision, now, now, outcome.CleanedText, wasDraft: true, deviceResultHash));
+        Cleaned = Cleaned.Rewritten(outcome.CleanedText, now);
+        _appendedCleanedRevisions.Add(new CleanedRevision(Id, Cleaned.DraftRevision, now, outcome.CleanedText, wasDraft: true, deviceResultHash));
         Synopsis = outcome.Synopsis;
         CleanedHasHandEdits = false;
         LastCleanupRawRevision = rawRevisionRead;
@@ -296,8 +293,8 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         DropPersonProposal(proposal);
         if (cleaned != Cleaned.Text)
         {
-            Cleaned = Cleaned.RewrittenKeepingSavedAt(cleaned);
-            _appendedCleanedRevisions.Add(new CleanedRevision(Id, Cleaned.DraftRevision, now, now, cleaned, wasDraft: true));
+            Cleaned = Cleaned.Rewritten(cleaned, now);
+            _appendedCleanedRevisions.Add(new CleanedRevision(Id, Cleaned.DraftRevision, now, cleaned, wasDraft: true));
         }
 
         RefreshFromDrafts();

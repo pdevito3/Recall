@@ -65,7 +65,6 @@ public static partial class SessionMapper
     [MapperIgnoreSource(nameof(Session.MoodSuggestions))]
     [MapperIgnoreSource(nameof(Session.PeopleProposals))]
     [MapperIgnoreSource(nameof(Session.TenantId))]
-    [MapperIgnoreSource(nameof(Session.LastTranscriptRevision))]
     [MapperIgnoreSource(nameof(Session.UserId))]
     [MapperIgnoreSource(nameof(Session.Preview))]
     [MapperIgnoreSource(nameof(Session.CleanupRun))]

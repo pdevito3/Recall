@@ -18,14 +18,15 @@ public class SessionTests
     private static CleanupOutcome Outcome(string cleaned, string synopsis) => new(cleaned, synopsis, [], [], []);
 
     private static DraftSave Save(string text, int baseRevision, DateTimeOffset? savedAt = null)
-        => DraftSave.Of(text, baseRevision, savedAt ?? Noon, Now);
+        => DraftSave.Of(text, baseRevision, savedAt ?? Noon);
 
     private static string Mention(string label)
         => "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Lunch with \"},"
             + "{\"type\":\"mention\",\"attrs\":{\"personId\":\"" + PersonId + "\",\"label\":\"" + label + "\"}}]}]}";
 
     [Test]
-    public void only_a_save_from_a_base_older_than_the_last_chunk_misses_the_transcript()
+    [Property("Rule", "REC-6")]
+    public void a_chunk_moves_the_number_so_only_a_save_from_a_base_older_than_the_chunk_misses_the_transcript()
     {
         // Arrange
         var session = NewSession();

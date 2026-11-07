@@ -11,8 +11,6 @@ public class CleanedRevision
 
     [Sensitive] public DateTimeOffset SavedAt { get; private set; }
 
-    [Sensitive] public DateTimeOffset ClaimedSavedAt { get; private set; }
-
     [Sensitive] public string Text { get; private set; } = default!;
 
     /// <summary>True when the Draft took these words at this number. False for a save that lost.</summary>
@@ -23,12 +21,11 @@ public class CleanedRevision
 
     public Session Session { get; private set; } = default!;
 
-    internal CleanedRevision(string sessionId, int number, DateTimeOffset savedAt, DateTimeOffset claimedSavedAt, string text, bool wasDraft, string? deviceResultHash = null)
+    internal CleanedRevision(string sessionId, int number, DateTimeOffset savedAt, string text, bool wasDraft, string? deviceResultHash = null)
     {
         SessionId = sessionId;
         Number = number;
         SavedAt = savedAt;
-        ClaimedSavedAt = claimedSavedAt;
         Text = text;
         WasDraft = wasDraft;
         DeviceResultHash = deviceResultHash;

@@ -9,8 +9,6 @@ public class RawRevision
 
     [Sensitive] public DateTimeOffset SavedAt { get; private set; }
 
-    [Sensitive] public DateTimeOffset ClaimedSavedAt { get; private set; }
-
     [Sensitive] public string Text { get; private set; } = default!;
 
     /// <summary>True when the Draft took these words at this number. False for a save that lost.</summary>
@@ -18,12 +16,11 @@ public class RawRevision
 
     public Session Session { get; private set; } = default!;
 
-    internal RawRevision(string sessionId, int number, DateTimeOffset savedAt, DateTimeOffset claimedSavedAt, string text, bool wasDraft)
+    internal RawRevision(string sessionId, int number, DateTimeOffset savedAt, string text, bool wasDraft)
     {
         SessionId = sessionId;
         Number = number;
         SavedAt = savedAt;
-        ClaimedSavedAt = claimedSavedAt;
         Text = text;
         WasDraft = wasDraft;
     }

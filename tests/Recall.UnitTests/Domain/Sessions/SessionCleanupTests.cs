@@ -13,7 +13,7 @@ public class SessionCleanupTests
     private static Session SessionWithRaw()
     {
         var session = Session.Create("ten_1", "usr_1", "device-1", Noon, null, Noon);
-        session.SaveRaw(DraftSave.Of("raw words", 0, Noon, Noon));
+        session.SaveRaw(DraftSave.Of("raw words", 0, Noon));
         return session;
     }
 

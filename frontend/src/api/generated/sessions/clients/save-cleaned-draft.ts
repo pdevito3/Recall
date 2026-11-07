@@ -8,8 +8,8 @@ import type { SaveCleanedDraftOptions, SaveCleanedDraftResponses } from '../type
 import { client, unwrapResult } from '../../.kubb/client'
 
 /**
- * @summary Saves the Cleaned Draft with Last-write-wins on the save time. A save that loses keeps its words as a Revision.
- * A base must be the number of a Draft whose words the client holds. A higher base loses at any save time.
+ * @summary Saves the Cleaned Draft. A save wins only when its base is the number of the current Draft. Any other save loses and keeps its words as a Revision.
+ * A base must be the number of a Draft whose words the client holds. The save time decides no save.
  * {@link /api/v1/sessions/:id/cleaned}
  */
 export function saveCleanedDraft<ThrowOnError extends boolean = true>(options: Options<SaveCleanedDraftOptions, ThrowOnError>): Promise<UnwrappedResult<SaveCleanedDraftResponses, ThrowOnError>> {
