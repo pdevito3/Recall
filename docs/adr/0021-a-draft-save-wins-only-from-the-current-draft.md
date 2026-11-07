@@ -21,6 +21,6 @@ A chunk, a rename, and a Cleanup each move the number, so rule 4 covers each of 
 - Two writers see more `Lost` answers. Each client merges or shows a notice. So a client keeps one save in flight for each Draft, and an offline queue holds only the newest text. The steps are in [iOS API changes](../ios-api-changes.md#the-base-of-a-draft-save).
 - A save from an older base that reached the server before this rule could win with no read. A client now reads first, each time that the Draft moved.
 - `savedAt` is what the client sent. A fast clock shows a time in the future on a Revision, and a win from a slow clock moves the time of the Draft back. Nothing on the server reads either time to make a decision.
-- `Unchanged` writes no Revision, so its replay has no first answer to find after the Draft moves. SES-5 decides it, so it gets `Lost` with one new Revision. The client reads the Draft, and the words stay in a Revision.
+- `Unchanged` writes no Revision, so its replay has no first answer to find after the Draft moves. SES-5 decides it, so from its older base it gets `Lost` with one new Revision. The client reads the Draft, and the words stay in a Revision.
 - A client that guesses a number above the latest number can win later, when a Draft takes that number. SES-36 forbids this guess, and the server does not hold enough to refuse it at no cost.
 - The operator can reverse this decision. The change is one pull request with a clean revert, and the migration has a `Down`.

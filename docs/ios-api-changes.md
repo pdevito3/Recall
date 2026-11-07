@@ -59,7 +59,7 @@ Each `outcome` tells the client this:
 | `Kept` | Took these words in the first try of this save. It can hold other words now | In an earlier Revision. No new Revision | The number at which the Draft took these words |
 | `Lost` | Did not take this save | In a Revision | `null` |
 
-A replay sends the same `text` and the same `savedAt`. Give each new save a new `savedAt`, and keep the `savedAt` of a queued save when you send it again. A replay of a save that won gives `Kept`, and a replay of a save that lost gives `Lost`. Neither makes a new Revision. So a client that lost a reply gets the true answer when it sends the save again. A replay of a save that gave `Unchanged` gives `Unchanged` while the Draft holds the words, and `Lost` after the Draft moved. After `Kept`, do not merge these words into the Draft again, because the Draft already took them.
+A replay sends the same `text` and the same `savedAt`. Give each new save a new `savedAt`, and keep the `savedAt` of a queued save when you send it again. A replay of a save that won gives `Kept`, and a replay of a save that lost gives `Lost`. Neither makes a new Revision. So a client that lost a reply gets the true answer when it sends the save again. A replay of a save that gave `Unchanged` gives `Unchanged` while the Draft holds the words. After the Draft moved, it is a new save, so from its older base it gets `Lost`. After `Kept`, do not merge these words into the Draft again, because the Draft already took them.
 
 Any write can answer 507 when the disk of the server is full. The save did not happen. Keep the words, and send the same save again later.
 
