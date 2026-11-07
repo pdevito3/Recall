@@ -30,12 +30,13 @@ public sealed class SummarySchedules(BackWaveClient client, IJobStore store)
         if (_inPlace.TryGetValue(userId, out var known) && known == zone.Value)
             return;
 
+        var queue = SummaryQueues.Of(tenantId);
         var stored = (await store.ListSchedulesAsync(cancellationToken)).Select(s => s.Schedule).FirstOrDefault(s => s.ScheduleId == IdOf(userId));
-        if (stored is not { NoOverlap: true } || stored.TimeZoneId != zone.Value || stored.Cron != Nightly.Canonical || stored.WireName != SummaryJobs.RefreshWireName)
+        if (stored is not { NoOverlap: true } || stored.TimeZoneId != zone.Value || stored.Cron != Nightly.Canonical || stored.WireName != SummaryJobs.RefreshWireName || stored.Queue != queue)
         {
             await client.UpsertRecurringAsync(
                 IdOf(userId), Nightly, new RefreshSummaries(userId, tenantId),
-                timeZone: zone.Value, catchUp: CatchUpPolicy.Coalesce, noOverlap: true, cancellationToken: cancellationToken);
+                queue: queue, timeZone: zone.Value, catchUp: CatchUpPolicy.Coalesce, noOverlap: true, cancellationToken: cancellationToken);
         }
 
         _inPlace[userId] = zone.Value;

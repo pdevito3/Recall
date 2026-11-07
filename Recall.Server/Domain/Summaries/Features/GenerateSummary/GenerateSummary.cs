@@ -65,7 +65,7 @@ public static class GenerateSummary
 
             Activity.Current?.SetTag("app.summary_id", summary.Id);
             await dbContext.SaveAndEnqueueAsync(
-                async (jobs, ct) => await jobs.EnqueueAsync(new RunSummary(summary.Id, owner.UserId, owner.TenantId, runId), timeProvider.GetUtcNow(), ct),
+                async (jobs, ct) => await jobs.EnqueueOnAsync(new RunSummary(summary.Id, owner.UserId, owner.TenantId, runId), timeProvider.GetUtcNow(), SummaryQueues.Of(owner.TenantId), ct),
                 cancellationToken);
             _logger.Here().Information("Started summary run {SummaryRunId} of summary {SummaryId}, period {SummaryPeriod}", runId, summary.Id, key.Period);
             return summary.ToSummaryDto(key, sources);

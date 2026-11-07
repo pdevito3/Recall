@@ -16,9 +16,9 @@ using TimeZones;
 using UserSettings;
 
 /// <summary>
-/// The jobs of Summaries. Both run in the <see cref="JobHosting.SummaryQueue"/> group of one worker, so two runs of one Summary
-/// never call a provider at the same time. A payload holds IDs only. A provider can echo the text of a request in an error, so
-/// no words of a failure leave this class.
+/// The jobs of Summaries. Both run in the queue of the tenant in <see cref="SummaryQueues"/>, one job at a time, so two runs
+/// of one Summary never call a provider at the same time. A payload holds IDs only. A provider can echo the text of a
+/// request in an error, so no words of a failure leave this class.
 /// </summary>
 public sealed class SummaryJobs(IServiceScopeFactory scopeFactory, IModelProviderClient client, ApiKeyProtector keys, TimeProvider timeProvider)
 {
@@ -35,11 +35,34 @@ public sealed class SummaryJobs(IServiceScopeFactory scopeFactory, IModelProvide
 
     private readonly ILogger _logger = Log.ForContext<SummaryJobs>();
 
-    /// <summary>Generates one Summary that a person opened, and each missing or stale source Summary below it.</summary>
-    [Job(RunWireName, Queue = JobHosting.SummaryQueue)]
+    /// <summary>
+    /// Generates one Summary that a person opened, and each missing or stale source Summary below it. A claim that ends with
+    /// no throw ends each run that the job began and still holds, so an earlier claim that began a source leaves no Summary
+    /// <c>Generating</c>. A claim that throws keeps its runs for the next claim.
+    /// </summary>
+    [Job(RunWireName, Queue = SummaryQueues.First)]
     public async Task RunSummaryAsync(string summaryId, string userId, string tenantId, string runId, JobContext context, CancellationToken cancellationToken)
     {
         var owner = new JournalOwner(userId, tenantId);
+        await RunRequestedAsync(owner, summaryId, runId, context, cancellationToken);
+        await SendAsync(owner, new EndSummaryRunsOfJob.Command(context.JobId), cancellationToken);
+    }
+
+    /// <summary>
+    /// The nightly job of one User. It regenerates each stale or failed Summary, and makes the Day that just ended, and calls
+    /// no provider for a Summary whose sources did not change. With no model provider it changes nothing. It ends its runs as
+    /// <see cref="RunSummaryAsync"/> does.
+    /// </summary>
+    [Job(RefreshWireName, Queue = SummaryQueues.First)]
+    public async Task RefreshSummariesAsync(string userId, string tenantId, JobContext context, CancellationToken cancellationToken)
+    {
+        var owner = new JournalOwner(userId, tenantId);
+        await RefreshAsync(owner, context, cancellationToken);
+        await SendAsync(owner, new EndSummaryRunsOfJob.Command(context.JobId), cancellationToken);
+    }
+
+    private async Task RunRequestedAsync(JournalOwner owner, string summaryId, string runId, JobContext context, CancellationToken cancellationToken)
+    {
         var run = await ReadRequestedRunAsync(owner, summaryId, runId, cancellationToken);
         if (run is null)
             return;
@@ -47,7 +70,6 @@ public sealed class SummaryJobs(IServiceScopeFactory scopeFactory, IModelProvide
         if (context.Attempt > MaxClaims)
         {
             await SendAsync(owner, new FailSummaryRun.Command(summaryId, runId, SummaryFailure.Interrupted), cancellationToken);
-            await SendAsync(owner, new EndSummaryRunsOfJob.Command(context.JobId), cancellationToken);
             return;
         }
 
@@ -59,22 +81,13 @@ public sealed class SummaryJobs(IServiceScopeFactory scopeFactory, IModelProvide
         }
 
         await generation.EnsureAsync(endpoint, run.Value.Key, runId, cancellationToken);
-        await SendAsync(owner, new EndSummaryRunsOfJob.Command(context.JobId), cancellationToken);
     }
 
-    /// <summary>
-    /// The nightly job of one User. It regenerates each stale or failed Summary, and makes the Day that just ended, and calls
-    /// no provider for a Summary whose sources did not change. With no model provider it changes nothing.
-    /// </summary>
-    [Job(RefreshWireName, Queue = JobHosting.SummaryQueue)]
-    public async Task RefreshSummariesAsync(string userId, string tenantId, JobContext context, CancellationToken cancellationToken)
+    private async Task RefreshAsync(JournalOwner owner, JobContext context, CancellationToken cancellationToken)
     {
-        var owner = new JournalOwner(userId, tenantId);
+        var userId = owner.UserId;
         if (context.Attempt > MaxClaims)
-        {
-            await SendAsync(owner, new EndSummaryRunsOfJob.Command(context.JobId), cancellationToken);
             return;
-        }
 
         var plan = await ReadRefreshPlanAsync(owner, context.JobId, cancellationToken);
         if (plan.Targets.Count == 0)
@@ -92,7 +105,6 @@ public sealed class SummaryJobs(IServiceScopeFactory scopeFactory, IModelProvide
 
         foreach (var key in plan.Targets)
             await generation.EnsureAsync(endpoint, key, requestedRunId: null, cancellationToken);
-        await SendAsync(owner, new EndSummaryRunsOfJob.Command(context.JobId), cancellationToken);
         _logger.Here().Information("The summary refresh of user {UserId} checked {SummaryCount} summaries and called the provider {ProviderCallCount} times", userId, plan.Targets.Count, generation.ProviderCalls);
     }
 
@@ -250,6 +262,14 @@ public sealed class SummaryJobs(IServiceScopeFactory scopeFactory, IModelProvide
                 }
 
                 texts = await ReadSummaryTextsAsync(sourceKeys, cancellationToken);
+            }
+
+            // The sources changed after the read of their state, for example a delete. A run with no words would only invent a
+            // Summary, so it ends, and the next run reads the sources again.
+            if (texts.Count == 0)
+            {
+                await jobs.SendAsync(owner, new FailSummaryRun.Command(run.SummaryId, run.RunId, SummaryFailure.Interrupted), cancellationToken);
+                return false;
             }
 
             ProviderCalls++;

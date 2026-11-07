@@ -260,6 +260,35 @@ public class SummaryJobTests : TestBase
     }
 
     [Test]
+    public async Task a_claim_with_no_provider_ends_the_source_runs_that_an_earlier_claim_began()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        await FactoryClient.SessionOnAsync(Monday, "some words");
+        scenario.Fake.Behavior.Mode = FakeMode.Status;
+        scenario.Fake.Behavior.Status = 503;
+        var month = await FactoryClient.OpenAsync(SummaryPeriod.Month, Monday);
+        var jobId = Guid.NewGuid();
+        await Should.ThrowAsync<JobSafeTextException>(() => SummaryScenario.RunAsync(month.Id!, attempt: 1, jobId));
+        var dayBetween = await FactoryClient.ReadAsync(SummaryPeriod.Day, Monday);
+        FactoryClient.SignInAsAppUser(scenario.Admin.Identifier);
+        (await FactoryClient.DeleteAsync(ApiRoutes.ModelProviders.GetRecord(scenario.Provider.Id))).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        FactoryClient.SignInAsAppUser(scenario.Member.Identifier);
+
+        // Act
+        await SummaryScenario.RunAsync(month.Id!, attempt: 2, jobId);
+
+        // Assert
+        dayBetween.Status.ShouldBe(nameof(SummaryStatus.Generating));
+        var monthAfter = await FactoryClient.ReadAsync(SummaryPeriod.Month, Monday);
+        monthAfter.Status.ShouldBe(nameof(SummaryStatus.Failed));
+        monthAfter.Failure.ShouldBe(nameof(SummaryFailure.NoModelProvider));
+        var dayAfter = await FactoryClient.ReadAsync(SummaryPeriod.Day, Monday);
+        dayAfter.Status.ShouldBe(nameof(SummaryStatus.Failed));
+        dayAfter.Failure.ShouldBe(nameof(SummaryFailure.Interrupted));
+    }
+
+    [Test]
     public async Task a_job_that_ended_with_no_result_leaves_no_summary_generating()
     {
         // Arrange
@@ -402,6 +431,32 @@ public class SummaryJobTests : TestBase
         first.Cron.ShouldBe(SummarySchedules.Nightly.Canonical);
         moved.TimeZoneId.ShouldBe("Asia/Tokyo");
         moved.NoOverlap.ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task each_summary_job_of_a_tenant_goes_to_the_queue_of_its_tenant()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        await FactoryClient.SessionOnAsync(Monday, "some words");
+
+        // Act
+        var opened = await FactoryClient.OpenAsync(SummaryPeriod.Day, Monday);
+        var monitor = Services.GetRequiredService<BackWaveMonitor>();
+        var runs = await monitor.ListJobsAsync(new JobQuery { WireName = SummaryJobs.RunWireName, MaxResults = 1000 });
+        var queues = new List<string>();
+        foreach (var job in runs)
+        {
+            if ((await monitor.GetJobPayloadAsync(job.JobId))?.Text.Contains(opened.Id!, StringComparison.Ordinal) == true)
+                queues.Add(job.Queue);
+        }
+        var schedule = await ScheduleOfAsync(scenario.Member.Id);
+
+        // Assert
+        var queue = SummaryQueues.Of(scenario.Member.TenantId);
+        SummaryQueues.All.ShouldContain(queue);
+        queues.ShouldHaveSingleItem().ShouldBe(queue);
+        schedule.Queue.ShouldBe(queue);
     }
 
     [Test]

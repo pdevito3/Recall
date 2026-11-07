@@ -71,6 +71,9 @@ public class SummaryApiTests : TestBase
     [Arguments("0", "2026-06-01")]
     [Arguments("Day", "06/01/2026")]
     [Arguments("Day", "2026-6-1")]
+    [Arguments("Day", "9999-12-31")]
+    [Arguments("Year", "9999-06-01")]
+    [Arguments("Day", "0001-01-01")]
     public async Task a_bad_period_or_date_is_a_validation_problem(string period, string date)
     {
         // Arrange

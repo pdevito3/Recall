@@ -16,9 +16,6 @@ public static class JobHosting
 
     public const string TranscriptionQueue = "transcription";
 
-    /// <summary>One worker, so two runs of one Summary never call a provider at once, and a roll-up reads its sources in order.</summary>
-    public const string SummaryQueue = "summaries";
-
     public const string HealthCheckName = "backwave";
 
     /// <summary>Inside the 10 s that <c>docker stop</c> waits by default. The telemetry files flush after the host stops.</summary>
@@ -55,11 +52,12 @@ public static class JobHosting
         Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
     };
 
+    /// <summary>One worker for each queue, and a queue runs one job at a time, so a tenant holds one worker at most.</summary>
     public static WorkerGroupOptions SummaryWorkers(JobOptions settings) => new()
     {
-        Name = SummaryQueue,
-        PoolSize = 1,
-        Policy = new DispatchPolicy.Strict([SummaryQueue]),
+        Name = "summaries",
+        PoolSize = SummaryQueues.Count * SummaryQueues.JobsAtOnceInAQueue,
+        Policy = SummaryQueues.Policy,
         PollInterval = TimeSpan.FromSeconds(settings.PollSeconds),
         ShutdownBudget = JobShutdownBudget,
         Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
@@ -98,7 +96,7 @@ public static class JobHosting
         });
         // A hosted service starts in the order of its registration, so each limit is in place before a worker group can claim.
         if (settingsAtRegistration.RunWorkers || !inDevelopmentOrTest)
-            builder.Services.AddHostedService<CleanupQueueLimits>();
+            builder.Services.AddHostedService<QueueLimits>();
         builder.Services.AddBackWave(backwave =>
         {
             backwave.UseStore(services => new SqliteJobStore(new SqliteStoreOptions

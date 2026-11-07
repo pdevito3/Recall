@@ -1,8 +1,6 @@
 namespace Recall.Server.Resources.Jobs;
 
 using BackWave.Core;
-using BackWave.Storage;
-using Serilog;
 
 /// <summary>
 /// A Cleanup waits on a model, and a model can hang for minutes, so its jobs have their own worker group. Each queue has a limit
@@ -20,9 +18,6 @@ public static class CleanupQueues
 
     /// <summary>Each queue can fill its limit at one time, so a queue at its limit takes no worker from another queue.</summary>
     public const int Workers = Count * JobsAtOnceInAQueue;
-
-    private const uint FnvOffset = 2166136261;
-    private const uint FnvPrime = 16777619;
 
     public static IReadOnlyList<string> All { get; } = Enumerable.Range(0, Count).Select(NameOf).ToArray();
 
@@ -44,39 +39,7 @@ public static class CleanupQueues
         return All.OrderBy(queue => load.GetValueOrDefault(queue)).ThenBy(queue => queue != hashed).First();
     }
 
-    public static string Of(string tenantId)
-    {
-        // The hash of a string differs in each process.
-        var hash = FnvOffset;
-        foreach (var c in tenantId)
-            hash = (hash ^ c) * FnvPrime;
-        return NameOf((int)(hash % Count));
-    }
+    public static string Of(string tenantId) => NameOf(StableHash.BucketOf(tenantId, Count));
 
     private static string NameOf(int index) => $"cleanup-{index}";
-}
-
-/// <summary>A queue limit is a row in the job store. This writes it once, so a start with the limits in place writes nothing.</summary>
-public sealed class CleanupQueueLimits(IJobStore store, TimeProvider timeProvider) : IHostedService
-{
-    private const string Actor = "recall-startup";
-
-    private readonly ILogger _logger = Log.ForContext<CleanupQueueLimits>();
-
-    public async Task StartAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            var settings = await store.ListQueueSettingsAsync(cancellationToken);
-            foreach (var queue in CleanupQueues.All.Where(queue => !settings.Any(s => s.Queue == queue && s.ConcurrencyLimit == CleanupQueues.JobsAtOnceInAQueue)))
-                await store.SetConcurrencyLimitAsync(queue, CleanupQueues.JobsAtOnceInAQueue, Actor, timeProvider.GetUtcNow(), cancellationToken);
-        }
-        catch (Exception fault) when (!cancellationToken.IsCancellationRequested)
-        {
-            // The app still serves its pages, and the next start writes the limits.
-            _logger.Here().Warning("The limits of the Cleanup queues were not written ({FaultType}).", fault.GetType().FullName);
-        }
-    }
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

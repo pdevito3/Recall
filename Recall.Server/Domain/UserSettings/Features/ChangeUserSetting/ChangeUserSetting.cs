@@ -46,10 +46,26 @@ public static class ChangeUserSetting
             }, cancellationToken);
 
             if (applied)
-                await schedules.EnsureAsync(owner.UserId, owner.TenantId, UserSetting.ZoneOf(setting.TimeZone), cancellationToken);
+                await MoveScheduleAsync(owner, setting, cancellationToken);
 
             _logger.Here().Information("Took a settings change of user {UserId}, applied {Applied}", owner.UserId, applied);
             return setting.ToUserSettingDto();
+        }
+
+        /// <summary>
+        /// The change is stored, so a busy job store does not fail the save: a client that sends it again with the old version
+        /// would get 409. The next open of a Summary or the next start puts the schedule in the new zone.
+        /// </summary>
+        private async Task MoveScheduleAsync(JournalOwner owner, UserSetting setting, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await schedules.EnsureAsync(owner.UserId, owner.TenantId, UserSetting.ZoneOf(setting.TimeZone), cancellationToken);
+            }
+            catch (Exception fault) when (!cancellationToken.IsCancellationRequested)
+            {
+                _logger.Here().Warning("The nightly summary schedule of user {UserId} did not move to the new zone ({FaultType})", owner.UserId, fault.GetType().FullName);
+            }
         }
     }
 }
