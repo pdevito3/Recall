@@ -20,7 +20,8 @@ import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { createRouterLink } from "@/components/ui/create-router-link"
 import { RouterLinkPrimitive, type RouterLinkHostProps } from "@/components/ui/link"
-import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip"
+import { lazyOverlay } from "@/components/ui/lazy-overlay"
+import { TooltipTrigger } from "@/components/ui/tooltip-trigger"
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
   SidebarContext,
@@ -35,15 +36,8 @@ const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
-const loadSheet = () => import("@/components/ui/sheet")
-const preloadSheetForAWindowThatNarrowsOffline = () => {
-  void loadSheet().catch(() => undefined)
-}
-preloadSheetForAWindowThatNarrowsOffline()
-const Sheet = React.lazy(async () => {
-  const { Sheet } = await loadSheet()
-  return { default: Sheet }
-})
+const Sheet = lazyOverlay(async () => (await import("@/components/ui/sheet")).Sheet)
+const Tooltip = lazyOverlay(async () => (await import("@/components/ui/tooltip")).Tooltip)
 
 // Context for submenu groups to enable shared layoutId for animations
 const SidebarMenuSubContext = React.createContext<string | null>(null)
@@ -176,30 +170,28 @@ function Sidebar({
 
   if (isMobile) {
     return (
-      <React.Suspense fallback={null}>
-        <Sheet
-          isOpen={openMobile}
-          onOpenChange={setOpenMobile}
-          dir={dir}
-          data-sidebar="sidebar"
-          data-slot="sidebar"
-          data-mobile="true"
-          className="max-w-[85vw] bg-sidebar p-0 text-sidebar-foreground data-[side=left]:w-(--sidebar-width) data-[side=right]:w-(--sidebar-width)"
-          style={
-            {
-              "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
-            } as React.CSSProperties
-          }
-          side={side}
-          showCloseButton={false}
-          {...props}
-        >
-          <Heading slot="title" className="sr-only">
-            Sidebar
-          </Heading>
-          <div className="flex h-full w-full flex-col">{children}</div>
-        </Sheet>
-      </React.Suspense>
+      <Sheet
+        isOpen={openMobile}
+        onOpenChange={setOpenMobile}
+        dir={dir}
+        data-sidebar="sidebar"
+        data-slot="sidebar"
+        data-mobile="true"
+        className="max-w-[85vw] bg-sidebar p-0 text-sidebar-foreground data-[side=left]:w-(--sidebar-width) data-[side=right]:w-(--sidebar-width)"
+        style={
+          {
+            "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
+          } as React.CSSProperties
+        }
+        side={side}
+        showCloseButton={false}
+        {...props}
+      >
+        <Heading slot="title" className="sr-only">
+          Sidebar
+        </Heading>
+        <div className="flex h-full w-full flex-col">{children}</div>
+      </Sheet>
     )
   }
 

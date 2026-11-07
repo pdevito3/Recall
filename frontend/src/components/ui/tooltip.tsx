@@ -2,21 +2,9 @@ import * as React from "react"
 import {
   OverlayArrow,
   Tooltip as TooltipPrimitive,
-  TooltipTrigger as TooltipTriggerPrimitive,
 } from "@animate-ui/react/primitives/react-aria"
 import { cn } from "@/lib/utils"
-
-function TooltipTrigger({
-  delay = 0,
-  ...props
-}: React.ComponentProps<typeof TooltipTriggerPrimitive>) {
-  return (
-    <TooltipTriggerPrimitive
-      delay={delay}
-      {...props}
-    />
-  )
-}
+import { TooltipTrigger } from "@/components/ui/tooltip-trigger"
 
 function Tooltip({
   className,

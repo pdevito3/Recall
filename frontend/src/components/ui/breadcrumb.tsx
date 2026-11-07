@@ -15,7 +15,10 @@ import { ArrowRight01Icon, MoreHorizontalCircle01Icon } from "@hugeicons/core-fr
 import { cn } from "@/lib/utils"
 import { createRouterLink } from "@/components/ui/create-router-link"
 import { RouterLinkPrimitive, type RouterLinkHostProps } from "@/components/ui/link"
-import { Popover, PopoverTrigger } from "@/components/ui/popover"
+import { lazyOverlay } from "@/components/ui/lazy-overlay"
+import { PopoverTrigger } from "@/components/ui/popover-trigger"
+
+const Popover = lazyOverlay(async () => (await import("@/components/ui/popover")).Popover)
 
 function Breadcrumb({ className, ...props }: React.ComponentProps<"nav">) {
   return (

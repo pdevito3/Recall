@@ -1,19 +1,15 @@
-import { Logout01Icon, UserCircleIcon } from '@hugeicons/core-free-icons'
+import { UserCircleIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import {
-  DropdownMenu,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+import { DropdownMenuTrigger } from '@/components/ui/dropdown-menu-trigger'
+import { lazyOverlay } from '@/components/ui/lazy-overlay'
 import { SidebarMenuButton } from '@/components/ui/sidebar'
 import { useSidebar } from '@/components/ui/use-sidebar'
 
 import { useLogout } from '../apis/auth-actions'
 import { useAuth } from '../apis/get-user'
+
+const UserMenuPopover = lazyOverlay(async () => (await import('./user-menu-popover')).UserMenuPopover)
 
 export function UserMenu() {
   const { username } = useAuth()
@@ -27,22 +23,14 @@ export function UserMenu() {
         <HugeiconsIcon icon={UserCircleIcon} />
         <span className="truncate">{name}</span>
       </SidebarMenuButton>
-      <DropdownMenu aria-label="User menu" placement="top start" className="w-56">
-        <DropdownMenuGroup aria-label="Signed in as">
-          <DropdownMenuLabel className="wrap-anywhere">{name}</DropdownMenuLabel>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onAction={() => {
-            // On a phone the sidebar is a sheet over the page, and the toast of the sign-out must not lie over it.
-            setOpenMobile(false)
-            logout.mutate()
-          }}
-        >
-          <HugeiconsIcon icon={Logout01Icon} />
-          Logout
-        </DropdownMenuItem>
-      </DropdownMenu>
+      <UserMenuPopover
+        name={name}
+        onLogout={() => {
+          // On a phone the sidebar is a sheet over the page, and the toast of the sign-out must not lie over it.
+          setOpenMobile(false)
+          logout.mutate()
+        }}
+      />
     </DropdownMenuTrigger>
   )
 }

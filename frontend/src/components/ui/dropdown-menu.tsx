@@ -8,7 +8,6 @@ import {
   MenuItem as MenuItemPrimitive,
   Menu as MenuPrimitive,
   MenuSection as MenuSectionPrimitive,
-  MenuTrigger as MenuTriggerPrimitive,
   Popover as PopoverPrimitive,
   Separator as SeparatorPrimitive,
   SubmenuTrigger as SubmenuTriggerPrimitive,
@@ -18,12 +17,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Tick02Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons"
 import { cn } from "@/lib/utils"
-
-function DropdownMenuTrigger({
-  ...props
-}: React.ComponentProps<typeof MenuTriggerPrimitive>) {
-  return <MenuTriggerPrimitive {...props} />
-}
+import { DropdownMenuTrigger } from "@/components/ui/dropdown-menu-trigger"
 
 function DropdownMenu({
   "data-slot": dataSlot = "dropdown-menu-content",

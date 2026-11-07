@@ -295,7 +295,9 @@ The router moves the `component` of each route to a chunk that loads when the pa
 
 ## Bundle size
 
-`pnpm build` fails when the JavaScript that `dist/index.html` loads is more than 965 kB of minified code. That is the entry chunk in the `<script type="module">` tag and each chunk in the `modulepreload` links, which the entry imports statically. The budget does not count the CSS, or the chunk of a route. `main.tsx` loads the chunk of each route after the first idle moment, because a page with no network cannot fetch a chunk, and the status line tells a person to keep the page open. The budget is `firstPageBudgetKb` in `frontend/vite.config.ts`. The error gives the size of each chunk that it counts.
+`pnpm build` fails when the JavaScript that `dist/index.html` loads is more than 965 kB of minified code. That is the entry chunk in the `<script type="module">` tag and each chunk in the `modulepreload` links, which the entry imports statically. The budget does not count the CSS, or the chunk of a route. `main.tsx` loads the chunk of each route after the first idle moment, because a page with no network cannot fetch a chunk, and the status line tells a person to keep the page open. The budget is `firstPageBudgetKb` in `frontend/vite.config.ts`. The error gives the size of each chunk that it counts. A build that passes logs the size of the first page.
+
+`motion` (151 kB) does not load on the first page. Each animated overlay of the layout, such as the tooltip of the sidebar, the user menu, or the dialog of unsent words at logout, is closed on the first paint. So the layout loads each one with `lazyOverlay` from `components/ui/lazy-overlay.tsx`, and imports its trigger from a module with no `motion`, such as `components/ui/tooltip-trigger.tsx`. A static import of `tooltip.tsx`, `popover.tsx`, `dropdown-menu.tsx`, or another component of `@animate-ui/react` in the layout loads `motion` on the first page again.
 
 When the build fails:
 

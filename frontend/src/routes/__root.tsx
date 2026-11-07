@@ -19,12 +19,12 @@ import { login, returnUrlOf } from '@/domain/auth/apis/auth-actions'
 import { authUserQuery } from '@/domain/auth/apis/get-user'
 import { useHasLeftThePage } from '@/domain/auth/apis/page-of-another-person'
 import { PageOfAnotherPerson } from '@/domain/auth/components/page-of-another-person'
-import { UnsentWordsAtLogoutDialog } from '@/domain/auth/components/unsent-words-at-logout-dialog'
 import { DraftNotices } from '@/domain/sessions/components/draft-notices'
 import { FileStoreNotice } from '@/domain/file-store/components/file-store-notice'
 import { MembershipCheckFailedNotice } from '@/domain/membership/components/membership-notice'
 import { useResumeUnsentDrafts } from '@/domain/sessions/autosave/use-resume-unsent-drafts'
 import { HrefRouterProvider } from '@/components/ui/link'
+import { lazyOverlay } from '@/components/ui/lazy-overlay'
 import { Separator } from '@/components/ui/separator'
 import {
   Breadcrumb,
@@ -45,6 +45,10 @@ declare module '@tanstack/react-router' {
 export const Route = createRootRoute({
   component: RootComponent,
 })
+
+const UnsentWordsAtLogoutDialog = lazyOverlay(
+  async () => (await import('@/domain/auth/components/unsent-words-at-logout-dialog')).UnsentWordsAtLogoutDialog,
+)
 
 function RootComponent() {
   return useHasLeftThePage() ? <PageOfAnotherPerson /> : <SessionGate />

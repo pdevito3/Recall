@@ -55,6 +55,7 @@ const failOverFirstPageBudget: Plugin = {
           '. Find the module that grew it, and see docs/frontend.md, section "Bundle size".',
       )
     }
+    this.info(`The first page loads ${totalKb.toFixed(2)} kB of the budget of ${firstPageBudgetKb} kB.`)
   },
 }
 
