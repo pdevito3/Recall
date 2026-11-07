@@ -487,6 +487,7 @@ test.describe('the Cleanup card', () => {
 
     await page.goto(sessionUrl(edited.id))
 
-    await expect(at.text('You edited Cleaned by hand.')).toBeVisible()
+    await expect(at.text('You edited Cleaned by hand after the last Cleanup.')).toBeVisible()
+    await expect(at.text('A new Cleanup replaces Cleaned, and your edit stays as a Revision.')).toBeVisible()
   })
 })

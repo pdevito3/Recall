@@ -129,6 +129,18 @@ test('a waiting result that does not tag a Person whom Cleaned tags says so befo
   await expect.element(screen.getByText('Cleaned tags Zed Renamed, and this result does not. If you use it, Cleaned loses that tag.')).toBeVisible()
 })
 
+test('a waiting result that does not load keeps the use off and says why', async () => {
+  // Arrange
+  const screen = await renderCard([
+    { method: 'GET', path: '/api/v1/sessions/ses_1', body: waitingSince({ cleanedText: tagged('I met ', 'Zed') }) },
+    { method: 'GET', path: '/api/v1/sessions/ses_1/cleaned-revisions/3', status: 500, body: { title: 'Server error', status: 500 } },
+  ])
+
+  // Assert
+  await expect.element(screen.getByText('The result did not load, so the page cannot say which tags a use keeps.')).toBeVisible()
+  await expect.element(screen.getByRole('button', { name: 'Use the Cleanup result' })).toBeDisabled()
+})
+
 test('a waiting result that keeps each tag of Cleaned says nothing of tags', async () => {
   // Arrange
   const screen = await renderCard([

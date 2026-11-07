@@ -196,11 +196,14 @@ export function CleanupCard({ sessionId }: { sessionId: string }) {
               variant="outline"
               className="self-start"
               isPending={apply.isPending}
-              isDisabled={waitingText.isPending}
+              isDisabled={!waitingText.isSuccess}
               onPress={() => apply.mutate({ revision: waiting, baseCleanedRevision: data.cleanedDraftRevision })}
             >
               Use the Cleanup result
             </Button>
+            {waitingText.isError && (
+              <QueryError title="The result did not load, so the page cannot say which tags a use keeps." error={waitingText.error} onRetry={() => void waitingText.refetch()} />
+            )}
           </div>
         )}
         {provider.data?.name && (
@@ -211,7 +214,11 @@ export function CleanupCard({ sessionId }: { sessionId: string }) {
         {hasNoProvider && failure !== NO_PROVIDER_TEXT && <p className="text-sm text-muted-foreground">{NO_PROVIDER_TEXT}</p>}
         <RefusedSaveAlert problem={startProblem ?? stopProblem ?? applyProblem} />
         <div className="flex flex-wrap gap-2">
-          <Button isPending={start.isPending} isDisabled={isRunning || hasNoProvider} onPress={() => start.mutate()}>
+          <Button isPending={start.isPending} isDisabled={isRunning || hasNoProvider} onPress={() => {
+              apply.reset()
+              start.mutate()
+            }}
+          >
             {data.cleanupStatus === 'NotRun' || isRunning ? 'Run Cleanup' : 'Run Cleanup again'}
           </Button>
           {isRunning && (

@@ -70,7 +70,7 @@ export function useWaitingCleanupText(id: string, revision: number | null) {
   })
 }
 
-/** A refusal means that Cleaned moved or the result no longer waits, so the card reads the Session again. */
+/** A refusal means that Cleaned moved, the result no longer waits, or a new Cleanup runs, so the card reads the Session again. */
 export function useApplyWaitingCleanup(id: string) {
   const put = usePutSession(id)
   const queryClient = useQueryClient()
