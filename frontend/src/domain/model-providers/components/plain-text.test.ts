@@ -113,16 +113,17 @@ describe('plainTextOf', () => {
     expect(plainTextOf(doc)).toBe('site (https://evil.example/site) and https://sam.example')
   })
 
-  it('indents each line of a code block, with no fence of backticks, and shows a rule as a rule', () => {
+  it('indents each line of a code block under its language, with no fence of backticks, and shows a rule as a rule', () => {
     const doc = JSON.stringify({
       type: 'doc',
       content: [
         { type: 'codeBlock', attrs: { language: 'js' }, content: [{ type: 'text', text: 'a\n\nb' }] },
+        { type: 'codeBlock', content: [{ type: 'text', text: 'c' }] },
         { type: 'horizontalRule' },
       ],
     })
 
-    expect(plainTextOf(doc)).toBe('    a\n\n    b\n\n---')
+    expect(plainTextOf(doc)).toBe('js\n    a\n\n    b\n\n    c\n\n---')
   })
 
   it.each(['plain words', '{"cut', '{"type":"other"}', '12', ''])('keeps text that is no document: %s', (stored) => {

@@ -2,7 +2,7 @@ interface ProseNode {
   type?: unknown
   text?: unknown
   content?: unknown
-  attrs?: { label?: unknown; start?: unknown; checked?: unknown }
+  attrs?: { label?: unknown; start?: unknown; checked?: unknown; language?: unknown }
   marks?: unknown
 }
 
@@ -90,12 +90,15 @@ function blockOf(node: ProseNode): string {
         .split('\n')
         .map((line) => (line ? `> ${line}` : '>'))
         .join('\n')
-    // A card shows no fence of backticks, so a code block keeps its lines apart from prose by their indent.
-    case 'codeBlock':
-      return inlinesOf(childrenOf(node))
+    // A card shows no fence of backticks, so a code block keeps its lines apart from prose by their indent, under the name of its language.
+    case 'codeBlock': {
+      const language = typeof node.attrs?.language === 'string' && node.attrs.language ? `${node.attrs.language}\n` : ''
+      const lines = inlinesOf(childrenOf(node))
         .split('\n')
         .map((line) => (line ? `    ${line}` : ''))
         .join('\n')
+      return `${language}${lines}`
+    }
     case 'horizontalRule':
       return '---'
     case 'paragraph':
