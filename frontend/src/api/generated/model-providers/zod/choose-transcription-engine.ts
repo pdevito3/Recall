@@ -5,8 +5,8 @@
 
 import * as z from 'zod'
 import { problemDetailsSchema } from '../../models/zod/problem-details'
+import { transcriptionEngineChoiceDtoSchema } from '../../models/zod/transcription-engine-choice-dto'
 import { transcriptionEngineDtoSchema } from '../../models/zod/transcription-engine-dto'
-import { transcriptionEngineForUpdateDtoSchema } from '../../models/zod/transcription-engine-for-update-dto'
 import { validationProblemDetailsSchema } from '../../models/zod/validation-problem-details'
 
 export const chooseTranscriptionEngineStatus200Schema = transcriptionEngineDtoSchema.describe('Where the audio of the tenant becomes text, and why.')
@@ -27,4 +27,4 @@ export const chooseTranscriptionEngineResponseSchema = chooseTranscriptionEngine
 
 export const chooseTranscriptionEngineErrorSchema = z.union([chooseTranscriptionEngineStatus400Schema, chooseTranscriptionEngineStatus401Schema, chooseTranscriptionEngineStatus403Schema, chooseTranscriptionEngineStatus404Schema, chooseTranscriptionEngineStatus422Schema, chooseTranscriptionEngineStatus507Schema])
 
-export const chooseTranscriptionEngineBodySchema = transcriptionEngineForUpdateDtoSchema
+export const chooseTranscriptionEngineBodySchema = transcriptionEngineChoiceDtoSchema

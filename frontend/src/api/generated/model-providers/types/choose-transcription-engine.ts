@@ -4,8 +4,8 @@
 */
 
 import type { ProblemDetails } from '../../models/types/problem-details'
+import type { TranscriptionEngineChoiceDto } from '../../models/types/transcription-engine-choice-dto'
 import type { TranscriptionEngineDto } from '../../models/types/transcription-engine-dto'
-import type { TranscriptionEngineForUpdateDto } from '../../models/types/transcription-engine-for-update-dto'
 import type { ValidationProblemDetails } from '../../models/types/validation-problem-details'
 
 /**
@@ -26,7 +26,7 @@ export type ChooseTranscriptionEngineStatus422 = ValidationProblemDetails;
 
 export type ChooseTranscriptionEngineStatus507 = ProblemDetails;
 
-export type ChooseTranscriptionEngineBody = TranscriptionEngineForUpdateDto;
+export type ChooseTranscriptionEngineBody = TranscriptionEngineChoiceDto;
 
 export type ChooseTranscriptionEngineOptions = {
     body: ChooseTranscriptionEngineBody;

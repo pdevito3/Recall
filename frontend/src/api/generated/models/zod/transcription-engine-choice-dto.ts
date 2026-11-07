@@ -5,7 +5,7 @@
 
 import * as z from 'zod'
 
-export const transcriptionEngineForUpdateDtoSchema = z.object({
+export const transcriptionEngineChoiceDtoSchema = z.object({
   modelProviderId: z.string().nullish().describe('The provider that gets the audio. Null sends no audio out, and the local engine makes the text.'),
   model: z.string().max(200).nullish().describe('The model that turns audio into text, such as `gpt-transcribe` or `whisper-large-v3-turbo`.'),
 })

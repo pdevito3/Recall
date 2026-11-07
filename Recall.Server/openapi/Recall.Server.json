@@ -1022,7 +1022,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TranscriptionEngineForUpdateDto"
+                "$ref": "#/components/schemas/TranscriptionEngineChoiceDto"
               }
             }
           },
@@ -7250,6 +7250,26 @@
           }
         }
       },
+      "TranscriptionEngineChoiceDto": {
+        "type": "object",
+        "properties": {
+          "modelProviderId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The provider that gets the audio. Null sends no audio out, and the local engine makes the text."
+          },
+          "model": {
+            "maxLength": 200,
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The model that turns audio into text, such as `gpt-transcribe` or `whisper-large-v3-turbo`."
+          }
+        }
+      },
       "TranscriptionEngineDto": {
         "required": [
           "engine",
@@ -7297,26 +7317,6 @@
           }
         },
         "description": "Where the audio of the tenant becomes text, and why."
-      },
-      "TranscriptionEngineForUpdateDto": {
-        "type": "object",
-        "properties": {
-          "modelProviderId": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "description": "The provider that gets the audio. Null sends no audio out, and the local engine makes the text."
-          },
-          "model": {
-            "maxLength": 200,
-            "type": [
-              "null",
-              "string"
-            ],
-            "description": "The model that turns audio into text, such as `gpt-transcribe` or `whisper-large-v3-turbo`."
-          }
-        }
       },
       "TranscriptionStatusDto": {
         "required": [

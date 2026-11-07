@@ -4,5 +4,5 @@ import { TranscriptionEnginePage } from '@/domain/model-providers/components/tra
 
 export const Route = createFileRoute('/transcription-engine')({
   component: TranscriptionEnginePage,
-  staticData: { breadcrumb: 'Audio to text' },
+  staticData: { breadcrumb: 'Transcription' },
 })

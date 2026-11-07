@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { chooseTranscriptionEngine } from '@/api/generated/model-providers/clients/choose-transcription-engine'
 import { getTranscriptionEngine } from '@/api/generated/model-providers/clients/get-transcription-engine'
-import type { TranscriptionEngineForUpdateDto } from '@/api/generated/models/types/transcription-engine-for-update-dto'
+import type { TranscriptionEngineChoiceDto } from '@/api/generated/models/types/transcription-engine-choice-dto'
 
 import { ModelProviderKeys } from './model-providers'
 
@@ -21,7 +21,7 @@ export function useTranscriptionEngine() {
 export function useChooseTranscriptionEngine() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (body: TranscriptionEngineForUpdateDto) => chooseTranscriptionEngine({ body, options: { suppressErrorToast: true } }),
+    mutationFn: (body: TranscriptionEngineChoiceDto) => chooseTranscriptionEngine({ body, options: { suppressErrorToast: true } }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: TranscriptionEngineKeys.current() }),
   })
 }

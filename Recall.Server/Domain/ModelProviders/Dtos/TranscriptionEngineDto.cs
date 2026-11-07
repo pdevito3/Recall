@@ -20,7 +20,7 @@ public sealed record TranscriptionEngineDto
     public string? Model { get; init; }
 }
 
-public sealed record TranscriptionEngineForUpdateDto
+public sealed record TranscriptionEngineChoiceDto
 {
     /// <summary>The provider that gets the audio. Null sends no audio out, and the local engine makes the text.</summary>
     public string? ModelProviderId { get; init; }

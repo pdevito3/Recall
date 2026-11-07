@@ -3,7 +3,7 @@
 * Do not edit manually.
 */
 
-export type TranscriptionEngineForUpdateDto = {
+export type TranscriptionEngineChoiceDto = {
     /**
      * @description The provider that gets the audio. Null sends no audio out, and the local engine makes the text.
      * @type string | undefined

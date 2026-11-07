@@ -4,7 +4,7 @@ import * as z from 'zod'
 
 import type { ModelProviderDto, ModelProviderDtoKindEnumKey } from '@/api/generated/models/types/model-provider-dto'
 import type { TranscriptionEngineDto } from '@/api/generated/models/types/transcription-engine-dto'
-import { transcriptionEngineForUpdateDtoSchema } from '@/api/generated/models/zod/transcription-engine-for-update-dto'
+import { transcriptionEngineChoiceDtoSchema } from '@/api/generated/models/zod/transcription-engine-choice-dto'
 import { QueryError } from '@/components/query-error'
 import { RefusedSaveAlert } from '@/components/refused-save-alert'
 import { Button } from '@/components/ui/button'
@@ -25,7 +25,7 @@ const TAKES_AUDIO: Record<ModelProviderDtoKindEnumKey, boolean> = {
 
 const schema = z.object({
   modelProviderId: z.string().min(1, 'Pick a model provider.'),
-  model: stringWithMaxLengthOf(transcriptionEngineForUpdateDtoSchema.shape.model.unwrap().unwrap()).min(
+  model: stringWithMaxLengthOf(transcriptionEngineChoiceDtoSchema.shape.model.unwrap().unwrap()).min(
     1,
     'Enter the model that turns audio into text.',
   ),

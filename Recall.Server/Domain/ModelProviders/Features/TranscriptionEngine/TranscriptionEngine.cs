@@ -87,7 +87,7 @@ public sealed class GetTranscriptionEngineEndpoint : IEndpoint
 
 public static class ChooseTranscriptionEngine
 {
-    public sealed record Command(TranscriptionEngineForUpdateDto Dto) : IRequest<TranscriptionEngineDto>;
+    public sealed record Command(TranscriptionEngineChoiceDto Dto) : IRequest<TranscriptionEngineDto>;
 
     public sealed class Handler(AppDbContext dbContext, IPermissionGuard permissions, TimeProvider timeProvider)
         : IRequestHandler<Command, TranscriptionEngineDto>
@@ -141,6 +141,6 @@ public sealed class ChooseTranscriptionEngineEndpoint : IEndpoint
     /// A provider of a kind that takes no audio gets 422.
     /// </summary>
     public static async Task<Ok<TranscriptionEngineDto>> Handle(
-        TranscriptionEngineForUpdateDto dto, IMediator mediator, CancellationToken cancellationToken)
+        TranscriptionEngineChoiceDto dto, IMediator mediator, CancellationToken cancellationToken)
         => TypedResults.Ok(await mediator.Send(new ChooseTranscriptionEngine.Command(dto), cancellationToken));
 }
