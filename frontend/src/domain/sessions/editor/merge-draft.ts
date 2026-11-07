@@ -181,7 +181,8 @@ const paragraphBreak: Word = { space: '', node: { type: 'paragraphBreak' } }
 const wordsOfParagraphs = (paragraphs: JSONContent[]) =>
   paragraphs.flatMap((paragraph, at) => [...(at > 0 ? [paragraphBreak] : []), ...wordsOf(paragraph)])
 
-function paragraphOf(words: Word[]): JSONContent {
+/** The words in one block that holds words, such as a paragraph or a heading, inside the frame of that block. */
+function textBlockOf(words: Word[], shell: JSONContent): JSONContent {
   const content: JSONContent[] = []
   words.forEach(({ space, node }, at) => {
     const gap = at === 0 ? '' : space || ' '
@@ -193,8 +194,10 @@ function paragraphOf(words: Word[]): JSONContent {
       } else content.push(piece)
     }
   })
-  return content.length > 0 ? { type: 'paragraph', content } : { type: 'paragraph' }
+  return content.length > 0 ? { ...shell, content } : shell
 }
+
+const paragraphOf = (words: Word[]) => textBlockOf(words, { type: 'paragraph' })
 
 function paragraphsOf(words: Word[]): JSONContent[] {
   const paragraphs: Word[][] = [[]]
@@ -213,16 +216,39 @@ function commonOf<T>(one: T[], other: T[], key: (item: T) => string): T[] {
 
 const keyOfBlock = (block: JSONContent) => JSON.stringify(block)
 
+/** A block with no content: its type, its attributes, and its marks. */
+const shellOf = (block: JSONContent): JSONContent => Object.fromEntries(Object.entries(block).filter(([name]) => name !== 'content'))
+
+/** A block that holds words, and no block. */
+const holdsWords = (block: JSONContent) => childrenOf(block).every((child) => child.type === 'text' || !Array.isArray(child.content))
+
 /**
  * Where both sides changed the same paragraphs, they merge word by word, so a word that both hold stays one word.
+ * Where both sides changed one other block, such as a list or a heading, and kept its type and attributes, its content
+ * merges the same way, item by item and word by word, so the block shows once.
  * New paragraphs that both sides added at one place stay paragraphs: theirs, and then mine. Other blocks do the same.
  * With no known base, paragraphs that differ merge word by word, as in the merge of the iOS client.
  */
 const resolveBlocks = (hasBase: boolean): Resolve<JSONContent> => (base, mine, theirs) => {
-  if ((hasBase && base.length === 0) || ![...base, ...mine, ...theirs].every(isParagraphOfWords)) return keepTheirsAndAddMine(keyOfBlock)(base, mine, theirs)
-  const [ofMine, ofTheirs] = [wordsOfParagraphs(mine), wordsOfParagraphs(theirs)]
-  const ofBase = base.length > 0 ? wordsOfParagraphs(base) : commonOf(ofMine, ofTheirs, keyOfWord)
-  return paragraphsOf(mergeLists(ofBase, ofMine, ofTheirs, keyOfWord, keepTheirsAndAddMine(keyOfWord)))
+  const isAddedByBoth = hasBase && base.length === 0
+  if (!isAddedByBoth && [...base, ...mine, ...theirs].every(isParagraphOfWords)) {
+    const [ofMine, ofTheirs] = [wordsOfParagraphs(mine), wordsOfParagraphs(theirs)]
+    const ofBase = base.length > 0 ? wordsOfParagraphs(base) : commonOf(ofMine, ofTheirs, keyOfWord)
+    return paragraphsOf(mergeLists(ofBase, ofMine, ofTheirs, keyOfWord, keepTheirsAndAddMine(keyOfWord)))
+  }
+  const shell = mine.length === 1 && theirs.length === 1 ? shellOf(theirs[0]) : null
+  const isOneBlockChanged = shell !== null && !isAddedByBoth && base.length <= 1
+    && [...base, ...mine].every((block) => keyOfBlock(shellOf(block)) === keyOfBlock(shell))
+  if (!isOneBlockChanged) return keepTheirsAndAddMine(keyOfBlock)(base, mine, theirs)
+  const blocks = [...base, ...mine, ...theirs]
+  if (blocks.every(holdsWords)) {
+    const [ofMine, ofTheirs] = [wordsOf(mine[0]), wordsOf(theirs[0])]
+    const ofBase = base.length > 0 ? wordsOf(base[0]) : commonOf(ofMine, ofTheirs, keyOfWord)
+    return [textBlockOf(mergeLists(ofBase, ofMine, ofTheirs, keyOfWord, keepTheirsAndAddMine(keyOfWord)), shell)]
+  }
+  const [ofMine, ofTheirs] = [childrenOf(mine[0]), childrenOf(theirs[0])]
+  const ofBase = base.length > 0 ? childrenOf(base[0]) : commonOf(ofMine, ofTheirs, keyOfBlock)
+  return [{ ...shell, content: mergeLists(ofBase, ofMine, ofTheirs, keyOfBlock, resolveBlocks(hasBase)) }]
 }
 
 /**

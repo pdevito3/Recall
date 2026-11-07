@@ -76,11 +76,10 @@ test('a mention and a mark stay in a paragraph that merges word by word', () => 
   expect(merged.content[0].content).toEqual([{ type: 'text', text: 'Lunch with ' }, mention, { type: 'text', text: ' and' }, { type: 'text', text: ' loud', marks: [{ type: 'bold' }] }])
 })
 
-test('a list that both sides changed keeps the list of the other side, and the list of the person follows', () => {
-  const list = (...items: string[]) => ({ type: 'bulletList', content: items.map((item) => ({ type: 'listItem', content: [paragraph(item)] })) })
+test('items that both sides added at the end of one list stay in that list: theirs, and then mine', () => {
   const merged = mergeDraft(doc(list('a')), doc(list('a', 'mine')), doc(list('a', 'theirs')))
 
-  expect(JSON.parse(merged)).toEqual({ type: 'doc', content: [list('a', 'theirs'), list('a', 'mine')] })
+  expect(JSON.parse(merged)).toEqual({ type: 'doc', content: [list('a', 'theirs', 'mine')] })
 })
 
 test('a long text with one change costs little and keeps each word', () => {
@@ -88,4 +87,38 @@ test('a long text with one change costs little and keeps each word', () => {
   const merged = mergeDraft(words(many), words(`${many} mine`), words(`theirs ${many}`))
 
   expect(plain(merged)).toEqual([`theirs ${many} mine`])
+})
+
+const list = (...items: string[]) => ({ type: 'bulletList', content: items.map((text) => ({ type: 'listItem', content: [paragraph(text)] })) })
+const heading = (text: string, level = 2) => ({ type: 'heading', attrs: { level }, content: [{ type: 'text', text }] })
+
+test('a list that both sides changed merges item by item, so the list shows once with each change', () => {
+  const merged = mergeDraft(doc(list('milk', 'eggs')), doc(list('milk', 'eggs', 'bread')), doc(list('oat milk', 'eggs')))
+
+  expect(JSON.parse(merged)).toEqual(JSON.parse(doc(list('oat milk', 'eggs', 'bread'))))
+})
+
+test('one item of a list that both sides changed merges word by word', () => {
+  const merged = mergeDraft(doc(list('milk', 'eggs')), doc(list('milk and honey', 'eggs')), doc(list('cold milk', 'eggs')))
+
+  expect(JSON.parse(merged)).toEqual(JSON.parse(doc(list('cold milk and honey', 'eggs'))))
+})
+
+test('a heading that both sides changed merges word by word and keeps its level', () => {
+  const merged = mergeDraft(doc(heading('Day one')), doc(heading('Day one at sea')), doc(heading('Day 1')))
+
+  expect(JSON.parse(merged)).toEqual(JSON.parse(doc(heading('Day 1 at sea'))))
+})
+
+test('with no known base, a list that each side extends shows once, with the items of both', () => {
+  const merged = mergeDraft(null, doc(list('milk', 'eggs', 'bread')), doc(list('milk', 'eggs', 'jam')))
+
+  expect(JSON.parse(merged).content).toHaveLength(1)
+  expect(plainWordsOf(merged).split(/\s+/).sort()).toEqual(['bread', 'eggs', 'jam', 'milk'])
+})
+
+test('a heading whose level changed on one side and whose words changed on the other keeps both blocks, with no word lost', () => {
+  const merged = mergeDraft(doc(heading('Day one')), doc(heading('Day one at sea')), doc(heading('Day one', 3)))
+
+  expect(plainWordsOf(merged)).toContain('at sea')
 })
