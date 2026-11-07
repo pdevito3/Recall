@@ -8,5 +8,5 @@ import * as z from 'zod'
 export const draftSaveDtoSchema = z.object({
   text: z.string().max(1000000),
   baseRevision: z.int32().min(0).describe('The Revision that the person edited. It is `0` for a Draft with no Revision.'),
-  savedAt: z.iso.datetime().describe('When the person saved. A time in the future becomes the time of the server.'),
+  savedAt: z.iso.datetime().describe('When the person saved. A time in the future becomes the time of the server. A replay sends the same time. A merge after `Lost` is a new save and sends a new time.'),
 })

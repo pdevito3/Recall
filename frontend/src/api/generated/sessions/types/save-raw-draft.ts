@@ -24,6 +24,8 @@ export type SaveRawDraftStatus409 = ValidationProblemDetails;
 
 export type SaveRawDraftStatus422 = ValidationProblemDetails;
 
+export type SaveRawDraftStatus507 = ProblemDetails;
+
 export type SaveRawDraftBody = DraftSaveDto;
 
 export type SaveRawDraftOptions = {
@@ -40,6 +42,7 @@ export type SaveRawDraftResponses = {
     "404": SaveRawDraftStatus404;
     "409": SaveRawDraftStatus409;
     "422": SaveRawDraftStatus422;
+    "507": SaveRawDraftStatus507;
 };
 
 /**

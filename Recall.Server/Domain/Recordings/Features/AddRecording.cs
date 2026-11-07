@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Resources;
 using Resources.Entrypoints.Http;
+using Resources.Jobs;
 using Serilog;
 using Transcription;
 
@@ -18,7 +19,7 @@ public static class AddRecording
 
     public sealed record Command(string SessionId, RecordingForCreationDto Dto) : IRequest<Result>, IRunsAgainWhenRaced;
 
-    public sealed class Handler(AppDbContext dbContext, ModelStore modelStore) : IRequestHandler<Command, Result>
+    public sealed class Handler(AppDbContext dbContext, ModelStore modelStore, JobHostStatus jobHostStatus) : IRequestHandler<Command, Result>
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
 
@@ -26,7 +27,7 @@ public static class AddRecording
         {
             var owner = dbContext.RequireJournalOwner();
             var dto = request.Dto;
-            ValidationException.Must(Enum.TryParse<RecordingFormat>(dto.Format, out var format) && Enum.IsDefined(format),
+            ValidationException.Must(Enum.TryParse<RecordingFormat>(dto.Format, out var format) && Enum.GetName(format) == dto.Format,
                 "format", "The audio format must be Webm or Mp4.");
             ValidationException.ThrowWhenNullOrWhitespace(dto.ClientRecordingId, "clientRecordingId", "Please provide a client recording ID.");
             ValidationException.ThrowWhenHasCharacterNotStorable(dto.ClientRecordingId, "clientRecordingId", "The client recording ID has a character that is not allowed.");
@@ -43,12 +44,12 @@ public static class AddRecording
                     .AsNoTracking()
                     .FirstOrDefaultAsync(r => r.ClientRecordingId == dto.ClientRecordingId, ct);
                 if (existing is not null)
-                    return new Result(existing.ToDto([], modelStore.Status), false);
+                    return new Result(existing.ToDto([], modelStore.Status, jobHostStatus.TranscriptionIsStopped), false);
 
                 var recording = Recording.Create(owner.TenantId, owner.UserId, session.Id, dto.ClientRecordingId, format);
                 await dbContext.Recordings.AddAsync(recording, ct);
                 await dbContext.SaveChangesAsync(ct);
-                return new Result(recording.ToDto([], modelStore.Status), true);
+                return new Result(recording.ToDto([], modelStore.Status, jobHostStatus.TranscriptionIsStopped), true);
             }, cancellationToken);
 
             Activity.Current?.SetTag("app.recording_id", result.Recording.Id);

@@ -20,6 +20,8 @@ export const retryRecordingStatus409Schema = validationProblemDetailsSchema
 
 export const retryRecordingStatus422Schema = validationProblemDetailsSchema
 
+export const retryRecordingStatus507Schema = problemDetailsSchema
+
 export const retryRecordingResponseSchema = retryRecordingStatus200Schema
 
-export const retryRecordingErrorSchema = z.union([retryRecordingStatus401Schema, retryRecordingStatus404Schema, retryRecordingStatus409Schema, retryRecordingStatus422Schema])
+export const retryRecordingErrorSchema = z.union([retryRecordingStatus401Schema, retryRecordingStatus404Schema, retryRecordingStatus409Schema, retryRecordingStatus422Schema, retryRecordingStatus507Schema])

@@ -19,8 +19,10 @@ export const addPersonStatus403Schema = problemDetailsSchema
 
 export const addPersonStatus422Schema = validationProblemDetailsSchema
 
+export const addPersonStatus507Schema = problemDetailsSchema
+
 export const addPersonResponseSchema = addPersonStatus201Schema
 
-export const addPersonErrorSchema = z.union([addPersonStatus400Schema, addPersonStatus401Schema, addPersonStatus403Schema, addPersonStatus422Schema])
+export const addPersonErrorSchema = z.union([addPersonStatus400Schema, addPersonStatus401Schema, addPersonStatus403Schema, addPersonStatus422Schema, addPersonStatus507Schema])
 
 export const addPersonBodySchema = personLabelDtoSchema

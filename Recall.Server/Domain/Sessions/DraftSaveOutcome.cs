@@ -7,4 +7,6 @@ public enum DraftSaveOutcome
     Won,
 
     Lost,
+
+    Kept,
 }

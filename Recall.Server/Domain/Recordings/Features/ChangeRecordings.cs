@@ -7,6 +7,7 @@ using MediatR;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Resources;
 using Resources.Entrypoints.Http;
+using Resources.Jobs;
 using Resources.Storage;
 using Serilog;
 using Transcription;
@@ -15,7 +16,7 @@ public static class RetryRecording
 {
     public sealed record Command(string Id) : IRequest<RecordingDto>, IRunsAgainWhenRaced;
 
-    public sealed class Handler(AppDbContext dbContext, ModelStore modelStore, TimeProvider timeProvider) : IRequestHandler<Command, RecordingDto>
+    public sealed class Handler(AppDbContext dbContext, ModelStore modelStore, JobHostStatus jobHostStatus, TimeProvider timeProvider) : IRequestHandler<Command, RecordingDto>
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
 
@@ -31,7 +32,7 @@ public static class RetryRecording
             await RecordingWork.TryQueueTranscriptionAsync(dbContext, recording, timeProvider, _logger);
 
             _logger.Here().Information("Queued recording {RecordingId} again", recording.Id);
-            return recording.ToDto([], modelStore.Status);
+            return recording.ToDto([], modelStore.Status, jobHostStatus.TranscriptionIsStopped);
         }
     }
 }

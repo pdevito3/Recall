@@ -95,6 +95,27 @@ public class OpenApiDocumentTests
     }
 
     [Test]
+    public async Task each_write_operation_and_no_read_documents_the_full_disk_answer()
+    {
+        // Arrange
+        var root = await LoadDocumentAsync();
+
+        // Act
+        var operations = Operations(root).ToList();
+
+        // Assert
+        operations.ShouldNotBeEmpty();
+        foreach (var (name, method, operation) in operations)
+        {
+            var fullDisk = Responses(operation).Where(r => r.Status == "507").Select(r => r.Response).SingleOrDefault();
+            if (method is "get")
+                fullDisk.ShouldBeNull(name);
+            else
+                fullDisk.ShouldNotBeNull(name)["content"]!["application/problem+json"]!["schema"]!["$ref"]!.GetValue<string>().ShouldEndWith("/ProblemDetails", customMessage: name);
+        }
+    }
+
+    [Test]
     public async Task success_responses_and_request_bodies_use_only_json()
     {
         // Arrange

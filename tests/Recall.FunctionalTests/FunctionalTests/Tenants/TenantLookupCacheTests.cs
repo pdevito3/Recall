@@ -22,6 +22,7 @@ public class TenantLookupCacheTests : TestBase
     public async Task user_of_a_deleted_tenant_cannot_read_tenant_data()
     {
         // Arrange
+        await StartGraph().AddTenant(out _).BuildAsync();
         await StartGraph()
             .AddTenant(out var tenant)
             .AddUsers(out var users, u => u.Role = "Admin", _ => { })
@@ -46,6 +47,7 @@ public class TenantLookupCacheTests : TestBase
     public async Task user_of_a_deleted_tenant_with_no_cached_tenant_cannot_read_tenant_data()
     {
         // Arrange
+        await StartGraph().AddTenant(out _).BuildAsync();
         await StartGraph()
             .AddTenant(out var tenant)
             .AddUsers(out var users, u => u.Role = "Admin", _ => { })

@@ -1,10 +1,11 @@
 namespace Recall.Server.Domain.Recordings.Dtos;
 
+using Features;
 using Transcription;
 
 public static class RecordingViews
 {
-    public static RecordingDto ToDto(this Recording recording, IReadOnlyList<int> storedSlices, ModelStatus model) => new()
+    public static RecordingDto ToDto(this Recording recording, IReadOnlyList<int> storedSlices, ModelStatus model, bool jobsStopped) => new()
     {
         Id = recording.Id,
         SessionId = recording.SessionId,
@@ -13,7 +14,9 @@ public static class RecordingViews
         Engine = recording.Engine.ToString(),
         Status = recording.Status.ToString(),
         Problem = recording.Problem.ToString(),
-        ProblemText = ProblemTextOf(recording.Problem, model),
+        ProblemText = recording.WaitsForTranscription && jobsStopped
+            ? GetTranscriptionStatus.JobsStoppedText
+            : ProblemTextOf(recording.Problem, model),
         HighestStoredSlice = recording.HighestStoredSlice,
         StoredSlices = storedSlices,
         ByteLength = recording.ByteLength,
@@ -30,7 +33,10 @@ public static class RecordingViews
         RecordingProblem.WaitingForModel => ModelTextOf(model) ?? "The audio is stored and waits for its turn.",
         RecordingProblem.AudioUnreadable => "The audio is stored, but the server cannot read it. Download it to keep a copy, then record again.",
         RecordingProblem.AudioMissing => "The server cannot find the audio of this Recording. Tell the Owner of this server.",
-        RecordingProblem.OutOfMemory => "The audio is stored, but the server ran out of memory while it made the text. Ask the Owner to give the server more memory, then try again.",
+        RecordingProblem.DiskFull => "The audio is stored, but the disk of the server is full, so the server cannot make the text. Ask the Owner to free some space, then try again.",
+        RecordingProblem.DiskRefused => "The audio is stored, but the disk of the server refused the work, so the server cannot make the text. Ask the Owner to check the disk and its permissions, then try again.",
+        RecordingProblem.OutOfMemory => "The audio is stored, but the speech engine was stopped, and the server ran out of memory during the same try. Ask the Owner to check the memory of the server, then try again.",
+        RecordingProblem.EngineKilled => "The audio is stored, but the speech engine was stopped before it finished. Try again. If it stops again, tell the Owner of this server.",
         RecordingProblem.EngineCrashed => "The audio is stored, but the speech engine stopped with an error. Try again. If it stops again, tell the Owner of this server.",
         RecordingProblem.EngineStalled => "The audio is stored, but the speech engine stopped making progress. Try again when the server has less work.",
         RecordingProblem.EngineNotInstalled => "The audio is stored, but this server has no speech engine. The Owner must install the release image.",
@@ -45,8 +51,8 @@ public static class RecordingViews
     {
         ModelStatus.Missing => "The audio is stored. The server must get the speech model first, and then it makes the text.",
         ModelStatus.Downloading => "The audio is stored. The server is downloading the speech model, and then it makes the text.",
-        ModelStatus.DownloadFailed => "The audio is stored. The server could not download the speech model, so it makes no text yet. It tries again every 15 minutes. Ask the Owner to check the network of the server.",
-        ModelStatus.HashRejected => "The audio is stored. The speech model that the server downloaded did not pass its hash check, so the server did not use it. It tries again every 15 minutes.",
+        ModelStatus.DownloadFailed => "The audio is stored. The server could not download the speech model, so it makes no text yet. It tries again on its own. Ask the Owner to check the network and the free disk space of the server.",
+        ModelStatus.HashRejected => "The audio is stored. The speech model that the server downloaded did not pass its hash check, so the server did not use it. It tries again on its own.",
         _ => null,
     };
 }

@@ -24,6 +24,8 @@ export type FinishRecordingStatus409 = ValidationProblemDetails;
 
 export type FinishRecordingStatus422 = ValidationProblemDetails;
 
+export type FinishRecordingStatus507 = ProblemDetails;
+
 export type FinishRecordingBody = RecordingFinishDto;
 
 export type FinishRecordingOptions = {
@@ -40,6 +42,7 @@ export type FinishRecordingResponses = {
     "404": FinishRecordingStatus404;
     "409": FinishRecordingStatus409;
     "422": FinishRecordingStatus422;
+    "507": FinishRecordingStatus507;
 };
 
 /**

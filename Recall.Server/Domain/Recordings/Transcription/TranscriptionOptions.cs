@@ -8,6 +8,8 @@ public sealed class TranscriptionOptions
 
     public string ModelBaseUrl { get; init; } = ModelManifest.BaseUrl;
 
+    public string MemoryEventsPath { get; init; } = "/sys/fs/cgroup/memory.events";
+
     public string FfmpegPath { get; init; } = "/usr/local/bin/ffmpeg";
 
     public string WorkerPath { get; init; } = Path.Combine(AppContext.BaseDirectory, "transcriber", "Recall.Transcriber.dll");

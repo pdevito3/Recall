@@ -8,18 +8,23 @@ using Exceptions;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using Serilog;
 
 /// <summary>
 /// Maps a domain exception from a tool to an MCP tool error: a result with <c>isError</c> set, so the model
 /// reads the message and can correct its call. The structured content has the same fields as an HTTP problem.
 /// A missing required argument gives the same tool error as a missing required body field. An argument of the wrong
-/// JSON type gives the message of a query value that does not bind. A server fault is not mapped: the SDK returns a tool
-/// error with no detail, so the message stays on the server.
+/// JSON type gives the message of a query value that does not bind. A full disk gives its true text, because the caller
+/// can act on it, and the server logs it. Another server fault is not mapped: the SDK returns a tool error with no detail,
+/// so the message stays on the server.
 /// </summary>
 public static partial class McpDomainErrors
 {
     public static McpRequestHandler<CallToolRequestParams, CallToolResult> Filter(
-        McpRequestHandler<CallToolRequestParams, CallToolResult> next) =>
+        McpRequestHandler<CallToolRequestParams, CallToolResult> next) => FilterLoggingTo(next, null);
+
+    public static McpRequestHandler<CallToolRequestParams, CallToolResult> FilterLoggingTo(
+        McpRequestHandler<CallToolRequestParams, CallToolResult> next, ILogger? logger) =>
         async (context, cancellationToken) =>
         {
             try
@@ -28,6 +33,11 @@ public static partial class McpDomainErrors
             }
             catch (Exception exception) when (DomainError.IsClientError(exception))
             {
+                return ToToolError(DomainError.From(exception));
+            }
+            catch (Exception exception) when (DomainError.From(exception).Kind == DomainErrorKind.DiskFull)
+            {
+                (logger ?? Log.ForContext(typeof(McpDomainErrors))).Error(exception, "A tool call failed because the disk is full");
                 return ToToolError(DomainError.From(exception));
             }
             catch (ArgumentException exception) when (MissingArgument(exception) is { } name)
@@ -51,6 +61,7 @@ public static partial class McpDomainErrors
         DomainErrorKind.Forbidden => "permission_denied",
         DomainErrorKind.Conflict => "already_exists",
         DomainErrorKind.StaleVersion or DomainErrorKind.ConcurrentChange => "aborted",
+        DomainErrorKind.DiskFull => "resource_exhausted",
         DomainErrorKind.Unexpected => "internal",
     };
 #pragma warning restore FSTMSG001

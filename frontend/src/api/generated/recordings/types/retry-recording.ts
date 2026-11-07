@@ -21,6 +21,8 @@ export type RetryRecordingStatus409 = ValidationProblemDetails;
 
 export type RetryRecordingStatus422 = ValidationProblemDetails;
 
+export type RetryRecordingStatus507 = ProblemDetails;
+
 export type RetryRecordingOptions = {
     body?: never;
     path: RetryRecordingPath;
@@ -34,6 +36,7 @@ export type RetryRecordingResponses = {
     "404": RetryRecordingStatus404;
     "409": RetryRecordingStatus409;
     "422": RetryRecordingStatus422;
+    "507": RetryRecordingStatus507;
 };
 
 /**
