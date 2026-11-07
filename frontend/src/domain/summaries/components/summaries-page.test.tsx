@@ -89,6 +89,8 @@ test('a failed Summary shows why in an alert with Retry, and never its words or 
   await expect.element(screen.getByRole('alert').getByText('The model provider did not answer. Try again later.')).toBeVisible()
   await expect.element(screen.getByRole('button', { name: 'Retry' })).toBeVisible()
   await expect.element(screen.getByText('This Summary was not written.')).toBeVisible()
+  await expect.element(screen.getByText('3 Sessions in this period')).toBeVisible()
+  await expect.element(screen.getByText(/^Reads/)).not.toBeInTheDocument()
   await expect.element(screen.getByText('Words that must not show.')).not.toBeInTheDocument()
   await expect.element(screen.getByText('Up to date.')).not.toBeInTheDocument()
   await expect.element(screen.getByText(/ProviderUnavailable/)).not.toBeInTheDocument()
@@ -177,7 +179,7 @@ test('Next week opens the week after, and a tab opens the period of the same dat
 
   // Assert
   await expect.element(screen.getByText('All of June.')).toBeVisible()
-  await expect.element(screen.getByText(/^Reads 2 days · Written /)).toBeVisible()
+  await expect.element(screen.getByText(/^Reads 2 Days · Written /)).toBeVisible()
   await expect.element(screen.getByRole('tab', { name: 'Month' })).toHaveAttribute('aria-selected', 'true')
   expect(router.state.location.search).toEqual({ period: 'Month', date: '2026-06-10' })
 })

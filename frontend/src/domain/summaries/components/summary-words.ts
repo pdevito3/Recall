@@ -37,9 +37,9 @@ interface PeriodWords {
 const PERIOD_WORDS: Record<SummaryPeriod, PeriodWords> = {
   Day: { noun: 'day', source: ['Session', 'Sessions'], title: (first) => formatDate(first, withYear, locale) },
   Week: { noun: 'week', source: ['Session', 'Sessions'], title: (first, last) => range(first, last, true) },
-  Month: { noun: 'month', source: ['day', 'days'], title: (first) => formatDate(first, { month: 'long', year: 'numeric' }, locale) },
-  Quarter: { noun: 'quarter', source: ['month', 'months'], title: (first, last) => range(first, last, false) },
-  Year: { noun: 'year', source: ['quarter', 'quarters'], title: (first) => String(first.year) },
+  Month: { noun: 'month', source: ['Day', 'Days'], title: (first) => formatDate(first, { month: 'long', year: 'numeric' }, locale) },
+  Quarter: { noun: 'quarter', source: ['Month', 'Months'], title: (first, last) => range(first, last, false) },
+  Year: { noun: 'year', source: ['Quarter', 'Quarters'], title: (first) => String(first.year) },
 }
 
 export function periodNoun(period: SummaryPeriod): string {
@@ -51,10 +51,14 @@ export function periodTitle({ period, periodDate, periodLastDate }: PeriodBounds
   return PERIOD_WORDS[period].title(parseDate(periodDate), parseDate(periodLastDate))
 }
 
-/** "Reads 3 Sessions" for a Day or a Week, and the source periods of a roll-up, such as "Reads 2 quarters" for a Year. */
-export function sourceCountText(period: SummaryPeriod, count: number): string {
+/**
+ * "Reads 3 Sessions" for a Day or a Week, and the source periods of a roll-up, such as "Reads 2 Quarters" for a Year. A Summary
+ * that read nothing, such as a failed one, gets "3 Sessions in this period".
+ */
+export function sourceCountText(period: SummaryPeriod, count: number, reads: boolean): string {
   const [one, many] = PERIOD_WORDS[period].source
-  return `Reads ${count} ${count === 1 ? one : many}`
+  const sources = `${count} ${count === 1 ? one : many}`
+  return reads ? `Reads ${sources}` : `${sources} in this period`
 }
 
 /** The years that the Server takes in a date. */

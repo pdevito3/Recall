@@ -73,7 +73,7 @@ function SummaryBody({ summary, isGenerating, onGenerate }: SummaryBodyProps) {
   const line = STATUS_LINES[shown]
   const hasContent = summary.status === 'Ready' || summary.status === 'Stale'
   const facts = [
-    summary.sourceCount > 0 ? sourceCountText(summary.period, summary.sourceCount) : null,
+    summary.sourceCount > 0 ? sourceCountText(summary.period, summary.sourceCount, hasContent || summary.status === 'Generating') : null,
     hasContent && summary.generatedAt ? writtenAtText(summary.generatedAt, browserTimeZone()) : null,
   ].filter((fact) => fact !== null)
 

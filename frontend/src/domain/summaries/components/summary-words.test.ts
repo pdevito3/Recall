@@ -48,11 +48,16 @@ describe('sourceCountText', () => {
   test.each([
     { period: 'Day', count: 1, text: 'Reads 1 Session' },
     { period: 'Week', count: 3, text: 'Reads 3 Sessions' },
-    { period: 'Month', count: 3, text: 'Reads 3 days' },
-    { period: 'Quarter', count: 1, text: 'Reads 1 month' },
-    { period: 'Year', count: 2, text: 'Reads 2 quarters' },
+    { period: 'Month', count: 3, text: 'Reads 3 Days' },
+    { period: 'Quarter', count: 1, text: 'Reads 1 Month' },
+    { period: 'Year', count: 2, text: 'Reads 2 Quarters' },
   ] as const)('a $period with $count sources reads "$text"', ({ period, count, text }) => {
-    expect(sourceCountText(period, count)).toBe(text)
+    expect(sourceCountText(period, count, true)).toBe(text)
+  })
+
+  test('a Summary that read nothing names the sources of its period', () => {
+    expect(sourceCountText('Day', 1, false)).toBe('1 Session in this period')
+    expect(sourceCountText('Year', 2, false)).toBe('2 Quarters in this period')
   })
 })
 
