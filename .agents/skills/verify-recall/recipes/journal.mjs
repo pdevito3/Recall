@@ -97,9 +97,11 @@ export default async ({ page, context, step, capture, expect, login }) => {
     await expect(editor(page)).toContainText('Words at the start. The second tab.')
     await capture('r12-conflict-notice')
 
-    const read = await api(page, 'GET', `/api/v1/sessions/${id}/raw-revisions`)
-    expect(read.status).toBe(200)
-    expect(JSON.stringify(read.body)).toContain('The second tab.')
+    const list = await api(page, 'GET', `/api/v1/sessions/${id}/raw-revisions`)
+    expect(list.status).toBe(200)
+    const revisions = []
+    for (const { number } of list.body.items) revisions.push(JSON.stringify((await api(page, 'GET', `/api/v1/sessions/${id}/raw-revisions/${number}`)).body))
+    expect(revisions.join('\n')).toContain('The second tab.')
     await page.getByRole('button', { name: 'Show the newest words', exact: true }).click()
     await expect(editor(page)).toHaveText('Words at the start. The first tab.')
 
