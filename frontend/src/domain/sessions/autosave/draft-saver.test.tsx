@@ -476,6 +476,25 @@ test('after a loss, the page reads the Draft, merges the change of the person in
   saver.stop()
 })
 
+test('a loss, then a delete of the entry on another device: the read finds no entry, and the words go to a new entry', async () => {
+  vi.mocked(saveRawDraft).mockResolvedValueOnce(lostAt(5))
+  vi.mocked(saveRawDraft).mockResolvedValue(wonAt(1))
+  vi.mocked(addSession).mockResolvedValue({ ...entryWithWords('', 0), id: 'session-2' })
+  const queryClient = new QueryClient()
+  vi.spyOn(queryClient, 'fetchQuery').mockRejectedValue(new ProblemDetailsError({ type: 'about:blank', title: 'Gone', status: 404 }))
+  const saver = new DraftSaver(fromBase, queryClient)
+
+  saver.edit(doc('base', 'my words'))
+  saver.flush()
+  await vi.waitFor(() => expect(saveRawDraft).toHaveBeenCalledTimes(2))
+  await vi.waitFor(() => expect(saver.getSnapshot().status.kind).toBe('saved'))
+
+  expect(addSession).toHaveBeenCalledOnce()
+  expect(vi.mocked(saveRawDraft).mock.lastCall?.[0]).toMatchObject({ path: { id: 'session-2' }, body: { text: doc('base', 'my words'), baseRevision: 0 } })
+  expect(saver.getSnapshot()).toMatchObject({ sessionId: 'session-2', movedFromDeletedEntry: true, waitsForAnotherWriter: false })
+  saver.stop()
+})
+
 test('a paragraph that the person changed and another device kept is not added a second time', async () => {
   vi.mocked(saveRawDraft).mockResolvedValueOnce(lostAt(5))
   vi.mocked(saveRawDraft).mockResolvedValue(wonAt(6))

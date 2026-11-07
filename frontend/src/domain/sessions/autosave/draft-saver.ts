@@ -551,7 +551,11 @@ export class DraftSaver {
     this.target = { ...this.target, clientSessionId, channel: 'raw', sessionId: null, baseRevision: 0 }
     savers.set(draftKey(this.target), this)
     this.wordsInHistory = null
-    this.update({ sessionId: null, baseRevision: 0, conflict: null, movedFromDeletedEntry: true })
+    // A new entry is empty and has no other writer, so a loss on the old entry asks for no read and no wait.
+    this.baseText = ''
+    this.lostInARow = 0
+    this.readsBeforeNextSave = false
+    this.update({ sessionId: null, baseRevision: 0, conflict: null, movedFromDeletedEntry: true, waitsForAnotherWriter: false })
     this.keep(change)
   }
 
