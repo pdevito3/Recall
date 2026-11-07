@@ -242,8 +242,8 @@ public class ProviderLimitTests
     [Test]
     public async Task a_model_id_with_bad_bytes_or_a_hidden_character_is_not_offered()
     {
-        // Arrange: � is what a reader makes of bad UTF-8.
-        const string body = """{"data":[{"id":"good-model"},{"id":"bad�model"},{"id":"nul\u0000model"},{"id":"bidi‮model"}]}""";
+        // Arrange: \ufffd is what a reader makes of bad UTF-8.
+        const string body = """{"data":[{"id":"good-model"},{"id":"bad\ufffdmodel"},{"id":"nul\u0000model"},{"id":"bidi\u202emodel"}]}""";
         var (fake, endpoint) = await StartAsync(ModelProviderKind.OpenAiCompatible, FakeMode.RawBody, reply: body);
         await using var _ = fake;
 

@@ -13,6 +13,7 @@ export const modelProviderPaths = {
   test: (id: string) => `/api/v1/model-providers/${id}/test`,
   session: (id: string) => `/api/v1/sessions/${id}`,
   cleanup: (id: string) => `/api/v1/sessions/${id}/cleanup`,
+  stopCleanup: (id: string) => `/api/v1/sessions/${id}/cleanup/stop`,
 }
 
 export const aProvider = (changes: Partial<ModelProviderDto> = {}): ModelProviderDto => ({
@@ -71,6 +72,10 @@ export const modelProvidersApi = {
 
   cleanupStarts(session: SessionDto): MockRoute {
     return { method: 'post', path: modelProviderPaths.cleanup(session.id), status: 202, body: session }
+  },
+
+  cleanupStops(session: SessionDto): MockRoute {
+    return { method: 'post', path: modelProviderPaths.stopCleanup(session.id), status: 200, body: session }
   },
 
   cleanupRefuses(session: SessionDto, message: string): MockRoute {

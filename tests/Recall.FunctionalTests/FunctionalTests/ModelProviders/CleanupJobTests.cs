@@ -249,6 +249,104 @@ public class CleanupJobTests : TestBase
     }
 
     [Test]
+    [Arguments(ModelProviderKind.Anthropic, "{ this is no json", "application/json")]
+    [Arguments(ModelProviderKind.Anthropic, "<html>a page of another service</html>", "text/html")]
+    [Arguments(ModelProviderKind.Anthropic, "{}", "application/json; charset=no-such-charset")]
+    [Arguments(ModelProviderKind.OpenAiCompatible, "{ this is no json", "application/json")]
+    [Arguments(ModelProviderKind.OpenAiCompatible, "<html>a page of another service</html>", "text/html")]
+    [Arguments(ModelProviderKind.OpenAiCompatible, "{}", "application/json; charset=no-such-charset")]
+    public async Task an_answer_that_will_not_change_on_a_retry_ends_at_the_first_call(ModelProviderKind kind, string body, string contentType)
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient, kind);
+        scenario.Fake.Behavior.Mode = FakeMode.RawBody;
+        scenario.Fake.Behavior.Reply = body;
+        scenario.Fake.Behavior.ContentType = contentType;
+        var started = await scenario.SessionWithRunningCleanupAsync(Words);
+
+        // Act: a claim that a worker must try again throws, and this one ends with no throw.
+        await scenario.RunJobAsync(started.Id);
+        var session = await scenario.ReadAsync(started.Id);
+
+        // Assert
+        session.CleanupStatus.ShouldBe(nameof(CleanupStatus.Failed));
+        session.CleanupFailure.ShouldBe(nameof(CleanupFailure.BadModelOutput));
+    }
+
+    [Test]
+    public async Task a_stop_ends_a_call_that_hangs_at_once_and_a_person_can_run_it_again()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        scenario.Fake.Behavior.Mode = FakeMode.Hold;
+        scenario.Fake.Behavior.DelayMs = 120_000;
+        var started = await scenario.SessionWithRunningCleanupAsync(Words);
+        var call = scenario.RunJobAsync(started.Id);
+        while (scenario.Fake.CompletionCalls == 0)
+            await Task.Delay(TimeSpan.FromMilliseconds(20));
+
+        // Act
+        var stopped = await FactoryClient.PostAsync(ApiRoutes.Sessions.StopCleanup(started.Id), null);
+        await call.WaitAsync(TimeSpan.FromSeconds(10));
+        var afterStop = await scenario.ReadAsync(started.Id);
+        scenario.Fake.Behavior.Mode = FakeMode.Normal;
+        var again = await FactoryClient.PostAsync(ApiRoutes.Sessions.Cleanup(started.Id), null);
+        await scenario.RunJobAsync(started.Id);
+        var afterRun = await scenario.ReadAsync(started.Id);
+
+        // Assert
+        stopped.StatusCode.ShouldBe(HttpStatusCode.OK);
+        afterStop.CleanupStatus.ShouldBe(nameof(CleanupStatus.Failed));
+        afterStop.CleanupFailure.ShouldBe(nameof(CleanupFailure.Stopped));
+        afterStop.RawText.ShouldBe(started.RawText);
+        afterStop.CleanedLatestRevision.ShouldBe(started.CleanedLatestRevision);
+        again.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        afterRun.CleanupStatus.ShouldBe(nameof(CleanupStatus.Clean));
+        afterRun.RawText.ShouldBe(started.RawText);
+    }
+
+    [Test]
+    public async Task an_answer_that_arrives_after_a_stop_changes_nothing()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        scenario.Fake.Behavior.Mode = FakeMode.Hold;
+        scenario.Fake.Behavior.DelayMs = 1_000;
+        var started = await scenario.SessionWithRunningCleanupAsync(Words);
+        var runId = await CleanupScenario.RunIdOfAsync(started.Id);
+
+        // Act
+        (await FactoryClient.PostAsync(ApiRoutes.Sessions.StopCleanup(started.Id), null)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await scenario.RunJobAsync(started.Id, runId: runId);
+        var session = await scenario.ReadAsync(started.Id);
+
+        // Assert
+        scenario.Fake.CompletionCalls.ShouldBe(0);
+        session.CleanupFailure.ShouldBe(nameof(CleanupFailure.Stopped));
+        session.CleanedLatestRevision.ShouldBe(started.CleanedLatestRevision);
+    }
+
+    [Test]
+    public async Task a_stop_with_no_running_cleanup_changes_nothing_and_tells_the_truth()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        var started = await scenario.SessionWithRunningCleanupAsync(Words);
+        await scenario.RunJobAsync(started.Id);
+        var clean = await scenario.ReadAsync(started.Id);
+
+        // Act
+        var stopped = await FactoryClient.PostAsync(ApiRoutes.Sessions.StopCleanup(started.Id), null);
+        var after = await scenario.ReadAsync(started.Id);
+
+        // Assert
+        stopped.StatusCode.ShouldBe(HttpStatusCode.OK);
+        after.CleanupStatus.ShouldBe(nameof(CleanupStatus.Clean));
+        after.CleanupFailure.ShouldBe(nameof(CleanupFailure.None));
+        after.CleanedLatestRevision.ShouldBe(clean.CleanedLatestRevision);
+    }
+
+    [Test]
     public async Task a_key_that_the_ring_cannot_read_ends_the_run_with_no_call()
     {
         // Arrange

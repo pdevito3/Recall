@@ -52,6 +52,7 @@ public class EndpointAccessSweepTests : TestBase
         ["SetSessionMetadata"] = new(JournalOfEachMember, OwnerOnly: true),
         ["DeleteSession"] = new(JournalOfEachMember, OwnerOnly: true),
         ["StartCleanup"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["StopCleanup"] = new(JournalOfEachMember, OwnerOnly: true),
         ["StreamCleanup"] = new(JournalOfEachMember, OwnerOnly: true),
         ["AcceptSuggestion"] = new(JournalOfEachMember, OwnerOnly: true),
         ["RejectSuggestion"] = new(JournalOfEachMember, OwnerOnly: true),
@@ -353,8 +354,9 @@ public class EndpointAccessSweepTests : TestBase
         await InsertAsync(session);
         await InsertAsync(person);
         await InsertAsync(correction);
-        var provider = ModelProvider.Connect(tenant.Id, ModelProviderKind.OpenAiCompatible, "Sweep provider", "http://127.0.0.1:9/v1", null, DateTimeOffset.UnixEpoch);
+        var provider = ModelProvider.Connect(tenant.Id, ModelProviderKind.OpenAiCompatible, "Sweep provider", "http://127.0.0.1:9/v1", null);
         provider.Update("Sweep provider", "http://127.0.0.1:9/v1", null, "sweep-model", provider.Version);
+        provider.Activate(DateTimeOffset.UnixEpoch);
         await InsertAsync(provider);
         var recording = Recording.Create(tenant.Id, admin.Id, session.Id, $"sweep-{Guid.NewGuid():N}", RecordingFormat.Webm);
         recording.StoreSlice(0, 1);

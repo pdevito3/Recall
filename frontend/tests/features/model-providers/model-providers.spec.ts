@@ -86,6 +86,45 @@ test.describe('the model providers page', () => {
     await expect(at.connectFailed).toContainText(words)
   })
 
+  test('a provider with no model cannot be made active, and the page says why', async ({ page, api }) => {
+    api.mock(signedInAs('Admin'), noSessions, modelProvidersApi.listHolds([aProvider({ isActive: false })]))
+    const at = modelProviders(page)
+
+    await page.goto('/model-providers')
+
+    await expect(at.makeActive).toBeDisabled()
+    await expect(at.text('Pick a model, then make it active.')).toBeVisible()
+  })
+
+  test('a provider with a model becomes active only when a person chooses it', async ({ page, api }) => {
+    const provider = aProvider({ isActive: false, model: 'model-a' })
+    api.mock(signedInAs('Admin'), noSessions, modelProvidersApi.listHolds([provider]), modelProvidersApi.updateAnswers({ ...provider, isActive: true }))
+    const at = modelProviders(page)
+    await page.goto('/model-providers')
+
+    await at.makeActive.click()
+
+    await expect.poll(() => api.last('put', modelProviderPaths.record(provider.id))?.body).toMatchObject({ makeActive: true, model: 'model-a' })
+  })
+
+  test('a new URL of a provider with a key needs the key again, and both go in one save', async ({ page, api }) => {
+    const provider = aProvider({ kind: 'OpenAiCompatible', baseUrl: 'http://192.168.1.20:11434/v1', model: 'model-a' })
+    api.mock(signedInAs('Admin'), noSessions, modelProvidersApi.listHolds([provider]), modelProvidersApi.updateAnswers(provider))
+    const at = modelProviders(page)
+    await page.goto('/model-providers')
+    await expect(at.saveUrl).toBeDisabled()
+
+    await at.newUrl.fill('http://192.168.1.21:11434/v1')
+    await expect(at.saveUrl).toBeDisabled()
+    await expect(at.text('A new URL needs the API key again.')).toBeVisible()
+    await at.newApiKey.fill('a-key-of-this-test')
+    await at.saveUrl.click()
+
+    await expect
+      .poll(() => api.last('put', modelProviderPaths.record(provider.id))?.body)
+      .toMatchObject({ baseUrl: 'http://192.168.1.21:11434/v1', apiKey: 'a-key-of-this-test' })
+  })
+
   test('a changed key ring shows a warning', async ({ page, api }) => {
     api.mock(signedInAs('Admin'), noSessions, modelProvidersApi.listHolds([aProvider({ keyState: 'Unreadable' })], 'Changed'))
     const at = modelProviders(page)
@@ -104,6 +143,39 @@ test.describe('the model providers page', () => {
 
     await expect(at.noAdminNote).toBeVisible()
     expect(api.last('get', modelProviderPaths.list)).toBeUndefined()
+  })
+})
+
+test.describe('a page of model providers on a 390 px phone', () => {
+  test.use({ actor: as.user('Bob Smith'), viewport: { width: 390, height: 800 } })
+
+  test('a base URL stays whole on one line, and each control is 44 px high', async ({ page, api }) => {
+    const provider = aProvider({ kind: 'OpenAiCompatible', baseUrl: 'http://host.docker.internal:26662/v1', model: 'model-a' })
+    api.mock(signedInAs('Admin'), noSessions, modelProvidersApi.listHolds([provider]))
+    const at = modelProviders(page)
+
+    await page.goto('/model-providers')
+    await expect(at.text('http://host.docker.internal:26662/v1')).toBeVisible()
+
+    expect((await at.text('http://host.docker.internal:26662/v1').boundingBox())?.height).toBeLessThan(24)
+    await expect(at.makeActive).toHaveCount(0)
+    for (const control of await at.controls.all()) {
+      expect((await control.boundingBox())?.height).toBeGreaterThanOrEqual(44)
+    }
+    expect(await at.pageOverflow()).toBe(0)
+  })
+
+  test('a long Topic takes the width of the card', async ({ page, api }) => {
+    const topic = 'a long topic that a person keeps for each of the things that a week holds'
+    const session = aSession({ cleanupStatus: 'Clean', cleanedText: 'Done.', suggestions: [{ kind: 'Topic', value: topic }] })
+    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(session), modelProvidersApi.activeIs('Home lab'))
+    const at = modelProviders(page)
+
+    await page.goto(`/model-providers?session=${session.id}`)
+    await expect(at.text(topic)).toBeVisible()
+
+    expect((await at.text(topic).boundingBox())?.height).toBeLessThanOrEqual(60)
+    expect(await at.pageOverflow()).toBe(0)
   })
 })
 
@@ -166,6 +238,7 @@ test.describe('the Cleanup card', () => {
     await at.runCleanup.click()
     await expect(at.cleanupRunning).toBeVisible()
     await expect(at.runCleanup).toBeDisabled()
+    await expect(at.runCleanup).toHaveText('Run Cleanup')
 
     await page.goto('/about')
     api.mock(modelProvidersApi.sessionIs(aSession({ cleanupStatus: 'Clean', cleanedText: 'I met Sam today.' })))
@@ -185,8 +258,39 @@ test.describe('the Cleanup card', () => {
 
     api.mock(modelProvidersApi.activeIs(null))
     await page.reload()
-    await expect(at.runCleanup).toBeEnabled()
+    await expect(at.noProviderNote).toBeVisible()
+    await expect(at.runCleanup).toBeDisabled()
     await expect(at.wordsGoToAnyProvider).toHaveCount(0)
+  })
+
+  test('a person stops a running Cleanup, the page says so, and a new run is open', async ({ page, api }) => {
+    const running = aSession({ cleanupStatus: 'Running' })
+    const stopped = aSession({ cleanupStatus: 'Failed', cleanupFailure: 'Stopped' })
+    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(running), modelProvidersApi.cleanupStops(stopped))
+    const at = modelProviders(page)
+    await page.goto(sessionUrl(running.id))
+    await expect(at.stopCleanup).toBeVisible()
+
+    api.mock(modelProvidersApi.sessionIs(stopped))
+    await at.stopCleanup.click()
+
+    await expect(at.cleanupFailure('You stopped the Cleanup.')).toBeVisible()
+    await expect(at.stopCleanup).toHaveCount(0)
+    await expect(at.runCleanup).toBeEnabled()
+    await expect(at.runCleanup).toHaveText('Run Cleanup again')
+    await expect(at.rawWords).toContainText('um I met sam today')
+    expect(api.last('post', modelProviderPaths.stopCleanup(running.id))).toBeDefined()
+  })
+
+  test('a finished run has no stop button', async ({ page, api }) => {
+    const clean = aSession({ cleanupStatus: 'Clean', cleanedText: 'Done.' })
+    api.mock(signedInAs('User'), modelProvidersApi.sessionIs(clean))
+    const at = modelProviders(page)
+
+    await page.goto(sessionUrl(clean.id))
+
+    await expect(at.runCleanup).toHaveText('Run Cleanup again')
+    await expect(at.stopCleanup).toHaveCount(0)
   })
 
   test('a Running run polls until the result arrives', async ({ page, api }) => {

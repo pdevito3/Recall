@@ -52,11 +52,11 @@ public class StringColumnLengthTests
         ["sessions.cleaned_text"] = new("text", Text, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)),
         ["raw_revisions.text"] = new("text", Text, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)),
         ["cleaned_revisions.text"] = new("text", Text, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)),
-        ["model_providers.name"] = new("name", Text, v => ModelProvider.Connect("ten_1", ModelProviderKind.OpenAiCompatible, v, ProviderAddress, null, DateTimeOffset.UnixEpoch)),
-        ["model_providers.base_url"] = new("baseUrl", AddressOfLength, v => ModelProvider.Connect("ten_1", ModelProviderKind.OpenAiCompatible, "Mine", v, null, DateTimeOffset.UnixEpoch)),
+        ["model_providers.name"] = new("name", Text, v => ModelProvider.Connect("ten_1", ModelProviderKind.OpenAiCompatible, v, ProviderAddress, null)),
+        ["model_providers.base_url"] = new("baseUrl", AddressOfLength, v => ModelProvider.Connect("ten_1", ModelProviderKind.OpenAiCompatible, "Mine", v, null)),
         ["model_providers.model"] = new("model", Text, v =>
         {
-            var provider = ModelProvider.Connect("ten_1", ModelProviderKind.OpenAiCompatible, "Mine", ProviderAddress, null, DateTimeOffset.UnixEpoch);
+            var provider = ModelProvider.Connect("ten_1", ModelProviderKind.OpenAiCompatible, "Mine", ProviderAddress, null);
             provider.Update("Mine", ProviderAddress, null, v, provider.Version);
         }),
         ["recordings.client_recording_id"] = new("clientRecordingId", Text, v => Recording.Create("ten_1", "usr_1", "ses_1", v, RecordingFormat.Webm)),

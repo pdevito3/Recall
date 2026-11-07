@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { refusalOf } from '@/hooks/use-server-errors'
 
-import { useCleanupSession, useRespondToProposal, useRespondToSuggestion, useStartCleanup } from '../apis/cleanup'
+import { useCleanupSession, useRespondToProposal, useRespondToSuggestion, useStartCleanup, useStopCleanup } from '../apis/cleanup'
 import { useActiveModelProvider } from '../apis/model-providers'
 import { plainTextOf } from './plain-text'
 
@@ -18,14 +18,17 @@ const STATUS_TEXT: Record<SessionDto['cleanupStatus'], string> = {
   Failed: 'The last Cleanup did not finish. Your words did not change.',
 }
 
+const NO_PROVIDER_TEXT = 'An Admin must connect a model provider, pick a model, and make it active first.'
+
 const FAILURE_TEXT: Record<SessionDto['cleanupFailure'], string | null> = {
   None: null,
-  NoModelProvider: 'An Admin must connect a model provider and pick a model first.',
+  NoModelProvider: NO_PROVIDER_TEXT,
   KeyUnreadable: 'The server cannot read the API key of the model provider. An Admin must enter the key again.',
   ProviderRefused: 'The model provider refused the request. An Admin can test the connection on this page.',
   ProviderUnavailable: 'The model provider did not answer after several tries. Try again later.',
   BadModelOutput: 'The answer of the model is not one that the app can use. Try again.',
   Interrupted: 'The Cleanup stopped before it got a result. Try again.',
+  Stopped: 'You stopped the Cleanup. You can run it again.',
 }
 
 function Words({ title, text }: { title: string; text: string }) {
@@ -47,7 +50,7 @@ function Suggestions({ session }: { session: SessionDto }) {
         {session.suggestions.map(({ kind, value }) => (
           <li key={`${kind}-${value}`} className="flex flex-wrap items-center gap-2 text-sm">
             <Badge variant="outline">{kind}</Badge>
-            <span className="min-w-24 flex-1 wrap-anywhere">{value}</span>
+            <span className="min-w-24 flex-1 basis-48 wrap-anywhere">{value}</span>
             <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" aria-label={`Accept ${value}`} onPress={() => respond.mutate({ accept: true, kind, value })}>
                 Accept
@@ -77,7 +80,7 @@ function PeopleProposals({ session }: { session: SessionDto }) {
                 <RefusedSaveAlert problem={refusalOf(respond.error, []).problem} />
               </div>
             )}
-            <span className="min-w-24 flex-1 wrap-anywhere">{label}</span>
+            <span className="min-w-24 flex-1 basis-48 wrap-anywhere">{label}</span>
             <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" aria-label={`Tag ${label}`} onPress={() => respond.mutate({ label, approve: true, createNew: false })}>
                 Tag
@@ -96,8 +99,10 @@ function PeopleProposals({ session }: { session: SessionDto }) {
 export function CleanupCard({ sessionId }: { sessionId: string }) {
   const session = useCleanupSession(sessionId)
   const start = useStartCleanup(sessionId)
+  const stop = useStopCleanup(sessionId)
   const provider = useActiveModelProvider()
   const startProblem = start.error ? refusalOf(start.error, []).problem : null
+  const stopProblem = stop.error ? refusalOf(stop.error, []).problem : null
 
   if (session.isPending) {
     return (
@@ -113,6 +118,7 @@ export function CleanupCard({ sessionId }: { sessionId: string }) {
   const { data } = session
   const isRunning = data.cleanupStatus === 'Running'
   const failure = FAILURE_TEXT[data.cleanupFailure]
+  const hasNoProvider = provider.isSuccess && !provider.data.name
 
   return (
     <Card>
@@ -138,11 +144,17 @@ export function CleanupCard({ sessionId }: { sessionId: string }) {
         {provider.data?.name && (
           <p className="text-sm text-muted-foreground wrap-anywhere">A Cleanup sends your words to {provider.data.name}.</p>
         )}
-        <RefusedSaveAlert problem={startProblem} />
-        <div>
-          <Button isPending={start.isPending} isDisabled={isRunning} onPress={() => start.mutate()}>
-            {data.cleanupStatus === 'NotRun' ? 'Run Cleanup' : 'Run Cleanup again'}
+        {hasNoProvider && failure !== NO_PROVIDER_TEXT && <p className="text-sm text-muted-foreground">{NO_PROVIDER_TEXT}</p>}
+        <RefusedSaveAlert problem={startProblem ?? stopProblem} />
+        <div className="flex flex-wrap gap-2">
+          <Button isPending={start.isPending} isDisabled={isRunning || hasNoProvider} onPress={() => start.mutate()}>
+            {data.cleanupStatus === 'NotRun' || isRunning ? 'Run Cleanup' : 'Run Cleanup again'}
           </Button>
+          {isRunning && (
+            <Button variant="outline" isPending={stop.isPending} onPress={() => stop.mutate()}>
+              Stop Cleanup
+            </Button>
+          )}
         </div>
         {data.synopsis && (
           <section className="flex flex-col gap-1">

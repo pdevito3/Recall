@@ -23,7 +23,8 @@ public static class GetModelProviderList
                 .NewestActivationFirst()
                 .ToListAsync(cancellationToken);
 
-            var items = providers.Select((provider, index) => provider.ToDto(keys, isActive: index == 0)).ToList();
+            var active = providers.FirstOrDefault(provider => provider is { ActivatedOn: not null, Model: not null });
+            var items = providers.Select(provider => provider.ToDto(keys, isActive: provider == active)).ToList();
             return new ModelProviderListDto
             {
                 Items = items,

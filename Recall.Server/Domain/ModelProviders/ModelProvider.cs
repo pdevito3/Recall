@@ -3,8 +3,9 @@ namespace Recall.Server.Domain.ModelProviders;
 using Exceptions;
 
 /// <summary>
-/// The AI service that an Admin connects for the app. The newest activation of a tenant is the active one, so a change
-/// of the active one writes one row, and a delete of it falls back to the one before.
+/// The AI service that an Admin connects for the app. A connect does not change which one a Cleanup uses: a provider takes
+/// words only when a person chooses it and it has a model. The newest choice of a tenant is the active one, so a change of
+/// the active one writes one row, and a delete of it falls back to the one before.
 /// </summary>
 public class ModelProvider : BaseEntity, ITenantable
 {
@@ -39,11 +40,12 @@ public class ModelProvider : BaseEntity, ITenantable
     /// <summary>A model from the list of the provider. It is null until the Admin picks one.</summary>
     [NotSensitive] public string? Model { get; private set; }
 
-    [NotSensitive] public DateTimeOffset ActivatedOn { get; private set; }
+    /// <summary>Null until a person chooses this provider, and again when its model goes away.</summary>
+    [NotSensitive] public DateTimeOffset? ActivatedOn { get; private set; }
 
-    public static ModelProvider Connect(string tenantId, ModelProviderKind kind, string name, string? baseUrl, string? protectedApiKey, DateTimeOffset now)
+    public static ModelProvider Connect(string tenantId, ModelProviderKind kind, string name, string? baseUrl, string? protectedApiKey)
     {
-        var provider = new ModelProvider { TenantId = tenantId, Kind = kind, ActivatedOn = now };
+        var provider = new ModelProvider { TenantId = tenantId, Kind = kind };
         provider.SetName(name);
         provider.SetBaseUrl(baseUrl);
         provider.ProtectedApiKey = protectedApiKey;
@@ -64,7 +66,11 @@ public class ModelProvider : BaseEntity, ITenantable
         SetModel(model);
     }
 
-    public void Activate(DateTimeOffset now) => ActivatedOn = now;
+    public void Activate(DateTimeOffset now)
+    {
+        ValidationException.Must(Model is not null, ModelField, "Please pick a model before you make this model provider active.");
+        ActivatedOn = now;
+    }
 
     /// <summary>A deleted row stays for the audit log. A key must not stay with it.</summary>
     public void ForgetKey() => ProtectedApiKey = null;
@@ -95,6 +101,8 @@ public class ModelProvider : BaseEntity, ITenantable
         }
 
         Model = trimmed;
+        if (Model is null)
+            ActivatedOn = null;
     }
 
     private void RequireKey()

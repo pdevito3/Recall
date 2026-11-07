@@ -17,7 +17,7 @@ const KEY_RING_TEXT: Record<ModelProviderListDto['keyRing'], string | null> = {
   Changed:
     'The key ring changed: the database holds values that this key ring cannot read. Restore the key folder from the same backup as the database, or enter each API key again.',
   NotWritable:
-    'The key folder takes no write, so the next start makes a new key ring, and each saved API key stops working. Make the folder writable.',
+    'The key folder takes no write. Each saved API key still works, but a key that the server makes for the ring after this does not stay after a restart. Make the folder writable.',
 }
 
 const STATUS_LABELS = {
@@ -120,7 +120,7 @@ export function ModelProvidersPage({ sessionId }: { sessionId?: string }) {
   const mightBeAnAdmin = membership.status === 'member' && membership.user.role === 'Admin'
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8">
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 max-sm:[&_[data-slot=button]]:h-11 max-sm:[&_[data-slot=input]]:h-11 max-sm:[&_[data-slot=select-trigger]]:h-11">
       <PageHeading>Model providers</PageHeading>
       {sessionId ? <CleanupCard sessionId={sessionId} /> : <RecentSessions />}
       {mightBeAnAdmin ? (

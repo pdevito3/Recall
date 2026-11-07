@@ -7,5 +7,5 @@ import * as z from 'zod'
 
 export const cleanupEventDataDtoSchema = z.object({
   message: z.string().nullish(),
-  stopReason: z.enum(['None', 'NoModelProvider', 'KeyUnreadable', 'ProviderRefused', 'ProviderUnavailable', 'BadModelOutput', 'Interrupted']).describe('The code of CleanupFailure of a `failed` event.'),
+  stopReason: z.enum(['None', 'NoModelProvider', 'KeyUnreadable', 'ProviderRefused', 'ProviderUnavailable', 'BadModelOutput', 'Interrupted', 'Stopped']).describe('The code of CleanupFailure of a `failed` event.'),
 })

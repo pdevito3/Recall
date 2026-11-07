@@ -58,7 +58,7 @@ public class ProviderTextAndAddressTests
 
     [Test]
     [Arguments("before\u0000after", "beforeafter")]
-    [Arguments("a‮b⁦c", "abc")]
+    [Arguments("a\u202eb\u2066c", "abc")]
     [Arguments("line\nnext", "line\nnext")]
     public void a_hidden_character_does_not_reach_a_message(string message, string shown)
     {

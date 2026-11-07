@@ -10,7 +10,8 @@ export const cleanupEventDataDtoStopReasonEnum = {
     ProviderRefused: "ProviderRefused",
     ProviderUnavailable: "ProviderUnavailable",
     BadModelOutput: "BadModelOutput",
-    Interrupted: "Interrupted"
+    Interrupted: "Interrupted",
+    Stopped: "Stopped"
 } as const;
 
 export type CleanupEventDataDtoStopReasonEnumKey = (typeof cleanupEventDataDtoStopReasonEnum)[keyof typeof cleanupEventDataDtoStopReasonEnum];

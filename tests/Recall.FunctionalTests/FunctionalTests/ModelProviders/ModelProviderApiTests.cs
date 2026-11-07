@@ -42,6 +42,109 @@ public class ModelProviderApiTests : TestBase
         active.ShouldNotBeNull().Name.ShouldBeNull();
     }
 
+    [Test]
+    public async Task a_new_provider_is_not_active_and_each_cleanup_of_the_tenant_keeps_working()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        FactoryClient.SignInAsAppUser(scenario.Admin.Identifier);
+
+        // Act
+        var second = await CleanupScenario.ConnectAsync(FactoryClient, ModelProviderKind.OpenAiCompatible, scenario.Fake.CompatibleBaseUrl, scenario.ApiKey, "second");
+        var list = await ListAsync();
+        FactoryClient.SignInAsAppUser(scenario.Member.Identifier);
+        var active = await FactoryClient.GetFromJsonAsync<ActiveModelProviderDto>(ApiRoutes.ModelProviders.Active);
+        var started = await scenario.SessionWithRunningCleanupAsync("words after a second connect");
+        await scenario.RunJobAsync(started.Id);
+        var session = await scenario.ReadAsync(started.Id);
+
+        // Assert
+        second.IsActive.ShouldBeFalse();
+        list.Items.Single(p => p.IsActive).Id.ShouldBe(scenario.Provider.Id);
+        active.ShouldNotBeNull().Name.ShouldBe(scenario.Provider.Name);
+        session.CleanupStatus.ShouldBe(nameof(Recall.Server.Domain.Sessions.CleanupStatus.Clean));
+        scenario.Fake.CompletionCalls.ShouldBe(1);
+    }
+
+    [Test]
+    public async Task a_provider_with_no_model_cannot_be_chosen()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient, pickModel: false);
+        FactoryClient.SignInAsAppUser(scenario.Admin.Identifier);
+
+        // Act
+        var chosen = await FactoryClient.PutAsJsonAsync(ApiRoutes.ModelProviders.GetRecord(scenario.Provider.Id), new
+        {
+            name = scenario.Provider.Name,
+            baseUrl = scenario.Provider.BaseUrl,
+            model = (string?)null,
+            makeActive = true,
+            version = scenario.Provider.Version,
+        });
+        var list = await ListAsync();
+
+        // Assert
+        chosen.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        list.Items.ShouldAllBe(p => !p.IsActive);
+    }
+
+    [Test]
+    public async Task a_provider_that_loses_its_model_stops_being_active_until_a_person_chooses_it_again()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        FactoryClient.SignInAsAppUser(scenario.Admin.Identifier);
+
+        // Act
+        var cleared = await FactoryClient.PutAsJsonAsync(ApiRoutes.ModelProviders.GetRecord(scenario.Provider.Id), new
+        {
+            name = scenario.Provider.Name,
+            baseUrl = scenario.Provider.BaseUrl,
+            model = (string?)null,
+            makeActive = false,
+            version = scenario.Provider.Version,
+        });
+        var withNoModel = (await cleared.Content.ReadFromJsonAsync<ModelProviderDto>()).ShouldNotBeNull();
+        var withModelAgain = await FactoryClient.PutAsJsonAsync(ApiRoutes.ModelProviders.GetRecord(scenario.Provider.Id), new
+        {
+            name = scenario.Provider.Name,
+            baseUrl = scenario.Provider.BaseUrl,
+            model = FakeModelProvider.ModelId,
+            makeActive = false,
+            version = withNoModel.Version,
+        });
+        var list = await ListAsync();
+
+        // Assert
+        cleared.StatusCode.ShouldBe(HttpStatusCode.OK);
+        withNoModel.IsActive.ShouldBeFalse();
+        withModelAgain.StatusCode.ShouldBe(HttpStatusCode.OK);
+        list.Items.ShouldAllBe(p => !p.IsActive);
+    }
+
+    [Test]
+    public async Task the_test_button_answers_with_the_truth_when_a_provider_sends_a_page_in_place_of_a_list()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        FactoryClient.SignInAsAppUser(scenario.Admin.Identifier);
+        scenario.Fake.Behavior.Mode = FakeMode.RawBody;
+        scenario.Fake.Behavior.Reply = "<html>a page of another service</html>";
+        scenario.Fake.Behavior.ContentType = "text/html";
+
+        // Act
+        var answer = await FactoryClient.PostAsync(ApiRoutes.ModelProviders.Test(scenario.Provider.Id), null);
+        var body = await answer.Content.ReadAsStringAsync();
+
+        // Assert
+        answer.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+        var result = (await answer.Content.ReadFromJsonAsync<ModelProviderTestResultDto>()).ShouldNotBeNull();
+        result.Ok.ShouldBeFalse();
+        result.Failure.ShouldNotBeNull().Kind.ShouldBe(nameof(Recall.Server.Domain.ModelProviders.Clients.ProviderFailureKind.BadOutput));
+        body.ShouldNotContain("another service");
+    }
+
     private async Task<(FakeModelProvider Fake, string Key)> StartAdminAsync()
     {
         var (admin, _) = await JournalScenario.AddPeopleAsync();

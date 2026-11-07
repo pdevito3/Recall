@@ -31,5 +31,15 @@ public static class CleanupPrompt
         return text.ToString().TrimEnd();
     }
 
-    public static string TextOf(string plainRaw) => $"<raw>\n{plainRaw}\n</raw>";
+    /// <summary>
+    /// The tag is one that the words do not hold, so words cannot close it and speak as instructions. The words go as they are,
+    /// because a change here would reach Cleaned.
+    /// </summary>
+    public static string TextOf(string plainRaw)
+    {
+        var tag = "raw";
+        for (var other = 1; plainRaw.Contains($"</{tag}", StringComparison.OrdinalIgnoreCase); other++)
+            tag = $"raw-{other}";
+        return $"<{tag}>\n{plainRaw}\n</{tag}>";
+    }
 }

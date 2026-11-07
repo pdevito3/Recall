@@ -3,6 +3,7 @@ namespace Recall.Server.Domain.ModelProviders.Clients;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using Databases;
 
 public static class ProviderFailureText
 {

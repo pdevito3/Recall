@@ -25,7 +25,7 @@ export const sessionDtoSchema = z.object({
   synopsis: z.string().nullish(),
   cleanupStatus: z.enum(['NotRun', 'Running', 'Clean', 'Stale', 'Failed']),
   lastCleanupRawRevision: z.int32().nullish(),
-  cleanupFailure: z.enum(['None', 'NoModelProvider', 'KeyUnreadable', 'ProviderRefused', 'ProviderUnavailable', 'BadModelOutput', 'Interrupted']).describe('Why the last Cleanup failed. It is a closed code, and the words of a model provider never come here.'),
+  cleanupFailure: z.enum(['None', 'NoModelProvider', 'KeyUnreadable', 'ProviderRefused', 'ProviderUnavailable', 'BadModelOutput', 'Interrupted', 'Stopped']).describe('Why the last Cleanup failed. It is a closed code, and the words of a model provider never come here.'),
   suggestions: z.array(sessionSuggestionDtoSchema),
   peopleProposals: z.array(personProposalDtoSchema),
   activity: z.string(),

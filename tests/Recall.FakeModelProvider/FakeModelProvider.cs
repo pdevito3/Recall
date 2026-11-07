@@ -73,6 +73,9 @@ public sealed class FakeBehavior
     public string? Reply { get; set; }
 
     public string ContentType { get; set; } = "application/json";
+
+    /// <summary>With <see cref="FakeMode.Hold"/>, only a request that holds these words waits.</summary>
+    public string? HoldOnly { get; set; }
 }
 
 /// <summary>
@@ -290,7 +293,7 @@ public sealed class FakeModelProvider : IAsyncDisposable
                 context.Response.StatusCode = 307;
                 context.Response.Headers.Location = $"{Address}/stolen";
                 return;
-            case FakeMode.Hold:
+            case FakeMode.Hold when Behavior.HoldOnly is null || text.Contains(Behavior.HoldOnly, StringComparison.Ordinal):
                 await Task.Delay(Behavior.DelayMs, context.RequestAborted);
                 break;
         }
@@ -442,7 +445,7 @@ public sealed class FakeModelProvider : IAsyncDisposable
                 context.Response.StatusCode = 307;
                 context.Response.Headers.Location = $"{Address}/stolen";
                 return;
-            case FakeMode.Hold:
+            case FakeMode.Hold when Behavior.HoldOnly is null || text.Contains(Behavior.HoldOnly, StringComparison.Ordinal):
                 await Task.Delay(Behavior.DelayMs, context.RequestAborted);
                 break;
         }

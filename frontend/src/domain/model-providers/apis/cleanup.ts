@@ -9,6 +9,7 @@ import { getSessionPage } from '@/api/generated/sessions/clients/get-session-pag
 import { rejectSuggestion } from '@/api/generated/sessions/clients/reject-suggestion'
 import { respondToPersonProposal } from '@/api/generated/sessions/clients/respond-to-person-proposal'
 import { startCleanup } from '@/api/generated/sessions/clients/start-cleanup'
+import { stopCleanup } from '@/api/generated/sessions/clients/stop-cleanup'
 
 const pollWhileRunningMs = 2_000
 const sessionsShown = 10
@@ -43,6 +44,14 @@ export function useStartCleanup(id: string) {
   const put = usePutSession(id)
   return useMutation({
     mutationFn: () => startCleanup({ path: { id }, options: { suppressErrorToast: true } }),
+    onSuccess: put,
+  })
+}
+
+export function useStopCleanup(id: string) {
+  const put = usePutSession(id)
+  return useMutation({
+    mutationFn: () => stopCleanup({ path: { id }, options: { suppressErrorToast: true } }),
     onSuccess: put,
   })
 }

@@ -29,10 +29,26 @@ export function ModelProviderCard({ provider }: { provider: ModelProviderDto }) 
   const update = useUpdateModelProvider(provider.id)
   const remove = useDeleteModelProvider(provider.id)
   const [newKey, setNewKey] = useState('')
+  const [editedUrl, setEditedUrl] = useState<string | null>(null)
   const keyFieldId = `new-key-${provider.id}`
+  const urlFieldId = `new-url-${provider.id}`
+  const newUrl = editedUrl ?? provider.baseUrl ?? ''
+  const urlChanged = newUrl.trim() !== (provider.baseUrl ?? '')
+  const urlNeedsKey = urlChanged && provider.keyState !== 'None' && newKey.trim() === ''
 
   const handleSaveKey = () =>
     update.mutate({ ...savedChange(provider), apiKey: newKey }, { onSuccess: () => setNewKey('') })
+
+  const handleSaveUrl = () =>
+    update.mutate(
+      { ...savedChange(provider), baseUrl: newUrl.trim() || null, apiKey: newKey.trim() === '' ? undefined : newKey },
+      {
+        onSuccess: () => {
+          setNewKey('')
+          setEditedUrl(null)
+        },
+      },
+    )
 
   return (
     <Card>
@@ -44,15 +60,15 @@ export function ModelProviderCard({ provider }: { provider: ModelProviderDto }) 
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
+        <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[max-content_1fr]">
           {provider.baseUrl && (
             <>
               <dt className="text-muted-foreground">Base URL</dt>
-              <dd className="wrap-anywhere">{provider.baseUrl}</dd>
+              <dd className="wrap-anywhere max-sm:mb-2">{provider.baseUrl}</dd>
             </>
           )}
           <dt className="text-muted-foreground">Model</dt>
-          <dd className="wrap-anywhere">{provider.model ?? 'Test the connection, then pick a model.'}</dd>
+          <dd className="wrap-anywhere max-sm:mb-2">{provider.model ?? 'Test the connection, then pick a model.'}</dd>
           <dt className="text-muted-foreground">API key</dt>
           <dd>
             {provider.keyState === 'Readable' && 'Saved and encrypted'}
@@ -70,6 +86,7 @@ export function ModelProviderCard({ provider }: { provider: ModelProviderDto }) 
           {!provider.isActive && (
             <Button
               variant="outline"
+              isDisabled={!provider.model}
               isPending={update.isPending}
               onPress={() => update.mutate({ ...savedChange(provider), makeActive: true })}
             >
@@ -96,6 +113,14 @@ export function ModelProviderCard({ provider }: { provider: ModelProviderDto }) 
             </ResponsiveDialog>
           </ResponsiveDialogTrigger>
         </div>
+
+        {!provider.isActive && (
+          <p className="text-sm text-muted-foreground">
+            {provider.model
+              ? 'A Cleanup does not use this model provider until you make it active.'
+              : 'A Cleanup does not use this model provider. Pick a model, then make it active.'}
+          </p>
+        )}
 
         {test.data?.failure && (
           <div role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
@@ -134,6 +159,24 @@ export function ModelProviderCard({ provider }: { provider: ModelProviderDto }) 
         )}
 
         <div className="flex flex-col gap-2">
+          <Label htmlFor={urlFieldId}>New URL</Label>
+          <div className="flex flex-wrap gap-2">
+            <Input
+              id={urlFieldId}
+              type="url"
+              autoComplete="off"
+              className="min-w-0 flex-1 basis-48"
+              value={newUrl}
+              onChange={(event) => setEditedUrl(event.target.value)}
+            />
+            <Button variant="outline" isDisabled={!urlChanged || urlNeedsKey} isPending={update.isPending} onPress={handleSaveUrl}>
+              Save URL
+            </Button>
+          </div>
+          {urlNeedsKey && <p className="text-sm text-muted-foreground">A new URL needs the API key again. Enter it under New API key.</p>}
+        </div>
+
+        <div className="flex flex-col gap-2">
           <Label htmlFor={keyFieldId}>New API key</Label>
           <div className="flex flex-wrap gap-2">
             <Input
@@ -144,7 +187,7 @@ export function ModelProviderCard({ provider }: { provider: ModelProviderDto }) 
               value={newKey}
               onChange={(event) => setNewKey(event.target.value)}
             />
-            <Button variant="outline" isDisabled={newKey.trim() === ''} isPending={update.isPending} onPress={handleSaveKey}>
+            <Button variant="outline" isDisabled={newKey.trim() === '' || urlChanged} isPending={update.isPending} onPress={handleSaveKey}>
               Save key
             </Button>
           </div>

@@ -95,6 +95,33 @@ public class JobHostingTests
     }
 
     [Test]
+    [Property("Rule", "SES-43")]
+    public void a_cleanup_has_its_own_workers_and_a_system_job_never_waits_behind_one()
+    {
+        // Act
+        var cleanups = JobHosting.CleanupWorkers(new JobOptions());
+
+        // Assert
+        cleanups.PoolSize.ShouldBe(CleanupQueues.Count);
+        cleanups.Policy.ShouldBeOfType<DispatchPolicy.Weighted>().Queues.ShouldBe(CleanupQueues.All);
+        CleanupQueues.All.ShouldNotContain(JobHosting.SystemQueue);
+        JobHosting.SystemWorkers(new JobOptions()).Policy.ShouldBeOfType<DispatchPolicy.Strict>().Queues.ShouldBe([JobHosting.SystemQueue]);
+    }
+
+    [Test]
+    public void a_tenant_keeps_its_queue_in_each_process_and_tenants_spread_over_the_queues()
+    {
+        // Act
+        var queues = Enumerable.Range(0, 800).Select(i => CleanupQueues.Of($"tenant-{i}")).ToList();
+
+        // Assert
+        CleanupQueues.Of("tenant-0").ShouldBe("cleanup-0");
+        CleanupQueues.Of("tenant-1").ShouldBe("cleanup-3");
+        queues.Distinct().Order().ShouldBe(CleanupQueues.All);
+        queues.GroupBy(queue => queue).Min(group => group.Count()).ShouldBeGreaterThan(60);
+    }
+
+    [Test]
     [Arguments("ffmpeg", "NOTICE.md", "https://ffmpeg.org/releases/ffmpeg-7.1.3.tar.xz")]
     [Arguments("ffmpeg", "COPYING.LGPLv2.1", "GNU LESSER GENERAL PUBLIC LICENSE")]
     [Arguments("sherpa-onnx", "LICENSE", "Apache License")]

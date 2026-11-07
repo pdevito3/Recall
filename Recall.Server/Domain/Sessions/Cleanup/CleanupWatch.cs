@@ -62,6 +62,7 @@ public sealed class CleanupWatch(AppDbContext dbContext, TimeProvider timeProvid
         CleanupFailure.ProviderUnavailable => "The model provider did not answer after several tries. Try again later.",
         CleanupFailure.BadModelOutput => "The answer of the model is not one that the app can use, so your Cleaned text did not change. Try again.",
         CleanupFailure.Interrupted => "The Cleanup stopped before it got a result, so your Cleaned text did not change. Try again.",
+        CleanupFailure.Stopped => "You stopped the Cleanup, so your Cleaned text did not change. You can run it again.",
         _ => throw new ArgumentOutOfRangeException(nameof(failure)),
     };
 

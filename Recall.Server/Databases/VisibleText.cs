@@ -1,4 +1,4 @@
-namespace Recall.Server.Domain.ModelProviders.Clients;
+namespace Recall.Server.Databases;
 
 using System.Globalization;
 using System.Text;
@@ -10,6 +10,7 @@ using System.Text;
 public static class VisibleText
 {
     private const char Replacement = (char)0xFFFD;
+    private const char ZeroWidthNonJoiner = (char)0x200C; // Part of some words, such as in Persian.
     private const char ZeroWidthJoiner = (char)0x200D; // Part of an emoji, and of some words.
     private const char LineSeparator = (char)0x2028;
     private const char ParagraphSeparator = (char)0x2029;
@@ -37,5 +38,5 @@ public static class VisibleText
     private static bool IsHidden(char c)
         => char.IsControl(c)
             || c is LineSeparator or ParagraphSeparator
-            || (CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.Format && c != ZeroWidthJoiner);
+            || (CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.Format && c is not (ZeroWidthJoiner or ZeroWidthNonJoiner));
 }

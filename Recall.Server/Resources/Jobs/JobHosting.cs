@@ -13,7 +13,6 @@ public static class JobHosting
 {
     public const string SystemQueue = "system";
 
-    public const string CleanupQueue = "cleanup";
     public const string TranscriptionQueue = "transcription";
 
     public const string HealthCheckName = "backwave";
@@ -33,11 +32,31 @@ public static class JobHosting
 
     private const int TranscriptionsThatFitInMemory = 1;
 
+    public static WorkerGroupOptions SystemWorkers(JobOptions settings) => new()
+    {
+        Name = "system",
+        Policy = new DispatchPolicy.Strict([SystemQueue]),
+        PollInterval = TimeSpan.FromSeconds(settings.PollSeconds),
+        ShutdownBudget = JobShutdownBudget,
+        Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
+    };
+
     public static WorkerGroupOptions TranscriptionWorkers(JobOptions settings) => new()
     {
         Name = TranscriptionQueue,
         PoolSize = TranscriptionsThatFitInMemory,
         Policy = new DispatchPolicy.Strict([TranscriptionQueue]),
+        PollInterval = TimeSpan.FromSeconds(settings.PollSeconds),
+        ShutdownBudget = JobShutdownBudget,
+        Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
+    };
+
+    /// <summary>The pool holds one job of each queue, so a queue limit is what a tenant can hold, and other tenants keep the rest.</summary>
+    public static WorkerGroupOptions CleanupWorkers(JobOptions settings) => new()
+    {
+        Name = "cleanup",
+        PoolSize = CleanupQueues.Count,
+        Policy = CleanupQueues.Policy,
         PollInterval = TimeSpan.FromSeconds(settings.PollSeconds),
         ShutdownBudget = JobShutdownBudget,
         Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
@@ -75,15 +94,10 @@ public static class JobHosting
             })).UseJobs(JobFailureFilter.Applied(BackWaveJobs.Module));
             if (settingsAtRegistration.RunWorkers || !inDevelopmentOrTest)
             {
-                backwave.AddWorkerGroup(new WorkerGroupOptions
-                {
-                    Name = "system",
-                    Policy = new DispatchPolicy.Strict([SystemQueue, CleanupQueue]),
-                    PollInterval = TimeSpan.FromSeconds(settingsAtRegistration.PollSeconds),
-                    ShutdownBudget = JobShutdownBudget,
-                    Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
-                });
+                backwave.AddWorkerGroup(SystemWorkers(settingsAtRegistration));
+                backwave.AddWorkerGroup(CleanupWorkers(settingsAtRegistration));
                 backwave.AddWorkerGroup(TranscriptionWorkers(settingsAtRegistration));
+                builder.Services.AddHostedService<CleanupQueueLimits>();
                 builder.Services.AddHostedService<JobHostWatch>();
                 builder.Services.AddSingleton<CleanupJobWatch>();
                 builder.Services.AddHostedService(services => services.GetRequiredService<CleanupJobWatch>());
@@ -93,6 +107,7 @@ public static class JobHosting
         builder.Services.AddBackWaveDashboardMetrics();
         builder.Services.AddSingleton<JobHostStatus>();
         builder.Services.AddSingleton<SaveJobs>();
+        builder.Services.AddSingleton<RunningCleanups>();
         builder.Services.AddHealthChecks().AddCheck<JobHostHealthCheck>(HealthCheckName);
     }
 }

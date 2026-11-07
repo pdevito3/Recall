@@ -1,5 +1,7 @@
 namespace Recall.Server.Domain.ModelProviders.Clients;
 
+using Databases;
+
 public static class ModelProviderHttp
 {
     public const string ClientName = "model-provider";

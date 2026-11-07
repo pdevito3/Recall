@@ -9,7 +9,7 @@ using Resources.Entrypoints.Http;
 
 /// <summary>
 /// A person who owns a journal sees where a Cleanup sends the words, with no permission to manage the providers. It uses the
-/// rule of <c>CleanupJob</c>: the newest activation is the active one, and with no model it takes no words.
+/// rule of <c>CleanupJob</c>: <see cref="ModelProviderQueries.ActiveFirst"/>.
 /// </summary>
 public static class GetActiveModelProvider
 {
@@ -23,11 +23,11 @@ public static class GetActiveModelProvider
 
             var active = await dbContext.ModelProviders.AsNoTracking()
                 .TagWithOperationCallSite("model_providers.active")
-                .NewestActivationFirst()
-                .Select(p => new { p.Name, p.Model })
+                .ActiveFirst()
+                .Select(p => p.Name)
                 .FirstOrDefaultAsync(cancellationToken);
 
-            return new ActiveModelProviderDto { Name = active?.Model is null ? null : active.Name };
+            return new ActiveModelProviderDto { Name = active };
         }
     }
 }

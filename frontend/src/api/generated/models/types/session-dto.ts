@@ -24,7 +24,8 @@ export const sessionDtoCleanupFailureEnum = {
     ProviderRefused: "ProviderRefused",
     ProviderUnavailable: "ProviderUnavailable",
     BadModelOutput: "BadModelOutput",
-    Interrupted: "Interrupted"
+    Interrupted: "Interrupted",
+    Stopped: "Stopped"
 } as const;
 
 export type SessionDtoCleanupFailureEnumKey = (typeof sessionDtoCleanupFailureEnum)[keyof typeof sessionDtoCleanupFailureEnum];

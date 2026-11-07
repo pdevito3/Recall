@@ -615,7 +615,6 @@ namespace Recall.Server.Databases.Migrations
                         .UseCollation("BINARY");
 
                     b.Property<string>("ActivatedOn")
-                        .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("activated_on");
 

@@ -39,9 +39,9 @@ public static class UpdateModelProvider
 
             var active = await dbContext.ModelProviders
                 .TagWithOperationCallSite("model_providers.update.active")
-                .NewestActivationFirst()
+                .ActiveFirst()
                 .Select(p => p.Id)
-                .FirstAsync(cancellationToken);
+                .FirstOrDefaultAsync(cancellationToken);
 
             _logger.Here().Information("Updated model provider {ModelProviderId}", provider.Id);
             return provider.ToDto(keys, active == provider.Id);

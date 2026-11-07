@@ -3183,6 +3183,60 @@
         }
       }
     },
+    "/api/v1/sessions/{id}/cleanup/stop": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Stops a running Cleanup. Raw and Cleaned stay as they are, and a new Cleanup can start. A Session with no running Cleanup stays as it is.",
+        "operationId": "StopCleanup",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
     "/api/v1/sessions/{id}/cleanup/stream": {
       "post": {
         "tags": [
@@ -4971,7 +5025,8 @@
               "ProviderRefused",
               "ProviderUnavailable",
               "BadModelOutput",
-              "Interrupted"
+              "Interrupted",
+              "Stopped"
             ],
             "type": "string",
             "description": "The code of CleanupFailure of a `failed` event."
@@ -6069,7 +6124,8 @@
               "ProviderRefused",
               "ProviderUnavailable",
               "BadModelOutput",
-              "Interrupted"
+              "Interrupted",
+              "Stopped"
             ],
             "type": "string",
             "description": "Why the last Cleanup failed. It is a closed code, and the words of a model provider never come here."

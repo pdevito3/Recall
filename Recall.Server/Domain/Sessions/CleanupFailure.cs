@@ -10,4 +10,5 @@ public enum CleanupFailure
     ProviderUnavailable = 4,
     BadModelOutput = 5,
     Interrupted = 6,
+    Stopped = 7,
 }

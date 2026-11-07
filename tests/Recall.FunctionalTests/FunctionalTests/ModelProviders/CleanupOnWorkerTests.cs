@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
+using BackWave;
 using BackWave.Monitor;
 using BackWave.Storage;
 using Microsoft.Data.Sqlite;
@@ -19,6 +20,7 @@ using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Dtos;
 using Recall.Server.Domain.Sessions.Jobs;
 using Recall.Server.Resources.Entrypoints.Jobs;
+using Recall.Server.Resources.Jobs;
 using Shouldly;
 using TestUtilities;
 
@@ -157,6 +159,90 @@ public class CleanupOnWorkerTests
         finished.CleanedText.ShouldContain("teh market (cleaned)");
         finished.RawText.ShouldBe(raw);
         fake.RequestBodies.Count(body => body.Contains("teh market", StringComparison.Ordinal)).ShouldBe(1);
+    }
+
+    [Test]
+    [Property("Rule", "SES-42")]
+    public async Task a_person_stops_a_hung_call_on_the_page_and_runs_it_again_on_a_worker()
+    {
+        // Arrange
+        var key = CleanupScenario.NewKey();
+        await using var fake = await FakeModelProvider.StartAsync(key);
+        fake.Behavior.Mode = FakeMode.Hold;
+        fake.Behavior.DelayMs = 300_000;
+        using var owner = await OwnerAsync();
+        await ConnectAsync(owner, fake, key);
+        var marker = $"stopped{Guid.NewGuid():N}";
+        var session = await SessionWithWordsAsync(owner, marker);
+        var raw = (await ReadAsync<SessionDto>(await SendAsync(owner, HttpMethod.Post, ApiRoutes.Sessions.Cleanup(session.Id)), HttpStatusCode.Accepted)).RawText;
+        await WaitUntilAsync(() => fake.RequestBodies.Count(body => body.Contains(marker, StringComparison.Ordinal)) == 1);
+
+        // Act
+        var stopped = await ReadAsync<SessionDto>(await SendAsync(owner, HttpMethod.Post, ApiRoutes.Sessions.StopCleanup(session.Id)), HttpStatusCode.OK);
+        fake.Behavior.Mode = FakeMode.Normal;
+        await ReadAsync<SessionDto>(await SendAsync(owner, HttpMethod.Post, ApiRoutes.Sessions.Cleanup(session.Id)), HttpStatusCode.Accepted);
+        var finished = await SessionAfterRunAsync(owner, session.Id);
+
+        // Assert
+        stopped.CleanupStatus.ShouldBe(nameof(CleanupStatus.Failed));
+        stopped.CleanupFailure.ShouldBe(nameof(CleanupFailure.Stopped));
+        stopped.RawText.ShouldBe(raw);
+        finished.CleanupStatus.ShouldBe(nameof(CleanupStatus.Clean));
+        finished.RawText.ShouldBe(raw);
+        fake.RequestBodies.Count(body => body.Contains(marker, StringComparison.Ordinal)).ShouldBe(2);
+    }
+
+    [Test]
+    [Property("Rule", "SES-43")]
+    public async Task hung_calls_of_one_queue_hold_two_workers_and_leave_the_others_to_other_queues()
+    {
+        // Arrange
+        var key = CleanupScenario.NewKey();
+        await using var fake = await FakeModelProvider.StartAsync(key);
+        var hung = $"hung{Guid.NewGuid():N}";
+        fake.Behavior.Mode = FakeMode.Hold;
+        fake.Behavior.HoldOnly = hung;
+        fake.Behavior.DelayMs = 300_000;
+        using var owner = await OwnerAsync();
+        await ConnectAsync(owner, fake, key);
+        var sessions = new List<SessionDto>();
+        for (var i = 0; i < CleanupQueues.JobsAtOnceInAQueue + 2; i++)
+        {
+            var session = await SessionWithWordsAsync(owner, $"{hung} {i}");
+            await ReadAsync<SessionDto>(await SendAsync(owner, HttpMethod.Post, ApiRoutes.Sessions.Cleanup(session.Id)), HttpStatusCode.Accepted);
+            sessions.Add(session);
+        }
+
+        await WaitUntilAsync(() => fake.RequestBodies.Count(body => body.Contains(hung, StringComparison.Ordinal)) >= CleanupQueues.JobsAtOnceInAQueue);
+        await Task.Delay(TimeSpan.FromSeconds(3));
+        var callsWhileFull = fake.RequestBodies.Count(body => body.Contains(hung, StringComparison.Ordinal));
+
+        // Act
+        var free = await SessionWithWordsAsync(owner, $"free{Guid.NewGuid():N}");
+        await ReadAsync<SessionDto>(await SendAsync(owner, HttpMethod.Post, ApiRoutes.Sessions.Cleanup(free.Id)), HttpStatusCode.Accepted);
+        var work = await Host.WithDatabaseAsync(database => database.Sessions.IgnoreQueryFilters().Where(s => s.Id == free.Id).Select(s => new { s.UserId, s.TenantId, s.CleanupRunId }).FirstAsync());
+        var otherQueue = CleanupQueues.All.First(queue => queue != CleanupQueues.Of(work.TenantId));
+        await Host.Services.GetRequiredService<BackWaveClient>().EnqueueAsync(new CleanupSession(free.Id, work.UserId, work.TenantId, work.CleanupRunId!), DateTimeOffset.UtcNow, otherQueue);
+        var finished = await SessionAfterRunAsync(owner, free.Id);
+        var stillHung = await ReadSessionAsync(owner, sessions[0].Id);
+        foreach (var session in sessions)
+            await ReadAsync<SessionDto>(await SendAsync(owner, HttpMethod.Post, ApiRoutes.Sessions.StopCleanup(session.Id)), HttpStatusCode.OK);
+
+        // Assert
+        callsWhileFull.ShouldBe(CleanupQueues.JobsAtOnceInAQueue);
+        finished.CleanupStatus.ShouldBe(nameof(CleanupStatus.Clean));
+        stillHung.CleanupStatus.ShouldBe(nameof(CleanupStatus.Running));
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        var deadline = DateTimeOffset.UtcNow + WaitLimit;
+        while (!condition())
+        {
+            if (DateTimeOffset.UtcNow > deadline)
+                throw new TimeoutException($"The condition did not hold in {WaitLimit}.");
+            await Task.Delay(TimeSpan.FromMilliseconds(50));
+        }
     }
 
     [Test]

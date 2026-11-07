@@ -14,7 +14,7 @@ public static class AddModelProvider
 {
     public sealed record Command(ModelProviderForCreationDto Dto) : IRequest<ModelProviderDto>;
 
-    public sealed class Handler(AppDbContext dbContext, IPermissionGuard permissions, ApiKeyProtector keys, TimeProvider timeProvider)
+    public sealed class Handler(AppDbContext dbContext, IPermissionGuard permissions, ApiKeyProtector keys)
         : IRequestHandler<Command, ModelProviderDto>
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
@@ -27,7 +27,7 @@ public static class AddModelProvider
 
             var provider = await RootLock.Tenant.RunSharedAsync(dbContext, tenantId, async ct =>
             {
-                var connected = ModelProvider.Connect(tenantId, ModelProvider.KindOf(request.Dto.Kind), request.Dto.Name, request.Dto.BaseUrl, protectedKey, timeProvider.GetUtcNow());
+                var connected = ModelProvider.Connect(tenantId, ModelProvider.KindOf(request.Dto.Kind), request.Dto.Name, request.Dto.BaseUrl, protectedKey);
                 await dbContext.ModelProviders.AddAsync(connected, ct);
                 await dbContext.SaveChangesAsync(ct);
                 return connected;
@@ -35,7 +35,7 @@ public static class AddModelProvider
 
             Activity.Current?.SetTag("app.model_provider_id", provider.Id);
             _logger.Here().Information("Connected model provider {ModelProviderId} of kind {ModelProviderKind}", provider.Id, provider.Kind);
-            return provider.ToDto(keys, isActive: true);
+            return provider.ToDto(keys, isActive: false);
         }
     }
 }

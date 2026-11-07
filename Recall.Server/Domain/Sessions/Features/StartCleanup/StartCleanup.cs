@@ -11,6 +11,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using ModelProviders;
 using Resources;
+using Resources.Jobs;
 using Serilog;
 using UserSettings;
 
@@ -39,14 +40,13 @@ public static class StartCleanup
 
                 var hasModel = await dbContext.ModelProviders
                     .TagWithOperationCallSite("sessions.start_cleanup.provider")
-                    .NewestActivationFirst()
-                    .Select(p => p.Model)
-                    .FirstOrDefaultAsync(cancellationToken) is not null;
-                ValidationException.Must(hasModel, CleanupField, "An Admin must connect a model provider and pick a model first.");
+                    .ActiveFirst()
+                    .AnyAsync(cancellationToken);
+                ValidationException.Must(hasModel, CleanupField, "An Admin must connect a model provider, pick a model, and make it active first.");
 
                 var runId = session.BeginCleanup();
                 await dbContext.SaveAndEnqueueAsync(
-                    async (jobs, ct) => await jobs.EnqueueAsync(new CleanupSession(session.Id, session.UserId, session.TenantId, runId), DateTimeOffset.UtcNow, ct),
+                    async (jobs, ct) => await jobs.EnqueueOnAsync(new CleanupSession(session.Id, session.UserId, session.TenantId, runId), DateTimeOffset.UtcNow, CleanupQueues.Of(session.TenantId), ct),
                     cancellationToken);
                 _logger.Here().Information("Started Cleanup {CleanupRunId} of session {SessionId}", runId, session.Id);
             }

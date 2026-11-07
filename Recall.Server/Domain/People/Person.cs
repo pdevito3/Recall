@@ -1,5 +1,6 @@
 namespace Recall.Server.Domain.People;
 
+using Databases;
 using Exceptions;
 
 public class Person : BaseEntity, ITenantable, IJournalOwned
@@ -25,9 +26,10 @@ public class Person : BaseEntity, ITenantable, IJournalOwned
     public void Rename(string label)
     {
         ValidationException.ThrowWhenNullOrWhitespace(label, LabelField, "Please provide a name.");
-        var trimmed = label.Trim();
+        ValidationException.ThrowWhenHasCharacterNotStorable(label, LabelField, "The name has a character that is not allowed.");
+        var trimmed = VisibleText.OneLine(label);
+        ValidationException.ThrowWhenNullOrWhitespace(trimmed, LabelField, "Please provide a name.");
         ValidationException.ThrowWhenLongerThan(trimmed, LabelMaxLength, LabelField, $"The name must not have more than {LabelMaxLength} characters.");
-        ValidationException.ThrowWhenHasCharacterNotStorable(trimmed, LabelField, "The name has a character that is not allowed.");
         Label = trimmed;
     }
 

@@ -33,7 +33,8 @@ public sealed class CleanupOutput
 
     /// <summary>
     /// Null when the words are not usable. A model can put words around the object, so this reads from the first brace to the
-    /// last one. Each list drops a value that the app cannot store, and a value that is blank or too long.
+    /// last one. Each list loses each hidden character, and drops a value that the app cannot store, a value that is blank or too
+    /// long, and a Mood outside the list of the app.
     /// </summary>
     public static CleanupOutput? Parse(string modelText)
     {
@@ -59,7 +60,7 @@ public sealed class CleanupOutput
         if (cleanedMarkdown is null || string.IsNullOrWhiteSpace(cleanedMarkdown) || cleanedMarkdown.Length > Session.DraftMaxLength || !StorableText.CanStore(cleanedMarkdown))
             return null;
 
-        var recap = synopsis?.Trim() ?? string.Empty;
+        var recap = VisibleText.Without(synopsis ?? string.Empty).Trim();
         if (recap.Length > Session.SynopsisMaxLength || !StorableText.CanStore(recap))
             return null;
 
@@ -68,13 +69,13 @@ public sealed class CleanupOutput
             recap,
             Values(topics, Session.MetadataValueMaxLength),
             Values(people, People.Person.LabelMaxLength),
-            Values(moods, Session.MetadataValueMaxLength).Select(Mood.Canonical).Distinct(StringComparer.OrdinalIgnoreCase).ToList());
+            Values(moods, Session.MetadataValueMaxLength).Where(Mood.IsKnown).Select(Mood.Canonical).Distinct(StringComparer.OrdinalIgnoreCase).ToList());
     }
 
     private static List<string> Values(IEnumerable<string?>? values, int maxLength) => (values ?? [])
-        .Where(value => !string.IsNullOrWhiteSpace(value))
-        .Select(value => value!.Trim())
-        .Where(value => value.Length <= maxLength && StorableText.CanStore(value))
+        .Where(value => value is not null && StorableText.CanStore(value))
+        .Select(value => VisibleText.OneLine(value!))
+        .Where(value => value.Length > 0 && value.Length <= maxLength)
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .Take(MaxSuggestions)
         .ToList();
