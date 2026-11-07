@@ -29,7 +29,7 @@ export type DraftSaveResultDto = {
     */
     outcome: DraftSaveResultDtoOutcomeEnumKey;
     /**
-     * @description After `Won` or `Unchanged`, the base of the next save. After `Kept`, the number at which the Draft took these words: read the Session before the next save. After `Lost`, null: read the Session, merge, and save from the number of the read, with a new `savedAt`.
+     * @description After `Won`, `Unchanged`, or `Kept`, the number of a Draft that held these words, and the base of the next save. After `Lost`, null: read the Session, merge, and save from the number of the read, with a new `savedAt`.
      *
      * Format: `int32`
      * @type integer | undefined

@@ -23,7 +23,6 @@ public sealed record DraftSlot(string Text, int DraftRevision, int LatestRevisio
     public DraftSlot Rewritten(string text, DateTimeOffset now) => new(text, LatestRevision + 1, LatestRevision + 1, now);
 }
 
-/// <summary>The answer of the first try of a save. <paramref name="DraftTookAt"/> is the number at which the Draft took the words, and null when this save lost. SES-8.</summary>
 public readonly record struct DraftAnswer(int? DraftTookAt);
 
 /// <summary>What a save does to a Draft. <c>DraftRevision</c> is the number that the reply names, or null after a loss. SES-36.</summary>

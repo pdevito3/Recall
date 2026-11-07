@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Recall.Server.Databases.Migrations
 {
-    /// <inheritdoc />
     public partial class RemoveTheClockFromDraftSaves : Migration
     {
         // EF drops a column with a table rebuild, and a rebuild loses the triggers of a journal table (ADR 0020). SQLite drops
@@ -13,7 +12,6 @@ namespace Recall.Server.Databases.Migrations
         private static void DropColumnInPlace(MigrationBuilder migrationBuilder, string table, string column)
             => migrationBuilder.Sql($"ALTER TABLE {table} DROP COLUMN {column};");
 
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             DropColumnInPlace(migrationBuilder, "sessions", "last_transcript_revision");
@@ -25,7 +23,6 @@ namespace Recall.Server.Databases.Migrations
             }
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             foreach (var table in new[] { "raw_revisions", "cleaned_revisions" })

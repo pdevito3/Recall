@@ -18,7 +18,6 @@ public sealed class DraftSave
 
     public int BaseRevision { get; }
 
-    /// <summary>The time that the client sent, in UTC. With the words, it says that a save is a replay. SES-8.</summary>
     public DateTimeOffset SavedAt { get; }
 
     public static DraftSave Of(string text, int baseRevision, DateTimeOffset savedAt)
