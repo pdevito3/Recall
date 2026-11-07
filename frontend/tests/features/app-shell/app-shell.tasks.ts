@@ -117,10 +117,6 @@ export function appShellPage(page: Page) {
       return box.y + box.height / 2
     },
 
-    async pageSideScrollRange() {
-      return page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
-    },
-
     async pageScrollRange() {
       return page.evaluate(() => document.documentElement.scrollHeight - document.documentElement.clientHeight)
     },
