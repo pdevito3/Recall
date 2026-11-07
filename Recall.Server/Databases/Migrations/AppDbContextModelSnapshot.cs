@@ -1181,6 +1181,107 @@ namespace Recall.Server.Databases.Migrations
                     b.ToTable("sessions", (string)null);
                 });
 
+            modelBuilder.Entity("Recall.Server.Domain.Summaries.Summary", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id")
+                        .UseCollation("BINARY");
+
+                    b.Property<string>("Content")
+                        .HasMaxLength(20000)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("content");
+
+                    b.Property<string>("Failure")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("failure");
+
+                    b.Property<string>("GeneratedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("generated_at");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("LastModifiedOn")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_modified_on");
+
+                    b.Property<string>("Period")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("period");
+
+                    b.Property<string>("RunId")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("run_id")
+                        .UseCollation("BINARY");
+
+                    b.Property<Guid?>("RunJobId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("run_job_id");
+
+                    b.Property<string>("RunState")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("run_state");
+
+                    b.Property<int>("SourceCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("source_count");
+
+                    b.Property<string>("SourceFingerprint")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("source_fingerprint");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("start_date");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("tenant_id")
+                        .UseCollation("BINARY");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id")
+                        .UseCollation("BINARY");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_summaries");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_summaries_tenant_id");
+
+                    b.HasIndex("UserId", "RunJobId")
+                        .HasDatabaseName("ix_summaries_user_id_run_job_id");
+
+                    b.HasIndex("UserId", "Period", "StartDate")
+                        .IsUnique()
+                        .HasDatabaseName("ix_summaries_user_id_period_start_date");
+
+                    b.ToTable("summaries", (string)null);
+                });
+
             modelBuilder.Entity("Recall.Server.Domain.Sync.SyncChange", b =>
                 {
                     b.Property<long>("Sequence")
@@ -1640,6 +1741,23 @@ namespace Recall.Server.Databases.Migrations
                         .OnDelete(DeleteBehavior.ClientNoAction)
                         .IsRequired()
                         .HasConstraintName("fk_sessions_users_user_id");
+                });
+
+            modelBuilder.Entity("Recall.Server.Domain.Summaries.Summary", b =>
+                {
+                    b.HasOne("Recall.Server.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.ClientNoAction)
+                        .IsRequired()
+                        .HasConstraintName("fk_summaries_tenants_tenant_id");
+
+                    b.HasOne("Recall.Server.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.ClientNoAction)
+                        .IsRequired()
+                        .HasConstraintName("fk_summaries_users_user_id");
                 });
 
             modelBuilder.Entity("Recall.Server.Domain.UserSettings.UserSetting", b =>

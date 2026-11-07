@@ -8,6 +8,7 @@ using BackWave.Sqlite;
 using Databases;
 using Domain.Recordings.Jobs;
 using Domain.Sessions.Jobs;
+using Domain.Summaries.Jobs;
 
 public static class JobHosting
 {
@@ -51,6 +52,17 @@ public static class JobHosting
         Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
     };
 
+    /// <summary>One worker for each queue, and a queue runs one job at a time, so a tenant holds one worker at most.</summary>
+    public static WorkerGroupOptions SummaryWorkers(JobOptions settings) => new()
+    {
+        Name = "summaries",
+        PoolSize = SummaryQueues.Count * SummaryQueues.JobsAtOnceInAQueue,
+        Policy = SummaryQueues.Policy,
+        PollInterval = TimeSpan.FromSeconds(settings.PollSeconds),
+        ShutdownBudget = JobShutdownBudget,
+        Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
+    };
+
     /// <summary>A queue limit is what a tenant can hold, and the pool has room for each queue at its limit.</summary>
     public static WorkerGroupOptions CleanupWorkers(JobOptions settings) => new()
     {
@@ -84,7 +96,7 @@ public static class JobHosting
         });
         // A hosted service starts in the order of its registration, so each limit is in place before a worker group can claim.
         if (settingsAtRegistration.RunWorkers || !inDevelopmentOrTest)
-            builder.Services.AddHostedService<CleanupQueueLimits>();
+            builder.Services.AddHostedService<QueueLimits>();
         builder.Services.AddBackWave(backwave =>
         {
             backwave.UseStore(services => new SqliteJobStore(new SqliteStoreOptions
@@ -100,16 +112,21 @@ public static class JobHosting
                 backwave.AddWorkerGroup(SystemWorkers(settingsAtRegistration));
                 backwave.AddWorkerGroup(CleanupWorkers(settingsAtRegistration));
                 backwave.AddWorkerGroup(TranscriptionWorkers(settingsAtRegistration));
+                backwave.AddWorkerGroup(SummaryWorkers(settingsAtRegistration));
                 builder.Services.AddHostedService<JobHostWatch>();
                 builder.Services.AddSingleton<CleanupJobWatch>();
                 builder.Services.AddHostedService(services => services.GetRequiredService<CleanupJobWatch>());
                 builder.Services.AddHostedService<RecordingSweepService>();
+                builder.Services.AddSingleton<SummaryJobWatch>();
+                builder.Services.AddHostedService(services => services.GetRequiredService<SummaryJobWatch>());
+                builder.Services.AddHostedService<SummaryScheduleSync>();
             }
         });
         builder.Services.AddBackWaveDashboardMetrics();
         builder.Services.AddSingleton<JobHostStatus>();
         builder.Services.AddSingleton<SaveJobs>();
         builder.Services.AddSingleton<RunningCleanups>();
+        builder.Services.AddSingleton<SummarySchedules>();
         builder.Services.AddHealthChecks().AddCheck<JobHostHealthCheck>(HealthCheckName);
     }
 }

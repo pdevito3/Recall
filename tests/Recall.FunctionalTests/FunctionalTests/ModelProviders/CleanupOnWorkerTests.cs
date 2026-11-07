@@ -16,6 +16,7 @@ using Recall.FunctionalTests.FunctionalTests.Recordings;
 using Recall.Server.Domain.ModelProviders;
 using Recall.Server.Domain.ModelProviders.Dtos;
 using Recall.Server.Domain.Recordings.Dtos;
+using Recall.Server.Domain.Recordings.Jobs;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Dtos;
 using Recall.Server.Domain.Sessions.Jobs;
@@ -247,8 +248,10 @@ public class CleanupOnWorkerTests
         var tenantId = await Host.WithDatabaseAsync(database => database.Sessions.IgnoreQueryFilters().Where(s => s.Id == session.Id).Select(s => s.TenantId).FirstAsync());
         var hashed = CleanupQueues.Of(tenantId);
         var store = Host.Services.GetRequiredService<IJobStore>();
-        // Each owner of this host joins one tenant, and a tenant stays in the queue that it uses. So the stopped Cleanups of
-        // an earlier test must end first, or this tenant keeps its own queue and the rule under test never runs.
+
+        // Each owner of this host joins one tenant, and a tenant stays in the queue of a provider job that has not ended. So
+        // the jobs of an earlier test must end first, or this tenant keeps its own queue and the rule under test never runs.
+        await CancelWaitingProviderJobsAsync(store);
         await WaitUntilAsync(async () => !(await CleanupQueues.UnfinishedAsync(store, CancellationToken.None)).Any(job => job.TenantId == tenantId));
         var otherTenant = new CleanupSession("ses_other", "usr_other", $"ten_other{Guid.NewGuid():N}", "run_other");
         var held = await Host.Services.GetRequiredService<BackWaveClient>().EnqueueAsync(otherTenant, DateTimeOffset.UtcNow.AddDays(1), hashed);
@@ -307,6 +310,15 @@ public class CleanupOnWorkerTests
         used.CleanedText.ShouldContain($"{marker} (cleaned)");
         used.CleanedHasHandEdits.ShouldBeFalse();
         used.WaitingCleanupRevision.ShouldBeNull();
+    }
+
+    /// <summary>A job that waits for a later try is cancelled, because its backoff can be longer than the wait. A leased job ends soon.</summary>
+    private static async Task CancelWaitingProviderJobsAsync(IJobStore store)
+    {
+        foreach (var wireName in new[] { CleanupJob.WireName, TranscribeRecordingJob.CloudWireName })
+        foreach (var state in new[] { JobState.Scheduled, JobState.AwaitingParent })
+        foreach (var waiting in await store.ListJobsAsync(new JobQuery { State = state, WireName = wireName }))
+            await store.CancelJobAsync(waiting.JobId, "test", DateTimeOffset.UtcNow);
     }
 
     private static async Task WaitUntilAsync(Func<Task<bool>> condition)
