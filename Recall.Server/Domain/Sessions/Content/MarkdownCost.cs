@@ -19,6 +19,17 @@ internal static class MarkdownCost
     /// </summary>
     public const long MostLinkWork = 500_000_000;
 
+    /// <summary>
+    /// The blocks that one line can be in: the signs that open a quote or a list item at its start, and half of its indent,
+    /// because a list item that goes on takes two columns or more. The parser reads the rest of the line again for each new
+    /// list item and the indent again for each one that goes on, so 300 000 signs took 10 s, and 5 000 blocks in indented
+    /// lines took 12 s. The JSON writer refuses a depth over 64, and each block takes two levels of it, so a line in more
+    /// than 32 blocks stays as the source in any case. The bound is twice that, so an indent of code has room.
+    /// </summary>
+    public const int DeepestBlock = 64;
+
+    private const string Blank = " \t";
+
     public static bool IsAboveBound(string markdown)
     {
         var marks = 0;
@@ -53,7 +64,82 @@ internal static class MarkdownCost
         }
 
         linkWork += linkStarts * (markdown.Length - blockStart);
-        return marks > MostMarks || linkWork > MostLinkWork;
+        return marks > MostMarks || linkWork > MostLinkWork || NestsTooDeep(markdown);
+    }
+
+    private static bool NestsTooDeep(string markdown)
+    {
+        for (var start = 0; start < markdown.Length;)
+        {
+            var end = markdown.IndexOf('\n', start);
+            end = end < 0 ? markdown.Length : end;
+            if (Depth(markdown.AsSpan(start, end - start).TrimEnd('\r')) > DeepestBlock)
+                return true;
+            start = end + 1;
+        }
+
+        return false;
+    }
+
+    private static int Depth(ReadOnlySpan<char> line)
+    {
+        line = line[..ThematicBreakStart(line)];
+        var columns = 0;
+        var at = 0;
+        for (; at < line.Length && line[at] is ' ' or '\t'; at++)
+            columns += line[at] == '\t' ? 4 : 1;
+
+        var depth = columns / 2;
+        while (at < line.Length)
+        {
+            var isQuote = line[at] == '>';
+            var after = isQuote ? at + 1 : ListMarkerEnd(line, at);
+            if (after < 0)
+                return depth;
+
+            var gap = line.Length - after - line[after..].TrimStart(Blank).Length;
+            if (!isQuote && gap == 0 && after < line.Length)
+                return depth;
+
+            depth++;
+
+            // Four columns past the sign start indented code, which opens no block.
+            if (gap > 4)
+                return depth;
+            at = after + gap;
+        }
+
+        return depth;
+    }
+
+    private static int ListMarkerEnd(ReadOnlySpan<char> line, int at)
+    {
+        if (line[at] is '-' or '+' or '*')
+            return at + 1;
+
+        var digits = 0;
+        while (at + digits < line.Length && digits <= 9 && char.IsAsciiDigit(line[at + digits]))
+            digits++;
+        return digits is > 0 and <= 9 && at + digits < line.Length && line[at + digits] is '.' or ')' ? at + digits + 1 : -1;
+    }
+
+    /// <summary>A line that ends in three or more of one of "-", "*", and "_", with only blanks between, ends in a thematic break.</summary>
+    private static int ThematicBreakStart(ReadOnlySpan<char> line)
+    {
+        var at = line.TrimEnd(Blank).Length;
+        if (at == 0 || line[at - 1] is not ('-' or '*' or '_'))
+            return line.Length;
+
+        var sign = line[at - 1];
+        var signs = 0;
+        while (at > 0 && (line[at - 1] == sign || line[at - 1] is ' ' or '\t'))
+        {
+            at--;
+            if (line[at] == sign)
+                signs++;
+        }
+
+        return signs >= 3 ? at : line.Length;
     }
 
     private static bool IsMark(char character) => character is '|' or '*' or '_' or '~' or '=' or '+' or '`' or '[' or ']' or '<' or '&' or '#' or '!' or '\\';

@@ -28,6 +28,16 @@ public class MarkdownCostTests
             Repeat("- a\n", 250_000),
             Repeat("*", 499_000) + "a" + Repeat("*", 499_000),
             Repeat("[a](x ", 66_000),
+            Repeat("- ", 300_000) + "x",
+            Repeat("- ", 499_990) + "x",
+            Repeat("> ", 300_000) + "x",
+            Repeat(">", 990_000) + "x",
+            Repeat("1. ", 300_000) + "x",
+            Repeat("1) ", 300_000) + "x",
+            Repeat("- * ", 30_000) + "-",
+            Repeat("- > 1. ", 100_000) + "x",
+            "- a\n" + Repeat(" ", 6) + Repeat("- ", 300_000) + "x",
+            string.Concat(Enumerable.Range(0, 170).Select(line => Repeat(" ", line * 64) + Repeat("- ", 32) + "x\n")),
         ];
         return texts.Select<string, Func<string>>(text => () => text);
     }
@@ -86,6 +96,44 @@ public class MarkdownCostTests
 
         // Assert
         ProseMirrorToPlainText.Render(json!).Trim().ShouldBe(markdown);
+    }
+
+    [Test]
+    [Arguments("> ")]
+    [Arguments("- ")]
+    [Arguments("1. ")]
+    public void blocks_that_nest_to_the_bound_already_end_in_the_source(string sign)
+    {
+        // Arrange: so the bound on the nesting of blocks takes no form from the document.
+        var markdown = Repeat(sign, MarkdownCost.DeepestBlock) + "x";
+        MarkdownCost.IsAboveBound(markdown).ShouldBeFalse();
+
+        // Act
+        var json = MarkdownToProseMirror.ConvertToJson(markdown);
+
+        // Assert
+        ProseMirrorToPlainText.Render(json).Trim().ShouldBe(markdown.Trim());
+    }
+
+    [Test]
+    [Arguments("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -")]
+    [Arguments("> * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *")]
+    [Arguments("-      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - x")]
+    [Arguments("1234567890. 1. 2. 3. 4. 5. 6. 7. 8. 9. 10. 11. 12. 13. 14. 15. 16. 17. 18. 19. 20. 21. 22. 23. 24. 25. 26. 27. 28. 29. 30. 31. 32. 33.")]
+    public void signs_that_open_no_block_are_under_the_bound(string markdown)
+    {
+        // Act and assert: a thematic break, indented code, and a number that no list can start with.
+        MarkdownCost.IsAboveBound(markdown).ShouldBeFalse();
+    }
+
+    [Test]
+    public void a_deep_indent_of_code_is_under_the_bound()
+    {
+        // Arrange
+        var markdown = "```\n" + Repeat("\t", 16) + "return;\n" + Repeat(" ", 120) + "}\n```";
+
+        // Act and assert
+        MarkdownCost.IsAboveBound(markdown).ShouldBeFalse();
     }
 
     [Test]
