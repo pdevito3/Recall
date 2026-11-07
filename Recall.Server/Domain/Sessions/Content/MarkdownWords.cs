@@ -23,9 +23,9 @@ internal static partial class MarkdownWords
         foreach (var link in parsed.Descendants<LinkInline>())
             CountCopiesOf(link, missing);
 
-        // An autolink is its text and its address, and the source has the words once.
-        foreach (var autolink in parsed.Descendants<AutolinkInline>())
-            CountWords(autolink.IsEmail ? $"mailto:{autolink.Url}" : autolink.Url, missing, 1);
+        // An autolink is its text and its address, and the source has the words once. A refused address is text only.
+        foreach (var address in parsed.Descendants<AutolinkInline>().Select(link => link.IsEmail ? $"mailto:{link.Url}" : link.Url).Where(LinkAddress.IsAllowed))
+            CountWords(address, missing, 1);
 
         return missing.All(word => word.Value <= inDocument.GetValueOrDefault(word.Key))
             && !parsed.Descendants<FencedCodeBlock>().Any(fence => !string.IsNullOrEmpty(fence.Arguments))
@@ -43,8 +43,8 @@ internal static partial class MarkdownWords
         if (link.Reference is not null)
             CountWords($"{link.Url} {link.Title}", missing, 1);
 
-        // A link with no visible text has its address as text and as the address.
-        if (link.FirstChild is null && link.Url is not null)
+        // A link with no visible text has its address as text and as the address. A refused address is text only.
+        if (link.FirstChild is null && link.Url is not null && LinkAddress.IsAllowed(link.Url))
             CountWords(link.Url, missing, 1);
     }
 

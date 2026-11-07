@@ -137,15 +137,15 @@ public partial class MarkdownWordsTests
     }
 
     [Test]
-    [Arguments("```js lost\ncode\n```\n\n<http://lost>", "js lost")]
-    [Arguments("```js lost\ncode\n```\n\n&lt;http://lost&gt;", "js lost")]
-    [Arguments("```js lost\ncode\n```\n\n<lost@example.com>", "js lost")]
-    [Arguments("```sql secret\nq\n```\n\n[**a** b](http://secret)", "sql secret")]
-    [Arguments("```sql secret\nq\n```\n\n[](http://secret)", "sql secret")]
-    [Arguments("```sql secret\nq\n```\n\n[a]\n\n[a]: http://secret", "sql secret")]
-    [Arguments("```sql secret\nq\n```\n\n[a]\n\n[a]: http://b \"secret\"", "sql secret")]
-    [Arguments("```js &lost;\ncode\n```", "&lost;")]
+    [Arguments("- foo [x] bar <http://x>", "[x]")]
+    [Arguments("- foo [x] bar <x@example.com>", "[x]")]
+    [Arguments("- foo [x] bar [**a** b](http://x)", "[x]")]
+    [Arguments("- foo [x] bar [](http://x)", "[x]")]
+    [Arguments("- foo [x] bar [a]\n\n[a]: http://x", "[x]")]
+    [Arguments("- foo [x] bar [a]\n\n[a]: http://b \"x\"", "[x]")]
     [Arguments("- foo [x] bar &lt;http://x&gt;", "[x]")]
+    [Arguments("```js lost\ncode\n```\n\n<http://lost>", "js lost")]
+    [Arguments("```js &lost;\ncode\n```", "&lost;")]
     public void a_word_that_the_document_holds_twice_cannot_hide_a_lost_word(string markdown, string kept)
     {
         // Act
@@ -153,6 +153,19 @@ public partial class MarkdownWordsTests
 
         // Assert
         plain.ShouldContain(kept);
+    }
+
+    [Test]
+    public void a_refused_address_of_a_link_leaves_the_rest_of_the_document_in_its_nodes()
+    {
+        // Act
+        var json = MarkdownToProseMirror.ConvertToJson("# w1\n\n<javascript:w2> and [](data:w3)");
+
+        // Assert
+        TypesIn(JsonNode.Parse(json)!.AsObject()).ShouldContain("heading");
+        json.ShouldNotContain("\"link\"");
+        foreach (var word in new[] { "w1", "w2", "w3" })
+            WordsIn(json).ShouldContain(word);
     }
 
     [Test]
