@@ -85,9 +85,25 @@ function missing<T>(items: T[], held: T[], key: (item: T) => string): T[] {
   })
 }
 
-/** Where both sides changed one place, the other side stays, and each item that the person added and the other side lacks goes after it. No item goes, and a merge of what a merge wrote adds nothing. */
-const keepTheirsAndAddMine = <T>(key: (item: T) => string): Resolve<T> => (base, mine, theirs) =>
-  [...theirs, ...missing(missing(mine, base, key), theirs, key)]
+/** Whether `list` holds each item of `part`, in the order of `part`. */
+function holdsInOrder<T>(list: T[], part: T[], key: (item: T) => string): boolean {
+  let at = 0
+  for (const item of list) if (at < part.length && key(item) === key(part[at])) at += 1
+  return at === part.length
+}
+
+/**
+ * Where both sides changed one place, the other side stays, and each item that the person added goes after it, also an
+ * item that the other side added too, so no item goes. When the other side holds the additions of the person in order,
+ * a merge or a save of the person wrote them, and nothing goes in. When the person holds the other side in order, the
+ * other side is an earlier save of the person, such as a save that won with no answer, and the side of the person stays.
+ */
+const keepTheirsAndAddMine = <T>(key: (item: T) => string): Resolve<T> => (base, mine, theirs) => {
+  const added = missing(mine, base, key)
+  if (holdsInOrder(theirs, added, key)) return theirs
+  if (missing(theirs, base, key).length > 0 && holdsInOrder(mine, theirs, key)) return mine
+  return [...theirs, ...added]
+}
 
 /**
  * A three-way merge: the change from `base` to `mine` goes into `theirs`. Each change of only one side applies.

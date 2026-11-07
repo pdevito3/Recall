@@ -34,6 +34,25 @@ test('words that both sides added at one place keep the other side first, and ea
   expect(plain(merged)).toEqual(['one three two'])
 })
 
+test('words that both sides added at one place all stay, also the words that both typed', () => {
+  const merged = mergeDraft(words('Words at the start.'), words('Words at the start. The second tab.'), words('Words at the start. The first tab.'))
+
+  expect(plain(merged)).toEqual(['Words at the start. The first tab. The second tab.'])
+})
+
+test('a merge of words that a merge wrote into one paragraph adds nothing', () => {
+  const [base, mine] = [words('Words at the start.'), words('Words at the start. The second tab.')]
+  const merged = mergeDraft(base, mine, words('Words at the start. The first tab.'))
+
+  expect(mergeDraft(base, mine, merged)).toBe(merged)
+})
+
+test('words of the person that the newest words hold in order, as after a save that won with no answer, do not show twice', () => {
+  const merged = mergeDraft(words('base'), words('base the first save and more'), words('base the first save'))
+
+  expect(plain(merged)).toEqual(['base the first save and more'])
+})
+
 test('new paragraphs that both sides added at one place stay paragraphs, theirs first', () => {
   const merged = mergeDraft(words('base'), words('base', 'my words'), words('base', 'a chunk'))
 

@@ -1,7 +1,11 @@
 import { QueryClient } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
+import type { JSONContent } from '@tiptap/react'
+
 import { ProblemDetailsError } from '@/lib/problem-details'
+
+import { parseDocument } from '../editor/content'
 
 vi.mock('@/api/generated/sessions/clients/add-session', () => ({ addSession: (request: never) => world.addSession(request) }))
 vi.mock('@/api/generated/sessions/clients/save-raw-draft', () => ({ saveRawDraft: (request: never) => world.saveRaw(request) }))
@@ -126,7 +130,7 @@ class ModelServer {
 
   appendChunk(row: Row, chunk: string) {
     const number = row.latestRevision + 1
-    row.text = row.text ? `${row.text} ${chunk}` : chunk
+    row.text = withChunk(row.text, chunk)
     row.revisions.push({ text: row.text, claimedAt: 'chunk', tookAt: number })
     row.savedAt = new Date().toISOString()
     row.draftRevision = number
@@ -240,7 +244,32 @@ interface Page {
   held: string | null
 }
 
-const tokensIn = (text: string): string[] => text.match(/\b[wc]\d+x\b/g) ?? []
+// A line break in a document is the escape `\n`, so a token can follow the letter `n`.
+const tokensIn = (text: string): string[] => text.match(/(?<=^|[^\w]|\\n)[wc]\d+x\b/g) ?? []
+
+/** The editor writes a document, so a word typed after a merge goes at the end of the last paragraph, and the text stays a document. */
+function typedInto(text: string, token: string): string {
+  const document = parseDocument(text)
+  if (!document) return text ? `${text} ${token}` : token
+  const blocks = document.content ?? []
+  const last = blocks[blocks.length - 1] as JSONContent | undefined
+  if (last?.type !== 'paragraph') return JSON.stringify({ ...document, content: [...blocks, { type: 'paragraph', content: [{ type: 'text', text: token }] }] })
+  const content = last.content ?? []
+  const end = content[content.length - 1] as JSONContent | undefined
+  const typed = end?.type === 'text' && !end.marks ? [...content.slice(0, -1), { ...end, text: `${end.text ?? ''} ${token}` }] : [...content, { type: 'text', text: content.length > 0 ? ` ${token}` : token }]
+  return JSON.stringify({ ...document, content: [...blocks.slice(0, -1), { ...last, content: typed }] })
+}
+
+/** A chunk of a recording joins as `RawTranscript.Append` on the Server joins it: a new paragraph of a document, or after an empty line of plain text. */
+function withChunk(text: string, chunk: string): string {
+  const paragraph = { type: 'paragraph', content: [{ type: 'text', text: chunk }] }
+  if (!text.trim()) return JSON.stringify({ type: 'doc', content: [paragraph] })
+  const document = parseDocument(text)
+  if (!document) return `${text}\n\n${chunk}`
+  const blocks = document.content ?? []
+  const isEmpty = blocks.length === 1 && blocks[0].type === 'paragraph' && (blocks[0].content ?? []).length === 0
+  return JSON.stringify({ ...document, content: [...(isEmpty ? [] : blocks), paragraph] })
+}
 
 class Tab {
   mod!: DraftSaverModule
@@ -324,11 +353,11 @@ class Tab {
     if (!page) return
     this.run(() => {
       if (page.editor === null) {
-        page.held = page.held === null ? token : `${page.held} ${token}`
+        page.held = typedInto(page.held ?? '', token)
         page.saver.holdInOutbox(page.held)
         return
       }
-      page.editor = page.editor ? `${page.editor} ${token}` : token
+      page.editor = typedInto(page.editor, token)
       page.saver.edit(page.editor)
     })
   }
