@@ -73,6 +73,15 @@ export const sessionsApi = {
     }
   },
 
+  draftSaveIsKept(session: SessionDto, { draftRevision, latestRevision }: { draftRevision: number; latestRevision: number }): MockRoute {
+    return {
+      method: 'put',
+      path: sessionsPaths.rawDraft(session.id),
+      status: 200,
+      body: { ...won(session, draftRevision), outcome: 'Kept', draftRevision, latestRevision },
+    }
+  },
+
   draftSaveIsUnchanged(session: SessionDto, { draftRevision, latestRevision }: { draftRevision: number; latestRevision: number }): MockRoute {
     return {
       method: 'put',

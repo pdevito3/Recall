@@ -270,13 +270,13 @@ test.describe('the status line', () => {
     await expect(journal.at.status('Saved at')).toBeVisible()
   })
 
-  test('does not say Saved for words that lost to a newer save', async ({ page, api }) => {
+  test('does not say Saved for words that a newer save pushed out of the Draft', async ({ page, api }) => {
     const session = aSession().build()
-    api.mock(sessionsApi.creates(session), sessionsApi.oneIs(session), sessionsApi.draftSaveLoses(session, { draftRevision: 3, latestRevision: 4 }))
+    api.mock(sessionsApi.creates(session), sessionsApi.oneIs(session), sessionsApi.draftSaveIsKept(session, { draftRevision: 2, latestRevision: 3 }))
     const journal = journalPage(page)
     await journal.open()
 
-    await journal.write('Words that lose')
+    await journal.write('Words that left the Draft')
 
     await expect(journal.at.status('Saved in History at')).toBeVisible()
     await expect(journal.at.savedAtStart).toHaveCount(0)

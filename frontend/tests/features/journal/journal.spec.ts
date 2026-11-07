@@ -9,6 +9,8 @@ import { entryPage, journalPage } from './journal.tasks'
 
 const created = aSession().build()
 
+const timesIn = (text: string, words: string) => text.split(words).length - 1
+
 test.describe('writing a new entry', () => {
   test('tells the person when the jobs that turn audio into text stopped', async ({ page, api }) => {
     api.mock(recordingsApi.jobsStopped('The background work stopped. The Owner must restart the server.'))
@@ -136,8 +138,8 @@ test.describe('writing a new entry', () => {
     expect(api.all('post', sessionsPaths.timeline)).toHaveLength(2)
   })
 
-  test('a save that loses says so, and Add my words joins them to the newest words with the cursor after them', async ({ page, api }) => {
-    api.mock(sessionsApi.creates(created), sessionsApi.oneIs(created), sessionsApi.draftSaveLoses(created, { draftRevision: 3, latestRevision: 4 }))
+  test('a save whose words left the Draft says so, and Add my words joins them to the newest words with the cursor after them', async ({ page, api }) => {
+    api.mock(sessionsApi.creates(created), sessionsApi.oneIs(created), sessionsApi.draftSaveIsKept(created, { draftRevision: 2, latestRevision: 3 }))
     const journal = journalPage(page)
     await journal.open()
     await journal.write('My words')
@@ -157,8 +159,8 @@ test.describe('writing a new entry', () => {
     await expect(journal.at.composer).toContainText('My wordsX')
   })
 
-  test('a save that loses can show the newest words, and the next save bases on them', async ({ page, api }) => {
-    api.mock(sessionsApi.creates(created), sessionsApi.oneIs(created), sessionsApi.draftSaveLoses(created, { draftRevision: 3, latestRevision: 4 }))
+  test('a save whose words left the Draft can show the newest words, and the next save bases on them', async ({ page, api }) => {
+    api.mock(sessionsApi.creates(created), sessionsApi.oneIs(created), sessionsApi.draftSaveIsKept(created, { draftRevision: 2, latestRevision: 3 }))
     const journal = journalPage(page)
     await journal.open()
     await journal.write('My words')
@@ -239,17 +241,27 @@ test.describe('writing a new entry', () => {
     await expect(journal.at.composer).toHaveText('Words before a reload')
   })
 
-  test('a save over words that the create found on the Server loses and shows the notice', async ({ page, api }) => {
+  test('a save over words that the create found on the Server loses, then joins them and saves from the read', async ({ page, api }) => {
     const replayed = aSession().atRevision(1).saying('Words from another tab').build()
-    api.mock(sessionsApi.creates(replayed), sessionsApi.draftSaveLoses(replayed, { draftRevision: 1, latestRevision: 2 }), sessionsApi.oneIs(replayed))
+    api.mock(sessionsApi.creates(replayed), { ...sessionsApi.draftSaveLoses(replayed, { draftRevision: 1, latestRevision: 2 }), delayMs: 300 }, sessionsApi.oneIs(replayed))
     const journal = journalPage(page)
     await journal.open()
 
-    await journal.write('Words from this tab')
+    await journal.typeWithoutWaiting('Words from this tab')
+    await expect.poll(() => api.all('put', sessionsPaths.rawDraft(replayed.id)).length).toBe(1)
+    api.mock(sessionsApi.draftSaveWins(replayed, 2))
 
-    expect((api.last('put', sessionsPaths.rawDraft(replayed.id))?.body as { baseRevision: number }).baseRevision).toBe(0)
-    await expect(journal.at.conflict('The words on this page are safe in History.')).toBeVisible()
-    await expect(journal.at.composer).toHaveText('Words from this tab')
+    await expect(journal.at.mergedNotice).toBeVisible()
+    await expect(journal.at.status('Saved at')).toBeVisible()
+    const [lost, merged] = api.all('put', sessionsPaths.rawDraft(replayed.id)).map(({ body }) => body as { baseRevision: number; text: string; savedAt: string })
+    expect(lost.baseRevision).toBe(0)
+    expect(merged.baseRevision).toBe(1)
+    expect(merged.savedAt).not.toBe(lost.savedAt)
+    expect(timesIn(merged.text, 'Words from this tab')).toBe(1)
+    expect(timesIn(merged.text, 'Words from another tab')).toBe(1)
+    await expect(journal.at.composer).toContainText('Words from this tab')
+    await expect(journal.at.composer).toContainText('Words from another tab')
+    expect(await journal.at.conflict('safe in History').count()).toBe(0)
   })
 
   test('a return to the journal with a read that fails opens the last known words and keeps the entry', async ({ page, api }) => {
@@ -294,7 +306,7 @@ test.describe('writing a new entry', () => {
   })
 
   test('a conflict from before a return still shows on the way back, with the words of the person', async ({ page, api }) => {
-    api.mock(sessionsApi.creates(created), sessionsApi.oneIs(created), sessionsApi.draftSaveLoses(created, { draftRevision: 3, latestRevision: 4 }))
+    api.mock(sessionsApi.creates(created), sessionsApi.oneIs(created), sessionsApi.draftSaveIsKept(created, { draftRevision: 2, latestRevision: 3 }))
     const journal = journalPage(page)
     await journal.open()
     await journal.write('My words')
@@ -365,7 +377,7 @@ test.describe('writing a new entry', () => {
   })
 
   test('Done during a read of the newest words leaves the next entry empty', async ({ page, api }) => {
-    api.mock(sessionsApi.creates(created), sessionsApi.oneIs(created), sessionsApi.draftSaveLoses(created, { draftRevision: 3, latestRevision: 4 }))
+    api.mock(sessionsApi.creates(created), sessionsApi.oneIs(created), sessionsApi.draftSaveIsKept(created, { draftRevision: 2, latestRevision: 3 }))
     const journal = journalPage(page)
     await journal.open()
     await journal.write('My words')
@@ -560,7 +572,7 @@ test.describe('the timeline', () => {
     await expect(journal.at.composer).toBeEmpty()
   })
 
-  test('a save that loses after Done brings the words back with the notice', async ({ page, api }) => {
+  test('a save whose words left the Draft after Done brings the words back with the notice', async ({ page, api }) => {
     const session = aSession().build()
     api.mock(sessionsApi.creates(session), sessionsApi.draftSaveWins(session, 1))
     const journal = journalPage(page)
@@ -568,12 +580,36 @@ test.describe('the timeline', () => {
     await journal.write('Words on the phone')
     await expect(journal.at.status('Saved at')).toBeVisible()
 
-    api.mock({ ...sessionsApi.draftSaveLoses(session, { draftRevision: 3, latestRevision: 4 }), delayMs: 300 }, sessionsApi.oneIs(session))
+    api.mock({ ...sessionsApi.draftSaveIsKept(session, { draftRevision: 2, latestRevision: 3 }), delayMs: 300 }, sessionsApi.oneIs(session))
     await journal.typeWithoutWaiting(' and more')
     await journal.finish()
 
     await expect(journal.at.conflict('The words on this page are safe in History.')).toBeVisible()
     await expect(journal.at.composer).toHaveText('Words on the phone and more')
+  })
+
+  test('a save that loses after Done merges the words into the newest words and saves them, and the next entry stays empty', async ({ page, api }) => {
+    const session = aSession().build()
+    api.mock(sessionsApi.creates(session), sessionsApi.draftSaveWins(session, 1))
+    const journal = journalPage(page)
+    await journal.open()
+    await journal.write('Words on the phone')
+    await expect(journal.at.status('Saved at')).toBeVisible()
+
+    api.mock({ ...sessionsApi.draftSaveLoses(session, { draftRevision: 2, latestRevision: 3 }), delayMs: 300 })
+    await journal.typeWithoutWaiting(' and more')
+    await journal.finish()
+    await expect.poll(() => api.all('put', sessionsPaths.rawDraft(session.id)).length).toBe(2)
+    const newest = { ...aSession().atRevision(3).saying('Words on the phone', 'From the other device').build(), id: session.id, clientSessionId: session.clientSessionId }
+    api.mock(sessionsApi.oneIs(newest), sessionsApi.draftSaveWins(session, 4))
+
+    await expect.poll(() => api.all('put', sessionsPaths.rawDraft(session.id)).length).toBe(3)
+    const merged = api.last('put', sessionsPaths.rawDraft(session.id))?.body as { baseRevision: number; text: string }
+    expect(merged.baseRevision).toBe(3)
+    expect(timesIn(merged.text, 'Words on the phone and more')).toBe(1)
+    expect(timesIn(merged.text, 'From the other device')).toBe(1)
+    await expect(journal.at.composer).toBeEmpty()
+    expect(await journal.at.conflict('safe in History').count()).toBe(0)
   })
 
   test('a refusal after Done keeps the entry, so a later save and a reload open its words', async ({ page, api }) => {
@@ -666,6 +702,42 @@ test.describe('the journal on a phone', () => {
 
     await expect(journal.at.entryLink(longWord)).toBeVisible()
     expect(await journal.pageSideScrollRange()).toBe(0)
+  })
+
+  test('a save that loses to another device merges the words of the person into the newest words, saves them, and says so', async ({ page, api }) => {
+    const session = aSession().build()
+    api.mock(sessionsApi.creates(session), sessionsApi.draftSaveWins(session, 1))
+    const journal = journalPage(page)
+    await journal.open()
+    await journal.write('My words')
+    await expect(journal.at.status('Saved at')).toBeVisible()
+
+    api.mock({ ...sessionsApi.draftSaveLoses(session, { draftRevision: 2, latestRevision: 3 }), delayMs: 300 })
+    await journal.typeWithoutWaiting(' and more')
+    await expect.poll(() => api.all('put', sessionsPaths.rawDraft(session.id)).length).toBe(2)
+    const newest = { ...aSession().atRevision(3).saying('My words', 'From the other device').build(), id: session.id, clientSessionId: session.clientSessionId }
+    api.mock(sessionsApi.oneIs(newest), sessionsApi.draftSaveWins(session, 4))
+
+    await expect(journal.at.mergedNotice).toBeVisible()
+    await expect(journal.at.status('Saved at')).toBeVisible()
+    expect(api.all('get', sessionsPaths.one(session.id)).length).toBeGreaterThan(0)
+    const [, lost, merged, ...more] = api.all('put', sessionsPaths.rawDraft(session.id)).map(({ body }) => body as { baseRevision: number; text: string; savedAt: string })
+    expect(more).toEqual([])
+    expect(merged.baseRevision).toBe(3)
+    expect(merged.savedAt).not.toBe(lost.savedAt)
+    expect(timesIn(merged.text, 'My words')).toBe(1)
+    expect(timesIn(merged.text, 'My words and more')).toBe(1)
+    expect(timesIn(merged.text, 'From the other device')).toBe(1)
+    await expect(journal.at.composer).toContainText('My words and more')
+    await expect(journal.at.composer).toContainText('From the other device')
+    expect(await journal.at.conflict('safe in History').count()).toBe(0)
+    await expect(journal.at.mergedNotice).toBeInViewport({ ratio: 1 })
+    await expect(journal.at.dismissMerged).toBeInViewport({ ratio: 1 })
+    expect(await journal.pageSideScrollRange()).toBe(0)
+
+    await journal.at.dismissMerged.click()
+
+    await expect(journal.at.mergedNotice).toHaveCount(0)
   })
 
   test('reaches Logout from the sidebar sheet', async ({ page }) => {

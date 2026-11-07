@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Page, type Request } from '@playwright/test'
 import { sessionsPaths } from '@tests/support/api/sessions-api'
 import { settingsPaths } from '@tests/support/api/settings-api'
 import { actorSubject } from '@tests/support/auth/actors'
@@ -201,6 +201,23 @@ export function entryPage(page: Page) {
 
     aSaveAnswered(id: string) {
       return putTo(sessionsPaths.rawDraft(id))
+    },
+
+    /** When each save of the Draft went and when its answer came, in the order that they went. */
+    timesOfDraftSaves(id: string) {
+      const saves: { sentAt: number; answeredAt: number | null }[] = []
+      const sent = new Map<Request, (typeof saves)[number]>()
+      page.on('request', (request) => {
+        if (request.method() !== 'PUT' || new URL(request.url()).pathname !== sessionsPaths.rawDraft(id)) return
+        const save = { sentAt: Date.now(), answeredAt: null }
+        saves.push(save)
+        sent.set(request, save)
+      })
+      page.on('response', (response) => {
+        const save = sent.get(response.request())
+        if (save) save.answeredAt = Date.now()
+      })
+      return saves
     },
 
     async startARead(id: string) {

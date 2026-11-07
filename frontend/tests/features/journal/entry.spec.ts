@@ -5,6 +5,8 @@ import { expect, test } from '@tests/support/fixtures'
 import { STALE_VERSION_PROBLEM_TYPE } from '@/lib/problem-details'
 import { entryPage, unsentWords } from './journal.tasks'
 
+const timesIn = (text: string, words: string) => text.split(words).length - 1
+
 test.describe('an entry', () => {
   test('shows its words and a breadcrumb back to the journal', async ({ page, api }) => {
     const session = aSession().saying('Hello there').build()
@@ -42,9 +44,9 @@ test.describe('an entry', () => {
     expect(save.text).toContain('more')
   })
 
-  test('a save that loses keeps the words on the page, says where they are, and can show the newest', async ({ page, api }) => {
+  test('a save whose words left the Draft keeps the words on the page, says where they are, and can show the newest', async ({ page, api }) => {
     const session = aSession().atRevision(4).saying('Mine').build()
-    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }))
+    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveIsKept(session, { draftRevision: 5, latestRevision: 6 }))
     const entry = entryPage(page)
     await entry.open(session.id)
 
@@ -60,32 +62,33 @@ test.describe('an entry', () => {
     await expect(entry.at.editor).toBeFocused()
   })
 
-  test('a save that loses says that it is in History, and the words of the person join the newest Draft', async ({ page, api }) => {
+  test('a save whose words left the Draft says that they are in History, and Add my words joins only the change of the person to the newest Draft', async ({ page, api }) => {
     const session = aSession().atRevision(4).saying('Mine').build()
-    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }))
+    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveIsKept(session, { draftRevision: 5, latestRevision: 6 }))
     const entry = entryPage(page)
     await entry.open(session.id)
     await entry.edit(session.id, ' edited')
     await expect(entry.at.status('Saved in History at')).toBeVisible()
-    const lost = api.last('put', sessionsPaths.rawDraft(session.id))?.body as { savedAt: string }
+    const first = api.last('put', sessionsPaths.rawDraft(session.id))?.body as { savedAt: string }
 
-    const newest = { ...aSession().atRevision(5).saying('From the other device').build(), id: session.id, clientSessionId: session.clientSessionId }
+    const newest = { ...aSession().atRevision(6).saying('Mine', 'From the other device').build(), id: session.id, clientSessionId: session.clientSessionId }
     api.mock(sessionsApi.oneIs(newest), sessionsApi.draftSaveWins(session, 7))
     await entry.at.addMyWords.click()
 
     await expect(entry.at.status('Saved at')).toBeVisible()
     await expect(entry.at.conflict('The words on this page are safe in History.')).toHaveCount(0)
-    const kept = api.last('put', sessionsPaths.rawDraft(session.id))?.body as { baseRevision: number; text: string; savedAt: string }
-    expect(kept.baseRevision).toBe(5)
-    expect(kept.text).toContain('edited')
-    expect(kept.text).toContain('From the other device')
-    expect(kept.savedAt).not.toBe(lost.savedAt)
+    const joined = api.last('put', sessionsPaths.rawDraft(session.id))?.body as { baseRevision: number; text: string; savedAt: string }
+    expect(joined.baseRevision).toBe(6)
+    expect(timesIn(joined.text, 'Mine')).toBe(1)
+    expect(timesIn(joined.text, 'Mine edited')).toBe(1)
+    expect(timesIn(joined.text, 'From the other device')).toBe(1)
+    expect(joined.savedAt).not.toBe(first.savedAt)
     await expect(entry.at.editor).toBeFocused()
   })
 
   test('words typed during a read of the newest words stay on the page', async ({ page, api }) => {
     const session = aSession().atRevision(4).saying('Mine').build()
-    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }))
+    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveIsKept(session, { draftRevision: 5, latestRevision: 6 }))
     const entry = entryPage(page)
     await entry.open(session.id)
     await entry.edit(session.id, ' edited')
@@ -181,7 +184,7 @@ test.describe('an entry', () => {
     await expect(entry.at.words('Mine edited')).toBeVisible()
   })
 
-  test('a lost save whose read fails goes again, and says where the words are once a read works', async ({ page, api }) => {
+  test('a lost save whose read fails reads again, and merges and saves once a read works', async ({ page, api }) => {
     const session = aSession().atRevision(4).saying('Mine').build()
     api.mock(sessionsApi.oneIs(session))
     const entry = entryPage(page)
@@ -189,6 +192,35 @@ test.describe('an entry', () => {
 
     api.mock(
       sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }),
+      sessionsApi.oneFails(session.id, aProblem().refusing('Not now.')),
+    )
+    await entry.edit(session.id, ' edited')
+    await expect(entry.at.status('Not saved yet')).toBeVisible()
+    expect(api.all('put', sessionsPaths.rawDraft(session.id))).toHaveLength(1)
+
+    const newest = { ...aSession().atRevision(6).saying('Mine', 'From the other device').build(), id: session.id, clientSessionId: session.clientSessionId }
+    api.mock(sessionsApi.oneIs(newest), sessionsApi.draftSaveWins(session, 7))
+
+    // The first retry waits 2 s, and the second 4 s.
+    await expect(entry.at.mergedNotice).toBeVisible({ timeout: 10_000 })
+    await expect(entry.at.status('Saved at')).toBeVisible()
+    expect(api.all('put', sessionsPaths.rawDraft(session.id))).toHaveLength(2)
+    const merged = api.last('put', sessionsPaths.rawDraft(session.id))?.body as { baseRevision: number; text: string }
+    expect(merged.baseRevision).toBe(6)
+    expect(timesIn(merged.text, 'Mine edited')).toBe(1)
+    expect(timesIn(merged.text, 'From the other device')).toBe(1)
+    await expect(entry.at.words('From the other device')).toBeVisible()
+    expect(await entry.at.conflict('safe in History').count()).toBe(0)
+  })
+
+  test('a kept save whose read fails goes again, and says where the words are once a read works', async ({ page, api }) => {
+    const session = aSession().atRevision(4).saying('Mine').build()
+    api.mock(sessionsApi.oneIs(session))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+
+    api.mock(
+      sessionsApi.draftSaveIsKept(session, { draftRevision: 5, latestRevision: 6 }),
       sessionsApi.oneFails(session.id, aProblem().refusing('Not now.')),
     )
     await entry.edit(session.id, ' edited')
@@ -204,13 +236,13 @@ test.describe('an entry', () => {
     await expect(entry.at.words('From the other device')).toBeVisible()
   })
 
-  test('a save that loses while the person is on another page opens with its words and the notice', async ({ page, api }) => {
+  test('a save whose words left the Draft while the person is on another page opens with its words and the notice', async ({ page, api }) => {
     const session = aSession().atRevision(4).saying('Mine').build()
     api.mock(sessionsApi.oneIs(session), sessionsApi.timelineIs([]))
     const entry = entryPage(page)
     await entry.open(session.id)
 
-    api.mock({ ...sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }), delayMs: 2000 })
+    api.mock({ ...sessionsApi.draftSaveIsKept(session, { draftRevision: 5, latestRevision: 6 }), delayMs: 2000 })
     const answered = entry.aSaveAnswered(session.id)
     await entry.editWithoutWaiting(' edited')
     await expect.poll(() => api.all('put', sessionsPaths.rawDraft(session.id)).length).toBe(1)
@@ -227,15 +259,15 @@ test.describe('an entry', () => {
     await expect(entry.at.conflict('The words on this page are safe in History.')).toHaveCount(0)
   })
 
-  test('a second save that loses on another page shows the notice again on the way back', async ({ page, api }) => {
+  test('a second save whose words left the Draft on another page shows the notice again on the way back', async ({ page, api }) => {
     const session = aSession().atRevision(4).saying('Mine').build()
-    api.mock(sessionsApi.oneIs(session), sessionsApi.timelineIs([]), sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }))
+    api.mock(sessionsApi.oneIs(session), sessionsApi.timelineIs([]), sessionsApi.draftSaveIsKept(session, { draftRevision: 5, latestRevision: 6 }))
     const entry = entryPage(page)
     await entry.open(session.id)
     await entry.edit(session.id, ' edited')
     await expect(entry.at.status('Saved in History at')).toBeVisible()
 
-    api.mock({ ...sessionsApi.draftSaveLoses(session, { draftRevision: 7, latestRevision: 8 }), delayMs: 2000 })
+    api.mock({ ...sessionsApi.draftSaveIsKept(session, { draftRevision: 7, latestRevision: 8 }), delayMs: 2000 })
     const answered = entry.aSaveAnswered(session.id)
     await entry.editWithoutWaiting(' twice')
     await expect.poll(() => api.all('put', sessionsPaths.rawDraft(session.id)).length).toBe(2)
@@ -249,7 +281,7 @@ test.describe('an entry', () => {
 
   test('newest words that do not load say so, and the words on the page stay', async ({ page, api }) => {
     const session = aSession().atRevision(4).saying('Mine').build()
-    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }))
+    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveIsKept(session, { draftRevision: 5, latestRevision: 6 }))
     const entry = entryPage(page)
     await entry.open(session.id)
     await entry.edit(session.id, ' edited')
@@ -542,6 +574,63 @@ test.describe('the topics of an entry on a phone', () => {
     await expect(entry.at.removeTopic(topic)).toBeInViewport({ ratio: 1 })
     expect(await entry.sideScrollRange()).toBe(0)
     expect((await entry.at.removeTopic(topic).boundingBox())?.width).toBe(44)
+  })
+})
+
+test.describe('an entry that another device changed', () => {
+  test('on a phone, a save that loses merges the words of the person into the newest words, saves them, and says so', async ({ page, api }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    const session = aSession().atRevision(4).saying('Mine').build()
+    api.mock(sessionsApi.oneIs(session))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+    const readsBefore = api.all('get', sessionsPaths.one(session.id)).length
+
+    api.mock({ ...sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }), delayMs: 300 })
+    await entry.typeWithoutWaiting(' edited')
+    await expect.poll(() => api.all('put', sessionsPaths.rawDraft(session.id)).length).toBe(1)
+    const newest = { ...aSession().atRevision(6).saying('Mine', 'From the other device').build(), id: session.id, clientSessionId: session.clientSessionId }
+    api.mock(sessionsApi.oneIs(newest), sessionsApi.draftSaveWins(session, 7))
+
+    await expect(entry.at.mergedNotice).toBeVisible()
+    await expect(entry.at.status('Saved at')).toBeVisible()
+    expect(api.all('get', sessionsPaths.one(session.id)).length).toBeGreaterThan(readsBefore)
+    const [lost, merged, ...more] = api.all('put', sessionsPaths.rawDraft(session.id)).map(({ body }) => body as { baseRevision: number; text: string; savedAt: string })
+    expect(more).toEqual([])
+    expect(merged.baseRevision).toBe(6)
+    expect(merged.savedAt).not.toBe(lost.savedAt)
+    expect(timesIn(merged.text, 'Mine')).toBe(1)
+    expect(timesIn(merged.text, 'Mine edited')).toBe(1)
+    expect(timesIn(merged.text, 'From the other device')).toBe(1)
+    await expect(entry.at.words('Mine edited')).toBeVisible()
+    await expect(entry.at.words('From the other device')).toBeVisible()
+    expect(await entry.at.conflict('safe in History').count()).toBe(0)
+    await expect(entry.at.mergedNotice).toBeInViewport({ ratio: 1 })
+    await expect(entry.at.dismissMerged).toBeInViewport({ ratio: 1 })
+    expect(await entry.sideScrollRange()).toBe(0)
+
+    await entry.at.dismissMerged.click()
+
+    await expect(entry.at.mergedNotice).toHaveCount(0)
+  })
+
+  test('after 3 saves that lose in a row, the next read waits, the status says so, and the words stay', async ({ page, api }) => {
+    const session = aSession().atRevision(4).saying('Mine').build()
+    api.mock(sessionsApi.oneIs(session))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+    const newest = { ...aSession().atRevision(6).saying('Mine', 'From the other device').build(), id: session.id, clientSessionId: session.clientSessionId }
+    api.mock(sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }), sessionsApi.oneIs(newest))
+    const saves = entry.timesOfDraftSaves(session.id)
+
+    await entry.typeWithoutWaiting(' edited')
+
+    await expect(entry.at.status('Another tab or device keeps changing this entry. Your words are safe, and they wait to save.')).toBeVisible({ timeout: 10_000 })
+    expect(saves).toHaveLength(3)
+    await expect(entry.at.words('Mine edited')).toBeVisible()
+    await expect.poll(() => saves.length, { timeout: 10_000 }).toBe(4)
+    expect(saves[3].sentAt - (saves[2].answeredAt ?? Infinity)).toBeGreaterThanOrEqual(900)
+    await expect(entry.at.words('Mine edited')).toBeVisible()
   })
 })
 
