@@ -5,9 +5,11 @@ using BackWave.Monitor;
 using BackWave.Storage;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
 using Recall.FakeModelProvider;
 using Recall.FunctionalTests.FunctionalTests.Sessions;
 using Recall.Server.Domain.ModelProviders;
+using Recall.Server.Domain.ModelProviders.Clients;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Cleanup;
 using Recall.Server.Domain.Sessions.Dtos;
@@ -207,6 +209,54 @@ public class CleanupJobTests : TestBase
         var session = await scenario.ReadAsync(started.Id);
 
         // Assert
+        session.CleanupStatus.ShouldBe(nameof(CleanupStatus.Failed));
+        session.CleanupFailure.ShouldBe(nameof(CleanupFailure.ProviderUnavailable));
+    }
+
+    private static IJobStore StoreWithFirstClaimAt(DateTimeOffset firstClaim)
+    {
+        var store = Substitute.For<IJobStore>();
+        store.GetJobHistoryAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns([new JobTransition(0, firstClaim, JobState.Leased, 1, null)]);
+        return store;
+    }
+
+    [Test]
+    [Property("Rule", "SES-37")]
+    public async Task a_later_try_past_the_time_of_the_whole_run_ends_with_no_call()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        var started = await scenario.SessionWithRunningCleanupAsync(Words);
+        var store = StoreWithFirstClaimAt(DateTimeOffset.UtcNow - new ProviderLimits().Call - TimeSpan.FromMinutes(1));
+
+        // Act
+        await scenario.RunJobAsync(started.Id, attempt: 2, store: store);
+        var session = await scenario.ReadAsync(started.Id);
+
+        // Assert
+        session.CleanupStatus.ShouldBe(nameof(CleanupStatus.Failed));
+        session.CleanupFailure.ShouldBe(nameof(CleanupFailure.ProviderUnavailable));
+        scenario.Fake.CompletionCalls.ShouldBe(0);
+    }
+
+    [Test]
+    [Property("Rule", "SES-37")]
+    public async Task a_later_try_has_only_the_time_that_the_run_has_left()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        scenario.Fake.Behavior.Mode = FakeMode.Hold;
+        scenario.Fake.Behavior.DelayMs = 120_000;
+        var started = await scenario.SessionWithRunningCleanupAsync(Words);
+        var store = StoreWithFirstClaimAt(DateTimeOffset.UtcNow - new ProviderLimits().Call + TimeSpan.FromSeconds(3));
+
+        // Act
+        await scenario.RunJobAsync(started.Id, attempt: 2, store: store).WaitAsync(TimeSpan.FromSeconds(30));
+        var session = await scenario.ReadAsync(started.Id);
+
+        // Assert
+        scenario.Fake.CompletionCalls.ShouldBe(1);
         session.CleanupStatus.ShouldBe(nameof(CleanupStatus.Failed));
         session.CleanupFailure.ShouldBe(nameof(CleanupFailure.ProviderUnavailable));
     }

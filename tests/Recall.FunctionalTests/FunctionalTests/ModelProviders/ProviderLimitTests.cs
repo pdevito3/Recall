@@ -66,10 +66,12 @@ public class ProviderLimitTests
         await using var _ = fake;
 
         // Act
+        var started = DateTimeOffset.UtcNow;
         var reply = await CompleteAsync(ClientWith(Short), endpoint);
 
-        // Assert
+        // Assert: the call limit of these limits is 30 s, so an end before it is the idle limit.
         FailureOf(reply).Kind.ShouldBe(ProviderFailureKind.Unavailable);
+        (DateTimeOffset.UtcNow - started).ShouldBeLessThan(TimeSpan.FromSeconds(20));
     }
 
     [Test]

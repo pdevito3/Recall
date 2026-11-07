@@ -24,12 +24,6 @@ public sealed class ProviderReadGuard(ProviderLimits limits) : DelegatingHandler
 
         var isStream = response.Content.Headers.ContentType?.MediaType == StreamMediaType;
         var byteLimit = isStream ? limits.StreamBytes : limits.BodyBytes;
-        if (response.Content.Headers.ContentLength > byteLimit)
-        {
-            response.Dispose();
-            throw new ProviderAnswerTooLargeException();
-        }
-
         var body = new GuardedStream(await response.Content.ReadAsStreamAsync(cancellationToken), limits.Idle, byteLimit, isStream ? limits.StreamLineBytes : long.MaxValue);
         var guarded = new StreamContent(body);
         foreach (var header in response.Content.Headers)

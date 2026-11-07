@@ -3,6 +3,7 @@ namespace Recall.FunctionalTests.FunctionalTests.ModelProviders;
 using System.Net;
 using System.Net.Http.Json;
 using BackWave.Jobs;
+using BackWave.Storage;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -121,9 +122,9 @@ internal sealed class CleanupScenario : IAsyncDisposable
         .FirstAsync());
 
     /// <summary>Runs the job the way that a worker does, with one claim.</summary>
-    public async Task RunJobAsync(string sessionId, int attempt = 1, string? runId = null, CancellationToken cancellationToken = default)
+    public async Task RunJobAsync(string sessionId, int attempt = 1, string? runId = null, IJobStore? store = null, CancellationToken cancellationToken = default)
     {
-        var job = ActivatorUtilities.CreateInstance<CleanupJob>(Services);
+        var job = store is null ? ActivatorUtilities.CreateInstance<CleanupJob>(Services) : ActivatorUtilities.CreateInstance<CleanupJob>(Services, store);
         await job.CleanupSessionAsync(
             sessionId,
             Member.Id,

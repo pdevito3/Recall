@@ -121,6 +121,46 @@ public class ProviderTextAndAddressTests
     }
 
     [Test]
+    public void a_key_with_a_mark_in_each_few_letters_goes_in_each_form_that_changes_its_marks()
+    {
+        // Arrange: no run of this key is long enough to match as a cut, so only the whole encoded form can match.
+        const string marked = "ab+cd/ef=gh+ij/kl=mn+op/qr=st+uv/wx=yz+01/23=45+67";
+        var encoded = Uri.EscapeDataString(marked);
+        var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(marked));
+        var urlSafe = base64.TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+        // Act and Assert
+        ProviderFailureText.Shown($"bad {encoded} here", marked, "fallback").ShouldNotContain(encoded);
+        ProviderFailureText.Shown($"bad {base64} here", marked, "fallback").ShouldNotContain(base64);
+        ProviderFailureText.Shown($"bad {urlSafe} here", marked, "fallback").ShouldNotContain(urlSafe);
+    }
+
+    [Test]
+    public void a_status_with_a_body_in_another_format_gives_the_status_and_a_fixed_text()
+    {
+        // Act
+        var failure = ProviderFailureText.ForStatus(ModelProviderKind.OpenAiCompatible, 500, "<html>secret words of a service</html>", null);
+
+        // Assert
+        failure.DisplayMessage.ShouldBe("The model provider answered with the status 500.");
+        failure.StatusCode.ShouldBe(500);
+    }
+
+    [Test]
+    public void a_fault_of_the_network_can_retry_and_any_other_fault_means_that_the_bytes_will_not_change()
+    {
+        // Act
+        var network = ProviderCall.FailureFor(new HttpRequestException("reset"));
+        var other = ProviderCall.FailureFor(new InvalidOperationException("no such shape"));
+        var wrapped = ProviderCall.FailureFor(new InvalidOperationException("wrapped", new System.Text.Json.JsonException("bad")));
+
+        // Assert
+        network.Kind.ShouldBe(ProviderFailureKind.Unavailable);
+        other.Kind.ShouldBe(ProviderFailureKind.BadOutput);
+        wrapped.Kind.ShouldBe(ProviderFailureKind.BadOutput);
+    }
+
+    [Test]
     [Arguments("http://169.254.169.254/v1")]
     [Arguments("http://[fe80::1]:8080/v1")]
     [Arguments("http://[::ffff:169.254.169.254]/v1")]
