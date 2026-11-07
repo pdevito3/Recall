@@ -1,6 +1,7 @@
 import type { Key } from 'react-aria-components'
 import { Tab, TabList, TabPanel, Tabs } from 'react-aria-components'
 
+import { Page } from '@/components/page'
 import { PageHeading } from '@/components/page-heading'
 import { browserTimeZone, todayAt } from '@/lib/zoned-time'
 
@@ -24,7 +25,7 @@ export function SummariesPage({ period, date, onPeriodChange }: SummariesPagePro
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 max-sm:[&_[data-slot=button]]:h-11 max-sm:[&_[data-slot=button]]:min-w-11">
+    <Page>
       <PageHeading>Summaries</PageHeading>
       {/* Manual activation: an arrow key moves the focus, and only Enter or Space opens a period and starts its run. */}
       <Tabs selectedKey={period} onSelectionChange={handleSelectionChange} keyboardActivation="manual" className="flex flex-col gap-6">
@@ -45,6 +46,6 @@ export function SummariesPage({ period, date, onPeriodChange }: SummariesPagePro
           </TabPanel>
         ))}
       </Tabs>
-    </div>
+    </Page>
   )
 }

@@ -1,4 +1,5 @@
 import { fileStoreApi } from '@tests/support/api/file-store-api'
+import { summariesApi, transcriptionEngineApi } from '@tests/support/api/summaries-api'
 import { usersApi } from '@tests/support/api/users-api'
 import { expect, test } from '@tests/support/fixtures'
 import { useDefaultFontSize } from '@tests/support/screen'
@@ -24,6 +25,31 @@ for (const viewport of [
       await homePage(page).open()
 
       expect(await appShellPage(page).pageScrollRange()).toBe(0)
+    })
+  })
+}
+
+for (const width of [1280, 390]) {
+  test.describe(`the frame of each page at ${width} px`, () => {
+    test.use({ viewport: { width, height: 800 } })
+
+    test('the heading of Summaries and of Transcription starts where the heading of About starts', async ({ page, api }) => {
+      api.mock(summariesApi.dayOpens('2026-01-15'), transcriptionEngineApi.isLocal())
+      const shell = appShellPage(page)
+
+      await shell.openAbout()
+      const aboutX = (await shell.at.aboutHeading.boundingBox())?.x
+      await page.goto('/summaries?period=Day&date=2026-01-15')
+      await expect(shell.at.summariesHeading).toBeVisible()
+      const summariesX = (await shell.at.summariesHeading.boundingBox())?.x
+      const summariesSideScroll = await shell.pageSideScrollRange()
+      await page.goto('/transcription-engine')
+      await expect(shell.at.transcriptionHeading).toBeVisible()
+
+      expect(summariesX).toBe(aboutX)
+      expect(summariesSideScroll).toBe(0)
+      expect((await shell.at.transcriptionHeading.boundingBox())?.x).toBe(aboutX)
+      expect(await shell.pageSideScrollRange()).toBe(0)
     })
   })
 }

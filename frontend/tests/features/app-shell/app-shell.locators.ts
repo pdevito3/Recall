@@ -2,6 +2,8 @@ import type { Page } from '@playwright/test'
 
 export const appShell = (page: Page) => ({
   aboutHeading: page.getByRole('heading', { level: 1, name: 'About' }),
+  summariesHeading: page.getByRole('heading', { level: 1, name: 'Summaries' }),
+  transcriptionHeading: page.getByRole('heading', { level: 1, name: 'Transcription' }),
   aboutText: page.getByText('Recall is your private journal.', { exact: false }),
   currentPage: page.getByRole('navigation', { name: 'breadcrumb' }).getByRole('link'),
   contentInfoLandmarks: page.getByRole('contentinfo'),
