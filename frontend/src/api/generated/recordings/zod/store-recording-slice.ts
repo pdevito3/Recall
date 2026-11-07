@@ -12,6 +12,8 @@ export const storeRecordingSlicePathIdSchema = z.string()
 
 export const storeRecordingSlicePathIndexSchema = z.int32()
 
+export const storeRecordingSliceHeaderXRecallUserSchema = z.string().optional().describe('The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.')
+
 export const storeRecordingSliceStatus200Schema = recordingSliceDtoSchema
 
 export const storeRecordingSliceStatus401Schema = z.unknown()

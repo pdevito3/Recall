@@ -10,6 +10,14 @@ export type DeleteRecordingPath = {
     id: string;
 };
 
+export type DeleteRecordingHeaders = {
+    /**
+     * @description The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.
+     * @type string | undefined
+    */
+    "X-Recall-User"?: string;
+};
+
 export type DeleteRecordingStatus204 = unknown;
 
 export type DeleteRecordingStatus401 = unknown;
@@ -24,7 +32,7 @@ export type DeleteRecordingOptions = {
     body?: never;
     path: DeleteRecordingPath;
     query?: never;
-    headers?: never;
+    headers?: DeleteRecordingHeaders;
 };
 
 export type DeleteRecordingResponses = {
