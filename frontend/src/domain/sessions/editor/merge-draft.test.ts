@@ -185,6 +185,13 @@ test('a paragraph that the person goes on with, from a save of a closed tab that
   expect(plain(merged)).toEqual(['Lunch with Sam at noon', 'A chunk'])
 })
 
+test('from an empty Draft, a paragraph that each side went on with around one word shows that word once, next to a heading and a list', () => {
+  const merged = mergeDraft('', doc(heading('Plans'), list('Bread'), paragraph('Before lunch with Sam today')), words('lunch with Sam at noon'))
+
+  expect(plain(merged).join(' ').match(/lunch/g)).toEqual(['lunch'])
+  expect(plain(merged)).toEqual(['Plans', 'Bread', 'Before lunch with Sam at noon today'])
+})
+
 test('a block that both sides added at other places shows once, at the place of the other side', () => {
   const merged = mergeDraft(doc(heading('Day one'), paragraph('The sea')), doc(heading('Day one'), paragraph('A new line'), paragraph('The sea')), doc(heading('Day one'), paragraph('The sea'), paragraph('A new line'), paragraph('More')))
 

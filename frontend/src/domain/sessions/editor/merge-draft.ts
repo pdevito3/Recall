@@ -399,10 +399,12 @@ const resolveBlocks = (hasBase: boolean): Resolve<JSONContent> => (base, mine, t
  * `docs/ios-api-changes.md` ask. A block that only the person changed takes the change, so its words do not show twice.
  * Paragraphs that both sides changed merge word by word. A change of only the other side stays.
  * With no known base, the words that both hold are the base, as in the merge of the iOS client: a word that only one side holds stays.
+ * A base with no word, as an empty Draft, is no known base: each word of each side is an addition, so none can be a deletion.
  */
 export function mergeDraft(base: string | null, mine: string, theirs: string): string {
   const blocks = (text: string) => childrenOf(asDocument(text))
   const [ofMine, ofTheirs] = [blocks(mine), blocks(theirs)]
-  const ofBase = base === null ? commonBlocksOf(ofMine, ofTheirs) : blocks(base)
-  return JSON.stringify({ type: 'doc', content: mergeBlocks(ofBase, ofMine, ofTheirs, base !== null) })
+  const ofBase = base === null ? [] : blocks(base)
+  const hasBase = ofBase.some(holdsAWord)
+  return JSON.stringify({ type: 'doc', content: mergeBlocks(hasBase ? ofBase : commonBlocksOf(ofMine, ofTheirs), ofMine, ofTheirs, hasBase) })
 }
