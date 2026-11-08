@@ -1,7 +1,5 @@
 {
   "number": 1,
   "savedAt": "2026-06-01T08:05:00+00:00",
-  "text": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Lunch with \"},{\"type\":\"mention\",\"attrs\":{\"personId\":\"per_00000000000000000000000000000001\",\"label\":\"Sam\"}}]}]}",
-  "changeId": null,
-  "parentChangeId": null
+  "text": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Lunch with \"},{\"type\":\"mention\",\"attrs\":{\"personId\":\"per_00000000000000000000000000000001\",\"label\":\"Sam\"}}]}]}"
 }

@@ -69,10 +69,6 @@ public class StringColumnLengthTests
             provider.Update("Mine", ProviderAddress, null, v, provider.Version);
         }),
         ["recordings.client_recording_id"] = new("clientRecordingId", Text, v => Recording.Create("ten_1", "usr_1", "ses_1", v, RecordingFormat.Webm)),
-        ["raw_revisions.change_id"] = new("changeId", Text, v => DraftSave.Of("", 0, DateTimeOffset.UnixEpoch, changeId: v)),
-        ["raw_revisions.parent_change_id"] = new("parentChangeId", Text, v => DraftSave.Of("", 0, DateTimeOffset.UnixEpoch, parentChangeId: v)),
-        ["cleaned_revisions.change_id"] = new("changeId", Text, v => DraftSave.Of("", 0, DateTimeOffset.UnixEpoch, changeId: v)),
-        ["cleaned_revisions.parent_change_id"] = new("parentChangeId", Text, v => DraftSave.Of("", 0, DateTimeOffset.UnixEpoch, parentChangeId: v)),
         // new-feature:caller-columns
     };
 

@@ -39,16 +39,24 @@ namespace Recall.Server.Databases.Migrations
                 nullable: true);
         }
 
-        // EF drops a column with a table rebuild, and a rebuild loses the triggers of a journal table (ADR 0020). SQLite drops
-        // these columns in place, because no trigger or index reads them.
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            foreach (var table in new[] { "raw_revisions", "cleaned_revisions" })
-            {
-                migrationBuilder.Sql($"ALTER TABLE {table} DROP COLUMN change_id;");
-                migrationBuilder.Sql($"ALTER TABLE {table} DROP COLUMN parent_change_id;");
-            }
+            migrationBuilder.DropColumn(
+                name: "change_id",
+                table: "raw_revisions");
+
+            migrationBuilder.DropColumn(
+                name: "parent_change_id",
+                table: "raw_revisions");
+
+            migrationBuilder.DropColumn(
+                name: "change_id",
+                table: "cleaned_revisions");
+
+            migrationBuilder.DropColumn(
+                name: "parent_change_id",
+                table: "cleaned_revisions");
         }
     }
 }

@@ -3,18 +3,12 @@
     {
       "number": 2,
       "savedAt": "2026-06-01T08:01:00+00:00",
-      "length": 11,
-      "wasDraft": false,
-      "changeId": null,
-      "parentChangeId": null
+      "length": 11
     },
     {
       "number": 1,
       "savedAt": "2026-06-01T08:05:00+00:00",
-      "length": 189,
-      "wasDraft": true,
-      "changeId": null,
-      "parentChangeId": null
+      "length": 189
     }
   ],
   "nextCursor": null
