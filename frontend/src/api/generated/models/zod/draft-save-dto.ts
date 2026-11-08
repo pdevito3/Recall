@@ -9,4 +9,6 @@ export const draftSaveDtoSchema = z.object({
   text: z.string().max(4000000),
   baseRevision: z.int32().min(0).describe('The number of the Draft that the person edited. It is `0` for a Draft with no Revision. Only the number of the current Draft wins.'),
   savedAt: z.iso.datetime().describe('When the person saved. This time decides no save. With the words, it says that a save is a replay, so a replay sends the same time, and a new save sends a new time.'),
+  changeId: z.string().max(64).nullish().describe('An ID that the client made for these words. It decides no save, and the Revision of the save keeps it. A client with no IDs leaves it out.'),
+  parentChangeId: z.string().max(64).nullish().describe('The ID of the change that these words grew from, so that a client can find the base of a merge in the Revisions. It decides no save.'),
 })

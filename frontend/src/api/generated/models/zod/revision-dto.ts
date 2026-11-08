@@ -9,4 +9,6 @@ export const revisionDtoSchema = z.object({
   number: z.int32(),
   savedAt: z.iso.datetime(),
   text: z.string(),
+  changeId: z.string().nullish().describe('The ID that the client gave these words. Null for a save with no ID and for a write of the Server.'),
+  parentChangeId: z.string().nullish().describe('The ID of the change that these words grew from, as the client sent it.'),
 })

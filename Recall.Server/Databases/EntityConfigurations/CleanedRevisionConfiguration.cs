@@ -13,6 +13,8 @@ public sealed class CleanedRevisionConfiguration : IEntityTypeConfiguration<Clea
         builder.Property(e => e.SessionId).HasMaxLength(EntityId.MaxLength).UseCollation(EntityId.Collation);
         builder.Property(e => e.Number).ValueGeneratedNever();
         builder.Property(e => e.Text).IsRequired().HasMaxLength(Session.DraftMaxStoredLength);
+        builder.Property(e => e.ChangeId).HasMaxLength(DraftSave.ChangeIdMaxLength);
+        builder.Property(e => e.ParentChangeId).HasMaxLength(DraftSave.ChangeIdMaxLength);
         builder.Property(e => e.DeviceResultHash).HasMaxLength(CleanedRevision.DeviceResultHashLength);
 
         builder.ApplyTenanting(e => e.Session.TenantId);
