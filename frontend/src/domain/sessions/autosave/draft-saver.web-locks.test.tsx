@@ -56,6 +56,20 @@ test('a page that a dev build shows twice at its start edits the entry, and send
   expect(draftSaverFor(target, queryClient)).toBe(saver)
 })
 
+test('a page that comes back to an entry after its saver let the lock go edits the entry again', async () => {
+  const queryClient = new QueryClient()
+  // A saver stays in this tab for its entry, so this test takes an entry of its own.
+  const saver = draftSaverFor({ ...target, clientSessionId: 'entry-of-a-return' }, queryClient)
+  const leave = saver.subscribe(() => undefined)
+  await expect.poll(() => saver.getSnapshot().editing).toBe('here')
+
+  leave()
+  await expect.poll(() => saver.getSnapshot().editing).toBe('waiting')
+  saver.subscribe(() => undefined)
+
+  await expect.poll(() => saver.getSnapshot().editing).toBe('here')
+})
+
 /** Another tab that holds the lock of the entry until the test frees it. */
 function anotherTabHolds(name: string, options: LockOptions = {}) {
   let free = () => undefined as void
@@ -74,6 +88,8 @@ test('Edit here that a release drops before the lock answers leaves a later Edit
 
   lock.takeHere()
   lock.release()
+  // The lock manager answers the dropped steal, so the next need asks anew.
+  await new Promise((resolve) => setTimeout(resolve, 100))
   lock.need()
   await expect.poll(() => lock.editingPlace).toBe('here')
   const freeSecond = anotherTabHolds(name, { steal: true })
