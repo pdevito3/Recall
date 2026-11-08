@@ -4,7 +4,7 @@ import { afterEach, expect, test, vi } from 'vitest'
 import { saveRawDraft } from '@/api/generated/sessions/clients/save-raw-draft'
 
 import { draftSaverFor, resumeUnsentDrafts, type DraftTarget } from './draft-saver'
-import { closeEntryLocks } from './entry-lock'
+import { closeEntryLocks, handOverWaitMs, lockOfEntry, type LockParty } from './entry-lock'
 import type { OutboxEntry } from './outbox'
 
 vi.mock('@/api/generated/sessions/clients/save-raw-draft')
@@ -54,4 +54,34 @@ test('a page that a dev build shows twice at its start edits the entry, and send
   expect(saver.lastSavedWords()).toBe('words of a reload')
   expect(saveRawDraft).toHaveBeenCalledOnce()
   expect(draftSaverFor(target, queryClient)).toBe(saver)
+})
+
+/** Another tab that holds the lock of the entry until the test frees it. */
+function anotherTabHolds(name: string, options: LockOptions = {}) {
+  let free = () => undefined as void
+  void navigator.locks.request(name, options, () => new Promise<void>((resolve) => { free = resolve })).catch(() => undefined)
+  return () => free()
+}
+
+const aShownParty: LockParty = { handOver: () => null, takeOver: () => [], takeLateHandOver: () => [], takeDraftsOfNoParty: () => [], noteEditingPlace: () => undefined, isShown: () => true }
+
+test('Edit here that a release drops before the lock answers leaves a later Edit here working', async () => {
+  const name = `recall.edit.${owner}.client-session`
+  const freeFirst = anotherTabHolds(name)
+  const lock = lockOfEntry(owner, 'client-session')
+  lock.join(aShownParty)
+  await expect.poll(() => lock.editingPlace).toBe('elsewhere')
+
+  lock.takeHere()
+  lock.release()
+  lock.need()
+  await expect.poll(() => lock.editingPlace).toBe('here')
+  const freeSecond = anotherTabHolds(name, { steal: true })
+  await expect.poll(() => lock.editingPlace).toBe('elsewhere')
+
+  lock.takeHere()
+
+  await expect.poll(() => lock.editingPlace, { timeout: handOverWaitMs * 4 }).toBe('here')
+  freeFirst()
+  freeSecond()
 })

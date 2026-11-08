@@ -242,6 +242,8 @@ export class EntryLock {
     const request = this.request
     if (this.isClosed || !request || request.isDropped) return
     request.isDropped = true
+    // A dropped steal gets no grant, so Edit here must work again.
+    this.isTaking = false
     if (this.waitInLine) {
       // An aborted wait gets no answer.
       request.isPending = false

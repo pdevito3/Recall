@@ -463,6 +463,22 @@ test('a move to a new entry on a full storage removes the key of the old entry, 
   saver.discard()
 })
 
+test('a move to a new entry leaves the draft of the old entry to a saver of its own', async () => {
+  vi.mocked(saveRawDraft).mockRejectedValueOnce(new ProblemDetailsError({ type: 'about:blank', title: 'Gone', status: 404 }))
+  vi.mocked(addSession).mockReturnValue(new Promise(() => undefined))
+  const queryClient = new QueryClient()
+  const saver = draftSaverFor(target, queryClient)
+  saver.edit('words of a deleted entry')
+  saver.flush()
+  await vi.waitFor(() => expect(saver.getSnapshot().movedFromDeletedEntry).toBe(true))
+
+  const ofTheOldEntry = draftSaverFor(target, queryClient)
+
+  expect(ofTheOldEntry).not.toBe(saver)
+  ofTheOldEntry.discard()
+  saver.discard()
+})
+
 test('after a move on a full storage, a next write replaces the old copy, and a discard removes it', async () => {
   storedByAnotherTab(entryWith('saved words'))
   const setItem = fullQuota()
