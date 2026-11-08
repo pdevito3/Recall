@@ -1015,6 +1015,8 @@ class ModelRun {
     if (tab.isFrozen) {
       tab.wake()
       await vi.advanceTimersByTimeAsync(0)
+      // A tab that learns at the wake that it lost the entry asks for it again, and the lock manager answers in a later task, before the person can look.
+      await vi.advanceTimersByTimeAsync(1)
       this.note(`tab ${index} wakes`)
       return
     }
