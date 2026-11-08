@@ -243,7 +243,7 @@ test.describe('writing a new entry', () => {
 
   test('a save over words that the create found on the Server loses, then joins them and saves from the read', async ({ page, api }) => {
     const replayed = aSession().atRevision(1).saying('Words from another tab').build()
-    api.mock(sessionsApi.creates(replayed), { ...sessionsApi.draftSaveLoses(replayed, { draftRevision: 1, latestRevision: 2 }), delayMs: 300 }, sessionsApi.oneIs(replayed))
+    api.mock(sessionsApi.creates(replayed), { ...sessionsApi.draftSaveLoses(replayed, { draftRevision: 1, latestRevision: 2 }), delayMs: 300 }, sessionsApi.oneIs(replayed), ...sessionsApi.revisionsAre(replayed, []))
     const journal = journalPage(page)
     await journal.open()
 
@@ -257,9 +257,10 @@ test.describe('writing a new entry', () => {
     expect(lost.baseRevision).toBe(0)
     expect(merged.baseRevision).toBe(1)
     expect(merged.savedAt).not.toBe(lost.savedAt)
-    // From an empty Draft the merge has no base, so it merges word by word as the iOS client does: each word of both shows once.
-    for (const word of ['Words', 'from', 'another', 'this', 'tab']) expect(timesIn(merged.text, word)).toBe(1)
-    await expect(journal.at.composer).toHaveText('Words from another this tab')
+    expect(timesIn(merged.text, 'Words from another tab')).toBe(1)
+    expect(timesIn(merged.text, 'Words from this tab')).toBe(1)
+    await expect(journal.at.composer).toContainText('Words from another tab')
+    await expect(journal.at.composer).toContainText('Words from this tab')
     expect(await journal.at.conflict('safe in History').count()).toBe(0)
   })
 
@@ -595,7 +596,7 @@ test.describe('the timeline', () => {
     await journal.write('Words on the phone')
     await expect(journal.at.status('Saved at')).toBeVisible()
 
-    api.mock({ ...sessionsApi.draftSaveLoses(session, { draftRevision: 2, latestRevision: 3 }), delayMs: 300 })
+    api.mock({ ...sessionsApi.draftSaveLoses(session, { draftRevision: 2, latestRevision: 3 }), delayMs: 300 }, ...sessionsApi.revisionsAre(session, []))
     await journal.typeWithoutWaiting(' and more')
     await journal.finish()
     await expect.poll(() => api.all('put', sessionsPaths.rawDraft(session.id)).length).toBe(2)
@@ -711,7 +712,7 @@ test.describe('the journal on a phone', () => {
     await journal.write('My words')
     await expect(journal.at.status('Saved at')).toBeVisible()
 
-    api.mock({ ...sessionsApi.draftSaveLoses(session, { draftRevision: 2, latestRevision: 3 }), delayMs: 300 })
+    api.mock({ ...sessionsApi.draftSaveLoses(session, { draftRevision: 2, latestRevision: 3 }), delayMs: 300 }, ...sessionsApi.revisionsAre(session, []))
     await journal.typeWithoutWaiting(' and more')
     await expect.poll(() => api.all('put', sessionsPaths.rawDraft(session.id)).length).toBe(2)
     const newest = { ...aSession().atRevision(3).saying('My words', 'From the other device').build(), id: session.id, clientSessionId: session.clientSessionId }

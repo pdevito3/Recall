@@ -12,6 +12,9 @@ import { readOutbox, writeToOutbox, type OutboxEntry, type StoredEntry } from '.
 
 vi.mock('@/api/generated/sessions/clients/add-session')
 vi.mock('@/api/generated/sessions/clients/save-raw-draft')
+// After Lost, the saver looks in the Revisions for a change of its key that another tab sent. Here no other tab sends one.
+vi.mock('@/api/generated/sessions/clients/get-raw-revision-page', () => ({ getRawRevisionPage: () => Promise.resolve({ items: [], nextCursor: null }) }))
+vi.mock('@/api/generated/sessions/clients/get-raw-revision', () => ({ getRawRevision: () => Promise.reject(new Error('No Revision in this test')) }))
 
 const owner = 'person-a'
 const target: DraftTarget = {

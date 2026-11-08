@@ -28,6 +28,7 @@ type Message =
   | { kind: 'settle'; nonce: string }
   | { kind: 'settling'; nonce: string; writer: string }
   | { kind: 'settled'; nonce: string; writer: string; report: OtherTabReport }
+  | { kind: 'copied'; writer: string; name: string }
 
 export interface OtherTabReport {
   wordsOnlyInMemory: string[]
@@ -38,6 +39,7 @@ let sequence = 0
 const keysOfThisTab = new Set<string>()
 const waiters = new Map<string, (message: Message) => void>()
 const otherTabWatchers = new Set<() => void>()
+const copyWatchers = new Set<(name: string) => void>()
 let answerASettle: (() => Promise<OtherTabReport>) | null = null
 let channel: BroadcastChannel | null | undefined
 
@@ -53,6 +55,9 @@ function hear({ data: message }: MessageEvent<Message>) {
       if (!answerASettle) break
       talk({ kind: 'settling', nonce: message.nonce, writer: thisTab })
       void answerASettle().then((report) => talk({ kind: 'settled', nonce: message.nonce, writer: thisTab, report }))
+      break
+    case 'copied':
+      if (message.writer === thisTab) for (const watcher of copyWatchers) watcher(message.name)
       break
     case 'here':
     case 'settling':
@@ -242,6 +247,19 @@ export function removeLeftMarksWithNoKey() {
     }
   } catch {
     return
+  }
+}
+
+/** This tab copied the text that a key of `writer` holds, so two tabs now hold those words. `name` names the text inside the key. */
+export function noteCopyOfAKey(writer: string, name: string) {
+  talk({ kind: 'copied', writer, name })
+}
+
+/** Another tab copied the text of a key of this tab. A frozen tab does not hear it. */
+export function watchCopiesOfKeysOfThisTab(watcher: (name: string) => void) {
+  copyWatchers.add(watcher)
+  return () => {
+    copyWatchers.delete(watcher)
   }
 }
 

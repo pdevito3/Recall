@@ -11,6 +11,10 @@ vi.mock('@/api/generated/sessions/clients/add-session', () => ({ addSession: (re
 vi.mock('@/api/generated/sessions/clients/save-raw-draft', () => ({ saveRawDraft: (request: never) => world.saveRaw(request) }))
 vi.mock('@/api/generated/sessions/clients/save-cleaned-draft', () => ({ saveCleanedDraft: () => Promise.reject(new Error('The model has no cleaned channel.')) }))
 vi.mock('@/api/generated/sessions/clients/get-session', () => ({ getSession: (request: never) => world.getSession(request) }))
+vi.mock('@/api/generated/sessions/clients/get-raw-revision-page', () => ({ getRawRevisionPage: (request: never) => world.rawRevisionPage(request) }))
+vi.mock('@/api/generated/sessions/clients/get-raw-revision', () => ({ getRawRevision: (request: never) => world.rawRevision(request) }))
+vi.mock('@/api/generated/sessions/clients/get-cleaned-revision-page', () => ({ getCleanedRevisionPage: () => Promise.reject(new Error('The model has no cleaned channel.')) }))
+vi.mock('@/api/generated/sessions/clients/get-cleaned-revision', () => ({ getCleanedRevision: () => Promise.reject(new Error('The model has no cleaned channel.')) }))
 vi.mock('@/components/notification', () => ({ Notification: { error: () => undefined, success: () => undefined, info: () => undefined } }))
 vi.mock('../apis/timeline-cache', () => ({ patchTimelineRow: () => undefined, refreshTimelineHead: () => Promise.resolve() }))
 
@@ -20,6 +24,7 @@ const stepsInARun = 120
 const hasFullStorage = process.env.MODEL_NO_FULL_STORAGE === undefined
 const hasSignOut = process.env.MODEL_NO_SIGN_OUT === undefined
 const owner = 'person-a'
+const revisionPageSize = 5
 
 const randomFrom = (seed: number) => {
   let state = seed >>> 0
@@ -42,7 +47,7 @@ interface Row {
   latestRevision: number
   lastChunkRevision: number
   savedAt: string | null
-  revisions: { text: string; claimedAt: string; tookAt: number | null }[]
+  revisions: { number: number; text: string; claimedAt: string; tookAt: number | null }[]
   chunks: string[]
 }
 
@@ -111,7 +116,7 @@ class ModelServer {
     if (save.text === row.text) return answer('Unchanged', row.draftRevision)
     const number = row.latestRevision + 1
     const wins = save.baseRevision === row.draftRevision
-    row.revisions.push({ text: save.text, claimedAt: save.savedAt, tookAt: wins ? number : null })
+    row.revisions.push({ number, text: save.text, claimedAt: save.savedAt, tookAt: wins ? number : null })
     row.latestRevision = number
     if (!wins) return answer('Lost', null)
     row.text = save.text
@@ -128,11 +133,34 @@ class ModelServer {
     return this.dto(row)
   }
 
+  /** The Revisions of `GetRawRevisionPage`, newest first, with no text and with no sign of a win, as the Server gives them. */
+  async rawRevisionPage({ path, query }: { path: { id: string }; query?: { cursor?: string } }) {
+    const row = await this.rowAfterARead(path.id)
+    const before = query?.cursor === undefined ? Infinity : Number(query.cursor)
+    const items = row.revisions.filter(({ number }) => number < before).reverse().slice(0, revisionPageSize)
+    const hasMore = row.revisions.some(({ number }) => number < (items[items.length - 1]?.number ?? 0))
+    return { items: items.map(({ number, claimedAt, text }) => ({ number, savedAt: claimedAt, length: text.length })), nextCursor: hasMore ? String(items[items.length - 1].number) : null }
+  }
+
+  async rawRevision({ path }: { path: { id: string; number: number } }) {
+    const row = await this.rowAfterARead(path.id)
+    const revision = row.revisions.find(({ number }) => number === path.number)
+    if (!revision) throw new ProblemDetailsError({ type: 'about:blank', title: 'Gone', status: 404 })
+    return { number: revision.number, savedAt: revision.claimedAt, text: revision.text }
+  }
+
+  private async rowAfterARead(id: string) {
+    await delay(this.readsTakeMs ?? this.latencyMs())
+    const row = this.rows.find((other) => other.id === id)
+    if (!row) throw new ProblemDetailsError({ type: 'about:blank', title: 'Gone', status: 404 })
+    return row
+  }
+
   appendChunk(row: Row, chunk: string) {
     const number = row.latestRevision + 1
     row.text = withChunk(row.text, chunk)
-    row.revisions.push({ text: row.text, claimedAt: 'chunk', tookAt: number })
     row.savedAt = new Date().toISOString()
+    row.revisions.push({ number, text: row.text, claimedAt: row.savedAt, tookAt: number })
     row.draftRevision = number
     row.latestRevision = number
     row.lastChunkRevision = number

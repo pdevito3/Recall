@@ -193,6 +193,7 @@ test.describe('an entry', () => {
     api.mock(
       sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }),
       sessionsApi.oneFails(session.id, aProblem().refusing('Not now.')),
+      ...sessionsApi.revisionsAre(session, []),
     )
     await entry.edit(session.id, ' edited')
     await expect(entry.at.status('Not saved yet')).toBeVisible()
@@ -597,7 +598,7 @@ test.describe('an entry that another device changed', () => {
     await entry.open(session.id)
     const readsBefore = api.all('get', sessionsPaths.one(session.id)).length
 
-    api.mock({ ...sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }), delayMs: 300 })
+    api.mock({ ...sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }), delayMs: 300 }, ...sessionsApi.revisionsAre(session, []))
     await entry.typeWithoutWaiting(' edited')
     await expect.poll(() => api.all('put', sessionsPaths.rawDraft(session.id)).length).toBe(1)
     const newest = { ...aSession().atRevision(6).saying('Mine', 'From the other device').build(), id: session.id, clientSessionId: session.clientSessionId }
@@ -631,7 +632,7 @@ test.describe('an entry that another device changed', () => {
     const entry = entryPage(page)
     await entry.open(session.id)
     const newest = { ...aSession().atRevision(6).saying('Mine', 'From the other device').build(), id: session.id, clientSessionId: session.clientSessionId }
-    api.mock(sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }), sessionsApi.oneIs(newest))
+    api.mock(sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }), sessionsApi.oneIs(newest), ...sessionsApi.revisionsAre(session, []))
     const saves = entry.timesOfDraftSaves(session.id)
 
     await entry.typeWithoutWaiting(' edited')
@@ -652,7 +653,7 @@ test.describe('an entry that another device changed', () => {
     await entry.open(session.id)
     await entry.useARootFontOf(24)
     const newest = { ...aSession().atRevision(6).saying('Mine', 'From the other device').build(), id: session.id, clientSessionId: session.clientSessionId }
-    api.mock(sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }), sessionsApi.oneIs(newest))
+    api.mock(sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }), sessionsApi.oneIs(newest), ...sessionsApi.revisionsAre(session, []))
     const wait = entry.at.status('Another tab or device keeps changing this entry. Your words are safe, and they wait to save.')
 
     await entry.typeLinesAfterTheOnlyLine(12)

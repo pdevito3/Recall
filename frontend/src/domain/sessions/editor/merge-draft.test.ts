@@ -34,23 +34,19 @@ test('words that both sides added at one place keep the other side first, and ea
   expect(plain(merged)).toEqual(['one three two'])
 })
 
-test('words that both sides added at one place all stay, and a word that both typed shows once, as in the iOS client', () => {
-  const merged = mergeDraft(words('Words at the start.'), words('Words at the start. The second tab.'), words('Words at the start. The first tab.'))
-
-  expect(plain(merged)).toEqual(['Words at the start. The first second tab.'])
+test.each([
+  ['in one paragraph', words('Words at the start.'), words('Words at the start. The second tab.'), words('Words at the start. The first tab.'), ['Words at the start. The first tab. The second tab.']],
+  ['as new paragraphs', words('Words at the start.'), words('Words at the start.', 'The second tab.'), words('Words at the start.', 'The first tab.'), ['Words at the start.', 'The first tab.', 'The second tab.']],
+  ['into an empty Draft', '', words('Words from this tab'), words('Words from another tab'), ['Words from another tab', 'Words from this tab']],
+  ['in place of one word', words('Lunch with Ana'), words('Lunch with Sam at noon'), words('Lunch with Sam and Bo'), ['Lunch with Sam and Bo Sam at noon']],
+])('words that both sides added at one place stay in full, theirs first, also a word that both typed: %s', (_, base, mine, theirs, merged) => {
+  expect(plain(mergeDraft(base, mine, theirs))).toEqual(merged)
 })
 
-test('a merge of words that a merge wrote into one paragraph adds nothing', () => {
-  const [base, mine] = [words('Words at the start.'), words('Words at the start. The second tab.')]
-  const merged = mergeDraft(base, mine, words('Words at the start. The first tab.'))
+test('words that both sides added at one place in the same way show once', () => {
+  const merged = mergeDraft(words('one'), words('one two', 'three'), words('one two', 'three'))
 
-  expect(mergeDraft(base, mine, merged)).toBe(merged)
-})
-
-test('words of the person that the newest words hold in order, as after a save that won with no answer, do not show twice', () => {
-  const merged = mergeDraft(words('base'), words('base the first save and more'), words('base the first save'))
-
-  expect(plain(merged)).toEqual(['base the first save and more'])
+  expect(plain(merged)).toEqual(['one two', 'three'])
 })
 
 test('new paragraphs that both sides added at one place stay paragraphs, theirs first', () => {
@@ -63,6 +59,12 @@ test('with no known base, a paragraph that the person extends during a read keep
   const merged = mergeDraft(null, words('my words and a key'), words('my words', 'a chunk'))
 
   expect(plain(merged)).toEqual(['my words and a key', 'a chunk'])
+})
+
+test('with no known base, a paragraph that the other side holds at another place shows once, there, with the words of the person that it lacks', () => {
+  const merged = mergeDraft(null, words('alpha', 'copied beta', 'gamma mine'), words('gamma', 'copied beta delta', 'alpha'))
+
+  expect(plain(merged)).toEqual(['gamma mine', 'copied beta delta', 'alpha'])
 })
 
 test('a paragraph that the person deleted goes, when the other device did not change it', () => {
@@ -167,29 +169,16 @@ test('a heading that both sides changed, and a paragraph that the person added a
   expect(JSON.parse(merged)).toEqual(JSON.parse(doc(heading('Day 1 at sea'), paragraph('A new line'), paragraph('The sea'))))
 })
 
-test('words that the newest words hold in part, as from a tab that took the words of another tab, show once', () => {
-  const merged = mergeDraft(words('Lunch with'), words('Lunch with Sam at noon'), words('Lunch with Sam and Ana'))
+test('from the save of this tab that another tab sent, words that both went on with show once', () => {
+  const merged = mergeDraft(words('Lunch with Sam'), words('Lunch with Sam at noon'), words('Lunch with Sam and Ana'))
 
   expect(plain(merged)).toEqual(['Lunch with Sam and Ana at noon'])
 })
 
-test('a word that both sides put in place of one word shows once', () => {
-  const merged = mergeDraft(words('Lunch with Ana'), words('Lunch with Sam at noon'), words('Lunch with Sam and Bo'))
-
-  expect(plain(merged)).toEqual(['Lunch with Sam and Bo at noon'])
-})
-
-test('a paragraph that the person goes on with, from a save of a closed tab that the newest words hold, shows once', () => {
-  const merged = mergeDraft('', words('Lunch with Sam at noon'), words('Lunch with Sam', 'A chunk'))
+test('from the save of a closed tab, a paragraph that the person goes on with shows once next to a chunk', () => {
+  const merged = mergeDraft(words('Lunch with Sam'), words('Lunch with Sam at noon'), words('Lunch with Sam', 'A chunk'))
 
   expect(plain(merged)).toEqual(['Lunch with Sam at noon', 'A chunk'])
-})
-
-test('from an empty Draft, a paragraph that each side went on with around one word shows that word once, next to a heading and a list', () => {
-  const merged = mergeDraft('', doc(heading('Plans'), list('Bread'), paragraph('Before lunch with Sam today')), words('lunch with Sam at noon'))
-
-  expect(plain(merged).join(' ').match(/lunch/g)).toEqual(['lunch'])
-  expect(plain(merged)).toEqual(['Plans', 'Bread', 'Before lunch with Sam at noon today'])
 })
 
 test.each([
@@ -199,12 +188,6 @@ test.each([
   ['a deleted word and a new paragraph that starts with the same word', words('the red car is fast'), words('the car is fast'), words('the red car is fast', 'the end'), ['the car is fast', 'the end']],
 ])('paragraphs that only start with the same word stay apart: %s', (_, base, mine, theirs, merged) => {
   expect(plain(mergeDraft(base, mine, theirs))).toEqual(merged)
-})
-
-test('a block that both sides added at other places shows once, at the place of the other side', () => {
-  const merged = mergeDraft(doc(heading('Day one'), paragraph('The sea')), doc(heading('Day one'), paragraph('A new line'), paragraph('The sea')), doc(heading('Day one'), paragraph('The sea'), paragraph('A new line'), paragraph('More')))
-
-  expect(plain(merged)).toEqual(['Day one', 'The sea', 'A new line', 'More'])
 })
 
 test('with no known base, a heading pairs with the heading that shares its words, so no word shows twice', () => {
