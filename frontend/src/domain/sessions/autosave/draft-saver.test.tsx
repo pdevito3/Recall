@@ -2,6 +2,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { afterEach, expect, test, vi } from 'vitest'
 
 import { addSession } from '@/api/generated/sessions/clients/add-session'
+import { getRawRevision } from '@/api/generated/sessions/clients/get-raw-revision'
 import { getSession } from '@/api/generated/sessions/clients/get-session'
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
 import { saveCleanedDraft } from '@/api/generated/sessions/clients/save-cleaned-draft'
@@ -16,6 +17,7 @@ import { readOutbox, type OutboxEntry, type StoredEntry } from './outbox'
 import { thisTab } from './tab-keys'
 
 vi.mock('@/api/generated/sessions/clients/add-session')
+vi.mock('@/api/generated/sessions/clients/get-raw-revision')
 vi.mock('@/api/generated/sessions/clients/get-session')
 vi.mock('@/api/generated/sessions/clients/save-cleaned-draft')
 vi.mock('@/api/generated/sessions/clients/save-raw-draft')
@@ -1143,6 +1145,35 @@ test('a tab that takes an entry after a crash merges a loss from the base of tha
   await vi.waitFor(() => expect(saveRawDraft).toHaveBeenCalledTimes(2))
 
   expect(vi.mocked(saveRawDraft).mock.lastCall?.[0].body).toMatchObject({ text: doc('base', 'a chunk', 'words of a closed tab'), baseRevision: 5 })
+  saver.stop()
+})
+
+test('a key of an older version with no base text reads Revision baseRevision before its first save, and a loss merges from that text', async () => {
+  vi.mocked(getRawRevision).mockResolvedValue({ number: 1, savedAt: '2026-11-06T15:30:30+00:00', text: doc('base') })
+  vi.mocked(saveRawDraft).mockResolvedValueOnce(lostAt(5)).mockResolvedValue(wonAt(6))
+  const { baseText: _noBase, ...ofAnOlderVersion } = entryWith(doc('words of an older version'))
+  localStorage.setItem(`recall.unsent.${owner}.another-tab.1`, JSON.stringify(ofAnOlderVersion))
+
+  const saver = new DraftSaver(target, clientAnswering(doc('base', 'a chunk'), 5))
+  await vi.waitFor(() => expect(saveRawDraft).toHaveBeenCalledTimes(2))
+
+  expect(getRawRevision).toHaveBeenCalledWith(expect.objectContaining({ path: { id: 'session-1', number: 1 } }))
+  expect(vi.mocked(getRawRevision).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(saveRawDraft).mock.invocationCallOrder[0])
+  expect(vi.mocked(saveRawDraft).mock.lastCall?.[0].body).toMatchObject({ text: doc('a chunk', 'words of an older version'), baseRevision: 5 })
+  saver.stop()
+})
+
+test('a key with no base text whose Revision read fails keeps its words in the key and sends nothing', async () => {
+  vi.mocked(getRawRevision).mockRejectedValue(new TypeError('Failed to fetch'))
+  const { baseText: _noBase, ...ofAnOlderVersion } = entryWith('words of an older version')
+  localStorage.setItem(`recall.unsent.${owner}.another-tab.1`, JSON.stringify(ofAnOlderVersion))
+
+  const saver = new DraftSaver(target, new QueryClient())
+  await vi.waitFor(() => expect(getRawRevision).toHaveBeenCalled())
+
+  expect(saveRawDraft).not.toHaveBeenCalled()
+  expect(wordsInKeys()).toEqual(['words of an older version'])
+  expect(saver.getSnapshot().status.kind).not.toBe('saved')
   saver.stop()
 })
 

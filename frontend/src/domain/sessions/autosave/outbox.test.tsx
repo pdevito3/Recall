@@ -68,13 +68,15 @@ for (const [name, stored] of [
   })
 }
 
-test('an entry that this version cannot read keeps its words as a new entry, in the same key until a tab takes it', () => {
+test('an entry that this version cannot read keeps its words in its key, with the same entry at each read, and says why they do not go', () => {
   const stored = JSON.stringify({ ...entryWith('words of an old version'), channel: 'other' })
   localStorage.setItem('recall.unsent.person-a.unknown', stored)
 
-  const [found] = readOutbox('person-a')
+  const [first] = readOutbox('person-a')
+  const [second] = readOutbox('person-a')
 
-  expect(found).toMatchObject({ writer: null, storageKey: 'recall.unsent.person-a.unknown', entry: { channel: 'raw', sessionId: null, change: { value: 'words of an old version' } } })
+  expect(first).toMatchObject({ writer: null, storageKey: 'recall.unsent.person-a.unknown', entry: { channel: 'raw', sessionId: null, change: { value: 'words of an old version' }, refusal: expect.any(String) } })
+  expect(second?.entry).toEqual(first?.entry)
   expect(localStorage.getItem('recall.unsent.person-a.unknown')).toBe(stored)
 })
 
@@ -84,12 +86,18 @@ test('a key with a name of an older version has no writer, so any tab can take i
   expect(readOutbox('person-a')[0]).toMatchObject({ writer: null, entry: { change: { value: 'old words' } } })
 })
 
-test('a key with no base text is not an entry of this version, so its words go on as a new entry', () => {
+test('a key of an older version with no base text stays the entry that it names, and its base is the text of Revision baseRevision, still to read', () => {
   // JSON leaves out a field with no value.
-  const withNoBase = { ...entryWith('words with no base'), baseText: undefined }
+  const withNoBase = { ...entryWith('words with no base'), sessionId: 'session-1', baseRevision: 3, baseText: undefined }
   localStorage.setItem('recall.unsent.person-a.with-no-base', JSON.stringify(withNoBase))
 
-  expect(readOutbox('person-a')[0]?.entry).toMatchObject({ sessionId: null, baseText: '', change: { value: 'words with no base' } })
+  expect(readOutbox('person-a')[0]?.entry).toMatchObject({ key: 'words with no base.raw', clientSessionId: 'words with no base', sessionId: 'session-1', baseRevision: 3, baseText: null, change: { value: 'words with no base' } })
+})
+
+test('a key of an older version on Revision 0 has an empty base', () => {
+  localStorage.setItem('recall.unsent.person-a.with-no-base', JSON.stringify({ ...entryWith('words on an empty Draft'), baseText: undefined }))
+
+  expect(readOutbox('person-a')[0]?.entry).toMatchObject({ clientSessionId: 'words on an empty Draft', baseRevision: 0, baseText: '' })
 })
 
 test('a change in flight goes with the newest change, so a tab that takes the key sends it again first', () => {
