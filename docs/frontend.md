@@ -210,11 +210,23 @@ Kept words go out when the same person signs in on this browser again. A refused
 
 Each load of a page has a new writer id. A page writes its text under keys that name that id. A key never changes: a newer text gets a new key, and the page then removes its previous key. So a remove takes only the exact text that the remover read. One saver has at most one key, and that key holds the change in the queue and the held words as one entry. Another tab takes a key only after its writer left, or after its writer did not answer a ping for 500 ms. A writer that leaves writes `recall.left.<writer>` in `pagehide` and sends a message on the `recall.tabs` channel. A wrong guess about a frozen tab sends the same text twice, and the Server takes the second as a replay or as a Revision. No word goes, because safety does not depend on who is alive. `frontend/src/domain/sessions/autosave/tab-keys.ts` holds this rule.
 
-The app runs on plain HTTP on a LAN, so it must not need a secure context. It uses `localStorage` and `BroadcastChannel`, which plain HTTP has. It does not use Web Locks.
+The app runs on plain HTTP on a LAN, so it must not need a secure context. It uses `localStorage` and `BroadcastChannel`, which plain HTTP has. It uses Web Locks only where the browser has them, for the editor of an entry.
+
+#### One tab edits an entry
+
+One tab of a browser edits an entry at a time ([ADR 0022](adr/0022-one-tab-edits-an-entry.md)). `frontend/src/domain/sessions/autosave/entry-lock.ts` holds this rule.
+
+- The tab that edits holds the Web Lock `recall.edit.<person>.<entry>`. A second tab that opens the entry shows the words of the editor with no edit. Its `Edit here` button takes the entry there, and the other tab goes read-only at once.
+- The tab that loses hands its unsent words, its change in flight, and its base to the new editor on the `recall.editors` channel. It keeps them until the new editor says that it took them, so a crash of the new editor loses nothing. A frozen tab hands them over when it wakes, and the new editor merges them once from their base.
+- A crash or a close frees the lock. The next tab in line takes the words from the key of the editor.
+- A load with no page of the entry, such as a load that takes the words of a closed tab, gives the entry to a tab that shows it.
+- On plain HTTP the browser has no Web Locks. A mark `recall.editor.<lock>` in `localStorage` names the editor, and a tab reads it before it writes or sends. A mark of a tab that crashed stays, so the next tab needs `Edit here`.
+
+So no two tabs hold the same unsent words, and a merge after `Lost` always knows its base.
 
 A browser with no `BroadcastChannel`, or one that refuses to make a channel, still opens the app. The words of one tab stay safe, because the keys do not need the channel. With two tabs, no ping gets an answer, so a tab takes the key of a live tab after 500 ms. The same text then goes twice, as for a wrong guess about a frozen tab. A tab also does not hear a sign-out or a sign-in in another tab at once. It checks the last person of the browser when it shows again.
 
-A page that opens takes the key of a writer that left. When the newest words of its entry are in the key of a live tab, the page leaves the key and shows a copy of the words. So a reload with a second tab open keeps the words on the screen. Both tabs then save, and the Server decides with the rule of the base.
+A page that opens takes the key of a writer that left. A live tab never copies or takes the key of another live tab. The words of a live editor come only by the hand-over of [One tab edits an entry](#one-tab-edits-an-entry).
 
 #### Limits of the unsent words
 
@@ -244,6 +256,8 @@ The app cannot change this delay. No web API forces the commit.
 **A reload while the server is down.** No app code runs, so the app cannot show a message. A plain HTTP origin cannot have a service worker, because a service worker needs a secure context. A reverse proxy that stays up shows its own error page. Caddy sends a 502 with an empty body, and the person sees a white page. With nothing listening, the person sees the connection error page of the browser. The words stay in their keys, and they go out when the page opens again after the server returns.
 
 **A sign-out in another tab.** A tab that does not answer within 500 ms cannot report words that only its memory holds, so the sign-out in another tab cannot name them. A frozen tab, or a tab in a long paste, does this. Words that a tab types after the dialog opened stay in the key of that tab, and they return with a notice at the next sign-in. With no room in storage, those later words have no key, and they go with the page, with no warning.
+
+**No room in storage.** A key holds the newest words of its saver or nothing. When a write finds no room and the words changed, the older key goes, and the page says that the words are only there. A crash then loses them. A hand-over writes the words to a key again when storage has room.
 
 **One entry open in two composers.** A reload or Duplicate Tab can do this while a second tab is open, because the pointer of a composer stays in `sessionStorage` over a reload. A composer that already reads the entry does not join the held words of a key of another tab. The words stay in the key, they join at a later load, and the tab that joins them says so.
 
