@@ -151,7 +151,7 @@ export function JournalText({ text, label }: { text: string; label: string }) {
     editable: false,
     content: contentOf(text),
     extensions: [...textExtensions, PersonMention],
-    editorProps: { attributes: { 'aria-label': label, dir: 'auto', class: 'journal-prose outline-none' } },
+    editorProps: { attributes: { 'aria-label': label, 'aria-readonly': 'true', dir: 'auto', class: 'journal-prose outline-none' } },
   })
   return <EditorContent editor={editor} />
 }

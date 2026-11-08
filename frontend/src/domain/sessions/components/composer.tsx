@@ -6,6 +6,7 @@ import { useJournalZone } from '@/domain/settings/apis/user-setting'
 import { focusEditorIn } from '../editor/focus-editor'
 import { JournalEditor, JournalText } from '../editor/journal-editor'
 import { ConflictNotice, EditedElsewhereNotice, MergedNotice } from './conflict-notice'
+import { useFocusEditHereWhenTheEditorLeaves } from './use-focus-edit-here'
 import { SaveStatusLine } from './save-status'
 import type { Composer } from './use-composer'
 
@@ -13,6 +14,7 @@ export function ComposerForm({ composer }: { composer: Composer }) {
   const zone = useJournalZone()
   const section = useRef<HTMLElement>(null)
   const bar = useRef<HTMLDivElement>(null)
+  const editHereRef = useFocusEditHereWhenTheEditorLeaves(composer.editing)
   const isRefused = composer.status.kind === 'refused'
   // The bound of a refused text makes the page shorter, and that can leave the composer above the screen.
   useEffect(() => {
@@ -21,7 +23,7 @@ export function ComposerForm({ composer }: { composer: Composer }) {
   if (composer.editing !== 'here') {
     return (
       <section aria-label="Write a new entry" className="flex flex-col gap-2">
-        {composer.editing === 'elsewhere' && <EditedElsewhereNotice hasLost={composer.hasEdited} onEditHere={composer.editHere} />}
+        {composer.editing === 'elsewhere' && <EditedElsewhereNotice hasLost={composer.hasEdited} onEditHere={composer.editHere} editHereRef={editHereRef} />}
         <div className="rounded-lg border p-3">
           <JournalText key={composer.wordsOfTheEditor ?? ''} text={composer.wordsOfTheEditor ?? ''} label="New entry, open in another tab" />
         </div>

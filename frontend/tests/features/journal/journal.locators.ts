@@ -30,8 +30,12 @@ export const journal = (page: Page) => ({
 
 export const entry = (page: Page) => ({
   heading: page.getByRole('main').getByRole('heading', { level: 1 }),
-  editor: page.getByRole('textbox', { name: 'Your words' }),
-  words: (text: string) => page.getByRole('textbox', { name: 'Your words' }).getByText(text),
+  editor: page.getByRole('textbox', { name: 'Your words', exact: true }),
+  wordsOfAnotherTab: page.getByLabel('Your words, open in another tab'),
+  openInAnotherTab: page.getByRole('status').filter({ hasText: 'This entry is open in another tab.' }),
+  nowEditedInAnotherTab: page.getByRole('status').filter({ hasText: 'You now edit this entry in another tab.' }),
+  editHere: page.getByRole('button', { name: 'Edit here', exact: true }),
+  words: (text: string) => page.getByRole('textbox', { name: 'Your words', exact: true }).getByText(text),
   cleanedEditor: page.getByRole('textbox', { name: 'Cleaned version' }),
   cleanedTab: page.getByRole('tab', { name: 'Cleaned', exact: true }),
   breadcrumbName: page.getByRole('navigation', { name: 'breadcrumb' }).getByRole('link', { name: 'Journal', exact: true }),

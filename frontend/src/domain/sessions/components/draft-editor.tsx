@@ -13,6 +13,7 @@ import { EditorToolbar } from '../editor/editor-toolbar'
 import { focusEditorIn } from '../editor/focus-editor'
 import { JournalEditor, JournalText } from '../editor/journal-editor'
 import { ConflictNotice, EditedElsewhereNotice, MergedNotice } from './conflict-notice'
+import { useFocusEditHereWhenTheEditorLeaves } from './use-focus-edit-here'
 import { SaveStatusLine } from './save-status'
 import { SessionHistory } from './session-history'
 
@@ -58,6 +59,7 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
   const currentText = useRef(opened.text)
   const section = useRef<HTMLElement>(null)
   const bar = useRef<HTMLDivElement>(null)
+  const editHereRef = useFocusEditHereWhenTheEditorLeaves(snapshot.editing)
 
   const reopenWith = (text: string) => {
     currentText.current = text
@@ -113,8 +115,9 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
     const text = kept ?? serverText
     currentText.current = text
     setChangeNote(null)
-    setOpened((previous) => ({ text, key: previous.key + 1, takesFocus: pressedEditHere.current }))
+    const takesFocus = pressedEditHere.current
     pressedEditHere.current = false
+    setOpened((previous) => ({ text, key: previous.key + 1, takesFocus }))
   }, [saver, snapshot.editing, serverText])
 
   const editHere = () => {
@@ -150,7 +153,7 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
     return (
       <div className="flex flex-col gap-6">
         <section aria-label={channelLabels[channel]} className="flex flex-col gap-2">
-          {snapshot.editing === 'elsewhere' && <EditedElsewhereNotice hasLost={hasEdited} onEditHere={editHere} />}
+          {snapshot.editing === 'elsewhere' && <EditedElsewhereNotice hasLost={hasEdited} onEditHere={editHere} editHereRef={editHereRef} />}
           <div className="rounded-lg border p-3">
             <JournalText key={words} text={words} label={`${channelLabels[channel]}, open in another tab`} />
           </div>

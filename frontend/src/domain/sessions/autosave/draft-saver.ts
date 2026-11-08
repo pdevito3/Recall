@@ -1,4 +1,4 @@
-import type { QueryClient } from '@tanstack/react-query'
+import { notifyManager, type QueryClient } from '@tanstack/react-query'
 
 import type { DraftSaveResultDto } from '@/api/generated/models/types/draft-save-result-dto'
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
@@ -508,7 +508,7 @@ export class DraftSaver implements LockParty {
 
   /** The words to take: those that the last editor handed over, and each key of the draft that no saver of this tab writes. The newest go on the page, and each other goes with its own base. */
   takeOver(handed: HandOver | null) {
-    if (this.isHelper || this.isStopped) return
+    if (this.isHelper || this.isStopped) return []
     const key = draftKey(this.target)
     const ofThisDraft = (handed?.drafts ?? []).filter(({ entry }) => entry.key === key)
     const handedKeys = new Set(ofThisDraft.map(({ storageKey }) => storageKey))
@@ -517,22 +517,28 @@ export class DraftSaver implements LockParty {
     const wasElsewhere = this.snapshot.editing === 'elsewhere'
     if (!main && wasElsewhere) {
       void this.startFromTheDraft()
-      return
+      return []
     }
     // A page that edits only from now opens the words of the saver when it opens its editor.
     this.update({ editing: 'here' })
     if (main) this.adopt(main.entry, main.storageKey)
     for (const other of others) this.helpWith(other)
     if (this.heldWords !== null && this.newWordsListeners.size === 0) void this.joinHoldWithNoPage()
+    return statesOf(ofThisDraft)
   }
 
   /** Words that a frozen tab or a tab with no room in storage handed over after this tab started. A state that this tab took from storage goes once. */
   takeLateHandOver(handed: HandOver) {
-    if (this.isHelper || this.isStopped) return
-    for (const one of handed.drafts) {
-      if (one.entry.key !== draftKey(this.target) || this.takenStates.has(one.entry.stateId ?? '')) continue
-      this.helpWith({ ...one, storageKey: one.storageKey !== null && isKeyStored(one.storageKey) && !isKeyOfASaverHere(one.storageKey) ? one.storageKey : null })
-    }
+    if (this.isHelper || this.isStopped) return []
+    const ofThisDraft = handed.drafts.filter(({ entry }) => entry.key === draftKey(this.target))
+    for (const one of ofThisDraft) if (!this.takenStates.has(one.entry.stateId ?? '')) this.helpWith(withKeyToTake(one))
+    return statesOf(ofThisDraft)
+  }
+
+  takeDraftsOfNoParty(drafts: HandedEntry[]) {
+    if (this.isHelper || this.isStopped) return []
+    for (const one of drafts) if (!this.takenStates.has(one.entry.stateId ?? '')) this.helpWith(withKeyToTake(one))
+    return statesOf(drafts)
   }
 
   isShown() {
@@ -550,14 +556,24 @@ export class DraftSaver implements LockParty {
     if (this.snapshot.editing !== 'elsewhere') return
     const words = this.wordsInKeyOfTheEditor()
     if (words === this.snapshot.wordsOfTheEditor) return
-    // With no unsent words, the words of the editor are in the Draft.
-    if (words === null && this.snapshot.sessionId) void this.queryClient.invalidateQueries({ queryKey: SessionKeys.detail(this.snapshot.sessionId), exact: true })
-    this.update({ wordsOfTheEditor: words })
+    const sessionId = this.snapshot.sessionId
+    if (words !== null || sessionId === null) {
+      this.update({ wordsOfTheEditor: words })
+      return
+    }
+    // With no unsent words, the words of the editor are in the Draft. The page shows the last words until the Draft is read, so the older Draft does not show for a moment.
+    void this.queryClient.invalidateQueries({ queryKey: SessionKeys.detail(sessionId), exact: true }).then(() => {
+      // In the queue of the query, so the page has the read Draft when the last words go.
+      notifyManager.schedule(() => {
+        if (this.snapshot.editing === 'elsewhere' && this.wordsInKeyOfTheEditor() === null) this.update({ wordsOfTheEditor: null })
+      })
+    })
   }
 
   private wordsInKeyOfTheEditor() {
     const [newest] = readOutbox(this.target.owner)
-      .filter(({ writer, entry }) => writer !== thisTab && entry.key === draftKey(this.target))
+      // A key that this tab handed over is now the key of the editor, so the name of the key does not tell.
+      .filter(({ storageKey, entry }) => entry.key === draftKey(this.target) && !isKeyOfASaverHere(storageKey))
       .sort(newestFirst)
     return newest?.entry.change?.value ?? null
   }
@@ -572,6 +588,9 @@ export class DraftSaver implements LockParty {
   private adopt(entry: OutboxEntry, storageKey: string | null) {
     this.noteTaken(entry)
     this.ownKey = storageKey
+    // A key that holds these words stays when a write of the same words finds no room, so a take keeps the words in storage.
+    const stored = storageKey === null ? undefined : readOutbox(this.target.owner).find((one) => one.storageKey === storageKey)
+    this.kept = stored?.entry.stateId && wordsOfAState(stored.entry) === wordsOfAState(entry) ? { storageKey: stored.storageKey, stateId: stored.entry.stateId, words: wordsOfAState(entry) } : null
     this.target = { ...this.target, sessionId: entry.sessionId ?? this.target.sessionId }
     this.baseText = entry.baseText
     this.readsBeforeNextSave = entry.readsFirst ?? false
@@ -590,10 +609,10 @@ export class DraftSaver implements LockParty {
     for (const state of takenStates ?? []) this.takenStates.add(state)
   }
 
-  /** Words of another tab that are not the words of this saver go with their own base, as that tab would have sent them. */
+  /** Words of another tab that are not the words of this saver go with their own base and channel, as that tab would have sent them. */
   private helpWith(taken: HandedEntry) {
     this.noteTaken(taken.entry)
-    const target = { ...this.target, sessionId: taken.entry.sessionId, baseRevision: taken.entry.baseRevision, baseText: taken.entry.baseText }
+    const target = { ...this.target, channel: taken.entry.channel, sessionId: taken.entry.sessionId, baseRevision: taken.entry.baseRevision, baseText: taken.entry.baseText }
     helpers.add(new DraftSaver(target, this.queryClient, { taken }))
   }
 
@@ -940,6 +959,9 @@ const newestFirst = (one: HandedEntry, other: HandedEntry) =>
   (other.entry.change?.savedAt ?? other.entry.startedAt).localeCompare(one.entry.change?.savedAt ?? one.entry.startedAt)
 
 const isKeyOfASaverHere = (storageKey: string | null) => storageKey !== null && everySaver().some((saver) => saver.writesKey(storageKey))
+/** A handed key that is gone, or that a saver of this tab writes now, is not the key of these words. */
+const withKeyToTake = (handed: HandedEntry): HandedEntry => ({ ...handed, storageKey: handed.storageKey !== null && isKeyStored(handed.storageKey) && !isKeyOfASaverHere(handed.storageKey) ? handed.storageKey : null })
+const statesOf = (drafts: HandedEntry[]) => drafts.flatMap(({ entry }) => entry.stateId ?? [])
 
 /** The saver of a draft in this tab. It edits when this tab holds the lock of the entry, and it starts from the words and base of the last editor. */
 export function draftSaverFor(target: DraftTarget, queryClient: QueryClient, isNewEntry = false): DraftSaver {

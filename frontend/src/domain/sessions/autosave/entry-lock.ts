@@ -11,7 +11,7 @@ import { thisTab } from './tab-keys'
  */
 export type EditingPlace = 'waiting' | 'here' | 'elsewhere'
 
-/** The words of one saver, with the key that holds them or an older state of them. Null when the words are only in memory. */
+/** The words of one saver, with the key that holds them. The key is null when the words are only in memory. */
 export interface HandedEntry {
   storageKey: string | null
   entry: OutboxEntry
@@ -27,10 +27,12 @@ export interface HandOver {
 export interface LockParty {
   /** The words and the base of this saver, for the tab that takes the entry. Null when it holds nothing. This saver stops, and its key stays for the taker. */
   handOver(): HandedEntry | null
-  /** This tab edits the entry now. `handed` holds the words that the last editor gave over, or it is null when none came in time. */
-  takeOver(handed: HandOver | null): void
-  /** The last editor gave over its words after this tab started from storage. */
-  takeLateHandOver(handed: HandOver): void
+  /** This tab edits the entry now. `handed` holds the words that the last editor gave over, or it is null when none came in time. Gives the states of `handed` that this saver took. */
+  takeOver(handed: HandOver | null): string[]
+  /** The last editor gave over its words after this tab started from storage. Gives the states that this saver took. */
+  takeLateHandOver(handed: HandOver): string[]
+  /** Words of a draft that no saver of this tab writes, as words of another channel. Each goes on with its own base. Gives the states taken. */
+  takeDraftsOfNoParty(drafts: HandedEntry[]): string[]
   noteEditingPlace(): void
   /** True while a page shows the words of this saver. */
   isShown(): boolean
@@ -147,6 +149,8 @@ export class EntryLock {
   private lastHanded: HandedEntry[] | null = null
   private isClosed = false
   private hasAsked = false
+  /** True from Edit here until the hand-over came or the wait ended. */
+  private isTaking = false
 
   constructor(name: string, isNewEntry: boolean) {
     this.name = name
@@ -185,7 +189,9 @@ export class EntryLock {
 
   /** Edit here: the lock moves to this tab, and the other tab stops at once. */
   takeHere() {
-    if (this.place === 'here' || this.isClosed) return
+    // A second press while the first waits for the hand-over would end the wait of the first.
+    if (this.place === 'here' || this.isClosed || this.isTaking) return
+    this.isTaking = true
     this.waitInLine?.abort()
     this.waitInLine = null
     this.ask('steal')
@@ -247,8 +253,7 @@ export class EntryLock {
       return
     }
     if (this.place !== 'here' || handed.drafts.length === 0) return
-    for (const party of this.parties) party.takeLateHandOver(handed)
-    this.noteTaken(handed)
+    this.giveOut(handed, (party) => party.takeLateHandOver(handed))
   }
 
   /** A page in the back-forward cache edits nothing. With no Web Locks, its mark goes, so another tab can edit. */
@@ -293,6 +298,7 @@ export class EntryLock {
         await held
       })
       .catch((error: unknown) => {
+        if (!isHeld && how === 'steal') this.isTaking = false
         if (!isHeld || !isAbort(error)) return
         request.isLost = true
         this.lose()
@@ -324,25 +330,31 @@ export class EntryLock {
     this.lastHanded = null
     const wasHere = this.place === 'here'
     const fromOthers = isTake ? await this.askForHandOver() : null
+    if (isTake) this.isTaking = false
     if (this.isClosed) return
     const handed = ownHanded === null ? fromOthers : { from: fromOthers?.from ?? thisTab, drafts: [...ownHanded, ...(fromOthers?.drafts ?? [])] }
     if (request.isLost) {
-      // A third tab took the entry during the wait. The words that came go on to it.
+      // A third tab took the entry during the wait. The words that came go on to it, and this tab waits in line again.
       if (handed && handed.drafts.length > 0) this.forward(handed)
+      this.ask('inLine')
       return
     }
     this.place = 'here'
-    if (!wasHere) {
-      for (const party of this.parties) party.takeOver(handed)
-      this.noteTaken(handed)
-    }
+    if (!wasHere) this.giveOut(handed, (party) => party.takeOver(handed))
     this.notify()
   }
 
-  /** The tab that gave these words keeps them until it hears that a tab took them. */
-  private noteTaken(handed: HandOver | null) {
-    const states = (handed?.drafts ?? []).flatMap(({ entry }) => entry.stateId ?? [])
-    if (states.length > 0) talk({ kind: 'took', lock: this.name, states })
+  /**
+   * Each saver takes the words of its draft, and the first saver takes the words of a draft that no saver here writes,
+   * as words of another channel. The tab that gave the words keeps each state until it hears that a tab took it.
+   */
+  private giveOut(handed: HandOver | null, take: (party: LockParty) => string[]) {
+    const parties = [...this.parties]
+    const taken = new Set(parties.flatMap(take))
+    const left = (handed?.drafts ?? []).filter(({ entry }) => entry.stateId !== undefined && !taken.has(entry.stateId))
+    const [first] = parties
+    if (first && left.length > 0) for (const state of first.takeDraftsOfNoParty(left)) taken.add(state)
+    if (taken.size > 0) talk({ kind: 'took', lock: this.name, states: [...taken] })
   }
 
   hearTook(states: string[]) {
@@ -361,7 +373,7 @@ export class EntryLock {
       const limit = setTimeout(() => finish(null), handOverWaitMs)
       const finish = (handed: HandOver | null) => {
         clearTimeout(limit)
-        this.handOverWaiter = null
+        if (this.handOverWaiter === finish) this.handOverWaiter = null
         resolve(handed)
       }
       this.handOverWaiter = finish

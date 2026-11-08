@@ -4,6 +4,7 @@ import { afterEach, expect, test, vi } from 'vitest'
 import { addSession } from '@/api/generated/sessions/clients/add-session'
 import { getSession } from '@/api/generated/sessions/clients/get-session'
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
+import { saveCleanedDraft } from '@/api/generated/sessions/clients/save-cleaned-draft'
 import { saveRawDraft } from '@/api/generated/sessions/clients/save-raw-draft'
 import { ProblemDetailsError } from '@/lib/problem-details'
 
@@ -12,9 +13,11 @@ import { plainWordsOf } from '../editor/content'
 import { DraftSaver, draftNotices, waitAfterLosses, draftSaverFor, removeNoticesOfWordsInHistory, shownStatusOf, unsentWordsOnThisDevice, type DraftTarget } from './draft-saver'
 import { closeEntryLocks } from './entry-lock'
 import { readOutbox, type OutboxEntry, type StoredEntry } from './outbox'
+import { thisTab } from './tab-keys'
 
 vi.mock('@/api/generated/sessions/clients/add-session')
 vi.mock('@/api/generated/sessions/clients/get-session')
+vi.mock('@/api/generated/sessions/clients/save-cleaned-draft')
 vi.mock('@/api/generated/sessions/clients/save-raw-draft')
 
 const owner = 'person-a'
@@ -328,6 +331,39 @@ test('with no room, a write that changes no words keeps the key, so the words st
 
   expect(wordsInKeys()).toEqual(['words'])
   expect(saver.isHoldingWordsOnlyInMemory()).toBe(false)
+  saver.stop()
+})
+
+test('a take of the key of another tab keeps that key when the first write finds no room, so the words stay in storage', () => {
+  vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
+  const saver = aSaver()
+  const entry = entryWith('handed words', { stateId: 'another-tab.3' })
+  const { storageKey } = storedByAnotherTab(entry)
+  const real = Storage.prototype.setItem
+  // Storage is full: a new key finds no room, and only the handed key fits back in its own room.
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, name, value) {
+    if (name !== storageKey) throw new DOMException('full', 'QuotaExceededError')
+    real.call(this, name, value)
+  })
+
+  saver.takeOver({ from: 'another-tab', drafts: [{ storageKey, entry }] })
+
+  expect(wordsInKeys()).toEqual(['handed words'])
+  expect(saver.isHoldingWordsOnlyInMemory()).toBe(false)
+  saver.stop()
+})
+
+test('a hand-over of words of a channel with no saver here goes with its own channel and base, so no word of it is lost', async () => {
+  vi.mocked(saveCleanedDraft).mockReturnValue(new Promise(() => undefined))
+  const saver = aSaver()
+  const cleaned = entryWith('cleaned words', { key: 'client-session.cleaned', channel: 'cleaned', stateId: 'another-tab.4', baseRevision: 2 })
+
+  expect(saver.takeDraftsOfNoParty([{ storageKey: null, entry: cleaned }])).toEqual(['another-tab.4'])
+
+  await vi.waitFor(() => expect(saveCleanedDraft).toHaveBeenCalledOnce())
+  expect(vi.mocked(saveCleanedDraft).mock.calls[0]?.[0].body).toMatchObject({ text: 'cleaned words', baseRevision: 2 })
+  expect(saveRawDraft).not.toHaveBeenCalled()
+  expect(readOutbox(owner).map(({ entry }) => entry.channel)).toEqual(['cleaned'])
   saver.stop()
 })
 
@@ -1166,6 +1202,17 @@ test('a page that waits for the entry shows the words that the tab that edits ho
   expect(saver.getSnapshot()).toMatchObject({ editing: 'elsewhere', wordsOfTheEditor: 'words of the tab that edits' })
   saver.edit('a key in a read-only page')
   expect(wordsInKeys()).toEqual(['words of the tab that edits'])
+  saver.stop()
+})
+
+test('a page that handed its key over shows the words in that key, as the words of the tab that edits now', () => {
+  markOfAnotherTab()
+  // A taker with no room keeps the handed key, so the key still has the name of this tab.
+  localStorage.setItem(`recall.unsent.${owner}.${thisTab}.99`, JSON.stringify(entryWith('words the other tab took')))
+
+  const saver = aSaver()
+
+  expect(saver.getSnapshot()).toMatchObject({ editing: 'elsewhere', wordsOfTheEditor: 'words the other tab took' })
   saver.stop()
 })
 

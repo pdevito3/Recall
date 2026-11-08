@@ -203,8 +203,9 @@ export function useComposer() {
     const cached = sessionId ? queryClient.getQueryData<SessionDto>(SessionKeys.detail(sessionId)) : undefined
     const words = kept ?? (resumedSessionId ? null : (cached?.rawText ?? ''))
     if (words !== null) currentWords.current = words
-    setEditor(({ key }) => ({ key: key + 1, words, takesFocus: pressedEditHere.current }))
+    const takesFocus = pressedEditHere.current
     pressedEditHere.current = false
+    setEditor(({ key }) => ({ key: key + 1, words, takesFocus }))
   }, [editing, saver, sessionId, resumedSessionId, queryClient])
   const editHere = useCallback(() => {
     pressedEditHere.current = true

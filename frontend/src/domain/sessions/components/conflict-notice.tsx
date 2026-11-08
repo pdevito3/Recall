@@ -1,3 +1,5 @@
+import { useId, type Ref } from 'react'
+
 import { Button } from '@/components/ui/button'
 
 import type { DraftConflict } from '../autosave/draft-saver'
@@ -27,15 +29,23 @@ export function ConflictNotice({ conflict, onShowNewest, onKeep }: ConflictNotic
   )
 }
 
-/** `hasLost` is true when this tab edited the entry until another tab took it. */
-export function EditedElsewhereNotice({ hasLost, onEditHere }: { hasLost: boolean; onEditHere: () => void }) {
+interface EditedElsewhereNoticeProps {
+  /** True when this tab edited the entry until another tab took it. */
+  hasLost: boolean
+  onEditHere: () => void
+  editHereRef: Ref<HTMLButtonElement>
+}
+
+/** The button names the notice, so a screen reader reads why when the focus comes to it after another tab took the entry. */
+export function EditedElsewhereNotice({ hasLost, onEditHere, editHereRef }: EditedElsewhereNoticeProps) {
+  const why = useId()
   return (
     <div role="status" className="flex flex-col gap-2 rounded-lg border bg-muted p-3 text-sm dark:bg-card wrap-anywhere sm:flex-row sm:items-center sm:justify-between">
-      <p>
+      <p id={why}>
         {hasLost ? 'You now edit this entry in another tab. This tab shows the words and saves nothing.' : 'This entry is open in another tab. This tab shows the words and saves nothing.'}
         {' '}Choose Edit here to write in this tab.
       </p>
-      <Button variant="outline" className={`${wrapping} self-end sm:self-auto`} onPress={onEditHere}>Edit here</Button>
+      <Button ref={editHereRef} aria-describedby={why} variant="outline" className={`${wrapping} self-end sm:self-auto`} onPress={onEditHere}>Edit here</Button>
     </div>
   )
 }
