@@ -167,6 +167,8 @@ export class DraftSaver implements LockParty {
   private readonly takenStates = new Set<string>()
   /** A saver that finishes the words of another tab that left, beside the saver of this tab. It edits no page. */
   private readonly isHelper: boolean
+  /** Each take counts, so the read of an older take does not move the base. */
+  private takeCount = 0
 
   constructor(target: DraftTarget, queryClient: QueryClient, options: { taken?: HandedEntry; isNewEntry?: boolean } = {}) {
     this.target = target
@@ -526,6 +528,7 @@ export class DraftSaver implements LockParty {
   /** The words to take: those that the last editor handed over, and each key of the draft that no saver of this tab writes. The newest go on the page, and each other goes with its own base. */
   takeOver(handed: HandOver | null) {
     if (this.isHelper || this.isStopped) return []
+    this.takeCount += 1
     // This tab edits again, so the pause of its last hand-over ends, also when no words come with the take.
     this.saver.resume()
     const key = draftKey(this.target)
@@ -641,8 +644,10 @@ export class DraftSaver implements LockParty {
     const id = this.snapshot.sessionId
     // Offline, a read waits for the network, and the person must not wait for it.
     const limit = new Promise<null>((resolve) => setTimeout(() => resolve(null), takeReadLimitMs))
+    const take = this.takeCount
     const read = id ? await Promise.race([this.readSessionNow(id).catch(() => null), limit]) : null
-    if (this.isStopped || this.lock.editingPlace !== 'here') return
+    // A later take during the read can bring words on an older base. They keep that base until they merge, and the page shows the words of that take.
+    if (this.isStopped || this.lock.editingPlace !== 'here' || take !== this.takeCount) return
     if (read) this.moveBaseToDraftIn(read)
     this.update({ editing: 'here' })
     if (this.heldWords !== null && this.newWordsListeners.size === 0) void this.joinHoldWithNoPage()
