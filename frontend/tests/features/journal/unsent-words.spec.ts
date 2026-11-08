@@ -198,14 +198,14 @@ test.describe('the outbox', () => {
     const unsent = unsentWords(page)
     const session = aSession().build()
     api.mock(sessionsApi.rawRevisionFails(session, 1, aProblem()), sessionsApi.draftSaveWins(session, 2))
-    const key = await unsent.leftInTheOutbox({ words: 'Words of an earlier version', sessionId: session.id })
+    await unsent.leftInTheOutbox({ words: 'Words of an earlier version', sessionId: session.id })
 
     await unsent.openSettings()
 
     await expect.poll(() => api.all('get', sessionsPaths.rawRevision(session.id, 1)).length).toBeGreaterThan(0)
     await expect(unsent.at.waiting).toContainText('Words of an earlier version')
     expect(api.all('put', sessionsPaths.rawDraft(session.id))).toHaveLength(0)
-    expect(await unsent.stored(key)).toContain('Words of an earlier version')
+    expect(await unsent.wordsInTheKeys()).toEqual(['Words of an earlier version'])
 
     api.mock(sessionsApi.rawRevisionIs(session, 1))
     await expect.poll(() => wordsOf(api.last('put', sessionsPaths.rawDraft(session.id))), { timeout: 15_000 }).toContain('Words of an earlier version')

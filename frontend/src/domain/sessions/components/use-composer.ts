@@ -101,9 +101,20 @@ export function useComposer() {
     openEditorWith('')
   }, [setSaver, openEditorWith])
 
+  const shown = saver ?? finished?.saver ?? null
+  const snapshot = useSyncExternalStore(shown?.subscribe ?? noSubscription, shown?.getSnapshot ?? (() => idleSnapshot))
+
+  const sessionId = saver ? snapshot.sessionId : null
+
+  // Another tab edits this entry, so this tab shows its words with no edit. When this tab takes the entry, the editor opens with the words of the last editor.
+  const editing = saver ? snapshot.editing : 'here'
+  // A saver takes the words that wait in storage when the lock answers, so until then this tab does not know what to open.
+  const isLockAnswered = editing !== 'waiting'
+
   const isReading = editor.words === null
   useEffect(() => {
-    if (!isReading || !resumedSessionId) return
+    // Words that the saver took at the answer of the lock open in the editor with no read.
+    if (!isReading || !resumedSessionId || !isLockAnswered || saver?.wordsToOpen() != null) return
     let isCurrent = true
     // The answer must reach the screen before the next key, so that the key lands in the words of the entry.
     const openWords = (words: string) => {
@@ -157,7 +168,7 @@ export function useComposer() {
       clearInterval(readLimit)
       clearTimeout(readRetry)
     }
-  }, [isReading, resumedSessionId, saver, queryClient, startOver])
+  }, [isReading, resumedSessionId, isLockAnswered, saver, queryClient, startOver])
 
   useEffect(() => {
     if (readsAtOpen.current) latestSaver.current?.takeHold()
@@ -177,14 +188,7 @@ export function useComposer() {
     [saver],
   )
 
-  const shown = saver ?? finished?.saver ?? null
-  const snapshot = useSyncExternalStore(shown?.subscribe ?? noSubscription, shown?.getSnapshot ?? (() => idleSnapshot))
-
-  const sessionId = saver ? snapshot.sessionId : null
-
-  // Another tab edits this entry, so this tab shows its words with no edit. When this tab takes the entry, the editor opens with the words of the last editor.
-  const editing = saver ? snapshot.editing : 'here'
-  const shownSession = useQuery({ ...sessionQueryOptions(sessionId ?? ''), enabled: editing !== 'here' && sessionId !== null })
+  const shownSession = useQuery({ ...sessionQueryOptions(sessionId ?? ''), enabled: editing === 'elsewhere' && sessionId !== null })
   const wordsOfTheEditor = snapshot.wordsOfTheEditor ?? shownSession.data?.rawText ?? (editing === 'here' ? null : (editor.words ?? ''))
   const [hasEdited, setHasEdited] = useState(editing === 'here')
   const pressedEditHere = useRef(false)

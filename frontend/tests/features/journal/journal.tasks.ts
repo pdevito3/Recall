@@ -344,6 +344,9 @@ export function unsentWords(page: Page) {
 
     stored: (key: string) => page.evaluate((k) => localStorage.getItem(k), key),
     keys: () => page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('recall.unsent.'))),
+    /** The words of each key. A tab that takes the words of a key writes them to a key of its own. */
+    wordsInTheKeys: () =>
+      page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('recall.unsent.')).map((key) => (JSON.parse(localStorage.getItem(key)!) as { change: { value: string } | null }).change?.value ?? null)),
     clientSessionIdOfTheHold: () =>
       page.evaluate(() => {
         const entries = Object.keys(localStorage).filter((key) => key.startsWith('recall.unsent.')).map((key) => JSON.parse(localStorage.getItem(key)!) as { clientSessionId: string; held?: string | null })
