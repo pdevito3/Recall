@@ -750,9 +750,6 @@ export class DraftSaver implements LockParty {
     const clientSessionId = newUuid()
     pointAtNewEntry(this.target.clientSessionId, clientSessionId)
     const oldLock = this.lock
-    // The old entry is gone, and a key of another tab for it needs a saver of its own lock.
-    const oldKey = draftKey(this.target)
-    if (savers.get(oldKey) === this) savers.delete(oldKey)
     this.target = { ...this.target, clientSessionId, channel: 'raw', sessionId: null, baseRevision: 0 }
     this.lock.leave(this)
     this.lock = lockOfEntry(this.target.owner, clientSessionId, true)
