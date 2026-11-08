@@ -345,6 +345,11 @@ export class DraftSaver implements LockParty {
     return this.wordsOnServer
   }
 
+  /** The text of the Draft at the base, as the read of a take gave it. A page with no unsent words opens it, so the page and the next save hold one Revision. Null before the read of a key of an older version. */
+  wordsOfTheBase() {
+    return this.baseText
+  }
+
   hasConflict() {
     return this.snapshot.conflict !== null
   }

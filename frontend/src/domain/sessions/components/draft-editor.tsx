@@ -112,7 +112,8 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
     // At the first grant with no words of another tab, the editor opens what the page opened.
     if (kept === null && !wasElsewhere.current) return
     wasElsewhere.current = false
-    const text = kept ?? serverText
+    // The cache of the page can be older than the read of the take, and a save goes from the base of that read.
+    const text = kept ?? saver.wordsOfTheBase() ?? serverText
     currentText.current = text
     setChangeNote(null)
     const takesFocus = pressedEditHere.current
