@@ -79,6 +79,7 @@ test.describe('words for an entry that was deleted', () => {
     const gone = aSession().build()
     const next = aSession().build()
     api.mock(
+      sessionsApi.rawRevisionFails(gone, 1, aProblem().notFound('This Session does not exist.')),
       sessionsApi.draftSaveIsRefused(gone, aProblem().notFound('This Session does not exist.')),
       sessionsApi.creates(next),
       sessionsApi.oneIs(next),
@@ -184,13 +185,31 @@ test.describe('the outbox', () => {
   test('sends the words of an earlier load with no page open', async ({ page, api }) => {
     const unsent = unsentWords(page)
     const session = aSession().build()
-    api.mock(sessionsApi.draftSaveWins(session, 2))
+    api.mock(sessionsApi.rawRevisionIs(session, 1), sessionsApi.draftSaveWins(session, 2))
     const key = await unsent.leftInTheOutbox({ words: 'Words of an earlier load', sessionId: session.id })
 
     await unsent.openSettings()
 
     await expect.poll(() => wordsOf(api.last('put', sessionsPaths.rawDraft(session.id)))).toContain('Words of an earlier load')
     await expect.poll(() => unsent.stored(key)).toBeNull()
+  })
+
+  test('keeps the words of an earlier version in their key while the read of their base fails, and sends them when it works', async ({ page, api }) => {
+    const unsent = unsentWords(page)
+    const session = aSession().build()
+    api.mock(sessionsApi.rawRevisionFails(session, 1, aProblem()), sessionsApi.draftSaveWins(session, 2))
+    const key = await unsent.leftInTheOutbox({ words: 'Words of an earlier version', sessionId: session.id })
+
+    await unsent.openSettings()
+
+    await expect.poll(() => api.all('get', sessionsPaths.rawRevision(session.id, 1)).length).toBeGreaterThan(0)
+    await expect(unsent.at.waiting).toContainText('Words of an earlier version')
+    expect(api.all('put', sessionsPaths.rawDraft(session.id))).toHaveLength(0)
+    expect(await unsent.stored(key)).toContain('Words of an earlier version')
+
+    api.mock(sessionsApi.rawRevisionIs(session, 1))
+    await expect.poll(() => wordsOf(api.last('put', sessionsPaths.rawDraft(session.id))), { timeout: 15_000 }).toContain('Words of an earlier version')
+    await expect.poll(() => unsent.keys()).toEqual([])
   })
 
   test('does not send, show, or remove the words of another person', async ({ page, api }) => {
@@ -209,7 +228,7 @@ test.describe('the outbox', () => {
   test('sends each entry that it can read, and removes an entry that it cannot read', async ({ page, api }) => {
     const unsent = unsentWords(page)
     const session = aSession().build()
-    api.mock(sessionsApi.draftSaveWins(session, 2))
+    api.mock(sessionsApi.rawRevisionIs(session, 1), sessionsApi.draftSaveWins(session, 2))
     const literalNull = `recall.unsent.${actorSubject}.literal-null.raw`
     const broken = `recall.unsent.${actorSubject}.broken.raw`
     await unsent.leftInStorage(literalNull, 'null')

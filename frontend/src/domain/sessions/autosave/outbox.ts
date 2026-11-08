@@ -1,5 +1,3 @@
-import { newUuid } from '@/lib/new-uuid'
-
 import type { Stamped } from './save-queue'
 import { keysUnder, removeKey, writeKeyOfThisTab, type KeyOfATab } from './tab-keys'
 
@@ -10,8 +8,11 @@ export interface OutboxEntry {
   startedAt: string
   sessionId: string | null
   baseRevision: number
-  /** The text of the Draft at `baseRevision`. The tab that takes the words merges only the change of the person since this text. */
-  baseText: string
+  /**
+   * The text of the Draft at `baseRevision`. The tab that takes the words merges only the change of the person since this text.
+   * Null in a key of an older version: the base is then the text of Revision `baseRevision`, which the saver reads before its first save.
+   */
+  baseText: string | null
   /** The newest words of the person. */
   change: Stamped<string> | null
   /** A change older than `change` that went to the Server with no answer yet. It goes again first, with its own `savedAt`, so a save that won answers `Kept`. */
@@ -53,11 +54,14 @@ function parseEntry(stored: string | null): OutboxEntry | null {
       && typeof entry.startedAt === 'string'
       && (entry.sessionId === null || typeof entry.sessionId === 'string')
       && typeof entry.baseRevision === 'number'
-      && typeof entry.baseText === 'string'
+      && (entry.baseText == null || typeof entry.baseText === 'string')
       && (entry.sent == null || isStamped(entry.sent))
       && (entry.takenStates === undefined || (Array.isArray(entry.takenStates) && entry.takenStates.every((state) => typeof state === 'string')))
       && (isStamped(entry.change) || ((typeof entry.held === 'string' || typeof entry.wordsInHistory === 'string') && (entry.change ?? null) === null))
-    return isEntry ? (entry as OutboxEntry) : null
+    if (!isEntry) return null
+    // Revision 0 is an empty Draft, so its base needs no read.
+    const baseText = entry.baseText ?? (entry.baseRevision === 0 ? '' : null)
+    return { ...(entry as OutboxEntry), baseText }
   } catch {
     return null
   }
@@ -89,18 +93,22 @@ function changeIn(stored: string | null): Stamped<string> | null {
   }
 }
 
-/** An entry that this version cannot read can still hold words, and those go on as a new entry. */
-function entryFromWordsOf(stored: string | null): OutboxEntry | null {
+const unreadableReason = 'This version of Recall cannot read the entry of these words.'
+
+/**
+ * An entry that this version cannot read can still hold words. They stay in the key, and the person sees them with
+ * the reason, to copy or discard. The entry is named by the key, so each read finds the same entry.
+ */
+function entryFromWordsOf(storageKey: string, stored: string | null): OutboxEntry | null {
   const change = changeIn(stored)
   if (!change?.value) return null
-  const clientSessionId = newUuid()
-  return { key: `${clientSessionId}.raw`, channel: 'raw', clientSessionId, startedAt: change.savedAt, sessionId: null, baseRevision: 0, baseText: '', change }
+  return { key: `${storageKey}.raw`, channel: 'raw', clientSessionId: storageKey, startedAt: change.savedAt, sessionId: null, baseRevision: 0, baseText: '', change, refusal: unreadableReason }
 }
 
 const entryIn = ({ storageKey, writer, stored }: KeyOfATab): StoredEntry | null => {
   const parsed = parseEntry(stored)
   if (parsed) return { storageKey, writer, entry: parsed }
-  const repaired = entryFromWordsOf(stored)
+  const repaired = entryFromWordsOf(storageKey, stored)
   // A key with no words holds nothing to keep.
   if (!repaired) removeKey(storageKey)
   return repaired && { storageKey, writer: null, entry: repaired }

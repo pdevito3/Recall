@@ -3,6 +3,8 @@ import { notifyManager, type QueryClient } from '@tanstack/react-query'
 import type { DraftSaveResultDto } from '@/api/generated/models/types/draft-save-result-dto'
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
 import { addSession } from '@/api/generated/sessions/clients/add-session'
+import { getCleanedRevision } from '@/api/generated/sessions/clients/get-cleaned-revision'
+import { getRawRevision } from '@/api/generated/sessions/clients/get-raw-revision'
 import { getSession } from '@/api/generated/sessions/clients/get-session'
 import { saveCleanedDraft } from '@/api/generated/sessions/clients/save-cleaned-draft'
 import { saveRawDraft } from '@/api/generated/sessions/clients/save-raw-draft'
@@ -111,8 +113,8 @@ export interface DraftTarget {
   startedAt: string
   sessionId: string | null
   baseRevision: number
-  /** The text of the Draft at `baseRevision`, so that a merge takes only the change of the person. */
-  baseText: string
+  /** The text of the Draft at `baseRevision`, so that a merge takes only the change of the person. Null for a key of an older version, as `OutboxEntry` says. */
+  baseText: string | null
   /** Asked at the create, because the person can turn capture off after the first word. */
   location?: () => Promise<{ latitude: number; longitude: number } | null>
 }
@@ -154,7 +156,8 @@ export class DraftSaver implements LockParty {
   private isStopped = false
   private isDiscarded = false
   private isBeingDeleted = false
-  private baseText: string
+  /** Null until the read of Revision `baseRevision`, for a key of an older version. Each send reads it first. */
+  private baseText: string | null
   private lostInARow = 0
   private readsBeforeNextSave = false
   private lock: EntryLock
@@ -366,7 +369,11 @@ export class DraftSaver implements LockParty {
       this.saver.flush()
       return text
     }
-    const base = this.baseText
+    const base = await this.readBaseText(this.snapshot.sessionId).catch(() => null)
+    if (base === null) {
+      Notification.error('The newest words did not load. Try again.')
+      return null
+    }
     const newest = await this.readNewestDraft()
     if (newest === null || !this.isEditing()) return null
     const history = this.wordsInHistory
@@ -433,13 +440,14 @@ export class DraftSaver implements LockParty {
     }
     helpers.delete(this)
     this.lock.leave(this)
-    this.lock.releaseIfDone(this.lockIsFree())
+    if (this.lockIsFree()) this.lock.release()
     refreshDraftNotices()
   }
 
   subscribe = (listener: () => void) => {
     this.listeners.add(listener)
     refreshDraftNotices()
+    this.lock.need()
     this.lock.askForTheEntry()
     return () => {
       this.listeners.delete(listener)
@@ -483,8 +491,12 @@ export class DraftSaver implements LockParty {
 
   private releaseLockIfDone() {
     if (this.isHelper || !this.isDone() || !this.lockIsFree()) return
-    for (const [key, saver] of savers) if (saver.lock === this.lock && saver.isDone()) savers.delete(key)
-    this.lock.releaseIfDone(true)
+    this.lock.release()
+  }
+
+  /** Words of another tab wait in storage, so this saver needs the entry again. */
+  needTheEntry() {
+    this.lock.need()
   }
 
   // LockParty
@@ -671,6 +683,7 @@ export class DraftSaver implements LockParty {
 
   /** A failed read throws, so the save goes again and gets the same answer. A later save waits for the read, because its base comes from the read. */
   private async saveAndRead(change: Stamped<string>, signal: AbortSignal): Promise<SaveAnswer> {
+    if (this.baseText === null) await this.readBaseText(await this.sessionIdForSave(signal), signal).catch(asReadFailure)
     if (this.isOwnKeyGone()) return { reply: null, newest: await this.readForAnswer(signal) }
     if (this.readsBeforeNextSave) return { reply: null, newest: await this.readForAnswer(signal), isReadAfterLoss: true }
     const reply = await this.saveWords(change, signal)
@@ -685,6 +698,24 @@ export class DraftSaver implements LockParty {
   /** New words on this page are new text, and they get a key of their own. */
   private forgetAKeyThatIsGone() {
     if (this.isOwnKeyGone()) this.ownKey = null
+  }
+
+  /** A key of an older version holds no text of its base. That base is the text of Revision `baseRevision`, so it is exact. */
+  private async readBaseText(id: string, signal?: AbortSignal): Promise<string> {
+    if (this.baseText !== null) return this.baseText
+    const number = this.snapshot.baseRevision
+    const read = this.isRaw ? getRawRevision : getCleanedRevision
+    const { text } = await read({ path: { id, number }, signal, options: { suppressErrorToast: true } })
+    // A page that moved the base during the read gave a newer base, and it is exact too.
+    if (this.baseText === null && this.snapshot.baseRevision === number) this.baseText = text
+    if (this.baseText === null) throw new Error('The base moved during its read.')
+    return this.baseText
+  }
+
+  /** Each send reads the base first, so an answer always merges from its text. */
+  private get readBase(): string {
+    if (this.baseText === null) throw new Error('A merge came before the read of its base.')
+    return this.baseText
   }
 
   private async readForAnswer(signal: AbortSignal) {
@@ -724,7 +755,7 @@ export class DraftSaver implements LockParty {
     this.lock = lockOfEntry(this.target.owner, clientSessionId, true)
     this.lock.join(this)
     if (!this.isHelper) savers.set(draftKey(this.target), this)
-    oldLock.releaseIfDone(this.lockIsFreeOf(oldLock))
+    if (this.lockIsFreeOf(oldLock)) oldLock.release()
     this.wordsInHistory = null
     // A new entry is empty and has no other writer, so a loss on the old entry asks for no read and no wait.
     this.baseText = ''
@@ -791,7 +822,7 @@ export class DraftSaver implements LockParty {
       this.noteWordsAreTheDraft(theirs, this.isRaw ? newest.rawDraftRevision : newest.cleanedDraftRevision)
       return
     }
-    const merged = mergeDraft(this.baseText, mine, theirs)
+    const merged = mergeDraft(this.readBase, mine, theirs)
     this.moveBaseToDraftIn(newest)
     this.wordsInHistory = null
     this.update({ conflict: null })
@@ -989,7 +1020,12 @@ export function noteDeleteOfDrafts(clientSessionId: string, isRunning: boolean) 
 export function resumeUnsentDrafts(owner: string, queryClient: QueryClient) {
   if (hasStopped) return
   for (const { writer, entry } of readOutbox(owner).sort(newestFirst)) {
-    if (writer === thisTab || savers.has(entry.key)) continue
+    if (writer === thisTab) continue
+    const existing = savers.get(entry.key)
+    if (existing) {
+      existing.needTheEntry()
+      continue
+    }
     draftSaverFor({ owner, channel: entry.channel, clientSessionId: entry.clientSessionId, startedAt: entry.startedAt, sessionId: entry.sessionId, baseRevision: entry.baseRevision, baseText: entry.baseText }, queryClient)
   }
   refreshWordsOfEditors()

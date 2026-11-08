@@ -133,22 +133,26 @@ function isMarkOfAnotherTab(name: string) {
 
 type Ask = 'ifFree' | 'inLine' | 'steal'
 
-/** One request for the Web Lock. A steal by another tab ends it, also while this tab still waits for a hand-over. */
+/** One request for the Web Lock. A steal by another tab ends it, also while this tab still waits for a hand-over. A release drops it, and a need takes back a drop that the lock manager did not answer yet. */
 interface Request {
   isLost: boolean
+  isDropped: boolean
+  /** The lock manager can still answer: the request is not answered and not ended. */
+  isPending: boolean
 }
 
 export class EntryLock {
   readonly name: string
   private place: EditingPlace = 'waiting'
   private readonly parties = new Set<LockParty>()
-  private release: (() => void) | null = null
+  private unlock: (() => void) | null = null
   private waitInLine: AbortController | null = null
   private handOverWaiter: ((handed: HandOver) => void) | null = null
   /** The words that this tab gave when it lost the lock, until a tab says that it took them. They go again to each tab that takes, and they come back with the lock. */
   private lastHanded: HandedEntry[] | null = null
   private isClosed = false
-  private hasAsked = false
+  /** The newest request of this tab. Null, or dropped, while this tab does not need the entry. */
+  private request: Request | null = null
   /** True from Edit here until the hand-over came or the wait ended. */
   private isTaking = false
 
@@ -166,14 +170,23 @@ export class EntryLock {
     return this.place
   }
 
-  /** The first saver asks for the lock. A saver that joins while this tab edits takes the words that other tabs left in storage. */
+  /** A saver that joins asks for the lock when this tab does not ask yet. A saver that joins while this tab edits takes the words that other tabs left in storage. */
   join(party: LockParty) {
-    const isFirst = this.parties.size === 0 && !this.hasAsked
+    const isNeeded = this.isNeeded()
     this.parties.add(party)
-    if (isFirst) {
-      this.hasAsked = true
-      this.ask('ifFree')
-    } else if (this.place === 'here') party.takeOver(null)
+    if (!isNeeded) this.need()
+    else if (this.place === 'here') party.takeOver(null)
+  }
+
+  private isNeeded() {
+    return this.request !== null && !this.request.isDropped
+  }
+
+  /** A page or words of this tab need the entry again after a release. A drop that the lock manager did not answer yet is undone, so the page does not wait behind its own request. */
+  need() {
+    if (this.isClosed || this.isNeeded()) return
+    if (this.request?.isPending) this.request.isDropped = false
+    else this.ask('ifFree')
   }
 
   leave(party: LockParty) {
@@ -220,10 +233,27 @@ export class EntryLock {
     return [...this.parties].some((party) => party.isShown())
   }
 
-  /** Frees the lock when this tab holds nothing of the entry, and no page shows it. */
-  releaseIfDone(isDone: boolean) {
-    // A saver that waits in line and holds nothing must not get the lock later, when no page or notice knows it.
-    if (isDone) this.close()
+  /**
+   * This tab holds nothing of the entry, and no page shows it, so the lock goes free. A saver that waits in line and
+   * holds nothing must not get the lock later, when no page or notice knows it. This lock and its savers stay, so a page
+   * that shows the entry again asks with them, and no second lock of the entry asks in this tab.
+   */
+  release() {
+    const request = this.request
+    if (this.isClosed || !request || request.isDropped) return
+    request.isDropped = true
+    if (this.waitInLine) {
+      // An aborted wait gets no answer.
+      request.isPending = false
+      this.waitInLine.abort()
+      this.waitInLine = null
+    }
+    if (this.place === 'here') removeMark(this.name)
+    this.unlock?.()
+    this.unlock = null
+    if (this.place === 'waiting') return
+    this.place = 'waiting'
+    this.notify()
   }
 
   close() {
@@ -232,8 +262,8 @@ export class EntryLock {
     this.waitInLine?.abort()
     this.waitInLine = null
     if (this.place === 'here') removeMark(this.name)
-    this.release?.()
-    this.release = null
+    this.unlock?.()
+    this.unlock = null
     locks.delete(this.name)
   }
 
@@ -274,18 +304,20 @@ export class EntryLock {
   }
 
   private ask(how: Ask) {
+    const request: Request = { isLost: false, isDropped: false, isPending: webLocks !== undefined }
+    this.request = request
     if (!webLocks) {
-      this.askWithNoLocks(how)
+      this.askWithNoLocks(how, request)
       return
     }
     const waitInLine = how === 'inLine' ? new AbortController() : null
     if (waitInLine) this.waitInLine = waitInLine
     const options: LockOptions = how === 'steal' ? { steal: true } : how === 'ifFree' ? { ifAvailable: true } : { signal: waitInLine?.signal }
-    const request: Request = { isLost: false }
     let isHeld = false
     webLocks
       .request(this.name, options, async (lock) => {
-        if (this.isClosed) return
+        request.isPending = false
+        if (this.isClosed || request.isDropped) return
         if (lock === null) {
           this.becomeReader()
           return
@@ -293,12 +325,13 @@ export class EntryLock {
         isHeld = true
         if (this.waitInLine === waitInLine) this.waitInLine = null
         const held = new Promise<void>((resolve) => {
-          this.release = resolve
+          this.unlock = resolve
         })
         await this.grant(how === 'steal', request)
         await held
       })
       .catch((error: unknown) => {
+        request.isPending = false
         if (!isHeld && how === 'steal') this.isTaking = false
         if (!isHeld || !isAbort(error)) return
         request.isLost = true
@@ -307,14 +340,14 @@ export class EntryLock {
   }
 
   /** With no Web Locks, as on plain HTTP, the mark in storage names the tab that edits. A tab that crashed leaves its mark, and Edit here takes the entry. */
-  private askWithNoLocks(how: Ask) {
+  private askWithNoLocks(how: Ask, request: Request) {
     if (how === 'inLine') return
     if (how === 'ifFree' && this.place !== 'here' && isMarkOfAnotherTab(this.name)) {
       this.becomeReader()
       return
     }
-    this.release = () => undefined
-    void this.grant(how === 'steal', { isLost: false })
+    this.unlock = () => undefined
+    void this.grant(how === 'steal', request)
   }
 
   private becomeReader() {
@@ -332,7 +365,7 @@ export class EntryLock {
     const wasHere = this.place === 'here'
     const fromOthers = isTake ? await this.askForHandOver() : null
     if (isTake) this.isTaking = false
-    if (this.isClosed) return
+    if (this.isClosed || request.isDropped) return
     const handed = ownHanded === null ? fromOthers : { from: fromOthers?.from ?? thisTab, drafts: [...ownHanded, ...(fromOthers?.drafts ?? [])] }
     if (request.isLost) {
       // A third tab took the entry during the wait. The words that came go on to it, and this tab waits in line again.
@@ -393,8 +426,8 @@ export class EntryLock {
   private lose(to: string | null = null) {
     if (this.place !== 'here') return
     this.place = 'elsewhere'
-    this.release?.()
-    this.release = null
+    this.unlock?.()
+    this.unlock = null
     const drafts = [...this.parties].flatMap((party) => party.handOver() ?? [])
     talk({ kind: 'handed', lock: this.name, to, from: thisTab, drafts })
     this.lastHanded = drafts.length > 0 ? drafts : null

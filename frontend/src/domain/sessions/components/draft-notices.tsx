@@ -109,7 +109,7 @@ function RefusedNotice({ notice }: { notice: Extract<DraftNotice, { kind: 'refus
       <div className="min-w-0 flex-1 basis-64 space-y-1">
         <p className="font-medium text-destructive wrap-anywhere">These words are not saved. {notice.reason}</p>
         <p dir="auto" className="line-clamp-2 wrap-anywhere text-muted-foreground">{plainPreviewOf(notice.words, previewLength)}</p>
-        <p className="text-muted-foreground">Copy the words, make them shorter, and put them in a new entry. They stay here until you discard them.</p>
+        <p className="text-muted-foreground">Copy the words, and put them in a new entry. They stay here until you discard them.</p>
       </div>
       <div className={actionsClass}>
         <CopyWords words={notice.words} />

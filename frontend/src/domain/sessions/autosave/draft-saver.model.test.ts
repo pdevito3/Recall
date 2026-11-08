@@ -30,6 +30,9 @@ vi.mock('@/api/generated/sessions/clients/get-session', () => ({
     })
   },
 }))
+// Every key of the model holds the text of its base, so a read of a base by number is a fault.
+vi.mock('@/api/generated/sessions/clients/get-raw-revision', () => ({ getRawRevision: () => Promise.reject(new Error('The model keeps the base in each key.')) }))
+vi.mock('@/api/generated/sessions/clients/get-cleaned-revision', () => ({ getCleanedRevision: () => Promise.reject(new Error('The model has no cleaned channel.')) }))
 vi.mock('@/components/notification', () => ({ Notification: { error: () => undefined, success: () => undefined, info: () => undefined } }))
 vi.mock('../apis/timeline-cache', () => ({ patchTimelineRow: () => undefined, refreshTimelineHead: () => Promise.resolve() }))
 

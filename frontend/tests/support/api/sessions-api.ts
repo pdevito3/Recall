@@ -133,6 +133,16 @@ export const sessionsApi = {
     return { method: 'put', path: sessionsPaths.metadata(session.id), status: 200, body: session }
   },
 
+  /** Revision `number` of the raw Draft. A key of an older version has no text of its base, so the page reads it. */
+  rawRevisionIs(session: SessionDto, number: number, text = session.rawText): MockRoute {
+    return { method: 'get', path: sessionsPaths.rawRevision(session.id, number), status: 200, body: { number, savedAt: '2026-11-06T15:30:30+00:00', text } }
+  },
+
+  rawRevisionFails(session: SessionDto, number: number, problem: { build(): ProblemDetails }): MockRoute {
+    const body = problem.build()
+    return { method: 'get', path: sessionsPaths.rawRevision(session.id, number), status: body.status ?? 500, body }
+  },
+
   revisionsAre(session: SessionDto, revisions: RevisionDto[], nextCursor: string | null = null): MockRoute[] {
     return [
       {

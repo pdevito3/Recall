@@ -584,6 +584,7 @@ test('a won save ends the waits, so a next loss reads at once', async () => {
   save.mockResolvedValueOnce(lostWithNoNumber()).mockResolvedValueOnce(lostWithNoNumber()).mockResolvedValueOnce(lostWithNoNumber())
   save.mockResolvedValueOnce(wonAt(8)).mockResolvedValueOnce(lostWithNoNumber()).mockResolvedValue(wonAt(9))
   const saver = new DraftSaver(fromBase, clientAnswering(doc('base', 'newer words'), 7))
+  saver.subscribe(() => undefined)
 
   saver.edit(doc('base', 'my words'))
   saver.flush()
@@ -617,6 +618,7 @@ test('add my words after a Kept save left the Draft puts only the change of the 
   const queryClient = new QueryClient()
   vi.mocked(getSession).mockResolvedValueOnce(entryWithWords(doc('base', 'OTHERDEVICE'), 7)).mockResolvedValue(entryWithWords(doc('base', 'OTHERDEVICE', 'CHUNK'), 8))
   const saver = new DraftSaver(fromBase, queryClient)
+  saver.subscribe(() => undefined)
   saver.edit(doc('base word1'))
   saver.flush()
   await vi.waitFor(() => expect(saver.getSnapshot().conflict).toBe('wordsMovedToHistory'))
@@ -635,6 +637,7 @@ test('add my words changes nothing when the read fails, so the words stay on the
   const read = vi.mocked(getSession).mockResolvedValueOnce(entryWithWords('a chunk', 5))
   read.mockRejectedValue(new Error('Network Error'))
   const saver = new DraftSaver(target, queryClient)
+  saver.subscribe(() => undefined)
   saver.edit('my words')
   saver.flush()
   await vi.waitFor(() => expect(saver.getSnapshot().conflict).toBe('wordsMovedToHistory'))
@@ -695,6 +698,7 @@ test('a Lost save has no number in its reply, and the next save goes only after 
   let answer: (session: SessionDto) => void = () => undefined
   vi.mocked(getSession).mockImplementation(() => new Promise((resolve) => { answer = resolve as typeof answer }))
   const saver = new DraftSaver(target, queryClient)
+  saver.subscribe(() => undefined)
 
   saver.edit('my words')
   saver.flush()
@@ -1128,6 +1132,7 @@ test('a tab that takes an entry after a crash sends the change in flight first w
   storedByAnotherTab(entryWith('', { baseText: doc('base'), sent, change: { value: doc('base', 'sent words and more'), savedAt: '2026-11-06T15:32:00.000Z' } }))
 
   const saver = new DraftSaver(target, new QueryClient())
+  saver.subscribe(() => undefined)
   await vi.waitFor(() => expect(saveRawDraft).toHaveBeenCalledTimes(2))
 
   const [first, second] = vi.mocked(saveRawDraft).mock.calls.map(([call]) => call.body)
@@ -1151,22 +1156,20 @@ test('a tab that takes an entry after a crash merges a loss from the base of tha
 test('a key of an older version with no base text reads Revision baseRevision before its first save, and a loss merges from that text', async () => {
   vi.mocked(getRawRevision).mockResolvedValue({ number: 1, savedAt: '2026-11-06T15:30:30+00:00', text: doc('base') })
   vi.mocked(saveRawDraft).mockResolvedValueOnce(lostAt(5)).mockResolvedValue(wonAt(6))
-  const { baseText: _noBase, ...ofAnOlderVersion } = entryWith(doc('words of an older version'))
-  localStorage.setItem(`recall.unsent.${owner}.another-tab.1`, JSON.stringify(ofAnOlderVersion))
+  localStorage.setItem(`recall.unsent.${owner}.another-tab.1`, JSON.stringify({ ...entryWith(doc('words of an older version')), baseText: undefined }))
 
   const saver = new DraftSaver(target, clientAnswering(doc('base', 'a chunk'), 5))
   await vi.waitFor(() => expect(saveRawDraft).toHaveBeenCalledTimes(2))
 
   expect(getRawRevision).toHaveBeenCalledWith(expect.objectContaining({ path: { id: 'session-1', number: 1 } }))
   expect(vi.mocked(getRawRevision).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(saveRawDraft).mock.invocationCallOrder[0])
-  expect(vi.mocked(saveRawDraft).mock.lastCall?.[0].body).toMatchObject({ text: doc('a chunk', 'words of an older version'), baseRevision: 5 })
+  expect(vi.mocked(saveRawDraft).mock.lastCall?.[0].body).toMatchObject({ text: doc('words of an older version', 'a chunk'), baseRevision: 5 })
   saver.stop()
 })
 
 test('a key with no base text whose Revision read fails keeps its words in the key and sends nothing', async () => {
   vi.mocked(getRawRevision).mockRejectedValue(new TypeError('Failed to fetch'))
-  const { baseText: _noBase, ...ofAnOlderVersion } = entryWith('words of an older version')
-  localStorage.setItem(`recall.unsent.${owner}.another-tab.1`, JSON.stringify(ofAnOlderVersion))
+  localStorage.setItem(`recall.unsent.${owner}.another-tab.1`, JSON.stringify({ ...entryWith('words of an older version'), baseText: undefined }))
 
   const saver = new DraftSaver(target, new QueryClient())
   await vi.waitFor(() => expect(getRawRevision).toHaveBeenCalled())
