@@ -156,7 +156,7 @@ export class DraftSaver {
   private baseText: string | null
   private changesInKey: ChangeInKey[] = []
   private changesNoted = 0
-  /** The order of the oldest change that holds the words that another tab copied. Null when no tab copied words of this saver. */
+  /** A win of a change of this order or later gives the words a base again. Null when no other tab holds the words of this saver. */
   private copiedUpTo: number | null = null
   private lostInARow = 0
   private readsBeforeNextSave = false
@@ -196,6 +196,8 @@ export class DraftSaver {
     this.hasBeenTouched = true
     this.ownKey = storageKey
     this.heldWords = entry.held ?? null
+    // The tab that wrote the key can have sent these words, so they have no base until a save of this saver wins.
+    if (entry.change !== null || this.heldWords !== null) this.copiedUpTo = 0
     this.reportsArrival = this.heldWords !== null || (entry.change !== null && !entry.refusal)
     if (entry.wordsInHistory) this.noteWordsOnlyInHistory(entry.wordsInHistory)
     if (this.heldWords !== null) queueMicrotask(() => this.holdRun === 0 && void this.joinHoldWithNoPage())
@@ -463,8 +465,9 @@ export class DraftSaver {
     return this.isRaw ? session.rawText : (session.cleanedText ?? '')
   }
 
+  /** Words that two tabs hold can be in the Draft or not, and a read does not tell which. So they keep no base until a save of them wins here. */
   moveBaseTo(draftRevision: number, draftText: string) {
-    this.baseText = draftText
+    if (this.copiedUpTo === null) this.baseText = draftText
     this.update({ baseRevision: draftRevision })
   }
 
