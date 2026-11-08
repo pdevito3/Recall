@@ -442,6 +442,8 @@ interface Page {
   held: string | null
   /** Where the entry is edited, as the page last rendered it. */
   place: 'waiting' | 'here' | 'elsewhere'
+  /** The page showed the words of another tab since it last edited, so a take opens the text that the read of the take gave. */
+  wasElsewhere: boolean
 }
 
 // A line break in a document is the escape `\n`, so a token can follow the letter `n`. A person types `w`, a recording adds `c`, and another device types `d`.
@@ -579,7 +581,7 @@ class Tab {
     const target = { owner, channel: 'raw' as const, clientSessionId, startedAt: '2026-11-07T00:00:00.000Z', sessionId, baseRevision, baseText: '' }
     this.run(() => {
       const saver = this.mod.draftSaverFor(target, this.queryClient, isNewEntry)
-      const page: Page = { saver, stopListening: () => undefined, clientSessionId, editor: null, held: null, place: 'waiting' }
+      const page: Page = { saver, stopListening: () => undefined, clientSessionId, editor: null, held: null, place: 'waiting', wasElsewhere: false }
       this.page = page
       // A page opens its editor after the render, so a take of the words ends first.
       page.stopListening = saver.subscribe(() => queueMicrotask(() => this.notePlace(page)))
@@ -598,14 +600,18 @@ class Tab {
     if (place === page.place) return
     page.place = place
     if (place !== 'here') {
+      if (place === 'elsewhere') page.wasElsewhere = true
       page.editor = null
       page.held = null
       return
     }
     const kept = page.saver.wordsToOpen()
     const id = page.saver.getSnapshot().sessionId
-    page.editor = kept ?? (id ? null : '')
     page.held = page.saver.wordsInHold()
+    // As the entry page: after a take with no words to open, the editor opens the text of the base, not an older read of the page.
+    const ofTheTake = page.wasElsewhere && page.held === null ? page.saver.wordsOfTheBase() : null
+    page.wasElsewhere = false
+    page.editor = kept ?? ofTheTake ?? (id ? null : '')
     if (page.editor === null) {
       page.saver.takeHold()
       void this.readInto(page, id as string)
