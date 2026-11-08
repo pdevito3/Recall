@@ -296,10 +296,8 @@ function foldEarlierSaves(base: JSONContent[], mine: JSONContent[], theirs: JSON
   const merged = new Set<JSONContent>()
   const fold = (added: JSONContent[], other: JSONContent[], merge: (one: JSONContent, other: JSONContent) => JSONContent[]) => {
     const kept = new Set(matchBlocksOf(base, added).filter((at) => at >= 0))
-    // A block of the other side that stands for a block of `base` is its change of that block, not an earlier save.
-    const keptByOther = new Set(matchBlocksOf(base, other).filter((at) => at >= 0))
     const places: JSONContent[][] = other.map((block) => [block])
-    const isFree = (block: JSONContent, at: number) => !merged.has(block) && !keptByOther.has(at) && places[at][0] === block && !inBase.has(keyOfBlock(block)) && holdsAWord(block)
+    const isFree = (block: JSONContent, at: number) => !merged.has(block) && places[at][0] === block && !inBase.has(keyOfBlock(block)) && holdsAWord(block)
     const left = added.filter((block, at) => {
       if (kept.has(at) || merged.has(block) || inBase.has(keyOfBlock(block)) || !holdsAWord(block)) return true
       const place = other.findIndex((candidate, index) => isFree(candidate, index) && isASaveOf(candidate, block))
