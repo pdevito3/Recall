@@ -4,6 +4,7 @@ import { Tab, TabList, Tabs } from 'react-aria-components'
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
 import { useBreadcrumbName } from '@/components/breadcrumb-name'
 import { PageHeading } from '@/components/page-heading'
+import { RecordingsCard } from '@/domain/capture/components/recordings-card'
 import { useJournalZone } from '@/domain/settings/apis/user-setting'
 import { formatInstant, type TimeZone } from '@/lib/zoned-time'
 
@@ -49,6 +50,7 @@ export function SessionPage({ session }: { session: SessionDto }) {
         </Tabs>
       )}
       <DraftEditor key={channel} session={session} channel={channel} />
+      <RecordingsCard sessionId={session.id} />
       <CleanupCard session={session} />
       <SessionTags session={session} />
     </>
