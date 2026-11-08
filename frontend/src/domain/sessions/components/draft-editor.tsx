@@ -109,17 +109,18 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
     if (snapshot.editing !== 'here' || before === 'here') return
     setHasEdited(true)
     const kept = saver.wordsToOpen()
-    // At the first grant with no words of another tab, the editor opens what the page opened.
-    if (kept === null && !wasElsewhere.current) return
-    wasElsewhere.current = false
-    // The cache of the page can be older than the read of the take, and a save goes from the base of that read.
+    // With no unsent words, the editor and the base of the next save hold the newest of the read of the take and the cache of the page.
+    if (kept === null && !saver.hasConflict() && saver.getSnapshot().baseRevision < serverDraft) saver.moveBaseTo(serverDraft, serverText)
     const text = kept ?? saver.wordsOfTheBase() ?? serverText
+    // At the first grant, an editor that already shows these words keeps its caret.
+    if (!wasElsewhere.current && text === currentText.current) return
+    wasElsewhere.current = false
     currentText.current = text
     setChangeNote(null)
     const takesFocus = pressedEditHere.current
     pressedEditHere.current = false
     setOpened((previous) => ({ text, key: previous.key + 1, takesFocus }))
-  }, [saver, snapshot.editing, serverText])
+  }, [saver, snapshot.editing, serverText, serverDraft])
 
   const editHere = () => {
     pressedEditHere.current = true
