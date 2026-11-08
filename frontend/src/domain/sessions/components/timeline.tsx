@@ -4,6 +4,7 @@ import { parseDate } from '@internationalized/date'
 import type { SessionSummaryDto } from '@/api/generated/models/types/session-summary-dto'
 import { QueryError } from '@/components/query-error'
 import { Badge } from '@/components/ui/badge'
+import { buttonVariants } from '@/components/ui/button-variants'
 import { Link } from '@/components/ui/link'
 import { usePeopleDirectory } from '@/domain/people/apis/people'
 import { formatInstant, todayAt, type TimeZone } from '@/lib/zoned-time'
@@ -82,11 +83,22 @@ interface DaySectionProps {
 
 const DaySection = memo(function DaySection({ group, today, zone, labels }: DaySectionProps) {
   const headingId = `day-${group.day}`
+  const heading = dayHeading(parseDate(group.day), parseDate(today))
   return (
     <section aria-labelledby={headingId}>
-      <h2 id={headingId} className="sticky top-0 z-10 bg-background py-2 text-sm font-semibold text-muted-foreground">
-        {dayHeading(parseDate(group.day), parseDate(today))}
-      </h2>
+      <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-background py-1">
+        <h2 id={headingId} className="min-w-0 text-sm font-semibold text-muted-foreground">
+          {heading}
+        </h2>
+        <Link
+          to="/summaries"
+          search={{ period: 'Day', date: group.day }}
+          aria-label={`Summary of ${heading}`}
+          className={buttonVariants({ variant: 'ghost', size: 'sm' })}
+        >
+          Summary
+        </Link>
+      </div>
       <ul className="flex flex-col gap-2">
         {group.rows.map((row) => (
           <TimelineRow key={row.id} row={row} zone={zone} labels={labels} />
