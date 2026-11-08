@@ -192,6 +192,15 @@ test('from an empty Draft, a paragraph that each side went on with around one wo
   expect(plain(merged)).toEqual(['Plans', 'Bread', 'Before lunch with Sam at noon today'])
 })
 
+test.each([
+  ['two new paragraphs that start with I', words('Morning.'), words('Morning.', 'I went to the store.'), words('Morning.', 'I called mom.'), ['Morning.', 'I called mom.', 'I went to the store.']],
+  ['a change of the person and a new paragraph of the other device', words('I like cats'), words('I like dogs'), words('I like cats', 'I went out'), ['I like dogs', 'I went out']],
+  ['a new paragraph of the person and a change of the other device', words('We met at noon.'), words('We met at noon.', 'We ate soup.'), words('We met at 1 pm.'), ['We met at 1 pm.', 'We ate soup.']],
+  ['a deleted word and a new paragraph that starts with the same word', words('the red car is fast'), words('the car is fast'), words('the red car is fast', 'the end'), ['the car is fast', 'the end']],
+])('paragraphs that only start with the same word stay apart: %s', (_, base, mine, theirs, merged) => {
+  expect(plain(mergeDraft(base, mine, theirs))).toEqual(merged)
+})
+
 test('a block that both sides added at other places shows once, at the place of the other side', () => {
   const merged = mergeDraft(doc(heading('Day one'), paragraph('The sea')), doc(heading('Day one'), paragraph('A new line'), paragraph('The sea')), doc(heading('Day one'), paragraph('The sea'), paragraph('A new line'), paragraph('More')))
 

@@ -276,10 +276,14 @@ function commonBlockOf(one: JSONContent, other: JSONContent): JSONContent {
   return { ...shellOf(one), content: commonBlocksOf(childrenOf(one), childrenOf(other)) }
 }
 
-/** A block that is one block with `block` on another side: it starts with the same word, or it holds more than half of the words of `block`. */
+/**
+ * A block that is one block with `block` on another side: the words that both hold, in order, are more than half of the
+ * shorter block. Two paragraphs that only start with the same word, as `I` or `We`, are two blocks.
+ */
 function isASaveOf(other: JSONContent, block: JSONContent) {
-  const [words, held] = [textsOf(block), new Set(textsOf(other))]
-  return keyOfBlock(shellOf(other)) === keyOfBlock(shellOf(block)) && (textsOf(other)[0] === words[0] || 2 * words.filter((word) => held.has(word)).length > words.length)
+  const [words, otherWords] = [textsOf(block), textsOf(other)]
+  const inOrder = matchOf(words, otherWords).filter((at) => at >= 0).length
+  return keyOfBlock(shellOf(other)) === keyOfBlock(shellOf(block)) && holdsAWord(block) && 2 * inOrder > Math.min(words.length, otherWords.length)
 }
 
 /**
@@ -292,8 +296,10 @@ function foldEarlierSaves(base: JSONContent[], mine: JSONContent[], theirs: JSON
   const merged = new Set<JSONContent>()
   const fold = (added: JSONContent[], other: JSONContent[], merge: (one: JSONContent, other: JSONContent) => JSONContent[]) => {
     const kept = new Set(matchBlocksOf(base, added).filter((at) => at >= 0))
+    // A block of the other side that stands for a block of `base` is its change of that block, not an earlier save.
+    const keptByOther = new Set(matchBlocksOf(base, other).filter((at) => at >= 0))
     const places: JSONContent[][] = other.map((block) => [block])
-    const isFree = (block: JSONContent, at: number) => !merged.has(block) && places[at][0] === block && !inBase.has(keyOfBlock(block)) && holdsAWord(block)
+    const isFree = (block: JSONContent, at: number) => !merged.has(block) && !keptByOther.has(at) && places[at][0] === block && !inBase.has(keyOfBlock(block)) && holdsAWord(block)
     const left = added.filter((block, at) => {
       if (kept.has(at) || merged.has(block) || inBase.has(keyOfBlock(block)) || !holdsAWord(block)) return true
       const place = other.findIndex((candidate, index) => isFree(candidate, index) && isASaveOf(candidate, block))
@@ -333,14 +339,12 @@ function keptBlocksOf(base: JSONContent[], mine: JSONContent[], theirs: JSONCont
 }
 
 /**
- * Blocks that both sides changed at one place, where a block of each side starts with the same word: one side goes on
- * from a save of the other, as a tab that took the key of a closed tab. They merge with the words that both hold as the
- * base, as in the merge of the iOS client, so no word shows twice. Null for blocks that two writers started apart.
+ * Blocks that both sides changed at one place, where a block of one side is a save of a block of the other: one side
+ * goes on from a save of the other, as a tab that took the key of a closed tab. They merge with the words that both hold
+ * as the base, as in the merge of the iOS client, so no word shows twice. Null for blocks that two writers started apart.
  */
 function mergeASaveOfTheOther(mine: JSONContent[], theirs: JSONContent[]): JSONContent[] | null {
-  const firstWordOf = (block: JSONContent) => `${keyOfBlock(shellOf(block))} ${textsOf(block)[0] ?? ''}`
-  const starts = new Set(theirs.filter(holdsAWord).map(firstWordOf))
-  return mine.some((block) => holdsAWord(block) && starts.has(firstWordOf(block))) ? mergeBlocks(commonBlocksOf(mine, theirs), mine, theirs, false) : null
+  return mine.some((block) => theirs.some((other) => isASaveOf(other, block))) ? mergeBlocks(commonBlocksOf(mine, theirs), mine, theirs, false) : null
 }
 
 /**
