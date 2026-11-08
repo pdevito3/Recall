@@ -23,6 +23,8 @@ A merge after `Lost` now always has the base of the words. It stays the three-wa
 - A hand-over can hold words of a channel that the taking tab has no saver for, as when the person wrote in Cleaned and the second tab shows Your words. A helper of that channel takes the words with their own base, and the taker says that it took only the states that a saver took. A state that no saver took stays with the tab that gave it.
 - A taker with no room in storage keeps the handed key while its words do not change, so a take does not move words from storage to memory.
 - `Edit here` asks once while the hand-over is on its way. A tab whose take another tab stole during the wait waits in line again.
+- A tab can take handed words from their key in storage, as after a reload or a crash, and then no `took` message comes. So the tab that gave the words reads the key before it gives them again or takes them back: a key that is gone, or that holds a newer state that took the words in, means that a tab took them.
+- A take of a state and of a newer state that took it in sends the words once.
 - These cases are not covered:
   - A crash with a full storage loses the words that only the memory of the tab holds. The page says so before the crash.
   - A sign-out cannot name the words that only the memory of a frozen tab holds.

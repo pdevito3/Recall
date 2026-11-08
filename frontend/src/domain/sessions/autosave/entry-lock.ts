@@ -1,6 +1,6 @@
 import { openChannel } from '@/lib/browser-channel'
 
-import type { OutboxEntry } from './outbox'
+import { isStateTakenFromKey, type OutboxEntry } from './outbox'
 import { thisTab } from './tab-keys'
 
 /**
@@ -239,9 +239,10 @@ export class EntryLock {
 
   hearTake(by: string) {
     if (by === thisTab) return
-    if (this.place !== 'here' && this.lastHanded !== null) {
+    const handed = this.place === 'here' ? null : this.untakenHanded()
+    if (handed !== null) {
       // The words stay here until the taker says that it took them.
-      talk({ kind: 'handed', lock: this.name, to: by, from: thisTab, drafts: this.lastHanded })
+      talk({ kind: 'handed', lock: this.name, to: by, from: thisTab, drafts: handed })
       return
     }
     this.lose(by)
@@ -326,7 +327,7 @@ export class EntryLock {
   private async grant(isTake: boolean, request: Request) {
     writeMark(this.name)
     // Words that this tab gave when it lost the lock, and that no tab took, come back with the lock.
-    const ownHanded = this.lastHanded
+    const ownHanded = this.untakenHanded()
     this.lastHanded = null
     const wasHere = this.place === 'here'
     const fromOthers = isTake ? await this.askForHandOver() : null
@@ -355,6 +356,13 @@ export class EntryLock {
     const [first] = parties
     if (first && left.length > 0) for (const state of first.takeDraftsOfNoParty(left)) taken.add(state)
     if (taken.size > 0) talk({ kind: 'took', lock: this.name, states: [...taken] })
+  }
+
+  /** The handed words that no tab took. A tab that took a key from storage, and not from a hand-over, says nothing, so the key tells. */
+  private untakenHanded() {
+    const left = (this.lastHanded ?? []).filter(({ storageKey, entry }) => storageKey === null || entry.stateId === undefined || !isStateTakenFromKey(storageKey, entry.stateId))
+    this.lastHanded = left.length > 0 ? left : null
+    return this.lastHanded
   }
 
   hearTook(states: string[]) {

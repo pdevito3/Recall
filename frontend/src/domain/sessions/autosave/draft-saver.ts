@@ -513,7 +513,10 @@ export class DraftSaver implements LockParty {
     const ofThisDraft = (handed?.drafts ?? []).filter(({ entry }) => entry.key === key)
     const handedKeys = new Set(ofThisDraft.map(({ storageKey }) => storageKey))
     const stored = readOutbox(this.target.owner).filter(({ storageKey, entry }) => entry.key === key && !handedKeys.has(storageKey) && !isKeyOfASaverHere(storageKey))
-    const [main, ...others] = [...ofThisDraft, ...stored].sort(newestFirst)
+    const toTake = [...ofThisDraft, ...stored]
+    // A state that another of these states took in has its words in that state, so they go once.
+    const takenIn = new Set(toTake.flatMap(({ entry }) => entry.takenStates ?? []))
+    const [main, ...others] = toTake.filter(({ entry }) => !takenIn.has(entry.stateId ?? '')).sort(newestFirst)
     const wasElsewhere = this.snapshot.editing === 'elsewhere'
     if (!main && wasElsewhere) {
       void this.startFromTheDraft()
@@ -589,8 +592,6 @@ export class DraftSaver implements LockParty {
     this.noteTaken(entry)
     this.ownKey = storageKey
     // A key that holds these words stays when a write of the same words finds no room, so a take keeps the words in storage.
-    const stored = storageKey === null ? undefined : readOutbox(this.target.owner).find((one) => one.storageKey === storageKey)
-    this.kept = stored?.entry.stateId && wordsOfAState(stored.entry) === wordsOfAState(entry) ? { storageKey: stored.storageKey, stateId: stored.entry.stateId, words: wordsOfAState(entry) } : null
     this.target = { ...this.target, sessionId: entry.sessionId ?? this.target.sessionId }
     this.baseText = entry.baseText
     this.readsBeforeNextSave = entry.readsFirst ?? false

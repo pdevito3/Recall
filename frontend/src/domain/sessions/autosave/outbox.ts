@@ -69,6 +69,17 @@ export const writeToOutbox = (owner: string, previousKey: string | null, entry: 
 
 export const removeFromOutbox = removeKey
 
+/** A tab took the words of a state from its key: the key is gone, or the entry in it took the state in. A key that cannot be read keeps the words. */
+export function isStateTakenFromKey(storageKey: string, stateId: string) {
+  let stored: string | null
+  try {
+    stored = localStorage.getItem(storageKey)
+  } catch {
+    return false
+  }
+  return stored === null || (parseEntry(stored)?.takenStates?.includes(stateId) ?? false)
+}
+
 function changeIn(stored: string | null): Stamped<string> | null {
   try {
     const { change } = JSON.parse(stored ?? 'null') as Partial<OutboxEntry>

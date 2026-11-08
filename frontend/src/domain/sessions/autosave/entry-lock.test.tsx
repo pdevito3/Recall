@@ -66,6 +66,24 @@ function heardTakes() {
   return { takes, close: () => channel.close() }
 }
 
+/** The drafts of each hand-over that this tab gives to a taker. */
+function heardHandOvers() {
+  const handed: { to: string | null; states: string[] }[] = []
+  const channel = new BroadcastChannel('recall.editors')
+  channel.onmessage = ({ data }: MessageEvent<{ kind: string; to?: string | null; drafts?: HandedEntry[] }>) => {
+    if (data.kind === 'handed' && data.drafts) handed.push({ to: data.to ?? null, states: data.drafts.flatMap(({ entry }) => entry.stateId ?? []) })
+  }
+  return { handed, close: () => channel.close() }
+}
+
+/** A saver that hands over words that it keeps in a key. */
+function aGivingParty(channel: 'raw' | 'cleaned', stateId: string): LockParty {
+  const { entry } = draftOf(channel, stateId)
+  const storageKey = `recall.unsent.person-a.this-tab.${channel}`
+  localStorage.setItem(storageKey, JSON.stringify(entry))
+  return { ...aRawParty(false).party, handOver: () => ({ storageKey, entry }) }
+}
+
 const handOverOf = (...drafts: HandedEntry[]): HandOver => ({ from: 'another-tab', drafts })
 
 test('a hand-over with words of a channel that no saver here writes gives them to a saver here, and says that this tab took each state', async () => {
@@ -91,6 +109,25 @@ test('a state that no saver took stays with the tab that gave it, so its words a
   lock.hearHandOver(handOverOf(draftOf('raw', 'another-tab.1'), draftOf('cleaned', 'another-tab.2')))
 
   await vi.waitFor(() => expect(heard).toEqual([['another-tab.1']]))
+  close()
+})
+
+test('handed words whose key a tab took from storage go to no later taker, and words still in their key do', async () => {
+  const { handed, close } = heardHandOvers()
+  const lock = lockOfEntry('person-a', 'client-session')
+  lock.join(aGivingParty('raw', 'this-tab.1'))
+  lock.join(aGivingParty('cleaned', 'this-tab.2'))
+  lock.hearTake('another-tab')
+  // The taker took the raw key from storage, sent the words, and removed the key, so it said nothing about the state.
+  localStorage.removeItem('recall.unsent.person-a.this-tab.raw')
+
+  lock.hearTake('third-tab')
+
+  await vi.waitFor(() => expect(handed).toHaveLength(2))
+  expect(handed).toEqual([
+    { to: 'another-tab', states: ['this-tab.1', 'this-tab.2'] },
+    { to: 'third-tab', states: ['this-tab.2'] },
+  ])
   close()
 })
 
