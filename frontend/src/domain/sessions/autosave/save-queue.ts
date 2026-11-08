@@ -19,6 +19,7 @@ export type SaveEvent<T> =
   | { type: 'replied'; savedAt: string }
   | { type: 'noReply' }
   | { type: 'refused'; message: string }
+  | { type: 'adopted'; queue: SaveQueue<T> }
 
 export type SaveStatus =
   | { kind: 'idle' }
@@ -32,8 +33,9 @@ export function emptyQueue<T>(): SaveQueue<T> {
   return { unsent: null, sending: null, unanswered: null, isWaitingSinceNoReply: false, refusal: null, lastSavedAt: null }
 }
 
-export function queueWithUnanswered<T>(change: Stamped<T>): SaveQueue<T> {
-  return { ...emptyQueue<T>(), unanswered: change, isWaitingSinceNoReply: true }
+/** A change with no answer goes again first with its own `savedAt`, and `newer` goes after it. */
+export function queueWithUnanswered<T>(change: Stamped<T>, newer: Stamped<T> | null = null): SaveQueue<T> {
+  return { ...emptyQueue<T>(), unanswered: change, unsent: newer, isWaitingSinceNoReply: true }
 }
 
 export function queueWithRefusal<T>(change: Stamped<T>, message: string): SaveQueue<T> {
@@ -74,6 +76,8 @@ export function step<T>(queue: SaveQueue<T>, event: SaveEvent<T>): SaveQueue<T> 
         isWaitingSinceNoReply: false,
         refusal: { message: event.message, change: queue.sending },
       }
+    case 'adopted':
+      return { ...event.queue, lastSavedAt: event.queue.lastSavedAt ?? queue.lastSavedAt }
   }
 }
 

@@ -10,7 +10,16 @@ export interface OutboxEntry {
   startedAt: string
   sessionId: string | null
   baseRevision: number
+  /** The text of the Draft at `baseRevision`. The tab that takes the words merges only the change of the person since this text. */
+  baseText: string
+  /** The newest words of the person. */
   change: Stamped<string> | null
+  /** A change older than `change` that went to the Server with no answer yet. It goes again first, with its own `savedAt`, so a save that won answers `Kept`. */
+  sent?: Stamped<string> | null
+  /** The last save was `Lost`, so the next send reads the Draft first. */
+  readsFirst?: boolean
+  /** Names this state of the words, so a tab takes a hand-over of the same state once. */
+  stateId?: string
   held?: string | null
   /** The words of a save that the Draft does not hold. They are safe in History, and this keeps the notice after a reload. */
   wordsInHistory?: string | null
@@ -42,6 +51,8 @@ function parseEntry(stored: string | null): OutboxEntry | null {
       && typeof entry.startedAt === 'string'
       && (entry.sessionId === null || typeof entry.sessionId === 'string')
       && typeof entry.baseRevision === 'number'
+      && typeof entry.baseText === 'string'
+      && (entry.sent == null || isStamped(entry.sent))
       && (isStamped(entry.change) || ((typeof entry.held === 'string' || typeof entry.wordsInHistory === 'string') && (entry.change ?? null) === null))
     return isEntry ? (entry as OutboxEntry) : null
   } catch {
@@ -69,7 +80,7 @@ function entryFromWordsOf(stored: string | null): OutboxEntry | null {
   const change = changeIn(stored)
   if (!change?.value) return null
   const clientSessionId = newUuid()
-  return { key: `${clientSessionId}.raw`, channel: 'raw', clientSessionId, startedAt: change.savedAt, sessionId: null, baseRevision: 0, change }
+  return { key: `${clientSessionId}.raw`, channel: 'raw', clientSessionId, startedAt: change.savedAt, sessionId: null, baseRevision: 0, baseText: '', change }
 }
 
 const entryIn = ({ storageKey, writer, stored }: KeyOfATab): StoredEntry | null => {

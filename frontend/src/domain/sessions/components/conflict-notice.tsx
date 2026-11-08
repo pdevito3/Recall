@@ -27,6 +27,19 @@ export function ConflictNotice({ conflict, onShowNewest, onKeep }: ConflictNotic
   )
 }
 
+/** `hasLost` is true when this tab edited the entry until another tab took it. */
+export function EditedElsewhereNotice({ hasLost, onEditHere }: { hasLost: boolean; onEditHere: () => void }) {
+  return (
+    <div role="status" className="flex flex-col gap-2 rounded-lg border bg-muted p-3 text-sm dark:bg-card wrap-anywhere sm:flex-row sm:items-center sm:justify-between">
+      <p>
+        {hasLost ? 'You now edit this entry in another tab. This tab shows the words and saves nothing.' : 'This entry is open in another tab. This tab shows the words and saves nothing.'}
+        {' '}Choose Edit here to write in this tab.
+      </p>
+      <Button variant="outline" className={`${wrapping} self-end sm:self-auto`} onPress={onEditHere}>Edit here</Button>
+    </div>
+  )
+}
+
 export const mergedNote = 'Another tab, device, or recording changed this entry while you wrote. Your words are now in the newest words, and the words before the merge are in History.'
 
 /** A merge changes the words on the page, so the note stays until the person dismisses it. */

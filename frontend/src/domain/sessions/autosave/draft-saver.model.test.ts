@@ -378,7 +378,7 @@ class Tab {
   }
 
   openDraft(clientSessionId: string, sessionId: string | null, baseRevision: number) {
-    const target = { owner, channel: 'raw' as const, clientSessionId, startedAt: '2026-11-07T00:00:00.000Z', sessionId, baseRevision }
+    const target = { owner, channel: 'raw' as const, clientSessionId, startedAt: '2026-11-07T00:00:00.000Z', sessionId, baseRevision, baseText: '' }
     this.run(() => {
       const saver = this.mod.draftSaverFor(target, this.queryClient)
       const stopListening = saver.subscribe(() => undefined)

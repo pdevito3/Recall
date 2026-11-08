@@ -31,7 +31,6 @@ interface SerialSaverOptions<T, R> {
   send: (change: Stamped<T>, signal: AbortSignal) => Promise<R>
   onReply: (reply: R, change: Stamped<T>) => void
   refusalMessage?: (error: ProblemDetailsError) => string
-  initialQueue?: SaveQueue<T>
   /** A queue of partial changes keeps only the last change of a field, also when an older change had no reply. */
   mergeEdits?: (older: T, newer: T) => T
   onQueueChange?: (queue: SaveQueue<T>) => void
@@ -46,15 +45,48 @@ export class SerialSaver<T, R> {
   private hold: ReturnType<typeof setTimeout> | undefined
   private retryMs = firstRetryMs
   private isDisposed = false
+  private isPaused = false
+  /** A pause ends each request of the queue before it, so a later answer of such a request changes nothing. */
+  private generation = 0
   private settleWaiters: ((isSettled: boolean) => void)[] = []
   private readonly options: SerialSaverOptions<T, R>
 
   constructor(options: SerialSaverOptions<T, R>) {
     this.options = options
-    this.queue = options.initialQueue ?? emptyQueue<T>()
+    this.queue = emptyQueue<T>()
     this.status = statusOf(this.queue)
     window.addEventListener('online', this.retryNow)
+  }
+
+  /** The queue of another saver goes on here: a change with no answer goes again first, with its own `savedAt`. */
+  adopt(queue: SaveQueue<T>) {
+    if (this.isDisposed) return
+    this.isPaused = false
+    this.generation += 1
+    this.apply({ type: 'adopted', queue })
     if (this.queue.unanswered) this.sendAfterThisRender()
+  }
+
+  /** The queue goes to another saver. Nothing goes from here until a next `adopt`, and an answer of a request from before changes nothing. */
+  pause() {
+    this.cancelDebounce()
+    clearTimeout(this.retry)
+    clearTimeout(this.hold)
+    this.hold = undefined
+    this.retryMs = firstRetryMs
+    this.isPaused = true
+    this.generation += 1
+    this.apply({ type: 'adopted', queue: emptyQueue<T>() })
+    this.answerSettleWaiters()
+  }
+
+  /** The change of a request with no answer yet, also after a request that did not answer and waits to go again. */
+  inFlight(): Stamped<T> | null {
+    return this.queue.sending ?? this.queue.unanswered
+  }
+
+  isSending() {
+    return this.queue.sending !== null
   }
 
   /** A stamp from another tab stays with the words, because the Server compares the time at which the person typed them. */
@@ -160,18 +192,21 @@ export class SerialSaver<T, R> {
 
   private pump() {
     const change = nextToSend(this.queue)
-    if (!change || this.isDisposed || this.hold !== undefined) return
+    if (!change || this.isDisposed || this.isPaused || this.hold !== undefined) return
+    const generation = this.generation
     this.apply({ type: 'sent' })
+    // The write of the queue can learn that another tab took the entry, and then nothing goes.
+    if (this.isDisposed || generation !== this.generation) return
     const limit = new AbortController()
     const limitTimer = setTimeout(() => limit.abort(), requestLimitMs)
     this.options.send(change, limit.signal).then(
       (reply) => {
         clearTimeout(limitTimer)
-        this.handleReply(reply, change)
+        if (generation === this.generation) this.handleReply(reply, change)
       },
       (error: unknown) => {
         clearTimeout(limitTimer)
-        this.handleFailure(error)
+        if (generation === this.generation) this.handleFailure(error)
       },
     )
   }

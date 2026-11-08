@@ -1,4 +1,4 @@
-import { isCancelledError, onlineManager, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { isCancelledError, onlineManager, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { flushSync } from 'react-dom'
 
@@ -48,7 +48,7 @@ function locationOfNewEntry(queryClient: QueryClient) {
   }
 }
 
-const idleSnapshot: DraftSnapshot = { status: { kind: 'idle' }, conflict: null, sessionId: null, baseRevision: 0, movedFromDeletedEntry: false, isOnlyInMemory: false, areWordsWithAnotherTab: false, waitsForAnotherWriter: false }
+const idleSnapshot: DraftSnapshot = { status: { kind: 'idle' }, conflict: null, sessionId: null, baseRevision: 0, movedFromDeletedEntry: false, isOnlyInMemory: false, waitsForAnotherWriter: false, editing: 'here', wordsOfTheEditor: null }
 const noSubscription = () => () => undefined
 
 const isTheEntryGone = (error: unknown) => isProblemDetailsError(error) && error.status === 404
@@ -70,7 +70,7 @@ export function useComposer() {
   const [saver, setSaverState] = useState<DraftSaver | null>(() => {
     const pointer = readPointer(owner)
     if (!pointer) return null
-    return draftSaverFor({ ...pointer, channel: 'raw', baseRevision: 0 }, queryClient)
+    return draftSaverFor({ ...pointer, channel: 'raw', baseRevision: 0, baseText: '' }, queryClient)
   })
   const [resumedSessionId] = useState(() => saver?.getSnapshot().sessionId ?? readPointer(owner)?.sessionId ?? null)
   const [finished, setFinished] = useState<{ saver: DraftSaver; words: string; pointer: ComposerPointer | null } | null>(null)
@@ -182,6 +182,35 @@ export function useComposer() {
 
   const sessionId = saver ? snapshot.sessionId : null
 
+  // Another tab edits this entry, so this tab shows its words with no edit. When this tab takes the entry, the editor opens with the words of the last editor.
+  const editing = saver ? snapshot.editing : 'here'
+  const shownSession = useQuery({ ...sessionQueryOptions(sessionId ?? ''), enabled: editing !== 'here' && sessionId !== null })
+  const wordsOfTheEditor = snapshot.wordsOfTheEditor ?? shownSession.data?.rawText ?? (editing === 'here' ? null : (editor.words ?? ''))
+  const [hasEdited, setHasEdited] = useState(editing === 'here')
+  const pressedEditHere = useRef(false)
+  const placeAtLastRender = useRef(editing)
+  const wasElsewhere = useRef(false)
+  useLayoutEffect(() => {
+    const before = placeAtLastRender.current
+    placeAtLastRender.current = editing
+    if (editing === 'elsewhere') wasElsewhere.current = true
+    if (editing !== 'here' || before === 'here' || !saver) return
+    setHasEdited(true)
+    const kept = saver.wordsToOpen()
+    // At the first grant with no words of another tab, the editor keeps what it opened.
+    if (kept === null && !wasElsewhere.current) return
+    wasElsewhere.current = false
+    const cached = sessionId ? queryClient.getQueryData<SessionDto>(SessionKeys.detail(sessionId)) : undefined
+    const words = kept ?? (resumedSessionId ? null : (cached?.rawText ?? ''))
+    if (words !== null) currentWords.current = words
+    setEditor(({ key }) => ({ key: key + 1, words, takesFocus: pressedEditHere.current }))
+    pressedEditHere.current = false
+  }, [editing, saver, sessionId, resumedSessionId, queryClient])
+  const editHere = useCallback(() => {
+    pressedEditHere.current = true
+    latestSaver.current?.takeHere()
+  }, [])
+
   const beginEntry = useCallback(
     (text: string) => {
       const pointer = { owner, clientSessionId: newUuid(), startedAt: new Date().toISOString(), sessionId: null, touchedAt: Date.now() }
@@ -190,9 +219,11 @@ export function useComposer() {
           ...pointer,
           channel: 'raw',
           baseRevision: 0,
+          baseText: '',
           location: locationOfNewEntry(queryClient),
         },
         queryClient,
+        true,
       )
       writePointer(pointer)
       setSaver(started)
@@ -233,7 +264,7 @@ export function useComposer() {
     openEditorWith(finished.saver.newestWords() ?? finished.words)
   }, [needsThePersonAfterDone, finished, setSaver, openEditorWith])
 
-  const canFinish = saver !== null && !isReading && snapshot.status.kind !== 'refused' && snapshot.conflict === null
+  const canFinish = saver !== null && !isReading && editing === 'here' && snapshot.status.kind !== 'refused' && snapshot.conflict === null
   const finish = useCallback(() => {
     if (!saver || !canFinish) return
     saver.flush()
@@ -269,6 +300,10 @@ export function useComposer() {
     isMergeNoted,
     dismissMergeNote: () => setIsMergeNoted(false),
     showNewest,
+    editing,
+    hasEdited,
+    wordsOfTheEditor,
+    editHere,
   }
 }
 

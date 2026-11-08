@@ -21,7 +21,8 @@ interface SessionHistoryProps {
   sessionId: string
   channel: DraftChannel
   currentRevision: number
-  onRestore: (text: string) => void
+  /** Absent while another tab edits the entry, so this tab restores nothing. */
+  onRestore?: (text: string) => void
 }
 
 const versionTime = (savedAt: string, zone: TimeZone) =>
@@ -76,9 +77,9 @@ export function SessionHistory({ sessionId, channel, currentRevision, onRestore 
             channel={channel}
             revision={viewing}
             zone={zone}
-            canRestore={viewing.number !== currentRevision}
+            canRestore={onRestore !== undefined && viewing.number !== currentRevision}
             onRestore={(text) => {
-              onRestore(text)
+              onRestore?.(text)
               setViewing(null)
             }}
           />

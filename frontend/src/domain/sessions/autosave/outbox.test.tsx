@@ -10,6 +10,7 @@ const entryWith = (words: string, key = `${words}.raw`): OutboxEntry => ({
   startedAt: '2026-11-06T15:30:00.000Z',
   sessionId: null,
   baseRevision: 0,
+  baseText: '',
   change: { value: words, savedAt: '2026-11-06T15:31:00.000Z' },
 })
 
@@ -81,6 +82,21 @@ test('a key with a name of an older version has no writer, so any tab can take i
   localStorage.setItem('recall.unsent.person-a.client-session.raw', JSON.stringify(entryWith('old words')))
 
   expect(readOutbox('person-a')[0]).toMatchObject({ writer: null, entry: { change: { value: 'old words' } } })
+})
+
+test('a key with no base text is not an entry of this version, so its words go on as a new entry', () => {
+  // JSON leaves out a field with no value.
+  const withNoBase = { ...entryWith('words with no base'), baseText: undefined }
+  localStorage.setItem('recall.unsent.person-a.with-no-base', JSON.stringify(withNoBase))
+
+  expect(readOutbox('person-a')[0]?.entry).toMatchObject({ sessionId: null, baseText: '', change: { value: 'words with no base' } })
+})
+
+test('a change in flight goes with the newest change, so a tab that takes the key sends it again first', () => {
+  const sent = { value: 'sent words', savedAt: '2026-11-06T15:30:30.000Z' }
+  writeToOutbox('person-a', null, { ...entryWith('newer words'), sent, readsFirst: true, stateId: 'tab.3' })
+
+  expect(readOutbox('person-a')[0]?.entry).toMatchObject({ sent, readsFirst: true, stateId: 'tab.3', change: { value: 'newer words' } })
 })
 
 test('held words with no queue are an entry', () => {

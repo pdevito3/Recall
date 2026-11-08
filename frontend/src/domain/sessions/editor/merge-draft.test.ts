@@ -19,7 +19,6 @@ test('a merge of what a merge wrote adds nothing', () => {
   const merged = mergeDraft(words('base'), words('base word1'), theirs)
 
   expect(mergeDraft(theirs, merged, merged)).toBe(merged)
-  expect(mergeDraft(null, merged, merged)).toBe(merged)
 })
 
 test('a paragraph that both sides changed merges word by word, and no word shows twice', () => {
@@ -55,28 +54,6 @@ test('new paragraphs that both sides added at one place stay paragraphs, theirs 
   expect(plain(merged)).toEqual(['base', 'a chunk', 'my words'])
 })
 
-test('with no known base, a paragraph that the person extends during a read keeps each word once', () => {
-  const merged = mergeDraft(null, words('my words and a key'), words('my words', 'a chunk'))
-
-  expect(plain(merged)).toEqual(['my words and a key', 'a chunk'])
-})
-
-test('with no known base, a paragraph that the other side holds at another place shows once, there, with the words of the person that it lacks', () => {
-  const merged = mergeDraft(null, words('alpha', 'copied beta', 'gamma mine'), words('gamma', 'copied beta delta', 'alpha'))
-
-  expect(plain(merged)).toEqual(['gamma mine', 'copied beta delta', 'alpha'])
-})
-
-test.each([
-  [words('I slept well', 'Morning'), words('Morning', 'I went out')],
-  [words('I had a coffee with Ana', 'Morning walk', 'Evening'), words('Morning walk', 'Evening', 'I took the bus home')],
-])('with no known base, two paragraphs that only share a word stay two paragraphs, each in full', (mine, theirs) => {
-  const merged = plain(mergeDraft(null, mine, theirs))
-
-  expect(merged).toEqual(expect.arrayContaining([...plain(mine), ...plain(theirs)]))
-  expect(merged).toHaveLength(new Set([...plain(mine), ...plain(theirs)]).size)
-})
-
 test('a paragraph that the person deleted goes, when the other device did not change it', () => {
   const merged = mergeDraft(words('keep', 'drop'), words('keep'), words('keep', 'drop', 'new'))
 
@@ -87,12 +64,6 @@ test('a change of only the other device stays', () => {
   const base = words('a', 'b')
 
   expect(mergeDraft(base, base, words('a', 'b', 'c'))).toBe(words('a', 'b', 'c'))
-})
-
-test('with no known base, each word of the person that the newest words lack follows them, and no word shows twice', () => {
-  const merged = mergeDraft(null, words('base word1'), words('base OTHERDEVICE'))
-
-  expect(plain(merged)).toEqual(['base OTHERDEVICE word1'])
 })
 
 test('a mention and a mark stay in a paragraph that merges word by word', () => {
@@ -141,13 +112,6 @@ test('a heading that both sides changed merges word by word and keeps its level'
   expect(JSON.parse(merged)).toEqual(JSON.parse(doc(heading('Day 1 at sea'))))
 })
 
-test('with no known base, a list that each side extends shows once, with the items of both', () => {
-  const merged = mergeDraft(null, doc(list('milk', 'eggs', 'bread')), doc(list('milk', 'eggs', 'jam')))
-
-  expect(JSON.parse(merged).content).toHaveLength(1)
-  expect(plainWordsOf(merged).split(/\s+/).sort()).toEqual(['bread', 'eggs', 'jam', 'milk'])
-})
-
 const page = (title: string, body: string, items: string[], tail: string) => doc(heading(title), paragraph(body), list(...items), paragraph(tail))
 const basePage = page('Title alpha', 'One two three four five', ['apple', 'banana', 'cherry'], 'Tail end')
 
@@ -179,7 +143,7 @@ test('a heading that both sides changed, and a paragraph that the person added a
   expect(JSON.parse(merged)).toEqual(JSON.parse(doc(heading('Day 1 at sea'), paragraph('A new line'), paragraph('The sea'))))
 })
 
-test('from the save of this tab that another tab sent, words that both went on with show once', () => {
+test('from one base, words that this device and another device both went on with show once', () => {
   const merged = mergeDraft(words('Lunch with Sam'), words('Lunch with Sam at noon'), words('Lunch with Sam and Ana'))
 
   expect(plain(merged)).toEqual(['Lunch with Sam and Ana at noon'])
@@ -198,18 +162,6 @@ test.each([
   ['a deleted word and a new paragraph that starts with the same word', words('the red car is fast'), words('the car is fast'), words('the red car is fast', 'the end'), ['the car is fast', 'the end']],
 ])('paragraphs that only start with the same word stay apart: %s', (_, base, mine, theirs, merged) => {
   expect(plain(mergeDraft(base, mine, theirs))).toEqual(merged)
-})
-
-test('with no known base, a heading pairs with the heading that shares its words, so no word shows twice', () => {
-  const merged = mergeDraft(null, doc(heading('Lunch at noon'), paragraph('With Sam')), doc(heading('Weather'), heading('Lunch')))
-
-  expect(JSON.parse(merged)).toEqual(JSON.parse(doc(heading('Weather'), heading('Lunch at noon'), paragraph('With Sam'))))
-})
-
-test('with no known base, a heading and a paragraph that each side extends show once each', () => {
-  const merged = mergeDraft(null, doc(heading('Day one at sea'), paragraph('The sea was calm')), doc(heading('Day one'), paragraph('The sea was calm today')))
-
-  expect(JSON.parse(merged)).toEqual(JSON.parse(doc(heading('Day one at sea'), paragraph('The sea was calm today'))))
 })
 
 test('a heading whose level changed on one side and whose words changed on the other keeps both blocks, with no word lost', () => {

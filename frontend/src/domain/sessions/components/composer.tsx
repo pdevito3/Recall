@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button'
 import { useJournalZone } from '@/domain/settings/apis/user-setting'
 
 import { focusEditorIn } from '../editor/focus-editor'
-import { JournalEditor } from '../editor/journal-editor'
-import { ConflictNotice, MergedNotice } from './conflict-notice'
+import { JournalEditor, JournalText } from '../editor/journal-editor'
+import { ConflictNotice, EditedElsewhereNotice, MergedNotice } from './conflict-notice'
 import { SaveStatusLine } from './save-status'
 import type { Composer } from './use-composer'
 
@@ -18,6 +18,16 @@ export function ComposerForm({ composer }: { composer: Composer }) {
   useEffect(() => {
     if (isRefused) section.current?.scrollIntoView({ block: 'nearest' })
   }, [isRefused])
+  if (composer.editing !== 'here') {
+    return (
+      <section aria-label="Write a new entry" className="flex flex-col gap-2">
+        {composer.editing === 'elsewhere' && <EditedElsewhereNotice hasLost={composer.hasEdited} onEditHere={composer.editHere} />}
+        <div className="rounded-lg border p-3">
+          <JournalText key={composer.wordsOfTheEditor ?? ''} text={composer.wordsOfTheEditor ?? ''} label="New entry, open in another tab" />
+        </div>
+      </section>
+    )
+  }
   return (
     <section ref={section} aria-label="Write a new entry" className="flex flex-col gap-2">
       {composer.conflict && (

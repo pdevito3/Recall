@@ -3,7 +3,8 @@ import { useEffect } from 'react'
 
 import { resumeUnsentSetting } from '@/domain/settings/apis/user-setting'
 
-import { isAnyWordOnlyInMemory, resumeUnsentDrafts, settleDraftSavers, wordsOfThisTabOnlyInMemory } from './draft-saver'
+import { isAnyWordOnlyInMemory, refreshWordsOfEditors, resumeUnsentDrafts, settleDraftSavers, wordsOfThisTabOnlyInMemory } from './draft-saver'
+import { prefixOfOutbox } from './outbox'
 import { joinTheOtherTabs, noteThisTabIsBack, noteThisTabLeaves, removeLeftMarksWithNoKey, watchOtherTabs } from './tab-keys'
 import { isAnyTagChangeUnsaved } from './tag-savers'
 import { useOwner } from './use-draft-saver'
@@ -28,14 +29,20 @@ export function useResumeUnsentDrafts() {
     const resumeWhenSeen = () => {
       if (document.visibilityState === 'visible') resume()
     }
+    // A page that shows an entry with no edit follows the words that the tab that edits keeps.
+    const followTheEditor = ({ key }: StorageEvent) => {
+      if (key === null || key.startsWith(prefixOfOutbox(owner))) refreshWordsOfEditors()
+    }
     resume()
     const stopWatching = watchOtherTabs(resume)
     document.addEventListener('visibilitychange', resumeWhenSeen)
     window.addEventListener('online', resume)
+    window.addEventListener('storage', followTheEditor)
     return () => {
       stopWatching()
       document.removeEventListener('visibilitychange', resumeWhenSeen)
       window.removeEventListener('online', resume)
+      window.removeEventListener('storage', followTheEditor)
     }
   }, [owner, queryClient])
 

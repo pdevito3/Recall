@@ -211,12 +211,6 @@ function paragraphsOf(words: Word[]): JSONContent[] {
   return paragraphs.map(paragraphOf)
 }
 
-/** The items that both lists hold, in order. With no known base, this is the base: each item that only one side holds is an addition of that side. */
-function commonOf<T>(one: T[], other: T[], key: (item: T) => string): T[] {
-  const match = matchOf(one.map(key), other.map(key))
-  return one.filter((_, at) => match[at] >= 0)
-}
-
 const keyOfBlock = (block: JSONContent) => JSON.stringify(block)
 
 /** A block with no content: its type, its attributes, and its marks. */
@@ -246,20 +240,8 @@ const isOneBlock = (one: Outline, other: Outline) =>
 
 const matchBlocksOf = (one: JSONContent[], other: JSONContent[]) => matchOf(outlinesOf(one), outlinesOf(other), isOneBlock)
 
-/** With no known base, the base of two lists of blocks: each block that both sides hold, with the words and blocks that both hold. */
-function commonBlocksOf(one: JSONContent[], other: JSONContent[]): JSONContent[] {
-  const match = matchBlocksOf(one, other)
-  return one.flatMap((block, at) => (match[at] < 0 ? [] : [commonBlockOf(block, other[match[at]])]))
-}
-
-function commonBlockOf(one: JSONContent, other: JSONContent): JSONContent {
-  if (keyOfBlock(one) === keyOfBlock(other)) return one
-  if (holdsWords(one) && holdsWords(other)) return textBlockOf(commonOf(wordsOf(one), wordsOf(other), keyOfWord), shellOf(one))
-  return { ...shellOf(one), content: commonBlocksOf(childrenOf(one), childrenOf(other)) }
-}
-
-const mergeBlocks = (base: JSONContent[], mine: JSONContent[], theirs: JSONContent[], hasBase: boolean): JSONContent[] =>
-  mergeLists(base, mine, theirs, keyOfBlock, resolveBlocks(hasBase))
+const mergeBlocks = (base: JSONContent[], mine: JSONContent[], theirs: JSONContent[]): JSONContent[] =>
+  mergeLists(base, mine, theirs, keyOfBlock, resolveBlocks)
 
 /** The places of each block of `base` that both sides kept, in order: in `base`, in `mine`, and in `theirs`. */
 function keptBlocksOf(base: JSONContent[], mine: JSONContent[], theirs: JSONContent[]): [number, number, number][] {
@@ -271,15 +253,14 @@ function keptBlocksOf(base: JSONContent[], mine: JSONContent[], theirs: JSONCont
  * Each block that both sides kept merges on its own, so two changed blocks side by side do not show twice. The blocks
  * between them merge as blocks. Null when no block of `base` stays on both sides.
  */
-function mergeBlockByBlock(base: JSONContent[], mine: JSONContent[], theirs: JSONContent[], hasBase: boolean): JSONContent[] | null {
+function mergeBlockByBlock(base: JSONContent[], mine: JSONContent[], theirs: JSONContent[]): JSONContent[] | null {
   const kept = keptBlocksOf(base, mine, theirs)
   if (kept.length === 0) return null
-  const merge = (ofBase: JSONContent[], ofMine: JSONContent[], ofTheirs: JSONContent[]) => mergeBlocks(ofBase, ofMine, ofTheirs, hasBase)
   const merged: JSONContent[] = []
   let [baseAt, mineAt, theirAt] = [0, 0, 0]
   for (const [atBase, atMine, atTheirs] of [...kept, [base.length, mine.length, theirs.length]]) {
-    merged.push(...merge(base.slice(baseAt, atBase), mine.slice(mineAt, atMine), theirs.slice(theirAt, atTheirs)))
-    if (atBase < base.length) merged.push(...merge([base[atBase]], [mine[atMine]], [theirs[atTheirs]]))
+    merged.push(...mergeBlocks(base.slice(baseAt, atBase), mine.slice(mineAt, atMine), theirs.slice(theirAt, atTheirs)))
+    if (atBase < base.length) merged.push(...mergeBlocks([base[atBase]], [mine[atMine]], [theirs[atTheirs]]))
     ;[baseAt, mineAt, theirAt] = [atBase + 1, atMine + 1, atTheirs + 1]
   }
   return merged
@@ -291,72 +272,33 @@ function mergeBlockByBlock(base: JSONContent[], mine: JSONContent[], theirs: JSO
  * merges the same way, item by item and word by word, so the block shows once.
  * Where both sides changed blocks side by side, such as a heading and a paragraph, each block merges on its own.
  * New paragraphs that both sides added at one place stay paragraphs: theirs, and then mine. Other blocks do the same.
- * With no known base, paragraphs that differ merge word by word, as in the merge of the iOS client.
  */
-const resolveBlocks = (hasBase: boolean): Resolve<JSONContent> => (base, mine, theirs) => {
-  const isAddedByBoth = hasBase && base.length === 0
+const resolveBlocks: Resolve<JSONContent> = (base, mine, theirs) => {
+  const isAddedByBoth = base.length === 0
   if (!isAddedByBoth && [...base, ...mine, ...theirs].every(isParagraphOfWords)) {
-    const [ofMine, ofTheirs] = [wordsOfParagraphs(mine), wordsOfParagraphs(theirs)]
-    const ofBase = base.length > 0 ? wordsOfParagraphs(base) : commonOf(ofMine, ofTheirs, keyOfWord)
-    return paragraphsOf(mergeLists(ofBase, ofMine, ofTheirs, keyOfWord, theirsThenMine(keyOfWord)))
+    return paragraphsOf(mergeLists(wordsOfParagraphs(base), wordsOfParagraphs(mine), wordsOfParagraphs(theirs), keyOfWord, theirsThenMine(keyOfWord)))
   }
   const shell = mine.length === 1 && theirs.length === 1 ? shellOf(theirs[0]) : null
-  const isOneBlockChanged = shell !== null && !isAddedByBoth && base.length <= 1
+  const isOneBlockChanged = shell !== null && base.length === 1
     && [...base, ...mine].every((block) => keyOfBlock(shellOf(block)) === keyOfBlock(shell))
   if (!isOneBlockChanged) {
-    const byBlock = isAddedByBoth ? null : mergeBlockByBlock(base, mine, theirs, hasBase)
+    const byBlock = isAddedByBoth ? null : mergeBlockByBlock(base, mine, theirs)
     return byBlock ?? theirsThenMine(keyOfBlock)(base, mine, theirs)
   }
-  const blocks = [...base, ...mine, ...theirs]
-  if (blocks.every(holdsWords)) {
-    const [ofMine, ofTheirs] = [wordsOf(mine[0]), wordsOf(theirs[0])]
-    const ofBase = base.length > 0 ? wordsOf(base[0]) : commonOf(ofMine, ofTheirs, keyOfWord)
-    return [textBlockOf(mergeLists(ofBase, ofMine, ofTheirs, keyOfWord, theirsThenMine(keyOfWord)), shell)]
+  if ([...base, ...mine, ...theirs].every(holdsWords)) {
+    return [textBlockOf(mergeLists(wordsOf(base[0]), wordsOf(mine[0]), wordsOf(theirs[0]), keyOfWord, theirsThenMine(keyOfWord)), shell)]
   }
-  const [ofMine, ofTheirs] = [childrenOf(mine[0]), childrenOf(theirs[0])]
-  const ofBase = base.length > 0 ? childrenOf(base[0]) : commonBlocksOf(ofMine, ofTheirs)
-  return [{ ...shell, content: mergeBlocks(ofBase, ofMine, ofTheirs, hasBase) }]
-}
-
-/** Each word of `part` is in `whole`, in the same order. */
-const isInOrderIn = (part: Word[], whole: Word[]) => commonOf(part, whole, keyOfWord).length === part.length
-
-/**
- * With no known base, a block of the person whose words a block of the other side at another place holds in order, or
- * that holds all the words of that block in order, is one block that a merge before put at two places. The words that
- * the other side holds show there, and only the other words stay at the place of the person. This is the case of a key
- * that two tabs hold: each tab merges the same words. Two blocks that only share some words are two blocks.
- */
-function withoutWordsAtTheirPlace(mine: JSONContent[], theirs: JSONContent[]): JSONContent[] {
-  const match = matchBlocksOf(mine, theirs)
-  const taken = new Set(match.filter((at) => at >= 0))
-  return mine.flatMap((block, at) => {
-    if (match[at] >= 0 || !holdsWords(block)) return [block]
-    const ofMine = wordsOf(block)
-    const shell = keyOfBlock(shellOf(block))
-    const other = theirs.findIndex((ofTheirs, theirAt) => {
-      if (taken.has(theirAt) || !holdsWords(ofTheirs) || keyOfBlock(shellOf(ofTheirs)) !== shell) return false
-      const words = wordsOf(ofTheirs)
-      return ofMine.length > 0 && words.length > 0 && (isInOrderIn(ofMine, words) || isInOrderIn(words, ofMine))
-    })
-    if (other < 0) return [block]
-    taken.add(other)
-    const left = missing(ofMine, wordsOf(theirs[other]), keyOfWord)
-    return left.length > 0 ? [textBlockOf(left, shellOf(block))] : []
-  })
+  return [{ ...shell, content: mergeBlocks(childrenOf(base[0]), childrenOf(mine[0]), childrenOf(theirs[0])) }]
 }
 
 /**
  * The change of the person since `base` goes into the newest Draft, `theirs`, one time, as the steps after `Lost` in
  * `docs/ios-api-changes.md` ask. A block that only the person changed takes the change, so its words do not show twice.
  * Paragraphs that both sides changed merge word by word. A change of only the other side stays.
- * An empty Draft is a base like any other, so two tabs that each typed into it keep all of their words.
- * With no known base, the words that both hold are the base, as in the merge of the iOS client: a word that only one side holds stays.
+ * An empty Draft is a base like any other, so two devices that each typed into it keep all of their words.
+ * The base is always known: one tab edits an entry at a time, and it keeps the base of its words (ADR 0022).
  */
-export function mergeDraft(base: string | null, mine: string, theirs: string): string {
+export function mergeDraft(base: string, mine: string, theirs: string): string {
   const blocks = (text: string) => childrenOf(asDocument(text))
-  const [ofMine, ofTheirs] = [blocks(mine), blocks(theirs)]
-  if (base !== null) return JSON.stringify({ type: 'doc', content: mergeBlocks(blocks(base), ofMine, ofTheirs, true) })
-  const ofMineHere = withoutWordsAtTheirPlace(ofMine, ofTheirs)
-  return JSON.stringify({ type: 'doc', content: mergeBlocks(commonBlocksOf(ofMineHere, ofTheirs), ofMineHere, ofTheirs, false) })
+  return JSON.stringify({ type: 'doc', content: mergeBlocks(blocks(base), blocks(mine), blocks(theirs)) })
 }

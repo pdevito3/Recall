@@ -11,8 +11,8 @@ import { shownStatusOf, type WhyNewWords } from '../autosave/draft-saver'
 import { useDraftSaver } from '../autosave/use-draft-saver'
 import { EditorToolbar } from '../editor/editor-toolbar'
 import { focusEditorIn } from '../editor/focus-editor'
-import { JournalEditor } from '../editor/journal-editor'
-import { ConflictNotice, MergedNotice } from './conflict-notice'
+import { JournalEditor, JournalText } from '../editor/journal-editor'
+import { ConflictNotice, EditedElsewhereNotice, MergedNotice } from './conflict-notice'
 import { SaveStatusLine } from './save-status'
 import { SessionHistory } from './session-history'
 
@@ -42,6 +42,7 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
     startedAt: session.startedAt,
     sessionId: session.id,
     baseRevision: draftRevisionOf(session, channel),
+    baseText: draftOf(session, channel),
   })
 
   const navigate = useNavigate()
@@ -93,6 +94,34 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
     [saver],
   )
 
+  // The editor opens when this tab edits, with the words of the tab that edited before.
+  const isEditingHere = snapshot.editing === 'here'
+  const [hasEdited, setHasEdited] = useState(isEditingHere)
+  const pressedEditHere = useRef(false)
+  const wasElsewhere = useRef(false)
+  const placeAtLastRender = useRef(snapshot.editing)
+  useLayoutEffect(() => {
+    const before = placeAtLastRender.current
+    placeAtLastRender.current = snapshot.editing
+    if (snapshot.editing === 'elsewhere') wasElsewhere.current = true
+    if (snapshot.editing !== 'here' || before === 'here') return
+    setHasEdited(true)
+    const kept = saver.wordsToOpen()
+    // At the first grant with no words of another tab, the editor opens what the page opened.
+    if (kept === null && !wasElsewhere.current) return
+    wasElsewhere.current = false
+    const text = kept ?? serverText
+    currentText.current = text
+    setChangeNote(null)
+    setOpened((previous) => ({ text, key: previous.key + 1, takesFocus: pressedEditHere.current }))
+    pressedEditHere.current = false
+  }, [saver, snapshot.editing, serverText])
+
+  const editHere = () => {
+    pressedEditHere.current = true
+    saver.takeHere()
+  }
+
   const newEntryId = snapshot.movedFromDeletedEntry && snapshot.sessionId !== session.id ? snapshot.sessionId : null
   useEffect(() => {
     if (newEntryId) void navigate({ to: '/sessions/$id', params: { id: newEntryId }, replace: true })
@@ -116,6 +145,20 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
   }
 
   const status = shownStatusOf(snapshot)
+  if (!isEditingHere) {
+    const words = snapshot.wordsOfTheEditor ?? serverText
+    return (
+      <div className="flex flex-col gap-6">
+        <section aria-label={channelLabels[channel]} className="flex flex-col gap-2">
+          {snapshot.editing === 'elsewhere' && <EditedElsewhereNotice hasLost={hasEdited} onEditHere={editHere} />}
+          <div className="rounded-lg border p-3">
+            <JournalText key={words} text={words} label={`${channelLabels[channel]}, open in another tab`} />
+          </div>
+        </section>
+        <SessionHistory sessionId={session.id} channel={channel} currentRevision={serverDraft} />
+      </div>
+    )
+  }
   return (
     <div className="flex flex-col gap-6">
       <section ref={section} aria-label={channelLabels[channel]} className="flex flex-col gap-2">

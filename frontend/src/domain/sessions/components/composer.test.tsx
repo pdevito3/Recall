@@ -27,6 +27,10 @@ const composerWith = (shown: ShownComposer): Composer => ({
   isMergeNoted: false,
   dismissMergeNote: () => undefined,
   showNewest: () => undefined,
+  editing: 'here',
+  hasEdited: true,
+  wordsOfTheEditor: null,
+  editHere: () => undefined,
   ...shown,
 })
 
