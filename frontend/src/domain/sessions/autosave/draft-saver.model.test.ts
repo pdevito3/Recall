@@ -7,14 +7,29 @@ import { ProblemDetailsError } from '@/lib/problem-details'
 
 import { parseDocument } from '../editor/content'
 
-vi.mock('@/api/generated/sessions/clients/add-session', () => ({ addSession: (request: never) => world.addSession(request) }))
-vi.mock('@/api/generated/sessions/clients/save-raw-draft', () => ({ saveRawDraft: (request: never) => world.saveRaw(request) }))
+// A request of a tab reaches the server also while the tab is frozen. Only the answer waits until the tab wakes.
+vi.mock('@/api/generated/sessions/clients/add-session', () => ({ addSession: (request: never) => viaTab(current, () => world.addSession(request)) }))
+vi.mock('@/api/generated/sessions/clients/save-raw-draft', () => ({
+  saveRawDraft: (request: { body: { text: string; baseRevision: number } }) => {
+    const tab = current
+    return viaTab(current, async () => {
+      const reply = await world.saveRaw(request as never)
+      world.noteSave?.(`tab ${tab?.name} saves "${tokensIn(request.body.text).join(' ')}" on base ${request.body.baseRevision} in ${(request as unknown as { path: { id: string } }).path.id}: ${reply.outcome}`)
+      return reply
+    })
+  },
+}))
 vi.mock('@/api/generated/sessions/clients/save-cleaned-draft', () => ({ saveCleanedDraft: () => Promise.reject(new Error('The model has no cleaned channel.')) }))
-vi.mock('@/api/generated/sessions/clients/get-session', () => ({ getSession: (request: never) => world.getSession(request) }))
-vi.mock('@/api/generated/sessions/clients/get-raw-revision-page', () => ({ getRawRevisionPage: (request: never) => world.rawRevisionPage(request) }))
-vi.mock('@/api/generated/sessions/clients/get-raw-revision', () => ({ getRawRevision: (request: never) => world.rawRevision(request) }))
-vi.mock('@/api/generated/sessions/clients/get-cleaned-revision-page', () => ({ getCleanedRevisionPage: () => Promise.reject(new Error('The model has no cleaned channel.')) }))
-vi.mock('@/api/generated/sessions/clients/get-cleaned-revision', () => ({ getCleanedRevision: () => Promise.reject(new Error('The model has no cleaned channel.')) }))
+vi.mock('@/api/generated/sessions/clients/get-session', () => ({
+  getSession: (request: never) => {
+    const tab = current
+    return viaTab(current, async () => {
+      const read = await world.getSession(request)
+      world.noteSave?.(`tab ${tab?.name} reads ${read.id}: rev ${read.rawDraftRevision}`)
+      return read
+    })
+  },
+}))
 vi.mock('@/components/notification', () => ({ Notification: { error: () => undefined, success: () => undefined, info: () => undefined } }))
 vi.mock('../apis/timeline-cache', () => ({ patchTimelineRow: () => undefined, refreshTimelineHead: () => Promise.resolve() }))
 
@@ -24,7 +39,6 @@ const stepsInARun = 120
 const hasFullStorage = process.env.MODEL_NO_FULL_STORAGE === undefined
 const hasSignOut = process.env.MODEL_NO_SIGN_OUT === undefined
 const owner = 'person-a'
-const revisionPageSize = 5
 
 const randomFrom = (seed: number) => {
   let state = seed >>> 0
@@ -61,6 +75,8 @@ class ModelServer {
   refusesACreate = false
   latencyMs = () => 50
   readsTakeMs: number | null = null
+  /** With MODEL_DEBUG, each save that a tab makes goes in the steps of the run. */
+  noteSave: ((step: string) => void) | null = null
 
   private fault() {
     return new ProblemDetailsError({ type: 'about:blank', title: 'The server failed.', status: 503 })
@@ -133,29 +149,6 @@ class ModelServer {
     return this.dto(row)
   }
 
-  /** The Revisions of `GetRawRevisionPage`, newest first, with no text and with no sign of a win, as the Server gives them. */
-  async rawRevisionPage({ path, query }: { path: { id: string }; query?: { cursor?: string } }) {
-    const row = await this.rowAfterARead(path.id)
-    const before = query?.cursor === undefined ? Infinity : Number(query.cursor)
-    const items = row.revisions.filter(({ number }) => number < before).reverse().slice(0, revisionPageSize)
-    const hasMore = row.revisions.some(({ number }) => number < (items[items.length - 1]?.number ?? 0))
-    return { items: items.map(({ number, claimedAt, text }) => ({ number, savedAt: claimedAt, length: text.length })), nextCursor: hasMore ? String(items[items.length - 1].number) : null }
-  }
-
-  async rawRevision({ path }: { path: { id: string; number: number } }) {
-    const row = await this.rowAfterARead(path.id)
-    const revision = row.revisions.find(({ number }) => number === path.number)
-    if (!revision) throw new ProblemDetailsError({ type: 'about:blank', title: 'Gone', status: 404 })
-    return { number: revision.number, savedAt: revision.claimedAt, text: revision.text }
-  }
-
-  private async rowAfterARead(id: string) {
-    await delay(this.readsTakeMs ?? this.latencyMs())
-    const row = this.rows.find((other) => other.id === id)
-    if (!row) throw new ProblemDetailsError({ type: 'about:blank', title: 'Gone', status: 404 })
-    return row
-  }
-
   appendChunk(row: Row, chunk: string) {
     const number = row.latestRevision + 1
     row.text = withChunk(row.text, chunk)
@@ -202,10 +195,172 @@ function storageWith(isFull: () => boolean) {
   })
 }
 
-/** A channel belongs to the tab that runs when the channel opens, so that a closed tab hears nothing. */
+/**
+ * The tab whose code runs now. A timer, a request, a lock event, or a message runs as the tab that it belongs to, and
+ * the code that it starts goes on as that tab. A fake timer runs only after each promise of the timer before it, so
+ * the promises of one timer run as its tab.
+ */
+let current: Tab | null = null
+
+function becomeCurrent(tab: Tab | null) {
+  current = tab
+}
+
+interface Waiting {
+  timer: unknown
+  work: () => void
+}
+
+/** The fake timers, before the stub that runs each timer as its tab. */
+const clock = { set: setTimeout, clear: clearTimeout }
+
+function runWaiting(tab: Tab, one: Waiting) {
+  const at = tab.waiting.indexOf(one)
+  if (at < 0 || tab.isFrozen || tab.isClosed) return
+  tab.waiting.splice(at, 1)
+  current = tab
+  one.work()
+}
+
+/** Runs work as `tab`: never for a closed tab, and after the wake for a frozen tab. */
+function asTab(tab: Tab | null, work: () => void, timer: unknown = null) {
+  if (tab?.isClosed) return
+  if (tab?.isFrozen) {
+    tab.waiting.push({ timer, work })
+    return
+  }
+  current = tab
+  work()
+}
+
+function tabTimeout(work: (...args: unknown[]) => void, ms?: number, ...args: unknown[]) {
+  const tab = current
+  const timer: unknown = clock.set(() => asTab(tab, () => work(...args), timer), ms)
+  return timer
+}
+
+function tabClearTimeout(timer: unknown) {
+  clock.clear(timer as never)
+  if (timer === null || timer === undefined) return
+  for (const tab of everyTab) {
+    const at = tab.waiting.findIndex((one) => one.timer === timer)
+    if (at >= 0) tab.waiting.splice(at, 1)
+  }
+}
+
+const everyTab = new Set<Tab>()
+
+/** The answer of a request goes to the tab that asked, when that tab runs. The server itself is no tab. */
+function viaTab<T>(tab: Tab | null, request: () => Promise<T>): Promise<T> {
+  const before = current
+  current = null
+  const answer = request()
+  current = before
+  return new Promise<T>((resolve, reject) => {
+    answer.then(
+      (value) => clock.set(() => asTab(tab, () => resolve(value)), 0),
+      (error: unknown) => clock.set(() => asTab(tab, () => reject(error)), 0),
+    )
+  })
+}
+
+/** The Web Locks of the browser: one holder of a name, a line of the tabs that wait, a steal, and the end of each lock of a tab that closed or crashed. */
+class ModelLocks {
+  private readonly held = new Map<string, LockAsk>()
+  private line: LockAsk[] = []
+
+  managerFor(tab: Tab) {
+    return { request: (name: string, options: LockOptions, callback: (lock: Lock | null) => Promise<unknown>) => this.request(tab, name, options, callback) }
+  }
+
+  holderOf(name: string) {
+    return this.held.get(name)?.tab ?? null
+  }
+
+  private request(tab: Tab, name: string, options: LockOptions, callback: (lock: Lock | null) => Promise<unknown>) {
+    return new Promise<unknown>((resolve, reject) => {
+      const ask: LockAsk = { tab, name, callback, resolve, reject }
+      if (options.steal) {
+        const holder = this.held.get(name)
+        this.held.delete(name)
+        if (holder) clock.set(() => asTab(holder.tab, () => holder.reject(new DOMException('stolen', 'AbortError'))), 0)
+        this.grant(ask)
+      } else if (options.ifAvailable) {
+        if (!this.held.has(name) && !this.line.some((other) => other.name === name)) this.grant(ask)
+        else this.answer(ask, null)
+      } else {
+        const signal = options.signal
+        signal?.addEventListener('abort', () => {
+          if (!this.line.includes(ask)) return
+          this.line = this.line.filter((other) => other !== ask)
+          clock.set(() => asTab(tab, () => reject(new DOMException('aborted', 'AbortError'))), 0)
+        })
+        if (signal?.aborted) return
+        this.line.push(ask)
+        this.next(name)
+      }
+    })
+  }
+
+  private grant(ask: LockAsk) {
+    this.held.set(ask.name, ask)
+    this.answer(ask, { name: ask.name, mode: 'exclusive' } as Lock, () => {
+      if (this.held.get(ask.name) !== ask) return
+      this.held.delete(ask.name)
+      this.next(ask.name)
+    })
+  }
+
+  private answer(ask: LockAsk, lock: Lock | null, release = () => undefined) {
+    clock.set(() => asTab(ask.tab, () => {
+      ask.callback(lock).then(
+        (value) => {
+          release()
+          ask.resolve(value)
+        },
+        (error: unknown) => {
+          release()
+          ask.reject(error)
+        },
+      )
+    }), 0)
+  }
+
+  private next(name: string) {
+    if (this.held.has(name)) return
+    const ask = this.line.find((other) => other.name === name)
+    if (!ask) return
+    this.line = this.line.filter((other) => other !== ask)
+    this.grant(ask)
+  }
+
+  /** A tab that closed or crashed holds no lock and waits for none. */
+  closeTabOf(tab: Tab) {
+    this.line = this.line.filter((ask) => ask.tab !== tab)
+    for (const [name, ask] of [...this.held]) {
+      if (ask.tab !== tab) continue
+      this.held.delete(name)
+      this.next(name)
+    }
+  }
+}
+
+interface LockAsk {
+  tab: Tab
+  name: string
+  callback: (lock: Lock | null) => Promise<unknown>
+  resolve: (value: unknown) => void
+  reject: (error: unknown) => void
+}
+
+let locks = new ModelLocks()
+let tabNames = 0
+
+/** A channel belongs to the tab that runs when the channel opens, so that a closed tab hears nothing. A message waits while its tab is frozen. */
 class ModelChannels {
   private open = new Set<ModelChannel>()
-  tabRunning: object | null = null
+  /** The messages on their way, so a word that a hand-over carries is not a lost word. */
+  readonly onTheWay = new Set<{ to: ModelChannel; data: unknown }>()
 
   add(channel: ModelChannel) {
     this.open.add(channel)
@@ -215,16 +370,27 @@ class ModelChannels {
     this.open.delete(channel)
   }
 
+  /** The answer is the words of the messages that will not come to the tab now. */
   closeChannelsOf(tab: object) {
+    const lost: unknown[] = []
+    for (const message of [...this.onTheWay]) {
+      if (message.to.tab !== tab) continue
+      this.onTheWay.delete(message)
+      lost.push(message.data)
+    }
     for (const channel of [...this.open]) if (channel.tab === tab) this.open.delete(channel)
+    return JSON.stringify(lost)
   }
 
   post(from: ModelChannel, data: unknown) {
     for (const channel of [...this.open]) {
       if (channel === from || channel.name !== from.name) continue
-      setTimeout(() => {
+      const message = { to: channel, data }
+      this.onTheWay.add(message)
+      clock.set(() => asTab(channel.tab, () => {
+        this.onTheWay.delete(message)
         if (this.open.has(channel)) channel.onmessage?.({ data } as MessageEvent)
-      }, 1)
+      }), 1)
     }
   }
 }
@@ -233,12 +399,12 @@ let channels = new ModelChannels()
 
 class ModelChannel {
   readonly name: string
-  readonly tab: object | null
+  readonly tab: Tab | null
   onmessage: ((event: MessageEvent) => void) | null = null
 
   constructor(name: string) {
     this.name = name
-    this.tab = channels.tabRunning
+    this.tab = current
     channels.add(this)
   }
 
@@ -268,8 +434,11 @@ interface Page {
   saver: Saver
   stopListening: () => void
   clientSessionId: string
+  /** The words in the editor, or null while the page reads the entry or shows the words of another tab. */
   editor: string | null
   held: string | null
+  /** Where the entry is edited, as the page last rendered it. */
+  place: 'waiting' | 'here' | 'elsewhere'
 }
 
 // A line break in a document is the escape `\n`, so a token can follow the letter `n`. A person types `w`, a recording adds `c`, and another device types `d`.
@@ -348,18 +517,36 @@ class Tab {
   isClosed = false
   tokenCount = 0
 
+  /** The name of the tab in the steps of a run. */
+  readonly name = (tabNames += 1)
+  isFrozen = false
+  /** The timers, answers, and messages that came while the tab was frozen, in order. */
+  readonly waiting: Waiting[] = []
+
   async load() {
-    channels.tabRunning = this
+    everyTab.add(this)
+    becomeCurrent(this)
+    // The lock reads the lock manager of its page when its module loads.
+    vi.stubGlobal('navigator', { locks: locks.managerFor(this) })
     vi.resetModules()
     this.mod = await import('./draft-saver')
     this.keys = await import('./tab-keys')
-    channels.tabRunning = this
+    becomeCurrent(this)
     this.keys.joinTheOtherTabs(async () => {
       await Promise.race([this.mod.settleDraftSavers(), delay(4000)])
       return { wordsOnlyInMemory: this.mod.wordsOfThisTabOnlyInMemory(), hasUnsavedTags: false }
     })
     this.keys.watchOtherTabs(() => this.resume())
-    channels.tabRunning = null
+  }
+
+  /** The browser stops the code of the tab: no timer, answer, message, or lock event reaches it until it wakes. */
+  freeze() {
+    this.isFrozen = true
+  }
+
+  wake() {
+    this.isFrozen = false
+    for (const one of this.waiting) clock.set(() => runWaiting(this, one), 0)
   }
 
   /** The effect of the root route: a load, a tab that left, a tab that the person sees again, or a network that returns. */
@@ -367,40 +554,66 @@ class Tab {
     if (!this.isClosed) void this.run(() => this.mod.resumeUnsentDrafts(owner, this.queryClient))
   }
 
-  /** Runs code of this tab, so that a channel that it opens is the channel of this tab. */
+  /** Runs code of this tab, so that a timer, a request, or a channel that it makes is of this tab. The code that it starts goes on as this tab. */
   run<T>(work: () => T): T {
-    channels.tabRunning = this
+    becomeCurrent(this)
+    return work()
+  }
+
+  /** Reads the state of this tab, as a person who looks at it, also when it is frozen. */
+  look<T>(work: () => T): T {
+    const before = current
+    becomeCurrent(this)
     try {
       return work()
     } finally {
-      channels.tabRunning = null
+      current = before
     }
   }
 
-  openDraft(clientSessionId: string, sessionId: string | null, baseRevision: number) {
+  /** The entry page or the composer. It edits only while this tab holds the lock of the entry, and else it shows the words of the tab that edits. */
+  openDraft(clientSessionId: string, sessionId: string | null, baseRevision: number, isNewEntry = false) {
     const target = { owner, channel: 'raw' as const, clientSessionId, startedAt: '2026-11-07T00:00:00.000Z', sessionId, baseRevision, baseText: '' }
     this.run(() => {
-      const saver = this.mod.draftSaverFor(target, this.queryClient)
-      const stopListening = saver.subscribe(() => undefined)
-      const kept = saver.wordsToOpen()
-      const id = saver.getSnapshot().sessionId
-      const page: Page = { saver, stopListening, clientSessionId, editor: kept ?? (id ? null : ''), held: saver.wordsInHold() }
-      saver.subscribeToNewWords((words) => {
-        page.editor = words
-      })
+      const saver = this.mod.draftSaverFor(target, this.queryClient, isNewEntry)
+      const page: Page = { saver, stopListening: () => undefined, clientSessionId, editor: null, held: null, place: 'waiting' }
       this.page = page
-      if (page.editor === null) {
-        saver.takeHold()
-        void this.readInto(page, id as string)
-      }
+      // A page opens its editor after the render, so a take of the words ends first.
+      page.stopListening = saver.subscribe(() => queueMicrotask(() => this.notePlace(page)))
+      saver.subscribeToNewWords((words) => {
+        if (page.place === 'here') page.editor = words
+      })
+      this.notePlace(page)
     })
     this.resume()
   }
 
+  /** The page edits from the moment that this tab holds the lock, and it opens the words of the saver or of the Draft. A page that lost the lock shows the words of the other tab, and it holds none. */
+  private notePlace(page: Page) {
+    if (this.isClosed || this.page !== page) return
+    const place = page.saver.getSnapshot().editing
+    if (place === page.place) return
+    page.place = place
+    if (place !== 'here') {
+      page.editor = null
+      page.held = null
+      return
+    }
+    const kept = page.saver.wordsToOpen()
+    const id = page.saver.getSnapshot().sessionId
+    page.editor = kept ?? (id ? null : '')
+    page.held = page.saver.wordsInHold()
+    if (page.editor === null) {
+      page.saver.takeHold()
+      void this.readInto(page, id as string)
+    }
+  }
+
   private async readInto(page: Page, id: string) {
     for (;;) {
-      const session = await world.getSession({ path: { id } }).catch((error: unknown) => (error instanceof ProblemDetailsError && error.status === 404 ? ('gone' as const) : null))
-      if (this.isClosed || this.page !== page || page.editor !== null) return
+      const session = await viaTab(this, () => world.getSession({ path: { id } })).catch((error: unknown) => (error instanceof ProblemDetailsError && error.status === 404 ? ('gone' as const) : null))
+      if (this.isClosed || this.page !== page || page.place !== 'here' || page.editor !== null) return
+
       if (session === null) {
         await delay(2000)
         continue
@@ -417,9 +630,10 @@ class Tab {
     }
   }
 
+  /** False when the page shows the words of another tab, so the person cannot type. */
   type(token: string, random?: Random) {
     const page = this.page
-    if (!page) return
+    if (!page || page.place !== 'here') return false
     this.run(() => {
       if (page.editor === null) {
         page.held = typedInto(page.held ?? '', token)
@@ -429,13 +643,30 @@ class Tab {
       page.editor = random ? typedSomewhere(page.editor, token, random) : typedInto(page.editor, token)
       page.saver.edit(page.editor)
     })
+    return true
+  }
+
+  /** The words that a page with no edit shows. A storage event makes the page read them again. */
+  wordsOfTheEditor() {
+    return this.look(() => {
+      this.mod.refreshWordsOfEditors()
+      return this.page?.saver.getSnapshot().wordsOfTheEditor ?? null
+    })
+  }
+
+  /** Edit here, on a page that shows the words of another tab. */
+  editHere() {
+    const page = this.page
+    if (!page || page.place !== 'elsewhere') return false
+    this.run(() => page.saver.takeHere())
+    return true
   }
 
   /** The person deletes one word that the person typed. The answer is the word, or null when the screen shows none. */
   deleteAWord(random: Random): string | null {
     const page = this.page
     const own = tokensIn(page?.editor ?? '').filter((token) => token.startsWith('w'))
-    if (!page || page.editor === null || own.length === 0) return null
+    if (!page || page.place !== 'here' || page.editor === null || own.length === 0) return null
     const token = own[random.below(own.length)]
     this.run(() => {
       page.editor = withoutWord(page.editor as string, token)
@@ -444,9 +675,10 @@ class Tab {
     return token
   }
 
+  /** Done, or a move away from a page that shows the words of another tab. */
   done() {
     const page = this.page
-    if (!page || page.editor === null || page.saver.hasConflict()) return
+    if (!page || (page.place === 'here' && (page.editor === null || page.saver.hasConflict()))) return
     this.run(() => {
       page.saver.flush()
       page.stopListening()
@@ -457,7 +689,7 @@ class Tab {
   /** Show the newest words replaces the words of the notice on the page, so the person knows that those words leave the Draft. */
   async answerConflict(random: Random, trace: Trace) {
     const page = this.page
-    if (!page || page.editor === null || page.saver.getSnapshot().conflict === null) return
+    if (!page || page.place !== 'here' || page.editor === null || page.saver.getSnapshot().conflict === null) return
     if (random.chance(0.5)) {
       const before = tokensIn(page.editor)
       const newest = await this.run(() => page.saver.takeNewestWords())
@@ -476,9 +708,9 @@ class Tab {
   async refetch() {
     const page = this.page
     const id = page?.saver.getSnapshot().sessionId
-    if (!page || !id || page.editor === null) return
-    const session = await world.getSession({ path: { id } }).catch(() => null)
-    if (!session || this.isClosed || this.page !== page) return
+    if (!page || !id || page.place !== 'here' || page.editor === null) return
+    const session = await viaTab(this, () => world.getSession({ path: { id } })).catch(() => null)
+    if (!session || this.isClosed || this.page !== page || page.place !== 'here') return
     this.run(() => {
       const { baseRevision, conflict } = page.saver.getSnapshot()
       if (session.rawDraftRevision <= baseRevision || page.saver.unsettledText() !== null || conflict !== null) return
@@ -488,10 +720,10 @@ class Tab {
   }
 
   notices(): Notice[] {
-    return this.run(() => this.mod.draftNotices())
+    return this.look(() => this.mod.draftNotices())
   }
 
-  /** A close that a person makes: the page hears `pagehide`, and its timers and listeners end. */
+  /** A close that a person makes: the page hears `pagehide`, and its timers and listeners end. The browser frees its locks. */
   close() {
     this.run(() => {
       this.keys.noteThisTabLeaves()
@@ -499,16 +731,18 @@ class Tab {
     })
     this.isClosed = true
     channels.closeChannelsOf(this)
+    locks.closeTabOf(this)
   }
 
-  /** A crash: no `pagehide`, and no code of this tab writes to storage again. */
+  /** A crash: no `pagehide`, and no code of this tab writes to storage again. The browser frees its locks. */
   kill(storage: Storage) {
     const before = Object.keys(storage).map((key) => [key, storage.getItem(key) as string] as const)
-    this.run(() => this.mod.stopDraftSavers())
+    this.look(() => this.mod.stopDraftSavers())
     for (const key of Object.keys(storage)) storage.removeItem(key)
     for (const [key, value] of before) storage.setItem(key, value)
     this.isClosed = true
     channels.closeChannelsOf(this)
+    locks.closeTabOf(this)
   }
 }
 
@@ -562,7 +796,7 @@ function lastWordsThatLeftTheDraftWithNoNotice(tabs: Tab[], storage: Storage, tr
 }
 
 function wordsThatVanished(tabs: Tab[], storage: Storage, trace: Trace) {
-  const keys = Object.keys(storage).map((key) => storage.getItem(key)).join(' ')
+  const keys = `${Object.keys(storage).map((key) => storage.getItem(key)).join(' ')} ${[...channels.onTheWay].map(({ data }) => JSON.stringify(data)).join(' ')}`
   const notices = tabs.flatMap((tab) => tab.notices()).map((notice) => ('words' in notice ? notice.words : '')).join(' ')
   const screens = tabs.map((tab) => tab.page?.editor ?? tab.page?.held ?? '').join(' ')
   const present = new Set(tokensIn(`${world.allText()} ${keys} ${notices} ${screens}`))
@@ -579,6 +813,8 @@ class ModelRun {
   private readonly storage = storageWith(() => this.storageIsFull)
   private readonly pointers = new Map<Tab, string>()
   private tokenCount = 0
+  /** The tab that the person used last. A move to another tab takes the person a moment. */
+  private lastTab: Tab | null = null
 
   constructor(seed: number) {
     this.random = randomFrom(seed)
@@ -588,7 +824,11 @@ class ModelRun {
     vi.stubGlobal('localStorage', this.storage)
     world = new ModelServer()
     world.latencyMs = () => 20 + this.random.below(1500)
+    if (process.env.MODEL_DEBUG) world.noteSave = (step) => this.note(step)
     channels = new ModelChannels()
+    locks = new ModelLocks()
+    everyTab.clear()
+    tabNames = 0
   }
 
   private readonly tabNames = new Map<Tab, number>()
@@ -611,14 +851,15 @@ class ModelRun {
     return `client-${this.random.below(1e9)}`
   }
 
-  private async openTab(clientSessionId = this.newEntryId()) {
+  private async openTab(pointer?: string) {
+    const clientSessionId = pointer ?? this.newEntryId()
     const tab = new Tab()
     await tab.load()
     this.tabs.push(tab)
     const row = world.rows.find((other) => other.clientSessionId === clientSessionId)
-    tab.openDraft(clientSessionId, row?.id ?? null, row?.draftRevision ?? 0)
+    tab.openDraft(clientSessionId, row?.id ?? null, row?.draftRevision ?? 0, pointer === undefined)
     this.pointers.set(tab, clientSessionId)
-    this.note(`open tab ${this.tabs.indexOf(tab)} on ${clientSessionId}`)
+    this.note(`open tab ${tab.name} on ${clientSessionId}`)
     return tab
   }
 
@@ -633,7 +874,17 @@ class ModelRun {
       await this.openTab()
       return
     }
-    const index = this.tabs.indexOf(tab)
+    const index = tab.name
+    const isAPersonOn = roll < 40 || (roll >= 62 && roll < 84) || roll >= 87
+    if (isAPersonOn && tab !== this.lastTab) {
+      await vi.advanceTimersByTimeAsync(100)
+      this.note(`the person goes to tab ${index}`)
+    }
+    if (isAPersonOn) this.lastTab = tab
+    if (tab.isFrozen && isAPersonOn && !(roll >= 68 && roll < 81)) {
+      this.note(`tab ${index} is frozen, so the person waits`)
+      return
+    }
     if (roll < 40) {
       const deleted = this.random.chance(0.1) ? tab.deleteAWord(this.random) : null
       if (deleted !== null && tab.page) {
@@ -645,8 +896,13 @@ class ModelRun {
         this.note(`tab ${index} deletes ${deleted}`)
         return
       }
+      if (!tab.page) tab.openDraft(this.newEntryId(), null, 0, true)
+      if (tab.page?.place !== 'here') {
+        if (this.random.chance(0.5) && tab.editHere()) this.note(`tab ${index} presses Edit here`)
+        else this.note(`tab ${index} shows the words of another tab, so the person does not type there`)
+        return
+      }
       const token = `w${(this.tokenCount += 1)}x`
-      if (!tab.page) tab.openDraft(this.newEntryId(), null, 0)
       this.trace.typed.add(token)
       tab.type(token, this.random)
       const entry = tab.page?.clientSessionId as string
@@ -656,6 +912,10 @@ class ModelRun {
       const row = this.pick(world.rows)
       if (row) void this.anotherDeviceTypesInto(row)
     } else if (roll < 62) {
+      if (this.random.chance(0.12)) {
+        await this.freezeOrWake(tab)
+        return
+      }
       const ms = this.random.below(2500)
       await vi.advanceTimersByTimeAsync(ms)
       this.note(`${ms} ms pass`)
@@ -665,7 +925,11 @@ class ModelRun {
         await this.openTab(same)
       }
     } else if (roll < 73) {
-      if (tab.run(() => this.mod(tab).isAnyWordOnlyInMemory())) {
+      if (tab.isFrozen) {
+        // The browser ends a frozen page with no `pagehide`, as at a crash.
+        this.crash(tab)
+        this.note(`tab ${index} is frozen, and the person closes it`)
+      } else if (tab.look(() => this.mod(tab).isAnyWordOnlyInMemory())) {
         this.note(`tab ${index} would close, and the browser warns, so the person stays`)
       } else {
         tab.close()
@@ -673,18 +937,17 @@ class ModelRun {
         this.note(`tab ${index} closes`)
       }
     } else if (roll < 76) {
-      // A crash loses what only a page holds, and the person saw the notice about those words before the crash.
-      for (const token of tokensIn(tab.run(() => tab.mod.wordsOfThisTabOnlyInMemory()).join(' '))) this.trace.discarded.add(token)
-      for (const notice of tab.notices()) if (notice.kind === 'inHistory') for (const token of tokensIn(notice.words)) this.trace.knownToBeGone.add(token)
-      if (tab.page?.saver.hasConflict()) for (const token of tokensIn(tab.page.editor ?? '')) this.trace.knownToBeGone.add(token)
-      tab.kill(this.storage)
-      this.removeTab(tab)
+      this.crash(tab)
       this.note(`tab ${index} crashes`)
     } else if (roll < 81) {
-      if (tab.run(() => this.mod(tab).isAnyWordOnlyInMemory())) {
+      const pointer = tab.page?.clientSessionId
+      if (tab.isFrozen) {
+        this.crash(tab)
+        this.note(`tab ${index} is frozen, and the person reloads it`)
+        await this.openTab(pointer)
+      } else if (tab.look(() => this.mod(tab).isAnyWordOnlyInMemory())) {
         this.note(`tab ${index} would reload, and the browser warns, so the person stays`)
       } else {
-        const pointer = tab.page?.clientSessionId
         tab.close()
         this.removeTab(tab)
         this.note(`tab ${index} reloads`)
@@ -726,6 +989,30 @@ class ModelRun {
     return tab.mod
   }
 
+  /** A crash loses what only a page holds, and the person saw the notice about those words before the crash. A hand-over on its way to the tab is in its memory too. */
+  private crash(tab: Tab) {
+    for (const token of tokensIn(tab.look(() => tab.mod.wordsOfThisTabOnlyInMemory()).join(' '))) this.trace.discarded.add(token)
+    for (const notice of tab.notices()) if (notice.kind === 'inHistory') for (const token of tokensIn(notice.words)) this.trace.knownToBeGone.add(token)
+    if (tab.page?.saver.hasConflict()) for (const token of tokensIn(tab.page.editor ?? '')) this.trace.knownToBeGone.add(token)
+    const onTheWay = [...channels.onTheWay].filter(({ to }) => to.tab === tab).map(({ data }) => JSON.stringify(data)).join(' ')
+    for (const token of tokensIn(onTheWay)) this.trace.discarded.add(token)
+    tab.kill(this.storage)
+    this.removeTab(tab)
+  }
+
+  /** The browser freezes a tab, or a frozen tab wakes. At the wake, the tab runs what waited before the person can use it. */
+  private async freezeOrWake(tab: Tab) {
+    const index = tab.name
+    if (tab.isFrozen) {
+      tab.wake()
+      await vi.advanceTimersByTimeAsync(0)
+      this.note(`tab ${index} wakes`)
+      return
+    }
+    tab.freeze()
+    this.note(`tab ${index} freezes`)
+  }
+
   /** A second writer through the Draft route, as the iOS client: it reads, types one word somewhere, and saves from the number of the read. After a loss it reads and tries once more. A word of a save that won must stay in the Draft. */
   private async anotherDeviceTypesInto(row: Row) {
     const token = `d${(this.tokenCount += 1)}x`
@@ -750,17 +1037,17 @@ class ModelRun {
       notice.saver.dismissConflict()
     }
     const canDiscard = (notice: Notice) => 'words' in notice && notice.kind !== 'inHistory' && (notice.kind !== 'onlyInMemory' || notice.canDiscard)
-    const tab = this.pick(this.tabs.filter((other) => other.notices().some(canDiscard)))
+    const tab = this.pick(this.tabs.filter((other) => !other.isFrozen && other.notices().some(canDiscard)))
     if (!tab) return
     const notice = this.pick(tab.notices().filter(canDiscard))
     if (!notice || !('words' in notice)) return
     for (const token of tokensIn(notice.words)) this.trace.discarded.add(token)
     tab.run(() => notice.saver.discard())
-    this.note(`tab ${this.tabs.indexOf(tab)} discards a notice with: ${notice.words}`)
+    this.note(`tab ${tab.name} discards a notice with: ${notice.words}`)
   }
 
   private async signOut(tab: Tab) {
-    const index = this.tabs.indexOf(tab)
+    const index = tab.name
     const reports = tab.run(() => tab.keys.askOtherTabsToSettle(5000))
     void tab.run(() => tab.mod.settleDraftSavers())
     await vi.advanceTimersByTimeAsync(5000)
@@ -785,6 +1072,10 @@ class ModelRun {
     }
     tab.run(() => tab.mod.removeNoticesOfWordsInHistory(owner))
     for (const other of [...this.tabs]) {
+      if (other.isFrozen) {
+        this.crash(other)
+        continue
+      }
       other.close()
       this.removeTab(other)
     }
@@ -797,7 +1088,8 @@ class ModelRun {
     }
     world.isDown = false
     this.storageIsFull = false
-    this.note('the server and storage work again, and a person opens a page')
+    for (const tab of this.tabs) if (tab.isFrozen) tab.wake()
+    this.note('the server and storage work again, each tab wakes, and a person opens a page')
     await this.openTab()
     await vi.advanceTimersByTimeAsync(120_000)
     this.check()
@@ -808,6 +1100,9 @@ class ModelRun {
 
   private check() {
     const vanished = wordsThatVanished(this.tabs, this.storage, this.trace)
+    // One tab edits an entry. A frozen tab does not know yet that it lost the entry, and the person cannot type there.
+    const editing = this.tabs.filter((tab) => !tab.isFrozen && tab.page?.place === 'here').map((tab) => tab.page?.clientSessionId)
+    const twoEditors = editing.filter((id, at) => editing.indexOf(id) !== at)
     const pushedOut = chunksPushedOut()
     const twice = world.rows.flatMap((row) => tokensIn(row.text).filter((token, at, all) => all.indexOf(token) !== at).map((token) => `${token} in ${row.id}`))
     // A deleted word that left the Draft must not come back. A crash can lose a deletion that only the page held, so a word that never left can stay.
@@ -818,14 +1113,23 @@ class ModelRun {
       else if (isInDraft) deletion.place = 'inDraft'
       else if (deletion.place === 'inDraft') deletion.place = 'left'
     }
-    if (vanished.length === 0 && pushedOut.length === 0 && twice.length === 0 && back.length === 0) return
+    if (vanished.length === 0 && pushedOut.length === 0 && twice.length === 0 && back.length === 0 && twoEditors.length === 0) return
     const trail = this.trace.steps.slice(-Number(process.env.MODEL_TRAIL ?? 40)).join('\n  ')
-    throw new Error(`${vanished.length > 0 ? `Words that vanished: ${vanished.join(', ')}.` : ''} ${pushedOut.length > 0 ? `Words of a recording or another device pushed out of the Draft: ${pushedOut.join(', ')}.` : ''} ${twice.length > 0 ? `Words twice in the Draft: ${twice.join(', ')}.` : ''} ${back.length > 0 ? `Deleted words back in the Draft: ${back.join(', ')}.` : ''}\nLast steps:\n  ${trail}`)
+    throw new Error(`${vanished.length > 0 ? `Words that vanished: ${vanished.join(', ')}.` : ''} ${pushedOut.length > 0 ? `Words of a recording or another device pushed out of the Draft: ${pushedOut.join(', ')}.` : ''} ${twice.length > 0 ? `Words twice in the Draft: ${twice.join(', ')}.` : ''} ${back.length > 0 ? `Deleted words back in the Draft: ${back.join(', ')}.` : ''} ${twoEditors.length > 0 ? `Two tabs edit: ${twoEditors.join(', ')}.` : ''}\nLast steps:\n  ${trail}`)
   }
 }
 
 beforeEach(() => {
   vi.useFakeTimers({ now: new Date('2026-11-07T00:00:00.000Z'), toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] })
+  clock.set = globalThis.setTimeout
+  clock.clear = globalThis.clearTimeout
+  current = null
+  vi.stubGlobal('setTimeout', tabTimeout)
+  vi.stubGlobal('clearTimeout', tabClearTimeout)
+  vi.stubGlobal('queueMicrotask', (work: () => void) => {
+    const tab = current
+    void Promise.resolve().then(() => asTab(tab, work))
+  })
   vi.stubGlobal('BroadcastChannel', ModelChannel)
   vi.stubGlobal('window', { addEventListener: () => undefined, removeEventListener: () => undefined })
   vi.stubGlobal('sessionStorage', storageWith(() => false))
@@ -834,8 +1138,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  vi.useRealTimers()
   vi.unstubAllGlobals()
+  vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
@@ -857,38 +1161,205 @@ function aScene() {
   vi.stubGlobal('localStorage', storage)
   world = new ModelServer()
   channels = new ModelChannels()
+  locks = new ModelLocks()
+  everyTab.clear()
   return storage
 }
 
-async function aTabOn(clientSessionId: string) {
+/** A tab that opens the entry. It edits once the lock comes, unless another tab edits the entry. */
+async function aTabOn(clientSessionId: string, sessionId: string | null = null, baseRevision = 0) {
   const tab = new Tab()
   await tab.load()
-  tab.openDraft(clientSessionId, null, 0)
+  tab.openDraft(clientSessionId, sessionId, baseRevision)
+  await vi.advanceTimersByTimeAsync(10)
   return tab
 }
+
+/** The same entry in another tab, as a person opens it from the list. */
+const aSecondTabOn = (row: Row) => aTabOn(row.clientSessionId, row.id, row.draftRevision)
 
 const pass = (ms: number) => vi.advanceTimersByTimeAsync(ms)
 const allKeys = (storage: Storage) => Object.keys(storage).map((key) => storage.getItem(key)).join(' ')
 
-test('a tab that opens leaves the key of a live tab and shows its words, so the words of both tabs reach the server', async () => {
-  const storage = aScene()
-  world.isDown = true
+test('a second tab on the entry shows the words of the editor, and edits only after Edit here', async () => {
+  aScene()
   const first = await aTabOn('entry-1')
   first.type('w1x')
-  await pass(1000)
-  const keysBefore = Object.keys(storage)
+  await pass(2000)
+  const row = world.rows[0] as Row
 
-  const second = await aTabOn('entry-1')
-  await pass(1000)
+  const second = await aSecondTabOn(row)
+  expect(first.page?.place).toBe('here')
+  expect(second.page?.place).toBe('elsewhere')
+  expect(second.wordsOfTheEditor()).toBeNull()
+  expect(second.type('w2x')).toBe(false)
 
-  expect(Object.keys(storage)).toEqual(expect.arrayContaining(keysBefore))
-  expect(second.page?.editor).toBe('w1x')
+  world.isDown = true
+  first.type('w3x')
+  await pass(1000)
+  expect(second.wordsOfTheEditor()).toBe('w1x w3x')
+  world.isDown = false
+  second.editHere()
+  await pass(1000)
+  expect(first.page?.place).toBe('elsewhere')
+  expect(second.page?.place).toBe('here')
+  expect(tokensIn(second.page?.editor ?? '')).toEqual(['w1x', 'w3x'])
+  expect(first.type('w4x')).toBe(false)
+  second.type('w5x')
+  await pass(5000)
+
+  expect(tokensIn(row.text)).toEqual(['w1x', 'w3x', 'w5x'])
+  expect(second.page?.saver.getSnapshot().conflict).toBeNull()
+  first.run(() => first.mod.stopDraftSavers())
+  second.run(() => second.mod.stopDraftSavers())
+})
+
+for (const state of ['saved', 'waiting to save', 'saving', 'offline'] as const) {
+  test(`Edit here while the editor is ${state} moves each word once, with its base`, async () => {
+    const storage = aScene()
+    world.latencyMs = () => 300
+    const first = await aTabOn('entry-1')
+    first.type('w1x')
+    await pass(3000)
+    const row = world.rows[0] as Row
+    const second = await aSecondTabOn(row)
+    world.appendChunk(row, 'c2x')
+    if (state === 'offline') world.isDown = true
+    if (state !== 'saved') first.type('w3x')
+    if (state === 'saving') await pass(1000)
+
+    second.editHere()
+    await pass(600)
+    expect(second.page?.place).toBe('here')
+    expect(first.page?.place).toBe('elsewhere')
+    if (state === 'offline') expect(tokensIn(allKeys(storage))).toContain('w3x')
+    world.isDown = false
+    second.type('w4x')
+    await pass(60_000)
+
+    const words = state === 'saved' ? ['w1x', 'c2x', 'w4x'] : ['w1x', 'c2x', 'w3x', 'w4x']
+    expect(tokensIn(row.text)).toEqual(words)
+    expect(tokensIn(second.page?.editor ?? '')).toEqual(words)
+    expect(second.page?.saver.getSnapshot().conflict).toBeNull()
+    expect(tokensIn(allKeys(storage))).toEqual([])
+    first.run(() => first.mod.stopDraftSavers())
+    second.run(() => second.mod.stopDraftSavers())
+  })
+}
+
+test('a crash of the editor frees the entry, and the next tab takes its words from storage', async () => {
+  const storage = aScene()
+  const first = await aTabOn('entry-1')
+  first.type('w1x')
+  await pass(2000)
+  const row = world.rows[0] as Row
+  world.isDown = true
   first.type('w2x')
-  second.type('w3x')
   await pass(1000)
+  first.kill(storage)
+
+  world.isDown = false
+  const next = await aSecondTabOn(row)
+  await pass(1000)
+  expect(next.page?.place).toBe('here')
+  expect(tokensIn(next.page?.editor ?? '')).toEqual(['w1x', 'w2x'])
+  next.type('w3x')
+  await pass(60_000)
+
+  expect(tokensIn(row.text)).toEqual(['w1x', 'w2x', 'w3x'])
+  expect(tokensIn(allKeys(storage))).toEqual([])
+  next.run(() => next.mod.stopDraftSavers())
+})
+
+test('a close of the editor gives the entry to a tab that shows it, and that tab edits from the words of the editor', async () => {
+  const storage = aScene()
+  const first = await aTabOn('entry-1')
+  first.type('w1x')
+  await pass(2000)
+  const row = world.rows[0] as Row
+  const second = await aSecondTabOn(row)
+  world.isDown = true
+  first.type('w2x')
+  await pass(1000)
+  expect(second.wordsOfTheEditor()).toBe('w1x w2x')
+
+  // The tab that waits in line gets the lock with no click, and it takes the key that the editor left.
+  first.close()
+  await pass(1000)
+  expect(second.page?.place).toBe('here')
+  expect(tokensIn(second.page?.editor ?? '')).toEqual(['w1x', 'w2x'])
   world.isDown = false
   await pass(60_000)
-  expect(tokensIn(world.allText())).toEqual(expect.arrayContaining(['w1x', 'w2x', 'w3x']))
+
+  expect(tokensIn(row.text)).toEqual(['w1x', 'w2x'])
+  expect(tokensIn(allKeys(storage))).toEqual([])
+  second.run(() => second.mod.stopDraftSavers())
+})
+
+test('a frozen editor that wakes after a steal shows the words of the new editor, and no word repeats', async () => {
+  const storage = aScene()
+  const first = await aTabOn('entry-1')
+  first.type('w1x')
+  await pass(2000)
+  const row = world.rows[0] as Row
+  world.isDown = true
+  first.type('w2x')
+  await pass(1000)
+  first.freeze()
+
+  const second = await aSecondTabOn(row)
+  second.editHere()
+  await pass(1000)
+  expect(second.page?.place).toBe('here')
+  expect(tokensIn(second.page?.editor ?? '')).toEqual(['w1x', 'w2x'])
+  second.type('w3x')
+  await pass(1000)
+
+  first.wake()
+  await pass(1000)
+  expect(first.page?.place).toBe('elsewhere')
+  expect(first.type('w4x')).toBe(false)
+  world.isDown = false
+  await pass(60_000)
+
+  expect(tokensIn(row.text)).toEqual(['w1x', 'w2x', 'w3x'])
+  expect(tokensIn(allKeys(storage))).toEqual([])
+  first.run(() => first.mod.stopDraftSavers())
+  second.run(() => second.mod.stopDraftSavers())
+})
+
+test('on a full storage, a steal moves the words of the editor over the channel, and the new editor merges them once from their base', async () => {
+  let isFull = false
+  const storage = storageWith(() => isFull)
+  vi.stubGlobal('localStorage', storage)
+  world = new ModelServer()
+  channels = new ModelChannels()
+  locks = new ModelLocks()
+  everyTab.clear()
+  const first = await aTabOn('entry-1')
+  first.type('w1x')
+  await pass(2000)
+  const row = world.rows[0] as Row
+  const second = await aSecondTabOn(row)
+  isFull = true
+  world.isDown = true
+  first.type('w2x')
+  await pass(1000)
+  expect(tokensIn(allKeys(storage))).not.toContain('w2x')
+  world.isDown = false
+  world.appendChunk(row, 'c3x')
+
+  second.editHere()
+  await pass(1000)
+  expect(first.page?.place).toBe('elsewhere')
+  expect(second.page?.place).toBe('here')
+  second.type('w4x')
+  await pass(60_000)
+
+  // Both sides added after w1x, so the other device goes first, then the person, as for each merge.
+  expect(tokensIn(row.text)).toEqual(['w1x', 'c3x', 'w2x', 'w4x'])
+  expect(tokensIn(second.page?.editor ?? '')).toEqual(['w1x', 'c3x', 'w2x', 'w4x'])
+  expect(second.page?.saver.getSnapshot().conflict).toBeNull()
   first.run(() => first.mod.stopDraftSavers())
   second.run(() => second.mod.stopDraftSavers())
 })
@@ -907,6 +1378,7 @@ test('a reload with a second tab open keeps the words on the screen, whichever t
   const back = await aTabOn('entry-1')
   await pass(1000)
 
+  expect(back.page?.place).toBe('here')
   expect(back.page?.editor).toBe('w1x')
   expect(tokensIn(allKeys(storage))).toContain('w1x')
   world.isDown = false
@@ -916,37 +1388,19 @@ test('a reload with a second tab open keeps the words on the screen, whichever t
   other.run(() => other.mod.stopDraftSavers())
 })
 
-test('of two tabs on one entry, the tab that loses merges, so the words of both tabs are in the Draft once, with no notice', async () => {
-  aScene()
-  const first = await aTabOn('entry-1')
-  first.type('w1x')
-  await pass(2000)
-  const row = world.rows[0] as Row
-  const second = await aTabOn('entry-1')
-  await pass(2000)
-  world.latencyMs = () => 10
-  first.type('w2x')
-  second.type('w3x')
-  await pass(3000)
-
-  expect([...tokensIn(row.text)].sort()).toEqual(['w1x', 'w2x', 'w3x'])
-  expect(first.page?.saver.getSnapshot().conflict).toBeNull()
-  expect(second.page?.saver.getSnapshot().conflict).toBeNull()
-  first.run(() => first.mod.stopDraftSavers())
-  second.run(() => second.mod.stopDraftSavers())
-})
-
 test('a discard removes only the words of its notice, also when a frozen tab wakes and types more', async () => {
   const storage = aScene()
   world.isDown = true
   const frozen = await aTabOn('entry-1')
   frozen.type('w1x')
   await pass(1000)
-  channels.closeChannelsOf(frozen)
+  frozen.freeze()
 
   const other = await aTabOn('entry-2')
   await pass(1000)
   const notice = other.notices().find((one) => 'words' in one && one.words.includes('w1x'))
+  frozen.wake()
+  await pass(10)
   frozen.type('w2x')
   await pass(1000)
   other.run(() => notice?.saver.discard())
@@ -965,7 +1419,7 @@ test('a held text that another held text starts with stays, and both reach the s
   const held = (clientSessionId: string, writer: string, words: string) =>
     storage.setItem(
       `recall.unsent.${owner}.${writer}.1`,
-      JSON.stringify({ key: `${clientSessionId}.raw`, channel: 'raw', clientSessionId, startedAt: '2026-11-07T00:00:00.000Z', sessionId: null, baseRevision: 0, change: null, held: words }),
+      JSON.stringify({ key: `${clientSessionId}.raw`, channel: 'raw', clientSessionId, startedAt: '2026-11-07T00:00:00.000Z', sessionId: null, baseRevision: 0, baseText: '', change: null, held: words }),
     )
   held('entry-1', 'tab-gone-1', 'w1x')
   held('entry-2', 'tab-gone-2', 'w1x w2x')
@@ -985,6 +1439,7 @@ test('a sign-out in one tab names the words that only the memory of another tab 
   vi.stubGlobal('localStorage', storage)
   world = new ModelServer()
   channels = new ModelChannels()
+  locks = new ModelLocks()
   world.isDown = true
   const typing = await aTabOn('entry-1')
   const leaving = await aTabOn('entry-2')
@@ -1015,7 +1470,7 @@ test('a discard at sign-out leaves no readable text of the words that it named',
   gone.close()
   storage.setItem(
     `recall.unsent.${owner}.tab-gone.1`,
-    JSON.stringify({ key: 'entry-2.raw', channel: 'raw', clientSessionId: 'entry-2', startedAt: '2026-11-07T00:00:00.000Z', sessionId: null, baseRevision: 0, change: null, held: 'w2x' }),
+    JSON.stringify({ key: 'entry-2.raw', channel: 'raw', clientSessionId: 'entry-2', startedAt: '2026-11-07T00:00:00.000Z', sessionId: null, baseRevision: 0, baseText: '', change: null, held: 'w2x' }),
   )
 
   const leaving = await aTabOn('entry-3')
@@ -1192,7 +1647,7 @@ test('a saver that took the key of a tab that left and moved to a new entry coun
   storage.setItem(`recall.left.tab-gone`, '1')
   storage.setItem(
     `recall.unsent.${owner}.tab-gone.1`,
-    JSON.stringify({ key: 'entry-1.raw', channel: 'raw', clientSessionId: 'entry-1', startedAt: '2026-11-07T00:00:00.000Z', sessionId: row.id, baseRevision: 1, change: { value: 'w2x', savedAt: '2026-11-07T00:00:01.000Z' }, held: null }),
+    JSON.stringify({ key: 'entry-1.raw', channel: 'raw', clientSessionId: 'entry-1', startedAt: '2026-11-07T00:00:00.000Z', sessionId: row.id, baseRevision: 1, baseText: row.text, change: { value: 'w2x', savedAt: '2026-11-07T00:00:01.000Z' }, held: null }),
   )
   world.rows = []
   world.refusesACreate = true

@@ -32,11 +32,16 @@ export interface LockParty {
   /** The last editor gave over its words after this tab started from storage. */
   takeLateHandOver(handed: HandOver): void
   noteEditingPlace(): void
+  /** True while a page shows the words of this saver. */
+  isShown(): boolean
 }
 
 type Message =
   | { kind: 'take'; lock: string; by: string }
   | ({ kind: 'handed'; lock: string; to: string | null } & HandOver)
+  | { kind: 'want'; lock: string; by: string }
+  | { kind: 'free'; lock: string; to: string }
+  | { kind: 'took'; lock: string; states: string[] }
 
 const channelName = 'recall.editors'
 const markPrefix = 'recall.editor.'
@@ -50,7 +55,11 @@ function hear({ data: message }: MessageEvent<Message>) {
   const lock = locks.get(message.lock)
   if (!lock) return
   if (message.kind === 'take') lock.hearTake(message.by)
-  else if (message.to === thisTab || message.to === null) lock.hearHandOver({ from: message.from, drafts: message.drafts })
+  else if (message.kind === 'want') lock.hearWant(message.by)
+  else if (message.kind === 'took') lock.hearTook(message.states)
+  else if (message.kind === 'free') {
+    if (message.to === thisTab) lock.hearFree()
+  } else if (message.to === thisTab || message.to === null) lock.hearHandOver({ from: message.from, drafts: message.drafts })
 }
 
 function watchMarks() {
@@ -83,7 +92,9 @@ function talk(message: Message) {
 const lockNameOf = (owner: string, clientSessionId: string) => `recall.edit.${encodeURIComponent(owner)}.${clientSessionId}`
 
 /** Web Locks need a secure context. On plain HTTP on a LAN the browser has none, and the mark in storage alone names the tab that edits. */
-const hasWebLocks = () => typeof navigator !== 'undefined' && navigator.locks !== undefined
+// A page keeps its context, so its lock manager does not change.
+const webLocks: LockManager | undefined = typeof navigator === 'undefined' ? undefined : navigator.locks
+const hasWebLocks = () => webLocks !== undefined
 
 const isAbort = (error: unknown) => error instanceof DOMException && error.name === 'AbortError'
 
@@ -132,7 +143,7 @@ export class EntryLock {
   private release: (() => void) | null = null
   private waitInLine: AbortController | null = null
   private handOverWaiter: ((handed: HandOver) => void) | null = null
-  /** The words that this tab gave when it lost the lock before it heard the take. They go again to the next tab that takes. */
+  /** The words that this tab gave when it lost the lock, until a tab says that it took them. They go again to each tab that takes, and they come back with the lock. */
   private lastHanded: HandedEntry[] | null = null
   private isClosed = false
   private hasAsked = false
@@ -180,9 +191,33 @@ export class EntryLock {
     this.ask('steal')
   }
 
+  /**
+   * A page that shows the entry with no edit asks the tab that edits to give the entry up when no page of that tab
+   * shows it, as when a load of that tab took the words that a closed or reloaded tab left.
+   */
+  askForTheEntry() {
+    if (this.place !== 'elsewhere' || this.isClosed || !this.isShown()) return
+    talk({ kind: 'want', lock: this.name, by: thisTab })
+  }
+
+  hearWant(by: string) {
+    if (by === thisTab || this.place !== 'here' || this.isShown()) return
+    talk({ kind: 'free', lock: this.name, to: by })
+  }
+
+  /** The tab that edits has no page of the entry, so this page takes it, with the hand-over of a take. */
+  hearFree() {
+    if (this.place === 'elsewhere' && this.isShown()) this.takeHere()
+  }
+
+  private isShown() {
+    return [...this.parties].some((party) => party.isShown())
+  }
+
   /** Frees the lock when this tab holds nothing of the entry, and no page shows it. */
   releaseIfDone(isDone: boolean) {
-    if (isDone && this.place === 'here') this.close()
+    // A saver that waits in line and holds nothing must not get the lock later, when no page or notice knows it.
+    if (isDone) this.close()
   }
 
   close() {
@@ -199,8 +234,8 @@ export class EntryLock {
   hearTake(by: string) {
     if (by === thisTab) return
     if (this.place !== 'here' && this.lastHanded !== null) {
+      // The words stay here until the taker says that it took them.
       talk({ kind: 'handed', lock: this.name, to: by, from: thisTab, drafts: this.lastHanded })
-      this.lastHanded = null
       return
     }
     this.lose(by)
@@ -211,7 +246,9 @@ export class EntryLock {
       this.handOverWaiter(handed)
       return
     }
-    if (this.place === 'here' && handed.drafts.length > 0) for (const party of this.parties) party.takeLateHandOver(handed)
+    if (this.place !== 'here' || handed.drafts.length === 0) return
+    for (const party of this.parties) party.takeLateHandOver(handed)
+    this.noteTaken(handed)
   }
 
   /** A page in the back-forward cache edits nothing. With no Web Locks, its mark goes, so another tab can edit. */
@@ -231,7 +268,7 @@ export class EntryLock {
   }
 
   private ask(how: Ask) {
-    if (!hasWebLocks()) {
+    if (!webLocks) {
       this.askWithNoLocks(how)
       return
     }
@@ -240,7 +277,7 @@ export class EntryLock {
     const options: LockOptions = how === 'steal' ? { steal: true } : how === 'ifFree' ? { ifAvailable: true } : { signal: waitInLine?.signal }
     const request: Request = { isLost: false }
     let isHeld = false
-    navigator.locks
+    webLocks
       .request(this.name, options, async (lock) => {
         if (this.isClosed) return
         if (lock === null) {
@@ -277,22 +314,41 @@ export class EntryLock {
     this.place = 'elsewhere'
     this.notify()
     this.ask('inLine')
+    this.askForTheEntry()
   }
 
   private async grant(isTake: boolean, request: Request) {
     writeMark(this.name)
+    // Words that this tab gave when it lost the lock, and that no tab took, come back with the lock.
+    const ownHanded = this.lastHanded
     this.lastHanded = null
     const wasHere = this.place === 'here'
-    const handed = isTake ? await this.askForHandOver() : null
+    const fromOthers = isTake ? await this.askForHandOver() : null
     if (this.isClosed) return
+    const handed = ownHanded === null ? fromOthers : { from: fromOthers?.from ?? thisTab, drafts: [...ownHanded, ...(fromOthers?.drafts ?? [])] }
     if (request.isLost) {
       // A third tab took the entry during the wait. The words that came go on to it.
       if (handed && handed.drafts.length > 0) this.forward(handed)
       return
     }
     this.place = 'here'
-    if (!wasHere) for (const party of this.parties) party.takeOver(handed)
+    if (!wasHere) {
+      for (const party of this.parties) party.takeOver(handed)
+      this.noteTaken(handed)
+    }
     this.notify()
+  }
+
+  /** The tab that gave these words keeps them until it hears that a tab took them. */
+  private noteTaken(handed: HandOver | null) {
+    const states = (handed?.drafts ?? []).flatMap(({ entry }) => entry.stateId ?? [])
+    if (states.length > 0) talk({ kind: 'took', lock: this.name, states })
+  }
+
+  hearTook(states: string[]) {
+    if (this.lastHanded === null) return
+    const left = this.lastHanded.filter(({ entry }) => !states.includes(entry.stateId ?? ''))
+    this.lastHanded = left.length > 0 ? left : null
   }
 
   private forward(handed: HandOver) {
@@ -321,7 +377,7 @@ export class EntryLock {
     this.release = null
     const drafts = [...this.parties].flatMap((party) => party.handOver() ?? [])
     talk({ kind: 'handed', lock: this.name, to, from: thisTab, drafts })
-    this.lastHanded = to === null && drafts.length > 0 ? drafts : null
+    this.lastHanded = drafts.length > 0 ? drafts : null
     this.notify()
     if (!this.isClosed) this.ask('inLine')
   }

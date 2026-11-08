@@ -20,6 +20,8 @@ export interface OutboxEntry {
   readsFirst?: boolean
   /** Names this state of the words, so a tab takes a hand-over of the same state once. */
   stateId?: string
+  /** The states that this state took in. A late hand-over of one of them holds no word that this state lacks, so it goes nowhere. */
+  takenStates?: string[]
   held?: string | null
   /** The words of a save that the Draft does not hold. They are safe in History, and this keeps the notice after a reload. */
   wordsInHistory?: string | null
@@ -53,6 +55,7 @@ function parseEntry(stored: string | null): OutboxEntry | null {
       && typeof entry.baseRevision === 'number'
       && typeof entry.baseText === 'string'
       && (entry.sent == null || isStamped(entry.sent))
+      && (entry.takenStates === undefined || (Array.isArray(entry.takenStates) && entry.takenStates.every((state) => typeof state === 'string')))
       && (isStamped(entry.change) || ((typeof entry.held === 'string' || typeof entry.wordsInHistory === 'string') && (entry.change ?? null) === null))
     return isEntry ? (entry as OutboxEntry) : null
   } catch {

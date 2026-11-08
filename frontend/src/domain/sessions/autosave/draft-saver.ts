@@ -1,14 +1,15 @@
-import { isCancelledError, type QueryClient } from '@tanstack/react-query'
+import type { QueryClient } from '@tanstack/react-query'
 
 import type { DraftSaveResultDto } from '@/api/generated/models/types/draft-save-result-dto'
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
 import { addSession } from '@/api/generated/sessions/clients/add-session'
+import { getSession } from '@/api/generated/sessions/clients/get-session'
 import { saveCleanedDraft } from '@/api/generated/sessions/clients/save-cleaned-draft'
 import { saveRawDraft } from '@/api/generated/sessions/clients/save-raw-draft'
 import { Notification } from '@/components/notification'
 import { newUuid } from '@/lib/new-uuid'
+import { retryUnlessRefused } from '@/lib/problem-details'
 
-import { sessionQueryOptions } from '../apis/get-session'
 import { SessionKeys, type DraftChannel } from '../apis/session.keys'
 import { patchTimelineRow, refreshTimelineHead } from '../apis/timeline-cache'
 import { holdsEachWordOf, joinWords, mentionedPersonIds, mergeWords, plainPreviewOf } from '../editor/content'
@@ -69,6 +70,20 @@ export function waitAfterLosses(lostInARow: number, jitter: number): number {
 /** A refused read is no refusal of the words, so the save goes again. A read of an entry that is gone moves the words. */
 const asReadFailure = (error: unknown): never => {
   throw isFinalRefusal(error) && !isARowThatIsGone(error) ? new Error('The read failed.') : error
+}
+
+const readRetryMs = 1_000
+
+/** A read with one retry, as the query of a Session has. */
+async function readSession(id: string, signal?: AbortSignal): Promise<SessionDto> {
+  const read = () => getSession({ path: { id }, signal, options: { suppressErrorToast: true } })
+  try {
+    return await read()
+  } catch (error) {
+    if (signal?.aborted || !(error instanceof Error) || !retryUnlessRefused(0, error)) throw error
+    await new Promise((resolve) => setTimeout(resolve, readRetryMs))
+    return read()
+  }
 }
 
 /** A save after a loss needs a new `savedAt`. The same `savedAt` with the same words is a replay, and it gets `Lost` again. */
@@ -138,8 +153,7 @@ export class DraftSaver implements LockParty {
   private readsBeforeNextSave = false
   private lock: EntryLock
   /** The state of this saver changes with each write of its key, and a hand-over names the state that it holds. */
-  private stateId = `${thisTab}.0`
-  private stateCount = 0
+  private stateId = nextStateId()
   /** The states of other tabs that this saver took, so a later hand-over of the same state goes once. */
   private readonly takenStates = new Set<string>()
   /** A saver that finishes the words of another tab that left, beside the saver of this tab. It edits no page. */
@@ -248,11 +262,11 @@ export class DraftSaver implements LockParty {
     const isCurrent = () => run === this.holdRun && !this.isStopped && this.isEditing()
     const id = this.snapshot.sessionId
     while (isCurrent() && this.heldWords !== null) {
-      const key = SessionKeys.detail(id ?? '')
-      const limit = setTimeout(() => void this.queryClient.cancelQueries({ queryKey: key, exact: true }), holdReadLimitMs)
+      const stopRead = new AbortController()
+      const limit = setTimeout(() => stopRead.abort(), holdReadLimitMs)
       const session = id === null
         ? null
-        : await this.queryClient.fetchQuery({ ...sessionQueryOptions(id), staleTime: 0 }).catch((error: unknown) => (isARowThatIsGone(error) ? null : undefined))
+        : await this.readSessionNow(id, stopRead.signal).catch((error: unknown) => (isARowThatIsGone(error) ? null : undefined))
       clearTimeout(limit)
       if (!isCurrent()) return
       if (session === undefined) {
@@ -375,8 +389,8 @@ export class DraftSaver implements LockParty {
     if (!id) return null
     const repliesBefore = this.replyCount
     const unsettledBefore = this.unsettledText()
-    const newest = await this.readSessionNow(id).catch((error: unknown) => {
-      if (!isCancelledError(error)) Notification.error('The newest words did not load. Try again.')
+    const newest = await this.readSessionNow(id).catch(() => {
+      Notification.error('The newest words did not load. Try again.')
       return null
     })
     if (!newest || this.unsettledText() !== unsettledBefore || this.replyCount !== repliesBefore) return null
@@ -420,6 +434,7 @@ export class DraftSaver implements LockParty {
   subscribe = (listener: () => void) => {
     this.listeners.add(listener)
     refreshDraftNotices()
+    this.lock.askForTheEntry()
     return () => {
       this.listeners.delete(listener)
       // The words of this notice were only on the page that closed.
@@ -512,6 +527,10 @@ export class DraftSaver implements LockParty {
     }
   }
 
+  isShown() {
+    return this.listeners.size > 0
+  }
+
   noteEditingPlace() {
     const place = this.lock.editingPlace
     if (place === 'here') return
@@ -543,7 +562,7 @@ export class DraftSaver implements LockParty {
 
   /** The words of the last editor, with its base, its change in flight, and its newest change. The next write of this saver replaces `storageKey`. */
   private adopt(entry: OutboxEntry, storageKey: string | null) {
-    if (entry.stateId) this.takenStates.add(entry.stateId)
+    this.noteTaken(entry)
     this.ownKey = storageKey
     this.target = { ...this.target, sessionId: entry.sessionId ?? this.target.sessionId }
     this.baseText = entry.baseText
@@ -557,9 +576,15 @@ export class DraftSaver implements LockParty {
     this.keep()
   }
 
+  /** A state that this saver took, and each state that it took in, go once. */
+  private noteTaken({ stateId, takenStates }: OutboxEntry) {
+    if (stateId) this.takenStates.add(stateId)
+    for (const state of takenStates ?? []) this.takenStates.add(state)
+  }
+
   /** Words of another tab that are not the words of this saver go with their own base, as that tab would have sent them. */
   private helpWith(taken: HandedEntry) {
-    if (taken.entry.stateId) this.takenStates.add(taken.entry.stateId)
+    this.noteTaken(taken.entry)
     const target = { ...this.target, sessionId: taken.entry.sessionId, baseRevision: taken.entry.baseRevision, baseText: taken.entry.baseText }
     helpers.add(new DraftSaver(target, this.queryClient, { taken }))
   }
@@ -575,6 +600,8 @@ export class DraftSaver implements LockParty {
     if (read) this.moveBaseToDraftIn(read)
     this.update({ editing: 'here' })
     if (this.heldWords !== null && this.newWordsListeners.size === 0) void this.joinHoldWithNoPage()
+    // A saver with no page and no words, such as one that a load made for a key of another tab, must not keep the entry from a page.
+    this.releaseLockIfDone()
   }
 
   private async sessionIdForSave(signal: AbortSignal) {
@@ -636,19 +663,19 @@ export class DraftSaver implements LockParty {
   private async readForAnswer(signal: AbortSignal) {
     const id = this.snapshot.sessionId
     if (!id) return null
-    const stopRead = () => void this.queryClient.cancelQueries({ queryKey: SessionKeys.detail(id), exact: true })
-    signal.addEventListener('abort', stopRead)
-    try {
-      return await this.readSessionNow(id).catch(asReadFailure)
-    } finally {
-      signal.removeEventListener('abort', stopRead)
-    }
+    return this.readSessionNow(id, signal).catch(asReadFailure)
   }
 
-  /** A poll that started before the save can still run, and a read must not take its older answer. */
-  private async readSessionNow(id: string) {
+  /**
+   * A read of the server that no other read answers. In the query cache, a second read or a stop cancels the first read,
+   * and the first read then gives the older data of the cache. An older base makes the next save `Lost`, and its merge shows words twice.
+   */
+  private async readSessionNow(id: string, signal?: AbortSignal) {
+    // A poll that started before the save can still run, and its older answer must not replace this read in the cache.
     await this.queryClient.cancelQueries({ queryKey: SessionKeys.detail(id), exact: true })
-    return this.queryClient.fetchQuery({ ...sessionQueryOptions(id), staleTime: 0 })
+    const session = await readSession(id, signal)
+    this.queryClient.setQueryData(SessionKeys.detail(id), session)
+    return session
   }
 
   private async saveWords(change: Stamped<string>, signal: AbortSignal) {
@@ -660,7 +687,7 @@ export class DraftSaver implements LockParty {
       : saveCleanedDraft({ path: { id }, body, signal, options })
   }
 
-  /** A failed write leaves the older key, which still holds the words. */
+  /** The words go on as a new entry. With no room in storage, they are only in this page. */
   private moveToNewEntry(change: Stamped<string>) {
     const clientSessionId = newUuid()
     pointAtNewEntry(this.target.clientSessionId, clientSessionId)
@@ -825,14 +852,14 @@ export class DraftSaver implements LockParty {
   }
 
   /**
-   * One key holds all the text of this saver, with its base. A write replaces the older key, and a failed write leaves it.
+   * One key holds all the text of this saver, with its base. A write replaces the older key, and a failed write removes it, so the words are only in this page, and its notice says so.
    * Only the tab that edits writes words to send. A hold is the words of this tab, so it stays in a key in any tab.
    */
   private keep(fallback: Stamped<string> | null = null) {
     if (this.isDiscarded || this.isOwnKeyGone()) return
     const change = this.saver.newestUnsettled() ?? fallback
     if (change !== null && !this.isEditing()) return
-    this.stateId = `${thisTab}.${(this.stateCount += 1)}`
+    this.stateId = nextStateId()
     if (change === null && this.heldWords === null && this.wordsInHistory === null) {
       if (this.ownKey !== null) removeFromOutbox(this.ownKey)
       this.ownKey = null
@@ -841,7 +868,9 @@ export class DraftSaver implements LockParty {
       return
     }
     const written = writeToOutbox(this.target.owner, this.ownKey, this.outboxEntry(change))
-    if (written !== null) this.ownKey = written
+    // A key holds the newest state or nothing. A tab that took an older state would send its words again on its base, so they would show twice.
+    if (written === null && this.ownKey !== null) removeFromOutbox(this.ownKey)
+    this.ownKey = written
     this.noteOutboxWrite(written !== null)
   }
 
@@ -868,11 +897,16 @@ export class DraftSaver implements LockParty {
       refusal: this.saver.refusalMessage(),
       movedFromDeletedEntry: this.snapshot.movedFromDeletedEntry,
       stateId: this.stateId,
+      takenStates: [...this.takenStates],
     }
   }
 }
 
 const savers = new Map<string, DraftSaver>()
+
+/** Each saver of this tab names its states from one count, so two savers of one entry never name a state the same. */
+let stateCount = 0
+const nextStateId = () => `${thisTab}.${(stateCount += 1)}`
 
 /** Savers that finish the words of a tab that left beside the saver of this tab. Each goes with its own base, as that tab would have. */
 const helpers = new Set<DraftSaver>()
