@@ -220,11 +220,12 @@ One tab of a browser edits an entry at a time ([ADR 0022](adr/0022-one-tab-edits
 - The tab that loses hands its unsent words, its change in flight, and its base to the new editor on the `recall.editors` channel. It keeps them until the new editor says that it took them, so a crash of the new editor loses nothing. A frozen tab hands them over when it wakes, and the new editor merges them once from their base.
 - A crash or a close frees the lock. The next tab in line takes the words from the key of the editor.
 - A load with no page of the entry, such as a load that takes the words of a closed tab, gives the entry to a tab that shows it.
+- When the editor leaves a page because another tab took the entry, a focus in the editor goes to `Edit here`. The button names the notice, so a screen reader reads why. The read-only words are a read-only text box.
 - On plain HTTP the browser has no Web Locks. A mark `recall.editor.<lock>` in `localStorage` names the editor, and a tab reads it before it writes or sends. A mark of a tab that crashed stays, so the next tab needs `Edit here`.
 
 So no two tabs hold the same unsent words, and a merge after `Lost` always knows its base.
 
-A browser with no `BroadcastChannel`, or one that refuses to make a channel, still opens the app. The words of one tab stay safe, because the keys do not need the channel. With two tabs, no ping gets an answer, so a tab takes the key of a live tab after 500 ms. The same text then goes twice, as for a wrong guess about a frozen tab. A tab also does not hear a sign-out or a sign-in in another tab at once. It checks the last person of the browser when it shows again.
+A browser with no `BroadcastChannel`, or one that refuses to make a channel, still opens the app. The words of one tab stay safe, because the keys do not need the channel. With two tabs, no hand-over comes, so a tab that takes an entry starts from the key of the last editor after 500 ms. Words that a full storage left only in the memory of that editor stay there. A tab also does not hear a sign-out or a sign-in in another tab at once. It checks the last person of the browser when it shows again.
 
 A page that opens takes the key of a writer that left. A live tab never copies or takes the key of another live tab. The words of a live editor come only by the hand-over of [One tab edits an entry](#one-tab-edits-an-entry).
 

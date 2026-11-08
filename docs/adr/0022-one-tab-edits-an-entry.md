@@ -20,6 +20,9 @@ A merge after `Lost` now always has the base of the words. It stays the three-wa
 ## Consequences
 
 - Each case that the model test `draft-saver.model.test.ts` covers keeps each word once: a steal of a live editor, a frozen editor that wakes after a steal, a crash or a close of the editor, a full storage with a steal, and a crash of the tab that stole.
+- A hand-over can hold words of a channel that the taking tab has no saver for, as when the person wrote in Cleaned and the second tab shows Your words. A helper of that channel takes the words with their own base, and the taker says that it took only the states that a saver took. A state that no saver took stays with the tab that gave it.
+- A taker with no room in storage keeps the handed key while its words do not change, so a take does not move words from storage to memory.
+- `Edit here` asks once while the hand-over is on its way. A tab whose take another tab stole during the wait waits in line again.
 - These cases are not covered:
   - A crash with a full storage loses the words that only the memory of the tab holds. The page says so before the crash.
   - A sign-out cannot name the words that only the memory of a frozen tab holds.
