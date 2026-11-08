@@ -2,7 +2,8 @@ export type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete'
 
 export interface MockRoute {
   method: HttpMethod
-  path: string
+  /** A pattern answers a read of each id, such as the Recordings of any entry. */
+  path: string | RegExp
   status: number
   body?: unknown
   headers?: Record<string, string>
@@ -17,6 +18,9 @@ export interface MockRoute {
 const mockedPrefixes = ['/api/', '/auth/']
 
 export const isMockedPath = (pathname: string) => mockedPrefixes.some((prefix) => pathname.startsWith(prefix))
+
+export const answers = (route: MockRoute, method: string, pathname: string) =>
+  route.method === method && (typeof route.path === 'string' ? route.path === pathname : route.path.test(pathname))
 
 export interface ServedRequest {
   query: URLSearchParams

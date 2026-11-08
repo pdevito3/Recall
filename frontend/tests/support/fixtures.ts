@@ -8,7 +8,7 @@ import { fileStoreApi } from './api/file-store-api'
 import { recordingsApi } from './api/recordings-api'
 import { aSetting, settingsApi } from './api/settings-api'
 import { usersApi } from './api/users-api'
-import { isMockedPath, requestRecorder, type HttpMethod, type MockRoute, type ServedRequest } from './api/mock-route'
+import { answers, isMockedPath, requestRecorder, type HttpMethod, type MockRoute, type ServedRequest } from './api/mock-route'
 import { as, type Identity } from './auth/actors'
 
 export interface Api {
@@ -44,6 +44,7 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
         settingsApi.are(aSetting()),
         fileStoreApi.takesWrites(),
         recordingsApi.jobsRun(),
+        recordingsApi.noneForAnyEntry(),
         sessionsApi.timelineIs([]),
         peopleApi.listIs([]),
         modelProvidersApi.activeIs(null),
@@ -58,7 +59,7 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
         async (route, request) => {
           const url = new URL(request.url())
           const method = request.method().toLowerCase()
-          const newestMock = routes.findLast((r) => r.method === method && r.path === url.pathname)
+          const newestMock = routes.findLast((r) => answers(r, method, url.pathname))
 
           // Playwright fails a test on a failed assertion, never on an HTTP status. So the 501 alone
           // proves nothing, and the miss is asserted at teardown.
