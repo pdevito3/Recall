@@ -10,11 +10,13 @@ import type { ShownSaveStatus } from '../autosave/draft-saver'
 import { ComposerForm } from './composer'
 import type { Composer } from './use-composer'
 
-const composerWith = (status: ShownSaveStatus): Composer => ({
+type ShownComposer = Partial<Pick<Composer, 'status' | 'isMergeNoted' | 'editorKey' | 'words'>>
+
+const composerWith = (shown: ShownComposer): Composer => ({
   editorKey: 0,
   words: '',
   autoFocus: false,
-  status,
+  status: { kind: 'idle' },
   conflict: null,
   composingSessionId: null,
   canFinish: true,
@@ -24,6 +26,7 @@ const composerWith = (status: ShownSaveStatus): Composer => ({
   isMergeNoted: false,
   dismissMergeNote: () => undefined,
   showNewest: () => undefined,
+  ...shown,
 })
 
 const statuses: ShownSaveStatus[] = [
@@ -37,7 +40,7 @@ const statuses: ShownSaveStatus[] = [
   { kind: 'refused', message: 'The entry is too long. Make it shorter, then save again.' },
 ]
 
-const renderComposer = async (status: ShownSaveStatus) => {
+const renderComposer = async (first: ShownComposer) => {
   await page.viewport(320, 640)
   document.documentElement.style.fontSize = '24px'
   onTestFinished(() => {
@@ -46,13 +49,19 @@ const renderComposer = async (status: ShownSaveStatus) => {
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } })
   client.setQueryData(SettingKeys.mine(), { timeZone: 'UTC', timeZoneIsKnown: true, locationCaptureEnabled: false, requirePeopleProposalApproval: false, version: 1 })
   client.setQueryData(PersonKeys.directory(), [])
-  const shown = (current: ShownSaveStatus) => (
+  const shown = (current: ShownComposer) => (
     <QueryClientProvider client={client}>
       <ComposerForm composer={composerWith(current)} />
     </QueryClientProvider>
   )
-  const screen = await render(shown(status))
-  return { screen, showStatus: (next: ShownSaveStatus) => screen.rerender(shown(next)) }
+  const screen = await render(shown(first))
+  return { screen, show: (next: ShownComposer) => screen.rerender(shown({ ...first, ...next })) }
+}
+
+const typeLinesUpToTheBar = async () => {
+  await page.getByRole('textbox', { name: 'New entry' }).click()
+  for (let line = 1; line <= 16; line++) await userEvent.keyboard(`line ${line} of the words{Enter}`)
+  await userEvent.keyboard('the last line')
 }
 
 const caretLine = () => {
@@ -76,9 +85,9 @@ const caretIsAboveTheBar = () => {
 }
 
 test.each(statuses)('at 320 px with a font of 24 px the line with the caret stays above the bar while the person types, with the status $kind', async (status) => {
-  const { screen } = await renderComposer(status)
+  await renderComposer({ status })
 
-  await screen.getByRole('textbox', { name: 'New entry' }).click()
+  await page.getByRole('textbox', { name: 'New entry' }).click()
   for (let line = 1; line <= 16; line++) {
     await userEvent.keyboard(`line ${line} of the words{Enter}`)
     caretIsAboveTheBar()
@@ -88,13 +97,25 @@ test.each(statuses)('at 320 px with a font of 24 px the line with the caret stay
 })
 
 test.each(statuses.filter(({ kind }) => kind !== 'idle'))('at 320 px with a font of 24 px a status $kind that makes the bar taller keeps the line with the caret above the bar', async (status) => {
-  const { screen, showStatus } = await renderComposer({ kind: 'idle' })
+  const { show } = await renderComposer({ status: { kind: 'idle' } })
 
-  await screen.getByRole('textbox', { name: 'New entry' }).click()
-  for (let line = 1; line <= 16; line++) await userEvent.keyboard(`line ${line} of the words{Enter}`)
-  await userEvent.keyboard('the last line')
+  await typeLinesUpToTheBar()
   caretIsAboveTheBar()
-  await showStatus(status)
+  await show({ status })
 
   await vi.waitFor(caretIsAboveTheBar)
+})
+
+test('at 320 px with a font of 24 px a merge that adds lines while the person writes keeps the line with the caret above the bar', async () => {
+  const { show } = await renderComposer({ status: { kind: 'waitingForAnotherWriter' } })
+  const merged = JSON.stringify({
+    type: 'doc',
+    content: Array.from({ length: 24 }, (_, line) => ({ type: 'paragraph', content: [{ type: 'text', text: `line ${line + 1} of the merged words` }] })),
+  })
+
+  await typeLinesUpToTheBar()
+  await show({ editorKey: 1, words: merged })
+
+  await expect.element(page.getByText('line 24 of the merged words')).toBeInTheDocument()
+  caretIsAboveTheBar()
 })

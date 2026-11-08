@@ -56,6 +56,7 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
   const [isMergeNoted, setIsMergeNoted] = useState(false)
   const currentText = useRef(opened.text)
   const section = useRef<HTMLElement>(null)
+  const bar = useRef<HTMLDivElement>(null)
 
   const reopenWith = (text: string) => {
     currentText.current = text
@@ -139,8 +140,9 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
           }}
           onSubmit={() => saver.flush()}
           toolbar={(editor) => <EditorToolbar editor={editor} />}
+          barRef={bar}
         />
-        <div className="sticky bottom-0 z-10 bg-background py-2">
+        <div ref={bar} className="sticky bottom-0 z-10 bg-background py-2">
           <SaveStatusLine status={shownStatusOf(snapshot)} zone={zone} />
         </div>
       </section>

@@ -1,7 +1,7 @@
 import { EditorState, Selection } from '@tiptap/pm/state'
 import { Placeholder } from '@tiptap/extensions'
 import { EditorContent, Extension, useEditor, type Editor } from '@tiptap/react'
-import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 
 import { useAddPerson, usePeopleDirectory } from '@/domain/people/apis/people'
 
@@ -9,8 +9,21 @@ import { contentOf } from './content-of'
 import { PersonMention, textExtensions } from './journal-extensions'
 import { mentionSuggestion, type MentionSource } from './mention-suggestion'
 
-// The status bar sticks to the bottom of the screen, so the line with the cursor must stay above it.
-const stickyBarRoom = { top: 0, right: 0, bottom: 80, left: 0 }
+const gapAboveBar = 8
+
+/** The bar under the editor holds the status, and its text can wrap to several lines, so its height changes. */
+function useHeightOf(ref: RefObject<HTMLElement | null> | undefined): number {
+  const [height, setHeight] = useState(0)
+  // Not a layout effect: the bar renders after the editor, and React sets its ref after the layout effects of the editor.
+  useEffect(() => {
+    const element = ref?.current
+    if (!element) return
+    const observer = new ResizeObserver(() => setHeight(element.getBoundingClientRect().height))
+    observer.observe(element, { box: 'border-box' })
+    return () => observer.disconnect()
+  }, [ref])
+  return height
+}
 
 interface JournalEditorProps {
   initialText: string
@@ -24,6 +37,8 @@ interface JournalEditorProps {
   onChange: (text: string, isEmpty: boolean) => void
   onSubmit?: () => void
   toolbar?: (editor: Editor) => ReactNode
+  /** The bar that sticks to the bottom of the screen under the editor. The line with the cursor stays above it. */
+  barRef?: RefObject<HTMLElement | null>
 }
 
 function useMentionSource(): MentionSource {
@@ -42,12 +57,14 @@ function useMentionSource(): MentionSource {
   )
 }
 
-export function JournalEditor({ initialText, revision, label, placeholder, autoFocus, isBounded, onChange, onSubmit, toolbar }: JournalEditorProps) {
+export function JournalEditor({ initialText, revision, label, placeholder, autoFocus, isBounded, onChange, onSubmit, toolbar, barRef }: JournalEditorProps) {
   const mentionSource = useMentionSource()
   const callbacks = useRef({ onChange, onSubmit, placeholder })
   useLayoutEffect(() => {
     callbacks.current = { onChange, onSubmit, placeholder }
   }, [onChange, onSubmit, placeholder])
+  const barHeight = useHeightOf(barRef)
+  const barRoom = { top: 0, right: 0, bottom: barHeight + gapAboveBar, left: 0 }
 
   const editor = useEditor({
     autofocus: autoFocus ? 'end' : false,
@@ -60,8 +77,8 @@ export function JournalEditor({ initialText, revision, label, placeholder, autoF
       LeaveKey,
     ],
     editorProps: {
-      scrollThreshold: stickyBarRoom,
-      scrollMargin: stickyBarRoom,
+      scrollThreshold: barRoom,
+      scrollMargin: barRoom,
       attributes: {
         role: 'textbox',
         'aria-multiline': 'true',
@@ -79,9 +96,21 @@ export function JournalEditor({ initialText, revision, label, placeholder, autoF
     openedRevision.current = revision
     const { schema, plugins } = editor.state
     const doc = schema.nodeFromJSON(contentOf(initialText))
+    const isWriting = editor.view.hasFocus()
     editor.view.updateState(EditorState.create({ doc, plugins, selection: Selection.atEnd(doc) }))
     if (autoFocus) editor.view.focus()
+    // The new words can be longer, and the cursor moves to their end, so a person who writes keeps the cursor in view.
+    if (isWriting) editor.commands.scrollIntoView()
   }, [editor, revision, initialText, autoFocus])
+
+  // A status that wraps to more lines makes the bar taller with no key pressed, and the bar then covers the line with the cursor.
+  // A cursor off the screen stays there, so a person who scrolled away to read stays where they read. The bound of a
+  // refused text scrolls the cursor out of its box, so the box then scrolls to it.
+  useEffect(() => {
+    if (!editor?.isFocused) return
+    const cursor = editor.view.coordsAtPos(editor.state.selection.head)
+    if (isBounded || (cursor.bottom > 0 && cursor.top < window.innerHeight)) editor.commands.scrollIntoView()
+  }, [editor, barHeight, isBounded])
 
   return (
     <div className="flex flex-col rounded-lg border bg-card focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
