@@ -554,6 +554,9 @@ class ModelRun {
 
   constructor(seed: number) {
     this.random = randomFrom(seed)
+    // The wait after losses has a random part. A second stream from the seed keeps each run the same each time.
+    const jitter = randomFrom(seed ^ 0x9e3779b9)
+    vi.spyOn(Math, 'random').mockImplementation(() => jitter.below(1_000_000) / 1_000_000)
     vi.stubGlobal('localStorage', this.storage)
     world = new ModelServer()
     world.latencyMs = () => 20 + this.random.below(1500)
@@ -805,6 +808,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 test('each word that a person typed and did not discard is on the server, in a key, in a notice, or on a screen', async () => {
