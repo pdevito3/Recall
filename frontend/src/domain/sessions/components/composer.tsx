@@ -30,7 +30,8 @@ export function ComposerForm({ composer }: { composer: Composer }) {
           }}
         />
       )}
-      {composer.isMergeNoted && <MergedNotice onDismiss={composer.dismissMergeNote} />}
+      {/* While the merged words wait to save, they are not in the newest words yet. */}
+      {composer.isMergeNoted && composer.status.kind !== 'waitingForAnotherWriter' && <MergedNotice onDismiss={composer.dismissMergeNote} />}
       <JournalEditor
         revision={composer.editorKey}
         initialText={composer.words ?? ''}

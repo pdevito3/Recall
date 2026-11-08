@@ -115,13 +115,15 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
     saver.flush()
   }
 
+  const status = shownStatusOf(snapshot)
   return (
     <div className="flex flex-col gap-6">
       <section ref={section} aria-label={channelLabels[channel]} className="flex flex-col gap-2">
         {snapshot.conflict && (
           <ConflictNotice conflict={snapshot.conflict} onShowNewest={() => void showNewest()} onKeep={() => void keep()} />
         )}
-        {isMergeNoted && <MergedNotice onDismiss={() => setIsMergeNoted(false)} />}
+        {/* While the merged words wait to save, they are not in the newest words yet. */}
+        {isMergeNoted && status.kind !== 'waitingForAnotherWriter' && <MergedNotice onDismiss={() => setIsMergeNoted(false)} />}
         {changeNote && (
           <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted p-3 text-sm dark:bg-card">
             <p>{changeNote}</p>
@@ -143,7 +145,7 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
           barRef={bar}
         />
         <div ref={bar} className="sticky bottom-0 z-10 bg-background py-2">
-          <SaveStatusLine status={shownStatusOf(snapshot)} zone={zone} />
+          <SaveStatusLine status={status} zone={zone} />
         </div>
       </section>
       <SessionHistory

@@ -8,6 +8,7 @@ import { SettingKeys } from '@/domain/settings/apis/setting.keys'
 
 import type { ShownSaveStatus } from '../autosave/draft-saver'
 import { ComposerForm } from './composer'
+import { mergedNote } from './conflict-notice'
 import type { Composer } from './use-composer'
 
 type ShownComposer = Partial<Pick<Composer, 'status' | 'isMergeNoted' | 'editorKey' | 'words'>>
@@ -118,4 +119,14 @@ test('at 320 px with a font of 24 px a merge that adds lines while the person wr
 
   await expect.element(page.getByText('line 24 of the merged words')).toBeInTheDocument()
   caretIsAboveTheBar()
+})
+
+test('while the merged words wait to save, the page does not say that they are in the newest words, and says it once they save', async () => {
+  const { show } = await renderComposer({ status: { kind: 'waitingForAnotherWriter' }, isMergeNoted: true })
+
+  await expect.element(page.getByText('Another tab or device keeps changing this entry. Your words are safe, and they wait to save.')).toBeVisible()
+  expect(page.getByText(mergedNote).query()).toBeNull()
+  await show({ status: { kind: 'saved', at: '2026-11-08T09:30:00Z' } })
+
+  await expect.element(page.getByText(mergedNote)).toBeVisible()
 })
