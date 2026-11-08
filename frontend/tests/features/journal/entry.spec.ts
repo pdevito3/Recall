@@ -643,6 +643,26 @@ test.describe('an entry that another device changed', () => {
     expect(saves[3].sentAt - (saves[2].answeredAt ?? Infinity)).toBeGreaterThanOrEqual(900)
     await expect(entry.at.words('Mine edited')).toBeVisible()
   })
+
+  test('at 320 px with a font of 24 px, while the merged words wait, the line with the cursor stays above the status, and the page does not say that the words are in the newest words', async ({ page, api }) => {
+    await page.setViewportSize({ width: 320, height: 640 })
+    const session = aSession().atRevision(4).saying('Mine').build()
+    api.mock(sessionsApi.oneIs(session))
+    const entry = entryPage(page)
+    await entry.open(session.id)
+    await entry.useARootFontOf(24)
+    const newest = { ...aSession().atRevision(6).saying('Mine', 'From the other device').build(), id: session.id, clientSessionId: session.clientSessionId }
+    api.mock(sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }), sessionsApi.oneIs(newest))
+    const wait = entry.at.status('Another tab or device keeps changing this entry. Your words are safe, and they wait to save.')
+
+    await entry.typeLinesAfterTheOnlyLine(12)
+    await expect(wait).toBeVisible({ timeout: 10_000 })
+
+    await expect(entry.at.words('From the other device')).toBeVisible()
+    expect(await entry.at.mergedNotice.count()).toBe(0)
+    const statusTop = (await wait.boundingBox())?.y ?? -Infinity
+    await expect.poll(async () => (await entry.cursorLineBottom()) ?? Infinity).toBeLessThanOrEqual(statusTop)
+  })
 })
 
 test.describe('the history of an entry', () => {

@@ -243,6 +243,24 @@ export function entryPage(page: Page) {
 
     sideScrollRange: () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
 
+    async useARootFontOf(px: number) {
+      await page.evaluate((size) => {
+        document.documentElement.style.fontSize = `${size}px`
+      }, px)
+    },
+
+    /** The entry has one line, so End goes to the end of its words. */
+    async typeLinesAfterTheOnlyLine(count: number) {
+      await at.editor.click()
+      await page.keyboard.press('End')
+      for (let line = 1; line <= count; line++) {
+        await page.keyboard.press('Enter')
+        await page.keyboard.type(`line ${line} of the words`)
+      }
+    },
+
+    cursorLineBottom: () => page.evaluate(() => window.getSelection()?.getRangeAt(0).getBoundingClientRect().bottom),
+
     async leaveForTheJournal() {
       await at.goToJournal.click()
       await page.waitForURL('/')

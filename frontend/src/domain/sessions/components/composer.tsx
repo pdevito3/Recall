@@ -12,6 +12,7 @@ import type { Composer } from './use-composer'
 export function ComposerForm({ composer }: { composer: Composer }) {
   const zone = useJournalZone()
   const section = useRef<HTMLElement>(null)
+  const bar = useRef<HTMLDivElement>(null)
   const isRefused = composer.status.kind === 'refused'
   // The bound of a refused text makes the page shorter, and that can leave the composer above the screen.
   useEffect(() => {
@@ -29,7 +30,8 @@ export function ComposerForm({ composer }: { composer: Composer }) {
           }}
         />
       )}
-      {composer.isMergeNoted && <MergedNotice onDismiss={composer.dismissMergeNote} />}
+      {/* While the merged words wait to save, they are not in the newest words yet. */}
+      {composer.isMergeNoted && composer.status.kind !== 'waitingForAnotherWriter' && <MergedNotice onDismiss={composer.dismissMergeNote} />}
       <JournalEditor
         revision={composer.editorKey}
         initialText={composer.words ?? ''}
@@ -39,11 +41,12 @@ export function ComposerForm({ composer }: { composer: Composer }) {
         isBounded={isRefused}
         onChange={composer.handleChange}
         onSubmit={composer.finish}
+        barRef={bar}
       />
       {composer.words === null && (
         <p role="status" className="text-sm text-muted-foreground">Loading your entry. You can keep typing.</p>
       )}
-      <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-background py-2">
+      <div ref={bar} className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-background py-2">
         <SaveStatusLine status={composer.status} zone={zone} />
         <div className="ml-auto flex items-center gap-3">
           <p className="text-xs text-muted-foreground max-md:hidden">Type @ to tag a person</p>
