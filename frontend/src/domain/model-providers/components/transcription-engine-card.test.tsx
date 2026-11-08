@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { expect, test } from 'vitest'
+import { expect, onTestFinished, test } from 'vitest'
 import { commands, page, userEvent } from 'vitest/browser'
 import { render } from 'vitest-browser-react'
 
@@ -147,4 +147,35 @@ test('a person who is not an Admin sees the engine and the reason, and no form',
   await expect.element(screen.getByRole('definition').filter({ hasText: 'Local AI' })).toBeVisible()
   await expect.element(screen.getByRole('button', { name: 'Send audio to this provider' })).not.toBeInTheDocument()
   await expect.element(screen.getByRole('button', { name: 'Keep audio on this server' })).not.toBeInTheDocument()
+})
+
+test('at 320 px with a font of 24 px, each control of the form stays inside the card, with no side scroll', async () => {
+  // Arrange
+  await page.viewport(320, 640)
+  document.documentElement.style.fontSize = '24px'
+  onTestFinished(() => {
+    document.documentElement.style.fontSize = ''
+  })
+  await commands.answerRequests([engineAnswer(sentToLocalAi), providersAnswer([claude, localAi])])
+
+  // Act
+  const screen = await render(
+    // The padding of the content of the layout.
+    <div className="p-4">
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <TranscriptionEngineCard canChoose />
+      </QueryClientProvider>
+    </div>,
+  )
+
+  // Assert
+  await expect.element(screen.getByRole('button', { name: 'Send audio to this provider' })).toBeVisible()
+  const edge = screen.getByRole('heading', { name: 'Audio to text' }).element().closest('[data-slot=card]')?.getBoundingClientRect().right ?? 0
+  expect(edge).toBeGreaterThan(0)
+  expect(edge).toBeLessThanOrEqual(320)
+  for (const name of ['Send audio to this provider', 'Keep audio on this server']) {
+    expect(screen.getByRole('button', { name }).element().getBoundingClientRect().right, name).toBeLessThanOrEqual(edge)
+  }
+  expect(screen.getByRole('textbox', { name: 'Model for audio' }).element().getBoundingClientRect().right).toBeLessThanOrEqual(edge)
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(320)
 })

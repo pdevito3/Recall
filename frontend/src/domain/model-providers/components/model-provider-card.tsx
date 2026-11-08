@@ -71,8 +71,9 @@ export function ModelProviderCard({ provider }: { provider: ModelProviderDto }) 
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex flex-wrap items-center gap-2 text-lg">
+      {/* With a large font on a phone, the name and the kind fill the row, and Delete goes under them, not past the edge. */}
+      <CardHeader className="flex flex-wrap gap-2">
+        <CardTitle className="flex min-w-0 flex-1 basis-40 flex-wrap items-center gap-2 text-lg">
           <h3 ref={headingRef} tabIndex={-1} className="wrap-anywhere outline-none">
             {provider.name}
           </h3>
