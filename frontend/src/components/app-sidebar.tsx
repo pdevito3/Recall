@@ -2,6 +2,8 @@ import {
   AiBrain01Icon,
   Book02Icon,
   InformationCircleIcon,
+  Mic01Icon,
+  Note01Icon,
   Settings01Icon,
   UserGroupIcon,
   UserMultipleIcon,
@@ -42,6 +44,11 @@ const navItems = [
     icon: Book02Icon,
   },
   {
+    title: "Summaries",
+    url: "/summaries",
+    icon: Note01Icon,
+  },
+  {
     title: "People",
     url: "/people",
     icon: UserMultipleIcon,
@@ -60,6 +67,11 @@ const navItems = [
     title: "Model providers",
     url: "/model-providers",
     icon: AiBrain01Icon,
+  },
+  {
+    title: "Transcription",
+    url: "/transcription-engine",
+    icon: Mic01Icon,
   },
   {
     title: "About",

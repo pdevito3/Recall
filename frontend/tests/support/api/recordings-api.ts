@@ -7,6 +7,11 @@ export const recordingsApi = {
     return { method: 'get', path: statusPath, status: 200, body: { jobsStopped: false, jobsStoppedText: null, model: 'Ready', modelText: null } }
   },
 
+  /** An entry that was typed, not spoken, as most are. */
+  noneForAnyEntry(): MockRoute {
+    return { method: 'get', path: /^\/api\/v1\/sessions\/[^/]+\/recordings$/, status: 200, body: [] }
+  },
+
   jobsStopped(text: string): MockRoute {
     return { method: 'get', path: statusPath, status: 200, body: { jobsStopped: true, jobsStoppedText: text, model: 'Ready', modelText: null } }
   },
