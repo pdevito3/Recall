@@ -67,6 +67,16 @@ test('with no known base, a paragraph that the other side holds at another place
   expect(plain(merged)).toEqual(['gamma mine', 'copied beta delta', 'alpha'])
 })
 
+test.each([
+  [words('I slept well', 'Morning'), words('Morning', 'I went out')],
+  [words('I had a coffee with Ana', 'Morning walk', 'Evening'), words('Morning walk', 'Evening', 'I took the bus home')],
+])('with no known base, two paragraphs that only share a word stay two paragraphs, each in full', (mine, theirs) => {
+  const merged = plain(mergeDraft(null, mine, theirs))
+
+  expect(merged).toEqual(expect.arrayContaining([...plain(mine), ...plain(theirs)]))
+  expect(merged).toHaveLength(new Set([...plain(mine), ...plain(theirs)]).size)
+})
+
 test('a paragraph that the person deleted goes, when the other device did not change it', () => {
   const merged = mergeDraft(words('keep', 'drop'), words('keep'), words('keep', 'drop', 'new'))
 

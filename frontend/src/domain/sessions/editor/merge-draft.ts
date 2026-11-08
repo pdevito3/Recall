@@ -318,22 +318,30 @@ const resolveBlocks = (hasBase: boolean): Resolve<JSONContent> => (base, mine, t
   return [{ ...shell, content: mergeBlocks(ofBase, ofMine, ofTheirs, hasBase) }]
 }
 
+/** Each word of `part` is in `whole`, in the same order. */
+const isInOrderIn = (part: Word[], whole: Word[]) => commonOf(part, whole, keyOfWord).length === part.length
+
 /**
- * With no known base, a block of the person that matches a block of the other side at another place is one block that
- * a merge before put at two places. Its words that the other side holds show there, and only the other words stay at
- * the place of the person. This is the case of a key that two tabs hold: each tab merges the same words.
+ * With no known base, a block of the person whose words a block of the other side at another place holds in order, or
+ * that holds all the words of that block in order, is one block that a merge before put at two places. The words that
+ * the other side holds show there, and only the other words stay at the place of the person. This is the case of a key
+ * that two tabs hold: each tab merges the same words. Two blocks that only share some words are two blocks.
  */
 function withoutWordsAtTheirPlace(mine: JSONContent[], theirs: JSONContent[]): JSONContent[] {
   const match = matchBlocksOf(mine, theirs)
   const taken = new Set(match.filter((at) => at >= 0))
-  const outlinesOfTheirs = outlinesOf(theirs)
   return mine.flatMap((block, at) => {
     if (match[at] >= 0 || !holdsWords(block)) return [block]
-    const [outline] = outlinesOf([block])
-    const other = outlinesOfTheirs.findIndex((ofTheirs, theirAt) => !taken.has(theirAt) && holdsWords(theirs[theirAt]) && isOneBlock(outline, ofTheirs))
+    const ofMine = wordsOf(block)
+    const shell = keyOfBlock(shellOf(block))
+    const other = theirs.findIndex((ofTheirs, theirAt) => {
+      if (taken.has(theirAt) || !holdsWords(ofTheirs) || keyOfBlock(shellOf(ofTheirs)) !== shell) return false
+      const words = wordsOf(ofTheirs)
+      return ofMine.length > 0 && words.length > 0 && (isInOrderIn(ofMine, words) || isInOrderIn(words, ofMine))
+    })
     if (other < 0) return [block]
     taken.add(other)
-    const left = missing(wordsOf(block), wordsOf(theirs[other]), keyOfWord)
+    const left = missing(ofMine, wordsOf(theirs[other]), keyOfWord)
     return left.length > 0 ? [textBlockOf(left, shellOf(block))] : []
   })
 }

@@ -109,8 +109,15 @@ interface ChangeInKey {
   order: number
 }
 
-/** Another tab can copy a key at any moment, so each change that went to the key can come back as a save of that tab. A few are enough, because the base moves with each answer. */
-const changesInKeyKept = 20
+/**
+ * Another tab can copy a key at any moment, so each change that went to the key can come back as a save of that tab.
+ * Each key typed is a change, so this keeps the changes of a few sentences. A win of a change that is no longer here
+ * gives no base while another tab holds the words.
+ */
+const changesInKeyKept = 500
+
+/** The most Revisions that one page holds on the Server, so a long recording costs few reads. */
+const revisionPageSize = 500
 
 const isSameChange = (one: Stamped<string>, other: Stamped<string>) => one.value === other.value && one.savedAt === other.savedAt
 
@@ -342,7 +349,7 @@ export class DraftSaver {
   /** The words of a change that the Draft took are the base, unless another tab copied newer words of this saver. */
   private baseAfterWinOf(change: Stamped<string>): string | null {
     const order = this.changesInKey.find((inKey) => isSameChange(inKey.change, change))?.order
-    if (this.copiedUpTo !== null && order !== undefined && order < this.copiedUpTo) return null
+    if (this.copiedUpTo !== null && (order === undefined || order < this.copiedUpTo)) return null
     this.copiedUpTo = null
     return change.value
   }
@@ -590,8 +597,10 @@ export class DraftSaver {
   /**
    * A merge after `Lost` takes the change of the person since the newest Draft that the page went on from. A tab that
    * copied the key of this page can have sent a change of this page, and the Draft took it with no answer here. The
-   * Revisions after the base name such a change by its `savedAt` and its words. A Revision of a save that lost also has
-   * them, and a replay tells the two apart with no write: SES-8 answers `Kept` only for a save that the Draft took.
+   * Revisions after the base name such a change by its `savedAt`, and the text of the Revision must be its words. The
+   * length of a Revision counts code points, not the units of a JS string, so only the text compares. A Revision of a
+   * save that lost also has them, and a replay tells the two apart with no write: SES-8 answers `Kept` only for a save
+   * that the Draft took.
    */
   private async ownWordsInDraft(newest: SessionDto, signal: AbortSignal): Promise<string | null> {
     const base = this.snapshot.baseRevision
@@ -602,15 +611,16 @@ export class DraftSaver {
     const found: { number: number; inKey: ChangeInKey }[] = []
     let cursor: string | undefined
     do {
-      const page = await clients.page({ path: { id: newest.id }, query: { cursor }, signal, options }).catch(asReadFailure)
+      const query = { cursor, pageSize: revisionPageSize }
+      const page = await clients.page({ path: { id: newest.id }, query, signal, options }).catch(asReadFailure)
       const after = page.items.filter(({ number }) => number > base)
-      for (const { number, savedAt, length } of after) {
-        const inKey = unheard.find(({ change }) => Date.parse(change.savedAt) === Date.parse(savedAt) && change.value.length === length)
-        if (inKey) found.push({ number, inKey })
+      for (const { number, savedAt } of after) {
+        for (const inKey of unheard) if (Date.parse(inKey.change.savedAt) === Date.parse(savedAt)) found.push({ number, inKey })
       }
       cursor = after.length === page.items.length ? (page.nextCursor ?? undefined) : undefined
     } while (cursor)
     for (const { number, inKey } of found) {
+      if (inKey.isAnswered) continue
       const { text } = await clients.one({ path: { id: newest.id, number }, signal, options }).catch(asReadFailure)
       if (text !== inKey.change.value) continue
       const { outcome } = await this.saveWords(inKey.change, signal).catch(asReadFailure)
@@ -654,6 +664,7 @@ export class DraftSaver {
     this.wordsInHistory = null
     // A new entry is empty and has no other writer, so a loss on the old entry asks for no read and no wait.
     this.baseText = ''
+    this.copiedUpTo = null
     this.lostInARow = 0
     this.readsBeforeNextSave = false
     this.update({ sessionId: null, baseRevision: 0, conflict: null, movedFromDeletedEntry: true, waitsForAnotherWriter: false })
@@ -711,6 +722,8 @@ export class DraftSaver {
     const mine = this.unsettledText() ?? change.value
     const theirs = this.draftTextIn(newest)
     if (mine === theirs) {
+      // The Draft holds each word of this saver, so they have a base again.
+      this.copiedUpTo = null
       this.noteWordsAreTheDraft(theirs, this.isRaw ? newest.rawDraftRevision : newest.cleanedDraftRevision)
       return
     }
