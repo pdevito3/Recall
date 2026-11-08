@@ -1410,6 +1410,42 @@ test('on a full storage, a steal moves the words of the editor over the channel,
   second.run(() => second.mod.stopDraftSavers())
 })
 
+test('on a full storage, words that a frozen editor hands over when it wakes show in a notice of the new editor at once', async () => {
+  let isFull = false
+  const storage = storageWith(() => isFull)
+  vi.stubGlobal('localStorage', storage)
+  world = new ModelServer()
+  channels = new ModelChannels()
+  locks = new ModelLocks()
+  everyTab.clear()
+  const first = await aTabOn('entry-1')
+  first.type('w1x')
+  await pass(2000)
+  const row = world.rows[0] as Row
+  const second = await aSecondTabOn(row)
+  isFull = true
+  world.isDown = true
+  first.type('w2x')
+  await pass(1000)
+  first.freeze()
+  second.editHere()
+  await pass(1000)
+  expect(second.page?.place).toBe('here')
+
+  first.wake()
+  await pass(1)
+  // The words are only in the memory of the new editor now, so its notice must name them before the next change of a saver.
+  expect(first.page?.place).toBe('elsewhere')
+  expect(tokensIn(second.notices().map((notice) => ('words' in notice ? notice.words : '')).join(' '))).toContain('w2x')
+  world.isDown = false
+  isFull = false
+  await pass(60_000)
+  expect(tokensIn(row.text)).toEqual(['w1x', 'w2x'])
+  expect(tokensIn(allKeys(storage))).toEqual([])
+  first.run(() => first.mod.stopDraftSavers())
+  second.run(() => second.mod.stopDraftSavers())
+})
+
 test('a reload with a second tab open keeps the words on the screen, whichever tab took the key', async () => {
   const storage = aScene()
   world.isDown = true

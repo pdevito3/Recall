@@ -197,7 +197,11 @@ export class DraftSaver implements LockParty {
     this.lock.join(this)
     if (this.lock.editingPlace === 'here') this.update({ editing: 'here' })
     else this.noteEditingPlace()
-    if (options.taken) this.adopt(options.taken.entry, options.taken.storageKey)
+    if (options.taken) {
+      // A helper is in the list before it adopts, so a notice of words that find no room in storage names it at once.
+      helpers.add(this)
+      this.adopt(options.taken.entry, options.taken.storageKey)
+    }
   }
 
   edit(text: string) {
@@ -635,7 +639,7 @@ export class DraftSaver implements LockParty {
   private helpWith(taken: HandedEntry) {
     this.noteTaken(taken.entry)
     const target = { ...this.target, channel: taken.entry.channel, sessionId: taken.entry.sessionId, baseRevision: taken.entry.baseRevision, baseText: taken.entry.baseText }
-    helpers.add(new DraftSaver(target, this.queryClient, { taken }))
+    new DraftSaver(target, this.queryClient, { taken })
   }
 
   /** This tab takes an entry from another tab that holds no unsent words, so it reads the Draft first, and the page opens the read. With no read, the base stays, and the rule of the base decides. */
