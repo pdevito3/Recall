@@ -80,6 +80,11 @@ export class SerialSaver<T, R> {
     this.answerSettleWaiters()
   }
 
+  /** The queue comes back with nothing in it, as when no tab handed words over, so the next change goes from here. */
+  resume() {
+    this.isPaused = false
+  }
+
   /** The change of a request with no answer yet, also after a request that did not answer and waits to go again. */
   inFlight(): Stamped<T> | null {
     return this.queue.sending ?? this.queue.unanswered

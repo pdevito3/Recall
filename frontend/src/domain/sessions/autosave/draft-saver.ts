@@ -521,6 +521,8 @@ export class DraftSaver implements LockParty {
   /** The words to take: those that the last editor handed over, and each key of the draft that no saver of this tab writes. The newest go on the page, and each other goes with its own base. */
   takeOver(handed: HandOver | null) {
     if (this.isHelper || this.isStopped) return []
+    // This tab edits again, so the pause of its last hand-over ends, also when no words come with the take.
+    this.saver.resume()
     const key = draftKey(this.target)
     const ofThisDraft = (handed?.drafts ?? []).filter(({ entry }) => entry.key === key)
     const handedKeys = new Set(ofThisDraft.map(({ storageKey }) => storageKey))
