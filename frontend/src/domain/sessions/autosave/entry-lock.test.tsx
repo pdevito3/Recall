@@ -131,6 +131,20 @@ test('handed words whose key a tab took from storage go to no later taker, and w
   close()
 })
 
+test('handed words that no tab took come back with the lock, so Edit here in the tab that gave them edits them again', async () => {
+  const taken: (HandOver | null)[] = []
+  const lock = lockOfEntry('person-a', 'client-session')
+  lock.join({ ...aGivingParty('raw', 'this-tab.1'), takeOver: (handed) => (taken.push(handed), []) })
+  taken.length = 0
+  lock.hearTake('another-tab')
+  expect(lock.editingPlace).toBe('elsewhere')
+
+  lock.takeHere()
+
+  await vi.waitFor(() => expect(lock.editingPlace).toBe('here'), { timeout: handOverWaitMs * 3 })
+  expect(taken.map((handed) => handed?.drafts.map(({ entry }) => entry.stateId))).toEqual([['this-tab.1']])
+})
+
 test('a second press of Edit here while the first waits for the hand-over asks once, so the wait of the first goes on', async () => {
   const { takes, close } = heardTakes()
   localStorage.setItem('recall.editor.recall.edit.person-a.client-session', 'another-tab')
