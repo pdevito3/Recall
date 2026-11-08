@@ -243,7 +243,9 @@ public class TenantAccessTests : TestBase
 
         // Act
         var record = await FactoryClient.GetRequestAsync(ApiRoutes.Tenants.GetRecord(firstTenant.Id));
-        var list = await FactoryClient.GetRequestAsync($"{ApiRoutes.Tenants.GetList}?pageSize=500");
+        // Other tests add tenants to the same database, so a list with no filter can hold more than one page.
+        var filters = Uri.EscapeDataString($"Id == \"{firstTenant.Id}\" || Id == \"{secondTenant.Id}\"");
+        var list = await FactoryClient.GetRequestAsync($"{ApiRoutes.Tenants.GetList}?filters={filters}");
 
         // Assert
         record.StatusCode.ShouldBe(HttpStatusCode.OK);
