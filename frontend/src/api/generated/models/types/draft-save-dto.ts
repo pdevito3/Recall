@@ -24,16 +24,4 @@ export type DraftSaveDto = {
      * @type string
     */
     savedAt: string;
-    /**
-     * @description An ID that the client made for these words. It decides no save, and the Revision of the save keeps it. A client with no IDs leaves it out.
-     * @maxLength 64
-     * @type string | undefined
-    */
-    changeId?: string | null;
-    /**
-     * @description The ID of the change that these words grew from, so that a client can find the base of a merge in the Revisions. It decides no save.
-     * @maxLength 64
-     * @type string | undefined
-    */
-    parentChangeId?: string | null;
 };

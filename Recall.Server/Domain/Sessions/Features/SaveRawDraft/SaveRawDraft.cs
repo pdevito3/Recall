@@ -26,7 +26,7 @@ public static class SaveRawDraft
                 .TagWithOperationCallSite("sessions.save_raw.load")
                 .GetById(request.Id, cancellationToken);
 
-            var save = DraftSave.Of(request.Dto.Text, request.Dto.BaseRevision, request.Dto.SavedAt, request.Dto.ChangeId, request.Dto.ParentChangeId);
+            var save = DraftSave.Of(request.Dto.Text, request.Dto.BaseRevision, request.Dto.SavedAt);
             var earlier = await dbContext.RawRevisions
                 .TagWithOperationCallSite("sessions.save_raw.earlier")
                 .Where(r => r.SessionId == session.Id && r.SavedAt == save.SavedAt && r.Text == save.Text)

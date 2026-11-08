@@ -35,7 +35,7 @@ public static class GetRawRevisionPage
 
             var (page, hasMore) = await revisions
                 .OrderByDescending(r => r.Number)
-                .Select(r => new RevisionSummaryDto { Number = r.Number, SavedAt = r.SavedAt, Length = r.Text.Length, WasDraft = r.WasDraft, ChangeId = r.ChangeId, ParentChangeId = r.ParentChangeId })
+                .Select(r => new RevisionSummaryDto { Number = r.Number, SavedAt = r.SavedAt, Length = r.Text.Length })
                 .ToKeysetPageAsync(request.Parameters.PageSize, cancellationToken);
 
             return new RevisionPageDto

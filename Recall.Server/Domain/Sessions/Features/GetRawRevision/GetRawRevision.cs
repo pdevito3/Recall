@@ -24,7 +24,7 @@ public static class GetRawRevision
                 .TagWithOperationCallSite("sessions.raw_revisions.get")
                 .AsNoTracking()
                 .Where(r => r.SessionId == request.SessionId && r.Number == request.Number)
-                .Select(r => new RevisionDto { Number = r.Number, SavedAt = r.SavedAt, Text = r.Text, ChangeId = r.ChangeId, ParentChangeId = r.ParentChangeId })
+                .Select(r => new RevisionDto { Number = r.Number, SavedAt = r.SavedAt, Text = r.Text })
                 .FirstOrDefaultAsync(cancellationToken);
             return revision ?? throw new NotFoundException("The Revision was not found.");
         }

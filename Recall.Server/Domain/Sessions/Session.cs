@@ -125,7 +125,7 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         var decision = Raw.Decide(save, earlier);
         Raw = decision.Next;
         if (decision.MintedRevision is { } number)
-            _appendedRawRevisions.Add(new RawRevision(Id, number, save, decision.Outcome == DraftSaveOutcome.Won));
+            _appendedRawRevisions.Add(new RawRevision(Id, number, save.SavedAt, save.Text, decision.Outcome == DraftSaveOutcome.Won));
 
         RefreshFromDrafts();
         return decision;
@@ -136,7 +136,7 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         var decision = Cleaned.Decide(save, earlier);
         Cleaned = decision.Next;
         if (decision.MintedRevision is { } number)
-            _appendedCleanedRevisions.Add(new CleanedRevision(Id, number, save, decision.Outcome == DraftSaveOutcome.Won));
+            _appendedCleanedRevisions.Add(new CleanedRevision(Id, number, save.SavedAt, save.Text, decision.Outcome == DraftSaveOutcome.Won));
         if (decision.Outcome == DraftSaveOutcome.Won)
             CleanedHasHandEdits = true;
 

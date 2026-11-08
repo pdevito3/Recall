@@ -23,19 +23,4 @@ export type RevisionSummaryDto = {
      * @type integer
     */
     length: number;
-    /**
-     * @description True when the Draft took these words at this number. False for a save that lost.
-     * @type boolean
-    */
-    wasDraft: boolean;
-    /**
-     * @description The ID that the client gave these words. Null for a save with no ID and for a write of the Server.
-     * @type string | undefined
-    */
-    changeId?: string | null;
-    /**
-     * @description The ID of the change that these words grew from, as the client sent it.
-     * @type string | undefined
-    */
-    parentChangeId?: string | null;
 };

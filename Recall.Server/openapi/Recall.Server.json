@@ -6432,22 +6432,6 @@
             "type": "string",
             "description": "When the person saved. This time decides no save. With the words, it says that a save is a replay, so a replay sends the same time, and a new save sends a new time.",
             "format": "date-time"
-          },
-          "changeId": {
-            "maxLength": 64,
-            "type": [
-              "null",
-              "string"
-            ],
-            "description": "An ID that the client made for these words. It decides no save, and the Revision of the save keeps it. A client with no IDs leaves it out."
-          },
-          "parentChangeId": {
-            "maxLength": 64,
-            "type": [
-              "null",
-              "string"
-            ],
-            "description": "The ID of the change that these words grew from, so that a client can find the base of a merge in the Revisions. It decides no save."
           }
         }
       },
@@ -7208,20 +7192,6 @@
           },
           "text": {
             "type": "string"
-          },
-          "changeId": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "description": "The ID that the client gave these words. Null for a save with no ID and for a write of the Server."
-          },
-          "parentChangeId": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "description": "The ID of the change that these words grew from, as the client sent it."
           }
         }
       },
@@ -7251,8 +7221,7 @@
         "required": [
           "number",
           "savedAt",
-          "length",
-          "wasDraft"
+          "length"
         ],
         "type": "object",
         "properties": {
@@ -7268,24 +7237,6 @@
             "type": "integer",
             "description": "The number of characters of the Revision.",
             "format": "int32"
-          },
-          "wasDraft": {
-            "type": "boolean",
-            "description": "True when the Draft took these words at this number. False for a save that lost."
-          },
-          "changeId": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "description": "The ID that the client gave these words. Null for a save with no ID and for a write of the Server."
-          },
-          "parentChangeId": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "description": "The ID of the change that these words grew from, as the client sent it."
           }
         }
       },

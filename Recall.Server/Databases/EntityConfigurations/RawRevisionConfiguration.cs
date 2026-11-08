@@ -13,8 +13,6 @@ public sealed class RawRevisionConfiguration : IEntityTypeConfiguration<RawRevis
         builder.Property(e => e.SessionId).HasMaxLength(EntityId.MaxLength).UseCollation(EntityId.Collation);
         builder.Property(e => e.Number).ValueGeneratedNever();
         builder.Property(e => e.Text).IsRequired().HasMaxLength(Session.DraftMaxStoredLength);
-        builder.Property(e => e.ChangeId).HasMaxLength(DraftSave.ChangeIdMaxLength);
-        builder.Property(e => e.ParentChangeId).HasMaxLength(DraftSave.ChangeIdMaxLength);
 
         builder.ApplyTenanting(e => e.Session.TenantId);
         builder.ApplyJournalOwner(e => e.Session.UserId);

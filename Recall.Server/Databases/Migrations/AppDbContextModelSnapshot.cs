@@ -908,20 +908,10 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("number");
 
-                    b.Property<string>("ChangeId")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("change_id");
-
                     b.Property<string>("DeviceResultHash")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT")
                         .HasColumnName("device_result_hash");
-
-                    b.Property<string>("ParentChangeId")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("parent_change_id");
 
                     b.Property<string>("SavedAt")
                         .IsRequired()
@@ -955,16 +945,6 @@ namespace Recall.Server.Databases.Migrations
                     b.Property<int>("Number")
                         .HasColumnType("INTEGER")
                         .HasColumnName("number");
-
-                    b.Property<string>("ChangeId")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("change_id");
-
-                    b.Property<string>("ParentChangeId")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("parent_change_id");
 
                     b.Property<string>("SavedAt")
                         .IsRequired()

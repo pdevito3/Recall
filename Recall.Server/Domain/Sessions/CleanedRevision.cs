@@ -16,12 +16,6 @@ public class CleanedRevision
     /// <summary>True when the Draft took these words at this number. False for a save that lost.</summary>
     public bool WasDraft { get; private set; }
 
-    /// <summary>The ID that the client gave these words, or null for a save with no ID and for a write of the Server. SES-46.</summary>
-    public string? ChangeId { get; private set; }
-
-    /// <summary>The ID of the change that these words grew from, as the client sent it. SES-46.</summary>
-    public string? ParentChangeId { get; private set; }
-
     /// <summary>The hash of the device result that made this Revision. A device result applies once, and this finds a repeat.</summary>
     [Sensitive] public string? DeviceResultHash { get; private set; }
 
@@ -35,13 +29,6 @@ public class CleanedRevision
         Text = text;
         WasDraft = wasDraft;
         DeviceResultHash = deviceResultHash;
-    }
-
-    internal CleanedRevision(string sessionId, int number, DraftSave save, bool wasDraft)
-        : this(sessionId, number, save.SavedAt, save.Text, wasDraft)
-    {
-        ChangeId = save.ChangeId;
-        ParentChangeId = save.ParentChangeId;
     }
 
     private CleanedRevision()
