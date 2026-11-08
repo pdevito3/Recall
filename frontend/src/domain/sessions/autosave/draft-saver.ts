@@ -592,6 +592,8 @@ export class DraftSaver implements LockParty {
     this.noteTaken(entry)
     this.ownKey = storageKey
     // A key that holds these words stays when a write of the same words finds no room, so a take keeps the words in storage.
+    const stored = storageKey === null ? undefined : readOutbox(this.target.owner).find((one) => one.storageKey === storageKey)
+    this.kept = stored?.entry.stateId && wordsOfAState(stored.entry) === wordsOfAState(entry) ? { storageKey: stored.storageKey, stateId: stored.entry.stateId, words: wordsOfAState(entry) } : null
     this.target = { ...this.target, sessionId: entry.sessionId ?? this.target.sessionId }
     this.baseText = entry.baseText
     this.readsBeforeNextSave = entry.readsFirst ?? false
