@@ -5,8 +5,9 @@ import { commands, page, userEvent } from 'vitest/browser'
 import { render } from 'vitest-browser-react'
 
 import type { SummaryDto } from '@/api/generated/models/types/summary-dto'
+import type { UserSettingDto } from '@/api/generated/models/types/user-setting-dto'
 import { apiClient } from '@/lib/api-client'
-import { browserTimeZone, todayAt } from '@/lib/zoned-time'
+import { parseTimeZone, todayAt } from '@/lib/zoned-time'
 import { routeTree } from '@/routeTree.gen'
 import type { Answer } from '@/test/answer'
 import { signedInMember } from '@/test/session'
@@ -30,6 +31,10 @@ const read = (path: string, body: SummaryDto): Answer => ({ method: 'GET', path,
 const open = (path: string, body: SummaryDto): Answer => ({ method: 'POST', path: `${path}/generate`, body })
 
 const weekPath = '/api/v1/summaries/Week/2026-06-03'
+
+// Far from the zone of the browser in the component suite (Pacific/Kiritimati, UTC+14), so the two dates are never the same.
+const settingZone = 'Pacific/Pago_Pago'
+const setting: UserSettingDto = { timeZone: settingZone, timeZoneIsKnown: true, locationCaptureEnabled: false, requirePeopleProposalApproval: false, version: 1 }
 const sent: string[] = []
 let recorder = 0
 
@@ -48,7 +53,7 @@ afterEach(() => {
 const sentCount = (request: string) => sent.filter((each) => each === request).length
 
 async function openPage(path: string, answers: Answer[]) {
-  await commands.answerRequests([...signedInMember, ...answers])
+  await commands.answerRequests([...signedInMember, { method: 'GET', path: '/api/v1/me/settings', body: setting }, ...answers])
   const router = createRouter({ routeTree, history: createMemoryHistory({ initialEntries: [path] }) })
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const screen = await render(
@@ -217,9 +222,9 @@ test('Previous is off in the first year that the Server takes', async () => {
   await expect.element(screen.getByRole('link', { name: 'Next year' })).not.toHaveAttribute('aria-disabled')
 })
 
-test('a period or a date that the contract refuses falls back to the Day of today', async () => {
+test('a period or a date that the contract refuses falls back to the Day of today in the time zone of Settings, not of the browser', async () => {
   // Arrange
-  const today = todayAt(browserTimeZone(), new Date())
+  const today = todayAt(parseTimeZone(settingZone), new Date())
   const todayPath = `/api/v1/summaries/Day/${today.toString()}`
   const empty = week({ id: null, period: 'Day', periodDate: today.toString(), periodLastDate: today.toString(), status: 'Missing', content: '', sourceCount: 0 })
   const { screen } = await openPage('/summaries?period=Fortnight&date=2026-02-30', [open(todayPath, empty)])
