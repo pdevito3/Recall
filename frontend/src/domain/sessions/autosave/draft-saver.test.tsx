@@ -7,6 +7,7 @@ import type { SessionDto } from '@/api/generated/models/types/session-dto'
 import { saveRawDraft } from '@/api/generated/sessions/clients/save-raw-draft'
 import { ProblemDetailsError } from '@/lib/problem-details'
 
+import { SessionKeys } from '../apis/session.keys'
 import { plainWordsOf } from '../editor/content'
 import { DraftSaver, draftNotices, waitAfterLosses, draftSaverFor, removeNoticesOfWordsInHistory, shownStatusOf, unsentWordsOnThisDevice, type DraftTarget } from './draft-saver'
 import { closeEntryLocks } from './entry-lock'
@@ -304,6 +305,29 @@ test('with no room at all, the older key goes, so no tab sends its older words a
   expect(wordsInKeys()).toEqual([])
   expect(saver.isHoldingWordsOnlyInMemory()).toBe(true)
   expect(saver.notice()).toMatchObject({ kind: 'onlyInMemory', words: 'words and more' })
+  saver.stop()
+})
+
+test('with no room, a write that changes no words keeps the key, so the words stay in storage', async () => {
+  vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
+  const saver = aSaver()
+  saver.edit('words')
+  const real = Storage.prototype.setItem
+  const setItem = vi.spyOn(Storage.prototype, 'setItem')
+  const full = () => {
+    throw new DOMException('full', 'QuotaExceededError')
+  }
+  // The new key and the key in place of the older key find no room, and the older key goes back.
+  setItem.mockImplementationOnce(full).mockImplementationOnce(full).mockImplementationOnce(function (this: Storage, name, value) {
+    real.call(this, name, value)
+  })
+
+  // The send changes only the change in flight, and no words.
+  saver.flush()
+  await vi.waitFor(() => expect(saveRawDraft).toHaveBeenCalledOnce())
+
+  expect(wordsInKeys()).toEqual(['words'])
+  expect(saver.isHoldingWordsOnlyInMemory()).toBe(false)
   saver.stop()
 })
 
@@ -967,6 +991,46 @@ test('a read after a save stops an older read that still runs, so it does not ta
   await vi.waitFor(() => expect(order).toContain('read'))
 
   expect(order.slice(0, 2)).toEqual(['cancel', 'read'])
+  saver.stop()
+})
+
+test('a read after a save takes the answer of the server, also when another read stops it, and not the older words in the cache', async () => {
+  vi.mocked(saveRawDraft).mockResolvedValue(keptAt(2))
+  const queryClient = new QueryClient()
+  queryClient.setQueryData(SessionKeys.detail('session-1'), entryWithWords('', 0))
+  let answer: (session: SessionDto) => void = () => undefined
+  vi.mocked(getSession).mockImplementation(() => new Promise((resolve) => { answer = resolve as typeof answer }))
+  const saver = new DraftSaver(target, queryClient)
+
+  saver.edit('my words')
+  saver.flush()
+  await vi.waitFor(() => expect(getSession).toHaveBeenCalledOnce())
+  // A poll or the read of another saver of this tab stops each read of the Session in the cache.
+  await queryClient.cancelQueries()
+  answer(entryWithWords('my words', 7))
+
+  await vi.waitFor(() => expect(saver.getSnapshot().status.kind).toBe('saved'))
+  expect(saver.getSnapshot()).toMatchObject({ baseRevision: 7, conflict: null })
+  saver.stop()
+})
+
+test('a Kept save whose Draft holds more takes the Draft, also when the person typed and then deleted the typing, so no word of another device goes out', async () => {
+  vi.mocked(saveRawDraft).mockResolvedValueOnce(keptAt(2)).mockResolvedValue(wonAt(8))
+  let answer: (session: SessionDto) => void = () => undefined
+  vi.mocked(getSession).mockImplementation(() => new Promise((resolve) => { answer = resolve as typeof answer }))
+  const saver = new DraftSaver(target, new QueryClient())
+
+  saver.edit('my words')
+  saver.flush()
+  await vi.waitFor(() => expect(getSession).toHaveBeenCalledOnce())
+  saver.edit('my words and more')
+  saver.edit('my words')
+  answer(entryWithWords('my words, words of another device', 7))
+
+  await vi.waitFor(() => expect(saveRawDraft).toHaveBeenCalledTimes(2))
+  const body = vi.mocked(saveRawDraft).mock.lastCall?.[0].body
+  expect(plainWordsOf(body?.text ?? '')).toContain('words of another device')
+  expect(body?.baseRevision).toBe(7)
   saver.stop()
 })
 

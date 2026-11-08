@@ -124,6 +124,10 @@ function queueOf({ change, sent, refusal }: OutboxEntry): SaveQueue<string> {
   return emptyQueue()
 }
 
+/** What a tab that takes a key sends: the words, their base, and the entry. A change of `sent` alone sends no other words. */
+const wordsOfAState = ({ sessionId, baseRevision, baseText, change, held, wordsInHistory, refusal, readsFirst }: OutboxEntry) =>
+  JSON.stringify([sessionId, baseRevision, baseText, change?.value ?? null, held ?? null, wordsInHistory ?? null, refusal ?? null, readsFirst ?? false])
+
 const pauseInTypingMs = 800
 const holdReadLimitMs = 30_000
 const holdReadRetryMs = 2_000
@@ -141,6 +145,8 @@ export class DraftSaver implements LockParty {
   private wordsOnServer: string | null = null
   private heldWords: string | null = null
   private ownKey: string | null = null
+  /** The last state that a write of this saver put in a key. */
+  private kept: { storageKey: string; stateId: string; words: string } | null = null
   private hasUnseenJoin = false
   private reportsArrival = false
   private holdRun = 0
@@ -485,7 +491,9 @@ export class DraftSaver implements LockParty {
 
   handOver(): HandedEntry | null {
     const change = this.saver.newestUnsettled()
-    const handed = change === null && this.heldWords === null && this.wordsInHistory === null ? null : { storageKey: this.ownKey, entry: this.outboxEntry(change) }
+    const entry = change === null && this.heldWords === null && this.wordsInHistory === null ? null : this.outboxEntry(change)
+    // Words that a full storage left only in memory go to a key now if storage has room, so a crash of each tab keeps them.
+    const handed = entry === null ? null : { storageKey: this.ownKey ?? writeToOutbox(this.target.owner, null, entry), entry }
     // The tab that takes the entry goes on from these words and from this key, so this saver holds and writes nothing more.
     this.ownKey = null
     this.heldWords = null
@@ -770,7 +778,8 @@ export class DraftSaver implements LockParty {
     this.update({ conflict: null })
     if (merged === theirs) {
       // The read holds the change of the person, so nothing goes to the Server. Newer typing holds older words, and the text of the read takes its place.
-      if (this.unsettledText() !== change.value) this.saver.edit(theirs)
+      const newer = this.saver.newestUnsettled()
+      if (newer !== null && newer !== change) this.saver.edit(theirs)
       this.wordsOnServer = theirs
       this.noteArrival()
       this.update({ waitsForAnotherWriter: false })
@@ -798,13 +807,14 @@ export class DraftSaver implements LockParty {
    */
   private noteDraftHoldsMoreThan(change: Stamped<string>, newest: SessionDto) {
     this.noteArrival()
-    const typed = this.unsettledText()
-    if (typed !== null && typed !== change.value) {
+    // A newer change can hold the same words, as after a delete of the words typed since. It still goes after this save, so it merges too.
+    const typed = this.saver.newestUnsettled()
+    if (typed !== null && typed !== change) {
       this.baseText = change.value
       this.mergeIntoRead(change, newest)
       return
     }
-    if (typed !== change.value) return
+    if (typed !== change) return
     const draft = this.draftTextIn(newest)
     this.wordsOnServer = draft
     this.wordsInHistory = null
@@ -852,7 +862,7 @@ export class DraftSaver implements LockParty {
   }
 
   /**
-   * One key holds all the text of this saver, with its base. A write replaces the older key, and a failed write removes it, so the words are only in this page, and its notice says so.
+   * One key holds all the text of this saver, with its base. A write replaces the older key. A failed write removes it when it holds other words, so the words are only in this page, and its notice says so.
    * Only the tab that edits writes words to send. A hold is the words of this tab, so it stays in a key in any tab.
    */
   private keep(fallback: Stamped<string> | null = null) {
@@ -867,10 +877,19 @@ export class DraftSaver implements LockParty {
       this.releaseLockIfDone()
       return
     }
-    const written = writeToOutbox(this.target.owner, this.ownKey, this.outboxEntry(change))
-    // A key holds the newest state or nothing. A tab that took an older state would send its words again on its base, so they would show twice.
+    const entry = this.outboxEntry(change)
+    const written = writeToOutbox(this.target.owner, this.ownKey, entry)
+    const kept = this.kept
+    if (written === null && kept !== null && kept.storageKey === this.ownKey && kept.words === wordsOfAState(entry)) {
+      // The key holds these words on this base, so it stays as the state of this saver.
+      this.stateId = kept.stateId
+      this.noteOutboxWrite(true)
+      return
+    }
+    // A key holds the newest words or nothing. A tab that took older words would send them again on their base, so they would show twice.
     if (written === null && this.ownKey !== null) removeFromOutbox(this.ownKey)
     this.ownKey = written
+    this.kept = written === null ? null : { storageKey: written, stateId: this.stateId, words: wordsOfAState(entry) }
     this.noteOutboxWrite(written !== null)
   }
 
