@@ -173,10 +173,22 @@ test('words that the newest words hold in part, as from a tab that took the word
   expect(plain(merged)).toEqual(['Lunch with Sam and Ana at noon'])
 })
 
-test('a block that both sides added at other places shows once', () => {
+test('a word that both sides put in place of one word shows once', () => {
+  const merged = mergeDraft(words('Lunch with Ana'), words('Lunch with Sam at noon'), words('Lunch with Sam and Bo'))
+
+  expect(plain(merged)).toEqual(['Lunch with Sam and Bo at noon'])
+})
+
+test('a paragraph that the person goes on with, from a save of a closed tab that the newest words hold, shows once', () => {
+  const merged = mergeDraft('', words('Lunch with Sam at noon'), words('Lunch with Sam', 'A chunk'))
+
+  expect(plain(merged)).toEqual(['Lunch with Sam at noon', 'A chunk'])
+})
+
+test('a block that both sides added at other places shows once, at the place of the other side', () => {
   const merged = mergeDraft(doc(heading('Day one'), paragraph('The sea')), doc(heading('Day one'), paragraph('A new line'), paragraph('The sea')), doc(heading('Day one'), paragraph('The sea'), paragraph('A new line'), paragraph('More')))
 
-  expect(plain(merged)).toEqual(['Day one', 'A new line', 'The sea', 'More'])
+  expect(plain(merged)).toEqual(['Day one', 'The sea', 'A new line', 'More'])
 })
 
 test('with no known base, a heading pairs with the heading that shares its words, so no word shows twice', () => {

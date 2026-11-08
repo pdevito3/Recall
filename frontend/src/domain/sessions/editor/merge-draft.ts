@@ -276,6 +276,39 @@ function commonBlockOf(one: JSONContent, other: JSONContent): JSONContent {
   return { ...shellOf(one), content: commonBlocksOf(childrenOf(one), childrenOf(other)) }
 }
 
+/** A block that is one block with `block` on another side: it starts with the same word, or it holds more than half of the words of `block`. */
+function isASaveOf(other: JSONContent, block: JSONContent) {
+  const [words, held] = [textsOf(block), new Set(textsOf(other))]
+  return keyOfBlock(shellOf(other)) === keyOfBlock(shellOf(block)) && (textsOf(other)[0] === words[0] || 2 * words.filter((word) => held.has(word)).length > words.length)
+}
+
+/**
+ * A block that one side added, where the other side holds an earlier save of it in a block that is not in `base`, as
+ * from the key of a closed tab or a save that won with no answer. The two merge word by word in the place of the other
+ * side, so their words show once. Words that both hold merge as in the iOS client.
+ */
+function foldEarlierSaves(base: JSONContent[], mine: JSONContent[], theirs: JSONContent[]): [JSONContent[], JSONContent[]] {
+  const inBase = new Set(base.map(keyOfBlock))
+  const merged = new Set<JSONContent>()
+  const fold = (added: JSONContent[], other: JSONContent[], merge: (one: JSONContent, other: JSONContent) => JSONContent[]) => {
+    const kept = new Set(matchBlocksOf(base, added).filter((at) => at >= 0))
+    const places: JSONContent[][] = other.map((block) => [block])
+    const isFree = (block: JSONContent, at: number) => !merged.has(block) && places[at][0] === block && !inBase.has(keyOfBlock(block)) && holdsAWord(block)
+    const left = added.filter((block, at) => {
+      if (kept.has(at) || merged.has(block) || inBase.has(keyOfBlock(block)) || !holdsAWord(block)) return true
+      const place = other.findIndex((candidate, index) => isFree(candidate, index) && isASaveOf(candidate, block))
+      if (place < 0) return true
+      places[place] = merge(block, other[place])
+      for (const block of places[place]) merged.add(block)
+      return false
+    })
+    return [left, places.flat()]
+  }
+  const [mineLeft, theirsWithMine] = fold(mine, theirs, (ofMine, ofTheirs) => resolveBlocks(false)([], [ofMine], [ofTheirs]))
+  const [theirsLeft, mineWithTheirs] = fold(theirsWithMine, mineLeft, (ofTheirs, ofMine) => resolveBlocks(false)([], [ofMine], [ofTheirs]))
+  return [mineWithTheirs, theirsLeft]
+}
+
 /**
  * A block with words that both sides added shows once, at its first place, also where each side put it at another
  * place: the other side holds an earlier save of the person. A block that one side holds more than once stays so.
@@ -284,7 +317,8 @@ function mergeBlocks(base: JSONContent[], mine: JSONContent[], theirs: JSONConte
   const countsOf = (blocks: JSONContent[]) => blocks.reduce((counts, block) => counts.set(keyOfBlock(block), (counts.get(keyOfBlock(block)) ?? 0) + 1), new Map<string, number>())
   const [ofMine, ofTheirs] = [countsOf(mine), countsOf(theirs)]
   const shown = new Map<string, number>()
-  return mergeLists(base, mine, theirs, keyOfBlock, resolveBlocks(hasBase)).filter((block) => {
+  const [foldedMine, foldedTheirs] = foldEarlierSaves(base, mine, theirs)
+  return mergeLists(base, foldedMine, foldedTheirs, keyOfBlock, resolveBlocks(hasBase)).filter((block) => {
     const key = keyOfBlock(block)
     shown.set(key, (shown.get(key) ?? 0) + 1)
     const most = Math.max(ofMine.get(key) ?? 0, ofTheirs.get(key) ?? 0)
