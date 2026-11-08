@@ -1,12 +1,14 @@
 import { QueryClient } from '@tanstack/react-query'
 import { afterEach, expect, test, vi } from 'vitest'
 
+import { getSession } from '@/api/generated/sessions/clients/get-session'
 import { saveRawDraft } from '@/api/generated/sessions/clients/save-raw-draft'
 
 import { draftSaverFor, resumeUnsentDrafts, type DraftTarget } from './draft-saver'
 import { closeEntryLocks, handOverWaitMs, lockOfEntry, type LockParty } from './entry-lock'
 import type { OutboxEntry } from './outbox'
 
+vi.mock('@/api/generated/sessions/clients/get-session')
 vi.mock('@/api/generated/sessions/clients/save-raw-draft')
 
 // These tests run the Web Locks of the browser, as a page on HTTPS has them, so a lock comes after a wait.
@@ -78,6 +80,25 @@ function anotherTabHolds(name: string, options: LockOptions = {}) {
 }
 
 const aShownParty: LockParty = { handOver: () => null, takeOver: () => [], takeLateHandOver: () => [], takeDraftsOfNoParty: () => [], noteEditingPlace: () => undefined, isShown: () => true }
+
+test('a page that gets the entry back from a tab that sent each word sends its next words', async () => {
+  vi.mocked(getSession).mockResolvedValue({ id: 'session-1', rawText: 'words of the other tab', rawDraftRevision: 2 } as never)
+  vi.mocked(saveRawDraft).mockResolvedValue({ outcome: 'Won', draftRevision: 3, latestRevision: 3, savedAt: '2026-11-06T15:32:00+00:00', cleanupStatus: 'Clean', version: 3 } as never)
+  const saver = draftSaverFor({ ...target, clientSessionId: 'entry-taken-back' }, new QueryClient())
+  saver.subscribe(() => undefined)
+  await expect.poll(() => saver.getSnapshot().editing).toBe('here')
+  // Another tab takes the entry with Edit here, sends each word, and closes.
+  const closeOther = anotherTabHolds(`recall.edit.${owner}.entry-taken-back`, { steal: true })
+  await expect.poll(() => saver.getSnapshot().editing).toBe('elsewhere')
+  closeOther()
+  await expect.poll(() => saver.getSnapshot().editing).toBe('here')
+
+  saver.edit('words of the other tab and more')
+  saver.flush()
+
+  await expect.poll(() => vi.mocked(saveRawDraft).mock.calls.length).toBe(1)
+  await expect.poll(() => saver.getSnapshot().status.kind).toBe('saved')
+})
 
 test('Edit here that a release drops before the lock answers leaves a later Edit here working', async () => {
   const name = `recall.edit.${owner}.client-session`
