@@ -244,8 +244,8 @@ interface Page {
   held: string | null
 }
 
-// A line break in a document is the escape `\n`, so a token can follow the letter `n`.
-const tokensIn = (text: string): string[] => text.match(/(?<=^|[^\w]|\\n)[wc]\d+x\b/g) ?? []
+// A line break in a document is the escape `\n`, so a token can follow the letter `n`. A person types `w`, a recording adds `c`, and another device types `d`.
+const tokensIn = (text: string): string[] => text.match(/(?<=^|[^\w]|\\n)[wcd]\d+x\b/g) ?? []
 
 /** The editor writes a document, so a word typed after a merge goes at the end of the last paragraph, and the text stays a document. */
 function typedInto(text: string, token: string): string {
@@ -258,6 +258,47 @@ function typedInto(text: string, token: string): string {
   const end = content[content.length - 1] as JSONContent | undefined
   const typed = end?.type === 'text' && !end.marks ? [...content.slice(0, -1), { ...end, text: `${end.text ?? ''} ${token}` }] : [...content, { type: 'text', text: content.length > 0 ? ` ${token}` : token }]
   return JSON.stringify({ ...document, content: [...blocks.slice(0, -1), { ...last, content: typed }] })
+}
+
+const textOf = (token: string): JSONContent => ({ type: 'text', text: token })
+const listItemOf = (token: string): JSONContent => ({ type: 'listItem', content: [{ type: 'paragraph', content: [textOf(token)] }] })
+
+/** A word at the end of a paragraph or a heading, or in a list item, old or new. */
+function withWordAtEnd(block: JSONContent, token: string, random: Random): JSONContent {
+  if (block.type === 'bulletList') {
+    const items = block.content ?? []
+    const at = random.below(items.length + 1)
+    if (at === items.length) return { ...block, content: [...items, listItemOf(token)] }
+    const paragraphs = items[at].content ?? []
+    const last = paragraphs[paragraphs.length - 1] ?? { type: 'paragraph' }
+    return { ...block, content: items.map((item, index) => (index === at ? { ...item, content: [...paragraphs.slice(0, -1), withWordAtEnd(last, token, random)] } : item)) }
+  }
+  const content = block.content ?? []
+  const end = content[content.length - 1] as JSONContent | undefined
+  return { ...block, content: end?.type === 'text' && !end.marks ? [...content.slice(0, -1), { ...end, text: `${end.text ?? ''} ${token}` }] : [...content, textOf(content.length > 0 ? ` ${token}` : token)] }
+}
+
+/** Half of the words go at the end, as `typedInto` puts them. The others go into a heading, a paragraph, or a list, or start a new heading or list, so that a merge meets structure and changes side by side. */
+function typedSomewhere(text: string, token: string, random: Random): string {
+  const roll = random.below(100)
+  if (roll < 50) return typedInto(text, token)
+  const document = parseDocument(text) ?? { type: 'doc', content: text.trim() ? [{ type: 'paragraph', content: [textOf(text)] }] : [] }
+  const blocks = [...(document.content ?? [])]
+  const at = random.below(blocks.length + 1)
+  if (roll < 75 && blocks.length > 0) blocks[Math.min(at, blocks.length - 1)] = withWordAtEnd(blocks[Math.min(at, blocks.length - 1)], token, random)
+  else if (roll < 88) blocks.splice(at, 0, { type: 'heading', attrs: { level: 2 }, content: [textOf(token)] })
+  else blocks.splice(at, 0, { type: 'bulletList', content: [listItemOf(token)] })
+  return JSON.stringify({ ...document, content: blocks })
+}
+
+/** The text with one word gone, as a person deletes it. */
+function withoutWord(text: string, token: string): string {
+  const cut = (words: string) => words.replace(new RegExp(`(^|\\s+)${token}(?=\\s|$)`), '')
+  const document = parseDocument(text)
+  if (!document) return cut(text)
+  const strip = (node: JSONContent): JSONContent =>
+    node.type === 'text' ? { ...node, text: cut(node.text ?? '') } : node.content ? { ...node, content: node.content.map(strip).filter((child) => child.type !== 'text' || child.text !== '') } : node
+  return JSON.stringify(strip(document))
 }
 
 /** A chunk of a recording joins as `RawTranscript.Append` on the Server joins it: a new paragraph of a document, or after an empty line of plain text. */
@@ -348,7 +389,7 @@ class Tab {
     }
   }
 
-  type(token: string) {
+  type(token: string, random?: Random) {
     const page = this.page
     if (!page) return
     this.run(() => {
@@ -357,9 +398,22 @@ class Tab {
         page.saver.holdInOutbox(page.held)
         return
       }
-      page.editor = typedInto(page.editor, token)
+      page.editor = random ? typedSomewhere(page.editor, token, random) : typedInto(page.editor, token)
       page.saver.edit(page.editor)
     })
+  }
+
+  /** The person deletes one word that the person typed. The answer is the word, or null when the screen shows none. */
+  deleteAWord(random: Random): string | null {
+    const page = this.page
+    const own = tokensIn(page?.editor ?? '').filter((token) => token.startsWith('w'))
+    if (!page || page.editor === null || own.length === 0) return null
+    const token = own[random.below(own.length)]
+    this.run(() => {
+      page.editor = withoutWord(page.editor as string, token)
+      page.saver.edit(page.editor)
+    })
+    return token
   }
 
   done() {
@@ -438,6 +492,8 @@ interface Trace {
   lastTyped: Map<string, { token: string; clientSessionId: string }>
   /** A notice named these words, and the person answered it. */
   knownToBeGone: Set<string>
+  /** The words that a person deleted, with the entry, and where the word is: not yet in the Draft, as a save in flight can still bring it, in the Draft, or out of it since. */
+  deleted: Map<string, { clientSessionId: string; place: 'notYet' | 'inDraft' | 'left' }>
 }
 
 /**
@@ -490,7 +546,7 @@ const chunksPushedOut = () => world.rows.flatMap((row) => row.chunks.filter((chu
 class ModelRun {
   private readonly random: Random
   private readonly tabs: Tab[] = []
-  private readonly trace: Trace = { steps: [], discarded: new Set(), typed: new Set(), lastTyped: new Map(), knownToBeGone: new Set() }
+  private readonly trace: Trace = { steps: [], discarded: new Set(), typed: new Set(), lastTyped: new Map(), knownToBeGone: new Set(), deleted: new Map() }
   private storageIsFull = false
   private readonly storage = storageWith(() => this.storageIsFull)
   private readonly pointers = new Map<Tab, string>()
@@ -548,13 +604,26 @@ class ModelRun {
     }
     const index = this.tabs.indexOf(tab)
     if (roll < 40) {
+      const deleted = this.random.chance(0.1) ? tab.deleteAWord(this.random) : null
+      if (deleted !== null && tab.page) {
+        this.trace.discarded.add(deleted)
+        // A copy that another tab, a notice, or a key still holds has no base, so its merge keeps each word that it holds, as the merge of the iOS client does.
+        const others = this.tabs.filter((other) => other !== tab)
+        const copies = `${allKeys(this.storage)} ${others.map((other) => other.page?.editor ?? other.page?.held ?? '').join(' ')} ${this.tabs.flatMap((other) => other.notices()).map((notice) => ('words' in notice ? notice.words : '')).join(' ')}`
+        if (!tokensIn(copies).includes(deleted)) this.trace.deleted.set(deleted, { clientSessionId: tab.page.clientSessionId, place: tokensIn(world.rows.find((row) => row.clientSessionId === tab.page?.clientSessionId)?.text ?? '').includes(deleted) ? 'inDraft' : 'notYet' })
+        this.note(`tab ${index} deletes ${deleted}`)
+        return
+      }
       const token = `w${(this.tokenCount += 1)}x`
       if (!tab.page) tab.openDraft(this.newEntryId(), null, 0)
       this.trace.typed.add(token)
-      tab.type(token)
+      tab.type(token, this.random)
       const entry = tab.page?.clientSessionId as string
       this.trace.lastTyped.set(`${this.tabNames.get(tab) ?? this.nameTab(tab)} ${entry}`, { token, clientSessionId: entry })
       this.note(`tab ${index} types ${token}`)
+    } else if (roll < 44) {
+      const row = this.pick(world.rows)
+      if (row) void this.anotherDeviceTypesInto(row)
     } else if (roll < 62) {
       const ms = this.random.below(2500)
       await vi.advanceTimersByTimeAsync(ms)
@@ -626,6 +695,23 @@ class ModelRun {
     return tab.mod
   }
 
+  /** A second writer through the Draft route, as the iOS client: it reads, types one word somewhere, and saves from the number of the read. After a loss it reads and tries once more. A word of a save that won must stay in the Draft. */
+  private async anotherDeviceTypesInto(row: Row) {
+    const token = `d${(this.tokenCount += 1)}x`
+    this.note(`another device types ${token} into ${row.id}`)
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const read = await world.getSession({ path: { id: row.id } }).catch(() => null)
+      if (!read) return
+      const body = { text: typedSomewhere(read.rawText, token, this.random), baseRevision: read.rawDraftRevision, savedAt: new Date().toISOString() }
+      const reply = await world.saveRaw({ path: { id: row.id }, body }).catch(() => null)
+      if (reply?.outcome === 'Won') {
+        row.chunks.push(token)
+        this.note(`the save of ${token} by another device wins`)
+        return
+      }
+    }
+  }
+
   private async discardANotice() {
     for (const notice of this.tabs.flatMap((other) => other.notices())) {
       if (notice.kind !== 'inHistory' || !this.random.chance(0.5)) continue
@@ -692,9 +778,18 @@ class ModelRun {
   private check() {
     const vanished = wordsThatVanished(this.tabs, this.storage, this.trace)
     const pushedOut = chunksPushedOut()
-    if (vanished.length === 0 && pushedOut.length === 0) return
+    const twice = world.rows.flatMap((row) => tokensIn(row.text).filter((token, at, all) => all.indexOf(token) !== at).map((token) => `${token} in ${row.id}`))
+    // A deleted word that left the Draft must not come back. A crash can lose a deletion that only the page held, so a word that never left can stay.
+    const back: string[] = []
+    for (const [token, deletion] of this.trace.deleted) {
+      const isInDraft = tokensIn(world.rows.find((row) => row.clientSessionId === deletion.clientSessionId)?.text ?? '').includes(token)
+      if (isInDraft && deletion.place === 'left') back.push(token)
+      else if (isInDraft) deletion.place = 'inDraft'
+      else if (deletion.place === 'inDraft') deletion.place = 'left'
+    }
+    if (vanished.length === 0 && pushedOut.length === 0 && twice.length === 0 && back.length === 0) return
     const trail = this.trace.steps.slice(-Number(process.env.MODEL_TRAIL ?? 40)).join('\n  ')
-    throw new Error(`${vanished.length > 0 ? `Words that vanished: ${vanished.join(', ')}.` : ''} ${pushedOut.length > 0 ? `Chunks pushed out of the Draft: ${pushedOut.join(', ')}.` : ''}\nLast steps:\n  ${trail}`)
+    throw new Error(`${vanished.length > 0 ? `Words that vanished: ${vanished.join(', ')}.` : ''} ${pushedOut.length > 0 ? `Words of a recording or another device pushed out of the Draft: ${pushedOut.join(', ')}.` : ''} ${twice.length > 0 ? `Words twice in the Draft: ${twice.join(', ')}.` : ''} ${back.length > 0 ? `Deleted words back in the Draft: ${back.join(', ')}.` : ''}\nLast steps:\n  ${trail}`)
   }
 }
 

@@ -34,10 +34,10 @@ test('words that both sides added at one place keep the other side first, and ea
   expect(plain(merged)).toEqual(['one three two'])
 })
 
-test('words that both sides added at one place all stay, also the words that both typed', () => {
+test('words that both sides added at one place all stay, and a word that both typed shows once, as in the iOS client', () => {
   const merged = mergeDraft(words('Words at the start.'), words('Words at the start. The second tab.'), words('Words at the start. The first tab.'))
 
-  expect(plain(merged)).toEqual(['Words at the start. The first tab. The second tab.'])
+  expect(plain(merged)).toEqual(['Words at the start. The first second tab.'])
 })
 
 test('a merge of words that a merge wrote into one paragraph adds nothing', () => {
@@ -62,7 +62,7 @@ test('new paragraphs that both sides added at one place stay paragraphs, theirs 
 test('with no known base, a paragraph that the person extends during a read keeps each word once', () => {
   const merged = mergeDraft(null, words('my words and a key'), words('my words', 'a chunk'))
 
-  expect(plainWordsOf(merged).split(/\s+/).sort()).toEqual(['a', 'and', 'chunk', 'key', 'my', 'words'])
+  expect(plain(merged)).toEqual(['my words and a key', 'a chunk'])
 })
 
 test('a paragraph that the person deleted goes, when the other device did not change it', () => {
@@ -134,6 +134,61 @@ test('with no known base, a list that each side extends shows once, with the ite
 
   expect(JSON.parse(merged).content).toHaveLength(1)
   expect(plainWordsOf(merged).split(/\s+/).sort()).toEqual(['bread', 'eggs', 'jam', 'milk'])
+})
+
+const page = (title: string, body: string, items: string[], tail: string) => doc(heading(title), paragraph(body), list(...items), paragraph(tail))
+const basePage = page('Title alpha', 'One two three four five', ['apple', 'banana', 'cherry'], 'Tail end')
+
+test('a heading and a paragraph that both sides changed side by side each merge on their own, and no block shows twice', () => {
+  const theirs = page('Title alpha OTHERH', 'One two OTHERP three four five', ['apple', 'banana', 'cherry'], 'Tail end')
+  const mine = page('Title alpha PAGEH', 'One two three four five PAGEP', ['apple', 'banana', 'cherry'], 'Tail end')
+
+  expect(JSON.parse(mergeDraft(basePage, mine, theirs))).toEqual(JSON.parse(page('Title alpha OTHERH PAGEH', 'One two OTHERP three four five PAGEP', ['apple', 'banana', 'cherry'], 'Tail end')))
+})
+
+test('a heading, a paragraph, and a list that both sides changed each merge on their own, also where both changed one place', () => {
+  const blocks = mergeDraft(basePage, page('Title alpha PAGEH', 'One two three four five PAGEP', ['apple', 'banana PAGEL', 'cherry'], 'Tail end'), page('Title alpha OTHERH', 'One two OTHERP three four five', ['apple OTHERL', 'banana', 'cherry'], 'Tail end'))
+  const samePlace = mergeDraft(basePage, page('Title alpha PAGEH', 'One two three four five PAGEP', ['apple', 'banana', 'cherry PAGEL'], 'Tail end PAGET'), page('Title alpha OTHERH', 'One two three four five OTHERP', ['apple', 'banana', 'cherry OTHERL'], 'Tail end OTHERT'))
+
+  expect(JSON.parse(blocks)).toEqual(JSON.parse(page('Title alpha OTHERH PAGEH', 'One two OTHERP three four five PAGEP', ['apple OTHERL', 'banana PAGEL', 'cherry'], 'Tail end')))
+  expect(JSON.parse(samePlace)).toEqual(JSON.parse(page('Title alpha OTHERH PAGEH', 'One two three four five OTHERP PAGEP', ['apple', 'banana', 'cherry OTHERL PAGEL'], 'Tail end OTHERT PAGET')))
+})
+
+test('a word that the person deleted next to a list that the person changed does not come back', () => {
+  const theirs = page('Title alpha', 'One two three four five OTHERP', ['apple', 'banana', 'cherry'], 'Tail end')
+  const mine = page('Title alpha', 'One two four five', ['apple', 'banana', 'cherry', 'PAGEL'], 'Tail end')
+
+  expect(JSON.parse(mergeDraft(basePage, mine, theirs))).toEqual(JSON.parse(page('Title alpha', 'One two four five OTHERP', ['apple', 'banana', 'cherry', 'PAGEL'], 'Tail end')))
+})
+
+test('a heading that both sides changed, and a paragraph that the person added after it, show once each', () => {
+  const merged = mergeDraft(doc(heading('Day one'), paragraph('The sea')), doc(heading('Day one at sea'), paragraph('A new line'), paragraph('The sea')), doc(heading('Day 1'), paragraph('The sea')))
+
+  expect(JSON.parse(merged)).toEqual(JSON.parse(doc(heading('Day 1 at sea'), paragraph('A new line'), paragraph('The sea'))))
+})
+
+test('words that the newest words hold in part, as from a tab that took the words of another tab, show once', () => {
+  const merged = mergeDraft(words('Lunch with'), words('Lunch with Sam at noon'), words('Lunch with Sam and Ana'))
+
+  expect(plain(merged)).toEqual(['Lunch with Sam and Ana at noon'])
+})
+
+test('a block that both sides added at other places shows once', () => {
+  const merged = mergeDraft(doc(heading('Day one'), paragraph('The sea')), doc(heading('Day one'), paragraph('A new line'), paragraph('The sea')), doc(heading('Day one'), paragraph('The sea'), paragraph('A new line'), paragraph('More')))
+
+  expect(plain(merged)).toEqual(['Day one', 'A new line', 'The sea', 'More'])
+})
+
+test('with no known base, a heading pairs with the heading that shares its words, so no word shows twice', () => {
+  const merged = mergeDraft(null, doc(heading('Lunch at noon'), paragraph('With Sam')), doc(heading('Weather'), heading('Lunch')))
+
+  expect(JSON.parse(merged)).toEqual(JSON.parse(doc(heading('Weather'), heading('Lunch at noon'), paragraph('With Sam'))))
+})
+
+test('with no known base, a heading and a paragraph that each side extends show once each', () => {
+  const merged = mergeDraft(null, doc(heading('Day one at sea'), paragraph('The sea was calm')), doc(heading('Day one'), paragraph('The sea was calm today')))
+
+  expect(JSON.parse(merged)).toEqual(JSON.parse(doc(heading('Day one at sea'), paragraph('The sea was calm today'))))
 })
 
 test('a heading whose level changed on one side and whose words changed on the other keeps both blocks, with no word lost', () => {

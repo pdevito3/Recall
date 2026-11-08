@@ -526,7 +526,10 @@ test('after a loss, the words stay in the key of the tab until a save of the mer
 test('after 3 losses in a row, the next read waits from 1 s, the wait doubles, and the page says that the words wait to save', async () => {
   vi.useFakeTimers()
   vi.spyOn(Math, 'random').mockReturnValue(0)
-  vi.mocked(saveRawDraft).mockResolvedValue(lostWithNoNumber())
+  // Five losses, then a win: with no wait, all six saves go at once, and the test fails and ends.
+  const save = vi.mocked(saveRawDraft)
+  for (let loss = 0; loss < 5; loss += 1) save.mockResolvedValueOnce(lostWithNoNumber())
+  save.mockResolvedValue(wonAt(8))
   const saver = new DraftSaver(fromBase, clientAnswering(doc('base', 'newer words'), 7))
 
   saver.edit(doc('base', 'my words'))
@@ -756,7 +759,7 @@ test('words that the Draft holds raise no notice and send no save, and the page 
 })
 
 test('words that the Draft holds with no page raise no notice of History', async () => {
-  vi.mocked(saveRawDraft).mockResolvedValue(lostWithNoNumber())
+  vi.mocked(saveRawDraft).mockResolvedValueOnce(lostWithNoNumber()).mockResolvedValue(wonAt(8))
   const saver = new DraftSaver(target, clientAnswering(doc('my words', 'a chunk'), 7))
 
   saver.edit(doc('my words'))
@@ -1022,7 +1025,7 @@ test('a key with only a notice about History does not go to an untouched page, b
 })
 
 test('a read after a save stops an older read that still runs, so it does not take the older answer', async () => {
-  vi.mocked(saveRawDraft).mockResolvedValue(lostWithNoNumber())
+  vi.mocked(saveRawDraft).mockResolvedValueOnce(lostWithNoNumber()).mockResolvedValue(wonAt(8))
   const queryClient = new QueryClient()
   const order: string[] = []
   vi.spyOn(queryClient, 'cancelQueries').mockImplementation(() => {
