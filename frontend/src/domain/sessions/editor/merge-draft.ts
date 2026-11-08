@@ -313,36 +313,15 @@ function foldEarlierSaves(base: JSONContent[], mine: JSONContent[], theirs: JSON
   return [mineWithTheirs, theirsLeft]
 }
 
-/**
- * A block with words that both sides added shows once, at its first place, also where each side put it at another
- * place: the other side holds an earlier save of the person. A block that one side holds more than once stays so.
- */
 function mergeBlocks(base: JSONContent[], mine: JSONContent[], theirs: JSONContent[], hasBase: boolean): JSONContent[] {
-  const countsOf = (blocks: JSONContent[]) => blocks.reduce((counts, block) => counts.set(keyOfBlock(block), (counts.get(keyOfBlock(block)) ?? 0) + 1), new Map<string, number>())
-  const [ofMine, ofTheirs] = [countsOf(mine), countsOf(theirs)]
-  const shown = new Map<string, number>()
   const [foldedMine, foldedTheirs] = foldEarlierSaves(base, mine, theirs)
-  return mergeLists(base, foldedMine, foldedTheirs, keyOfBlock, resolveBlocks(hasBase)).filter((block) => {
-    const key = keyOfBlock(block)
-    shown.set(key, (shown.get(key) ?? 0) + 1)
-    const most = Math.max(ofMine.get(key) ?? 0, ofTheirs.get(key) ?? 0)
-    return most === 0 || !holdsAWord(block) || (shown.get(key) ?? 0) <= most
-  })
+  return mergeLists(base, foldedMine, foldedTheirs, keyOfBlock, resolveBlocks(hasBase))
 }
 
 /** The places of each block of `base` that both sides kept, in order: in `base`, in `mine`, and in `theirs`. */
 function keptBlocksOf(base: JSONContent[], mine: JSONContent[], theirs: JSONContent[]): [number, number, number][] {
   const [inMine, inTheirs] = [matchBlocksOf(base, mine), matchBlocksOf(base, theirs)]
   return base.flatMap((_, at) => (inMine[at] >= 0 && inTheirs[at] >= 0 ? [[at, inMine[at], inTheirs[at]] as [number, number, number]] : []))
-}
-
-/**
- * Blocks that both sides changed at one place, where a block of one side is a save of a block of the other: one side
- * goes on from a save of the other, as a tab that took the key of a closed tab. They merge with the words that both hold
- * as the base, as in the merge of the iOS client, so no word shows twice. Null for blocks that two writers started apart.
- */
-function mergeASaveOfTheOther(mine: JSONContent[], theirs: JSONContent[]): JSONContent[] | null {
-  return mine.some((block) => theirs.some((other) => isASaveOf(other, block))) ? mergeBlocks(commonBlocksOf(mine, theirs), mine, theirs, false) : null
 }
 
 /**
@@ -383,7 +362,7 @@ const resolveBlocks = (hasBase: boolean): Resolve<JSONContent> => (base, mine, t
     && [...base, ...mine].every((block) => keyOfBlock(shellOf(block)) === keyOfBlock(shell))
   if (!isOneBlockChanged) {
     const byBlock = isAddedByBoth ? null : mergeBlockByBlock(base, mine, theirs, hasBase)
-    return byBlock ?? mergeASaveOfTheOther(mine, theirs) ?? keepTheirsAndAddMine(keyOfBlock)(base, mine, theirs)
+    return byBlock ?? keepTheirsAndAddMine(keyOfBlock)(base, mine, theirs)
   }
   const blocks = [...base, ...mine, ...theirs]
   if (blocks.every(holdsWords)) {
