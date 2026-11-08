@@ -513,10 +513,7 @@ export class DraftSaver implements LockParty {
     const ofThisDraft = (handed?.drafts ?? []).filter(({ entry }) => entry.key === key)
     const handedKeys = new Set(ofThisDraft.map(({ storageKey }) => storageKey))
     const stored = readOutbox(this.target.owner).filter(({ storageKey, entry }) => entry.key === key && !handedKeys.has(storageKey) && !isKeyOfASaverHere(storageKey))
-    const toTake = [...ofThisDraft, ...stored]
-    // A state that another of these states took in has its words in that state, so they go once.
-    const takenIn = new Set(toTake.flatMap(({ entry }) => entry.takenStates ?? []))
-    const [main, ...others] = toTake.filter(({ entry }) => !takenIn.has(entry.stateId ?? '')).sort(newestFirst)
+    const [main, ...others] = [...ofThisDraft, ...stored].sort(newestFirst)
     const wasElsewhere = this.snapshot.editing === 'elsewhere'
     if (!main && wasElsewhere) {
       void this.startFromTheDraft()

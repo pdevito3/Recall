@@ -1234,23 +1234,6 @@ test('words that came in a hand-over go on from their own key, and a late copy o
   saver.stop()
 })
 
-test('a take of handed words and of a newer key that took them in sends the words once', async () => {
-  vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
-  const saver = aSaver()
-  // A tab took the handed state and then crashed, so its key holds the same words as a newer state.
-  storedByAnotherTab(entryWith('handed words', { stateId: 'crashed-tab.4', takenStates: ['gone-tab.3'], change: { value: 'handed words', savedAt: '2026-11-06T15:32:00.000Z' } }))
-  const handed = { from: 'gone-tab', drafts: [{ storageKey: null, entry: entryWith('handed words', { stateId: 'gone-tab.3' }) }] }
-
-  const taken = saver.takeOver(handed)
-  saver.flush()
-  await vi.waitFor(() => expect(saveRawDraft).toHaveBeenCalled())
-  await new Promise((resolve) => setTimeout(resolve, 20))
-
-  expect(vi.mocked(saveRawDraft).mock.calls.map(([call]) => call.body.text)).toEqual(['handed words'])
-  expect(taken).toEqual(['gone-tab.3'])
-  saver.stop()
-})
-
 test('a late hand-over of words that this tab does not hold goes with its own base beside the page', async () => {
   vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
   const saver = aSaver()
