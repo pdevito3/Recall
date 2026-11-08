@@ -1250,6 +1250,41 @@ for (const state of ['saved', 'waiting to save', 'saving', 'offline'] as const) 
   })
 }
 
+test('words that a take brings during the read of an older take keep their base, so the words of another device stay', async () => {
+  aScene()
+  const first = await aTabOn('entry-1')
+  first.type('w1x')
+  await pass(2000)
+  const row = world.rows[0] as Row
+  const second = await aSecondTabOn(row)
+  // The read of a take waits up to 3 s, and this read answers just before.
+  world.readsTakeMs = 2_800
+  second.editHere()
+  await pass(700)
+  expect(second.page?.place).toBe('waiting')
+
+  world.readsTakeMs = null
+  world.isDown = true
+  first.editHere()
+  await pass(700)
+  world.appendChunk(row, 'c2x')
+  first.type('w3x')
+  await pass(500)
+  second.editHere()
+  await pass(600)
+  expect(second.page?.place).toBe('here')
+  expect(tokensIn(second.page?.editor ?? '')).toEqual(['w1x', 'w3x'])
+  // The read of the first take answers now, with c2x.
+  await pass(5_000)
+  world.isDown = false
+  await pass(60_000)
+
+  expect(tokensIn(row.text)).toEqual(['w1x', 'c2x', 'w3x'])
+  expect(tokensIn(second.page?.editor ?? '')).toEqual(['w1x', 'c2x', 'w3x'])
+  first.run(() => first.mod.stopDraftSavers())
+  second.run(() => second.mod.stopDraftSavers())
+})
+
 test('a crash of the editor frees the entry, and the next tab takes its words from storage', async () => {
   const storage = aScene()
   const first = await aTabOn('entry-1')

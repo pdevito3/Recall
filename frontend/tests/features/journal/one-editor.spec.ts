@@ -92,6 +92,29 @@ test.describe('an entry open in two tabs', () => {
     await expect(second.at.editor).toContainText('Mine and saved')
   })
 
+  test('Edit here opens the words that another device saved while this tab read, and the next save keeps them', async ({ page, context, api }) => {
+    const session = aSession().atRevision(4).saying('Mine').build()
+    api.mock(sessionsApi.oneIs(session), sessionsApi.draftSaveWins(session, 5))
+    await entryPage(page).open(session.id)
+    await typeIn(page, ' and saved')
+    await expect.poll(() => lastWords(api, session.id)).toContain('Mine and saved')
+    await expect.poll(() => hasUnsentKey(page), { timeout: 10_000 }).toBe(false)
+    api.mock(sessionsApi.oneIs(savedAs(session, 'Mine and saved', 5)))
+    const secondPage = await context.newPage()
+    const second = entryPage(secondPage)
+    await second.open(session.id)
+    await expect(second.at.wordsOfAnotherTab).toContainText('Mine and saved')
+
+    // A phone saves Revision 6, and this tab reads it only at Edit here.
+    api.mock(sessionsApi.oneIs(savedAs(session, 'Mine and saved and the phone', 6)), sessionsApi.draftSaveWins(session, 7))
+    await second.at.editHere.click()
+
+    await expect(second.at.editor).toContainText('Mine and saved and the phone')
+    await typeIn(secondPage, ' and mine')
+    await expect.poll(() => lastWords(api, session.id), { timeout: 10_000 }).toContain('Mine and saved and the phone and mine')
+    expect(api.last('put', sessionsPaths.rawDraft(session.id))?.body).toMatchObject({ baseRevision: 6 })
+  })
+
   test('a close of the editor gives the entry to the tab that shows it, with the words of the closed tab', async ({ context, api }) => {
     const session = aSession().atRevision(4).saying('Mine').build()
     // No save answers, so the words stay only in the key of the first tab.
