@@ -30,8 +30,9 @@ Preconditions:
 
 - **Capture.** Run `page.keyboard.type(words)` on `/`. `New entry` has the focus. The status region shows `Saved at <time>`. Choose `Done`. A link with the words shows in the timeline.
 - **Autosave.** Type, wait for `Saved at <time>`, and run `page.reload()`. `New entry` has the same words.
-- **Two tabs.** Open one entry in two pages of the context. Type and save in one, then in the other. The first save wins. The save of the second page gets `Lost`, so that page reads the entry, adds its words to the newest words one time, and saves again. It shows `Saved at <time>` and a note that starts with `Another tab, device, or recording changed this entry`, and each page shows the words of both, each one time. `Show history` lists each save, and the save that lost is a version of its own.
-- **Restore.** Choose a version that the page does not show now, such as the save that lost in Two tabs, then `Restore this version`. `Your words` has the words of that version, also after a reload.
+- **Two tabs.** Open one entry in two pages of the context. One tab edits it. The other shows `Your words, open in another tab` with no edit, and `Edit here`.
+- **Two devices.** Open one entry in the page and in a second context with the cookies of the first. Type and save in the second, then in the page. The first save wins. The save of the second page gets `Lost`, so that page reads the entry, adds its words to the newest words one time, and saves again. It shows `Saved at <time>` and a note that starts with `Another tab, device, or recording changed this entry`, and each page shows the words of both, each one time. `Show history` lists each save, and the save that lost is a version of its own.
+- **Restore.** Choose a version that the page does not show now, such as the save that lost in Two devices, then `Restore this version`. `Your words` has the words of that version, also after a reload.
 - **Delete.** Choose `Delete`, then `Delete entry`. The page goes to the journal, and `GET /api/v1/sessions/<id>` gives 404.
 - **Offline.** Run `context.setOffline(true)`, then type. The status region shows `Recall keeps trying`. Run `context.setOffline(false)`. The status region shows `Saved at <time>` within 35 seconds.
 - **Phone.** Set the viewport to 390x844. The page has no side scroll, and each control is at least 44 px in each direction.

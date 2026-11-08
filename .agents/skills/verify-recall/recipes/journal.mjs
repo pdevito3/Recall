@@ -49,7 +49,7 @@ const focusIsVisible = (page) => page.evaluate(() => {
   return { name: focused.getAttribute('aria-label') ?? focused.textContent?.trim().slice(0, 30) ?? focused.tagName, visible: frames.some((frame) => frame && shows(frame)) }
 })
 
-export default async ({ page, context, step, capture, expect, login }) => {
+export default async ({ page, context, stack, step, capture, expect, login }) => {
   await login()
 
   await step('lane 1: the app opens on the journal, and a new entry starts at the first word and shows in the timeline after Done', async () => {
@@ -81,12 +81,21 @@ export default async ({ page, context, step, capture, expect, login }) => {
   })
   await capture('r12-autosave')
 
-  const twoTabs = await step('lane 3: two tabs edit one entry, the first save wins, the other joins the newest words once, and History keeps the save before the merge', async () => {
+  const twoTabs = await step('lane 3: a second tab reads the entry, two devices edit it, the first save wins, the other joins the newest words once, and History keeps the save before the merge', async () => {
     const id = await addEntry(page, 'Words at the start.')
-    const other = await context.newPage()
     await page.goto(`/sessions/${id}`)
-    await other.goto(`/sessions/${id}`)
     await expect(editor(page)).toContainText('Words at the start.')
+    const tab = await context.newPage()
+    await tab.goto(`/sessions/${id}`)
+    await expect(tab.getByRole('textbox', { name: 'Your words, open in another tab' })).toContainText('Words at the start.')
+    await expect(tab.getByRole('button', { name: 'Edit here', exact: true })).toBeVisible()
+    await tab.close()
+
+    // One tab of a browser edits an entry, so the other editor is a second device: a context of its own, with the same sign-in.
+    const device = await context.browser().newContext({ baseURL: stack.urls.web, ignoreHTTPSErrors: true, viewport: { width: 1280, height: 800 } })
+    await device.addCookies(await context.cookies())
+    const other = await device.newPage()
+    await other.goto(`/sessions/${id}`)
     await expect(editor(other)).toContainText('Words at the start.')
 
     await typeAtEnd(other, editor(other), ' The first tab.')
@@ -110,7 +119,7 @@ export default async ({ page, context, step, capture, expect, login }) => {
     await other.bringToFront()
     await other.reload()
     await expect(editor(other)).toHaveText('Words at the start. The first tab. The second tab.')
-    await other.close()
+    await device.close()
     await page.bringToFront()
     await page.getByRole('button', { name: 'Show history', exact: true }).click()
     const versions = page.getByRole('button', { name: /^View version from/ })
