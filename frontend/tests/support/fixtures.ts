@@ -1,8 +1,14 @@
-import { test as base, expect, type Request } from '@playwright/test'
+import { test as base, expect, type Request, type Route } from '@playwright/test'
 import { authApi } from './api/auth-api'
 import { membershipApi } from './api/membership-api'
+import { modelProvidersApi } from './api/model-providers-api'
+import { peopleApi } from './api/people-api'
+import { sessionsApi } from './api/sessions-api'
+import { fileStoreApi } from './api/file-store-api'
+import { recordingsApi } from './api/recordings-api'
+import { aSetting, settingsApi } from './api/settings-api'
 import { usersApi } from './api/users-api'
-import { isMockedPath, requestRecorder, type HttpMethod, type MockRoute, type ServedRequest } from './api/mock-route'
+import { answers, isMockedPath, requestRecorder, type HttpMethod, type MockRoute, type ServedRequest } from './api/mock-route'
 import { as, type Identity } from './auth/actors'
 
 export interface Api {
@@ -31,9 +37,21 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
   api: [
     async ({ page, context, actor, baseURL }, provide) => {
       const origin = new URL(baseURL!).origin
-      const routes: MockRoute[] = [authApi.userIs(actor), ...membershipApi.userIs(actor), ...usersApi.currentOf(actor)]
+      const routes: MockRoute[] = [
+        authApi.userIs(actor),
+        ...membershipApi.userIs(actor),
+        ...usersApi.currentOf(actor),
+        settingsApi.are(aSetting()),
+        fileStoreApi.takesWrites(),
+        recordingsApi.jobsRun(),
+        recordingsApi.noneForAnyEntry(),
+        sessionsApi.timelineIs([]),
+        peopleApi.listIs([]),
+        modelProvidersApi.activeIs(null),
+      ]
       const served = requestRecorder()
       const missed: string[] = []
+      const openCalls: Route[] = []
 
       // On the context, so that a second tab of the test gets the same answers.
       await context.route(
@@ -41,7 +59,7 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
         async (route, request) => {
           const url = new URL(request.url())
           const method = request.method().toLowerCase()
-          const newestMock = routes.findLast((r) => r.method === method && r.path === url.pathname)
+          const newestMock = routes.findLast((r) => answers(r, method, url.pathname))
 
           // Playwright fails a test on a failed assertion, never on an HTTP status. So the 501 alone
           // proves nothing, and the miss is asserted at teardown.
@@ -52,6 +70,10 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
           }
 
           served.add(newestMock.method, url, new Headers(await request.allHeaders()), postBody(request))
+          if (newestMock.neverAnswers) {
+            openCalls.push(route)
+            return
+          }
           if (newestMock.delayMs) await new Promise((resolve) => setTimeout(resolve, newestMock.delayMs))
           await route.fulfill({
             status: newestMock.status,
@@ -69,6 +91,7 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
         all: served.all,
       })
 
+      await Promise.all(openCalls.map((route) => route.abort().catch(() => undefined)))
       // Let an in-flight handler finish, so that a late call is still recorded.
       await page.unrouteAll({ behavior: 'wait' })
       await context.unrouteAll({ behavior: 'wait' })

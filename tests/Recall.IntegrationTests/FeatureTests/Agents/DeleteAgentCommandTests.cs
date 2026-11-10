@@ -45,7 +45,7 @@ public class DeleteAgentCommandTests : TestBase
 
         // Assert
         (await act.ShouldThrowAsync<ForbiddenAccessException>()).Message
-            .ShouldBe("You cannot manage agents. Ask a tenant admin for access.");
+            .ShouldBe("You cannot manage agents. Ask an admin for access.");
         (await IsDeletedFlagsOfAsync(agent.Id)).Agent.ShouldBeFalse();
     }
 

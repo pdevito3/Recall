@@ -12,14 +12,22 @@ public static class AuthPages
         "No sign-in method is configured. Set Auth__Providers__0__Issuer, Auth__Providers__0__ClientId, and Auth__Providers__0__ClientSecret, then restart. See docs/authentication.md.";
 #pragma warning restore FSTMSG001
 
-    // The colors are the theme tokens of frontend/src/index.css. A page has no script, so it follows the system theme and cannot read a choice that the app stored.
+    private const string LightTokens = "--background:oklch(1 0 0);--foreground:oklch(0.1363 0.0364 259.2010);--primary:oklch(0.5461 0.2152 262.8809);--primary-foreground:oklch(1 0 0);--border:oklch(0.9288 0.0126 255.5078)";
+
+    private const string DarkTokens = "--background:oklch(0.1363 0.0364 259.2010);--foreground:oklch(0.9842 0.0034 247.8575);--primary:oklch(0.6231 0.1880 259.8145);--primary-foreground:oklch(1 0 0);--border:oklch(0.2795 0.0368 260.0310)";
+
+    /// <summary>The app writes this cookie, because a page here has no script and cannot read the choice that the app stored. With no choice, a page follows the system theme.</summary>
+    public const string ThemeCookie = "ui-theme";
+
+    // The colors are the theme tokens of frontend/src/index.css.
     private const string Style =
-        ":root{color-scheme:light dark;--background:oklch(1 0 0);--foreground:oklch(0.1363 0.0364 259.2010);--primary:oklch(0.5461 0.2152 262.8809);--primary-foreground:oklch(1 0 0);--border:oklch(0.9288 0.0126 255.5078)}"
-        + "@media (prefers-color-scheme:dark){:root{--background:oklch(0.1363 0.0364 259.2010);--foreground:oklch(0.9842 0.0034 247.8575);--primary:oklch(0.6231 0.1880 259.8145);--border:oklch(0.2795 0.0368 260.0310)}}"
+        ":root{color-scheme:light dark;" + LightTokens + "}"
+        + "@media (prefers-color-scheme:dark){:root{" + DarkTokens + "}}"
+        + "html.light{color-scheme:light;" + LightTokens + "}html.dark{color-scheme:dark;" + DarkTokens + "}"
         + "body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--background);color:var(--foreground);font:16px/1.5 system-ui,sans-serif}"
-        + "main{box-sizing:border-box;width:100%;max-width:28rem;padding:2rem}h1{font-size:1.5rem;margin:0 0 1rem}p{margin:0 0 1rem}code{overflow-wrap:anywhere}"
+        + "main{box-sizing:border-box;width:100%;max-width:28rem;padding:2rem;overflow-wrap:anywhere}@media (max-width:24rem){main{padding:1rem}}h1{font-size:1.5rem;margin:0 0 1rem}p{margin:0 0 1rem}code{font-size:.875rem}"
         + "ul{list-style:none;margin:1rem 0 0;padding:0}li{margin:.5rem 0}li.note{margin:1rem 0}ul+p{margin-top:1rem}form{margin:1rem 0 0}"
-        + "a{color:var(--primary)}a.button,button{display:block;box-sizing:border-box;width:100%;padding:.75rem 1rem;border:0;border-radius:.5rem;background:var(--primary);color:var(--primary-foreground);font:inherit;text-align:center;text-decoration:none;cursor:pointer}";
+        + "a{color:var(--primary)}a.button,button{display:block;box-sizing:border-box;width:100%;min-height:2.75rem;padding:.75rem 1rem;border:0;border-radius:.5rem;background:var(--primary);color:var(--primary-foreground);font:inherit;text-align:center;text-decoration:none;cursor:pointer}";
 
     private static readonly string StyleHash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(Style)));
 
@@ -32,6 +40,8 @@ public static class AuthPages
 
     public const string PromptLogin = "login";
 
+    public const string AnotherPersonMessage = "Another person signed in on this browser, so the page that you had open closed. Any words that this browser could not send wait on this device. They go to your journal when you sign in here again.";
+
     public sealed record ChooserMode(string Id, string DisplayName, LoginModeState State);
 
     public sealed record OpenProviderSession(string DisplayName, LoginModeState State, string? LogoutUrl);
@@ -43,10 +53,12 @@ public static class AuthPages
             + $"<p>Register this callback URL at the provider:</p><p><code>{BreakableUrl(callbackUrl)}</code></p>"
             + TryAgainTo(returnPath));
 
-    public static IResult Chooser(IReadOnlyList<ChooserMode> modes, string returnPath, bool signedOut, string? message, OpenProviderSession? providerSession)
+    public static IResult Chooser(IReadOnlyList<ChooserMode> modes, string returnPath, bool signedOut, string? message, OpenProviderSession? providerSession, bool asksTheProviderAgain = false)
     {
+        // The session at the provider belongs to the person who signed in last, and a plain start would sign that person in again.
+        var promptQuery = asksTheProviderAgain ? "&prompt=" + PromptLogin : "";
         var items = modes.Select(mode => mode.State == LoginModeState.Ready
-            ? $"<li><a class=\"button\" href=\"{E(StartUrl(mode.Id, returnPath))}\">Sign in with {E(mode.DisplayName)}</a></li>"
+            ? $"<li><a class=\"button\" href=\"{E(StartUrl(mode.Id, returnPath) + promptQuery)}\">Sign in with {E(mode.DisplayName)}</a></li>"
             : $"<li class=\"note\">{E(NotAvailable(mode.DisplayName))}</li>");
         var note = message is null ? "" : $"<p>{E(message)}</p>";
         var sessionNote = providerSession is null ? "" : OpenSessionNote(providerSession);
@@ -163,9 +175,9 @@ public static class AuthPages
 
     private static PageResult Page(int status, string heading, string body, string? policy = null)
         => new(status, policy ?? StrictPolicy,
-            $"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{E(heading.Contains("Recall", StringComparison.Ordinal) ? heading : $"{heading} - Recall")}</title><style>{Style}</style></head><body><main><h1>{E(heading)}</h1>{body}</main></body></html>");
+            themeClass => $"<!doctype html><html lang=\"en\"{themeClass}><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{E(heading.Contains("Recall", StringComparison.Ordinal) ? heading : $"{heading} - Recall")}</title><style>{Style}</style></head><body><main><h1>{E(heading)}</h1>{body}</main></body></html>");
 
-    private sealed class PageResult(int status, string policy, string html) : IResult
+    private sealed class PageResult(int status, string policy, Func<string, string> html) : IResult
     {
         public Task ExecuteAsync(HttpContext httpContext)
         {
@@ -175,7 +187,13 @@ public static class AuthPages
             response.Headers.ContentSecurityPolicy = policy;
             response.Headers.XContentTypeOptions = "nosniff";
             response.Headers["Referrer-Policy"] = "no-referrer";
-            return response.WriteAsync(html, httpContext.RequestAborted);
+            var themeClass = httpContext.Request.Cookies[ThemeCookie] switch
+            {
+                "light" => " class=\"light\"",
+                "dark" => " class=\"dark\"",
+                _ => "",
+            };
+            return response.WriteAsync(html(themeClass), httpContext.RequestAborted);
         }
     }
 }

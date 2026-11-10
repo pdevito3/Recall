@@ -10,6 +10,8 @@ import { validationProblemDetailsSchema } from '../../models/zod/validation-prob
 
 export const startCleanupPathIdSchema = z.string()
 
+export const startCleanupHeaderXRecallUserSchema = z.string().optional().describe('The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.')
+
 export const startCleanupStatus202Schema = sessionDtoSchema
 
 export const startCleanupStatus401Schema = z.unknown()

@@ -20,6 +20,7 @@ public static class EntrypointRegistration
     {
         builder.Services.AddRecallAuthentication(builder.Configuration, builder.Environment);
         builder.Services.AddHttpContextAccessor();
+        builder.Services.AddSpaCompression();
         builder.Services.AddScoped<ICurrentPrincipalAccessor, HttpContextPrincipalAccessor>();
 
         // HTTP
@@ -77,6 +78,7 @@ public static class EntrypointRegistration
         app.UseApiNotFound();
         app.UseRateLimiter();
         app.UseAuthentication();
+        app.UsePageUserCheck();
         app.UseAuthorization();
     }
 

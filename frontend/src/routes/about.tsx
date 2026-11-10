@@ -1,5 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+
+import { Page } from '@/components/page'
+import { PageHeading } from '@/components/page-heading'
 import { SupportBundleSection } from '@/domain/support/components/support-bundle-section'
 
 export const Route = createFileRoute('/about')({
@@ -9,45 +11,18 @@ export const Route = createFileRoute('/about')({
 
 function About() {
   return (
-    <div className="bg-background">
-      <div className="max-w-2xl mx-auto px-4 py-8">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-3xl">
-              <h1>About</h1>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-muted-foreground leading-relaxed">
-              This app runs on .NET Aspire and React.
-            </p>
-            <p className="text-muted-foreground leading-relaxed">
-              The stack includes:
-            </p>
-            <ul className="list-disc list-inside text-muted-foreground space-y-2">
-              <li>
-                <strong className="text-foreground">.NET Aspire</strong> - Cloud-native orchestration
-              </li>
-              <li>
-                <strong className="text-foreground">React 19</strong> - UI framework
-              </li>
-              <li>
-                <strong className="text-foreground">TanStack Router</strong> - Type-safe routing
-              </li>
-              <li>
-                <strong className="text-foreground">TanStack Query</strong> - Data fetching
-              </li>
-              <li>
-                <strong className="text-foreground">Tailwind CSS</strong> - Styling
-              </li>
-              <li>
-                <strong className="text-foreground">React Aria Components + shadcn</strong> - Component library, animated with Animate UI
-              </li>
-            </ul>
-            <SupportBundleSection />
-          </CardContent>
-        </Card>
+    <Page>
+      <PageHeading>About</PageHeading>
+      <div className="flex max-w-prose flex-col gap-4 leading-relaxed text-muted-foreground">
+        <p>Recall is your private journal. Open it and write. Each entry belongs to the day and the time you started it.</p>
+        <p>Three promises hold for each entry:</p>
+        <ul className="flex list-disc flex-col gap-2 pl-5">
+          <li>Your words stay as you wrote them. A cleaned version is a separate copy, and AI never changes your words.</li>
+          <li>Each save keeps a version in the history of the entry, so you can read or restore an earlier version.</li>
+          <li>The journal runs on a server that you control, and the data stays there. If you connect a cloud provider, the words or the audio that it works on go to that provider.</li>
+        </ul>
+        <SupportBundleSection />
       </div>
-    </div>
+    </Page>
   )
 }

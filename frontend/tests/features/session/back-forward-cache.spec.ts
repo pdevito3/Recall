@@ -26,8 +26,9 @@ test.describe('a page that Back restores from the back-forward cache', () => {
     const checksBefore = api.all('get', authPaths.me).length
     await session.goBackToTheCachedPage()
 
-    await expect(session.at.signedInAs).toBeVisible()
+    await expect(session.at.navigation).toBeVisible()
     await expect.poll(() => session.screenShowsOneColor()).toBe(false)
+    await session.at.userMenu.click()
     await session.at.logout.click({ trial: true })
     expect(await session.isStillTheFirstLoad()).toBe(true)
     expect(api.all('get', authPaths.me)).toHaveLength(checksBefore + 1)
@@ -38,7 +39,7 @@ test.describe('a page that Back restores from the back-forward cache', () => {
     await session.leavePrivatePageForAnotherDocument()
 
     const nextPerson = { sub: '2', name: 'Next Person', sid: 'session-of-next-person', client_kind: 'web' }
-    api.mock({ method: 'get', path: authPaths.me, status: 200, body: nextPerson, delayMs: 500 })
+    api.mock(authApi.loginOpens(), { method: 'get', path: authPaths.me, status: 200, body: nextPerson, delayMs: 500 })
     await session.goBackToTheCachedPage()
 
     await expect.poll(() => session.isStillTheFirstLoad()).toBe(false)
@@ -52,15 +53,18 @@ test.describe('a page that Back restores from the back-forward cache', () => {
     await session.goBackToTheCachedPage()
 
     await expect(session.at.checkFailed).toBeVisible({ timeout: 10000 })
-    await expect(session.at.signedInAs).toHaveCount(0)
+    await expect(session.at.navigation).toHaveCount(0)
   })
 
-  test('loads again when the check does not answer in time, so a person does not wait on an empty page', async ({ page }) => {
+  test('loads again when the check does not answer in time, so a person does not wait on an empty page', async ({ page, api, actor }) => {
     const session = sessionPage(page)
     await session.leavePrivatePageForAnotherDocument()
+    const checksBefore = api.all('get', authPaths.me).length
 
-    await page.route(`**${authPaths.me}`, () => {}, { times: 1 })
+    api.mock({ ...authApi.userIs(actor), neverAnswers: true })
     await session.goBackToTheCachedPage()
+    await expect.poll(() => api.all('get', authPaths.me).length).toBe(checksBefore + 1)
+    api.mock(authApi.userIs(actor))
 
     await expect.poll(() => session.isStillTheFirstLoad(), { timeout: 15000 }).toBe(false)
   })

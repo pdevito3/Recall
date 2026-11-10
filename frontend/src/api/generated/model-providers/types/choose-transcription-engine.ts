@@ -8,6 +8,14 @@ import type { TranscriptionEngineChoiceDto } from '../../models/types/transcript
 import type { TranscriptionEngineDto } from '../../models/types/transcription-engine-dto'
 import type { ValidationProblemDetails } from '../../models/types/validation-problem-details'
 
+export type ChooseTranscriptionEngineHeaders = {
+    /**
+     * @description The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.
+     * @type string | undefined
+    */
+    "X-Recall-User"?: string;
+};
+
 /**
  * @description Where the audio of the tenant becomes text, and why.
  * @type object
@@ -32,7 +40,7 @@ export type ChooseTranscriptionEngineOptions = {
     body: ChooseTranscriptionEngineBody;
     path?: never;
     query?: never;
-    headers?: never;
+    headers?: ChooseTranscriptionEngineHeaders;
 };
 
 export type ChooseTranscriptionEngineResponses = {

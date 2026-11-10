@@ -8,6 +8,14 @@ import type { ModelProviderForCreationDto } from '../../models/types/model-provi
 import type { ProblemDetails } from '../../models/types/problem-details'
 import type { ValidationProblemDetails } from '../../models/types/validation-problem-details'
 
+export type AddModelProviderHeaders = {
+    /**
+     * @description The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.
+     * @type string | undefined
+    */
+    "X-Recall-User"?: string;
+};
+
 /**
  * @description A model provider. No answer holds the key.
  * @type object
@@ -30,7 +38,7 @@ export type AddModelProviderOptions = {
     body: AddModelProviderBody;
     path?: never;
     query?: never;
-    headers?: never;
+    headers?: AddModelProviderHeaders;
 };
 
 export type AddModelProviderResponses = {

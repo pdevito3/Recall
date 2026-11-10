@@ -1,0 +1,126 @@
+import { useQueryClient } from '@tanstack/react-query'
+import { useMemo, useSyncExternalStore } from 'react'
+
+import { QueryError } from '@/components/query-error'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Combobox, ComboboxContent, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox'
+import { Label } from '@/components/ui/label'
+import { Skeleton } from '@/components/ui/skeleton'
+import { SaveStatusLine } from '@/domain/sessions/components/save-status'
+import { StaleChangePrompts } from '@/domain/sessions/components/stale-change-prompts'
+import { journalZoneOf, settingSaver, useUserSetting, type SettingChange } from '@/domain/settings/apis/user-setting'
+import { useCurrentUser } from '@/domain/users/apis/get-current-user'
+import { parseTimeZone, timeZoneLabel, type TimeZone } from '@/lib/zoned-time'
+
+interface ZoneOption {
+  id: string
+  label: string
+}
+
+const zoneOption = (id: string): ZoneOption => ({ id, label: `${id.replaceAll('/', ' / ')} (${timeZoneLabel(id as TimeZone)})` })
+
+let listedZones: ZoneOption[] | undefined
+
+// The list of the browser leaves out UTC and the new name of a renamed zone, such as Asia/Kolkata. A label costs about 0.5 ms.
+function zoneOptions(savedZone: TimeZone): ZoneOption[] {
+  listedZones ??= [...new Set(['UTC', ...Intl.supportedValuesOf('timeZone')])].sort().map(zoneOption)
+  if (listedZones.some(({ id }) => id === savedZone)) return listedZones
+  return [...listedZones, zoneOption(savedZone)].sort((a, b) => (a.id < b.id ? -1 : 1))
+}
+
+const settingLabels: Record<keyof SettingChange, string> = {
+  timeZone: 'Time zone',
+  locationCaptureEnabled: 'Save my location with each new entry',
+  requirePeopleProposalApproval: 'Ask me before AI adds a person to an entry',
+}
+
+export function SettingsForm() {
+  const setting = useUserSetting()
+  const queryClient = useQueryClient()
+  const saver = settingSaver(queryClient)
+  const status = useSyncExternalStore(saver.subscribe, saver.getStatus)
+  const asks = useSyncExternalStore(saver.subscribe, saver.asks)
+  const zone = journalZoneOf(setting.data)
+  const zones = useMemo(() => zoneOptions(zone), [zone])
+
+  if (setting.isPending) {
+    return <p role="status" aria-label="Loading your settings" className="text-muted-foreground">Loading your settings</p>
+  }
+  if (setting.isError) {
+    return <QueryError title="Your settings did not load." error={setting.error} onRetry={() => setting.refetch()} />
+  }
+
+  const values: SettingChange = { ...setting.data, ...saver.pendingFields() }
+  const change = (patch: Partial<SettingChange>) => saver.edit(patch)
+
+  return (
+    <div className="flex flex-col gap-8">
+      <StaleChangePrompts asks={asks} labelOf={(field) => settingLabels[field]} onAnswer={(ask, usesYours) => saver.answerAsk(ask, usesYours)} />
+      <section className="flex flex-col gap-2" aria-labelledby="settings-zone">
+        <h2 id="settings-zone" className="text-lg font-semibold">Time zone</h2>
+        <p className="text-sm text-muted-foreground">Your time zone decides the day that each entry belongs to.</p>
+        {setting.data.timeZone && !setting.data.timeZoneIsKnown && (
+          <p role="alert" className="text-sm text-destructive wrap-anywhere">
+            This server does not know your saved time zone, so your days use UTC. Pick a time zone to fix your days.
+          </p>
+        )}
+        <Combobox
+          aria-label="Time zone"
+          items={zones}
+          selectedKey={values.timeZone ?? null}
+          onSelectionChange={(key) => {
+            if (typeof key === 'string') change({ timeZone: parseTimeZone(key) })
+          }}
+        >
+          <Label className="sr-only">Time zone</Label>
+          <ComboboxInput />
+          <ComboboxContent>
+            <ComboboxList>
+              {(item: ZoneOption) => <ComboboxItem id={item.id} textValue={item.label}>{item.label}</ComboboxItem>}
+            </ComboboxList>
+          </ComboboxContent>
+        </Combobox>
+      </section>
+      <section className="flex flex-col gap-3" aria-labelledby="settings-entries">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+          <h2 id="settings-entries" className="text-lg font-semibold">Entries</h2>
+          {(asks.length === 0 || status.kind !== 'saved') && <SaveStatusLine status={status} zone={zone} />}
+        </div>
+        <Checkbox
+          className="max-md:min-h-11"
+          isSelected={values.locationCaptureEnabled}
+          onChange={(locationCaptureEnabled) => change({ locationCaptureEnabled })}
+        >
+          Save my location with each new entry
+        </Checkbox>
+        <Checkbox
+          className="max-md:min-h-11"
+          isSelected={values.requirePeopleProposalApproval}
+          onChange={(requirePeopleProposalApproval) => change({ requirePeopleProposalApproval })}
+        >
+          Ask me before AI adds a person to an entry
+        </Checkbox>
+      </section>
+      <section className="flex flex-col gap-2" aria-labelledby="settings-account">
+        <h2 id="settings-account" className="text-lg font-semibold">Account</h2>
+        <SignedInUser />
+      </section>
+    </div>
+  )
+}
+
+function SignedInUser() {
+  const { data: user, isLoading, isError } = useCurrentUser()
+
+  if (isLoading) {
+    return <Skeleton className="h-5 w-48" aria-label="Loading your user" />
+  }
+  if (isError || !user) {
+    return <p className="text-sm text-destructive">The Server could not load your user.</p>
+  }
+  return (
+    <p className="min-w-0 text-sm wrap-anywhere">
+      Signed in as <span className="font-medium">{user.name ?? user.identifier}</span>
+    </p>
+  )
+}

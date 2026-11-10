@@ -9,6 +9,8 @@ import { transcriptionEngineChoiceDtoSchema } from '../../models/zod/transcripti
 import { transcriptionEngineDtoSchema } from '../../models/zod/transcription-engine-dto'
 import { validationProblemDetailsSchema } from '../../models/zod/validation-problem-details'
 
+export const chooseTranscriptionEngineHeaderXRecallUserSchema = z.string().optional().describe('The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.')
+
 export const chooseTranscriptionEngineStatus200Schema = transcriptionEngineDtoSchema.describe('Where the audio of the tenant becomes text, and why.')
 
 export const chooseTranscriptionEngineStatus400Schema = validationProblemDetailsSchema

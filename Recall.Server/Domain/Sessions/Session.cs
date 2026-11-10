@@ -10,6 +10,7 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
     public const string IdPrefix = "ses";
     public const int ClientSessionIdMaxLength = 100;
     public const int DraftMaxLength = 1_000_000;
+    public const int DraftMaxStoredLength = 4_000_000;
     public const int PreviewMaxLength = 200;
     public const int SynopsisMaxLength = 10_000;
     public const int MetadataValueMaxLength = 100;

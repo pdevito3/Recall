@@ -1,28 +1,27 @@
 // Feature: navigation-and-theme. Sidebar links, breadcrumb, collapse, theme. See features/navigation-and-theme.md.
 export default async ({ page, step, capture, settle, expect, login }) => {
   const breadcrumb = page.getByRole('navigation', { name: 'breadcrumb', exact: true })
-  // The layout has a Toggle Sidebar button in the header and a rail with the same name. Use the header one.
-  const toggleSidebar = page.getByRole('main').getByRole('button', { name: 'Toggle Sidebar' }).first()
+  const toggleSidebar = page.getByRole('main').getByRole('button', { name: 'Toggle Sidebar' })
   const announcement = page.getByTestId('page-announcement')
 
   await step('log in', () => login())
 
-  await step('a link in the page: Go to the home page on a missing page gives the focus to the h1 of Home', async () => {
+  await step('a link in the page: Go to the home page on a missing page gives the focus to the h1 of the journal', async () => {
     await page.goto('/no-such-page')
     await page.getByRole('main').getByRole('link', { name: 'Go to the home page' }).click()
     await expect(page).toHaveURL(/\/$/)
     await expect(page.getByRole('heading', { level: 1 })).toBeFocused()
   })
 
-  await step('open / : breadcrumb is Home', async () => {
+  await step('open / : breadcrumb is Journal', async () => {
     await page.goto('/')
-    await expect(breadcrumb).toHaveText('Home')
+    await expect(breadcrumb).toHaveText('Journal')
   })
 
-  await step('open / : only the Home item of the sidebar is active', async () => {
+  await step('open / : only the Journal item of the sidebar is active', async () => {
     const active = page.locator('[data-slot="sidebar"] [data-active]')
     await expect(active).toHaveCount(1)
-    await expect(active).toHaveAccessibleName('Home')
+    await expect(active).toHaveAccessibleName('Journal')
     // A false flag must not render as an attribute, because the data-active style matches any value.
     await expect(page.locator('[data-active="false"]')).toHaveCount(0)
   })
@@ -72,7 +71,7 @@ export default async ({ page, step, capture, settle, expect, login }) => {
   const mobileSidebar = page.locator('[data-slot="sidebar"][data-mobile="true"]')
   await step('mobile: the header toggle opens the sidebar sheet, 18rem wide, with no close button', async () => {
     await page.goto('/')
-    await expect(breadcrumb).toHaveText('Home')
+    await expect(breadcrumb).toHaveText('Journal')
     await page.setViewportSize({ width: 390, height: 844 })
     await expect(mobileSidebar).toHaveCount(0)
     await toggleSidebar.click()

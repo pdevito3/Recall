@@ -10,6 +10,8 @@ import { validationProblemDetailsSchema } from '../../models/zod/validation-prob
 
 export const streamCleanupPathIdSchema = z.string()
 
+export const streamCleanupHeaderXRecallUserSchema = z.string().optional().describe('The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.')
+
 export const streamCleanupStatus200Schema = cleanupEventDtoSchema.describe('One event of `POST /sessions/{id}/cleanup/stream`. An event holds no words of the journal and no words of a model provider.')
 
 export const streamCleanupStatus401Schema = z.unknown()

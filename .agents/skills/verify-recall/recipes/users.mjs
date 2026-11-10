@@ -16,9 +16,10 @@ export default async ({ page, step, capture, settle, expect, login }) => {
 
   const colleague = await step('add a colleague to the tenant through the API', async () => {
     const res = await page.evaluate(async (s) => {
+      const me = await (await fetch('/auth/me', { headers: { 'X-CSRF': '1' } })).json()
       const r = await fetch('/api/v1/users', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF': '1' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRF': '1', 'X-Recall-User': me.sub },
         body: JSON.stringify({
           firstName: 'Casey',
           lastName: `Colleague ${s}`,

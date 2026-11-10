@@ -31,7 +31,7 @@ async function findUser(identifier: string, signal: AbortSignal): Promise<UserDt
 const isRefusal = (error: unknown): error is ProblemDetailsError =>
   isProblemDetailsError(error) && (error.status ?? 500) < 500
 
-const CHECK_FAILED = 'We could not check whether you are a member of a tenant.'
+const CHECK_FAILED = 'We could not check your account.'
 
 export function useMembership(): Membership {
   const session = useQuery(authUserQuery)

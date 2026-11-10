@@ -115,7 +115,10 @@ public static partial class UserMapper
 {
     /// <summary>The DTO with the actions that <paramref name="caller"/> can send for the user.</summary>
     public static UserDto ToUserDto(this User user, Caller caller)
-        => user.ToUserDtoWithoutActions() with { AllowedActions = NamesOf(user.AllowedActions(caller)) };
+    {
+        var dto = user.ToUserDtoWithoutActions();
+        return dto with { Permissions = InOneOrder(dto.Permissions), AllowedActions = NamesOf(user.AllowedActions(caller)) };
+    }
 
     // ...
     // It takes the configuration of ToUserDtoWithoutActions. The list handler adds the actions after the page loads.

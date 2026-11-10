@@ -64,7 +64,7 @@ public class AgentCallerTests : TestBase
 
         // Assert
         (await act.ShouldThrowAsync<ForbiddenAccessException>()).Message
-            .ShouldBe("You cannot manage the tenant. Ask a tenant admin for access.");
+            .ShouldBe("You cannot manage the tenant. Ask an admin for access.");
     }
 
     [Test]

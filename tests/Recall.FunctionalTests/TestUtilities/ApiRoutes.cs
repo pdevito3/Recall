@@ -101,6 +101,11 @@ public static class ApiRoutes
         public static string Root => $"{Base}/me/settings";
     }
 
+    public static class FileStore
+    {
+        public static string Status => $"{Base}/file-store/status";
+    }
+
     public static class Agents
     {
         public static string GetList => $"{Base}/agents";

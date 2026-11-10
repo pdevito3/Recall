@@ -12,6 +12,14 @@ export type GenerateSummaryPath = {
     date: string;
 };
 
+export type GenerateSummaryHeaders = {
+    /**
+     * @description The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.
+     * @type string | undefined
+    */
+    "X-Recall-User"?: string;
+};
+
 export type GenerateSummaryStatus200 = SummaryDto;
 
 export type GenerateSummaryStatus401 = unknown;
@@ -26,7 +34,7 @@ export type GenerateSummaryOptions = {
     body?: never;
     path: GenerateSummaryPath;
     query?: never;
-    headers?: never;
+    headers?: GenerateSummaryHeaders;
 };
 
 export type GenerateSummaryResponses = {

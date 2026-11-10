@@ -1,8 +1,11 @@
 import type { Key } from 'react-aria-components'
 import { Tab, TabList, TabPanel, Tabs } from 'react-aria-components'
 
+import { Page } from '@/components/page'
 import { PageHeading } from '@/components/page-heading'
-import { browserTimeZone, todayAt } from '@/lib/zoned-time'
+import { QueryError } from '@/components/query-error'
+import { journalZoneOf, useUserSetting } from '@/domain/settings/apis/user-setting'
+import { todayAt } from '@/lib/zoned-time'
 
 import type { SummaryPeriod } from '../types'
 import { SUMMARY_PERIODS } from './summary-words'
@@ -16,15 +19,17 @@ interface SummariesPageProps {
 }
 
 export function SummariesPage({ period, date, onPeriodChange }: SummariesPageProps) {
-  // A Summary belongs to the person, not to a place, so today is the date of the browser.
-  const shownDate = date ?? todayAt(browserTimeZone(), new Date()).toString()
+  const setting = useUserSetting()
+  // The Server puts each Session in a day of the time zone of Settings, so today is the date in that zone, as in the Journal.
+  // An open of the page starts a run, so the page waits for the zone and does not run a Summary of another day first.
+  const shownDate = date ?? (setting.data ? todayAt(journalZoneOf(setting.data), new Date()).toString() : undefined)
   const handleSelectionChange = (key: Key) => {
     const picked = SUMMARY_PERIODS.find((each) => each === key)
     if (picked) onPeriodChange(picked)
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 max-sm:[&_[data-slot=button]]:h-11 max-sm:[&_[data-slot=button]]:min-w-11">
+    <Page>
       <PageHeading>Summaries</PageHeading>
       {/* Manual activation: an arrow key moves the focus, and only Enter or Space opens a period and starts its run. */}
       <Tabs selectedKey={period} onSelectionChange={handleSelectionChange} keyboardActivation="manual" className="flex flex-col gap-6">
@@ -41,10 +46,16 @@ export function SummariesPage({ period, date, onPeriodChange }: SummariesPagePro
         </TabList>
         {SUMMARY_PERIODS.map((each) => (
           <TabPanel key={each} id={each} className="rounded-lg outline-none data-focus-visible:ring-3 data-focus-visible:ring-ring/50">
-            <SummaryPanel period={each} date={shownDate} />
+            {shownDate ? (
+              <SummaryPanel period={each} date={shownDate} />
+            ) : setting.isError ? (
+              <QueryError title="Your time zone did not load, so the page cannot tell which day is today." error={setting.error} onRetry={() => void setting.refetch()} />
+            ) : (
+              <p role="status" className="text-muted-foreground">Loading your time zone</p>
+            )}
           </TabPanel>
         ))}
       </Tabs>
-    </div>
+    </Page>
   )
 }

@@ -56,6 +56,8 @@ export function ThemeProvider({
     theme,
     setTheme: (theme: Theme) => {
       localStorage.setItem(storageKey, theme)
+      // The sign-in pages run no script, so the Server reads the choice here.
+      document.cookie = `ui-theme=${theme}; Path=/; Max-Age=31536000; SameSite=Lax`
       setTheme(theme)
     },
   }

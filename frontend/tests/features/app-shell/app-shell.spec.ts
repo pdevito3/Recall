@@ -1,7 +1,10 @@
+import { fileStoreApi } from '@tests/support/api/file-store-api'
+import { summariesApi, transcriptionEngineApi } from '@tests/support/api/summaries-api'
+import { usersApi } from '@tests/support/api/users-api'
 import { expect, test } from '@tests/support/fixtures'
 import { useDefaultFontSize } from '@tests/support/screen'
 import { homePage } from '../home/home.tasks'
-import { appShellPage } from './app-shell.tasks'
+import { appShellPage, sheetChunk } from './app-shell.tasks'
 
 for (const viewport of [
   { width: 1280, height: 800 },
@@ -22,6 +25,31 @@ for (const viewport of [
       await homePage(page).open()
 
       expect(await appShellPage(page).pageScrollRange()).toBe(0)
+    })
+  })
+}
+
+for (const width of [1280, 390]) {
+  test.describe(`the frame of each page at ${width} px`, () => {
+    test.use({ viewport: { width, height: 800 } })
+
+    test('the heading of Summaries and of Transcription starts where the heading of About starts', async ({ page, api }) => {
+      api.mock(summariesApi.dayOpens('2026-01-15'), transcriptionEngineApi.isLocal())
+      const shell = appShellPage(page)
+
+      await shell.openAbout()
+      const aboutX = (await shell.at.aboutHeading.boundingBox())?.x
+      await page.goto('/summaries?period=Day&date=2026-01-15')
+      await expect(shell.at.summariesHeading).toBeVisible()
+      const summariesX = (await shell.at.summariesHeading.boundingBox())?.x
+      const summariesSideScroll = await shell.pageSideScrollRange()
+      await page.goto('/transcription-engine')
+      await expect(shell.at.transcriptionHeading).toBeVisible()
+
+      expect(summariesX).toBe(aboutX)
+      expect(summariesSideScroll).toBe(0)
+      expect((await shell.at.transcriptionHeading.boundingBox())?.x).toBe(aboutX)
+      expect(await shell.pageSideScrollRange()).toBe(0)
     })
   })
 }
@@ -55,6 +83,25 @@ test.describe('the layout header', () => {
   })
 })
 
+test.describe('the file store notice', () => {
+  test('stays away while the file store takes writes', async ({ page }) => {
+    const shell = appShellPage(page)
+
+    await shell.openAbout()
+
+    await expect(shell.at.fileStoreNotice).toBeHidden()
+  })
+
+  test('tells the person what happened and what to do when the file store refuses a write', async ({ page, api }) => {
+    const shell = appShellPage(page)
+    api.mock(fileStoreApi.refusesWrites())
+
+    await shell.openAbout()
+
+    await expect(shell.at.fileStoreNotice).toContainText('Check that the computer that runs Recall has free disk space')
+  })
+})
+
 test.describe('the landmarks of the layout', () => {
   test('the router devtools add no contentinfo landmark', async ({ page }) => {
     const shell = appShellPage(page)
@@ -70,19 +117,19 @@ test.describe('the landmarks of the layout', () => {
 
     await shell.openAbout()
 
-    await expect(shell.at.homeNavigationLink).toBeVisible()
+    await expect(shell.at.journalNavigationLink).toBeVisible()
     await expect(shell.at.aboutNavigationLink).toBeVisible()
   })
 })
 
 test.describe('the current item of the sidebar', () => {
-  test('on the about page, About is the page and Home is not current', async ({ page }) => {
+  test('on the about page, About is the page and Journal is not current', async ({ page }) => {
     const shell = appShellPage(page)
 
     await shell.openAbout()
 
     await expect(shell.at.aboutNavigationLink).toHaveAttribute('aria-current', 'page')
-    await expect(shell.at.homeNavigationLink).not.toHaveAttribute('aria-current')
+    await expect(shell.at.journalNavigationLink).not.toHaveAttribute('aria-current')
     await expect(shell.at.currentNavigationItems).toHaveCount(1)
   })
 
@@ -128,7 +175,7 @@ test.describe('an unknown address', () => {
     await shell.goHome()
 
     await expect(homePage(page).at.heading).toBeVisible()
-    await expect(shell.at.currentPage).toHaveText('Home')
+    await expect(shell.at.currentPage).toHaveText('Journal')
   })
 })
 
@@ -233,5 +280,85 @@ test.describe('the mobile sidebar on a 320 px phone with a 24 px default font', 
         lineBoxOverflowOfTheFontPx,
       ),
     ).toBe(true)
+  })
+})
+
+for (const viewport of [
+  { width: 1280, height: 800 },
+  { width: 390, height: 844 },
+]) {
+  test.describe(`the content of each page at ${viewport.width} px`, () => {
+    test.use({ viewport })
+
+    test('starts at one left edge', async ({ page, api }) => {
+      api.mock(usersApi.listReturns([]))
+      const shell = appShellPage(page)
+
+      const edges = []
+      for (const address of ['/', '/people', '/settings', '/users', '/about']) {
+        edges.push(await shell.leftEdgeOfThePageHeadingAt(address))
+      }
+
+      expect(new Set(edges).size).toBe(1)
+    })
+  })
+}
+
+test.describe('the accessibility tree of the layout', () => {
+  test('names one sidebar toggle', async ({ page }) => {
+    const shell = appShellPage(page)
+
+    await shell.openAbout()
+
+    expect(await shell.at.sidebarToggles.count()).toBe(1)
+  })
+
+  test('keeps the rail of the sidebar, a mouse shortcut, out of the tree', async ({ page }) => {
+    const shell = appShellPage(page)
+
+    await shell.openAbout()
+
+    await expect(shell.at.sidebarRail).toHaveAttribute('aria-hidden', 'true')
+  })
+})
+
+test('a window that becomes narrow with no network still opens the sidebar', async ({ page }) => {
+  const shell = appShellPage(page)
+
+  await shell.openAboutAndWaitForSheetChunk()
+  await page.context().setOffline(true)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await shell.openMobileSidebar()
+
+  await expect(shell.at.journalNavigationLink).toBeVisible()
+})
+
+test('a page that the person did not open yet still opens with no network', async ({ page }) => {
+  const shell = appShellPage(page)
+
+  await shell.openAboutAndWaitForTheCodeOfEachPage()
+  await page.context().setOffline(true)
+
+  await shell.at.peopleNavigationLink.click()
+  await expect(shell.at.pageHeading).toHaveText('People')
+  await shell.at.settingsNavigationLink.click()
+  await expect(shell.at.pageHeading).toHaveText('Settings')
+  await expect(shell.at.pageErrorHeading).toHaveCount(0)
+})
+
+test.describe('a part of the app that cannot load', () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test('offers to load the page again, and that works after the network returns', async ({ page }) => {
+    const shell = appShellPage(page)
+    await page.route(sheetChunk, (route) => route.abort())
+
+    await page.goto('/about')
+    await expect(shell.at.pageErrorHeading).toBeVisible()
+
+    await page.unroute(sheetChunk)
+    await shell.at.loadPageAgainButton.click()
+
+    await expect(shell.at.aboutText).toBeVisible()
   })
 })

@@ -1,14 +1,20 @@
 import { useMutation, type QueryClient } from '@tanstack/react-query'
 
-import { Notification } from '@/components/notification'
+import { Notification, toastQueue } from '@/components/notification'
 import { apiClient } from '@/lib/api-client'
+import { openChannel } from '@/lib/browser-channel'
+import { checkLastPersonOfThisBrowser, noteSignInOfAnotherTab, sessionChannelName } from '@/lib/page-user'
 import { authUserQuery, getUser } from './get-user'
+
+import { settleUnsentWords, StayedSignedIn, stopSaversBeforeLeaving } from './unsent-words-at-logout'
 
 const serverMaxReturnPathLength = 2048
 
 const signedOutPage = '/auth/login?signedOut=1'
 
 const restoredPageCheckLimitMs = 3000
+
+const signOutWorkMs = 60_000
 
 type LogoutAnswer = { provider_logout_url: string } | undefined
 
@@ -18,7 +24,7 @@ let afterSignOut: string | undefined
 /** A call that answers 401 while the logout runs also starts a login, and that navigation would lose the answer of the logout. */
 let logoutInFlight: Promise<unknown> | undefined
 
-let otherTabs: BroadcastChannel | undefined
+let otherTabs: BroadcastChannel | null = null
 
 let sessionOfHiddenPage: string | undefined
 
@@ -44,17 +50,32 @@ export function login(returnUrl: string = '/'): void {
 }
 
 export async function logout(): Promise<void> {
-  const answer = apiClient.post<LogoutAnswer>('/auth/logout', undefined, { suppressErrorToast: true })
-  const running = Promise.allSettled([logoutInFlight, answer])
+  const signingOut = settleUnsentWordsAndSignOut()
+  const running = Promise.allSettled([logoutInFlight, signingOut])
   logoutInFlight = running
   try {
-    const { data } = await answer
+    await signingOut
+  } finally {
+    if (logoutInFlight === running) logoutInFlight = undefined
+  }
+}
+
+const showSigningOut = () => Notification.info('Signing out', { description: 'Recall tries to send your last words first. This can take a few seconds.', duration: signOutWorkMs })
+
+async function settleUnsentWordsAndSignOut() {
+  let working = showSigningOut()
+  const stopShowingWork = () => toastQueue.close(working)
+  try {
+    const leaveNoSign = await settleUnsentWords(stopShowingWork)
+    working = showSigningOut()
+    const { data } = await apiClient.post<LogoutAnswer>('/auth/logout', undefined, { suppressErrorToast: true })
+    leaveNoSign()
     afterSignOut = data?.provider_logout_url ?? afterSignOut ?? signedOutPage
     otherTabs?.postMessage('signed-out')
     hidePage()
     window.location.replace(afterSignOut)
   } finally {
-    if (logoutInFlight === running) logoutInFlight = undefined
+    stopShowingWork()
   }
 }
 
@@ -84,6 +105,7 @@ function showPage() {
  */
 function leaveAsSignedOut(queryClient: QueryClient) {
   hidePage()
+  stopSaversBeforeLeaving()
   queryClient.clear()
   afterSignOut ??= signedOutPage
   window.location.replace(afterSignOut)
@@ -111,8 +133,16 @@ async function checkSessionOfRestoredPage(queryClient: QueryClient) {
  * guard for that cache acts in a browser that still restores, as a WKWebView did. docs/authentication.md has the runs.
  */
 export function guardPageAgainstEndedSession(queryClient: QueryClient) {
-  otherTabs = new BroadcastChannel('recall.session')
-  otherTabs.onmessage = () => leaveAsSignedOut(queryClient)
+  otherTabs = openChannel(sessionChannelName)
+  if (otherTabs) {
+    otherTabs.onmessage = ({ data }: MessageEvent<'signed-out' | { signedInAs: string }>) => {
+      if (data === 'signed-out') leaveAsSignedOut(queryClient)
+      else noteSignInOfAnotherTab(data.signedInAs)
+    }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkLastPersonOfThisBrowser()
+  })
   window.addEventListener('pagehide', (event) => {
     if (!event.persisted) return
     hidePage()
@@ -127,6 +157,10 @@ export function guardPageAgainstEndedSession(queryClient: QueryClient) {
 export function useLogout() {
   return useMutation({
     mutationFn: logout,
-    onError: () => Notification.error('You are still signed in, because signing out did not finish. Try again.'),
+    // By default a mutation waits with no sign while the browser has no network, and the logout must ask about unsent words now.
+    networkMode: 'always',
+    onError: (error) => {
+      if (!(error instanceof StayedSignedIn)) Notification.error('You are still signed in, because signing out did not finish. Try again.')
+    },
   })
 }

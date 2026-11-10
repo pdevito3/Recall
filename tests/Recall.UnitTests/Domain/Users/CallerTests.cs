@@ -35,9 +35,9 @@ public class CallerTests
         yield return () => ("all tenants manager", Caller.AllTenantsManager.Instance, null);
         yield return () => ("member with the permission", MemberWith(Permission.ManageUsers()), null);
         yield return () => ("member with another permission", MemberWith(Permission.ManageTenant()),
-            "You cannot manage users. Ask a tenant admin for access.");
+            "You cannot manage users. Ask an admin for access.");
         yield return () => ("member with no permission", MemberWith(),
-            "You cannot manage users. Ask a tenant admin for access.");
+            "You cannot manage users. Ask an admin for access.");
         yield return () => ("anonymous", new Caller.Outsider(OutsiderKind.Anonymous), "Sign in to do this.");
         yield return () => ("machine client", new Caller.Outsider(OutsiderKind.MachineClient), MachineClientDenial);
         yield return () => ("no user record", new Caller.Outsider(OutsiderKind.NoUserRecord),
@@ -47,12 +47,12 @@ public class CallerTests
             DelegatedAgentOf([Permission.ManageUsers()], [Permission.ManageUsers()]), null);
         yield return () => ("delegated agent whose user lacks it",
             DelegatedAgentOf([Permission.ManageTenant()], [Permission.ManageUsers(), Permission.ManageTenant()]),
-            "You cannot manage users. Ask a tenant admin for access.");
+            "You cannot manage users. Ask an admin for access.");
         yield return () => ("delegated agent whose grant lacks it",
             DelegatedAgentOf([Permission.ManageUsers()], [Permission.ManageTenant()]),
             "This agent has no grant to manage users. A tenant admin can grant it.");
         yield return () => ("delegated agent whose user and grant both lack it", DelegatedAgentOf([], []),
-            "You cannot manage users. Ask a tenant admin for access.");
+            "You cannot manage users. Ask an admin for access.");
         yield return () => ("machine agent granted it", MachineAgentWith(Permission.ManageUsers()), null);
         yield return () => ("machine agent not granted it", MachineAgentWith(Permission.ManageTenant()),
             "This agent has no grant to manage users. A tenant admin can grant it.");
@@ -62,7 +62,7 @@ public class CallerTests
     {
         yield return () => ("member on their own record", MemberWith(), SelfId, null);
         yield return () => ("member on another user, without the permission", MemberWith(), OtherId,
-            "You cannot manage users. Ask a tenant admin for access.");
+            "You cannot manage users. Ask an admin for access.");
         yield return () => ("member on another user, with the permission", MemberWith(Permission.ManageUsers()),
             OtherId, null);
         yield return () => ("all tenants manager", Caller.AllTenantsManager.Instance, OtherId, null);
@@ -114,7 +114,7 @@ public class CallerTests
 
         // Assert
         act.ShouldThrow<ForbiddenAccessException>().Message
-            .ShouldBe("You cannot manage the tenant. Ask a tenant admin for access.");
+            .ShouldBe("You cannot manage the tenant. Ask an admin for access.");
     }
 
     [Test]
@@ -198,9 +198,9 @@ public class CallerTests
 
     private static string DenialOf(Caller caller, Permission permission) => caller switch
     {
-        Caller.Member => $"You cannot {permission.Words}. Ask a tenant admin for access.",
+        Caller.Member => $"You cannot {permission.Words}. Ask an admin for access.",
         Caller.DelegatedAgent agent when !agent.UserPermissions.Contains(permission)
-            => $"You cannot {permission.Words}. Ask a tenant admin for access.",
+            => $"You cannot {permission.Words}. Ask an admin for access.",
         Caller.DelegatedAgent agent => NotGranted(permission),
         Caller.MachineAgent agent => NotGranted(permission),
         Caller.Outsider { Kind: OutsiderKind.Anonymous } => "Sign in to do this.",

@@ -73,6 +73,13 @@ public sealed partial class AuthBrowser(AuthFlowFactory host, bool tls = false) 
         return SendAsync(request);
     }
 
+    public async Task<string> UserOfSessionAsync()
+    {
+        var me = await GetAsync("/auth/me", csrf: true);
+        using var body = JsonDocument.Parse(await me.Content.ReadAsStringAsync());
+        return body.RootElement.GetProperty("sub").GetString()!;
+    }
+
     public Task<HttpResponseMessage> PostFormAsync(string url, IEnumerable<(string Name, string Value)> fields, bool csrf = false, string? authorization = null)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, url)

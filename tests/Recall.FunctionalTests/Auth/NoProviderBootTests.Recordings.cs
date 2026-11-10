@@ -17,7 +17,7 @@ using Shouldly;
 
 public partial class NoProviderBootTests
 {
-    private sealed record Seeded(string Cookie, string DeletedTenantId, string KeptTenantId);
+    private sealed record Seeded(string Cookie, string AdminId, string DeletedTenantId, string KeptTenantId);
 
     private static async Task<Seeded> SeedTwoTenantsWithFilesAsync(string root)
     {
@@ -61,7 +61,7 @@ public partial class NoProviderBootTests
             await store.WriteAsync(FileKey.ForTenant(tenantId, RecordingFiles.RootFolder, admin, "rec_1", "audio.webm"), content, CancellationToken.None);
         }
 
-        return new Seeded(cookie, deleted, kept);
+        return new Seeded(cookie, admin, deleted, kept);
     }
 
     [Test]
@@ -81,6 +81,7 @@ public partial class NoProviderBootTests
         using var request = new HttpRequestMessage(HttpMethod.Delete, $"/api/v1/tenants/{seeded.DeletedTenantId}");
         request.Headers.Add("Cookie", $"{SessionCookie.PlainName}={seeded.Cookie}");
         request.Headers.Add("X-CSRF", "1");
+        request.Headers.Add(PageUserCheck.Header, seeded.AdminId);
         await Should.ThrowAsync<HttpRequestException>(() => first.Client.SendAsync(request));
         using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         await first.WaitForExitAsync(limit.Token);
@@ -121,6 +122,7 @@ public partial class NoProviderBootTests
         using var request = new HttpRequestMessage(HttpMethod.Delete, $"/api/v1/tenants/{seeded.DeletedTenantId}");
         request.Headers.Add("Cookie", $"{SessionCookie.PlainName}={seeded.Cookie}");
         request.Headers.Add("X-CSRF", "1");
+        request.Headers.Add(PageUserCheck.Header, seeded.AdminId);
         using var response = await server.Client.SendAsync(request);
 
         // Assert

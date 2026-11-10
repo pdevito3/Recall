@@ -178,3 +178,19 @@ test('the list of a Select as wide as the page fits in the page', async () => {
   expect(content.getBoundingClientRect().right).toBeLessThanOrEqual(document.documentElement.clientWidth)
   expect(document.documentElement.scrollWidth).toBe(document.documentElement.clientWidth)
 })
+
+test('on a phone a Select is a touch target of 44 px, as a field and a button are', async () => {
+  await page.viewport(390, 800)
+  const screen = await render(
+    <Select aria-label="Role" defaultValue="member">
+      <SelectTrigger>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem id="member">Member</SelectItem>
+      </SelectContent>
+    </Select>
+  )
+
+  expect(screen.getByRole('button', { name: /Role/ }).element().getBoundingClientRect().height).toBe(44)
+})

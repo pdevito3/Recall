@@ -80,6 +80,7 @@ public class EndpointAccessSweepTests : TestBase
         ["DeleteCorrection"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetUserSetting"] = new(JournalOfEachMember, OwnerOnly: true),
         ["ChangeUserSetting"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetFileStoreStatus"] = new("Each member can lose a recording to this fault, and the reply is one flag with no tenant data."),
         ["AddRecording"] = new(JournalOfEachMember, OwnerOnly: true),
         ["StoreRecordingSlice"] = new(JournalOfEachMember, OwnerOnly: true),
         ["FinishRecording"] = new(JournalOfEachMember, OwnerOnly: true),

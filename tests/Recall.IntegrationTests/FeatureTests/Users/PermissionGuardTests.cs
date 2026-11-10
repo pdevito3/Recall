@@ -42,7 +42,7 @@ public class PermissionGuardTests : TestBase
 
         // Assert
         (await act.ShouldThrowAsync<ForbiddenAccessException>()).Message
-            .ShouldBe("You cannot manage users. Ask a tenant admin for access.");
+            .ShouldBe("You cannot manage users. Ask an admin for access.");
         (await UserExistsAsync(target.Id)).ShouldBeTrue();
     }
 
@@ -267,7 +267,7 @@ public class PermissionGuardTests : TestBase
 
         // Assert
         (await act.ShouldThrowAsync<ForbiddenAccessException>()).Message
-            .ShouldBe("You cannot manage the tenant. Ask a tenant admin for access.");
+            .ShouldBe("You cannot manage the tenant. Ask an admin for access.");
         (await PermissionsOfAsync(target.Id)).ShouldBeEmpty();
     }
 
@@ -327,7 +327,7 @@ public class PermissionGuardTests : TestBase
 
         // Assert
         (await act.ShouldThrowAsync<ForbiddenAccessException>()).Message
-            .ShouldBe("You cannot manage the tenant. Ask a tenant admin for access.");
+            .ShouldBe("You cannot manage the tenant. Ask an admin for access.");
         (await PermissionsOfAsync(admin.Id)).ShouldContain("manage_tenant");
     }
 
@@ -373,9 +373,9 @@ public class PermissionGuardTests : TestBase
 
         // Assert
         (await add.ShouldThrowAsync<ForbiddenAccessException>()).Message
-            .ShouldBe("You cannot manage the access of users. Ask a tenant admin for access.");
+            .ShouldBe("You cannot manage the access of users. Ask an admin for access.");
         (await remove.ShouldThrowAsync<ForbiddenAccessException>()).Message
-            .ShouldBe("You cannot manage the access of users. Ask a tenant admin for access.");
+            .ShouldBe("You cannot manage the access of users. Ask an admin for access.");
         (await PermissionsOfAsync(admin.Id)).ShouldBe(Permission.ListNames(), ignoreOrder: true);
     }
 

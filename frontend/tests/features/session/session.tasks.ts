@@ -4,6 +4,9 @@ import { session } from './session.locators'
 
 export const blankPage = 'data:text/html,blank'
 
+// The first page of a run makes a cold Vite compile each module of the app, and that takes more than the 5 s of an assertion.
+const firstPaintMs = 30_000
+
 export function sessionPage(page: Page) {
   const at = session(page)
   const answered = (path: string) =>
@@ -60,7 +63,7 @@ export function sessionPage(page: Page) {
 
     async openDeepLinkAndWaitForLogin(path: string) {
       await page.goto(path, { waitUntil: 'commit' })
-      await expect.poll(() => new URL(page.url()).pathname, { timeout: 15000 }).toBe(authPaths.login)
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: firstPaintMs }).toBe(authPaths.login)
       await page.waitForLoadState()
     },
 
@@ -114,6 +117,7 @@ export function sessionPage(page: Page) {
       })
 
       await link.click()
+      await at.userMenu.click()
       // A fast logout starts its navigation inside the click, and then the click waits for the login that this check holds.
       await Promise.all([at.logout.click(), logoutOpensThe401, checked])
     },
@@ -127,11 +131,13 @@ export function sessionPage(page: Page) {
       const checked = answered(authPaths.me)
 
       await link.click()
+      await at.userMenu.click()
       await Promise.all([at.logout.click(), checked])
     },
 
     async signOutAndWaitForTheAnswer() {
       const answered = page.waitForResponse((r) => new URL(r.url()).pathname === authPaths.logout)
+      await at.userMenu.click()
       await at.logout.click()
       await answered
     },
@@ -144,7 +150,7 @@ export function sessionPage(page: Page) {
         })
       })
       await page.goto('/')
-      await expect(at.signedInAs).toBeVisible()
+      await expect(at.navigation).toBeVisible()
       await page.evaluate(() => {
         ;(window as unknown as { firstLoadMark: boolean }).firstLoadMark = true
       })

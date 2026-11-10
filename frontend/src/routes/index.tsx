@@ -1,61 +1,34 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { Logout01Icon } from '@hugeicons/core-free-icons'
-import { HugeiconsIcon } from '@hugeicons/react'
 
-import { useLogout } from '@/domain/auth/apis/auth-actions'
-import { InsecureContextNotice } from '@/domain/capture/components/insecure-context-notice'
-import { useCurrentUser } from '@/domain/users/apis/get-current-user'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Page } from '@/components/page'
 import { PageHeading } from '@/components/page-heading'
+import { InsecureContextNotice } from '@/domain/capture/components/insecure-context-notice'
+import { JobsStoppedNotice } from '@/domain/capture/components/jobs-stopped-notice'
+import { ComposerForm } from '@/domain/sessions/components/composer'
+import { Timeline } from '@/domain/sessions/components/timeline'
+import { useComposer } from '@/domain/sessions/components/use-composer'
+import { useSeedTimeZone } from '@/domain/settings/apis/use-seed-time-zone'
+import { useJournalZone } from '@/domain/settings/apis/user-setting'
+import { formatDate, todayAt } from '@/lib/zoned-time'
 
 export const Route = createFileRoute('/')({
-  component: Home,
-  staticData: { breadcrumb: 'Home' },
+  component: Journal,
+  staticData: { breadcrumb: 'Journal' },
 })
 
-function Home() {
-  const logout = useLogout()
+function Journal() {
+  useSeedTimeZone()
+  const zone = useJournalZone()
+  const composer = useComposer()
+  const today = formatDate(todayAt(zone, new Date()), { weekday: 'long', month: 'long', day: 'numeric' })
 
   return (
-    <div className="bg-background">
-      <div className="max-w-2xl mx-auto px-4 py-8">
-        <InsecureContextNotice />
-        <PageHeading>Recall</PageHeading>
-        <p className="text-muted-foreground mt-1">.NET Aspire + React</p>
-
-        <Card className="mt-8">
-          <CardHeader>
-            <CardTitle>
-              <h2>Your session</h2>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center justify-between gap-4">
-            <SignedInUser />
-            <Button variant="outline" className="max-sm:h-11" isPending={logout.isPending} onPress={() => logout.mutate()}>
-              <HugeiconsIcon icon={Logout01Icon} className="size-4" />
-              Logout
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  )
-}
-
-function SignedInUser() {
-  const { data: user, isLoading, isError } = useCurrentUser()
-
-  if (isLoading) {
-    return <Skeleton className="h-5 w-48" aria-label="Loading your user" />
-  }
-  if (isError || !user) {
-    return <p className="text-sm text-destructive">The Server could not load your user.</p>
-  }
-  return (
-    <p className="min-w-0 text-sm wrap-anywhere">
-      Signed in as <span className="font-medium">{user.name ?? user.identifier}</span>
-    </p>
+    <Page>
+      <InsecureContextNotice />
+      <JobsStoppedNotice />
+      <PageHeading>{today}</PageHeading>
+      <ComposerForm composer={composer} />
+      <Timeline zone={zone} hiddenSessionId={composer.composingSessionId} />
+    </Page>
   )
 }

@@ -12,6 +12,14 @@ export type RenamePersonPath = {
     id: string;
 };
 
+export type RenamePersonHeaders = {
+    /**
+     * @description The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.
+     * @type string | undefined
+    */
+    "X-Recall-User"?: string;
+};
+
 export type RenamePersonStatus200 = PersonDto;
 
 export type RenamePersonStatus400 = ValidationProblemDetails;
@@ -32,7 +40,7 @@ export type RenamePersonOptions = {
     body: RenamePersonBody;
     path: RenamePersonPath;
     query?: never;
-    headers?: never;
+    headers?: RenamePersonHeaders;
 };
 
 export type RenamePersonResponses = {

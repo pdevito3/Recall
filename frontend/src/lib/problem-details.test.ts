@@ -23,11 +23,18 @@ describe('isProblemDetails', () => {
   })
 
   it.each([
+    ['no type', { title: problem.title, status: 404 }],
+    ['only a detail', { detail: problem.detail, status: 422 }],
+  ])('accepts a body with %s, because RFC 7807 does not require a type', (_, body) => {
+    expect(isProblemDetails(body)).toBe(true)
+  })
+
+  it.each([
     ['null', null],
     ['a string', 'Not Found'],
     ['a body with no status', { type: problem.type, title: problem.title }],
     ['a body with a text status', { ...problem, status: '404' }],
-    ['a body with no type', { title: problem.title, status: 404 }],
+    ['a body with only a status', { status: 404 }],
   ])('rejects %s', (_, body) => {
     expect(isProblemDetails(body)).toBe(false)
   })

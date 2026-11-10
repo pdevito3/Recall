@@ -6,7 +6,7 @@ using Resources;
 public sealed record DraftSaveDto
 {
     [RequiredField]
-    [SchemaMaxLength(typeof(Session), nameof(Session.DraftMaxLength))]
+    [SchemaMaxLength(typeof(Session), nameof(Session.DraftMaxStoredLength))]
     public string Text { get; init; } = default!;
 
     /// <summary>The number of the Draft that the person edited. It is <c>0</c> for a Draft with no Revision. Only the number of the current Draft wins.</summary>

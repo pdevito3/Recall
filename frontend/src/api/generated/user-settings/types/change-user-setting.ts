@@ -8,6 +8,14 @@ import type { UserSettingChangeDto } from '../../models/types/user-setting-chang
 import type { UserSettingDto } from '../../models/types/user-setting-dto'
 import type { ValidationProblemDetails } from '../../models/types/validation-problem-details'
 
+export type ChangeUserSettingHeaders = {
+    /**
+     * @description The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.
+     * @type string | undefined
+    */
+    "X-Recall-User"?: string;
+};
+
 export type ChangeUserSettingStatus200 = UserSettingDto;
 
 export type ChangeUserSettingStatus400 = ValidationProblemDetails;
@@ -28,7 +36,7 @@ export type ChangeUserSettingOptions = {
     body: ChangeUserSettingBody;
     path?: never;
     query?: never;
-    headers?: never;
+    headers?: ChangeUserSettingHeaders;
 };
 
 export type ChangeUserSettingResponses = {

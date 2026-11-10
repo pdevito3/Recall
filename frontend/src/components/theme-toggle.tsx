@@ -13,7 +13,7 @@ export function ThemeToggle() {
       <Button
         onPress={() => setTheme("light")}
         className={cn(
-          "inline-flex items-center justify-center rounded-md px-2 py-1 text-sm group-data-[collapsible=icon]:px-1 transition-colors max-sm:min-h-11 max-sm:min-w-11",
+          "inline-flex items-center justify-center rounded-md px-2 py-1 text-sm group-data-[collapsible=icon]:px-1 transition-colors max-md:min-h-11 max-md:min-w-11",
           theme === "light"
             ? "bg-background text-foreground shadow-sm"
             : "text-muted-foreground hover:text-foreground"
@@ -25,7 +25,7 @@ export function ThemeToggle() {
       <Button
         onPress={() => setTheme("dark")}
         className={cn(
-          "inline-flex items-center justify-center rounded-md px-2 py-1 text-sm group-data-[collapsible=icon]:px-1 transition-colors max-sm:min-h-11 max-sm:min-w-11",
+          "inline-flex items-center justify-center rounded-md px-2 py-1 text-sm group-data-[collapsible=icon]:px-1 transition-colors max-md:min-h-11 max-md:min-w-11",
           theme === "dark"
             ? "bg-background text-foreground shadow-sm"
             : "text-muted-foreground hover:text-foreground"
@@ -37,7 +37,7 @@ export function ThemeToggle() {
       <Button
         onPress={() => setTheme("system")}
         className={cn(
-          "inline-flex items-center justify-center rounded-md px-2 py-1 text-sm group-data-[collapsible=icon]:px-1 transition-colors max-sm:min-h-11 max-sm:min-w-11",
+          "inline-flex items-center justify-center rounded-md px-2 py-1 text-sm group-data-[collapsible=icon]:px-1 transition-colors max-md:min-h-11 max-md:min-w-11",
           theme === "system"
             ? "bg-background text-foreground shadow-sm"
             : "text-muted-foreground hover:text-foreground"

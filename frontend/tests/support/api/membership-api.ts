@@ -15,6 +15,12 @@ export const membershipApi = {
     return [{ method: 'get', path: membershipPaths.userOf(actorSubject), status: 200, body: aUser().identifiedBy(actorSubject).build() }]
   },
 
+  /** A person whose role lets them read the list of users. */
+  userMayReadUsers(): MockRoute {
+    const body = { ...aUser().identifiedBy(actorSubject).inRole('Admin').build(), permissions: ['read_users' as const] }
+    return { method: 'get', path: membershipPaths.userOf(actorSubject), status: 200, body }
+  },
+
   /** The Server refuses the lookup, as it does for a deleted user whose tenant it still has in its cache. */
   lookupRefuses(detail: string): MockRoute {
     const body = { ...aProblem().saying(detail).build(), status: 403 }

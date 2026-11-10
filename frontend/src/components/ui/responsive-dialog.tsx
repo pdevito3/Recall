@@ -80,11 +80,13 @@ function ResponsiveDialog({
   children,
   showCloseButton = true,
   isDismissable = true,
+  role,
   ...props
 }: Omit<ModalOverlayPrimitiveProps, "className" | "children"> & {
   className?: string
   children: React.ReactNode
   showCloseButton?: boolean
+  role?: "dialog" | "alertdialog"
 }) {
   const isMobile = useIsMobile()
   const [descriptionId, setDescriptionId] = React.useState<string>()
@@ -121,6 +123,7 @@ function ResponsiveDialog({
       >
         <DialogPrimitive
           data-slot="responsive-dialog"
+          role={role}
           aria-describedby={descriptionId}
           data-close-button={showCloseButton || undefined}
           className="relative flex max-h-[inherit] flex-col outline-none"
@@ -141,7 +144,7 @@ function ResponsiveDialog({
           {showCloseButton && (
             <ResponsiveDialogClose
               variant="ghost"
-              className="absolute top-2 right-2 z-20 max-md:size-8 md:top-3"
+              className="absolute top-2 right-2 z-20 size-8 max-md:size-11 md:top-3"
               size="icon-sm"
             >
               <HugeiconsIcon icon={Cancel01Icon} />
@@ -170,7 +173,7 @@ function ResponsiveDialogHeader({
         // The negative margins cover the p-4 of the content that scrolls, so a focus ring in the side gutter does not show
         // next to the header. pb-2 covers the close button and the content just below the title. -mb-2 keeps pb-2 out of
         // the layout, so the dialog is not taller.
-        "sticky -top-4 z-10 -mx-4 -mt-4 -mb-2 flex flex-col gap-2 bg-background px-4 pt-4 pb-2 text-center md:text-left",
+        "sticky -top-4 z-10 -mx-4 -mt-4 -mb-2 flex flex-col gap-2 bg-background px-4 pt-4 pb-2 text-left",
         className
       )}
       {...props}
@@ -208,7 +211,7 @@ function ResponsiveDialogTitle({
       data-slot="responsive-dialog-title"
       className={cn(
         "text-base leading-snug font-semibold wrap-anywhere md:text-sm md:font-medium",
-        "in-data-close-button:max-md:px-8 in-data-close-button:md:pr-8",
+        "in-data-close-button:max-md:pr-10 in-data-close-button:md:pr-8",
         className
       )}
       {...props}

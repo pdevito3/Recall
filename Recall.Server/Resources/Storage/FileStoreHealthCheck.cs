@@ -17,17 +17,24 @@ public sealed class FileStoreHealthCheck(Func<string?> proveWritable, string roo
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
+        var problem = await WriteProblemAsync(cancellationToken);
+        return problem is null ? HealthCheckResult.Healthy() : new(context.Registration.FailureStatus, problem);
+    }
+
+    public async Task<bool> TakesWritesAsync(CancellationToken cancellationToken)
+        => await WriteProblemAsync(cancellationToken) is null;
+
+    private async Task<string?> WriteProblemAsync(CancellationToken cancellationToken)
+    {
         var (proof, timeLeft) = CurrentProof();
         try
         {
             var cause = await proof.WaitAsync(timeLeft, timeProvider, cancellationToken);
-            return cause is null
-                ? HealthCheckResult.Healthy()
-                : new(context.Registration.FailureStatus, $"The file store cannot take a write. The cause: {cause}");
+            return cause is null ? null : $"The file store cannot take a write. The cause: {cause}";
         }
         catch (TimeoutException)
         {
-            return new(context.Registration.FailureStatus, "The file store did not finish a write in time.");
+            return "The file store did not finish a write in time.";
         }
     }
 

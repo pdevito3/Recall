@@ -15,7 +15,10 @@ import { Route as ModelProvidersRouteImport } from './routes/model-providers'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UsersIndexRouteImport } from './routes/users/index'
+import { Route as SettingsIndexRouteImport } from './routes/settings/index'
+import { Route as PeopleIndexRouteImport } from './routes/people/index'
 import { Route as UsersIdIndexRouteImport } from './routes/users/$id/index'
+import { Route as SessionsIdIndexRouteImport } from './routes/sessions/$id/index'
 
 const TranscriptionEngineRoute = TranscriptionEngineRouteImport.update({
   id: '/transcription-engine',
@@ -47,9 +50,24 @@ const UsersIndexRoute = UsersIndexRouteImport.update({
   path: '/users/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsIndexRoute = SettingsIndexRouteImport.update({
+  id: '/settings/',
+  path: '/settings/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PeopleIndexRoute = PeopleIndexRouteImport.update({
+  id: '/people/',
+  path: '/people/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const UsersIdIndexRoute = UsersIdIndexRouteImport.update({
   id: '/users/$id/',
   path: '/users/$id/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SessionsIdIndexRoute = SessionsIdIndexRouteImport.update({
+  id: '/sessions/$id/',
+  path: '/sessions/$id/',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -59,7 +77,10 @@ export interface FileRoutesByFullPath {
   '/model-providers': typeof ModelProvidersRoute
   '/summaries': typeof SummariesRoute
   '/transcription-engine': typeof TranscriptionEngineRoute
+  '/people': typeof PeopleIndexRoute
+  '/settings': typeof SettingsIndexRoute
   '/users': typeof UsersIndexRoute
+  '/sessions/$id': typeof SessionsIdIndexRoute
   '/users/$id': typeof UsersIdIndexRoute
 }
 export interface FileRoutesByTo {
@@ -68,7 +89,10 @@ export interface FileRoutesByTo {
   '/model-providers': typeof ModelProvidersRoute
   '/summaries': typeof SummariesRoute
   '/transcription-engine': typeof TranscriptionEngineRoute
+  '/people': typeof PeopleIndexRoute
+  '/settings': typeof SettingsIndexRoute
   '/users': typeof UsersIndexRoute
+  '/sessions/$id': typeof SessionsIdIndexRoute
   '/users/$id': typeof UsersIdIndexRoute
 }
 export interface FileRoutesById {
@@ -78,7 +102,10 @@ export interface FileRoutesById {
   '/model-providers': typeof ModelProvidersRoute
   '/summaries': typeof SummariesRoute
   '/transcription-engine': typeof TranscriptionEngineRoute
+  '/people/': typeof PeopleIndexRoute
+  '/settings/': typeof SettingsIndexRoute
   '/users/': typeof UsersIndexRoute
+  '/sessions/$id/': typeof SessionsIdIndexRoute
   '/users/$id/': typeof UsersIdIndexRoute
 }
 export interface FileRouteTypes {
@@ -89,7 +116,10 @@ export interface FileRouteTypes {
     | '/model-providers'
     | '/summaries'
     | '/transcription-engine'
+    | '/people'
+    | '/settings'
     | '/users'
+    | '/sessions/$id'
     | '/users/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -98,7 +128,10 @@ export interface FileRouteTypes {
     | '/model-providers'
     | '/summaries'
     | '/transcription-engine'
+    | '/people'
+    | '/settings'
     | '/users'
+    | '/sessions/$id'
     | '/users/$id'
   id:
     | '__root__'
@@ -107,7 +140,10 @@ export interface FileRouteTypes {
     | '/model-providers'
     | '/summaries'
     | '/transcription-engine'
+    | '/people/'
+    | '/settings/'
     | '/users/'
+    | '/sessions/$id/'
     | '/users/$id/'
   fileRoutesById: FileRoutesById
 }
@@ -117,7 +153,10 @@ export interface RootRouteChildren {
   ModelProvidersRoute: typeof ModelProvidersRoute
   SummariesRoute: typeof SummariesRoute
   TranscriptionEngineRoute: typeof TranscriptionEngineRoute
+  PeopleIndexRoute: typeof PeopleIndexRoute
+  SettingsIndexRoute: typeof SettingsIndexRoute
   UsersIndexRoute: typeof UsersIndexRoute
+  SessionsIdIndexRoute: typeof SessionsIdIndexRoute
   UsersIdIndexRoute: typeof UsersIdIndexRoute
 }
 
@@ -165,11 +204,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UsersIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/': {
+      id: '/settings/'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/people/': {
+      id: '/people/'
+      path: '/people'
+      fullPath: '/people'
+      preLoaderRoute: typeof PeopleIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/users/$id/': {
       id: '/users/$id/'
       path: '/users/$id'
       fullPath: '/users/$id'
       preLoaderRoute: typeof UsersIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sessions/$id/': {
+      id: '/sessions/$id/'
+      path: '/sessions/$id'
+      fullPath: '/sessions/$id'
+      preLoaderRoute: typeof SessionsIdIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -181,7 +241,10 @@ const rootRouteChildren: RootRouteChildren = {
   ModelProvidersRoute: ModelProvidersRoute,
   SummariesRoute: SummariesRoute,
   TranscriptionEngineRoute: TranscriptionEngineRoute,
+  PeopleIndexRoute: PeopleIndexRoute,
+  SettingsIndexRoute: SettingsIndexRoute,
   UsersIndexRoute: UsersIndexRoute,
+  SessionsIdIndexRoute: SessionsIdIndexRoute,
   UsersIdIndexRoute: UsersIdIndexRoute,
 }
 export const routeTree = rootRouteImport

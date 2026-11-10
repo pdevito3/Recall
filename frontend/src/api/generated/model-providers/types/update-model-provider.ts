@@ -12,6 +12,14 @@ export type UpdateModelProviderPath = {
     id: string;
 };
 
+export type UpdateModelProviderHeaders = {
+    /**
+     * @description The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.
+     * @type string | undefined
+    */
+    "X-Recall-User"?: string;
+};
+
 /**
  * @description A model provider. No answer holds the key.
  * @type object
@@ -38,7 +46,7 @@ export type UpdateModelProviderOptions = {
     body: UpdateModelProviderBody;
     path: UpdateModelProviderPath;
     query?: never;
-    headers?: never;
+    headers?: UpdateModelProviderHeaders;
 };
 
 export type UpdateModelProviderResponses = {

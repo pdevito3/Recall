@@ -9,6 +9,8 @@ import { validationProblemDetailsSchema } from '../../models/zod/validation-prob
 
 export const deleteCorrectionPathIdSchema = z.string()
 
+export const deleteCorrectionHeaderXRecallUserSchema = z.string().optional().describe('The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.')
+
 export const deleteCorrectionStatus204Schema = z.unknown()
 
 export const deleteCorrectionStatus401Schema = z.unknown()
