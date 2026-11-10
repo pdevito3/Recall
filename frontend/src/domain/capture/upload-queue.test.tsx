@@ -3,6 +3,7 @@ import { afterEach, expect, test } from 'vitest'
 import { commands } from 'vitest/browser'
 
 import type { RecordingDto } from '@/api/generated/models/types/recording-dto'
+import { SessionKeys } from '@/domain/sessions/apis/session.keys'
 // The app sends each call through this client, which turns a refusal into the Problem Details of the Server.
 import '@/lib/api-client'
 import { newUuid } from '@/lib/new-uuid'
@@ -213,18 +214,22 @@ test('the audio goes to a new entry when the person deleted the entry before its
   expect(entries[entries.length - 1].body).not.toMatchObject({ clientSessionId: capture.clientSessionId })
 })
 
-test('the browser lets the audio go when the person deleted the entry, and its recording, during the upload', async () => {
+test('the browser lets the audio go when the person deleted the entry, and its recording, during the upload, and the timeline reads again', async () => {
   // Arrange
   await commands.answerRequests([...serverTakesAll, { method: 'PUT', path: '/api/v1/recordings/rec_1/slices/1', status: 404, body: { status: 404, title: 'Not found' } }])
-  const capture = await aStoredCapture()
+  const capture = await aStoredCapture({ sessionId: 'ses_1', recordingId: 'rec_1' })
   await endCapture(capture.clientRecordingId)
+  const queryClient = new QueryClient()
+  queryClient.setQueryData(SessionKeys.timeline(), { pages: [], pageParams: [] })
 
   // Act
-  startQueue()
+  stopQueue = sendStoredAudioOf(owner, queryClient)
 
   // Assert
   await expect.poll(async () => (await capturesOf(owner)).length, { timeout: 5_000 }).toBe(0)
   expect(await readSlice(capture.clientRecordingId, 1)).toBeNull()
+  // The timeline of this tab still shows the deleted entry until it reads again.
+  expect(queryClient.getQueryState(SessionKeys.timeline())?.isInvalidated).toBe(true)
 })
 
 test('a refusal keeps the audio and stops the queue until the person sends again', async () => {

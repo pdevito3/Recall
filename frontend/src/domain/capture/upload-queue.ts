@@ -224,8 +224,11 @@ class UploadQueue {
       const verdict = verdictOf(step, failureOf(error))
       try {
         if (verdict.kind === 'newEntry') await updateCapture(capture.clientRecordingId, { clientSessionId: newUuid(), sessionId: null, recordingId: null })
-        else if (verdict.kind === 'gone') await removeCapture(capture.clientRecordingId)
-        else await updateCapture(capture.clientRecordingId, { problem: verdict.problem })
+        else if (verdict.kind === 'gone') {
+          await removeCapture(capture.clientRecordingId)
+          // The entry went in another tab or on another device, so this timeline still shows it.
+          void refreshTimelineHead(this.queryClient)
+        } else await updateCapture(capture.clientRecordingId, { problem: verdict.problem })
       } catch {
         // The store refused the note, and the next round reads the capture again.
       }
