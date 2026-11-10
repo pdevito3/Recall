@@ -345,7 +345,7 @@ public sealed class SessionStoreTests : TestBase
         // Act
         await host.WithStoreAsync(async store =>
         {
-            await store.RevokeOthersAsync(UserId, kept.SessionId, CancellationToken.None);
+            await store.RevokeOthersAsync(UserId, kept.SessionId);
             return true;
         });
 
@@ -366,7 +366,7 @@ public sealed class SessionStoreTests : TestBase
         // Act
         await host.WithStoreAsync(async store =>
         {
-            await store.RevokeByRefreshAsync(Parse(first.RefreshToken), CancellationToken.None);
+            await store.RevokeByRefreshAsync(Parse(first.RefreshToken));
             return true;
         });
 
@@ -483,7 +483,7 @@ public sealed class SessionStoreTests : TestBase
         var revoked = await host.WithStoreAsync(store => store.StartWebAsync(userId, Mode, CancellationToken.None));
         await host.WithStoreAsync(async store =>
         {
-            await store.RevokeAsync(revoked.SessionId, RevokeReason.Logout, CancellationToken.None);
+            await store.RevokeAsync(revoked.SessionId, RevokeReason.Logout);
             return true;
         });
         var native = await host.WithStoreAsync(store => store.StartNativeAsync(userId, Mode, CancellationToken.None));
