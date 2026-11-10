@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { parseDate } from '@internationalized/date'
 
 import type { SessionSummaryDto } from '@/api/generated/models/types/session-summary-dto'
@@ -19,6 +19,19 @@ const loadAheadPx = 1200
 interface TimelineProps {
   zone: TimeZone
   hiddenSessionId: string | null
+}
+
+/** A load faster than this would only flash the words, so they show only for a load that a person waits for. */
+const loadingShowsAfterMs = 400
+
+function LoadingEntries() {
+  const [isSlow, setIsSlow] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setIsSlow(true), loadingShowsAfterMs)
+    return () => clearTimeout(timer)
+  }, [])
+  if (!isSlow) return null
+  return <p role="status" aria-label="Loading your entries" className="text-muted-foreground">Loading your entries</p>
 }
 
 export function Timeline({ zone, hiddenSessionId }: TimelineProps) {
@@ -47,9 +60,7 @@ export function Timeline({ zone, hiddenSessionId }: TimelineProps) {
     return groupByDay(rows.filter((row) => row.id !== hiddenSessionId))
   }, [timeline.data, hiddenSessionId])
 
-  if (timeline.isPending) {
-    return <p role="status" aria-label="Loading your entries" className="text-muted-foreground">Loading your entries</p>
-  }
+  if (timeline.isPending) return <LoadingEntries />
   if (timeline.isLoadingError) {
     return <QueryError title="Your entries did not load." error={timeline.error} onRetry={() => timeline.refetch()} />
   }
