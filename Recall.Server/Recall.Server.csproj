@@ -38,6 +38,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Recall.UnitTests" />
     <InternalsVisibleTo Include="Recall.IntegrationTests" />
+    <InternalsVisibleTo Include="Recall.FunctionalTests" />
   </ItemGroup>
 
   <!-- BannedSymbols.txt bans the APIs that write without the save, so without an audit entry, the LIKE calls with no escape character, and the regex and reflection APIs that a source generator replaces -->

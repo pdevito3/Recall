@@ -44,7 +44,7 @@ public sealed partial class AuthBrowser(AuthFlowFactory host, bool tls = false) 
 
     public void Dispose() => _client.Dispose();
 
-    public async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request)
+    public async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken = default)
     {
         var path = request.RequestUri!.IsAbsoluteUri ? request.RequestUri.AbsolutePath : request.RequestUri.OriginalString.Split('?')[0];
         var sent = _cookies.Where(cookie => path.StartsWith(cookie.Value.Path, StringComparison.Ordinal)).ToList();
@@ -53,7 +53,7 @@ public sealed partial class AuthBrowser(AuthFlowFactory host, bool tls = false) 
         if (tls)
             request.Headers.TryAddWithoutValidation("X-Forwarded-Proto", "https");
 
-        var response = await _client.SendAsync(request);
+        var response = await _client.SendAsync(request, cancellationToken);
         if (response.Headers.TryGetValues("Set-Cookie", out var lines))
         {
             foreach (var line in lines)
@@ -80,7 +80,8 @@ public sealed partial class AuthBrowser(AuthFlowFactory host, bool tls = false) 
         return body.RootElement.GetProperty("sub").GetString()!;
     }
 
-    public Task<HttpResponseMessage> PostFormAsync(string url, IEnumerable<(string Name, string Value)> fields, bool csrf = false, string? authorization = null)
+    public Task<HttpResponseMessage> PostFormAsync(string url, IEnumerable<(string Name, string Value)> fields, bool csrf = false, string? authorization = null,
+        CancellationToken cancellationToken = default)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, url)
         {
@@ -90,7 +91,7 @@ public sealed partial class AuthBrowser(AuthFlowFactory host, bool tls = false) 
             request.Headers.Add("X-CSRF", "1");
         if (authorization is not null)
             request.Headers.TryAddWithoutValidation("Authorization", authorization);
-        return SendAsync(request);
+        return SendAsync(request, cancellationToken);
     }
 
     public async Task<AuthorizeRequest> StartWebAsync(string? returnUrl = null)

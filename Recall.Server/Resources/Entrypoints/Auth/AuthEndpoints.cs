@@ -8,6 +8,7 @@ using Recall.Server.Auth;
 using Recall.Server.Auth.Entities;
 using Recall.Server.Domain.Users;
 using Recall.Server.Domain.Users.Features;
+using Recall.Server.Exceptions;
 
 public static class AuthEndpoints
 {
@@ -36,6 +37,8 @@ public static class AuthEndpoints
 
     public static readonly AuthorizeAttribute AppSessionOnly = new() { AuthenticationSchemes = AppSessionHandler.SchemeName };
 
+    internal static readonly TimeSpan SlideWait = TimeSpan.FromSeconds(2);
+
     public static void MapAuthEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapGet(AuthRoutes.Status, StatusAsync).AllowAnonymous().ExcludeFromDescription();
@@ -47,10 +50,29 @@ public static class AuthEndpoints
         endpoints.MapGet(AuthRoutes.Me, MeAsync).AllowAnonymous().ExcludeFromDescription();
     }
 
+    /// <summary>
+    /// A slide only moves the end of a session that is days away, so <c>/auth/me</c> waits at most
+    /// <see cref="SlideWait"/> for the writer line. A slide that does not get its turn by then waits for the next
+    /// <c>/auth/me</c>, and the person reads the journal while a write holds the line.
+    /// </summary>
     public static async Task SlideAsync(HttpContext http, SessionStore store, string sessionId, CancellationToken cancellationToken)
     {
-        if (await store.SlideWebAsync(sessionId, cancellationToken) is { } expires && SessionCookie.Read(http.Request) is { } cookie)
-            SessionCookie.Write(http.Response, http.Request, cookie, expires);
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        limit.CancelAfter(SlideWait);
+        DateTimeOffset? expires;
+        try
+        {
+            expires = await store.SlideWebAsync(sessionId, limit.Token);
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested
+            && (exception is OperationCanceledException || DomainError.From(exception).Kind == DomainErrorKind.DatabaseBusy))
+        {
+            Telemetry.AddEvent([("exception.type", exception.GetType().Name)], "session.slide_skipped");
+            return;
+        }
+
+        if (expires is { } end && SessionCookie.Read(http.Request) is { } cookie)
+            SessionCookie.Write(http.Response, http.Request, cookie, end);
     }
 
     private static async Task<IResult> StatusAsync(HttpContext http, LoginModes modes, CancellationToken cancellationToken)
@@ -178,17 +200,18 @@ public static class AuthEndpoints
         if (cookie is not null && !csrf)
             return Results.Unauthorized();
 
+        // The session ends even when the client goes away during the logout, so these reads take no cancellation token.
         if (bearer is not null
             && bearer.StartsWith(TokenPair.AccessPrefix, StringComparison.Ordinal)
-            && await store.FindByAccessAsync(TokenHash.Of(bearer), SessionKind.Native, cancellationToken) is { } nativeSession)
-            await store.RevokeAsync(nativeSession.SessionId, RevokeReason.Logout, cancellationToken);
+            && await store.FindByAccessAsync(TokenHash.Of(bearer), SessionKind.Native, CancellationToken.None) is { } nativeSession)
+            await store.RevokeAsync(nativeSession.SessionId, RevokeReason.Logout);
 
         if (cookie is not null
-            && await store.FindByAccessAsync(TokenHash.Of(cookie), SessionKind.Web, cancellationToken) is { } webSession)
-            await store.RevokeAsync(webSession.SessionId, RevokeReason.Logout, cancellationToken);
+            && await store.FindByAccessAsync(TokenHash.Of(cookie), SessionKind.Web, CancellationToken.None) is { } webSession)
+            await store.RevokeAsync(webSession.SessionId, RevokeReason.Logout);
 
         if (refresh is not null)
-            await store.RevokeByRefreshAsync(refresh, cancellationToken);
+            await store.RevokeByRefreshAsync(refresh);
 
         if (csrf)
             SessionCookie.Clear(http.Response, request);
@@ -219,9 +242,9 @@ public static class AuthEndpoints
         return providerLogoutUrl is null ? Results.NoContent() : Results.Json(new LogoutAnswer(providerLogoutUrl));
     }
 
-    private static async Task<IResult> RevokeOthersAsync(HttpContext http, SessionStore store, CancellationToken cancellationToken)
+    private static async Task<IResult> RevokeOthersAsync(HttpContext http, SessionStore store)
     {
-        await store.RevokeOthersAsync(http.User.FindFirst("sub")!.Value, http.User.FindFirst(AppSessionHandler.SessionIdClaim)!.Value, cancellationToken);
+        await store.RevokeOthersAsync(http.User.FindFirst("sub")!.Value, http.User.FindFirst(AppSessionHandler.SessionIdClaim)!.Value);
         return Results.NoContent();
     }
 
