@@ -138,8 +138,8 @@ async function aFinishedCapture(change: Partial<StoredCapture> = {}) {
 // The audio store outlives a test, as it outlives a page. The page goes first, or it reads the empty store and calls again.
 afterEach(async () => {
   await cleanup()
-  for (const capture of await capturesOf(member.identifier)) await removeCapture(capture.clientRecordingId)
   vi.restoreAllMocks()
+  for (const capture of await capturesOf(member.identifier)) await removeCapture(capture.clientRecordingId)
 })
 
 test('one tap records into a new entry, and the card follows the audio until the words are in', { timeout: 30_000 }, async () => {
@@ -243,6 +243,21 @@ test('on plain HTTP the card says that the mic needs HTTPS, and the mic stays of
   await cardSays(screen,'The mic needs HTTPS')
   await expect.element(screen.getByRole('button', { name: 'Record' })).toBeDisabled()
   await expect.element(screen.getByRole('link', { name: 'Turn on HTTPS' })).toBeVisible()
+})
+
+test('a browser that refuses the audio store says so, and the mic stays off', async () => {
+  // Arrange
+  vi.spyOn(IDBDatabase.prototype, 'transaction').mockImplementation(() => {
+    throw new DOMException('The store is closed.', 'InvalidStateError')
+  })
+
+  // Act
+  const screen = await openHome([])
+
+  // Assert
+  await cardSays(screen, 'This browser does not keep audio')
+  await expect.element(screen.getByRole('button', { name: 'Record' })).toBeDisabled()
+  await expect.element(screen.getByRole('button', { name: 'Type instead' })).toBeVisible()
 })
 
 // Last, because the mic state of the tab keeps the denial until the next tap.

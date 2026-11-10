@@ -50,6 +50,8 @@ export type CaptureView =
   | { kind: 'recording'; startedAt: number }
   | { kind: MicFailure }
   | { kind: 'storeFailed' }
+  /** The browser refuses to read or keep the audio store, as some private windows do, so a recording could not be safe. */
+  | { kind: 'noStore' }
   /** The recording ended, and its audio waits in this browser for the upload to start. */
   | { kind: 'stored'; durationMs: number }
   | { kind: 'sending'; sentSlices: number; totalSlices: number; durationMs: number }
@@ -65,6 +67,8 @@ export type CaptureKind = CaptureView['kind']
 export interface CaptureInputs {
   isSecure: boolean
   canRecord: boolean
+  /** False when the audio store of the browser refused the read. */
+  canStore: boolean
   mic: MicState
   /** The newest capture of the person in this browser. */
   latest: StoredCapture | null
@@ -96,9 +100,10 @@ function viewOfText(capture: StoredCapture, recording: RecordingDto | undefined,
 }
 
 /** What the mic card shows. A recording of this tab comes first, then the newest capture, then the mic at rest. */
-export function captureViewOf({ isSecure, canRecord, mic, latest, recording, isOnline, now }: CaptureInputs): CaptureView {
+export function captureViewOf({ isSecure, canRecord, canStore, mic, latest, recording, isOnline, now }: CaptureInputs): CaptureView {
   if (!isSecure) return { kind: 'insecure' }
   if (!canRecord) return { kind: 'unsupported' }
+  if (!canStore) return { kind: 'noStore' }
   if (mic.kind === 'starting' || mic.kind === 'recording' || mic.kind === 'storeFailed') return mic
   if (mic.kind === 'failed') return { kind: mic.failure }
   if (!latest) return { kind: 'idle' }
@@ -110,4 +115,4 @@ export function captureViewOf({ isSecure, canRecord, mic, latest, recording, isO
 export const waitingBesides = (captures: StoredCapture[]) => captures.slice(0, -1).filter((capture) => !capture.isFinished).length
 
 /** A tap starts a recording in each state but these. */
-export const canTapToRecord = (kind: CaptureKind) => kind !== 'insecure' && kind !== 'unsupported' && kind !== 'starting'
+export const canTapToRecord = (kind: CaptureKind) => kind !== 'insecure' && kind !== 'unsupported' && kind !== 'noStore' && kind !== 'starting'

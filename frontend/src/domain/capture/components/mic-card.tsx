@@ -78,6 +78,11 @@ function wordsOf(view: CaptureView): { title: string; line: string } {
       return { title: 'The mic did not start', line: `Try again.${typeInstead}` }
     case 'unsupported':
       return { title: 'This browser cannot record audio', line: `Use a recent Chrome, Edge, Firefox, or Safari to record.${typeInstead}` }
+    case 'noStore':
+      return {
+        title: 'This browser does not keep audio',
+        line: `Recall saves each second in the browser before the upload, and this browser refuses that, as some private windows do. Open Recall in a normal window to record.${typeInstead}`,
+      }
     case 'insecure':
       return { title: 'The mic needs HTTPS', line: `This page opened on plain HTTP, so the mic stays off.${typeInstead}` }
     case 'storeFailed':
@@ -101,9 +106,9 @@ const iconOf: Partial<Record<CaptureKind, typeof Mic01Icon>> = {
 }
 
 const isProblem = (kind: CaptureKind) =>
-  kind === 'denied' || kind === 'insecure' || kind === 'failed' || kind === 'refused' || kind === 'noMic' || kind === 'micBusy' || kind === 'micFailed' || kind === 'unsupported' || kind === 'storeFailed'
+  kind === 'denied' || kind === 'insecure' || kind === 'failed' || kind === 'refused' || kind === 'noMic' || kind === 'micBusy' || kind === 'micFailed' || kind === 'unsupported' || kind === 'noStore' || kind === 'storeFailed'
 
-const isMicOff = (kind: CaptureKind) => kind === 'insecure' || kind === 'unsupported' || kind === 'denied'
+const isMicOff = (kind: CaptureKind) => kind === 'insecure' || kind === 'unsupported' || kind === 'noStore' || kind === 'denied'
 
 function typeAnEntry() {
   focusEditorIn(document.querySelector<HTMLElement>('section[aria-label="Write a new entry"]'))
@@ -199,6 +204,7 @@ function Actions({ view, capture }: { view: CaptureView; capture: Capture }) {
         </div>
       )
     case 'unsupported':
+    case 'noStore':
       return <Button variant="outline" className="h-11 px-4" onPress={typeAnEntry}>Type instead</Button>
     case 'insecure':
       return (
@@ -264,7 +270,8 @@ export function MicCard() {
           <LevelMeter level={capture.level} />
         </div>
       )}
-      <div role="status" className="flex max-w-md flex-col items-center gap-1.5">
+      {/* Until the store answers, the card does not know of stored audio, so it says nothing rather than Tap to record. */}
+      <div role="status" className={cn('flex max-w-md flex-col items-center gap-1.5', !capture.isLoaded && !isOff && 'invisible')}>
         <p className={cn('flex items-center gap-2 text-lg font-semibold', isRecording && 'sr-only', isProblem(view.kind) && 'text-destructive')}>
           {icon && <HugeiconsIcon icon={icon} size={20} aria-hidden className={cn(view.kind === 'transcribing' && 'animate-spin [animation-duration:2s]', view.kind === 'ready' && 'text-emerald-600 dark:text-emerald-400')} />}
           {words.title}

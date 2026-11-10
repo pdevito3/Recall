@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { RecordingDto } from '@/api/generated/models/types/recording-dto'
 
 import type { StoredCapture } from './audio-store'
-import { captureViewOf, micReducer, readyShowsForMs, waitingBesides, type CaptureInputs, type MicState } from './capture-view'
+import { canTapToRecord, captureViewOf, micReducer, readyShowsForMs, waitingBesides, type CaptureInputs, type MicState } from './capture-view'
 
 const startedAt = Date.parse('2026-11-10T08:00:00Z')
 
@@ -45,6 +45,7 @@ const aRecording = (changes: Partial<RecordingDto> = {}): RecordingDto => ({
 const inputs = (changes: Partial<CaptureInputs> = {}): CaptureInputs => ({
   isSecure: true,
   canRecord: true,
+  canStore: true,
   mic: { kind: 'idle' },
   latest: null,
   recording: undefined,
@@ -97,6 +98,12 @@ describe('the mic card', () => {
 
   it('says that the browser cannot record when it has no recorder', () => {
     expect(captureViewOf(inputs({ canRecord: false })).kind).toBe('unsupported')
+  })
+
+  it('says that the browser does not keep audio when its store refuses the read, so no tap starts a recording that is not safe', () => {
+    const view = captureViewOf(inputs({ canStore: false }))
+    expect(view.kind).toBe('noStore')
+    expect(canTapToRecord(view.kind)).toBe(false)
   })
 
   it('rests at the mic when this browser has no capture', () => {

@@ -41,14 +41,14 @@ async function record(owner: string) {
 }
 
 function useStoredCaptures(owner: string) {
-  const [read, setRead] = useState<{ owner: string; captures: StoredCapture[]; at: number } | null>(null)
+  const [read, setRead] = useState<{ owner: string; captures: StoredCapture[]; canStore: boolean; at: number } | null>(null)
   useEffect(() => {
     if (!owner) return
     let isCurrent = true
     const readAgain = () =>
       void capturesOf(owner).then(
-        (captures) => isCurrent && setRead({ owner, captures, at: Date.now() }),
-        () => undefined,
+        (captures) => isCurrent && setRead({ owner, captures, canStore: true, at: Date.now() }),
+        () => isCurrent && setRead({ owner, captures: [], canStore: false, at: Date.now() }),
       )
     readAgain()
     const stop = subscribeToAudioStore(readAgain)
@@ -90,6 +90,7 @@ export function useCapture() {
   const view = captureViewOf({
     isSecure: window.isSecureContext,
     canRecord: recordingFormat() !== null,
+    canStore: stored?.canStore ?? true,
     mic: micState,
     latest,
     recording: recording.data,
