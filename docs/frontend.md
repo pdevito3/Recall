@@ -270,6 +270,25 @@ The app cannot change this delay. No web API forces the commit.
 
 The app asks at the start of an entry and again at its create. A change to off in the memory of this tab, or in a key of any tab of the person, stops the location, and so does any open question about location on this device. While it waits, each new entry shows a notice that it saves no location. The row of settings stays in memory, so it can be older than a change on another device, and a create can then send coordinates. The Server reads its own row and drops them. A row that has not loaded at the first word also gives no location to that entry. A refused change to off holds only in the tab that made it, the row stays on, and only that tab shows the refusal.
 
+### Recorded audio
+
+The mic card is the first card of the journal home. One tap records into a new entry. The recorder gives a slice each second, and each slice goes to IndexedDB (`recall.capture`) before the upload. A slice leaves the browser store only after the Server answers its `PUT` with a success. `frontend/src/domain/capture` holds this code: `upload-plan.ts` and `capture-view.ts` decide, and `audio-store.ts`, `mic-recorder.ts`, and `upload-queue.ts` do the work.
+
+- The root layout runs the upload queue of the person of the page on each page, so stored audio goes out after a reload or on a later visit. One tab of the browser sends at a time, under the Web Lock `recall.capture.upload.<owner>`. The steps are the Session, the Recording, each slice in order, and the finish with the count and the bytes. Each step is idempotent on the Server, so a retry after a lost answer is safe.
+- The entry is made only after the first slice is stored, so a tap with no audio leaves no empty entry.
+- A tab that records holds the Web Lock `recall.capture.recording.<id>`. A capture with no holder is one of a closed tab, and the queue ends it and sends it.
+- With no network, or with no answer from the Server, the queue waits 1 s, then twice as long each time up to 30 s. The return of the network tries at once. The card says that the audio is safe in this browser.
+- A `409` when the app makes the Session, or a `404` when it makes the Recording, means that the person deleted the entry before its audio came. The audio moves to a new entry. A `404` for a slice or the finish means that the person deleted the entry during the upload, so the browser drops its copy.
+- Another refusal keeps the audio with the words of the Server, and the card shows `Send again`.
+- After the finish, the card follows the Recording: `Writing the words`, then `Your words are in` with the words and `Open entry`, or `No words came from this audio` with `Try again`.
+
+Limits:
+
+- A close of the tab can lose the last second of audio. The recorder asks for the slice in `visibilitychange` and `pagehide`, but the browser does not wait for the write.
+- A recording goes on when the person opens another page of the app. Only the card on the journal home shows it.
+- Audio that waits at a logout stays under its person, and it goes out at the next sign-in of that person on this browser.
+- The browser gives the mic only to a secure context. On plain HTTP the card says that the mic needs HTTPS, and typed entries still work.
+
 ## Routes
 
 Each file in `routes/` is a route. The router generates `routeTree.gen.ts`. Do not edit that file.

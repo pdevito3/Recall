@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 import { home } from './home.locators'
 
 export function homePage(page: Page) {
@@ -16,6 +16,16 @@ export function homePage(page: Page) {
     async openOnPlainHttp() {
       await page.addInitScript(() => Object.defineProperty(window, 'isSecureContext', { value: false }))
       await this.open()
+    },
+
+    async isAbove(upper: Locator, lower: Locator) {
+      const [first, second] = await Promise.all([upper.boundingBox(), lower.boundingBox()])
+      return first !== null && second !== null && first.y + first.height <= second.y
+    },
+
+    /** How far the page scrolls sideways. */
+    sideScroll() {
+      return page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
     },
 
     async logOutFromTheUserMenu() {

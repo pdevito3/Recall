@@ -16,6 +16,7 @@ test.describe('the mic message on the journal page', () => {
 
     await expect(home.at.micMessage).toBeVisible()
     await expect(home.at.httpsGuide).toBeVisible()
+    await expect(home.at.record).toBeDisabled()
     await expect(home.at.journalComposer).toBeVisible()
   })
 
@@ -26,7 +27,25 @@ test.describe('the mic message on the journal page', () => {
     await home.open()
 
     await expect(home.at.journalComposer).toBeVisible()
+    await expect(home.at.record).toBeEnabled()
     await expect(home.at.micMessage).toHaveCount(0)
+  })
+})
+
+test.describe('the mic card on a phone', () => {
+  test.use({ actor: as.user('Bob Smith'), viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+
+  test('is the first thing under the date, and the page open puts no keyboard over it', async ({ page, api }) => {
+    api.mock(usersApi.currentIs({ identifier: '1', name: 'Robert Smith' }))
+    const home = homePage(page)
+
+    await home.open()
+
+    await expect(home.at.record).toBeInViewport()
+    await expect(home.at.journalComposer).toBeVisible()
+    await expect(home.at.journalComposer).not.toBeFocused()
+    expect(await home.isAbove(home.at.micCard, home.at.journalComposer)).toBe(true)
+    expect(await home.sideScroll()).toBe(0)
   })
 })
 
