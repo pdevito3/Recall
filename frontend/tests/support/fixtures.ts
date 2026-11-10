@@ -76,6 +76,7 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
             return
           }
           if (newestMock.delayMs) await new Promise((resolve) => setTimeout(resolve, newestMock.delayMs))
+          if (newestMock.heldUntil) await newestMock.heldUntil
           await route.fulfill({
             status: newestMock.status,
             headers: newestMock.headers,
