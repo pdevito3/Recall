@@ -12,6 +12,14 @@ export type ApplyWaitingCleanupPath = {
     id: string;
 };
 
+export type ApplyWaitingCleanupHeaders = {
+    /**
+     * @description The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.
+     * @type string | undefined
+    */
+    "X-Recall-User"?: string;
+};
+
 export type ApplyWaitingCleanupStatus200 = SessionDto;
 
 export type ApplyWaitingCleanupStatus400 = ValidationProblemDetails;
@@ -32,7 +40,7 @@ export type ApplyWaitingCleanupOptions = {
     body: ApplyWaitingCleanupBody;
     path: ApplyWaitingCleanupPath;
     query?: never;
-    headers?: never;
+    headers?: ApplyWaitingCleanupHeaders;
 };
 
 export type ApplyWaitingCleanupResponses = {

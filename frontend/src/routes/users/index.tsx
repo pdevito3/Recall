@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import * as z from 'zod'
 
 import { getUserListQueryPageNumberSchema } from '@/api/generated/users/zod/get-user-list'
+import { Page } from '@/components/page'
 import { PageHeading } from '@/components/page-heading'
 import { QueryError } from '@/components/query-error'
 import { Link } from '@/components/ui/link'
@@ -32,10 +33,10 @@ function UsersPage() {
     navigate({ search: (prev) => ({ ...prev, page: pageNumber === 1 ? undefined : pageNumber }) })
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8">
+    <Page>
       <PageHeading>Users</PageHeading>
       <UserRows list={list} page={page} onPageChange={handlePageChange} />
-    </div>
+    </Page>
   )
 }
 
@@ -70,7 +71,7 @@ function UserRows({ list, page, onPageChange }: UserRowsProps) {
   }
 
   if (users.length === 0) {
-    return <p className="text-muted-foreground">This tenant has no users.</p>
+    return <p className="text-muted-foreground">There are no users.</p>
   }
 
   return (
@@ -86,7 +87,7 @@ function UserRows({ list, page, onPageChange }: UserRowsProps) {
             {users.map((user) => (
               <TableRow key={user.id} id={user.id}>
                 <TableCell className="wrap-anywhere">
-                  <Link to="/users/$id" params={{ id: user.id }} className="font-medium underline-offset-4 hover:underline max-sm:flex max-sm:min-h-11 max-sm:items-center">
+                  <Link to="/users/$id" params={{ id: user.id }} className="font-medium max-md:inline-flex max-md:min-h-11 max-md:items-center underline-offset-4 hover:underline">
                     {user.fullName}
                   </Link>
                   {isMobile && user.email && <p className="text-sm text-muted-foreground">{user.email}</p>}

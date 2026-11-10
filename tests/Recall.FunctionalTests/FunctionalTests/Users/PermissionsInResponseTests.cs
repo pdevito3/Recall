@@ -140,6 +140,23 @@ public class PermissionsInResponseTests : TestBase
     }
 
     [Test]
+    public async Task the_list_and_the_record_give_the_permissions_of_a_user_in_one_order()
+    {
+        // Arrange
+        var arranged = await ArrangeAsync();
+        var target = await arranged.AddUserAsync(UserRole.User(), Permission.ReadUsers(), Permission.ManageTenant(), Permission.ReadAgents());
+
+        // Act
+        var users = await ReadAsync<List<UserDto>>(await FactoryClient.GetRequestAsync(ApiRoutes.Users.GetList));
+        var record = await ReadAsync<UserDto>(await FactoryClient.GetRequestAsync(ApiRoutes.Users.GetRecord(target.Id)));
+
+        // Assert
+        var inOrder = record.Permissions.Order(StringComparer.Ordinal).ToList();
+        record.Permissions.ShouldBe(inOrder);
+        users.Single(u => u.Id == target.Id).Permissions.ShouldBe(inOrder);
+    }
+
+    [Test]
     public void each_request_whose_response_has_permissions_has_a_case()
     {
         // Arrange

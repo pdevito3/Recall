@@ -11,6 +11,14 @@ export type StreamCleanupPath = {
     id: string;
 };
 
+export type StreamCleanupHeaders = {
+    /**
+     * @description The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.
+     * @type string | undefined
+    */
+    "X-Recall-User"?: string;
+};
+
 /**
  * @description One event of `POST /sessions/{id}/cleanup/stream`. An event holds no words of the journal and no words of a model provider.
  * @type object
@@ -31,7 +39,7 @@ export type StreamCleanupOptions = {
     body?: never;
     path: StreamCleanupPath;
     query?: never;
-    headers?: never;
+    headers?: StreamCleanupHeaders;
 };
 
 export type StreamCleanupResponses = {

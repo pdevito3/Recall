@@ -190,6 +190,86 @@ The session check shows no error toast. The alert is the only message for a fail
 
 Thus a page always has a session. Do not add a Login button or a signed-out state to a page.
 
+### Unsent words
+
+The words of an entry save in the background. Until the Server holds them, they stay in `localStorage` under `recall.unsent.<owner>.<writer>.<number>`. A setting that did not reach the Server stays under `recall.unsent-setting.<owner>.<writer>.<number>`. `<writer>` names one load of a page. The tab keeps a pointer to the open entry in `sessionStorage` under `recall.composer`. The pointer holds no words. Only the person of the key reads or sends these words.
+
+| What happens | What the app does |
+|---|---|
+| A save gets no answer in 30 s | The request ends, the status says that the save waits, and the save tries again. |
+| A save meets an entry that is gone (404, or a 409 that is not a conflict of a save) | The words become a new entry. A notice says so on each page, also on a later load with no page open. The entry page goes to the new entry. |
+| The Server refuses the words (another 4xx) | The words stay, with the reason, and they do not go out again on the next load. The page of the words shows the reason. With no such page open, a notice gives the reason, a Copy, and a Discard. |
+| A save has a base that is not the current Draft number | The Server answers `Lost`, keeps the words in a Revision, and the Draft stays. The time on the device does not decide. The app reads the Draft before it saves again. If the Draft holds each word of the save, no notice shows. If not, the page keeps the words on the screen and says so. `Add my words to the newest words` joins the words and saves from the read. A later save cannot push a chunk out of the Draft with no read. With no page open, a notice names the words and links to History, and it stays after a reload, until the person closes it or signs out. |
+| A retry or another tab sends a save whose first reply did not come | The Server answers `Kept` or `Lost` for a save that it knows. The number in a `Kept` is not a base. The app reads the Draft inside the same send, and it follows the same rule as for a loss. If this read fails, also with a refusal of the Server, the app sends the same save again, and no notice shows until a read answers. A read that finds the entry gone moves the words to a new entry. A later save that is still running decides instead, because the Draft can hold it. |
+| A person logs out | A toast says that the app works. Each tab sends its unsent words, and the wait is up to 5 s. If the Server holds them all, the logout goes on. If not, an alert dialog names the words, also those of another tab, each with a Copy. The person can keep them on this device or discard them. A discard removes the exact keys that the dialog named. Words that only the memory of a tab holds cannot stay, so the dialog offers `Stay signed in` in place of `Keep`. The logout then clears the pointer and ends the session. |
+| The session belongs to another person (see [One browser, two people](authentication.md#one-browser-two-people)) | The tab stops each saver, clears the query cache and the toasts, keeps the words under the key of the first person, and goes to `/auth/login?anotherPerson=1`. |
+
+Kept words go out when the same person signs in on this browser again. A refused text cannot go, so it returns as a notice with a Copy and a Discard. The next person sees no sign of them in the app. The browser tools of the device can still read them, and the dialog says so.
+
+#### One owner for each key
+
+Each load of a page has a new writer id. A page writes its text under keys that name that id. A key never changes: a newer text gets a new key, and the page then removes its previous key. So a remove takes only the exact text that the remover read. One saver has at most one key, and that key holds the change in the queue and the held words as one entry. Another tab takes a key only after its writer left, or after its writer did not answer a ping for 500 ms. A writer that leaves writes `recall.left.<writer>` in `pagehide` and sends a message on the `recall.tabs` channel. A wrong guess about a frozen tab sends the same text twice, and the Server takes the second as a replay or as a Revision. No word goes, because safety does not depend on who is alive. `frontend/src/domain/sessions/autosave/tab-keys.ts` holds this rule.
+
+The app runs on plain HTTP on a LAN, so it must not need a secure context. It uses `localStorage` and `BroadcastChannel`, which plain HTTP has. It uses Web Locks only where the browser has them, for the editor of an entry.
+
+#### One tab edits an entry
+
+One tab of a browser edits an entry at a time ([ADR 0022](adr/0022-one-tab-edits-an-entry.md)). `frontend/src/domain/sessions/autosave/entry-lock.ts` holds this rule.
+
+- The tab that edits holds the Web Lock `recall.edit.<person>.<entry>`. A second tab that opens the entry shows the words of the editor with no edit. Its `Edit here` button takes the entry there, and the other tab goes read-only at once.
+- The tab that loses hands its unsent words, its change in flight, and its base to the new editor on the `recall.editors` channel. It keeps them until the new editor says that it took them, so a crash of the new editor loses nothing. A frozen tab hands them over when it wakes, and the new editor merges them once from their base.
+- A crash or a close frees the lock. The next tab in line takes the words from the key of the editor.
+- A load with no page of the entry, such as a load that takes the words of a closed tab, gives the entry to a tab that shows it.
+- When the editor leaves a page because another tab took the entry, a focus in the editor goes to `Edit here`. The button names the notice, so a screen reader reads why. The read-only words are a read-only text box.
+- On plain HTTP the browser has no Web Locks. A mark `recall.editor.<lock>` in `localStorage` names the editor, and a tab reads it before it writes or sends. A mark of a tab that crashed stays, so the next tab needs `Edit here`.
+
+So no two tabs hold the same unsent words, and a merge after `Lost` always knows its base.
+
+A browser with no `BroadcastChannel`, or one that refuses to make a channel, still opens the app. The words of one tab stay safe, because the keys do not need the channel. With two tabs, no hand-over comes, so a tab that takes an entry starts from the key of the last editor after 500 ms. Words that a full storage left only in the memory of that editor stay there. A tab also does not hear a sign-out or a sign-in in another tab at once. It checks the last person of the browser when it shows again.
+
+A page that opens takes the key of a writer that left. A live tab never copies or takes the key of another live tab. The words of a live editor come only by the hand-over of [One tab edits an entry](#one-tab-edits-an-entry).
+
+#### Limits of the unsent words
+
+**A kill of the browser.** `localStorage` writes reach the memory of the browser at once, and the disk later. Chromium delays the commit to disk. So a kill of the browser process, or a power cut, can lose the last words. A close of a tab or of the browser loses nothing. The table has the runs on Chromium on macOS. Each run typed a word, waited, and killed the process with `SIGKILL`.
+
+| Server state | Wait before the kill | Result |
+|---|---|---|
+| Saves fail | 0, 500, or 2,000 ms | The word is lost. |
+| Saves fail | 6,000 ms or more | The word survives, and it goes out at the next load. |
+| Online | 0 or 500 ms | The word is lost, because the 800 ms pause in typing had not ended. |
+| Online | After `Saved` shows | The word is on the Server. |
+
+The app cannot change this delay. No web API forces the commit.
+
+**One very long text with no spaces.** Blink and the editor take time that grows faster than the size of one unbroken text. No word goes, and the tab does not answer during that time. The server limit is 1,000,000 characters. A text with spaces of 1.1 M characters takes 244 ms. A change of the wrap rule to `break-word` did not help (200,000 characters: 9.4 s). The notice of a text over the limit can take 36 s to show, and a reload with a dead tab can take 69 s. Real words of the same size take 223 ms.
+
+| Unbroken text | Paste |
+|---|---|
+| 10,000 characters | 0.1 s |
+| 50,000 characters | 1.8 s |
+| 100,000 characters | 4.9 s |
+| 200,000 characters | 11.2 s |
+| 1,100,000 characters | 50 s, and 98 s at a reload |
+
+**Tags.** A change of tags has no key, so a reload or a crash loses a change that did not reach the Server. A sign-out asks first. A reload with an open prompt about the same field drops the choice in the prompt, and the row keeps the value that the Server has.
+
+**A reload while the server is down.** No app code runs, so the app cannot show a message. A plain HTTP origin cannot have a service worker, because a service worker needs a secure context. A reverse proxy that stays up shows its own error page. Caddy sends a 502 with an empty body, and the person sees a white page. With nothing listening, the person sees the connection error page of the browser. The words stay in their keys, and they go out when the page opens again after the server returns.
+
+**A sign-out in another tab.** A tab that does not answer within 500 ms cannot report words that only its memory holds, so the sign-out in another tab cannot name them. A frozen tab, or a tab in a long paste, does this. Words that a tab types after the dialog opened stay in the key of that tab, and they return with a notice at the next sign-in. With no room in storage, those later words have no key, and they go with the page, with no warning.
+
+**No room in storage.** A key holds the newest words of its saver or nothing. When a write finds no room and the words changed, the older key goes, and the page says that the words are only there. A crash then loses them. A hand-over writes the words to a key again when storage has room.
+
+**One entry open in two composers.** A reload or Duplicate Tab can do this while a second tab is open, because the pointer of a composer stays in `sessionStorage` over a reload. A composer that already reads the entry does not join the held words of a key of another tab. The words stay in the key, they join at a later load, and the tab that joins them says so.
+
+**A tab that wakes.** A frozen tab that wakes after another tab took or discarded its key does not save those words again. If the person types in that tab after the wake, the screen text goes as new text, and the rule of the base decides it. If a key of another tab holds the words, the page of the frozen tab does not say Saved. If no key holds them, the page says that the words may be only on that page, and Done waits for an answer. With no entry yet, "Add my words to the newest words" saves the words as a new entry, and "Show the newest words" empties the page.
+
+**A notice about words in History.** It ends at a sign-out, and it does not return. The words stay in History. With no room in storage, the notice lives only in the memory of the tab, so a crash of the tab ends it.
+
+**Location capture never turns on with no click.** Location capture never turns on from a key, a retry, or a save of another setting. A change to on goes to the Server only from a click in a live page. A save of another setting sends the values of the row at its base, and the Server refuses a save with a stale base, so that save does not turn location on. If the row moved after the click, the click got no reply, the click got a refusal that the app would try again, or the click waits behind a save that failed, location stays off and the page asks. A change to on that waits in a key is dropped when another tab or a later load takes the key. If a tab closes before its click reaches the Server, location stays off, with no notice. A false off is safe. The person can click again.
+
+The app asks at the start of an entry and again at its create. A change to off in the memory of this tab, or in a key of any tab of the person, stops the location, and so does any open question about location on this device. While it waits, each new entry shows a notice that it saves no location. The row of settings stays in memory, so it can be older than a change on another device, and a create can then send coordinates. The Server reads its own row and drops them. A row that has not loaded at the first word also gives no location to that entry. A refused change to off holds only in the tab that made it, the row stays on, and only that tab shows the refusal.
+
 ## Routes
 
 Each file in `routes/` is a route. The router generates `routeTree.gen.ts`. Do not edit that file.
@@ -230,7 +310,9 @@ The router moves the `component` of each route to a chunk that loads when the pa
 
 ## Bundle size
 
-`pnpm build` fails when the JavaScript that `dist/index.html` loads is more than 950 kB of minified code. That is the entry chunk in the `<script type="module">` tag and each chunk in the `modulepreload` links, which the entry imports statically. The budget does not count the CSS, or the chunk of a route, which loads after the entry runs. The budget is `firstPageBudgetKb` in `frontend/vite.config.ts`. The error gives the size of each chunk that it counts.
+`pnpm build` fails when the JavaScript that `dist/index.html` loads is more than 965 kB of minified code. That is the entry chunk in the `<script type="module">` tag and each chunk in the `modulepreload` links, which the entry imports statically. The budget does not count the CSS, or the chunk of a route. `main.tsx` loads the chunk of each route after the first idle moment, because a page with no network cannot fetch a chunk, and the status line tells a person to keep the page open. The budget is `firstPageBudgetKb` in `frontend/vite.config.ts`. The error gives the size of each chunk that it counts. A build that passes logs the size of the first page.
+
+`motion` (151 kB) does not load on the first page. Each animated overlay of the layout, such as the tooltip of the sidebar, the user menu, or the dialog of unsent words at logout, is closed on the first paint. So the layout loads each one with `lazyOverlay` from `components/ui/lazy-overlay.tsx`, and imports its trigger from a module with no `motion`, such as `components/ui/tooltip-trigger.tsx`. A static import of `tooltip.tsx`, `popover.tsx`, `dropdown-menu.tsx`, or another component of `@animate-ui/react` in the layout loads `motion` on the first page again.
 
 When the build fails:
 

@@ -72,14 +72,12 @@ export function isProblemDetails(obj: unknown): obj is ProblemDetails {
     return false
   }
   const pd = obj as Record<string, unknown>
-  return (
-    typeof pd.type === 'string' &&
-    typeof pd.title === 'string' &&
-    typeof pd.status === 'number'
-  )
+  return (typeof pd.title === 'string' || typeof pd.detail === 'string') && typeof pd.status === 'number'
 }
 
 export const STALE_VERSION_PROBLEM_TYPE = 'urn:recall:problem:stale-version'
+export const CONCURRENT_CHANGE_PROBLEM_TYPE = 'urn:recall:problem:concurrent-change'
+export const PAGE_USER_MISMATCH_PROBLEM_TYPE = 'urn:recall:problem:page-user-mismatch'
 
 export function isStaleVersionError(error: unknown): boolean {
   return isProblemDetailsError(error) && error.problemDetails.type === STALE_VERSION_PROBLEM_TYPE
@@ -98,4 +96,9 @@ export function validationErrorsOf(error: unknown): Record<string, string[]> {
       (entry): entry is [string, string[]] => Array.isArray(entry[1]) && entry[1].every((m) => typeof m === 'string'),
     ),
   )
+}
+
+export function retryUnlessRefused(failureCount: number, error: Error): boolean {
+  const isRefused = isProblemDetailsError(error) && (error.status ?? 500) < 500
+  return !isRefused && failureCount < 1
 }

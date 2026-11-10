@@ -6,13 +6,13 @@ Each page of the SPA needs a session. A visitor with no session goes to the logi
 
 - `auth-anonymous` goes to `/auth/login` at once, with the page as `returnUrl`. `GET /auth/me` is 204, and `GET /api/v1/users/me` is the 401 of the Server.
 - `auth-login` goes through `/auth/login`, `/auth/oidc/<id>/start`, the login page of the IdP, and `/auth/oidc/callback`, back to the page that the visitor opened.
-- `auth-session` shows `Signed in as <name>` and `Logout`, and the user menu in the sidebar shows the same name. `GET /api/v1/users/me` is 200 with the same name. The session survives a reload.
+- `auth-session` shows the name in the user menu at the bottom of the sidebar, and `Logout` in that menu. The `Account` section of `/settings` shows `Signed in as <name>`. `GET /api/v1/users/me` is 200 with the same name. The session survives a reload.
 - `auth-logout` sends `POST /auth/logout` with `X-CSRF: 1`, then goes to the logout of the IdP, then through `/auth/signed-out` to `/auth/login?signedOut=1`. The page says `You are signed out`, and has the link `Sign in with <provider>`. Back, a plain visit, and a second tab reach the login page of the IdP or the signed-out page, and do not sign in with no click.
 
 ## How to get to it (user POV)
 
 - Open any page of the app with no session. The login page of the IdP shows.
-- Choose `Logout` in the `Your session` card of the home page `/`, or in the user menu at the bottom of the sidebar.
+- Choose `Logout` in the user menu at the bottom of the sidebar.
 
 ## Driving it with browse.mjs
 
@@ -23,10 +23,10 @@ Preconditions:
 
 - **Anonymous state.** Open `/`. Run `page.goto('/', { waitUntil: 'commit' })` after `waitForResponse` on `/auth/me` and `waitForRequest` on `/auth/login`. The response is 204, and the `returnUrl` of the login request is `/`. The page is then the login page of the IdP, so send each check of the app with `page.request`: `page.request.get('/api/v1/users/me', { headers: { 'X-CSRF': '1' } })` gives 401.
 - **Log in.** Sign in at the IdP. Run `const { name } = await login()`. On a new page, the helper opens `/` first. At ZeroFactor, it clicks the user `[data-testid="user-admin@example.com"]`. At DuendeDemo, it fills `#Input_Username` and `#Input_Password` with `bob` and clicks `button[value="login"]`. The browser returns to the `web` origin, and the `Main` navigation of the layout is visible. `name` is the `name` field of `GET /auth/me`.
-- **Session.** Read the name. Run ``page.getByText(`Signed in as ${name}`)``. The text is visible. `fetch('/api/v1/users/me', { headers: { 'X-CSRF': '1' } })` in the page gives 200, and its `name` is `name`. `context.cookies()` contains `recall` with `httpOnly`, `sameSite: 'Strict'`, and `path: '/'`. With `--preview`, the name is `__Host-recall`.
+- **Session.** Read the name. Run ``page.getByRole('button', { name: `User menu for ${name}`, exact: true })``. The button is visible. `fetch('/api/v1/users/me', { headers: { 'X-CSRF': '1' } })` in the page gives 200, and its `name` is `name`. `context.cookies()` contains `recall` with `httpOnly`, `sameSite: 'Strict'`, and `path: '/'`. With `--preview`, the name is `__Host-recall`.
 - **Reload.** Run `page.reload()`. The name is visible again.
 - **User menu.** Click the button `User menu for <name>` in the sidebar. The menu shows the name.
-- **Log out.** Run `logout()`. The helper clicks `Logout` and waits for `/auth/login?signedOut=1`.
+- **Log out.** Run `logout()`. The helper opens the user menu, chooses `Logout`, and waits for `/auth/login?signedOut=1`.
 - **Logged-out state.** Run `page.request.get('/auth/me', { headers: { 'X-CSRF': '1' } })`. The status is 204. The heading is `You are signed out`, and the title is `You are signed out - Recall`. The page has no note about the provider, because the provider returned.
 - **Back.** Run `page.goBack()`. The page is the login page of the IdP, and `/auth/me` is 204.
 - **Sign in again.** Open `/`, and sign in at the IdP. The IdP has no session, so it asks again.

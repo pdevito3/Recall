@@ -1,15 +1,11 @@
 import type { ModelProviderListDto } from '@/api/generated/models/types/model-provider-list-dto'
-import type { SessionSummaryDto } from '@/api/generated/models/types/session-summary-dto'
+import { Page } from '@/components/page'
 import { PageHeading } from '@/components/page-heading'
 import { QueryError } from '@/components/query-error'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Link } from '@/components/ui/link'
 import { useMembership } from '@/domain/membership/apis/get-membership'
 
-import { useRecentSessions } from '../apis/cleanup'
 import { useModelProviders } from '../apis/model-providers'
-import { CleanupCard } from './cleanup-card'
 import { ConnectProviderForm } from './connect-provider-form'
 import { ModelProviderCard } from './model-provider-card'
 
@@ -19,18 +15,6 @@ const KEY_RING_TEXT: Record<ModelProviderListDto['keyRing'], string | null> = {
     'The key ring changed: the database holds values that this key ring cannot read. Restore the key folder from the same backup as the database, or enter each API key again.',
   NotWritable:
     'The key folder takes no write. Each saved API key still works, but a key that the server makes for the ring after this does not stay after a restart. Make the folder writable.',
-}
-
-const STATUS_LABELS = {
-  NotRun: 'Not run',
-  Running: 'Running',
-  Clean: 'Clean',
-  Stale: 'Stale',
-  Failed: 'Failed',
-} as const
-
-function statusLabelOf({ cleanupStatus, cleanupFailure }: SessionSummaryDto) {
-  return cleanupStatus === 'Failed' && cleanupFailure === 'Stopped' ? 'Stopped' : STATUS_LABELS[cleanupStatus]
 }
 
 function Providers() {
@@ -82,59 +66,23 @@ function Providers() {
   )
 }
 
-function RecentSessions() {
-  const sessions = useRecentSessions()
-
-  if (sessions.isPending) {
-    return (
-      <p role="status" aria-label="Loading Sessions">
-        Loading Sessions
-      </p>
-    )
-  }
-  if (sessions.isError) {
-    return <QueryError title="The Sessions did not load." error={sessions.error} onRetry={() => void sessions.refetch()} />
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">
-          <h2>Run a Cleanup</h2>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {sessions.data.items.length === 0 && <p className="text-sm text-muted-foreground">You have no Session yet.</p>}
-        <ul className="flex flex-col">
-          {sessions.data.items.map((session) => (
-            <li key={session.id} className="flex items-center gap-2 text-sm">
-              <Link to="/model-providers" search={{ session: session.id }} className="flex min-h-11 min-w-0 flex-1 items-center sm:min-h-8">
-                <span className="truncate">{session.preview || 'A Session with no words'}</span>
-              </Link>
-              <Badge variant="outline">{statusLabelOf(session)}</Badge>
-            </li>
-          ))}
-        </ul>
-      </CardContent>
-    </Card>
-  )
-}
-
-export function ModelProvidersPage({ sessionId }: { sessionId?: string }) {
+export function ModelProvidersPage() {
   const membership = useMembership()
   const mightBeAnAdmin = membership.status === 'member' && membership.user.role === 'Admin'
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 max-sm:[&_[data-slot=button]]:h-11 max-sm:[&_[data-slot=button]]:min-w-11 max-sm:[&_[data-slot=input]]:h-11 max-sm:[&_[data-slot=select-trigger]]:h-11">
+    <Page>
       <PageHeading>Model providers</PageHeading>
-      {sessionId ? <CleanupCard sessionId={sessionId} /> : <RecentSessions />}
       {mightBeAnAdmin ? (
-        <Providers />
+        // A button and a field are 44 px high on a phone already, and a select is not.
+        <div className="flex flex-col gap-6">
+          <Providers />
+        </div>
       ) : (
         membership.status !== 'loading' && (
           <p className="text-sm text-muted-foreground">An Admin connects the model provider of this install.</p>
         )
       )}
-    </div>
+    </Page>
   )
 }

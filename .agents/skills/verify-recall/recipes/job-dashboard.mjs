@@ -6,7 +6,7 @@ export default async ({ page, step, capture, settle, expect, login }) => {
       const response = await page.goto('/backwave/jobs')
       expect(response.status()).toBe(200)
       await expect(page.getByRole('cell', { name: 'system-health' }).first()).toBeVisible({ timeout: 1000 })
-      await expect(page.getByText('Succeeded').first()).toBeVisible({ timeout: 1000 })
+      await expect(page.getByRole('cell', { name: 'Succeeded' }).first()).toBeVisible({ timeout: 1000 })
     }).toPass({ timeout: 30000 })
     await settle()
     await capture('owner-jobs')

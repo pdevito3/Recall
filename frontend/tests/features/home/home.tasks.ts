@@ -18,11 +18,6 @@ export function homePage(page: Page) {
       await this.open()
     },
 
-    async logOut() {
-      await at.logout.click()
-      await page.waitForURL('**/auth/login?signedOut=1')
-    },
-
     async logOutFromTheUserMenu() {
       await at.userMenuLogout.click()
       await page.waitForURL('**/auth/login?signedOut=1')

@@ -11,6 +11,14 @@ export type StartCleanupPath = {
     id: string;
 };
 
+export type StartCleanupHeaders = {
+    /**
+     * @description The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.
+     * @type string | undefined
+    */
+    "X-Recall-User"?: string;
+};
+
 export type StartCleanupStatus202 = SessionDto;
 
 export type StartCleanupStatus401 = unknown;
@@ -27,7 +35,7 @@ export type StartCleanupOptions = {
     body?: never;
     path: StartCleanupPath;
     query?: never;
-    headers?: never;
+    headers?: StartCleanupHeaders;
 };
 
 export type StartCleanupResponses = {

@@ -7,6 +7,7 @@ import type { SessionDto } from '@/api/generated/models/types/session-dto'
 // The app sends each request through this client, and it gives the words of a failure.
 import '@/lib/api-client'
 
+import { useSession } from '../apis/get-session'
 import { CleanupCard } from './cleanup-card'
 
 const doc = (words: string) => JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: words }] }] })
@@ -46,9 +47,15 @@ async function renderCard(answers: Parameters<typeof commands.answerRequests>[0]
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <CleanupCard sessionId="ses_1" />
+      <CleanupOfTheEntry />
     </QueryClientProvider>,
   )
+}
+
+// The entry page reads the Session, and the card reads it from the page.
+function CleanupOfTheEntry() {
+  const session = useSession('ses_1')
+  return session.data ? <CleanupCard session={session.data} /> : null
 }
 
 test('a hand edit during a run says that Cleaned keeps the words and does not say that Cleaned is current', async () => {
@@ -87,15 +94,15 @@ test('a result that waits in History is not called current, and the person can u
 
   await userEvent.click(screen.getByRole('button', { name: 'Use the Cleanup result' }))
 
-  await expect.element(screen.getByText('second clean words')).toBeVisible()
   await expect.element(screen.getByText('Cleaned is current.')).toBeVisible()
+  await expect.element(screen.getByText(/A Cleanup result waits in History/)).not.toBeInTheDocument()
 })
 
 const waitingSince = (change: Partial<SessionDto>) =>
   session({ cleanedHasHandEdits: true, cleanedDraftRevision: 2, cleanedLatestRevision: 3, cleanupBaseCleanedRevision: 2, waitingCleanupRevision: 3, cleanedText: doc('my own words'), ...change })
 
 for (const { name, change, status } of [
-  { name: 'Raw changed', change: { cleanupStatus: 'Stale', rawDraftRevision: 2 }, status: 'Raw changed after the last Cleanup.' },
+  { name: 'your words changed', change: { cleanupStatus: 'Stale', rawDraftRevision: 2 }, status: 'Your words changed after the last Cleanup.' },
   { name: 'a later run failed', change: { cleanupStatus: 'Failed', cleanupFailure: 'ProviderRefused' }, status: 'The last Cleanup did not finish. Your words did not change.' },
   { name: 'a later run was stopped', change: { cleanupStatus: 'Failed', cleanupFailure: 'Stopped' }, status: 'You stopped the last Cleanup. Your words did not change, and you can run it again.' },
 ] satisfies { name: string; change: Partial<SessionDto>; status: string }[]) {
@@ -135,7 +142,7 @@ test('a waiting result that does not load keeps the use off and says why', async
   // Arrange
   const screen = await renderCard([
     { method: 'GET', path: '/api/v1/sessions/ses_1', body: waitingSince({ cleanedText: tagged('I met ', 'Zed') }) },
-    { method: 'GET', path: '/api/v1/sessions/ses_1/cleaned-revisions/3', status: 500, body: { title: 'Server error', status: 500 } },
+    { method: 'GET', path: '/api/v1/sessions/ses_1/cleaned-revisions/3', status: 500, body: { status: 500 } },
   ])
 
   // Assert

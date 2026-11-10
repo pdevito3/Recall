@@ -265,7 +265,8 @@ async function signInAtDuendeDemo(user) {
 }
 
 async function logout() {
-  await page.getByRole('button', { name: 'Logout' }).click()
+  await page.getByRole('button', { name: /^User menu for / }).click()
+  await page.getByRole('menuitem', { name: 'Logout' }).click()
   await page.waitForURL((u) => u.pathname === '/auth/login' && u.searchParams.has('signedOut'), { waitUntil: 'domcontentloaded', timeout: 30_000 })
 }
 

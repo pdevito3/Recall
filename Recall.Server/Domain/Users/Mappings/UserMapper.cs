@@ -11,7 +11,10 @@ public static partial class UserMapper
 {
     /// <summary>The DTO with the actions that <paramref name="caller"/> can send for the user.</summary>
     public static UserDto ToUserDto(this User user, Caller caller)
-        => user.ToUserDtoWithoutActions() with { AllowedActions = NamesOf(user.AllowedActions(caller)) };
+    {
+        var dto = user.ToUserDtoWithoutActions();
+        return dto with { Permissions = InOneOrder(dto.Permissions), AllowedActions = NamesOf(user.AllowedActions(caller)) };
+    }
 
     /// <summary>
     /// Gives each row of a list the actions that <paramref name="caller"/> can send for it. The list query projects
@@ -22,7 +25,11 @@ public static partial class UserMapper
         for (var i = 0; i < users.Count; i++)
         {
             var permissions = users[i].Permissions.Select(p => Permission.Of(p)).ToArray();
-            users[i] = users[i] with { AllowedActions = NamesOf(UserAction.AllowedFor(caller, users[i].Id, permissions)) };
+            users[i] = users[i] with
+            {
+                Permissions = InOneOrder(users[i].Permissions),
+                AllowedActions = NamesOf(UserAction.AllowedFor(caller, users[i].Id, permissions)),
+            };
         }
     }
 
@@ -45,6 +52,8 @@ public static partial class UserMapper
     private static partial UserDto ToUserDtoWithoutActions(this User user);
 
     private static List<string> NamesOf(IEnumerable<UserAction> actions) => actions.Select(a => a.Value).ToList();
+    // The projection inlines MapUserPermissionsToPermissions into SQL, so the order comes after the rows load.
+    private static List<string> InOneOrder(IEnumerable<string> permissions) => permissions.Order(StringComparer.Ordinal).ToList();
     private static string MapEmail(EmailAddress email) => email.Value;
     // The projection inlines this expression, so EF can filter and sort on FullName. User.FullName is not a column.
     private static string MapFullName(User user) => user.LastName == null ? user.FirstName : user.FirstName + " " + user.LastName;

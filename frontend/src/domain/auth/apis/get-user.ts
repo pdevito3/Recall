@@ -1,5 +1,6 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { apiClient, sessionCheckPath } from '@/lib/api-client'
+import { notePageUser } from '@/lib/page-user'
 import type { AuthState, AuthUser } from '../types'
 import { AuthKeys } from './auth.keys'
 
@@ -17,6 +18,7 @@ export async function getUser(): Promise<AuthUser | null> {
   if (!isAuthUser(response.data)) {
     throw new Error(`GET ${sessionCheckPath} answered ${response.status} with a body that is not a user.`)
   }
+  notePageUser(response.data.sub)
   return response.data
 }
 

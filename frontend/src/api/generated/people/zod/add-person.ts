@@ -9,6 +9,8 @@ import { personLabelDtoSchema } from '../../models/zod/person-label-dto'
 import { problemDetailsSchema } from '../../models/zod/problem-details'
 import { validationProblemDetailsSchema } from '../../models/zod/validation-problem-details'
 
+export const addPersonHeaderXRecallUserSchema = z.string().optional().describe('The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.')
+
 export const addPersonStatus201Schema = personDtoSchema
 
 export const addPersonStatus400Schema = validationProblemDetailsSchema

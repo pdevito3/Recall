@@ -109,7 +109,7 @@ public class GetAuditEntryPageQueryTests : TestBase
 
         // Assert
         (await act.ShouldThrowAsync<ForbiddenAccessException>()).Message
-            .ShouldBe("You cannot read the audit log. Ask a tenant admin for access.");
+            .ShouldBe("You cannot read the audit log. Ask an admin for access.");
     }
 
     [Test]

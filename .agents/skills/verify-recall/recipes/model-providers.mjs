@@ -34,13 +34,17 @@ export default async ({ page, step, capture, expect, login }) => {
   const name = `Fake ${Date.now().toString(36)}`
   const cardOf = (title) => page.locator('[data-slot="card"]').filter({ has: page.getByRole('heading', { level: 3, name: title, exact: true }) })
 
+  // A sweep gives each name in an answer a long value, so the page shows the name of the answer, not the typed name.
   const connect = async (title, apiKey) => {
     await page.getByLabel('Name').fill(title)
     await page.getByLabel('Base URL').fill(fake.url)
     await page.getByLabel('API key', { exact: true }).fill(apiKey)
+    const added = page.waitForResponse((r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/v1/model-providers')
     await page.getByRole('button', { name: 'Connect', exact: true }).click()
-    await expect(page.getByRole('heading', { level: 3, name: title })).toBeVisible()
+    const shown = (await (await added).json()).name
+    await expect(page.getByRole('heading', { level: 3, name: shown })).toBeVisible()
     await expect(page.getByLabel('API key', { exact: true })).toHaveValue('')
+    return shown
   }
 
   try {
@@ -48,19 +52,19 @@ export default async ({ page, step, capture, expect, login }) => {
       await login()
     })
 
-    await step('Model providers in the sidebar: connect a provider with a key', async () => {
+    const shownName = await step('Model providers in the sidebar: connect a provider with a key', async () => {
       await page.goto('/')
       await page.getByRole('link', { name: 'Model providers', exact: true }).click()
       await expect(page.getByRole('heading', { level: 1, name: 'Model providers' })).toBeVisible()
-      await connect(name, key)
+      return connect(name, key)
     })
     await capture('connected')
 
     await step('Test connection: the status names the models, and a pick saves a model', async () => {
-      const card = cardOf(name)
+      const card = cardOf(shownName)
       await card.getByRole('button', { name: 'Test connection' }).click()
       await expect(card.getByRole('status').filter({ hasText: 'Connected.' })).toBeVisible()
-      await card.getByRole('button', { name: new RegExp(`Model of ${name}`) }).click()
+      await card.getByRole('button', { name: new RegExp(`Model of ${shownName}`) }).click()
       const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().includes('/api/v1/model-providers/'))
       await page.getByRole('option').first().click()
       expect((await saved).status()).toBe(200)
@@ -69,23 +73,23 @@ export default async ({ page, step, capture, expect, login }) => {
     await capture('tested')
 
     await step('a wrong key: the alert holds the words of the provider', async () => {
-      const wrong = `${name} wrong`
-      await connect(wrong, `wrong-${randomUUID()}`)
-      const card = cardOf(wrong)
+      const card = cardOf(await connect(`${name} wrong`, `wrong-${randomUUID()}`))
       await card.getByRole('button', { name: 'Test connection' }).click()
       await expect(card.getByRole('alert')).toContainText('The connection failed.')
     })
     await capture('bad-key')
 
     await step('the newest provider is active, so make the good one active again', async () => {
-      const card = cardOf(name)
+      // A sweep gives a name a new long value in each answer, so after a read of the list the good provider is the one with a model.
+      const card = page.locator('[data-slot="card"]').filter({ has: page.getByRole('button', { name: /Model of / }) })
       await card.getByRole('button', { name: 'Make active' }).click()
       await expect(card.getByText('Active', { exact: true })).toBeVisible()
     })
 
     const session = await step('add a Session with a draft through the API', async () => {
       const made = await page.evaluate(async (clientSessionId) => {
-        const headers = { 'Content-Type': 'application/json', 'X-CSRF': '1' }
+        const me = await (await fetch('/auth/me', { headers: { 'X-CSRF': '1' } })).json()
+        const headers = { 'Content-Type': 'application/json', 'X-CSRF': '1', 'X-Recall-User': me.sub }
         const post = await fetch('/api/v1/sessions', { method: 'POST', headers, body: JSON.stringify({ clientSessionId, startedAt: new Date().toISOString() }) })
         const created = await post.json()
         const text = JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'um I walked the dog' }] }] })
@@ -96,22 +100,28 @@ export default async ({ page, step, capture, expect, login }) => {
       return made
     })
 
-    await step('Run Cleanup: the page says that the person can leave', async () => {
-      await page.goto(`/model-providers?session=${session.id}`)
-      await page.getByRole('button', { name: /^Run Cleanup/ }).click()
-      await expect(page.getByRole('status').filter({ hasText: /You can close this page|Cleaned is current/ })).toBeVisible()
+    const cleanup = page.getByRole('region', { name: 'Cleanup', exact: true })
+
+    await step('Run Cleanup on the entry page: the page says that the person can leave', async () => {
+      await page.goto(`/sessions/${session.id}`)
+      await cleanup.getByRole('button', { name: /^Run Cleanup/ }).click()
+      await expect(cleanup.getByRole('status').filter({ hasText: /You can close this page|Cleaned is current/ })).toBeVisible()
     })
     await capture('running')
 
-    await step('a later visit shows Cleaned, and Raw has the words of the draft', async () => {
-      await expect(async () => {
-        await page.reload()
-        await expect(page.getByRole('status').filter({ hasText: 'Cleaned is current.' })).toBeVisible({ timeout: 2000 })
-      }).toPass({ timeout: 60_000 })
-      const raw = page.locator('section', { has: page.getByRole('heading', { level: 3, name: 'Raw' }) })
-      await expect(raw).toContainText('um I walked the dog')
+    await step('the page shows the result with no reload, in the Cleaned tab', async () => {
+      await expect(cleanup.getByRole('status').filter({ hasText: 'Cleaned is current.' })).toBeVisible({ timeout: 60_000 })
+      await page.getByRole('tab', { name: 'Cleaned', exact: true }).click()
+      await expect(page.getByRole('textbox', { name: 'Cleaned version' })).not.toBeEmpty()
     })
     await capture('cleaned')
+
+    await step('a later visit shows Cleaned, and Your words keep the words of the draft', async () => {
+      await page.reload()
+      await expect(cleanup.getByRole('status').filter({ hasText: 'Cleaned is current.' })).toBeVisible()
+      await page.getByRole('tab', { name: 'Your words', exact: true }).click()
+      await expect(page.getByRole('textbox', { name: 'Your words' })).toContainText('um I walked the dog')
+    })
   } finally {
     fake.stop()
   }

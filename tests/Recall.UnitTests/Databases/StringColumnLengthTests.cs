@@ -23,7 +23,7 @@ using Shouldly;
 
 public class StringColumnLengthTests
 {
-    public sealed record CallerColumn(string RequestField, Func<string, int, string> ValueOfLength, Action<string> Write);
+    public sealed record CallerColumn(string RequestField, Func<string, int, string> ValueOfLength, Action<string> Write, bool MessageNamesTheLimit = true);
 
     private static readonly string[] Characters = ["a", "\U0001F600"];
 
@@ -34,6 +34,14 @@ public class StringColumnLengthTests
     private static string AddressOfLength(string character, int length) => ProviderAddress + Text(character, length - ProviderAddress.Length);
 
     private static string Email(string character, int length) => Text(character, length - "@example.com".Length) + "@example.com";
+
+    // The limit of a column of words is on the stored document, so the value is a document that shows no words.
+    private static string DocumentWithNoWords(string character, int length)
+    {
+        const string start = "{\"type\":\"doc\",\"padding\":\"";
+        const string end = "\"}";
+        return start + Text(character, Math.Max(0, length - start.Length - end.Length)) + end;
+    }
 
     private static readonly Dictionary<string, CallerColumn> CallerColumns = new()
     {
@@ -49,10 +57,10 @@ public class StringColumnLengthTests
         ["corrections.canonical_term"] = new("canonicalTerm", Text, v => Correction.Create("ten_1", "usr_1", v, [], false)),
         ["sessions.client_session_id"] = new("clientSessionId", Text, v => Session.Create("ten_1", "usr_1", v, DateTimeOffset.UnixEpoch, null, DateTimeOffset.UnixEpoch)),
         ["sessions.activity"] = new("activity", Text, v => SessionMetadata.Of(v, [], [])),
-        ["sessions.raw_text"] = new("text", Text, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch)),
-        ["sessions.cleaned_text"] = new("text", Text, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch)),
-        ["raw_revisions.text"] = new("text", Text, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch)),
-        ["cleaned_revisions.text"] = new("text", Text, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch)),
+        ["sessions.raw_text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch), MessageNamesTheLimit: false),
+        ["sessions.cleaned_text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch), MessageNamesTheLimit: false),
+        ["raw_revisions.text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch), MessageNamesTheLimit: false),
+        ["cleaned_revisions.text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch), MessageNamesTheLimit: false),
         ["model_providers.name"] = new("name", Text, v => ModelProvider.Connect("ten_1", ModelProviderKind.OpenAiCompatible, v, ProviderAddress, null)),
         ["model_providers.base_url"] = new("baseUrl", AddressOfLength, v => ModelProvider.Connect("ten_1", ModelProviderKind.OpenAiCompatible, "Mine", v, null)),
         ["model_providers.model"] = new("model", Text, v =>
@@ -184,7 +192,8 @@ public class StringColumnLengthTests
         writeFits.ShouldNotThrow();
         var exception = writeTooLong.ShouldThrow<ValidationException>();
         exception.Property.ShouldBe(callerColumn.RequestField);
-        exception.Message.ShouldContain(maxLength.ToString(CultureInfo.InvariantCulture));
+        if (callerColumn.MessageNamesTheLimit)
+            exception.Message.ShouldContain(maxLength.ToString(CultureInfo.InvariantCulture));
     }
 
     public static IEnumerable<string> CallerColumnNames => CallerColumns.Keys;

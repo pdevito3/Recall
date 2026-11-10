@@ -1,8 +1,12 @@
 import {
   AiBrain01Icon,
-  Home01Icon,
+  Book02Icon,
   InformationCircleIcon,
+  Mic01Icon,
+  Note01Icon,
+  Settings01Icon,
   UserGroupIcon,
+  UserMultipleIcon,
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
@@ -23,6 +27,7 @@ import { useSidebar } from "@/components/ui/use-sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { useCurrentNavItem } from "@/components/current-nav-item"
 import { UserMenu } from "@/domain/auth/components/user-menu"
+import { useMembership } from "@/domain/membership/apis/get-membership"
 
 const appName = "Recall"
 const appInitials = appName
@@ -34,9 +39,24 @@ const appInitials = appName
 
 const navItems = [
   {
-    title: "Home",
+    title: "Journal",
     url: "/",
-    icon: Home01Icon,
+    icon: Book02Icon,
+  },
+  {
+    title: "Summaries",
+    url: "/summaries",
+    icon: Note01Icon,
+  },
+  {
+    title: "People",
+    url: "/people",
+    icon: UserMultipleIcon,
+  },
+  {
+    title: "Settings",
+    url: "/settings",
+    icon: Settings01Icon,
   },
   {
     title: "Users",
@@ -47,6 +67,11 @@ const navItems = [
     title: "Model providers",
     url: "/model-providers",
     icon: AiBrain01Icon,
+  },
+  {
+    title: "Transcription",
+    url: "/transcription-engine",
+    icon: Mic01Icon,
   },
   {
     title: "About",
@@ -62,6 +87,10 @@ const navUrls = [
 export function AppSidebar() {
   const current = useCurrentNavItem(navUrls)
   const { setOpenMobile } = useSidebar()
+  const membership = useMembership()
+  const canReadUsers = membership.status === "member" && membership.user.permissions.includes("read_users")
+  const canManageModelProviders =
+    membership.status === "member" && membership.user.permissions.includes("manage_model_providers")
 
   // On mobile the sidebar is a sheet over the page. Close it when a link is
   // pressed, so the user sees the new page. On desktop the sheet is not used.
@@ -90,6 +119,8 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 {navItems.map((item) => {
+                  if (item.url === "/users" && !canReadUsers) return null
+                  if (item.url === "/model-providers" && !canManageModelProviders) return null
                   return (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuLink

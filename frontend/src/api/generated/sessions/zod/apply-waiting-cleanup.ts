@@ -11,6 +11,8 @@ import { waitingCleanupApplyDtoSchema } from '../../models/zod/waiting-cleanup-a
 
 export const applyWaitingCleanupPathIdSchema = z.string()
 
+export const applyWaitingCleanupHeaderXRecallUserSchema = z.string().optional().describe('The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.')
+
 export const applyWaitingCleanupStatus200Schema = sessionDtoSchema
 
 export const applyWaitingCleanupStatus400Schema = validationProblemDetailsSchema

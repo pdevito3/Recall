@@ -1,11 +1,11 @@
 # Navigation and theme
 
-The sidebar is on every page. It has links to Home, Users, and About, and a theme toggle with light, dark, and system modes. The header has a button that collapses the sidebar to an icon rail, and a breadcrumb with the name of the current page.
+The sidebar is on every page. It has links to Journal, People, Settings, Users, and About, and a theme toggle with light, dark, and system modes. The header has a button that collapses the sidebar to an icon rail, and a breadcrumb with the name of the current page.
 
 ## Sub-features
 
 - `nav-links` goes to `/` and `/about` from the sidebar.
-- `nav-breadcrumb` shows the name of the current route, for example `Home` or `About`.
+- `nav-breadcrumb` shows the name of the current route, for example `Journal` or `About`.
 - `nav-active` marks only the sidebar items of the current route as active.
 - `nav-collapse` collapses the sidebar to icons and expands it again.
 - `theme-toggle` sets light, dark, or system. The value stays after a reload.
@@ -28,9 +28,9 @@ Preconditions:
 
 - **Log in.** Run `await login()`. Each page of the app needs a session.
 - **Link in the page.** Open `/no-such-page` and choose `Go to the home page`. The URL ends with `/`, and the level 1 heading has the focus.
-- **Home.** Open `/`. Run `page.goto('/')`. `getByRole('navigation', { name: 'breadcrumb', exact: true })` has the text `Home`. Use `exact: true`, because a page can have a breadcrumb of its own. `page.locator('[data-slot="sidebar"] [data-active]')` has 1 element, `Home`. No element has `data-active="false"`.
+- **Journal.** Open `/`. Run `page.goto('/')`. `getByRole('navigation', { name: 'breadcrumb', exact: true })` has the text `Journal`. Use `exact: true`, because a page can have a breadcrumb of its own. `page.locator('[data-slot="sidebar"] [data-active]')` has 1 element, `Home`. No element has `data-active="false"`.
 - **About.** Choose `About`. Run `page.getByRole('link', { name: 'About' }).click()`. The URL ends with `/about`, the breadcrumb is `About`, and the heading `About` (level 1) shows. The link `About` keeps the focus, and `getByTestId('page-announcement')` has the text `About`. The capture `about` shows it.
-- **Collapse.** Choose the header button. Run `page.getByRole('main').getByRole('button', { name: 'Toggle Sidebar' }).first().click()`. `[data-slot="sidebar"][data-state="collapsed"]` has count 1. Choose it again for `data-state="expanded"`.
+- **Collapse.** Choose the header button. Run `page.getByRole('main').getByRole('button', { name: 'Toggle Sidebar' }).click()`. `[data-slot="sidebar"][data-state="collapsed"]` has count 1. Choose it again for `data-state="expanded"`.
 - **Dark mode.** Choose `Dark mode`. Run `page.getByRole('button', { name: 'Dark mode' }).click()`. `<html>` has the class `dark`, and `localStorage.getItem('ui-theme')` is `dark`. After `page.reload()`, `<html>` still has the class `dark`.
 - **Light and system.** Run `page.getByRole('button', { name: 'Light mode' }).click()`. `<html>` has the class `light`. Then run `page.getByRole('button', { name: 'System theme' }).click()`. `localStorage.getItem('ui-theme')` is `system`.
 - **Mobile sheet.** Open `/`, then set the viewport to 390x844. A link to the current page changes no route, so the status region stays empty. Choose the header button `Toggle Sidebar`. `[data-slot="sidebar"][data-mobile="true"]` shows. It is 288 px (18rem) wide (1 px tolerance) and has no `Close` button. In the sheet, choose `About`. The URL ends with `/about`, the breadcrumb is `About`, and the sheet closes. The header button `Toggle Sidebar` gets the focus back, and `getByTestId('page-announcement')` has the text `About`.
@@ -38,6 +38,6 @@ Preconditions:
 
 ## Gotchas
 
-- Two elements are named `Toggle Sidebar`: the header button and the sidebar rail. Scope to `getByRole('main')` and use `.first()`.
+- The rail of the sidebar is a mouse shortcut with `aria-hidden`. The header button is the one `Toggle Sidebar`.
 - When the sidebar is collapsed, the theme toggle is wider than the icon rail and its left edge is clipped. This is a known visual defect. Look at the `collapsed` capture.
 - In `system` mode, the class on `<html>` follows the color scheme of the browser. Headless Chromium uses light.

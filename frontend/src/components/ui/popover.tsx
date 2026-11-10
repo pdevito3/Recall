@@ -1,20 +1,11 @@
 import * as React from "react"
 import {
-  DialogTrigger,
   Heading,
   Popover as PopoverPrimitive,
-  type DialogTriggerProps,
   type PopoverProps as PopoverPrimitiveProps,
 } from "@animate-ui/react/primitives/react-aria"
 import { cn } from "@/lib/utils"
-
-function PopoverTrigger({ children, ...props }: DialogTriggerProps) {
-  return (
-    <DialogTrigger {...props}>
-      {children}
-    </DialogTrigger>
-  )
-}
+import { PopoverTrigger } from "@/components/ui/popover-trigger"
 
 function Popover({
   className,

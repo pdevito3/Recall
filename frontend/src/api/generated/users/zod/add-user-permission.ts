@@ -11,6 +11,8 @@ import { validationProblemDetailsSchema } from '../../models/zod/validation-prob
 
 export const addUserPermissionPathIdSchema = z.string()
 
+export const addUserPermissionHeaderXRecallUserSchema = z.string().optional().describe('The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.')
+
 export const addUserPermissionStatus200Schema = userDtoSchema
 
 export const addUserPermissionStatus400Schema = validationProblemDetailsSchema

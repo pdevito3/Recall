@@ -12,15 +12,24 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { AppSidebar } from '@/components/app-sidebar'
+import { useCurrentBreadcrumbName } from '@/components/breadcrumb-name'
+import { BreadcrumbNameProvider } from '@/components/breadcrumb-name-provider'
 import { Button } from '@/components/ui/button'
 import { login, returnUrlOf } from '@/domain/auth/apis/auth-actions'
 import { authUserQuery } from '@/domain/auth/apis/get-user'
+import { useHasLeftThePage } from '@/domain/auth/apis/page-of-another-person'
+import { PageOfAnotherPerson } from '@/domain/auth/components/page-of-another-person'
+import { DraftNotices } from '@/domain/sessions/components/draft-notices'
+import { FileStoreNotice } from '@/domain/file-store/components/file-store-notice'
 import { MembershipCheckFailedNotice } from '@/domain/membership/components/membership-notice'
+import { useResumeUnsentDrafts } from '@/domain/sessions/autosave/use-resume-unsent-drafts'
 import { HrefRouterProvider } from '@/components/ui/link'
+import { lazyOverlay } from '@/components/ui/lazy-overlay'
 import { Separator } from '@/components/ui/separator'
 import {
   Breadcrumb,
   BreadcrumbItem,
+  BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbPage,
 } from '@/components/ui/breadcrumb'
@@ -29,6 +38,7 @@ declare module '@tanstack/react-router' {
   interface StaticDataRouteOption {
     /** The name of the page in the breadcrumb of the layout header. Each page route sets it. */
     breadcrumb?: string
+    breadcrumbParent?: { title: string; to: '/' | '/users' }
   }
 }
 
@@ -36,7 +46,15 @@ export const Route = createRootRoute({
   component: RootComponent,
 })
 
+const UnsentWordsAtLogoutDialog = lazyOverlay(
+  async () => (await import('@/domain/auth/components/unsent-words-at-logout-dialog')).UnsentWordsAtLogoutDialog,
+)
+
 function RootComponent() {
+  return useHasLeftThePage() ? <PageOfAnotherPerson /> : <SessionGate />
+}
+
+function SessionGate() {
   const session = useQuery(authUserQuery)
 
   // A failed refetch keeps the data of the last answer, and that answer still decides.
@@ -72,10 +90,21 @@ function SessionCheckFailed({ isRetrying, onRetry }: { isRetrying: boolean; onRe
 }
 
 function Layout() {
+  return (
+    <BreadcrumbNameProvider>
+      <LayoutContent />
+    </BreadcrumbNameProvider>
+  )
+}
+
+function LayoutContent() {
+  useResumeUnsentDrafts()
   const routerState = useRouterState()
   const page = routerState.matches[routerState.matches.length - 1]
   const isNotFound = routerState.matches.some((match) => match.globalNotFound)
-  const pageName = isNotFound ? 'Not Found' : page?.staticData.breadcrumb
+  const recordName = useCurrentBreadcrumbName()
+  const parent = isNotFound ? undefined : page?.staticData.breadcrumbParent
+  const pageName = isNotFound ? 'Not Found' : (recordName ?? page?.staticData.breadcrumb)
   const { content, announcement } = usePageFocusAfterNavigation(routerState.resolvedLocation?.pathname, pageName)
 
   return (
@@ -91,7 +120,12 @@ function Layout() {
                 className="mr-2 aria-[orientation=vertical]:h-4 aria-[orientation=vertical]:self-center"
               />
               <Breadcrumb>
-                <BreadcrumbList>
+                <BreadcrumbList className="flex-nowrap">
+                  {parent && (
+                    <BreadcrumbItem>
+                      <BreadcrumbLink to={parent.to}>{parent.title}</BreadcrumbLink>
+                    </BreadcrumbItem>
+                  )}
                   <BreadcrumbItem>
                     <BreadcrumbPage>{pageName}</BreadcrumbPage>
                   </BreadcrumbItem>
@@ -100,6 +134,9 @@ function Layout() {
             </div>
           </header>
           <MembershipCheckFailedNotice />
+          <FileStoreNotice />
+          <DraftNotices />
+          <UnsentWordsAtLogoutDialog />
           <div ref={content} className="flex flex-1 flex-col gap-4 p-4 pt-0">
             <Outlet />
           </div>

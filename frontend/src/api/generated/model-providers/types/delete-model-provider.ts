@@ -10,6 +10,14 @@ export type DeleteModelProviderPath = {
     id: string;
 };
 
+export type DeleteModelProviderHeaders = {
+    /**
+     * @description The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.
+     * @type string | undefined
+    */
+    "X-Recall-User"?: string;
+};
+
 export type DeleteModelProviderStatus204 = unknown;
 
 export type DeleteModelProviderStatus401 = unknown;
@@ -26,7 +34,7 @@ export type DeleteModelProviderOptions = {
     body?: never;
     path: DeleteModelProviderPath;
     query?: never;
-    headers?: never;
+    headers?: DeleteModelProviderHeaders;
 };
 
 export type DeleteModelProviderResponses = {

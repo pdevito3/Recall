@@ -80,8 +80,10 @@ public static class AuthEndpoints
         var returnPath = LocalReturnPath.Of(query["returnUrl"].Count == 1 ? query["returnUrl"][0] : null);
         var signedOut = query.ContainsKey("signedOut");
         var hasError = query.ContainsKey("error");
+        var isForPageOfAnotherPerson = query.ContainsKey("anotherPerson");
 
-        if (SessionCookie.Read(http.Request) is { } cookie
+        if (!isForPageOfAnotherPerson
+            && SessionCookie.Read(http.Request) is { } cookie
             && await store.FindByAccessAsync(TokenHash.Of(cookie), SessionKind.Web, cancellationToken) is not null)
             return new AuthRedirect(returnPath);
 
@@ -93,7 +95,7 @@ public static class AuthEndpoints
         var openSession = pending is null ? null : modes.FindOidc(pending.ModeId);
         var openSessionLogoutUrl = pending is null || openSession is null ? null : await openSession.ProviderLogoutUrlAsync(SignedOutUrlOf(http.Request), pending.State, cancellationToken);
 
-        var mayStartWithNoClick = modes.All.Count == 1 && states[0] == LoginModeState.Ready && !signedOut && !hasError && openSessionLogoutUrl is null;
+        var mayStartWithNoClick = modes.All.Count == 1 && states[0] == LoginModeState.Ready && !signedOut && !hasError && !isForPageOfAnotherPerson && openSessionLogoutUrl is null;
         if (mayStartWithNoClick)
             return new AuthRedirect($"/auth/oidc/{Uri.EscapeDataString(modes.All[0].Id)}/start?client=web&returnUrl={Uri.EscapeDataString(returnPath)}");
 
@@ -102,7 +104,8 @@ public static class AuthEndpoints
             ? new AuthPages.OpenProviderSession(openSession.DisplayName, await openSession.ProbeAsync(cancellationToken), openSessionLogoutUrl)
             : null;
         var chooser = modes.All.Zip(states, (mode, state) => new AuthPages.ChooserMode(mode.Id, mode.DisplayName, state)).ToList();
-        return AuthPages.Chooser(chooser, returnPath, isSignedOut, hasError ? "The last sign-in did not finish." : null, providerSession);
+        var message = isForPageOfAnotherPerson ? AuthPages.AnotherPersonMessage : hasError ? "The last sign-in did not finish." : null;
+        return AuthPages.Chooser(chooser, returnPath, isSignedOut, message, providerSession, asksTheProviderAgain: isForPageOfAnotherPerson);
     }
 
     private static AuthRedirect SignedOutReturn(HttpContext http, string? state)

@@ -12,6 +12,14 @@ export type RecordCleanupResultPath = {
     id: string;
 };
 
+export type RecordCleanupResultHeaders = {
+    /**
+     * @description The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.
+     * @type string | undefined
+    */
+    "X-Recall-User"?: string;
+};
+
 export type RecordCleanupResultStatus200 = SessionDto;
 
 export type RecordCleanupResultStatus400 = ValidationProblemDetails;
@@ -36,7 +44,7 @@ export type RecordCleanupResultOptions = {
     body: RecordCleanupResultBody;
     path: RecordCleanupResultPath;
     query?: never;
-    headers?: never;
+    headers?: RecordCleanupResultHeaders;
 };
 
 export type RecordCleanupResultResponses = {

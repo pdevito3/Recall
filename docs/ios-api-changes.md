@@ -7,6 +7,7 @@ This document compares each of the 22 routes that the POC iOS client calls (`Jou
 - An ID is a text such as `ses_0199f0c1a2b37c4d8e9f0a1b2c3d4e5f`, not a UUID. Change `UUID` to `String` for each ID that the server makes.
 - A time on a Draft save is `savedAt`, not `clientSavedAt`. Send each time with its offset, such as `2026-06-01T08:00:00.000Z`. A time with no offset gives 400. The settings and metadata saves take no time. They take a base version. See [Settings and metadata saves](#settings-and-metadata-saves).
 - An error is a problem document (`status`, `title`, `detail`, `errors`). See `error-*.json`.
+- A request with a bearer token does not send `X-Recall-User`. A browser sends this header with the session cookie, so that a tab of one person cannot save into the account of the next person who signs in on that browser. A write with the cookie and with no header, or with the `sub` of another person, gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A read with the cookie gets the same refusal only when it names another person. The OpenAPI document lists the header on each operation that writes.
 
 ## Routes
 
@@ -101,7 +102,7 @@ The client must do these steps:
 
    These cases apply only on a 409. A capture on that a person made while offline applies with a 200 and no prompt when the row did not change.
 
-   Apply a change that turns location capture off with no prompt, also when the same field changed on the server, because capture stays on until it applies, and tell the person. This can undo a newer change on another device that turned capture on, and that direction is the safe one for privacy.
+   Apply a change that turns location capture off with no prompt, also when the same field changed on the server, because capture stays on until it applies, and tell the person. This can undo a newer change on another device that turned capture on, and that direction is the safe one for privacy. The exception is a change with no reply, which can be a key from days ago: the web app asks, so that it does not go over a later choice of the person. While a change to off waits for a save or an answer, the web app saves no location with a new entry in that browser. It asks at the create of the entry, so this also covers an entry that started before the change.
 
    A version covers a whole row and not one field, so a client cannot see a field that went to another value and back. A change of such a field applies with a 200 when no case above asks first.
 5. On a failure with no reply, send the same body again with the same base. If the first try reached the server and finished, the reply is 200 with the stored row. If the first try of a settings save is still running, the reply can be 409, so go to step 4. If a newer change came after it, the reply is 409, so go to step 4. Two different bodies from one base cannot both change the row, so two overlapping saves do not lose a change.
@@ -132,3 +133,5 @@ A change of the time zone moves a Session to a new day, but the sync feed does n
 - `DELETE /api/v1/sessions/{id}` removes a Session. The feed then has a tombstone. See [ADR 0020](adr/0020-journal-rules-in-the-database.md).
 - `POST`, `GET /api/v1/people`, and `GET`, `PUT /api/v1/people/{id}`. A rename changes each mention. Fixtures: `person`, `people`.
 - `POST`, `GET /api/v1/corrections`, and `GET`, `PUT`, `DELETE /api/v1/corrections/{id}`. Fixtures: `correction`, `corrections`.
+- `PUT /api/v1/sessions/{id}/draft` counts the characters that a person sees, with a limit of 1,000,000. An editor document can have up to 4,000,000 characters with its formatting.
+- `GET /api/v1/file-store/status` gives `{ canWrite }`. When it is false, tell the person before you record audio. The web journal shows this message.

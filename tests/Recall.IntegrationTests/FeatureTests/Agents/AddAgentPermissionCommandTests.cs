@@ -58,7 +58,7 @@ public class AddAgentPermissionCommandTests : TestBase
 
         // Assert
         (await act.ShouldThrowAsync<ForbiddenAccessException>()).Message
-            .ShouldBe("You cannot manage the tenant. Ask a tenant admin for access.");
+            .ShouldBe("You cannot manage the tenant. Ask an admin for access.");
         (await GrantOfAsync(agent.Id)).ShouldBeEmpty();
     }
 
@@ -76,7 +76,7 @@ public class AddAgentPermissionCommandTests : TestBase
 
         // Assert
         (await act.ShouldThrowAsync<ForbiddenAccessException>()).Message
-            .ShouldBe("You cannot manage agents. Ask a tenant admin for access.");
+            .ShouldBe("You cannot manage agents. Ask an admin for access.");
         (await GrantOfAsync(agent.Id)).ShouldBeEmpty();
     }
 

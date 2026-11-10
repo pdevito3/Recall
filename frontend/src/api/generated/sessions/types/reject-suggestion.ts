@@ -12,6 +12,14 @@ export type RejectSuggestionPath = {
     id: string;
 };
 
+export type RejectSuggestionHeaders = {
+    /**
+     * @description The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.
+     * @type string | undefined
+    */
+    "X-Recall-User"?: string;
+};
+
 export type RejectSuggestionStatus200 = SessionDto;
 
 export type RejectSuggestionStatus400 = ValidationProblemDetails;
@@ -32,7 +40,7 @@ export type RejectSuggestionOptions = {
     body: RejectSuggestionBody;
     path: RejectSuggestionPath;
     query?: never;
-    headers?: never;
+    headers?: RejectSuggestionHeaders;
 };
 
 export type RejectSuggestionResponses = {

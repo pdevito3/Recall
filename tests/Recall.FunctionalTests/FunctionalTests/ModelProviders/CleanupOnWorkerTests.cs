@@ -20,6 +20,7 @@ using Recall.Server.Domain.Recordings.Jobs;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Dtos;
 using Recall.Server.Domain.Sessions.Jobs;
+using Recall.Server.Resources.Entrypoints.Auth;
 using Recall.Server.Resources.Entrypoints.Jobs;
 using Recall.Server.Resources.Jobs;
 using Shouldly;
@@ -48,6 +49,7 @@ public class CleanupOnWorkerTests
     {
         var request = new HttpRequestMessage(method, $"/{route}");
         request.Headers.Add("X-CSRF", "1");
+        request.Headers.Add(PageUserCheck.Header, await browser.UserOfSessionAsync());
         if (body is not null)
             request.Content = JsonContent.Create(body);
         return await browser.SendAsync(request);
@@ -351,6 +353,7 @@ public class CleanupOnWorkerTests
             HttpStatusCode.Created);
         using var slice = new HttpRequestMessage(HttpMethod.Put, $"/{ApiRoutes.Recordings.Slice(recording.Id, 0)}") { Content = new ByteArrayContent(RecordingScenario.WebmStart) };
         slice.Headers.Add("X-CSRF", "1");
+        slice.Headers.Add(PageUserCheck.Header, await owner.UserOfSessionAsync());
         slice.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         (await owner.SendAsync(slice)).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await SendAsync(owner, HttpMethod.Post, ApiRoutes.Recordings.Finish(recording.Id), new { sliceCount = 1, byteLength = RecordingScenario.WebmStart.Length })).StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -393,6 +396,7 @@ public class CleanupOnWorkerTests
         {
             var request = new HttpRequestMessage(HttpMethod.Post, $"/{ApiRoutes.Sessions.CleanupStream(session.Id)}");
             request.Headers.Add("X-CSRF", "1");
+            request.Headers.Add(PageUserCheck.Header, await owner.UserOfSessionAsync());
             request.Headers.TryAddWithoutValidation("Cookie", string.Join("; ", owner.Cookies.Select(cookie => $"{cookie.Key}={cookie.Value.Value}")));
             using var opened = await Host.NewClient().SendAsync(request, HttpCompletionOption.ResponseHeadersRead, closing.Token);
             opened.StatusCode.ShouldBe(HttpStatusCode.OK);

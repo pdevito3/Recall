@@ -1,0 +1,76 @@
+import { useEffect, useRef } from 'react'
+
+import { Button } from '@/components/ui/button'
+import { useJournalZone } from '@/domain/settings/apis/user-setting'
+
+import { focusEditorIn } from '../editor/focus-editor'
+import { JournalEditor, JournalText } from '../editor/journal-editor'
+import { ConflictNotice, EditedElsewhereNotice, MergedNotice } from './conflict-notice'
+import { useFocusEditHereWhenTheEditorLeaves } from './use-focus-edit-here'
+import { SaveStatusLine } from './save-status'
+import type { Composer } from './use-composer'
+
+export function ComposerForm({ composer }: { composer: Composer }) {
+  const zone = useJournalZone()
+  const section = useRef<HTMLElement>(null)
+  const bar = useRef<HTMLDivElement>(null)
+  const editHereRef = useFocusEditHereWhenTheEditorLeaves(composer.editing)
+  const isRefused = composer.status.kind === 'refused'
+  // The bound of a refused text makes the page shorter, and that can leave the composer above the screen.
+  useEffect(() => {
+    if (isRefused) section.current?.scrollIntoView({ block: 'nearest' })
+  }, [isRefused])
+  if (composer.editing !== 'here') {
+    return (
+      <section aria-label="Write a new entry" className="flex flex-col gap-2">
+        {composer.editing === 'elsewhere' && <EditedElsewhereNotice hasLost={composer.hasEdited} onEditHere={composer.editHere} editHereRef={editHereRef} />}
+        <div className="rounded-lg border p-3">
+          <JournalText key={composer.wordsOfTheEditor ?? ''} text={composer.wordsOfTheEditor ?? ''} label="New entry, open in another tab" />
+        </div>
+      </section>
+    )
+  }
+  return (
+    <section ref={section} aria-label="Write a new entry" className="flex flex-col gap-2">
+      {composer.conflict && (
+        <ConflictNotice
+          conflict={composer.conflict}
+          onShowNewest={composer.showNewest}
+          onKeep={() => {
+            composer.keepWords()
+            focusEditorIn(section.current)
+          }}
+        />
+      )}
+      {/* While the merged words wait to save, they are not in the newest words yet. */}
+      {composer.isMergeNoted && composer.status.kind !== 'waitingForAnotherWriter' && <MergedNotice onDismiss={composer.dismissMergeNote} />}
+      <JournalEditor
+        revision={composer.editorKey}
+        initialText={composer.words ?? ''}
+        label="New entry"
+        placeholder={composer.words === null ? '' : 'What is on your mind?'}
+        autoFocus={composer.autoFocus}
+        isBounded={isRefused}
+        onChange={composer.handleChange}
+        onSubmit={composer.finish}
+        barRef={bar}
+      />
+      {composer.words === null && (
+        <p role="status" className="text-sm text-muted-foreground">Loading your entry. You can keep typing.</p>
+      )}
+      <div ref={bar} className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-background py-2">
+        <SaveStatusLine status={composer.status} zone={zone} />
+        <div className="ml-auto flex items-center gap-3">
+          <p className="text-xs text-muted-foreground max-md:hidden">Type @ to tag a person</p>
+          <Button
+            className="disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100"
+            isDisabled={!composer.canFinish}
+            onPress={composer.finish}
+          >
+            Done
+          </Button>
+        </div>
+      </div>
+    </section>
+  )
+}

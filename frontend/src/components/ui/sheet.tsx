@@ -187,7 +187,7 @@ function SheetTitle({
       slot="title"
       data-slot="sheet-title"
       className={cn(
-        "text-base font-medium text-foreground wrap-anywhere in-data-close-button:pr-8",
+        "text-base font-medium text-foreground wrap-anywhere in-data-close-button:pr-8 max-md:in-data-close-button:pr-12",
         className
       )}
       {...props}

@@ -1,6 +1,9 @@
 import { expect, type Locator, type Page } from '@playwright/test'
 import { appShell } from './app-shell.locators'
 
+export const sheetChunk = /(ui|assets)\/sheet/
+const peopleChunk = /routes\/people\/index\.tsx\?tsr-split|assets\/index-.*people/
+
 export function appShellPage(page: Page) {
   const at = appShell(page)
   const warnings: string[] = []
@@ -15,6 +18,22 @@ export function appShellPage(page: Page) {
     async openAbout() {
       await page.goto('/about')
       await expect(at.aboutText).toBeVisible()
+    },
+
+    async openAboutAndWaitForSheetChunk() {
+      const sheetLoaded = page.waitForResponse(sheetChunk)
+      await page.goto('/about')
+      await expect(at.aboutText).toBeVisible()
+      await sheetLoaded
+    },
+
+    /** The app loads the code of each page after its first idle moment, and the network is quiet when it has all of them. */
+    async openAboutAndWaitForTheCodeOfEachPage() {
+      const peopleLoaded = page.waitForResponse(peopleChunk)
+      await page.goto('/about')
+      await expect(at.aboutText).toBeVisible()
+      await peopleLoaded
+      await page.waitForLoadState('networkidle')
     },
 
     async openMobileSidebar() {
@@ -55,11 +74,19 @@ export function appShellPage(page: Page) {
     },
 
     async clickBlankContent() {
-      await at.homeSubtitle.click()
+      await at.composerHint.click()
     },
 
     async focusedElement() {
       return page.evaluate(() => (document.activeElement === document.body ? 'body' : document.activeElement?.tagName))
+    },
+
+    async leftEdgeOfThePageHeadingAt(address: string) {
+      await page.goto(address)
+      await expect(at.pageHeading).toBeVisible()
+      const box = await at.pageHeading.boundingBox()
+      if (!box) throw new Error('The heading has no box')
+      return box.x
     },
 
     async addWideContent(width: number) {

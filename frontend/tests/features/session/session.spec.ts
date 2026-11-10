@@ -1,7 +1,9 @@
 import { authApi, authPaths } from '@tests/support/api/auth-api'
 import { as } from '@tests/support/auth/actors'
+import { membershipPaths } from '@tests/support/api/membership-api'
 import { usersPaths } from '@tests/support/api/users-api'
 import { aProblem } from '@tests/support/builders/problem-details-builder'
+import { aUser } from '@tests/support/builders/user-builder'
 import { expect, test } from '@tests/support/fixtures'
 import { blankPage, sessionPage } from './session.tasks'
 
@@ -44,9 +46,9 @@ test.describe('a session that ends while the page is open', () => {
     await session.open('/about')
 
     api.mock(...authApi.sessionEnded(usersPaths.current))
-    const { toasted } = await session.followAndGoToLogin(session.at.homeLink)
+    const { toasted } = await session.followAndGoToLogin(session.at.settingsLink)
 
-    expect(api.last('get', authPaths.login)?.query.get('returnUrl')).toBe('/')
+    expect(api.last('get', authPaths.login)?.query.get('returnUrl')).toBe('/settings')
     expect(toasted, 'a toast showed before the login').toBe(false)
   })
 })
@@ -60,11 +62,39 @@ test.describe('a sign-out in another tab', () => {
     await otherTab.open('/about')
 
     api.mock(...authApi.logoutWorks(), { method: 'get', path: authPaths.me, status: 204 })
+    await session.at.userMenu.click()
     await session.at.logout.click()
 
     await expect.poll(() => page.url()).toContain('signedOut=1')
     await expect.poll(() => otherPage.url()).toContain('signedOut=1')
     await expect(otherTab.at.navigation).toHaveCount(0)
+  })
+
+  test('leaves this tab at once when a second person signs in in another tab', async ({ page, context, api }) => {
+    const session = sessionPage(page)
+    await session.open('/about')
+
+    api.mock(
+      authApi.loginOpens(),
+      { method: 'get', path: authPaths.me, status: 200, body: { sub: '2', name: 'Next Person', sid: 'session-of-next-person', client_kind: 'web' } },
+      { method: 'get', path: membershipPaths.userOf('2'), status: 200, body: aUser().identifiedBy('2').build() },
+    )
+    const otherPage = await context.newPage()
+    await otherPage.goto('/about')
+
+    await expect.poll(() => page.url()).toContain('anotherPerson=1')
+    expect(new URL(otherPage.url()).pathname).toBe('/about')
+  })
+
+  test('stays when the same person opens another tab', async ({ page, context }) => {
+    const session = sessionPage(page)
+    await session.open('/about')
+
+    const otherPage = await context.newPage()
+    await sessionPage(otherPage).open('/about')
+
+    await expect(session.at.navigation).toBeVisible()
+    expect(new URL(page.url()).pathname).toBe('/about')
   })
 
   test('leaves this tab as it is when the sign-out fails', async ({ page, context, api }) => {
@@ -93,7 +123,7 @@ test.describe('a sign-out with a call of the API that answers 401 after it', () 
       { method: 'post', path: authPaths.logout, status: 204 },
       { method: 'get', path: authPaths.me, status: 204 },
     )
-    await session.followAndSignOutBeforeA401(session.at.homeLink, usersPaths.current)
+    await session.followAndSignOutBeforeA401(session.at.settingsLink, usersPaths.current)
 
     await expect.poll(() => page.url(), { timeout: 10000 }).toContain('signedOut=1')
     expect(api.all('get', authPaths.login).filter((request) => request.query.has('returnUrl'))).toHaveLength(0)
@@ -110,7 +140,7 @@ test.describe('a sign-out with a call of the API that answers 401 after it', () 
       { method: 'post', path: authPaths.logout, status: 200, body: { provider_logout_url: `${providerLogout}?client_id=recall` } },
       { method: 'get', path: authPaths.me, status: 204 },
     )
-    await session.followAndSignOutBeforeA401(session.at.homeLink, usersPaths.current, '/logout')
+    await session.followAndSignOutBeforeA401(session.at.settingsLink, usersPaths.current, '/logout')
 
     await expect.poll(() => page.url(), { timeout: 10000 }).toBe(`${providerLogout}?client_id=recall`)
     expect(api.all('get', authPaths.login)).toHaveLength(0)
@@ -129,7 +159,7 @@ test.describe('a sign-out with a call of the API that answers 401 before its ans
       { method: 'post', path: authPaths.logout, status: 200, body: { provider_logout_url: `${providerLogout}?client_id=recall` }, delayMs: 1500 },
       { method: 'get', path: authPaths.me, status: 204 },
     )
-    await session.followAndSignOutWithA401BeforeItsAnswer(session.at.homeLink, usersPaths.current)
+    await session.followAndSignOutWithA401BeforeItsAnswer(session.at.settingsLink, usersPaths.current)
 
     await expect.poll(() => page.url(), { timeout: 10000 }).toBe(`${providerLogout}?client_id=recall`)
     expect(api.all('get', authPaths.login)).toHaveLength(0)
@@ -142,7 +172,7 @@ test.describe('a call of the API that answers 401 while the session lives', () =
     await session.open('/about')
 
     api.mock(...authApi.apiAnswers401WhileTheSessionLives(usersPaths.current))
-    await session.followAndWaitForTheSessionCheck(session.at.homeLink)
+    await session.followAndWaitForTheSessionCheck(session.at.settingsLink)
 
     await expect(session.at.rejectedSignInToast).toBeVisible()
     await expect(session.at.navigation).toBeVisible()

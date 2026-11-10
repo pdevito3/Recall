@@ -7,6 +7,7 @@ using Recall.Server.Domain.EmailAddresses;
 using Recall.Server.Domain.Tenants;
 using Recall.Server.Domain.Users;
 using Recall.Server.Resources;
+using Recall.Server.Resources.Entrypoints.Auth;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi;
@@ -148,6 +149,7 @@ public class OpenApiDocumentTests
         // Act
         var parameters = Operations(root)
             .SelectMany(o => (o.Operation["parameters"]?.AsArray() ?? [])
+                .Where(p => p!["in"]!.GetValue<string>() != "header")
                 .Select(p => (Operation: o.Name, Name: p!["name"]!.GetValue<string>())))
             .ToList();
 
@@ -406,6 +408,32 @@ public class OpenApiDocumentTests
             var schemaRef = operation["responses"]?["422"]?["content"]?["application/problem+json"]?["schema"]?["$ref"]?
                 .GetValue<string>();
             schemaRef.ShouldBe(ValidationProblemRef, name);
+        }
+    }
+
+    [Test]
+    public async Task each_write_names_the_page_user_header_and_a_read_does_not()
+    {
+        // Arrange
+        var root = await LoadDocumentAsync();
+
+        // Act
+        var operations = Operations(root).ToList();
+
+        // Assert
+        foreach (var (name, verb, operation) in operations)
+        {
+            var header = operation["parameters"]?.AsArray().FirstOrDefault(parameter => parameter?["name"]?.GetValue<string>() == PageUserCheck.Header);
+            if (verb == "get")
+            {
+                header.ShouldBeNull(name);
+                continue;
+            }
+
+            header.ShouldNotBeNull(name);
+            header["in"]!.GetValue<string>().ShouldBe("header", name);
+            header["required"]?.GetValue<bool>().ShouldNotBe(true, name);
+            header["description"]!.GetValue<string>().ShouldContain(PageUserCheck.MismatchType, customMessage: name);
         }
     }
 

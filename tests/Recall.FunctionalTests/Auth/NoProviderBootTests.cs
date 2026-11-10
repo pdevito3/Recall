@@ -19,6 +19,8 @@ using Shouldly;
 [UnsupportedOSPlatform("windows")]
 public partial class NoProviderBootTests
 {
+    private const string HashedFile = "app-abc123.js";
+
     private const UnixFileMode WideDirectoryMode =
         UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
         | UnixFileMode.GroupRead | UnixFileMode.GroupExecute
@@ -85,6 +87,8 @@ public partial class NoProviderBootTests
             File.SetUnixFileMode(data, WideDirectoryMode);
             Directory.CreateDirectory(web);
             await File.WriteAllTextAsync(Path.Combine(web, "index.html"), "<html>recall spa</html>");
+            Directory.CreateDirectory(Path.Combine(web, "assets"));
+            await File.WriteAllTextAsync(Path.Combine(web, "assets", HashedFile), "console.log('recall spa')");
             await File.WriteAllTextAsync(Path.Combine(web, "app.js"), "// recall spa");
 
             // The child would inherit the narrow umask of this process, and hide a Server that does not set its own
@@ -408,9 +412,33 @@ public partial class NoProviderBootTests
             var policy = answer.Headers.GetValues("Content-Security-Policy").ShouldHaveSingleItem();
             policy.ShouldContain("frame-ancestors 'none'");
             policy.ShouldContain("script-src 'self';");
+            answer.Headers.GetValues("X-Content-Type-Options").ShouldHaveSingleItem().ShouldBe("nosniff");
+            answer.Headers.GetValues("Referrer-Policy").ShouldHaveSingleItem().ShouldBe("no-referrer");
         }
 
         health.Headers.Contains("Content-Security-Policy").ShouldBeFalse();
+    }
+
+    [Test]
+    [Arguments("/index.html", false)]
+    [Arguments($"/assets/{HashedFile}", true)]
+    public async Task a_file_of_the_spa_is_compressed_and_has_both_its_cache_rule_and_the_content_security_policy(string path, bool hashed)
+    {
+        // Arrange
+        await using var server = await ServerProcess.StartAsync();
+        var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"{server.Client.BaseAddress!.GetLeftPart(UriPartial.Authority)}{path}"));
+        request.Headers.AcceptEncoding.ParseAdd("br");
+
+        // Act
+        using var answer = await server.Client.SendAsync(request);
+
+        // Assert
+        answer.StatusCode.ShouldBe(HttpStatusCode.OK);
+        answer.Content.Headers.ContentEncoding.ShouldHaveSingleItem().ShouldBe("br");
+        answer.Headers.GetValues("Content-Security-Policy").ShouldHaveSingleItem().ShouldContain("script-src 'self';");
+        answer.Headers.CacheControl!.NoStore.ShouldBe(!hashed);
+        answer.Headers.CacheControl.Public.ShouldBe(hashed);
+        answer.Headers.CacheControl.ToString().Contains("immutable").ShouldBe(hashed);
     }
 
     [Test]

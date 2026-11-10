@@ -20,7 +20,7 @@ export default async ({ page, context, stack, step, capture, expect, login, logo
   const { name } = await step('log in at the IdP', () => login())
 
   await step('logged in: the page shows the name of the user, and the Server holds a session for the session cookie', async () => {
-    await expect(page.getByText(`Signed in as ${name}`)).toBeVisible()
+    await expect(page.getByRole('button', { name: `User menu for ${name}`, exact: true })).toBeVisible()
     const me = await page.evaluate(async () => {
       const response = await fetch('/api/v1/users/me', { headers: { 'X-CSRF': '1' } })
       return { status: response.status, body: await response.json() }
@@ -34,7 +34,7 @@ export default async ({ page, context, stack, step, capture, expect, login, logo
 
   await step('session survives a reload', async () => {
     await page.reload()
-    await expect(page.getByText(`Signed in as ${name}`)).toBeVisible()
+    await expect(page.getByRole('button', { name: `User menu for ${name}`, exact: true })).toBeVisible()
   })
 
   await step('the user menu shows the name of the session', async () => {
@@ -50,7 +50,7 @@ export default async ({ page, context, stack, step, capture, expect, login, logo
     expect(await appStatus(page, '/auth/me')).toBe(204)
     await expect(page.getByRole('heading', { name: 'You are signed out' })).toBeVisible()
     await expect(page).toHaveTitle('You are signed out - Recall')
-    await expect(page.getByText(`Signed in as ${name}`)).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /^User menu for / })).toHaveCount(0)
     await expect(page.getByRole('link', { name: /^Sign in with / })).toBeVisible()
     await expect(page.getByRole('link', { name: /^Sign out of / })).toHaveCount(0)
   })

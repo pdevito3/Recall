@@ -8,7 +8,6 @@ import {
   MenuItem as MenuItemPrimitive,
   Menu as MenuPrimitive,
   MenuSection as MenuSectionPrimitive,
-  MenuTrigger as MenuTriggerPrimitive,
   Popover as PopoverPrimitive,
   Separator as SeparatorPrimitive,
   SubmenuTrigger as SubmenuTriggerPrimitive,
@@ -18,12 +17,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Tick02Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons"
 import { cn } from "@/lib/utils"
-
-function DropdownMenuTrigger({
-  ...props
-}: React.ComponentProps<typeof MenuTriggerPrimitive>) {
-  return <MenuTriggerPrimitive {...props} />
-}
+import { DropdownMenuTrigger } from "@/components/ui/dropdown-menu-trigger"
 
 function DropdownMenu({
   "data-slot": dataSlot = "dropdown-menu-content",
@@ -92,7 +86,7 @@ function DropdownMenuLabel({
 }
 
 const dropdownMenuItemVariants = cva(
-  "group/dropdown-menu-item relative flex cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+  "group/dropdown-menu-item relative flex cursor-default items-center max-md:min-h-11 outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       selectionMode: {

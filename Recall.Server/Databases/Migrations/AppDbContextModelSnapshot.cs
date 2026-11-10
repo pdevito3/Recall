@@ -920,7 +920,7 @@ namespace Recall.Server.Databases.Migrations
 
                     b.Property<string>("Text")
                         .IsRequired()
-                        .HasMaxLength(1000000)
+                        .HasMaxLength(4000000)
                         .HasColumnType("TEXT")
                         .HasColumnName("text");
 
@@ -953,7 +953,7 @@ namespace Recall.Server.Databases.Migrations
 
                     b.Property<string>("Text")
                         .IsRequired()
-                        .HasMaxLength(1000000)
+                        .HasMaxLength(4000000)
                         .HasColumnType("TEXT")
                         .HasColumnName("text");
 
@@ -1136,7 +1136,7 @@ namespace Recall.Server.Databases.Migrations
 
                             b1.Property<string>("Text")
                                 .IsRequired()
-                                .HasMaxLength(1000000)
+                                .HasMaxLength(4000000)
                                 .HasColumnType("TEXT")
                                 .HasColumnName("cleaned_text");
                         });
@@ -1159,7 +1159,7 @@ namespace Recall.Server.Databases.Migrations
 
                             b1.Property<string>("Text")
                                 .IsRequired()
-                                .HasMaxLength(1000000)
+                                .HasMaxLength(4000000)
                                 .HasColumnType("TEXT")
                                 .HasColumnName("raw_text");
                         });

@@ -53,7 +53,7 @@ public sealed class SessionConfiguration : IEntityTypeConfiguration<Session>
 
     private static void ConfigureSlot(ComplexPropertyBuilder<DraftSlot> slot, string prefix)
     {
-        slot.Property(s => s.Text).HasColumnName($"{prefix}_text").IsRequired().HasMaxLength(Session.DraftMaxLength);
+        slot.Property(s => s.Text).HasColumnName($"{prefix}_text").IsRequired().HasMaxLength(Session.DraftMaxStoredLength);
         slot.Property(s => s.DraftRevision).HasColumnName($"{prefix}_draft_revision");
         slot.Property(s => s.LatestRevision).HasColumnName($"{prefix}_latest_revision");
         slot.Property(s => s.SavedAt).HasColumnName($"{prefix}_saved_at");

@@ -35,6 +35,9 @@ type EngineChoice = z.infer<typeof schema>
 
 const FIELDS = ['modelProviderId', 'model'] as const
 
+// With a large font on a phone, a label of five words is wider than the card, so it wraps and the button grows.
+const wrappingButton = 'h-auto min-h-8 max-w-full py-1.5 whitespace-normal'
+
 function FieldMessage({ id, message }: { id: string; message?: string }) {
   if (!message) return null
   return (
@@ -113,11 +116,11 @@ function EngineForm({ engine, providers }: { engine: TranscriptionEngineDto; pro
       <RefusedSaveAlert problem={serverErrors.problem} />
 
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" isPending={choose.isPending && Boolean(choose.variables?.modelProviderId)}>
+        <Button type="submit" className={wrappingButton} isPending={choose.isPending && Boolean(choose.variables?.modelProviderId)}>
           Send audio to this provider
         </Button>
         {engine.engine === 'Cloud' && (
-          <Button variant="outline" isPending={choose.isPending && !choose.variables?.modelProviderId} onPress={handleKeepOnServer}>
+          <Button variant="outline" className={wrappingButton} isPending={choose.isPending && !choose.variables?.modelProviderId} onPress={handleKeepOnServer}>
             Keep audio on this server
           </Button>
         )}

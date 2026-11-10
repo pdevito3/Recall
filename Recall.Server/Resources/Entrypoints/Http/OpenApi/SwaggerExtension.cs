@@ -99,6 +99,7 @@ public static class SwaggerExtension
             options.AddOperationTransformer<PaginationHeaderTransformer>();
             options.AddOperationTransformer<JsonContentTypeTransformer>();
             options.AddOperationTransformer<UnauthorizedResponseTransformer>();
+            options.AddOperationTransformer<PageUserHeaderTransformer>();
             options.AddOperationTransformer<DiskFullResponseTransformer>();
             options.AddDocumentTransformer<RequireOperationIdTransformer>();
             options.AddDocumentTransformer<RequireListOperationNameTransformer>();

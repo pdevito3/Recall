@@ -33,6 +33,15 @@ class ProblemDetailsBuilder {
     })
   }
 
+  conflict(detail: string) {
+    return new ProblemDetailsBuilder({
+      ...this.problem,
+      title: 'The request conflicts with a record that exists.',
+      status: 409,
+      detail,
+    })
+  }
+
   notFound(detail: string) {
     return new ProblemDetailsBuilder({
       ...this.problem,
@@ -41,6 +50,10 @@ class ProblemDetailsBuilder {
       status: 404,
       detail,
     })
+  }
+
+  refusing(detail: string) {
+    return new ProblemDetailsBuilder({ ...this.problem, status: 422, title: 'Unprocessable Entity', detail })
   }
 
   forbidden(detail: string) {

@@ -1,3 +1,4 @@
+import { membershipApi } from '@tests/support/api/membership-api'
 import { usersApi, usersPaths } from '@tests/support/api/users-api'
 import { as } from '@tests/support/auth/actors'
 import { aProblem } from '@tests/support/builders/problem-details-builder'
@@ -12,7 +13,7 @@ test.describe('the users of a tenant', () => {
     const grace = aUser().named('Grace Hopper').seenByAdmin()
     const alan = aUser().named('Alan Turing').inRole('Admin').seenByAdmin()
     const { id } = grace.build()
-    api.mock(usersApi.listReturns([grace, alan]), usersApi.oneIs(grace))
+    api.mock(membershipApi.userMayReadUsers(), usersApi.listReturns([grace, alan]), usersApi.oneIs(grace))
     const users = usersPage(page)
 
     await users.openList()
@@ -28,6 +29,16 @@ test.describe('the users of a tenant', () => {
     await expect(users.at.detail('grace')).toBeVisible()
     await expect(users.at.detail('User')).toBeVisible()
     await expect(users.at.usersNavLink).toHaveAttribute('aria-current', 'true')
+  })
+
+  test('a member who may not read the users has no link to them', async ({ page, api }) => {
+    api.mock(usersApi.listReturns([aUser().named('Grace Hopper')]))
+    const users = usersPage(page)
+
+    await users.openList()
+
+    await expect(users.at.journalNavLink).toBeVisible()
+    await expect(users.at.usersNavLink).toHaveCount(0)
   })
 
   test('puts the page in the URL, and sends it to the API', { tag: '@UM-1' }, async ({ page, api }) => {
@@ -88,14 +99,14 @@ test.describe('the users of a tenant', () => {
     const users = usersPage(page)
     await users.openDetail(id)
     api.mock(
-      usersApi.roleChangeFails(id, aProblem().forbidden('You cannot manage the access of users. Ask a tenant admin for access.')),
+      usersApi.roleChangeFails(id, aProblem().forbidden('You cannot manage the access of users. Ask an admin for access.')),
       usersApi.oneIs(grace.allowing('Delete')),
     )
 
     await users.pickRole('Grace Hopper', 'Admin')
     await users.confirmRoleRefused(id)
 
-    await expect(users.at.toast('You cannot manage the access of users. Ask a tenant admin for access.')).toBeVisible()
+    await expect(users.at.toast('You cannot manage the access of users. Ask an admin for access.')).toBeVisible()
     await expect(users.at.actionButton('Grace Hopper', 'Change role')).toHaveCount(0)
     await expect(users.at.actionButton('Grace Hopper', 'Delete')).toBeVisible()
     await expect(users.at.detail('User')).toBeVisible()
@@ -132,14 +143,14 @@ test.describe('the users of a tenant', () => {
   test('a refused delete keeps the user on the page, with the focus on the heading', { tag: '@UM-3' }, async ({ page, api }) => {
     const grace = aUser().named('Grace Hopper').seenByAdmin()
     const { id } = grace.build()
-    api.mock(usersApi.oneIs(grace), usersApi.deleteFails(id, aProblem().forbidden('You cannot manage users. Ask a tenant admin for access.')))
+    api.mock(usersApi.oneIs(grace), usersApi.deleteFails(id, aProblem().forbidden('You cannot manage users. Ask an admin for access.')))
     const users = usersPage(page)
     await users.openDetail(id)
 
     await users.askToDelete('Grace Hopper')
     await users.confirmDeleteRefused(id)
 
-    await expect(users.at.toast('You cannot manage users. Ask a tenant admin for access.')).toBeVisible()
+    await expect(users.at.toast('You cannot manage users. Ask an admin for access.')).toBeVisible()
     await expect(page).toHaveURL(`/users/${id}`)
     await expect(users.at.detailHeading('Grace Hopper')).toBeFocused()
   })
@@ -194,12 +205,12 @@ test.describe('the users of a tenant, for a member who cannot see them', () => {
   test.use({ actor: as.user('Bob Smith') })
 
   test('shows the refusal of the Server in place of the list', { tag: '@UM-1' }, async ({ page, api }) => {
-    api.mock(usersApi.listFails(aProblem().forbidden('You cannot see the users of the tenant. Ask a tenant admin for access.')))
+    api.mock(usersApi.listFails(aProblem().forbidden('You cannot see the users. Ask an admin for access.')))
     const users = usersPage(page)
 
     await users.openList()
 
-    await expect(users.at.loadFailure).toContainText('You cannot see the users of the tenant. Ask a tenant admin for access.')
+    await expect(users.at.loadFailure).toContainText('You cannot see the users. Ask an admin for access.')
     await expect(users.at.grid).toHaveCount(0)
   })
 })
@@ -207,7 +218,7 @@ test.describe('the users of a tenant, for a member who cannot see them', () => {
 test.describe('the users pages on a 390 px phone', () => {
   test.use({ actor: as.user('Ana Admin'), viewport: { width: 390, height: 844 } })
 
-  test('each user link and each pager button is a touch target of 44 px', async ({ page, api }) => {
+  test('each user link, each pager button, and the way back to the list is a touch target of 44 px', async ({ page, api }) => {
     const grace = aUser().named('Grace Hopper').seenByAdmin()
     api.mock(usersApi.listReturns([grace, aUser().named('Alan Turing')], { total: 25 }), usersApi.oneIs(grace))
     const users = usersPage(page)
@@ -223,7 +234,7 @@ test.describe('the users pages on a 390 px phone', () => {
 
     await users.openUser('Grace Hopper', grace.build().id)
 
-    expect((await users.at.allUsersLink.boundingBox())?.height).toBeGreaterThanOrEqual(44)
+    expect((await users.at.usersBreadcrumbLink.boundingBox())?.height).toBeGreaterThanOrEqual(44)
   })
 })
 
