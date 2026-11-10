@@ -94,7 +94,7 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
     {
         ValidateSliceIndex(index);
         if (index <= QuietEndThroughSlice)
-            throw new ConflictException(SliceField, "The words of this recording after this slice are made, so this slice cannot join them.");
+            throw new ConflictException(SliceField, "The server ended this upload with a later slice, so this slice cannot join the audio.");
         if (Status != RecordingStatus.Receiving)
             OpenForLatePart();
 
