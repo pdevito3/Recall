@@ -14,6 +14,9 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
     public static readonly TimeSpan AudioKeptAfterText = TimeSpan.FromDays(7);
     public static readonly TimeSpan MaxDuration = TimeSpan.FromHours(4);
 
+    /// <summary>An upload that gets no new slice for this long ends with the slices that came. See <see cref="EndQuietUpload"/>.</summary>
+    public static readonly TimeSpan QuietUploadEndsAfter = TimeSpan.FromHours(24);
+
     private const string ClientRecordingIdField = "clientRecordingId";
     private const string SliceField = "index";
     private const string SliceCountField = "sliceCount";
@@ -118,6 +121,27 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
         Engine = engine;
     }
 
+    /// <summary>
+    /// A client that never sends the rest or the finish must not leave a Recording that waits for good. The slices that came
+    /// make the audio, in the order of their index, also with a gap, so the text of each part that the server has still comes.
+    /// With no slice there is no audio, so the Recording fails with a reason, and a retry cannot start it.
+    /// </summary>
+    public void EndQuietUpload(int storedSliceCount, TranscriptionEngineKind engine)
+    {
+        if (Status != RecordingStatus.Receiving)
+            throw new ConflictException(StatusField, "This Recording is already finished.");
+
+        if (storedSliceCount == 0)
+        {
+            Status = RecordingStatus.Failed;
+            Problem = RecordingProblem.NoAudioReceived;
+            return;
+        }
+
+        Status = RecordingStatus.Received;
+        Engine = engine;
+    }
+
     /// <summary>A provider that did not answer on each try is the cause that a person needs, and not the count of the tries.</summary>
     public bool BeginAttempt()
     {
@@ -206,6 +230,8 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
 
         if (Status != RecordingStatus.Failed)
             throw new ConflictException(StatusField, "Only a Recording that failed or that waits for its text can run again.");
+        if (Problem == RecordingProblem.NoAudioReceived)
+            throw new ConflictException(StatusField, "No audio of this Recording reached the server, so there is no audio to make text of.");
 
         Engine = engine;
         Status = RecordingStatus.Received;
@@ -274,4 +300,5 @@ public enum RecordingProblem
     ProviderRefused,
     ProviderBadAnswer,
     ProviderKeyUnreadable,
+    NoAudioReceived,
 }

@@ -24,6 +24,51 @@ public class RecordingTests
     }
 
     [Test]
+    public void a_quiet_upload_ends_with_the_slices_that_came_also_with_a_gap()
+    {
+        // Arrange
+        var recording = Receiving();
+        recording.StoreSlice(0, 10);
+        recording.StoreSlice(2, 5);
+
+        // Act
+        recording.EndQuietUpload(2, TranscriptionEngineKind.Cloud);
+
+        // Assert
+        recording.Status.ShouldBe(RecordingStatus.Received);
+        recording.Engine.ShouldBe(TranscriptionEngineKind.Cloud);
+        recording.ByteLength.ShouldBe(15);
+        Should.Throw<ConflictException>(() => recording.StoreSlice(1, 5));
+    }
+
+    [Test]
+    public void a_quiet_upload_with_no_slice_fails_with_its_reason_and_a_retry_cannot_start_it()
+    {
+        // Arrange
+        var recording = Receiving();
+
+        // Act
+        recording.EndQuietUpload(0, TranscriptionEngineKind.Local);
+
+        // Assert
+        recording.Status.ShouldBe(RecordingStatus.Failed);
+        recording.Problem.ShouldBe(RecordingProblem.NoAudioReceived);
+        Should.Throw<ConflictException>(() => recording.Retry(TranscriptionEngineKind.Local));
+        recording.Status.ShouldBe(RecordingStatus.Failed);
+    }
+
+    [Test]
+    public void only_an_upload_that_still_receives_can_end_as_quiet()
+    {
+        // Arrange
+        var recording = Received();
+
+        // Act and assert
+        Should.Throw<ConflictException>(() => recording.EndQuietUpload(1, TranscriptionEngineKind.Local));
+        recording.Status.ShouldBe(RecordingStatus.Received);
+    }
+
+    [Test]
     public void a_new_recording_is_receiving_on_the_local_engine()
     {
         // Arrange and act

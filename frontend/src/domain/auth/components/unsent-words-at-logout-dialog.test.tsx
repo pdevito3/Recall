@@ -124,7 +124,7 @@ test('when the server has all the audio and only the start of its words failed, 
   const finished = settleUnsentWords(() => undefined)
 
   await expect.element(screen.getByRole('heading', { name: 'The server has not started on the words of your audio' }), { timeout: 10_000 }).toBeVisible()
-  await expect.element(screen.getByText('The server has all of your audio, and has not started on the words yet. The words of audio that the server has start when you sign in here again, or on their own a day after the recording.')).toBeVisible()
+  await expect.element(screen.getByText('The server has all of your audio, and has not started on the words yet. The words of audio that the server has start when you sign in here again, or on their own about a day later.')).toBeVisible()
   await expect.element(screen.getByText(/did not reach the server/)).not.toBeInTheDocument()
   await screen.getByRole('button', { name: 'Sign out' }).click()
 

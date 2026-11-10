@@ -63,6 +63,7 @@ public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore 
 
     private async Task QueueWaitingAsync(JournalOwner owner, CancellationToken cancellationToken)
     {
+        await EndQuietUploadsAsync(owner, cancellationToken);
         await using var scope = scopeFactory.CreateJournalScope(owner);
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var waiting = await dbContext.Recordings
@@ -89,6 +90,42 @@ public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore 
             foreach (var recording in waiting.Where(r => r.Engine == TranscriptionEngineKind.Local || !inCloud.Contains(r.Id)))
                 await RecordingWork.EnqueueAsync(jobs, recording.Id, owner.UserId, owner.TenantId, recording.Engine, cloudQueue, now, ct);
         }, cancellationToken);
+    }
+
+    /// <summary>
+    /// A Recording that got no new slice for <see cref="Recording.QuietUploadEndsAfter"/> ends with the slices that came, and the
+    /// queue below then makes its text. Each stored slice writes the row, so the time of the last write is the time of the last slice.
+    /// A slice that comes later gets 409, as after any finish. A slice that races this save makes the save fail, and the next sweep looks again.
+    /// </summary>
+    private async Task EndQuietUploadsAsync(JournalOwner owner, CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateJournalScope(owner);
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var endBefore = timeProvider.GetUtcNow() - Recording.QuietUploadEndsAfter;
+        // Few Recordings are Receiving at a time, and the time compares here, as SQLite cannot compare a DateTimeOffset.
+        var receiving = await dbContext.Recordings
+            .TagWithOperationCallSite("recordings.sweep.receiving")
+            .Where(r => r.Status == RecordingStatus.Receiving)
+            .ToListAsync(cancellationToken);
+        var quiet = receiving.Where(r => r.LastModifiedOn is { } changed && changed <= endBefore).ToList();
+        if (quiet.Count == 0)
+            return;
+
+        var engine = await RecordingWork.ChosenEngineAsync(dbContext, cancellationToken);
+        foreach (var recording in quiet)
+        {
+            var slices = await dbContext.RecordingSlices
+                .TagWithOperationCallSite("recordings.sweep.quiet_slices")
+                .AsNoTracking()
+                .Where(s => s.RecordingId == recording.Id)
+                .ToListAsync(cancellationToken);
+            recording.EndQuietUpload(slices.Count, engine);
+            if (slices.Count > 0)
+                await RecordingWork.WriteAudioAsync(fileStore, recording, slices, cancellationToken);
+            await dbContext.SaveChangesAsync(cancellationToken);
+            RecordingWork.TryDeleteSlices(fileStore, recording, _logger);
+            _logger.Here().Information("Ended the quiet upload of recording {RecordingId} with {SliceCount} slices", recording.Id, slices.Count);
+        }
     }
 
     private async Task SweepFilesOfOwnerAsync(JournalOwner owner, CancellationToken cancellationToken)

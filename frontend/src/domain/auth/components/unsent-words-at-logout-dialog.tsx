@@ -57,7 +57,7 @@ function WordsThatDidNotGo({ unsent }: { unsent: UnsentWords[] }) {
   )
 }
 
-const wordsStartText = 'The words of audio that the server has start when you sign in here again, or on their own a day after the recording.'
+const wordsStartText = 'The words of audio that the server has start when you sign in here again, or on their own about a day later.'
 
 function audioText(audio: StoredCapture[]) {
   const missing = audio.filter((capture) => !waitsOnlyForItsEnd(capture))

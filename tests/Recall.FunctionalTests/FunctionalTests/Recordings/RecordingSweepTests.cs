@@ -163,6 +163,53 @@ public class RecordingSweepTests : TestBase
         afterHour.ShouldBeGreaterThan(afterStart);
     }
 
+    [Test]
+    [Property("Rule", "REC-23")]
+    public async Task an_upload_with_no_new_slice_for_a_day_ends_with_the_slices_that_came_and_a_late_slice_gets_409()
+    {
+        // Arrange
+        var (admin, _) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(admin.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        var withGap = await FactoryClient.AddRecordingAsync(session.Id);
+        (await FactoryClient.PutSliceAsync(withGap.Id, 0, RecordingScenario.WebmStart)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await FactoryClient.PutSliceAsync(withGap.Id, 2, RecordingScenario.Bytes(4))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var empty = await FactoryClient.AddRecordingAsync(session.Id);
+        var recent = await FactoryClient.AddRecordingAsync(session.Id);
+        (await FactoryClient.PutSliceAsync(recent.Id, 0, RecordingScenario.WebmStart)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var quietSince = DateTimeOffset.UtcNow - Recording.QuietUploadEndsAfter - TimeSpan.FromMinutes(1);
+        foreach (var id in new[] { withGap.Id, empty.Id })
+            await JournalScenario.ExecuteOutOfBandAsync(
+                "UPDATE recordings SET last_modified_on = $at WHERE id = $id", ("$at", Recall.Server.Databases.Sqlite.UtcTextConverter.ToText(quietSince)), ("$id", id));
+        var sweep = new RecordingSweep(Services.GetRequiredService<IServiceScopeFactory>(), SharedStore, Services.GetRequiredService<IJobStore>(), TimeProvider.System);
+
+        // Act
+        await sweep.QueueWaitingRecordingsAsync(CancellationToken.None);
+
+        // Assert
+        var ended = await FactoryClient.GetRecordingAsync(withGap.Id);
+        ended.Status.ShouldNotBe(nameof(RecordingStatus.Receiving));
+        ended.StoredSlices.ShouldBe([0, 2]);
+        (await CountJobsAsync("transcribe-recording", withGap.Id)).ShouldBeGreaterThan(0);
+        var audio = FileKey.ForTenant(admin.TenantId, RecordingFiles.RootFolder, admin.Id, withGap.Id, "audio.webm");
+        using (var file = SharedStore.OpenRead(audio))
+        using (var bytes = new MemoryStream())
+        {
+            await file.CopyToAsync(bytes);
+            bytes.ToArray().ShouldBe(RecordingScenario.WebmStart.Concat(RecordingScenario.Bytes(4)).ToArray());
+        }
+
+        (await FactoryClient.PutSliceAsync(withGap.Id, 1, RecordingScenario.Bytes(4))).StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        var nothing = await FactoryClient.GetRecordingAsync(empty.Id);
+        nothing.Status.ShouldBe(nameof(RecordingStatus.Failed));
+        nothing.Problem.ShouldBe(nameof(RecordingProblem.NoAudioReceived));
+        nothing.ProblemText.ShouldBe("No audio of this Recording reached the server within a day, so the server ended it.");
+        (await FactoryClient.PostAsync(ApiRoutes.Recordings.Retry(empty.Id), null)).StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        (await FactoryClient.GetRecordingAsync(recent.Id)).Status.ShouldBe(nameof(RecordingStatus.Receiving));
+    }
+
     // The timer exists only after the first sweep, so one advance can come too early.
     private static async Task<long> WaitForMoreJobsAsync(string recordingId, long known, Action beforeEachLook)
     {

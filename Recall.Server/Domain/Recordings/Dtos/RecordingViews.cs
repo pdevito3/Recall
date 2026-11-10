@@ -54,6 +54,7 @@ public static class RecordingViews
         RecordingProblem.ProviderRefused => "The audio is stored, but the provider that makes the text refused it. Ask an Admin to check the key, the model, and the limits of the provider, then try again.",
         RecordingProblem.ProviderBadAnswer => "The audio is stored, but the provider that makes the text gave an answer that the server cannot read. Ask an Admin to check the model of the provider, then try again.",
         RecordingProblem.ProviderKeyUnreadable => "The audio is stored, but this server cannot read the key of the provider that makes the text. Ask an Admin to enter the key again, then try again.",
+        RecordingProblem.NoAudioReceived => "No audio of this Recording reached the server within a day, so the server ended it.",
         _ => null,
     };
 

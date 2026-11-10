@@ -48,14 +48,7 @@ public static class FinishRecording
             }
 
             recording.Finish(stored, request.Dto.SliceCount, request.Dto.ByteLength, await RecordingWork.ChosenEngineAsync(dbContext, cancellationToken));
-            await fileStore.WriteAsync(RecordingFiles.Audio(recording), async (target, ct) =>
-            {
-                foreach (var slice in slices)
-                {
-                    await using var part = fileStore.OpenRead(RecordingFiles.Slice(recording, slice.Index, slice.Sha256));
-                    await part.CopyToAsync(target, ct);
-                }
-            }, cancellationToken);
+            await RecordingWork.WriteAudioAsync(fileStore, recording, slices, cancellationToken);
 
             await dbContext.SaveChangesAsync(cancellationToken);
             await RecordingWork.TryQueueTranscriptionAsync(dbContext, jobStore, recording, timeProvider, _logger);
@@ -143,6 +136,17 @@ public static class RecordingWork
             logger.Here().Warning("Could not queue the text of recording {RecordingId}, because of {FaultType}. The sweep queues it within the hour", recording.Id, exception.GetType().Name);
         }
     }
+
+    /// <summary>Joins the slices, in the order of their index, into the audio file of the Recording.</summary>
+    public static Task WriteAudioAsync(FileStore fileStore, Recording recording, IReadOnlyList<RecordingSlice> slices, CancellationToken cancellationToken)
+        => fileStore.WriteAsync(RecordingFiles.Audio(recording), async (target, ct) =>
+        {
+            foreach (var slice in slices.OrderBy(s => s.Index))
+            {
+                await using var part = fileStore.OpenRead(RecordingFiles.Slice(recording, slice.Index, slice.Sha256));
+                await part.CopyToAsync(target, ct);
+            }
+        }, cancellationToken);
 
     public static void TryDeleteSlices(FileStore fileStore, Recording recording, ILogger logger)
     {
