@@ -81,7 +81,8 @@ function levelMeterOf(stream: MediaStream) {
     const analyser = context.createAnalyser()
     analyser.fftSize = 512
     context.createMediaStreamSource(stream).connect(analyser)
-    void context.resume()
+    // A stop soon after the start closes the context before the resume ends.
+    context.resume().catch(() => undefined)
     const samples = new Float32Array(analyser.fftSize)
     return {
       level: () => {
