@@ -15,7 +15,7 @@ const liveWithNoLockMs = 5 * sliceMs
 const formats: { format: RecordingForCreationDtoFormatEnumKey; mimeType: string }[] = [
   { format: 'Webm', mimeType: 'audio/webm;codecs=opus' },
   { format: 'Webm', mimeType: 'audio/webm' },
-  // Safari records only MP4.
+  // Older Safari records only MP4.
   { format: 'Mp4', mimeType: 'audio/mp4' },
 ]
 
