@@ -791,7 +791,7 @@ test.describe('words that the browser has no room to keep', () => {
     await expect(unsent.at.signOutDidNotFinish).toHaveCount(0)
   })
 
-  test('at a sign-out in another tab, the tab leaves with no question, so that no hidden page stays', async ({ page, api }) => {
+  test('at a sign-out in another tab, the tab shows them alone with a copy, and leaves with no browser prompt when the person says so', async ({ page, api }) => {
     const unsent = unsentWords(page)
     const session = aSession().build()
     api.mock(sessionsApi.creates(session), { method: 'put', path: sessionsPaths.rawDraft(session.id), status: 503 })
@@ -805,6 +805,11 @@ test.describe('words that the browser has no room to keep', () => {
 
     await unsent.signOutInAnotherTab()
 
+    await expect(unsent.at.leftAtSignOut).toContainText('Words with no room')
+    await expect(unsent.at.copyLeftAtSignOut).toBeVisible()
+    await expect(unsent.at.onlyInMemory).toHaveCount(0)
+    expect(page.url()).not.toContain('signedOut=1')
+    await unsent.at.leaveThePage.click()
     await expect.poll(() => page.url()).toContain('signedOut=1')
     expect(dialogs()).toBe(0)
   })
