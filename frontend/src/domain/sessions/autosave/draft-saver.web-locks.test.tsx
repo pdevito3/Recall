@@ -192,3 +192,28 @@ test.each(['rejects', 'never answers'])('Edit here after a query of the lock man
   freeEditor()
   freeEditorAgain()
 }, queryWaitMs * 4)
+
+test.each(['rejects', 'never answers'])('a new entry whose query of the lock manager %s keeps its one editor', async (fault) => {
+  const entry = `new-entry-of-a-query-that-${fault.replace(' ', '-')}`
+  let freeOther: (() => void) | null = null
+  const barrier = vi.spyOn(navigator.locks, 'query').mockImplementationOnce(() => {
+    // Another tab opens the entry meanwhile, and waits in line for it.
+    void anotherTabGets(`recall.edit.${owner}.${entry}`).then((free) => {
+      freeOther = free
+    })
+    return fault === 'rejects' ? Promise.reject(new DOMException('a fault', 'InvalidStateError')) : new Promise(() => undefined)
+  })
+  const lock = lockOfEntry(owner, entry, true)
+  lock.join(aShownParty)
+  await expect.poll(() => barrier).toHaveBeenCalledOnce()
+
+  // The wait for the query ends, and the lock manager has a moment to give the lock to a tab in line.
+  await new Promise((resolve) => setTimeout(resolve, (fault === 'rejects' ? 0 : queryWaitMs) + 500))
+
+  expect(lock.editingPlace).toBe('here')
+  expect(freeOther).toBeNull()
+  barrier.mockRestore()
+  closeEntryLocks()
+  await expect.poll(() => freeOther).not.toBeNull()
+  freeOther?.()
+}, queryWaitMs * 4)

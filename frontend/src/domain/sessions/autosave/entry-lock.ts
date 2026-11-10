@@ -352,8 +352,8 @@ export class EntryLock {
         const handOver = this.catchHandOver()
         // A tab that wakes from a freeze runs a grant that another tab can have stolen since. The lock manager answers in order, so a steal before this answer ends the request first.
         const isAnswered = await lockManagerAnswers(webLocks)
-        // With no answer, this tab cannot know that the grant still holds, so it does not act on it.
-        const isUnknown = !isAnswered && !this.isClosed && !request.isDropped
+        // With no answer, this tab cannot know that the grant still holds, so it does not act on it. A tab that edits already, as on a new entry, keeps the grant, and a steal ends it as a steal of a live editor.
+        const isUnknown = !isAnswered && !this.isClosed && !request.isDropped && this.place !== 'here'
         if (this.isClosed || request.isDropped || request.isLost || isUnknown) {
           // Words that came for this grant go on to the tab that edits next, and this tab keeps them until a tab says that it took them.
           const caught = handOver.end()
