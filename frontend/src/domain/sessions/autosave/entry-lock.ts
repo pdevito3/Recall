@@ -100,6 +100,20 @@ const hasWebLocks = () => webLocks !== undefined
 
 const isAbort = (error: unknown) => error instanceof DOMException && error.name === 'AbortError'
 
+/** The longest wait for the lock manager to answer the query of a grant. A slow answer under load must still come in time. */
+export const queryWaitMs = 5_000
+
+/** True when the lock manager answers a query. False when the query fails, or when no answer comes within `queryWaitMs`. */
+function lockManagerAnswers(manager: LockManager): Promise<boolean> {
+  return new Promise((resolve) => {
+    const limit = setTimeout(() => resolve(false), queryWaitMs)
+    manager.query().then(
+      () => resolve(true),
+      () => resolve(false),
+    ).finally(() => clearTimeout(limit))
+  })
+}
+
 /** The tab that edits an entry, in storage. A tab that wakes after a take reads it before it writes or sends. */
 function writeMark(name: string) {
   try {
@@ -337,12 +351,14 @@ export class EntryLock {
         // The tab that held the lock gives its words when it loses the lock, and they can come before the answer below.
         const handOver = this.catchHandOver()
         // A tab that wakes from a freeze runs a grant that another tab can have stolen since. The lock manager answers in order, so a steal before this answer ends the request first.
-        await webLocks.query()
-        if (this.isClosed || request.isDropped || request.isLost) {
+        const isAnswered = await lockManagerAnswers(webLocks)
+        // With no answer, this tab cannot know that the grant still holds, so it does not act on it. A tab that edits already, as on a new entry, keeps the grant, and a steal ends it as a steal of a live editor.
+        const isUnknown = !isAnswered && !this.isClosed && !request.isDropped && this.place !== 'here'
+        if (this.isClosed || request.isDropped || request.isLost || isUnknown) {
           // Words that came for this grant go on to the tab that edits next, and this tab keeps them until a tab says that it took them.
           const caught = handOver.end()
           if (caught !== null && caught.drafts.length > 0) this.forward({ from: caught.from, drafts: [...(this.untakenHanded() ?? []), ...caught.drafts] })
-          if (request.isLost) this.waitAgain(how, request)
+          if (request.isLost || isUnknown) this.waitAgain(how, request)
           return
         }
         const held = new Promise<void>((resolve) => {

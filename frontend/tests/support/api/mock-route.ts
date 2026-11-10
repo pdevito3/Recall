@@ -9,8 +9,12 @@ export interface MockRoute {
   headers?: Record<string, string>
   /** Holds the answer, so that a later request can overtake this one. */
   delayMs?: number
+  /** Holds the answer until the test settles this promise, so that the call ends at the step the test chooses, however slow the page is. */
+  heldUntil?: Promise<unknown>
   /** The call stays open until the page leaves, as a read that hangs does. */
   neverAnswers?: boolean
+  /** Answers one call. The next call gets the older mock of the path, so a test sets each answer of a sequence before the page asks. */
+  once?: boolean
 }
 
 // The SPA sends these paths to the Server. The Vite dev server serves the source files of the app under /src,

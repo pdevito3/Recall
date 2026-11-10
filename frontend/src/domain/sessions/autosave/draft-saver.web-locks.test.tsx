@@ -5,7 +5,7 @@ import { getSession } from '@/api/generated/sessions/clients/get-session'
 import { saveRawDraft } from '@/api/generated/sessions/clients/save-raw-draft'
 
 import { draftSaverFor, resumeUnsentDrafts, type DraftTarget } from './draft-saver'
-import { closeEntryLocks, handOverWaitMs, lockOfEntry, type LockParty } from './entry-lock'
+import { closeEntryLocks, handOverWaitMs, lockOfEntry, queryWaitMs, type LockParty } from './entry-lock'
 import type { OutboxEntry } from './outbox'
 
 vi.mock('@/api/generated/sessions/clients/get-session')
@@ -79,6 +79,13 @@ function anotherTabHolds(name: string, options: LockOptions = {}) {
   return () => free()
 }
 
+/** Another tab asks for the lock, and the promise ends once the lock manager gave it the lock. */
+function anotherTabGets(name: string, options: LockOptions = {}) {
+  return new Promise<() => void>((granted) => {
+    void navigator.locks.request(name, options, () => new Promise<void>((free) => granted(() => free()))).catch(() => undefined)
+  })
+}
+
 const aShownParty: LockParty = { handOver: () => null, takeOver: () => [], takeLateHandOver: () => [], takeDraftsOfNoParty: () => [], noteEditingPlace: () => undefined, isShown: () => true }
 
 test('a page that gets the entry back from a tab that sent each word sends its next words', async () => {
@@ -135,3 +142,78 @@ test('Edit here that a release drops before the lock answers leaves a later Edit
   freeFirst()
   freeSecond()
 })
+
+test('Edit here whose grant a third tab steals before the lock manager answers waits in line again, and edits when that tab closes', async () => {
+  const name = `recall.edit.${owner}.entry-of-a-stale-steal`
+  const freeEditor = anotherTabHolds(name)
+  const lock = lockOfEntry(owner, 'entry-of-a-stale-steal')
+  lock.join(aShownParty)
+  await expect.poll(() => lock.editingPlace).toBe('elsewhere')
+  // The grant of Edit here waits for the answer of the lock manager, as in a tab that froze, and a third tab steals the lock meanwhile.
+  let freeThief = () => undefined as void
+  const query = navigator.locks.query.bind(navigator.locks)
+  const barrier = vi.spyOn(navigator.locks, 'query').mockImplementationOnce(async () => {
+    freeThief = await anotherTabGets(name, { steal: true })
+    return query()
+  })
+
+  lock.takeHere()
+  await expect.poll(() => barrier.mock.results[0]?.type).toBe('return')
+  await barrier.mock.results[0]?.value
+  expect(lock.editingPlace).toBe('elsewhere')
+  freeThief()
+
+  await expect.poll(() => lock.editingPlace, { timeout: handOverWaitMs * 4 }).toBe('here')
+  barrier.mockRestore()
+  freeEditor()
+})
+
+test.each(['rejects', 'never answers'])('Edit here after a query of the lock manager that %s works again with no reload', async (fault) => {
+  const name = `recall.edit.${owner}.entry-of-a-query-that-${fault.replace(' ', '-')}`
+  const freeEditor = anotherTabHolds(name)
+  const lock = lockOfEntry(owner, `entry-of-a-query-that-${fault.replace(' ', '-')}`)
+  lock.join(aShownParty)
+  await expect.poll(() => lock.editingPlace).toBe('elsewhere')
+  let editorIsBack: Promise<() => void> = new Promise(() => undefined)
+  const barrier = vi.spyOn(navigator.locks, 'query').mockImplementationOnce(() => {
+    // The tab that lost the entry to the steal waits in line for it again, as each tab does.
+    editorIsBack = anotherTabGets(name)
+    return fault === 'rejects' ? Promise.reject(new DOMException('a fault', 'InvalidStateError')) : new Promise(() => undefined)
+  })
+  lock.takeHere()
+  await expect.poll(() => barrier).toHaveBeenCalledOnce()
+  const freeEditorAgain = await Promise.race([editorIsBack, new Promise<never>((_, reject) => setTimeout(() => reject(new Error('the editor did not get the entry back')), queryWaitMs * 2))])
+  expect(lock.editingPlace).toBe('elsewhere')
+  barrier.mockRestore()
+
+  lock.takeHere()
+
+  await expect.poll(() => lock.editingPlace, { timeout: handOverWaitMs * 4 }).toBe('here')
+  freeEditor()
+  freeEditorAgain()
+}, queryWaitMs * 4)
+
+test.each(['rejects', 'never answers'])('a new entry whose query of the lock manager %s keeps its one editor', async (fault) => {
+  const entry = `new-entry-of-a-query-that-${fault.replace(' ', '-')}`
+  const other: { free: (() => void) | null } = { free: null }
+  const barrier = vi.spyOn(navigator.locks, 'query').mockImplementationOnce(() => {
+    // Another tab opens the entry meanwhile, and waits in line for it.
+    void anotherTabGets(`recall.edit.${owner}.${entry}`).then((free) => {
+      other.free = free
+    })
+    return fault === 'rejects' ? Promise.reject(new DOMException('a fault', 'InvalidStateError')) : new Promise(() => undefined)
+  })
+  const lock = lockOfEntry(owner, entry, true)
+  lock.join(aShownParty)
+  await expect.poll(() => barrier).toHaveBeenCalledOnce()
+
+  // The wait for the query ends, and the lock manager has a moment to give the lock to a tab in line.
+  await new Promise((resolve) => setTimeout(resolve, (fault === 'rejects' ? 0 : queryWaitMs) + 500))
+
+  expect(lock.editingPlace).toBe('here')
+  expect(other.free).toBeNull()
+  barrier.mockRestore()
+  closeEntryLocks()
+  await expect.poll(() => other.free).not.toBeNull()
+  other.free?.()
+}, queryWaitMs * 4)

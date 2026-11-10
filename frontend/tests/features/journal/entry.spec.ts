@@ -598,11 +598,9 @@ test.describe('an entry that another device changed', () => {
     await entry.open(session.id)
     const readsBefore = api.all('get', sessionsPaths.one(session.id)).length
 
-    api.mock({ ...sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }), delayMs: 300 }, ...sessionsApi.revisionsAre(session, []))
-    await entry.typeWithoutWaiting(' edited')
-    await expect.poll(() => api.all('put', sessionsPaths.rawDraft(session.id)).length).toBe(1)
     const newest = { ...aSession().atRevision(6).saying('Mine', 'From the other device').build(), id: session.id, clientSessionId: session.clientSessionId }
-    api.mock(sessionsApi.oneIs(newest), sessionsApi.draftSaveWins(session, 7))
+    api.mock(sessionsApi.oneIs(newest), sessionsApi.draftSaveWins(session, 7), { ...sessionsApi.draftSaveLoses(session, { draftRevision: 5, latestRevision: 6 }), delayMs: 300, once: true }, ...sessionsApi.revisionsAre(session, []))
+    await entry.typeWithoutWaiting(' edited')
 
     await expect(entry.at.mergedNotice).toBeVisible()
     await expect(entry.at.status('Saved at')).toBeVisible()
