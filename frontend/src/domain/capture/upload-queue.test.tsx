@@ -1,4 +1,4 @@
-import { QueryClient } from '@tanstack/react-query'
+import { onlineManager, QueryClient } from '@tanstack/react-query'
 import { afterEach, expect, test } from 'vitest'
 import { commands } from 'vitest/browser'
 
@@ -8,7 +8,7 @@ import '@/lib/api-client'
 import { newUuid } from '@/lib/new-uuid'
 import type { Answer } from '@/test/answer'
 
-import { addCapture, capturesOf, endCapture, readSlice, storeSlice, type StoredCapture } from './audio-store'
+import { addCapture, capturesOf, endCapture, readSlice, storeSlice, subscribeToAudioStore, type StoredCapture } from './audio-store'
 import { sendStoredAudioOf, tryAgainToSend } from './upload-queue'
 
 // The queue runs against the real IndexedDB of the test browser. Each test has its own owner, so the captures of one test
@@ -16,7 +16,10 @@ import { sendStoredAudioOf, tryAgainToSend } from './upload-queue'
 let owner = ''
 let stopQueue = () => undefined as void
 
-afterEach(() => stopQueue())
+afterEach(() => {
+  stopQueue()
+  onlineManager.setOnline(true)
+})
 
 const recording = (status: RecordingDto['status']): RecordingDto => ({
   id: 'rec_1',
@@ -156,6 +159,26 @@ test('the queue finishes only after the recorder stops, and sends each slice whi
 
   await endCapture(capture.clientRecordingId)
   stopRecorder()
+  await expect.poll(async () => (await theCapture())?.isFinished, { timeout: 5_000 }).toBe(true)
+})
+
+test('the network that comes back while the queue notes that it is offline still wakes the queue', async () => {
+  // Arrange
+  await commands.answerRequests(serverTakesAll)
+  const capture = await aStoredCapture()
+  await endCapture(capture.clientRecordingId)
+  onlineManager.setOnline(false)
+  // The first change after the start is the offline note of the queue. The network comes back in that moment, after the
+  // queue looked at the network and before it waits for news.
+  const stopListening = subscribeToAudioStore(() => {
+    stopListening()
+    onlineManager.setOnline(true)
+  })
+
+  // Act
+  startQueue()
+
+  // Assert
   await expect.poll(async () => (await theCapture())?.isFinished, { timeout: 5_000 }).toBe(true)
 })
 
