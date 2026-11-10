@@ -67,6 +67,8 @@ A replay sends the same `text` and the same `savedAt`. Give each new save a new 
 
 Any write can answer 507 when the disk of the server is full. The save did not happen. Keep the words, and send the same save again later.
 
+Any write, and a sign in, can answer 503 when the database did not answer within 30 s. The save did not happen. Keep the words, and send the same save again later. A request timeout of the client that is shorter than 30 s ends the request before the server answers.
+
 A base that is not the number of the current Draft gives `Lost`, also with a later `savedAt`. The server keeps the words as the newest Revision, and it does not refuse the save with a 4xx.
 
 Two devices that edit one Draft see more `Lost` answers, and a chunk of a transcript, a Person rename, a Cleanup, or the approval of a Person also moves the number. Each `Lost` costs the client one merge, or one notice to the person. A `Lost` save does not change the Draft.
