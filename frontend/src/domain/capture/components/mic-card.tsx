@@ -201,14 +201,16 @@ function DiscardAudio({ onDiscard }: { onDiscard: () => void }) {
     )
   }
   return (
-    <div role="group" aria-label="Discard this audio" className="flex flex-wrap items-center justify-center gap-2">
+    <div role="group" aria-label="Discard this audio" className="flex basis-full flex-col items-center gap-2">
       <span className="text-sm">This audio goes for good.</span>
-      <Button variant="destructive" className="h-11 px-4" onPress={onDiscard}>
-        Discard audio
-      </Button>
-      <Button variant="outline" className="h-11 px-4" autoFocus onPress={() => setIsAsking(false)}>
-        Keep
-      </Button>
+      <div className="flex flex-wrap justify-center gap-2">
+        <Button variant="destructive" className="h-11 px-4" onPress={onDiscard}>
+          Discard audio
+        </Button>
+        <Button variant="outline" className="h-11 px-4" autoFocus onPress={() => setIsAsking(false)}>
+          Keep
+        </Button>
+      </div>
     </div>
   )
 }
@@ -224,7 +226,7 @@ function WaitingCaptures({ capture }: { capture: Capture }) {
       </p>
       <ul aria-label="Other recordings in this browser" className="flex flex-col gap-2">
         {waiting.map((other) => (
-          <li key={other.clientRecordingId} className="flex flex-col items-center gap-2 rounded-lg bg-muted px-3 py-2 text-sm">
+          <li key={other.clientRecordingId} className="flex flex-col items-center gap-2 rounded-lg border px-3 py-2 text-sm">
             <p className="wrap-anywhere">
               {clock(other.durationMs)} of audio from {timeOf(other.startedAt, zone)}.{' '}
               {other.problem?.kind === 'refused' ? (
