@@ -84,7 +84,9 @@ public class WriterLineTests
     private static async Task<SqliteConnection> WriteLockOutsideTheLineAsync()
     {
         await using var scope = Host.Services.CreateAsyncScope();
-        var connection = new SqliteConnection(scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.GetConnectionString());
+        // A pooled connection keeps its open transaction in the pool, and the host would then hold the lock for later tests.
+        var connectionString = scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.GetConnectionString();
+        var connection = new SqliteConnection(new SqliteConnectionStringBuilder(connectionString) { Pooling = false }.ConnectionString);
         await connection.OpenAsync();
         await using var begin = new SqliteCommand("BEGIN IMMEDIATE", connection);
         await begin.ExecuteNonQueryAsync();
