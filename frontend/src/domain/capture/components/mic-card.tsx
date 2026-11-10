@@ -16,6 +16,7 @@ import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Link } from '@/components/ui/link'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useTranscriptionEngine } from '@/domain/model-providers/apis/transcription-engine'
 import { sessionQueryOptions } from '@/domain/sessions/apis/get-session'
 import { plainPreviewOf } from '@/domain/sessions/editor/content'
@@ -167,14 +168,21 @@ function WordsOfTheEntry({ sessionId }: { sessionId: string }) {
   const session = useQuery(sessionQueryOptions(sessionId))
   const text = session.data && plainPreviewOf(session.data.rawText, 400)
   return (
-    <figure className="flex w-full max-w-lg flex-col gap-2 rounded-lg bg-muted px-4 py-3 text-left">
-      {text && <blockquote className="line-clamp-3 text-sm wrap-anywhere">{text}</blockquote>}
-      <figcaption className="flex justify-end">
+    <div className="flex w-full max-w-lg flex-col gap-2 rounded-lg bg-muted px-4 py-3 text-left">
+      {session.isPending ? (
+        <div aria-hidden className="flex flex-col gap-2 py-0.5">
+          <Skeleton className="h-4 w-full bg-foreground/10" />
+          <Skeleton className="h-4 w-2/3 bg-foreground/10" />
+        </div>
+      ) : (
+        text && <p className="line-clamp-3 text-sm wrap-anywhere">{text}</p>
+      )}
+      <div className="flex justify-end">
         <Link to="/sessions/$id" params={{ id: sessionId }} className="inline-flex min-h-11 items-center rounded-lg border bg-background px-3 text-sm font-medium sm:min-h-8">
           Open entry
         </Link>
-      </figcaption>
-    </figure>
+      </div>
+    </div>
   )
 }
 
@@ -246,7 +254,7 @@ export function MicCard() {
           (isOff || view.kind === 'starting') && 'bg-muted text-muted-foreground shadow-none',
         )}
       >
-        {isRecording && <span aria-hidden className="absolute inset-0 animate-ping rounded-full bg-destructive/40 [animation-duration:1.6s]" />}
+        {isRecording && <span aria-hidden className="absolute -inset-2 rounded-full bg-destructive/20 motion-safe:animate-pulse" />}
         <HugeiconsIcon icon={isRecording ? StopIcon : view.kind === 'insecure' ? SquareLock01Icon : isOff ? MicOff01Icon : Mic01Icon} size={40} className="relative" />
       </button>
 
