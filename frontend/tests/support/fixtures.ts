@@ -71,12 +71,14 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
             return
           }
 
+          if (newestMock.once) routes.splice(routes.indexOf(newestMock), 1)
           served.add(newestMock.method, url, new Headers(await request.allHeaders()), postBody(request))
           if (newestMock.neverAnswers) {
             openCalls.push(route)
             return
           }
           if (newestMock.delayMs) await new Promise((resolve) => setTimeout(resolve, newestMock.delayMs))
+          if (newestMock.heldUntil) await newestMock.heldUntil
           await route.fulfill({
             status: newestMock.status,
             headers: newestMock.headers,

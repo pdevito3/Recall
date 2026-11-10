@@ -41,6 +41,9 @@ const runs = Number(process.env.MODEL_RUNS ?? 40)
 const stepsInARun = 120
 const hasFullStorage = process.env.MODEL_NO_FULL_STORAGE === undefined
 const hasSignOut = process.env.MODEL_NO_SIGN_OUT === undefined
+// A grant whose query fails, or gets no answer, sends on the words of its hand-over and keeps them in memory until a tab takes them.
+// The check of each step can count those words as gone, so these faults run only on demand, with MODEL_QUERY_FAULTS.
+const hasQueryFaults = process.env.MODEL_QUERY_FAULTS !== undefined
 const owner = 'person-a'
 
 const randomFrom = (seed: number) => {
@@ -69,6 +72,16 @@ interface Row {
 }
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+/** Moves the clock in steps of 10 ms until the work ends. */
+async function passUntil<T>(work: Promise<T>): Promise<T> {
+  const pending = Symbol('pending')
+  for (;;) {
+    const result = await Promise.race([work, Promise.resolve(pending)])
+    if (result !== pending) return result as T
+    await vi.advanceTimersByTimeAsync(10)
+  }
+}
 
 /** The rules of `DraftSlot.Decide` on the Server, SES-36: a replay gets the answer of its first try, and only a base that is the current Draft wins. A request reaches the Server and answers later, also when its tab is gone. */
 class ModelServer {
@@ -278,12 +291,19 @@ function viaTab<T>(tab: Tab | null, request: () => Promise<T>): Promise<T> {
 class ModelLocks {
   private readonly held = new Map<string, LockAsk>()
   private line: LockAsk[] = []
+  /** A query of the lock manager can fail, or get no answer. */
+  queryFault: () => 'none' | 'rejects' | 'hangs' = () => 'none'
 
   managerFor(tab: Tab) {
     return {
       request: (name: string, options: LockOptions, callback: (lock: Lock | null) => Promise<unknown>) => this.request(tab, name, options, callback),
       // The manager answers each tab in order, so an answer comes after each end of a lock that the manager sent the tab before.
-      query: () => new Promise<LockManagerSnapshot>((resolve) => clock.set(() => asTab(tab, () => resolve({ held: [], pending: [] })), 0)),
+      query: () =>
+        new Promise<LockManagerSnapshot>((resolve, reject) => {
+          const fault = this.queryFault()
+          if (fault === 'hangs') return
+          clock.set(() => asTab(tab, () => (fault === 'rejects' ? reject(new DOMException('a fault', 'InvalidStateError')) : resolve({ held: [], pending: [] }))), 0)
+        }),
     }
   }
 
@@ -850,6 +870,14 @@ class ModelRun {
     if (process.env.MODEL_DEBUG) world.noteSave = (step) => this.note(step)
     channels = new ModelChannels()
     locks = new ModelLocks()
+    // A third stream from the seed, so that the faults of the lock manager do not change the steps of a seed.
+    const faults = randomFrom(seed ^ 0x5bd1e995)
+    if (hasQueryFaults) locks.queryFault = () => {
+      const roll = faults.below(100)
+      const fault = roll < 3 ? 'rejects' : roll < 6 ? 'hangs' : 'none'
+      if (fault !== 'none') this.note(`the lock manager ${fault === 'rejects' ? 'fails' : 'never answers'} a query`)
+      return fault
+    }
     everyTab.clear()
     tabNames = 0
   }
@@ -1073,11 +1101,11 @@ class ModelRun {
 
   private async signOut(tab: Tab) {
     const index = tab.name
-    const reports = tab.run(() => tab.keys.askOtherTabsToSettle(5000))
-    void tab.run(() => tab.mod.settleDraftSavers())
-    await vi.advanceTimersByTimeAsync(5000)
-    const otherTabs = await reports
-    const shown = tab.run(() => tab.mod.unsentWordsOnThisDevice(owner, otherTabs))
+    // As on the page, the dialog lists the words once each tab reported and the savers of this tab settled, or at 5 s. The person answers at once.
+    const listed = tab
+      .run(() => Promise.all([tab.keys.askOtherTabsToSettle(5000), Promise.race([tab.mod.settleDraftSavers(), delay(5000)])]))
+      .then(([otherTabs]) => tab.run(() => tab.mod.unsentWordsOnThisDevice(owner, otherTabs)))
+    const shown = await passUntil(listed)
     const discards = this.random.chance(0.3)
     if (!discards && shown.some(({ isOnlyInMemory }) => isOnlyInMemory)) {
       this.note(`tab ${index} would sign out, and the dialog names words in memory, so the person stays`)
