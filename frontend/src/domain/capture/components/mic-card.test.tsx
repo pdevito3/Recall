@@ -114,15 +114,17 @@ const cardSays = (screen: Awaited<ReturnType<typeof openHome>>, words: string, t
   expect.element(screen.getByRole('status').getByText(words, { exact: false }), { timeout }).toBeInTheDocument()
 
 // Speech is a tone here: the test fakes the source of the mic, and the recorder, the store, and the queue are real.
+function aTone() {
+  const context = new AudioContext()
+  const tone = context.createOscillator()
+  const out = context.createMediaStreamDestination()
+  tone.connect(out)
+  tone.start()
+  return out.stream
+}
+
 function micGivesATone() {
-  return vi.spyOn(navigator.mediaDevices, 'getUserMedia').mockImplementation(async () => {
-    const context = new AudioContext()
-    const tone = context.createOscillator()
-    const out = context.createMediaStreamDestination()
-    tone.connect(out)
-    tone.start()
-    return out.stream
-  })
+  return vi.spyOn(navigator.mediaDevices, 'getUserMedia').mockImplementation(async () => aTone())
 }
 
 async function aFinishedCapture(change: Partial<StoredCapture> = {}) {
@@ -151,6 +153,31 @@ afterEach(async () => {
   await cleanup()
   vi.restoreAllMocks()
   for (const capture of await capturesOf(member.identifier)) await removeCapture(capture.clientRecordingId)
+})
+
+test('on a phone the card keeps its height while the mic starts, so nothing moves under the finger', async () => {
+  // Arrange
+  await page.viewport(390, 800)
+  let micStarts: (stream: MediaStream) => void = () => {}
+  vi.spyOn(navigator.mediaDevices, 'getUserMedia').mockImplementation(() => new Promise<MediaStream>((resolve) => (micStarts = resolve)))
+  const screen = await openHome([])
+  await expect.element(screen.getByRole('link', { name: 'Change' })).toBeVisible()
+  const card = screen.getByRole('region', { name: 'Record an entry' })
+  const idleHeight = card.element().getBoundingClientRect().height
+
+  // Act
+  await userEvent.click(screen.getByRole('button', { name: 'Record' }))
+
+  // Assert
+  await cardSays(screen, 'Starting the mic')
+  expect(card.element().getBoundingClientRect().height).toBe(idleHeight)
+  // The mic of this page outlives the test, so it starts and stops, and the next test finds it idle. With no network nothing goes out.
+  onlineManager.setOnline(false)
+  onTestFinished(() => onlineManager.setOnline(true))
+  micStarts(aTone())
+  await userEvent.click(screen.getByRole('button', { name: 'Stop recording' }))
+  await expect.element(screen.getByRole('button', { name: 'Record', exact: true })).toBeInTheDocument()
+  await screen.unmount()
 })
 
 test('one tap records into a new entry, and the card follows the audio until the words are in', { timeout: 30_000 }, async () => {
@@ -226,6 +253,23 @@ test('with no network the card says that the audio is safe in this browser and w
   await cardSays(screen, '1:05 of audio is safe in this browser.')
   expect(await commands.takeSentRequests()).toEqual([])
   // The queue of this page sends when the network comes back, so it stops before the test goes online again.
+  await screen.unmount()
+})
+
+test('with no network after each slice went, the card says that the server has the audio and only the words wait', async () => {
+  // Arrange
+  const screen = await openHome([])
+  await cardSays(screen, 'Tap to record')
+  onlineManager.setOnline(false)
+  onTestFinished(() => onlineManager.setOnline(true))
+
+  // Act
+  await aFinishedCapture({ isFinished: false, durationMs: 65_000 })
+
+  // Assert
+  await cardSays(screen, 'No network. The words wait')
+  await cardSays(screen, 'The server has all 1:05 of this audio.')
+  expect(await commands.takeSentRequests()).toEqual([])
   await screen.unmount()
 })
 

@@ -61,8 +61,9 @@ export type CaptureView =
   /** The recording ended, and its audio waits in this browser for the upload to start. */
   | { kind: 'stored'; durationMs: number }
   | { kind: 'sending'; sentSlices: number; totalSlices: number; durationMs: number }
-  | { kind: 'offline'; durationMs: number }
-  | { kind: 'serverDown'; durationMs: number }
+  /** `isOnServer`: each slice is on the Server, and only the call that starts the words waits. */
+  | { kind: 'offline'; durationMs: number; isOnServer: boolean }
+  | { kind: 'serverDown'; durationMs: number; isOnServer: boolean }
   | { kind: 'refused'; text: string; clientRecordingId: string }
   | { kind: 'transcribing'; problemText: string | null }
   | { kind: 'ready'; sessionId: string }
@@ -87,11 +88,15 @@ export interface CaptureInputs {
 /** A text that is ready shows until this long after the recording, so a page open the next day starts at the mic. */
 export const readyShowsForMs = 60 * 60 * 1000
 
+/** Each slice is on the Server, and only the call that starts the words did not go. */
+export const waitsOnlyForItsEnd = (capture: StoredCapture) => capture.isEnded && capture.recordingId !== null && capture.sentSlices === capture.storedSlices
+
 function viewOfUpload(capture: StoredCapture, isOnline: boolean): CaptureView {
   const { durationMs } = capture
   if (capture.problem?.kind === 'refused') return { kind: 'refused', text: capture.problem.text, clientRecordingId: capture.clientRecordingId }
-  if (!isOnline || capture.problem?.kind === 'offline') return { kind: 'offline', durationMs }
-  if (capture.problem?.kind === 'serverDown') return { kind: 'serverDown', durationMs }
+  const isOnServer = waitsOnlyForItsEnd(capture)
+  if (!isOnline || capture.problem?.kind === 'offline') return { kind: 'offline', durationMs, isOnServer }
+  if (capture.problem?.kind === 'serverDown') return { kind: 'serverDown', durationMs, isOnServer }
   if (capture.isEnded && capture.sentSlices === 0 && capture.recordingId === null) return { kind: 'stored', durationMs }
   return { kind: 'sending', sentSlices: capture.sentSlices, totalSlices: capture.storedSlices, durationMs }
 }

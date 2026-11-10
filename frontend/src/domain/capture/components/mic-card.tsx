@@ -45,15 +45,25 @@ function wordsOf(view: CaptureView): { title: string; line: string } {
     case 'sending':
       return { title: `Sending ${clock(view.durationMs)} of audio`, line: 'The audio stays in this browser until the server has all of it.' }
     case 'offline':
-      return {
-        title: 'No network. The upload waits',
-        line: `${clock(view.durationMs)} of audio is safe in this browser. It uploads when the network comes back. You can keep recording.`,
-      }
+      return view.isOnServer
+        ? {
+            title: 'No network. The words wait',
+            line: `The server has all ${clock(view.durationMs)} of this audio. The words start when the network comes back, or on their own about a day later. You can keep recording.`,
+          }
+        : {
+            title: 'No network. The upload waits',
+            line: `${clock(view.durationMs)} of audio is safe in this browser. It uploads when the network comes back. You can keep recording.`,
+          }
     case 'serverDown':
-      return {
-        title: 'The server does not answer. The upload waits',
-        line: `${clock(view.durationMs)} of audio is safe in this browser. It uploads when the server answers again. You can keep recording.`,
-      }
+      return view.isOnServer
+        ? {
+            title: 'The server does not answer. The words wait',
+            line: `The server has all ${clock(view.durationMs)} of this audio. The words start when the server answers again, or on their own about a day later. You can keep recording.`,
+          }
+        : {
+            title: 'The server does not answer. The upload waits',
+            line: `${clock(view.durationMs)} of audio is safe in this browser. It uploads when the server answers again. You can keep recording.`,
+          }
     case 'refused':
       return { title: 'The server did not take this audio', line: `${view.text} The audio stays in this browser.` }
     case 'transcribing':
@@ -307,6 +317,7 @@ export function MicCard() {
   const capture = useCapture()
   const { view } = capture
   const isRecording = view.kind === 'recording'
+  const isStarting = view.kind === 'starting'
   const isOff = isMicOff(view.kind)
   const words = wordsOf(view)
   const icon = iconOf[view.kind]
@@ -345,13 +356,21 @@ export function MicCard() {
           {icon && <HugeiconsIcon icon={icon} size={20} aria-hidden className={cn(view.kind === 'transcribing' && 'animate-spin [animation-duration:2s]', view.kind === 'ready' && 'text-emerald-600 dark:text-emerald-400')} />}
           {words.title}
         </p>
-        <p className="text-sm text-balance text-muted-foreground">{words.line}</p>
+        {/* While the mic starts, the line keeps the room of the idle line, so the card does not shrink and grow again under the finger. */}
+        <p className="grid text-sm text-balance text-muted-foreground">
+          <span className="[grid-area:1/1]">{words.line}</span>
+          {isStarting && (
+            <span aria-hidden className="invisible [grid-area:1/1]">
+              {wordsOf({ kind: 'idle' }).line}
+            </span>
+          )}
+        </p>
       </div>
 
       <Actions view={view} capture={capture} />
 
       {capture.waiting.length > 0 && <WaitingCaptures capture={capture} />}
-      {view.kind === 'idle' && capture.isLoaded && <EnginePlace />}
+      {(view.kind === 'idle' || isStarting) && capture.isLoaded && <EnginePlace />}
     </section>
   )
 }

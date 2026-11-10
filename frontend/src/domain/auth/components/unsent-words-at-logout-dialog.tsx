@@ -9,7 +9,8 @@ import {
 
 import type { StoredCapture } from '@/domain/capture/audio-store'
 import { clock } from '@/domain/capture/audio-time'
-import { unsentMsOf, waitsOnlyForItsEnd } from '@/domain/capture/upload-plan'
+import { waitsOnlyForItsEnd } from '@/domain/capture/capture-view'
+import { unsentMsOf } from '@/domain/capture/upload-plan'
 import type { UnsentWords } from '@/domain/sessions/autosave/draft-saver'
 import { CopyWords } from '@/domain/sessions/components/draft-notices'
 import { plainPreviewOf } from '@/domain/sessions/editor/content'

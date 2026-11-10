@@ -99,7 +99,7 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
             OpenForLatePart();
 
         if (ByteLength + byteLength > MaxBytes)
-            throw new ConflictException(ByteLengthField, "This Recording is too large to store. The slices that are stored stay.");
+            throw new ConflictException(ByteLengthField, "This recording is too large to store. The slices that are stored stay.");
 
         ByteLength += byteLength;
         HighestStoredSlice = Math.Max(HighestStoredSlice ?? -1, index);
@@ -132,7 +132,7 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
     public void Finish(IReadOnlyCollection<int> stored, int sliceCount, long byteLength, TranscriptionEngineKind engine)
     {
         if (Status != RecordingStatus.Receiving)
-            throw new ConflictException(StatusField, "This Recording is already finished.");
+            throw new ConflictException(StatusField, "This recording is already finished.");
 
         ValidationException.Must(sliceCount is > 0 and <= MaxSlices, SliceCountField, $"A Recording has from 1 to {MaxSlices} slices.");
         // A gap that the sweep joined stays a gap (REC-24), so only the slices after the joined audio must all be here.
@@ -157,7 +157,7 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
     public void EndQuietUpload(int storedSliceCount, TranscriptionEngineKind engine)
     {
         if (Status != RecordingStatus.Receiving)
-            throw new ConflictException(StatusField, "This Recording is already finished.");
+            throw new ConflictException(StatusField, "This recording is already finished.");
 
         QuietEndThroughSlice = HighestStoredSlice ?? -1;
         if (storedSliceCount == 0)
@@ -264,9 +264,9 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
             return;
 
         if (Status != RecordingStatus.Failed)
-            throw new ConflictException(StatusField, "Only a Recording that failed or that waits for its text can run again.");
+            throw new ConflictException(StatusField, "Only a recording that failed or that waits for its text can run again.");
         if (Problem == RecordingProblem.NoAudioReceived)
-            throw new ConflictException(StatusField, "No audio of this Recording reached the server, so there is no audio to make text of.");
+            throw new ConflictException(StatusField, "No audio of this recording reached the server, so there is no audio to make text of.");
 
         Engine = engine;
         Status = RecordingStatus.Received;
@@ -284,7 +284,7 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
     private void RequireWaitingForTranscription()
     {
         if (!WaitsForTranscription)
-            throw new ConflictException(StatusField, "This Recording is not waiting for its text.");
+            throw new ConflictException(StatusField, "This recording is not waiting for its text.");
     }
 
     protected Recording() : base(IdPrefix) { }

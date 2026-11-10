@@ -137,7 +137,13 @@ describe('the mic card', () => {
 
   it('says that the upload waits for the server when the server does not answer', () => {
     const latest = aCapture({ sessionId: 'ses_1', recordingId: 'rec_1', sentSlices: 4, problem: { kind: 'serverDown' } })
-    expect(captureViewOf(inputs({ latest })).kind).toBe('serverDown')
+    expect(captureViewOf(inputs({ latest }))).toEqual({ kind: 'serverDown', durationMs: 10_000, isOnServer: false })
+  })
+
+  it('says that only the words wait when the server has each slice and only the finish did not go', () => {
+    const latest = aCapture({ sessionId: 'ses_1', recordingId: 'rec_1', sentSlices: 10, problem: { kind: 'serverDown' } })
+    expect(captureViewOf(inputs({ latest }))).toEqual({ kind: 'serverDown', durationMs: 10_000, isOnServer: true })
+    expect(captureViewOf(inputs({ latest, isOnline: false }))).toEqual({ kind: 'offline', durationMs: 10_000, isOnServer: true })
   })
 
   it('shows the words of a refusal, with the capture to send again', () => {

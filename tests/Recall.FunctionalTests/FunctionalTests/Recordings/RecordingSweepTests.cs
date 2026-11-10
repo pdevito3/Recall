@@ -204,7 +204,7 @@ public class RecordingSweepTests : TestBase
         var nothing = await FactoryClient.GetRecordingAsync(empty.Id);
         nothing.Status.ShouldBe(nameof(RecordingStatus.Failed));
         nothing.Problem.ShouldBe(nameof(RecordingProblem.NoAudioReceived));
-        nothing.ProblemText.ShouldBe("No audio of this Recording reached the server within a day, so the server ended it.");
+        nothing.ProblemText.ShouldBe("No audio of this recording reached the server within a day, so the server ended it.");
         (await FactoryClient.PostAsync(ApiRoutes.Recordings.Retry(empty.Id), null)).StatusCode.ShouldBe(HttpStatusCode.Conflict);
 
         (await FactoryClient.GetRecordingAsync(recent.Id)).Status.ShouldBe(nameof(RecordingStatus.Receiving));
