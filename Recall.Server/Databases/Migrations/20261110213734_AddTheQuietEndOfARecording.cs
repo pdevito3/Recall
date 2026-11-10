@@ -20,9 +20,8 @@ namespace Recall.Server.Databases.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "quiet_end_through_slice",
-                table: "recordings");
+            // In place, as main does, because a rebuild of recordings breaks the triggers that name it.
+            migrationBuilder.Sql("ALTER TABLE recordings DROP COLUMN quiet_end_through_slice;");
         }
     }
 }
