@@ -1,13 +1,21 @@
 namespace Recall.FunctionalTests.Auth;
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Net.Http.Headers;
+using Recall.Server.Auth;
+using Recall.Server.Auth.Entities;
 using Recall.Server.Databases;
 using Recall.Server.Databases.Sqlite;
+using Recall.Server.Resources;
 using Recall.Server.Resources.Entrypoints.Auth;
+using Serilog.Events;
 using Shouldly;
 
 // Each test holds the writer line of the host, so the tests of this class take turns.
@@ -15,6 +23,7 @@ using Shouldly;
 public class WriterLineTests
 {
     private const string Me = "/auth/me";
+    private const string SlideSpan = "session.slide";
     private static readonly TimeSpan Limit = TimeSpan.FromMinutes(1);
 
     private static AuthFlowFactory Host => AuthHosts.WriterLine;
@@ -79,6 +88,79 @@ public class WriterLineTests
         // Assert
         watch.Elapsed.ShouldBeLessThan(AuthEndpoints.SlideWait + TimeSpan.FromSeconds(5));
         me.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Test]
+    public async Task me_with_a_slide_due_moves_the_end_of_the_session_and_of_its_cookie()
+    {
+        // Arrange
+        using var browser = new AuthBrowser(Host);
+        await browser.LoginWebAsync($"subject-{Guid.NewGuid():N}");
+        AuthHosts.WriterLineClock.Advance(TimeSpan.FromDays(2));
+        var now = AuthHosts.WriterLineClock.GetUtcNow();
+
+        // Act
+        var me = await browser.GetAsync(Me, csrf: true).WaitAsync(Limit);
+
+        // Assert
+        me.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var sessionId = await SessionIdOfAsync(me);
+        var session = await Host.WithDatabaseAsync(db => db.Set<AuthSession>().AsNoTracking().SingleAsync(s => s.Id == sessionId));
+        session.ExpiresAt.ShouldBe(now + SessionPolicy.WebIdle, TimeSpan.FromMilliseconds(1));
+        session.LastSlidAt.ShouldNotBeNull().ShouldBe(now, TimeSpan.FromMilliseconds(1));
+        var cookie = SetCookieHeaderValue.Parse(me.Headers.GetValues("Set-Cookie").Single(line => line.StartsWith($"{browser.SessionCookieName}=", StringComparison.Ordinal)));
+        cookie.Expires.ShouldNotBeNull().ShouldBe(now + SessionPolicy.WebIdle, TimeSpan.FromSeconds(1));
+    }
+
+    [Test]
+    public async Task a_slide_that_fails_after_me_answered_writes_a_warning_and_fails_its_span()
+    {
+        // Arrange
+        var spans = new ConcurrentQueue<Activity>();
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == Telemetry.ServiceName,
+            Sample = (ref options) => options.Name == SlideSpan ? ActivitySamplingResult.AllDataAndRecorded : ActivitySamplingResult.None,
+            ActivityStopped = activity =>
+            {
+                if (activity.OperationName == SlideSpan)
+                    spans.Enqueue(activity);
+            },
+        };
+        ActivitySource.AddActivityListener(listener);
+        using var browser = new AuthBrowser(Host);
+        await browser.LoginWebAsync($"subject-{Guid.NewGuid():N}");
+        AuthHosts.WriterLineClock.Advance(TimeSpan.FromDays(2));
+        // The slide gets the turn, and its write then waits for this lock until the limit of the writer line ends.
+        await using var outside = await WriteLockOutsideTheLineAsync();
+
+        // Act
+        var me = await browser.GetAsync(Me, csrf: true).WaitAsync(Limit);
+        var sessionId = await SessionIdOfAsync(me);
+        // Each host writes the lines of the static logger to the sinks of Sweep. See AuthHosts.Start.
+        var warning = await EventuallyAsync(() => AuthHosts.Sweep.Logs.Holding(sessionId)
+            .SingleOrDefault(line => line.Level == LogEventLevel.Warning && line.MessageTemplate.Text.Contains("failed after /auth/me answered", StringComparison.Ordinal)));
+
+        // Assert
+        me.StatusCode.ShouldBe(HttpStatusCode.OK);
+        warning.Exception.ShouldNotBeNull();
+        var span = spans.Single(span => (string?)span.GetTagItem("app.session_id") == sessionId);
+        span.Status.ShouldBe(ActivityStatusCode.Error);
+    }
+
+    private static async Task<string> SessionIdOfAsync(HttpResponseMessage me)
+        => (await me.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("sid").GetString()!;
+
+    private static async Task<T> EventuallyAsync<T>(Func<T?> find)
+        where T : class
+    {
+        using var limit = new CancellationTokenSource(Limit);
+        while (true)
+        {
+            if (find() is { } found)
+                return found;
+            await Task.Delay(TimeSpan.FromMilliseconds(20), limit.Token);
+        }
     }
 
     private static async Task<SqliteConnection> WriteLockOutsideTheLineAsync()

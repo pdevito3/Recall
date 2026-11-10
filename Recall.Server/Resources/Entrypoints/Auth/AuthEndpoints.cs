@@ -9,6 +9,7 @@ using Recall.Server.Auth.Entities;
 using Recall.Server.Domain.Users;
 using Recall.Server.Domain.Users.Features;
 using Recall.Server.Exceptions;
+using Serilog;
 
 public static class AuthEndpoints
 {
@@ -68,6 +69,8 @@ public static class AuthEndpoints
                                           || DomainError.From(exception).Kind == DomainErrorKind.DatabaseBusy)
         {
             Telemetry.AddEvent([("exception.type", exception.GetType().Name)], "session.slide_skipped");
+            if (exception is TimeoutException)
+                _ = WarnOfALateFailureAsync(slide, sessionId);
             return;
         }
 
@@ -79,9 +82,33 @@ public static class AuthEndpoints
     // its thread. So the slide runs on its own thread with its own scope, and it can end after the answer.
     private static async Task<DateTimeOffset?> SlideInItsOwnScopeAsync(IServiceScopeFactory scopes, string sessionId)
     {
+        using var activity = Telemetry.Trace([("app.session_id", sessionId)], "session.slide");
         using var limit = new CancellationTokenSource(SlideWait);
-        await using var scope = scopes.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<SessionStore>().SlideWebAsync(sessionId, limit.Token);
+        try
+        {
+            await using var scope = scopes.CreateAsyncScope();
+            return await scope.ServiceProvider.GetRequiredService<SessionStore>().SlideWebAsync(sessionId, limit.Token);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Telemetry.MarkFailed(activity, exception);
+            throw;
+        }
+    }
+
+    // The answer has gone, so this is the only code that sees how the slide ends. A cancel at its own limit is a skip.
+    private static async Task WarnOfALateFailureAsync(Task slide, string sessionId)
+    {
+        try
+        {
+            await slide;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Log.ForContext(typeof(AuthEndpoints)).Here().Warning(exception,
+                "The slide of session {SessionId} failed after /auth/me answered. A write that does not end can mean a disk that hangs",
+                sessionId);
+        }
     }
 
     private static async Task<IResult> StatusAsync(HttpContext http, LoginModes modes, CancellationToken cancellationToken)
