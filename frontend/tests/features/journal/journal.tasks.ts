@@ -352,6 +352,15 @@ export function unsentWords(page: Page) {
         const entries = Object.keys(localStorage).filter((key) => key.startsWith('recall.unsent.')).map((key) => JSON.parse(localStorage.getItem(key)!) as { clientSessionId: string; held?: string | null })
         return entries.find(({ held }) => held != null)!.clientSessionId
       }),
+    /** The lock manager of a busy browser, which grants each lock after the page shows the entry. */
+    locksAnswerLate: () =>
+      page.addInitScript(() => {
+        const request = navigator.locks.request.bind(navigator.locks)
+        Object.defineProperty(navigator.locks, 'request', {
+          value: (name: string, options: LockOptions, callback: LockGrantedCallback<unknown>) =>
+            request(name, options, (lock) => new Promise((resolve) => setTimeout(resolve, 1_500)).then(() => callback(lock))),
+        })
+      }),
     settingKeys: () => page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('recall.unsent-setting.'))),
     composerPointer: () => page.evaluate(() => sessionStorage.getItem('recall.composer')),
     clipboardText: () => page.evaluate(() => navigator.clipboard.readText()),

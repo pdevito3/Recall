@@ -611,11 +611,11 @@ class Tab {
     }
     const kept = page.saver.wordsToOpen()
     const id = page.saver.getSnapshot().sessionId
-    page.held = page.saver.wordsInHold()
-    // As the entry page: after a take with no words to open, the editor opens the text of the base, not an older read of the page.
-    const ofTheTake = page.wasElsewhere && page.held === null ? page.saver.wordsOfTheBase() : null
+    // As the entry page: after a take with no words to open, the editor opens the text of the base with the held words joined, not an older read of the page.
+    const ofTheTake = kept === null && page.wasElsewhere ? page.saver.wordsOfTheBase() : null
     page.wasElsewhere = false
-    page.editor = kept ?? ofTheTake ?? (id ? null : '')
+    page.editor = kept ?? (ofTheTake === null ? null : page.saver.joinHoldInto(ofTheTake)) ?? (id ? null : '')
+    page.held = page.saver.wordsInHold()
     if (page.editor === null) {
       page.saver.takeHold()
       void this.readInto(page, id as string)

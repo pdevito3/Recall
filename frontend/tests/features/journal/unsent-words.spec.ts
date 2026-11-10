@@ -433,6 +433,46 @@ test.describe('a return to an entry whose read is slow', () => {
     await expect.poll(() => wordsOf(api.last('put', sessionsPaths.rawDraft(session.id))), { timeout: 10_000 }).toContain('a key on the entry page')
   })
 
+  test('Edit here in a second tab during the read opens the held words there, and saves them on the newest words', async ({ page, context, api }) => {
+    const session = aSession().build()
+    const journal = journalPage(page)
+    const saved = { ...aSession().atRevision(1).saying('Words from before').build(), id: session.id }
+    await aReturnDuringASlowRead(journal, page, api, session, () => ({ ...sessionsApi.oneIs(saved), neverAnswers: true }))
+    await journal.typeWithoutWaiting('Words typed early')
+    await expect.poll(() => unsentWords(page).clientSessionIdOfTheHold()).toBeTruthy()
+    // A phone saved Revision 2 since, and the second tab reads it.
+    const onThePhone = { ...aSession().atRevision(2).saying('Words from before and the phone').build(), id: session.id, clientSessionId: await unsentWords(page).clientSessionIdOfTheHold() }
+    api.mock(sessionsApi.oneIs(onThePhone), sessionsApi.draftSaveWins(session, 3))
+    const second = entryPage(await context.newPage())
+    await second.open(session.id)
+
+    await second.at.editHere.click()
+
+    await expect(second.at.editor).toContainText('Words from before and the phone')
+    await expect(second.at.editor).toContainText('Words typed early')
+    await expect.poll(() => wordsOf(api.last('put', sessionsPaths.rawDraft(session.id))), { timeout: 10_000 }).toContain('Words typed early')
+    expect(wordsOf(api.last('put', sessionsPaths.rawDraft(session.id)))).toContain('Words from before and the phone')
+    expect(api.last('put', sessionsPaths.rawDraft(session.id))?.body).toMatchObject({ baseRevision: 2 })
+  })
+
+  test('an entry page that opens before its lock answers opens the held words of a reload at the grant', async ({ page, api }) => {
+    const session = aSession().build()
+    const journal = journalPage(page)
+    const entry = entryPage(page)
+    const saved = { ...aSession().atRevision(1).saying('Words from before').build(), id: session.id }
+    await aReturnDuringASlowRead(journal, page, api, session, () => ({ ...sessionsApi.oneIs(saved), neverAnswers: true }))
+    await journal.typeWithoutWaiting('Words typed early')
+    await expect.poll(() => unsentWords(page).clientSessionIdOfTheHold()).toBeTruthy()
+    api.mock(sessionsApi.oneIs({ ...saved, clientSessionId: await unsentWords(page).clientSessionIdOfTheHold() }), sessionsApi.draftSaveWins(session, 2))
+    await unsentWords(page).locksAnswerLate()
+
+    await entry.open(session.id)
+
+    await expect(entry.at.editor).toContainText('Words from before', { timeout: 10_000 })
+    await expect(entry.at.editor).toContainText('Words typed early')
+    await expect.poll(() => wordsOf(api.last('put', sessionsPaths.rawDraft(session.id))), { timeout: 10_000 }).toContain('Words typed early')
+  })
+
   test('the editor stays the same at the answer of a read, so each key lands in the words', async ({ page, api }) => {
     const session = aSession().build()
     const journal = journalPage(page)

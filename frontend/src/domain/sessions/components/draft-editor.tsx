@@ -111,7 +111,8 @@ export function DraftEditor({ session, channel }: { session: SessionDto; channel
     const kept = saver.wordsToOpen()
     // With no unsent words, the editor and the base of the next save hold the newest of the read of the take and the cache of the page.
     if (kept === null && !saver.hasConflict() && saver.getSnapshot().baseRevision < serverDraft) saver.moveBaseTo(serverDraft, serverText)
-    const text = kept ?? saver.wordsOfTheBase() ?? serverText
+    // Words that the last editor held while its read waited join the words of the base, as words typed on a loaded page come with a take.
+    const text = kept ?? saver.joinHoldInto(saver.wordsOfTheBase() ?? serverText)
     // At the first grant, an editor that already shows these words keeps its caret.
     if (!wasElsewhere.current && text === currentText.current) return
     wasElsewhere.current = false
