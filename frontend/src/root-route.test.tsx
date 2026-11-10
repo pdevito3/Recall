@@ -13,12 +13,22 @@ import { render } from 'vitest-browser-react'
 import { commands, userEvent } from 'vitest/browser'
 
 import { Link } from '@/components/ui/link'
+import { login } from '@/domain/auth/apis/auth-actions'
 import { AuthKeys } from '@/domain/auth/apis/auth.keys'
+import { settleUnsentWords } from '@/domain/auth/apis/unsent-words-at-logout'
+import { addCapture, capturesOf, removeCapture, storeSlice } from '@/domain/capture/audio-store'
+import { notePageUser } from '@/lib/page-user'
 import { MembershipKeys } from '@/domain/membership/apis/membership.keys'
 import { Route as RootRoute } from '@/routes/__root'
 import { routeTree } from '@/routeTree.gen'
 import { FileStoreKeys } from '@/domain/file-store/apis/file-store.keys'
 import { member, memberSession } from '@/test/session'
+
+// A login leaves the page, so the test sees only that it starts.
+vi.mock('@/domain/auth/apis/auth-actions', async (original) => ({
+  ...(await original<typeof import('@/domain/auth/apis/auth-actions')>()),
+  login: vi.fn(),
+}))
 
 let showLateHeading = () => {}
 
@@ -96,7 +106,7 @@ async function renderLayoutAt(path: string) {
     </QueryClientProvider>,
   )
   await expect.element(screen.getByRole('main')).toBeVisible()
-  return { screen, router }
+  return { screen, router, queryClient }
 }
 
 test('the breadcrumb of a route with params shows the name that the route declares', async () => {
@@ -252,4 +262,40 @@ test('a session answer that is not a user shows that the session check failed, a
   await expect.element(alert.getByText('We could not check whether you are signed in. Try again in a moment.')).toBeVisible()
   await expect.element(alert.getByRole('button', { name: 'Try Again' })).toBeVisible()
   expect(screen.getByRole('navigation', { name: 'Main' }).elements()).toHaveLength(0)
+})
+
+test('a session that ends while the sign-out question shows keeps the question, and the answer still leads to the login', { timeout: 15_000 }, async () => {
+  notePageUser(member.identifier)
+  // A refusal waits for the person, so the send before the sign-out has nothing to try.
+  await addCapture({
+    clientRecordingId: 'cap_expiry',
+    owner: member.identifier,
+    clientSessionId: 'c1',
+    startedAt: new Date(Date.now() - 60_000).toISOString(),
+    format: 'Webm',
+    storedSlices: 0,
+    storedBytes: 0,
+    sentSlices: 0,
+    durationMs: 0,
+    isEnded: true,
+    sessionId: 'ses_1',
+    recordingId: 'rec_1',
+    isFinished: false,
+    problem: { kind: 'refused', text: 'The audio is larger than 8 MiB.' },
+    touchedAt: Date.now(),
+  })
+  await storeSlice('cap_expiry', 0, new Uint8Array(1_000).buffer, 1_000)
+  const { screen, queryClient } = await renderLayoutAt('/')
+  const finished = settleUnsentWords(() => undefined)
+  await expect.element(screen.getByRole('alertdialog'), { timeout: 10_000 }).toBeVisible()
+
+  // The session ended on the Server, and the next answer of the session check says so.
+  queryClient.setQueryData(AuthKeys.user(), null)
+  await expect.poll(() => vi.mocked(login).mock.calls.length).toBe(1)
+
+  await expect.element(screen.getByRole('alertdialog')).toBeVisible()
+  await screen.getByRole('button', { name: 'Keep audio and sign out' }).click()
+  await (await finished)()
+  expect(await capturesOf(member.identifier)).toMatchObject([{ clientRecordingId: 'cap_expiry', storedSlices: 1, isFinished: false }])
+  await removeCapture('cap_expiry')
 })

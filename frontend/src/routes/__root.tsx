@@ -52,7 +52,14 @@ const UnsentWordsAtLogoutDialog = lazyOverlay(
 )
 
 function RootComponent() {
-  return useHasLeftThePage() ? <PageOfAnotherPerson /> : <SessionGate />
+  const hasLeftThePage = useHasLeftThePage()
+  return (
+    <>
+      {hasLeftThePage ? <PageOfAnotherPerson /> : <SessionGate />}
+      {/* A session that ends during a sign-out takes the layout away, and the sign-out still waits for this answer. */}
+      <UnsentWordsAtLogoutDialog />
+    </>
+  )
 }
 
 function SessionGate() {
@@ -138,7 +145,6 @@ function LayoutContent() {
           <MembershipCheckFailedNotice />
           <FileStoreNotice />
           <DraftNotices />
-          <UnsentWordsAtLogoutDialog />
           <div ref={content} className="flex flex-1 flex-col gap-4 p-4 pt-0">
             <Outlet />
           </div>

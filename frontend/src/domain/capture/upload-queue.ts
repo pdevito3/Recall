@@ -1,10 +1,14 @@
 import { onlineManager, type QueryClient } from '@tanstack/react-query'
 
 import { addRecording } from '@/api/generated/recordings/clients/add-recording'
+import { deleteRecording } from '@/api/generated/recordings/clients/delete-recording'
 import { finishRecording } from '@/api/generated/recordings/clients/finish-recording'
 import { getRecording } from '@/api/generated/recordings/clients/get-recording'
+import { getSessionRecordings } from '@/api/generated/recordings/clients/get-session-recordings'
 import { storeRecordingSlice } from '@/api/generated/recordings/clients/store-recording-slice'
 import { addSession } from '@/api/generated/sessions/clients/add-session'
+import { deleteSession } from '@/api/generated/sessions/clients/delete-session'
+import { getSession } from '@/api/generated/sessions/clients/get-session'
 import { refreshTimelineHead } from '@/domain/sessions/apis/timeline-cache'
 import { newUuid } from '@/lib/new-uuid'
 import { isProblemDetailsError } from '@/lib/problem-details'
@@ -15,6 +19,7 @@ import { isRecordingLive } from './mic-recorder'
 import {
   finishedCapturesToForget,
   isNothingLeftToTry,
+  isUntouchedEntry,
   nextCaptureToSend,
   nextUploadStep,
   progressOf,
@@ -277,20 +282,45 @@ export async function sendStoredAudioBeforeSignOut(owner: string): Promise<Store
   return unsent
 }
 
-/**
- * The person chose to let audio go at a sign-out. The part that the Server has turns into words, if the Server still
- * answers, so a Recording does not wait for an end that never comes. Then the audio goes from this browser.
- */
+/** The person chose to let audio go: the Server ends what it holds of it, and then the audio goes from this browser. */
 export async function discardStoredAudio(captures: StoredCapture[]): Promise<void> {
-  for (const capture of captures) {
-    if (capture.recordingId && capture.sentSlices > 0) await finishWhatTheServerHas(capture.recordingId).catch(() => undefined)
-    await removeCapture(capture.clientRecordingId).catch(() => undefined)
-  }
+  await endOnServer(captures)
+  await forgetCaptures(captures)
 }
 
-async function finishWhatTheServerHas(recordingId: string) {
-  const recording = await getRecording({ path: { id: recordingId }, ...callOptions(), signal: AbortSignal.timeout(signOutQuietLimitMs) })
-  const sliceCount = recording.storedSlices.length
-  if (recording.status !== 'Receiving' || sliceCount === 0) return
-  await finishRecording({ path: { id: recordingId }, body: { sliceCount, byteLength: recording.byteLength }, ...callOptions(), signal: AbortSignal.timeout(signOutQuietLimitMs) })
+/**
+ * Ends what the Server holds of audio that the person lets go, if the Server still answers, so no Recording waits for an
+ * end that never comes. The part that the Server has turns into words. A Recording with no audio goes, and so does the
+ * entry that the recording made, while that entry is untouched.
+ */
+export async function endOnServer(captures: StoredCapture[]): Promise<void> {
+  for (const capture of captures) await endCaptureOnServer(capture).catch(() => undefined)
+}
+
+export async function forgetCaptures(captures: StoredCapture[]): Promise<void> {
+  for (const capture of captures) await removeCapture(capture.clientRecordingId).catch(() => undefined)
+}
+
+const discardCallOptions = () => ({ ...callOptions(), signal: AbortSignal.timeout(signOutQuietLimitMs) })
+
+async function endCaptureOnServer({ sessionId, recordingId }: StoredCapture) {
+  if (recordingId) {
+    const recording = await getRecording({ path: { id: recordingId }, ...discardCallOptions() })
+    if (recording.status !== 'Receiving') return
+    const sliceCount = recording.storedSlices.length
+    if (sliceCount > 0) {
+      await finishRecording({ path: { id: recordingId }, body: { sliceCount, byteLength: recording.byteLength }, ...discardCallOptions() })
+      return
+    }
+    await deleteRecording({ path: { id: recordingId }, ...discardCallOptions() })
+  }
+  if (sessionId) await deleteEntryIfUntouched(sessionId)
+}
+
+async function deleteEntryIfUntouched(sessionId: string) {
+  const [entry, recordings] = await Promise.all([
+    getSession({ path: { id: sessionId }, ...discardCallOptions() }),
+    getSessionRecordings({ path: { id: sessionId }, ...discardCallOptions() }),
+  ])
+  if (isUntouchedEntry(entry, recordings.length)) await deleteSession({ path: { id: sessionId }, ...discardCallOptions() })
 }

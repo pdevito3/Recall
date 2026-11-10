@@ -9,7 +9,7 @@ import {
 
 import type { StoredCapture } from '@/domain/capture/audio-store'
 import { clock } from '@/domain/capture/audio-time'
-import { unsentMsOf } from '@/domain/capture/upload-plan'
+import { unsentMsOf, waitsOnlyForItsEnd } from '@/domain/capture/upload-plan'
 import type { UnsentWords } from '@/domain/sessions/autosave/draft-saver'
 import { CopyWords } from '@/domain/sessions/components/draft-notices'
 import { plainPreviewOf } from '@/domain/sessions/editor/content'
@@ -57,10 +57,36 @@ function WordsThatDidNotGo({ unsent }: { unsent: UnsentWords[] }) {
   )
 }
 
+const wordsStartText = 'The words of audio that the server has start when you sign in here again, or on their own a day after the recording.'
+
 function audioText(audio: StoredCapture[]) {
-  const total = clock(audio.reduce((sum, capture) => sum + unsentMsOf(capture), 0))
-  const refused = audio.some(({ problem }) => problem?.kind === 'refused') ? ' A recording that the server refused waits on the journal page for you to send it again.' : ''
-  return `${total} of audio did not reach the server. If you keep it, it stays in this browser and uploads when you sign in here again.${refused}`
+  const missing = audio.filter((capture) => !waitsOnlyForItsEnd(capture))
+  const notStarted = missing.length < audio.length ? ` ${wordsStartText}` : ''
+  if (missing.length === 0) return notStarted.trim()
+  const total = clock(missing.reduce((sum, capture) => sum + unsentMsOf(capture), 0))
+  const refused = missing.some(({ problem }) => problem?.kind === 'refused') ? ' A recording that the server refused waits on the journal page for you to send it again.' : ''
+  return `${total} of audio did not reach the server. If you keep it, it stays in this browser and uploads when you sign in here again.${refused}${notStarted}`
+}
+
+/** Each slice of each recording is on the server, and only the start of the words did not go, so a sign-out loses no audio. */
+function WordsNotStartedDialog({ isATagUnsavedToo }: { isATagUnsavedToo: boolean }) {
+  return (
+    <ResponsiveDialog role="alertdialog" isOpen isDismissable={false} isKeyboardDismissDisabled showCloseButton={false}>
+      <ResponsiveDialogHeader>
+        <ResponsiveDialogTitle>The server has not started on the words of your audio</ResponsiveDialogTitle>
+        <ResponsiveDialogDescription>
+          The server has all of your audio, and has not started on the words yet. {wordsStartText}
+          {isATagUnsavedToo && ' A change of your tags did not reach the server, and a sign-out loses it.'}
+        </ResponsiveDialogDescription>
+      </ResponsiveDialogHeader>
+      <ResponsiveDialogFooter>
+        <ResponsiveDialogClose variant={isATagUnsavedToo ? 'destructive' : undefined} onPress={() => answerAboutUnsentWords('keep')}>
+          Sign out
+        </ResponsiveDialogClose>
+        <ResponsiveDialogClose onPress={() => answerAboutUnsentWords('stay')}>Stay signed in</ResponsiveDialogClose>
+      </ResponsiveDialogFooter>
+    </ResponsiveDialog>
+  )
 }
 
 /** The question names what did not go: words, audio, or both. */
@@ -76,7 +102,8 @@ function AudioThatDidNotGo({ audio }: { audio: StoredCapture[] }) {
     <ul aria-label="Audio that did not reach the server" className="mt-3 space-y-2 rounded-lg border p-3 text-sm">
       {audio.map((capture) => (
         <li key={capture.clientRecordingId}>
-          A recording of {clock(capture.durationMs)}. The server lacks {clock(unsentMsOf(capture))} of it.
+          A recording of {clock(capture.durationMs)}.{' '}
+          {waitsOnlyForItsEnd(capture) ? 'The server has all of it, and has not started on the words yet.' : `The server lacks ${clock(unsentMsOf(capture))} of it.`}
           {capture.problem?.kind === 'refused' && <p className="text-destructive">The server refused this audio.</p>}
         </li>
       ))}
@@ -87,12 +114,14 @@ function AudioThatDidNotGo({ audio }: { audio: StoredCapture[] }) {
 export function UnsentWordsAtLogoutDialog() {
   const question = useQuestionAboutUnsentWords()
   const audio = question?.audio ?? []
+  const isATagUnsavedToo = question?.isATagUnsaved ?? false
+  const hasMissingAudio = audio.some((capture) => !waitsOnlyForItsEnd(capture))
   if (question?.unsent.length === 0 && audio.length === 0) return <UnsavedTagsDialog />
+  if (question?.unsent.length === 0 && !hasMissingAudio) return <WordsNotStartedDialog isATagUnsavedToo={isATagUnsavedToo} />
   const unsent = question?.unsent ?? []
   const hasWords = unsent.length > 0
   const canKeep = !unsent.some(({ isOnlyInMemory }) => isOnlyInMemory)
-  const isATagUnsavedToo = question?.isATagUnsaved ?? false
-  const names = namesOf(hasWords, audio.length > 0)
+  const names = namesOf(hasWords, hasMissingAudio)
   return (
     <ResponsiveDialog role="alertdialog" isOpen={question !== null} isDismissable={false} isKeyboardDismissDisabled showCloseButton={false}>
       <ResponsiveDialogHeader>

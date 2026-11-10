@@ -1,3 +1,5 @@
+import type { SessionDto } from '@/api/generated/models/types/session-dto'
+
 import type { StoredCapture, UploadProblem } from './audio-store'
 import { readyShowsForMs } from './capture-view'
 
@@ -82,6 +84,18 @@ export const unsentAudioOf = (captures: StoredCapture[]) => captures.filter((cap
 
 /** The send before a sign-out is done when no capture can move: each one left waits for the person to send it again. */
 export const isNothingLeftToTry = (unsent: StoredCapture[]) => unsent.every((capture) => capture.problem?.kind === 'refused')
+
+/** Each slice is on the Server, and only the call that starts the words did not go. */
+export const waitsOnlyForItsEnd = (capture: StoredCapture) => capture.isEnded && capture.recordingId !== null && capture.sentSlices === capture.storedSlices
+
+/** An entry that never held text, a tag, or another Recording, so a discard of the recording that made it can take it too. */
+export const isUntouchedEntry = (entry: SessionDto, recordingCount: number) =>
+  recordingCount === 0 &&
+  entry.rawDraftRevision === 0 &&
+  entry.rawLatestRevision === 0 &&
+  entry.cleanedDraftRevision === 0 &&
+  entry.cleanedLatestRevision === 0 &&
+  entry.metadataVersion === 0
 
 /** The length of the audio that the Server does not have. Each slice is about a second, so the share of the slices tells it. */
 export const unsentMsOf = ({ durationMs, storedSlices, sentSlices }: StoredCapture) =>
