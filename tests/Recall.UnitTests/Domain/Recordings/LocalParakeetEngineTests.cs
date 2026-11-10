@@ -107,6 +107,29 @@ public class LocalParakeetEngineTests
     }
 
     [Test]
+    [Property("Rule", "REC-24")]
+    public async Task a_late_part_that_replaces_the_audio_during_the_decode_makes_the_decode_run_again()
+    {
+        // Arrange
+        using var rig = new Rig();
+        var runs = Path.Combine(rig.Folder, "runs");
+        var audio = Path.Combine(rig.Folder, "audio.webm");
+        await File.WriteAllTextAsync(audio, "first part");
+        var ffmpeg = rig.Script("ffmpeg", $"""
+            echo run >> "{runs}"
+            [ "$(wc -l < "{runs}")" -eq 1 ] && echo " and the late part" >> "{audio}"
+            for last; do :; done; head -c 100 /dev/zero > "$last"
+            """);
+        var engine = rig.Engine(rig.Script("worker", ChunkLine), ffmpeg);
+
+        // Act
+        await CollectAsync(engine, rig.Input());
+
+        // Assert
+        (await File.ReadAllLinesAsync(runs)).Length.ShouldBe(2);
+    }
+
+    [Test]
     [Property("Rule", "REC-15")]
     public async Task a_worker_killed_for_memory_is_out_of_memory()
     {
