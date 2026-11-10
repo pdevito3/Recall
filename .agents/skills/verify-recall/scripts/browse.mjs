@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 // Runs one recipe against the verification stack of this checkout, in a fresh Chromium context.
 //
-// Usage: node browse.mjs <recipe.mjs> [--headed] [--label <name>] [--keep-data] [--sweep [--no-web-font]]
+// Usage: node browse.mjs <recipe.mjs> [--headed] [--label <name>] [--keep-data] [--sweep [--no-web-font]] [--fake-mic <file.wav>]
+//
+// A recipe that exports `needsMic = true` gets a fake mic, and the mic is allowed for the web URL. The fake mic beeps,
+// or with --fake-mic it plays the WAV file in a loop. The recipe gets the path of that file as `speech`, or null.
 //
 // Each run takes a copy of the databases before the recipe and puts the rows back after it (see db.mjs), also after
 // a failed run. A run that was killed leaves its copy in the run directory, and the next run restores it first.
 // --keep-data skips the copy and the restore, so the rows of the recipe stay for a look at them.
 //
 // A recipe is an ES module with a default export:
-//   export default async ({ page, context, stack, expect, step, capture, settle, login, logout }) => { ... }
+//   export default async ({ page, context, stack, expect, step, capture, settle, login, logout, speech }) => { ... }
 //
 // Evidence goes to artifacts/verify/<RUN_ID>/<label>/ (label defaults to the recipe file name):
 //   steps.log      each step with ok/FAIL and its duration
@@ -30,9 +33,9 @@ import { restore, snapshot } from './db.mjs'
 import { blockWebFonts, report, routeLongValues, sweepCapture, sweepFocus, trackLastFocused } from './sweep.mjs'
 
 const args = process.argv.slice(2)
-const recipeArg = args.find((a) => !a.startsWith('--') && args[args.indexOf(a) - 1] !== '--label')
+const recipeArg = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--label' && args[i - 1] !== '--fake-mic')
 if (!recipeArg) {
-  console.error('usage: node browse.mjs <recipe.mjs> [--headed] [--label <name>] [--keep-data] [--sweep [--no-web-font]]')
+  console.error('usage: node browse.mjs <recipe.mjs> [--headed] [--label <name>] [--keep-data] [--sweep [--no-web-font]] [--fake-mic <file.wav>]')
   process.exit(2)
 }
 const headed = args.includes('--headed')
@@ -41,6 +44,15 @@ const labelIdx = args.indexOf('--label')
 const label = labelIdx >= 0 ? args[labelIdx + 1] : path.basename(recipeArg, '.mjs')
 const sweep = args.includes('--sweep')
 const noWebFont = args.includes('--no-web-font')
+const fakeMicIdx = args.indexOf('--fake-mic')
+const speech = fakeMicIdx >= 0 ? path.resolve(args[fakeMicIdx + 1] ?? '') : null
+if (speech && !existsSync(speech)) {
+  console.error(`browse: --fake-mic needs a WAV file, and ${speech} does not exist.`)
+  process.exit(2)
+}
+// The recipe loads before the browser starts, because it says if it needs a mic. A load error fails the run below.
+const recipe = await import(pathToFileURL(path.resolve(recipeArg)).href).catch((loadError) => ({ loadError }))
+const needsMic = recipe.needsMic === true || speech !== null
 
 const root = execSync('git rev-parse --show-toplevel').toString().trim()
 const currentFile = path.join(root, 'artifacts/verify/.current')
@@ -122,12 +134,15 @@ process.on('unhandledRejection', (e) => {
   log('steps.log', `unhandled rejection: ${message.split('\n')[0]}`)
 })
 
-const browser = await chromium.launch({ headless: !headed })
+// The headless shell of Playwright answers NotSupportedError to getUserMedia, so a fake mic needs the full Chromium build.
+const micArgs = ['--use-fake-device-for-media-stream', ...(speech ? [`--use-file-for-fake-audio-capture=${speech}`] : [])]
+const browser = await chromium.launch(needsMic ? { headless: !headed, channel: 'chromium', args: micArgs } : { headless: !headed })
 const context = await browser.newContext({
   baseURL: stack.urls.web,
   ignoreHTTPSErrors: true,
   viewport: { width: 1280, height: 800 },
 })
+if (needsMic) await context.grantPermissions(['microphone'], { origin: new URL(stack.urls.web).origin })
 await context.tracing.start({ screenshots: true, snapshots: true })
 if (sweep) {
   await routeLongValues(context, stack.urls.web)
@@ -274,8 +289,8 @@ let status = 'passed'
 let error = null
 let data = { restored: false, changes: {} }
 try {
-  const recipe = await import(pathToFileURL(path.resolve(recipeArg)).href)
-  await recipe.default({ page, context, stack, expect, step, capture, settle, login, logout })
+  if (recipe.loadError) throw recipe.loadError
+  await recipe.default({ page, context, stack, expect, step, capture, settle, login, logout, speech })
 } catch (e) {
   status = 'failed'
   error = e.message
