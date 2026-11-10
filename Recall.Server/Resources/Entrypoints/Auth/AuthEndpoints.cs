@@ -8,6 +8,8 @@ using Recall.Server.Auth;
 using Recall.Server.Auth.Entities;
 using Recall.Server.Domain.Users;
 using Recall.Server.Domain.Users.Features;
+using Recall.Server.Exceptions;
+using Serilog;
 
 public static class AuthEndpoints
 {
@@ -36,6 +38,8 @@ public static class AuthEndpoints
 
     public static readonly AuthorizeAttribute AppSessionOnly = new() { AuthenticationSchemes = AppSessionHandler.SchemeName };
 
+    internal static readonly TimeSpan SlideWait = TimeSpan.FromSeconds(2);
+
     public static void MapAuthEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapGet(AuthRoutes.Status, StatusAsync).AllowAnonymous().ExcludeFromDescription();
@@ -47,10 +51,64 @@ public static class AuthEndpoints
         endpoints.MapGet(AuthRoutes.Me, MeAsync).AllowAnonymous().ExcludeFromDescription();
     }
 
-    public static async Task SlideAsync(HttpContext http, SessionStore store, string sessionId, CancellationToken cancellationToken)
+    /// <summary>
+    /// A slide only moves the end of a session that is days away, so <c>/auth/me</c> waits at most
+    /// <see cref="SlideWait"/> for it, and the person reads the journal while a write holds the line. A slide that has
+    /// not ended by then is skipped, and the next <c>/auth/me</c> slides the session.
+    /// </summary>
+    public static async Task SlideAsync(HttpContext http, string sessionId)
     {
-        if (await store.SlideWebAsync(sessionId, cancellationToken) is { } expires && SessionCookie.Read(http.Request) is { } cookie)
-            SessionCookie.Write(http.Response, http.Request, cookie, expires);
+        var scopes = http.RequestServices.GetRequiredService<IServiceScopeFactory>();
+        var slide = Task.Run(() => SlideInItsOwnScopeAsync(scopes, sessionId), CancellationToken.None);
+        DateTimeOffset? expires;
+        try
+        {
+            expires = await slide.WaitAsync(SlideWait);
+        }
+        catch (Exception exception) when (exception is TimeoutException or OperationCanceledException
+                                          || DomainError.From(exception).Kind == DomainErrorKind.DatabaseBusy)
+        {
+            Telemetry.AddEvent([("exception.type", exception.GetType().Name)], "session.slide_skipped");
+            if (exception is TimeoutException)
+                _ = WarnOfALateFailureAsync(slide, sessionId);
+            return;
+        }
+
+        if (expires is { } end && SessionCookie.Read(http.Request) is { } cookie)
+            SessionCookie.Write(http.Response, http.Request, cookie, end);
+    }
+
+    // A token cannot stop a write that SQLite holds, such as a write on a disk that hangs, and the wait of SQLite blocks
+    // its thread. So the slide runs on its own thread with its own scope, and it can end after the answer.
+    private static async Task<DateTimeOffset?> SlideInItsOwnScopeAsync(IServiceScopeFactory scopes, string sessionId)
+    {
+        using var activity = Telemetry.Trace([("app.session_id", sessionId)], "session.slide");
+        using var limit = new CancellationTokenSource(SlideWait);
+        try
+        {
+            await using var scope = scopes.CreateAsyncScope();
+            return await scope.ServiceProvider.GetRequiredService<SessionStore>().SlideWebAsync(sessionId, limit.Token);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Telemetry.MarkFailed(activity, exception);
+            throw;
+        }
+    }
+
+    // The answer has gone, so this is the only code that sees how the slide ends. A cancel at its own limit is a skip.
+    private static async Task WarnOfALateFailureAsync(Task slide, string sessionId)
+    {
+        try
+        {
+            await slide;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Log.ForContext(typeof(AuthEndpoints)).Here().Warning(exception,
+                "The slide of session {SessionId} failed after /auth/me answered. A write that does not end can mean a disk that hangs",
+                sessionId);
+        }
     }
 
     private static async Task<IResult> StatusAsync(HttpContext http, LoginModes modes, CancellationToken cancellationToken)
@@ -178,17 +236,18 @@ public static class AuthEndpoints
         if (cookie is not null && !csrf)
             return Results.Unauthorized();
 
+        // The session ends even when the client goes away during the logout, so these reads take no cancellation token.
         if (bearer is not null
             && bearer.StartsWith(TokenPair.AccessPrefix, StringComparison.Ordinal)
-            && await store.FindByAccessAsync(TokenHash.Of(bearer), SessionKind.Native, cancellationToken) is { } nativeSession)
-            await store.RevokeAsync(nativeSession.SessionId, RevokeReason.Logout, cancellationToken);
+            && await store.FindByAccessAsync(TokenHash.Of(bearer), SessionKind.Native, CancellationToken.None) is { } nativeSession)
+            await store.RevokeAsync(nativeSession.SessionId, RevokeReason.Logout);
 
         if (cookie is not null
-            && await store.FindByAccessAsync(TokenHash.Of(cookie), SessionKind.Web, cancellationToken) is { } webSession)
-            await store.RevokeAsync(webSession.SessionId, RevokeReason.Logout, cancellationToken);
+            && await store.FindByAccessAsync(TokenHash.Of(cookie), SessionKind.Web, CancellationToken.None) is { } webSession)
+            await store.RevokeAsync(webSession.SessionId, RevokeReason.Logout);
 
         if (refresh is not null)
-            await store.RevokeByRefreshAsync(refresh, cancellationToken);
+            await store.RevokeByRefreshAsync(refresh);
 
         if (csrf)
             SessionCookie.Clear(http.Response, request);
@@ -219,9 +278,9 @@ public static class AuthEndpoints
         return providerLogoutUrl is null ? Results.NoContent() : Results.Json(new LogoutAnswer(providerLogoutUrl));
     }
 
-    private static async Task<IResult> RevokeOthersAsync(HttpContext http, SessionStore store, CancellationToken cancellationToken)
+    private static async Task<IResult> RevokeOthersAsync(HttpContext http, SessionStore store)
     {
-        await store.RevokeOthersAsync(http.User.FindFirst("sub")!.Value, http.User.FindFirst(AppSessionHandler.SessionIdClaim)!.Value, cancellationToken);
+        await store.RevokeOthersAsync(http.User.FindFirst("sub")!.Value, http.User.FindFirst(AppSessionHandler.SessionIdClaim)!.Value);
         return Results.NoContent();
     }
 
@@ -229,7 +288,7 @@ public static class AuthEndpoints
         => AppSessionHandler.CredentialOf(request.Headers.Authorization.ToString()) is null
             && (SessionCookie.Read(request) is null || AppSessionHandler.HasCsrfHeader(request));
 
-    private static async Task<IResult> MeAsync(HttpContext http, ISender sender, SessionStore store, CancellationToken cancellationToken)
+    private static async Task<IResult> MeAsync(HttpContext http, ISender sender, CancellationToken cancellationToken)
     {
         var session = await http.AuthenticateAsync(AppSessionHandler.SchemeName);
         if (!session.Succeeded)
@@ -242,7 +301,7 @@ public static class AuthEndpoints
         var kind = http.User.FindFirst(AppSessionHandler.ClientKindClaim)!.Value;
         var current = await sender.Send(new GetCurrentUser.Query(), cancellationToken);
         if (kind == SessionKindText.Web)
-            await SlideAsync(http, store, sessionId, cancellationToken);
+            await SlideAsync(http, sessionId);
 
         return Results.Json(new MeAnswer(current.Identifier, current.Name, sessionId, kind));
     }

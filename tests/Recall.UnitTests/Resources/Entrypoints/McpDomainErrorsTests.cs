@@ -136,6 +136,24 @@ public class McpDomainErrorsTests
     }
 
     [Test]
+    public async Task a_busy_database_is_an_unavailable_tool_error_that_stays_in_the_log()
+    {
+        // Arrange
+        var failure = new DatabaseBusyException();
+        var sink = new CollectingSink();
+        using var logger = new LoggerConfiguration().WriteTo.Sink(sink).CreateLogger();
+
+        // Act
+        var result = await CallToolThatThrows(failure, logger);
+
+        // Assert
+        result.IsError.ShouldBe(true);
+        result.Content.OfType<TextContentBlock>().ShouldHaveSingleItem().Text.ShouldStartWith("unavailable: ");
+        result.StructuredContent.ShouldNotBeNull().GetProperty("code").GetString().ShouldBe("unavailable");
+        sink.Events.ShouldHaveSingleItem().Exception.ShouldBe(failure);
+    }
+
+    [Test]
     public async Task a_json_error_when_each_argument_converts_stays_a_server_fault()
     {
         // Act
