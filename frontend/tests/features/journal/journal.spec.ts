@@ -243,13 +243,11 @@ test.describe('writing a new entry', () => {
 
   test('a save over words that the create found on the Server loses, then joins them and saves from the read', async ({ page, api }) => {
     const replayed = aSession().atRevision(1).saying('Words from another tab').build()
-    api.mock(sessionsApi.creates(replayed), { ...sessionsApi.draftSaveLoses(replayed, { draftRevision: 1, latestRevision: 2 }), delayMs: 300 }, sessionsApi.oneIs(replayed), ...sessionsApi.revisionsAre(replayed, []))
+    api.mock(sessionsApi.creates(replayed), sessionsApi.draftSaveWins(replayed, 2), { ...sessionsApi.draftSaveLoses(replayed, { draftRevision: 1, latestRevision: 2 }), delayMs: 300, once: true }, sessionsApi.oneIs(replayed), ...sessionsApi.revisionsAre(replayed, []))
     const journal = journalPage(page)
     await journal.open()
 
     await journal.typeWithoutWaiting('Words from this tab')
-    await expect.poll(() => api.all('put', sessionsPaths.rawDraft(replayed.id)).length).toBe(1)
-    api.mock(sessionsApi.draftSaveWins(replayed, 2))
 
     await expect(journal.at.mergedNotice).toBeVisible()
     await expect(journal.at.status('Saved at')).toBeVisible()
@@ -596,12 +594,10 @@ test.describe('the timeline', () => {
     await journal.write('Words on the phone')
     await expect(journal.at.status('Saved at')).toBeVisible()
 
-    api.mock({ ...sessionsApi.draftSaveLoses(session, { draftRevision: 2, latestRevision: 3 }), delayMs: 300 }, ...sessionsApi.revisionsAre(session, []))
+    const newest = { ...aSession().atRevision(3).saying('Words on the phone', 'From the other device').build(), id: session.id, clientSessionId: session.clientSessionId }
+    api.mock(sessionsApi.oneIs(newest), sessionsApi.draftSaveWins(session, 4), { ...sessionsApi.draftSaveLoses(session, { draftRevision: 2, latestRevision: 3 }), delayMs: 300, once: true }, ...sessionsApi.revisionsAre(session, []))
     await journal.typeWithoutWaiting(' and more')
     await journal.finish()
-    await expect.poll(() => api.all('put', sessionsPaths.rawDraft(session.id)).length).toBe(2)
-    const newest = { ...aSession().atRevision(3).saying('Words on the phone', 'From the other device').build(), id: session.id, clientSessionId: session.clientSessionId }
-    api.mock(sessionsApi.oneIs(newest), sessionsApi.draftSaveWins(session, 4))
 
     await expect.poll(() => api.all('put', sessionsPaths.rawDraft(session.id)).length).toBe(3)
     const merged = api.last('put', sessionsPaths.rawDraft(session.id))?.body as { baseRevision: number; text: string }
@@ -712,11 +708,9 @@ test.describe('the journal on a phone', () => {
     await journal.write('My words')
     await expect(journal.at.status('Saved at')).toBeVisible()
 
-    api.mock({ ...sessionsApi.draftSaveLoses(session, { draftRevision: 2, latestRevision: 3 }), delayMs: 300 }, ...sessionsApi.revisionsAre(session, []))
-    await journal.typeWithoutWaiting(' and more')
-    await expect.poll(() => api.all('put', sessionsPaths.rawDraft(session.id)).length).toBe(2)
     const newest = { ...aSession().atRevision(3).saying('My words', 'From the other device').build(), id: session.id, clientSessionId: session.clientSessionId }
-    api.mock(sessionsApi.oneIs(newest), sessionsApi.draftSaveWins(session, 4))
+    api.mock(sessionsApi.oneIs(newest), sessionsApi.draftSaveWins(session, 4), { ...sessionsApi.draftSaveLoses(session, { draftRevision: 2, latestRevision: 3 }), delayMs: 300, once: true }, ...sessionsApi.revisionsAre(session, []))
+    await journal.typeWithoutWaiting(' and more')
 
     await expect(journal.at.mergedNotice).toBeVisible()
     await expect(journal.at.status('Saved at')).toBeVisible()

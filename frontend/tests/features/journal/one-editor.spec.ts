@@ -61,7 +61,12 @@ test.describe('an entry open in two tabs', () => {
 
   test('after a save, the second tab shows the saved words and not the older words', async ({ page, context, api }) => {
     const session = aSession().atRevision(4).saying('Mine').build()
-    api.mock(sessionsApi.oneIs(session), { ...sessionsApi.draftSaveWins(session, 5), delayMs: 3_000 })
+    // The save answers only after the second tab shows the words, however long that tab takes to open.
+    let answerTheSave: () => void = () => undefined
+    const saveAnswers = new Promise<void>((resolve) => {
+      answerTheSave = resolve
+    })
+    api.mock(sessionsApi.oneIs(session), { ...sessionsApi.draftSaveWins(session, 5), heldUntil: saveAnswers })
     await entryPage(page).open(session.id)
     await typeIn(page, ' and saved')
     await expect.poll(() => lastWords(api, session.id)).toContain('Mine and saved')
@@ -82,6 +87,7 @@ test.describe('an entry open in two tabs', () => {
     })
 
     const reads = api.all('get', sessionsPaths.one(session.id)).length
+    answerTheSave()
     // The answer of the save removes the key of the first tab, and the page reads the Draft.
     await expect.poll(() => hasUnsentKey(secondPage), { timeout: 10_000 }).toBe(false)
     await expect.poll(() => api.all('get', sessionsPaths.one(session.id)).length).toBeGreaterThan(reads)

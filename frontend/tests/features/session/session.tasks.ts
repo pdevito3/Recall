@@ -195,8 +195,11 @@ export function sessionPage(page: Page) {
       return colors === 1
     },
 
+    /** The page sends the check only after Vite served about 250 modules of the app. Under load, that alone takes more than the 5 s of an assertion. */
     async openWhileTheCheckFails(path: string) {
+      const checked = answered(authPaths.me)
       await page.goto(path)
+      await checked
       await expect(at.checkFailed).toBeVisible()
     },
 
