@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { StoredCapture } from './audio-store'
 import { readyShowsForMs } from './capture-view'
-import { finishedCapturesToForget, isNothingLeftToTry, nextCaptureToSend, nextUploadStep, progressOf, retryDelayMs, unsentAudioOf, verdictOf, type UploadStep } from './upload-plan'
+import { finishedCapturesToForget, isNothingLeftToTry, nextCaptureToSend, nextUploadStep, progressOf, retryDelayMs, unsentAudioOf, unsentMsOf, verdictOf, type UploadStep } from './upload-plan'
 
 const aCapture = (changes: Partial<StoredCapture> = {}): StoredCapture => ({
   clientRecordingId: 'c1',
@@ -130,5 +130,10 @@ describe('the send before a sign-out', () => {
     const before = progressOf([aCapture({ sessionId: 'ses_1', recordingId: 'rec_1', sentSlices: 1 })])
     expect(progressOf([aCapture({ sessionId: 'ses_1', recordingId: 'rec_1', sentSlices: 2 })])).not.toBe(before)
     expect(progressOf([aCapture({ sessionId: 'ses_1', recordingId: 'rec_1', sentSlices: 1, problem: { kind: 'serverDown' } })])).toBe(before)
+  })
+
+  it('names the part of the audio that the Server does not have', () => {
+    expect(unsentMsOf(aCapture({ durationMs: 7_000, storedSlices: 7, sentSlices: 3 }))).toBe(4_000)
+    expect(unsentMsOf(aCapture({ durationMs: 7_000, storedSlices: 7, sentSlices: 0 }))).toBe(7_000)
   })
 })

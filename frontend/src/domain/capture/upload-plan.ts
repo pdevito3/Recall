@@ -83,6 +83,10 @@ export const unsentAudioOf = (captures: StoredCapture[]) => captures.filter((cap
 /** The send before a sign-out is done when no capture can move: each one left waits for the person to send it again. */
 export const isNothingLeftToTry = (unsent: StoredCapture[]) => unsent.every((capture) => capture.problem?.kind === 'refused')
 
+/** The length of the audio that the Server does not have. Each slice is about a second, so the share of the slices tells it. */
+export const unsentMsOf = ({ durationMs, storedSlices, sentSlices }: StoredCapture) =>
+  storedSlices === 0 ? durationMs : Math.round((durationMs * (storedSlices - sentSlices)) / storedSlices)
+
 /** Changes each time a step of an upload works, so that the send before a sign-out can tell that it still moves. */
 export const progressOf = (unsent: StoredCapture[]) =>
   unsent.map((capture) => `${capture.clientRecordingId}:${capture.sessionId}:${capture.recordingId}:${capture.sentSlices}`).join(',')

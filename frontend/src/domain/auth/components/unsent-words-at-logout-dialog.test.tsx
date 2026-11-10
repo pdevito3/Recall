@@ -69,8 +69,8 @@ test('audio that did not go is named at a sign-out, and a keep leaves it in this
   const finished = settleUnsentWords(() => undefined)
 
   await expect.element(screen.getByRole('heading', { name: 'Some of your audio did not reach the server' }), { timeout: 10_000 }).toBeVisible()
-  await expect.element(screen.getByText(/0:03 of audio did not reach the server\. If you keep it, it stays in this browser and uploads when you sign in here again\./)).toBeVisible()
-  await expect.element(screen.getByRole('list', { name: 'Audio that did not reach the server' }).getByText('A recording of 0:03')).toBeVisible()
+  await expect.element(screen.getByText(/0:01 of audio did not reach the server\. If you keep it, it stays in this browser and uploads when you sign in here again\./)).toBeVisible()
+  await expect.element(screen.getByRole('list', { name: 'Audio that did not reach the server' }).getByText('A recording of 0:03. The server lacks 0:01 of it.')).toBeVisible()
   await screen.getByRole('button', { name: 'Keep audio and sign out' }).click()
 
   ;(await finished)()

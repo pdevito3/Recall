@@ -9,6 +9,7 @@ import {
 
 import type { StoredCapture } from '@/domain/capture/audio-store'
 import { clock } from '@/domain/capture/audio-time'
+import { unsentMsOf } from '@/domain/capture/upload-plan'
 import type { UnsentWords } from '@/domain/sessions/autosave/draft-saver'
 import { CopyWords } from '@/domain/sessions/components/draft-notices'
 import { plainPreviewOf } from '@/domain/sessions/editor/content'
@@ -57,7 +58,7 @@ function WordsThatDidNotGo({ unsent }: { unsent: UnsentWords[] }) {
 }
 
 function audioText(audio: StoredCapture[]) {
-  const total = clock(audio.reduce((sum, { durationMs }) => sum + durationMs, 0))
+  const total = clock(audio.reduce((sum, capture) => sum + unsentMsOf(capture), 0))
   const refused = audio.some(({ problem }) => problem?.kind === 'refused') ? ' A recording that the server refused waits on the journal page for you to send it again.' : ''
   return `${total} of audio did not reach the server. If you keep it, it stays in this browser and uploads when you sign in here again.${refused}`
 }
@@ -73,10 +74,10 @@ function namesOf(hasWords: boolean, hasAudio: boolean) {
 function AudioThatDidNotGo({ audio }: { audio: StoredCapture[] }) {
   return (
     <ul aria-label="Audio that did not reach the server" className="mt-3 space-y-2 rounded-lg border p-3 text-sm">
-      {audio.map(({ clientRecordingId, durationMs, problem }) => (
-        <li key={clientRecordingId}>
-          A recording of {clock(durationMs)}
-          {problem?.kind === 'refused' && <p className="text-destructive">The server refused this audio.</p>}
+      {audio.map((capture) => (
+        <li key={capture.clientRecordingId}>
+          A recording of {clock(capture.durationMs)}. The server lacks {clock(unsentMsOf(capture))} of it.
+          {capture.problem?.kind === 'refused' && <p className="text-destructive">The server refused this audio.</p>}
         </li>
       ))}
     </ul>
