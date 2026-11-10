@@ -232,6 +232,13 @@ function asTab(tab: Tab | null, work: () => void, timer: unknown = null) {
     tab.waiting.push({ timer, work })
     return
   }
+  // A tab that woke runs what waited first, and each later answer after it, in the order that the answers came.
+  if (tab && tab.waiting.length > 0) {
+    const one = { timer, work }
+    tab.waiting.push(one)
+    clock.set(() => runWaiting(tab, one), 0)
+    return
+  }
   current = tab
   work()
 }
@@ -582,7 +589,10 @@ class Tab {
 
   /** The entry page or the composer. It edits only while this tab holds the lock of the entry, and else it shows the words of the tab that edits. */
   openDraft(clientSessionId: string, sessionId: string | null, baseRevision: number, isNewEntry = false) {
-    const target = { owner, channel: 'raw' as const, clientSessionId, startedAt: '2026-11-07T00:00:00.000Z', sessionId, baseRevision, baseText: '' }
+    // As the entry page, the saver starts from the read of the page: the text of the Draft at its revision.
+    const row = world.rows.find((other) => other.id === sessionId)
+    const baseText = row === undefined || baseRevision === 0 ? '' : baseRevision === row.draftRevision ? row.text : (row.revisions.find(({ number }) => number === baseRevision)?.text ?? '')
+    const target = { owner, channel: 'raw' as const, clientSessionId, startedAt: '2026-11-07T00:00:00.000Z', sessionId, baseRevision, baseText }
     this.run(() => {
       const saver = this.mod.draftSaverFor(target, this.queryClient, isNewEntry)
       const page: Page = { saver, stopListening: () => undefined, clientSessionId, editor: null, held: null, place: 'waiting', wasElsewhere: false }
@@ -1019,8 +1029,8 @@ class ModelRun {
     if (tab.isFrozen) {
       tab.wake()
       await vi.advanceTimersByTimeAsync(0)
-      // A tab that learns at the wake that it lost the entry asks for it again, and the lock manager answers in a later task, before the person can look.
-      await vi.advanceTimersByTimeAsync(1)
+      // A tab that learns at the wake that it lost the entry asks for it again, and the lock manager answers the request and the query of the grant in later tasks, before the person can look.
+      await vi.advanceTimersByTimeAsync(10)
       this.note(`tab ${index} wakes`)
       return
     }
@@ -1528,6 +1538,46 @@ test('on a full storage, a tab that gets the lock while the editor gives its wor
   await pass(60_000)
   expect(tokensIn(row.text)).toEqual(['w1x', 'w2x'])
   for (const tab of [first, third]) tab.run(() => tab.mod.stopDraftSavers())
+})
+
+test('on a full storage, a tab that wakes with a grant that another tab stole since passes on the words that came for it', async () => {
+  let isFull = false
+  const storage = storageWith(() => isFull)
+  vi.stubGlobal('localStorage', storage)
+  world = new ModelServer()
+  channels = new ModelChannels()
+  locks = new ModelLocks()
+  everyTab.clear()
+  const first = await aTabOn('entry-1')
+  first.type('w1x')
+  await pass(2000)
+  const row = world.rows[0] as Row
+  const frozen = await aSecondTabOn(row)
+  isFull = true
+  world.isDown = true
+  first.type('w2x')
+  await pass(1500)
+
+  // The editor gives its words to the tab that pressed Edit here and froze at once, and the editor closes.
+  frozen.editHere()
+  frozen.freeze()
+  await pass(100)
+  first.close()
+  const third = await aSecondTabOn(row)
+  third.editHere()
+  await pass(1000)
+  expect(third.page?.place).toBe('here')
+
+  frozen.wake()
+  await pass(1000)
+
+  expect(frozen.page?.place).toBe('elsewhere')
+  expect(third.page?.place).toBe('here')
+  world.isDown = false
+  isFull = false
+  await pass(60_000)
+  expect(tokensIn(row.text)).toEqual(['w1x', 'w2x'])
+  for (const tab of [frozen, third]) tab.run(() => tab.mod.stopDraftSavers())
 })
 
 test('a reload with a second tab open keeps the words on the screen, whichever tab took the key', async () => {
