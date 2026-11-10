@@ -2,11 +2,13 @@ import { useMutation, type QueryClient } from '@tanstack/react-query'
 
 import { Notification, toastQueue } from '@/components/notification'
 import { apiClient } from '@/lib/api-client'
+import { wordsOfThisTabOnlyInMemory } from '@/domain/sessions/autosave/draft-saver'
 import { openChannel } from '@/lib/browser-channel'
 import { checkLastPersonOfThisBrowser, noteSignInOfAnotherTab, sessionChannelName } from '@/lib/page-user'
 import { authUserQuery, getUser } from './get-user'
 
 import { settleUnsentWords, StayedSignedIn, stopSaversBeforeLeaving } from './unsent-words-at-logout'
+import { showWordsLeftAtSignOut, wordsLeftAtSignOut } from './words-left-at-sign-out'
 
 const serverMaxReturnPathLength = 2048
 
@@ -66,7 +68,9 @@ async function settleUnsentWordsAndSignOut() {
   let working = showSigningOut()
   const stopShowingWork = () => toastQueue.close(working)
   try {
-    const leaveNoSign = await settleUnsentWords(stopShowingWork)
+    const leaveNoSign = await settleUnsentWords(stopShowingWork, () => {
+      working = showSigningOut()
+    })
     working = showSigningOut()
     const { data } = await apiClient.post<LogoutAnswer>('/auth/logout', undefined, { suppressErrorToast: true })
     leaveNoSign()
@@ -102,13 +106,21 @@ function showPage() {
  * in a synchronous `pagehide` listener or sooner, and never only in React state or the query cache. A sign-out must not
  * remove them, because the next login of the same owner finds and sends them, and the key names the owner, so another
  * person who signs in on this device cannot read them.
+ *
+ * A write that finds no room in storage leaves words only in memory, also after the sign-out listed this tab. Those words
+ * stay on the screen, alone, so the person can copy them before the page goes.
  */
 function leaveAsSignedOut(queryClient: QueryClient) {
-  hidePage()
+  if (wordsLeftAtSignOut()) return
+  // A stopped saver holds no words, so this reads them first.
+  const wordsOnlyHere = wordsOfThisTabOnlyInMemory()
+  afterSignOut ??= signedOutPage
+  const leave = () => window.location.replace(afterSignOut ?? signedOutPage)
+  if (wordsOnlyHere.length > 0) showWordsLeftAtSignOut(wordsOnlyHere, leave)
+  else hidePage()
   stopSaversBeforeLeaving()
   queryClient.clear()
-  afterSignOut ??= signedOutPage
-  window.location.replace(afterSignOut)
+  if (wordsOnlyHere.length === 0) leave()
 }
 
 /**

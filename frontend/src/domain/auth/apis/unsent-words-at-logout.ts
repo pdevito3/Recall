@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 
 import { writePointer } from '@/domain/sessions/autosave/composer-pointer'
-import { removeNoticesOfWordsInHistory, settleDraftSavers, stopDraftSavers, unsentWordsOnThisDevice, type UnsentWords } from '@/domain/sessions/autosave/draft-saver'
+import { losesOnlyNamedWords, removeNoticesOfWordsInHistory, settleDraftSavers, stopDraftSavers, unsentWordsOnThisDevice, type UnsentWords } from '@/domain/sessions/autosave/draft-saver'
 import { askOtherTabsToSettle } from '@/domain/sessions/autosave/tab-keys'
 import { isAnyTagChangeUnsaved, settleMetadataSavers, stopMetadataSavers } from '@/domain/sessions/autosave/tag-savers'
 import { settleSettingSaver, stopSettingSaver } from '@/domain/settings/apis/user-setting'
@@ -52,16 +52,28 @@ export function stopSaversBeforeLeaving() {
   stopMetadataSavers()
 }
 
-/** Each tab tries to send its words, and then the person sees all the words that did not go, also those of another tab. */
-export async function settleUnsentWords(beforeAQuestion: () => void): Promise<() => void> {
+/** Each tab tries to send its words, and then the list names all the words that did not go, also those of another tab. */
+async function listUnsentWords(): Promise<Omit<Question, 'answer'>> {
   const [otherTabs] = await Promise.all([askOtherTabsToSettle(settleLimitMs), withinLimit(settleDraftSavers()), withinLimit(settleSettingSaver()), withinLimit(settleMetadataSavers())])
-  const unsent = unsentWordsOnThisDevice(pageUserOf(), otherTabs)
   // Tags have no outbox, so a sign-out loses a change of a tag that the Server did not take.
-  const isATagUnsaved = isAnyTagChangeUnsaved() || otherTabs.some(({ hasUnsavedTags }) => hasUnsavedTags)
-  const hasNoQuestion = unsent.length === 0 && !isATagUnsaved
-  if (!hasNoQuestion) beforeAQuestion()
-  const choice = hasNoQuestion ? 'keep' : await new Promise<Choice>((answer) => setQuestion({ unsent, isATagUnsaved, answer }))
-  if (choice === 'stay') throw new StayedSignedIn()
+  return { unsent: unsentWordsOnThisDevice(pageUserOf(), otherTabs), isATagUnsaved: isAnyTagChangeUnsaved() || otherTabs.some(({ hasUnsavedTags }) => hasUnsavedTags) }
+}
+
+/** The words can change while the person reads the list. So each answer lists again, and the person answers the new list when it loses something that the answered list did not name. */
+export async function settleUnsentWords(beforeAQuestion: () => void, afterAnAnswer: () => void = () => undefined): Promise<() => void> {
+  let listed = await listUnsentWords()
+  let choice: Choice = 'keep'
+  while (listed.unsent.length > 0 || listed.isATagUnsaved) {
+    beforeAQuestion()
+    const { unsent, isATagUnsaved } = listed
+    choice = await new Promise<Choice>((answer) => setQuestion({ unsent, isATagUnsaved, answer }))
+    if (choice === 'stay') throw new StayedSignedIn()
+    afterAnAnswer()
+    const now = await listUnsentWords()
+    if (losesOnlyNamedWords(unsent, now.unsent) && (isATagUnsaved || !now.isATagUnsaved)) break
+    listed = now
+  }
+  const { unsent } = listed
   return () => {
     stopSaversBeforeLeaving()
     if (choice === 'discard') for (const { discard } of unsent) discard()

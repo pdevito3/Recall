@@ -287,6 +287,7 @@ describe('a sign-out in another tab', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+    vi.doUnmock('@/domain/sessions/autosave/draft-saver')
   })
 
   it('hides the page, clears the data of this tab, and goes to the signed-out page', async () => {
@@ -297,6 +298,26 @@ describe('a sign-out in another tab', () => {
 
     expect(document.documentElement.style.opacity).toBe('0')
     expect(queryClient.getQueryCache().getAll()).toHaveLength(0)
+    expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?signedOut=1')
+  })
+
+  it('shows the words that only its memory holds, alone, and leaves only when the person says so', async () => {
+    vi.doMock('@/domain/sessions/autosave/draft-saver', async (original) => ({
+      ...(await original<typeof import('@/domain/sessions/autosave/draft-saver')>()),
+      wordsOfThisTabOnlyInMemory: () => ['words in memory'],
+    }))
+    const { replace, queryClient, channel } = await guardedActions()
+    const { wordsLeftAtSignOut } = await import('./words-left-at-sign-out')
+    queryClient.setQueryData(['private'], 'words of this person')
+
+    channel.onmessage!({ data: 'signed-out' })
+    channel.onmessage!({ data: 'signed-out' })
+
+    expect(queryClient.getQueryCache().getAll()).toHaveLength(0)
+    expect(wordsLeftAtSignOut()?.words).toEqual(['words in memory'])
+    expect(opacityOfPage()).not.toBe('0')
+    expect(replace).not.toHaveBeenCalled()
+    wordsLeftAtSignOut()?.leave()
     expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?signedOut=1')
   })
 

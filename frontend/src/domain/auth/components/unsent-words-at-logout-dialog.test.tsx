@@ -88,6 +88,19 @@ test('words that only a page holds cannot be kept, and the person can stay', asy
   await stayed
 })
 
+test('words that go to memory while the person reads the list are asked about again, so a keep keeps each word', async () => {
+  const { screen, finished } = await dialogFor([words('words of another tab')])
+  vi.mocked(unsentWordsOnThisDevice).mockReturnValue([words('words of another tab', { isOnlyInMemory: true })])
+  const stayed = expect(finished).rejects.toThrow()
+
+  await screen.getByRole('button', { name: 'Keep words and sign out' }).click()
+
+  await expect.element(screen.getByRole('button', { name: 'Stay signed in' })).toBeVisible()
+  await expect.element(screen.getByRole('button', { name: 'Keep words and sign out' })).not.toBeInTheDocument()
+  await screen.getByRole('button', { name: 'Stay signed in' }).click()
+  await stayed
+})
+
 test('a list of many long texts stays in its box, and the buttons stay in view', async () => {
   const { screen, finished } = await dialogFor(Array.from({ length: 30 }, (_, index) => words(`words ${index} `.repeat(40))))
 

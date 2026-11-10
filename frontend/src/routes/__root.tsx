@@ -33,6 +33,8 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
 } from '@/components/ui/breadcrumb'
+import { useWordsLeftAtSignOut } from '@/domain/auth/apis/words-left-at-sign-out'
+import { WordsLeftAtSignOut } from '@/domain/auth/components/words-left-at-sign-out'
 
 declare module '@tanstack/react-router' {
   interface StaticDataRouteOption {
@@ -56,7 +58,9 @@ function RootComponent() {
 
 function SessionGate() {
   const session = useQuery(authUserQuery)
+  const wordsLeft = useWordsLeftAtSignOut()
 
+  if (wordsLeft) return <WordsLeftAtSignOut {...wordsLeft} />
   // A failed refetch keeps the data of the last answer, and that answer still decides.
   if (session.data === null) return <GoToLogin />
   if (session.data) return <Layout />
