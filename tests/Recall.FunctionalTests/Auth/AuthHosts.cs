@@ -52,6 +52,11 @@ public static class AuthHosts
 
     public static AuthFlowFactory FrozenClock { get; private set; } = null!;
 
+    /// <summary>A host whose writer line only the tests of <see cref="WriterLineTests"/> hold, with a clock that they move.</summary>
+    public static AuthFlowFactory WriterLine { get; private set; } = null!;
+
+    public static FakeTimeProvider WriterLineClock { get; } = new(DateTimeOffset.UtcNow);
+
     public static void Start()
     {
         var main = Log.Logger;
@@ -109,6 +114,10 @@ public static class AuthHosts
         {
             Clock = new FakeTimeProvider(DateTimeOffset.UtcNow),
         });
+        WriterLine = Start(new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts })
+        {
+            Clock = WriterLineClock,
+        });
         TwoProviders = Start(new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts })
         {
             OtherProvider = new StubOidcProvider(AuthFlowFactory.OtherIssuer),
@@ -142,7 +151,7 @@ public static class AuthHosts
 
     public static async Task StopAsync()
     {
-        foreach (var host in new[] { LostJobTable, FrozenClock, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, Bundle, OwnerDemotion, Sweep, Jobs, Cleanups, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
+        foreach (var host in new[] { LostJobTable, FrozenClock, WriterLine, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, Bundle, OwnerDemotion, Sweep, Jobs, Cleanups, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
         {
             if (host is not null)
                 await host.DisposeAsync();

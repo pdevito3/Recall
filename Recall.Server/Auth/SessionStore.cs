@@ -118,7 +118,7 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
                     return new RefreshResult(null, decision);
 
                 case RefreshDecision.Replay:
-                    await RevokeAsync(row.Id, RevokeReason.RefreshReplay, cancellationToken);
+                    await RevokeAsync(row.Id, RevokeReason.RefreshReplay);
                     _logger.Here().Warning("Ended session {SessionId} because an old refresh token came back", row.Id);
                     return new RefreshResult(null, decision);
 
@@ -178,7 +178,9 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
         return updated == 1 ? expiresAt : null;
     }
 
-    public async Task RevokeAsync(string sessionId, RevokeReason reason, CancellationToken cancellationToken)
+    // A revoke takes no cancellation token. The caller that asked for it can go away while the write waits in the line,
+    // and the session must still end. The limit of the writer line bounds the wait.
+    public async Task RevokeAsync(string sessionId, RevokeReason reason)
     {
         var now = timeProvider.GetUtcNow();
         await dbContext.Set<AuthSession>()
@@ -186,10 +188,10 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
             .Where(s => s.Id == sessionId && s.RevokedAt == null)
             .ExecuteUpdateAsync(set => set
                 .SetProperty(s => s.RevokedAt, now)
-                .SetProperty(s => s.RevokedReason, reason), cancellationToken);
+                .SetProperty(s => s.RevokedReason, reason), CancellationToken.None);
     }
 
-    public async Task RevokeByRefreshAsync(RefreshToken token, CancellationToken cancellationToken)
+    public async Task RevokeByRefreshAsync(RefreshToken token)
     {
         var familyHash = TokenHash.Of(token.Family).Hex;
         var now = timeProvider.GetUtcNow();
@@ -198,10 +200,10 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
             .Where(s => s.RefreshFamilyHash == familyHash && s.RevokedAt == null)
             .ExecuteUpdateAsync(set => set
                 .SetProperty(s => s.RevokedAt, now)
-                .SetProperty(s => s.RevokedReason, RevokeReason.Logout), cancellationToken);
+                .SetProperty(s => s.RevokedReason, RevokeReason.Logout), CancellationToken.None);
     }
 
-    public async Task RevokeOthersAsync(string userId, string keepSessionId, CancellationToken cancellationToken)
+    public async Task RevokeOthersAsync(string userId, string keepSessionId)
     {
         var now = timeProvider.GetUtcNow();
         await dbContext.Set<AuthSession>()
@@ -209,7 +211,7 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
             .Where(s => s.UserId == userId && s.Id != keepSessionId && s.RevokedAt == null)
             .ExecuteUpdateAsync(set => set
                 .SetProperty(s => s.RevokedAt, now)
-                .SetProperty(s => s.RevokedReason, RevokeReason.RevokeOthers), cancellationToken);
+                .SetProperty(s => s.RevokedReason, RevokeReason.RevokeOthers), CancellationToken.None);
     }
 
     public async Task AddAttemptAsync(LoginAttempt attempt, CancellationToken cancellationToken)

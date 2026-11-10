@@ -1,6 +1,7 @@
 namespace Recall.Server.Databases.Sqlite;
 
 using System.Data.Common;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
 /// <summary>
@@ -14,7 +15,7 @@ public sealed class SqliteConnectionSetup : DbConnectionInterceptor
         // A WAL file keeps its largest size. The limit is 16 MiB, four times the 4 MiB between two default checkpoints,
         // so normal use does not truncate the file, and SQLite cuts it back at its first reset after a burst of writes.
         // SECURE_DELETE zeroes the bytes of a deleted row, so a deleted journal entry leaves the file at the next checkpoint.
-        "PRAGMA busy_timeout = 30000; PRAGMA synchronous = FULL; PRAGMA journal_size_limit = 16777216; PRAGMA secure_delete = ON;";
+        "PRAGMA synchronous = FULL; PRAGMA journal_size_limit = 16777216; PRAGMA secure_delete = ON;";
 
     public static SqliteConnectionSetup Instance { get; } = new();
 
@@ -22,10 +23,16 @@ public sealed class SqliteConnectionSetup : DbConnectionInterceptor
     {
     }
 
+    /// <summary>
+    /// The wait of SQLite for the write lock, in milliseconds: the <c>Default Timeout</c> of the connection string,
+    /// 30 s when it has none. <see cref="SqliteWriterLine"/> gives the write of a turn only the rest of it.
+    /// </summary>
+    public static int BusyTimeoutOf(DbConnection connection) => ((SqliteConnection)connection).DefaultTimeout * 1000;
+
     public override void ConnectionOpened(DbConnection connection, ConnectionEndEventData eventData)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = Pragmas;
+        command.CommandText = PragmasOf(connection);
         command.ExecuteNonQuery();
     }
 
@@ -33,7 +40,9 @@ public sealed class SqliteConnectionSetup : DbConnectionInterceptor
         CancellationToken cancellationToken = default)
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = Pragmas;
+        command.CommandText = PragmasOf(connection);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
+
+    private static string PragmasOf(DbConnection connection) => $"PRAGMA busy_timeout = {BusyTimeoutOf(connection)}; {Pragmas}";
 }
