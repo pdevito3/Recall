@@ -79,6 +79,13 @@ function anotherTabHolds(name: string, options: LockOptions = {}) {
   return () => free()
 }
 
+/** Another tab steals the lock, and the promise ends once the lock manager gave it the lock. */
+function anotherTabSteals(name: string) {
+  return new Promise<() => void>((granted) => {
+    void navigator.locks.request(name, { steal: true }, () => new Promise<void>((free) => granted(() => free()))).catch(() => undefined)
+  })
+}
+
 const aShownParty: LockParty = { handOver: () => null, takeOver: () => [], takeLateHandOver: () => [], takeDraftsOfNoParty: () => [], noteEditingPlace: () => undefined, isShown: () => true }
 
 test('a page that gets the entry back from a tab that sent each word sends its next words', async () => {
@@ -134,4 +141,29 @@ test('Edit here that a release drops before the lock answers leaves a later Edit
   await expect.poll(() => lock.editingPlace, { timeout: handOverWaitMs * 4 }).toBe('here')
   freeFirst()
   freeSecond()
+})
+
+test('Edit here whose grant a third tab steals before the lock manager answers waits in line again, and edits when that tab closes', async () => {
+  const name = `recall.edit.${owner}.entry-of-a-stale-steal`
+  const freeEditor = anotherTabHolds(name)
+  const lock = lockOfEntry(owner, 'entry-of-a-stale-steal')
+  lock.join(aShownParty)
+  await expect.poll(() => lock.editingPlace).toBe('elsewhere')
+  // The grant of Edit here waits for the answer of the lock manager, as in a tab that froze, and a third tab steals the lock meanwhile.
+  let freeThief = () => undefined as void
+  const query = navigator.locks.query.bind(navigator.locks)
+  const barrier = vi.spyOn(navigator.locks, 'query').mockImplementationOnce(async () => {
+    freeThief = await anotherTabSteals(name)
+    return query()
+  })
+
+  lock.takeHere()
+  await expect.poll(() => barrier.mock.results[0]?.type).toBe('return')
+  await barrier.mock.results[0]?.value
+  expect(lock.editingPlace).toBe('elsewhere')
+  freeThief()
+
+  await expect.poll(() => lock.editingPlace, { timeout: handOverWaitMs * 4 }).toBe('here')
+  barrier.mockRestore()
+  freeEditor()
 })
