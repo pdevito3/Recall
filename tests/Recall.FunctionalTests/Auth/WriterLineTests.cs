@@ -2,6 +2,7 @@ namespace Recall.FunctionalTests.Auth;
 
 using System.Diagnostics;
 using System.Net;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Recall.Server.Databases;
@@ -58,7 +59,36 @@ public class WriterLineTests
         // Assert
         watch.Elapsed.ShouldBeLessThan(AuthEndpoints.SlideWait + TimeSpan.FromSeconds(5));
         me.StatusCode.ShouldBe(HttpStatusCode.OK);
-        held.Writers.ShouldBe(1);
+        await held.WaitForWritersAsync(1, AuthEndpoints.SlideWait + TimeSpan.FromSeconds(5));
+    }
+
+    [Test]
+    public async Task me_with_a_slide_due_answers_while_the_write_of_its_slide_is_stuck()
+    {
+        // Arrange
+        using var browser = new AuthBrowser(Host);
+        await browser.LoginWebAsync($"subject-{Guid.NewGuid():N}");
+        AuthHosts.WriterLineClock.Advance(TimeSpan.FromDays(2));
+        // The slide gets the turn, and its write then blocks in SQLite, as a write on a disk that hangs does.
+        await using var outside = await WriteLockOutsideTheLineAsync();
+        var watch = Stopwatch.StartNew();
+
+        // Act
+        var me = await browser.GetAsync(Me, csrf: true).WaitAsync(Limit);
+
+        // Assert
+        watch.Elapsed.ShouldBeLessThan(AuthEndpoints.SlideWait + TimeSpan.FromSeconds(5));
+        me.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private static async Task<SqliteConnection> WriteLockOutsideTheLineAsync()
+    {
+        await using var scope = Host.Services.CreateAsyncScope();
+        var connection = new SqliteConnection(scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.GetConnectionString());
+        await connection.OpenAsync();
+        await using var begin = new SqliteCommand("BEGIN IMMEDIATE", connection);
+        await begin.ExecuteNonQueryAsync();
+        return connection;
     }
 
     private static async Task<HeldLine> HeldLineAsync()
@@ -83,9 +113,9 @@ public class WriterLineTests
             turn.Dispose();
         }
 
-        public async Task WaitForWritersAsync(int count)
+        public async Task WaitForWritersAsync(int count, TimeSpan? within = null)
         {
-            using var limit = new CancellationTokenSource(Limit);
+            using var limit = new CancellationTokenSource(within ?? Limit);
             while (Writers != count)
                 await Task.Delay(TimeSpan.FromMilliseconds(5), limit.Token);
         }

@@ -52,20 +52,20 @@ public static class AuthEndpoints
 
     /// <summary>
     /// A slide only moves the end of a session that is days away, so <c>/auth/me</c> waits at most
-    /// <see cref="SlideWait"/> for the writer line. A slide that does not get its turn by then waits for the next
-    /// <c>/auth/me</c>, and the person reads the journal while a write holds the line.
+    /// <see cref="SlideWait"/> for it, and the person reads the journal while a write holds the line. A slide that has
+    /// not ended by then is skipped, and the next <c>/auth/me</c> slides the session.
     /// </summary>
-    public static async Task SlideAsync(HttpContext http, SessionStore store, string sessionId, CancellationToken cancellationToken)
+    public static async Task SlideAsync(HttpContext http, string sessionId)
     {
-        using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        limit.CancelAfter(SlideWait);
+        var scopes = http.RequestServices.GetRequiredService<IServiceScopeFactory>();
+        var slide = Task.Run(() => SlideInItsOwnScopeAsync(scopes, sessionId), CancellationToken.None);
         DateTimeOffset? expires;
         try
         {
-            expires = await store.SlideWebAsync(sessionId, limit.Token);
+            expires = await slide.WaitAsync(SlideWait);
         }
-        catch (Exception exception) when (!cancellationToken.IsCancellationRequested
-            && (exception is OperationCanceledException || DomainError.From(exception).Kind == DomainErrorKind.DatabaseBusy))
+        catch (Exception exception) when (exception is TimeoutException or OperationCanceledException
+                                          || DomainError.From(exception).Kind == DomainErrorKind.DatabaseBusy)
         {
             Telemetry.AddEvent([("exception.type", exception.GetType().Name)], "session.slide_skipped");
             return;
@@ -73,6 +73,15 @@ public static class AuthEndpoints
 
         if (expires is { } end && SessionCookie.Read(http.Request) is { } cookie)
             SessionCookie.Write(http.Response, http.Request, cookie, end);
+    }
+
+    // A token cannot stop a write that SQLite holds, such as a write on a disk that hangs, and the wait of SQLite blocks
+    // its thread. So the slide runs on its own thread with its own scope, and it can end after the answer.
+    private static async Task<DateTimeOffset?> SlideInItsOwnScopeAsync(IServiceScopeFactory scopes, string sessionId)
+    {
+        using var limit = new CancellationTokenSource(SlideWait);
+        await using var scope = scopes.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<SessionStore>().SlideWebAsync(sessionId, limit.Token);
     }
 
     private static async Task<IResult> StatusAsync(HttpContext http, LoginModes modes, CancellationToken cancellationToken)
@@ -252,7 +261,7 @@ public static class AuthEndpoints
         => AppSessionHandler.CredentialOf(request.Headers.Authorization.ToString()) is null
             && (SessionCookie.Read(request) is null || AppSessionHandler.HasCsrfHeader(request));
 
-    private static async Task<IResult> MeAsync(HttpContext http, ISender sender, SessionStore store, CancellationToken cancellationToken)
+    private static async Task<IResult> MeAsync(HttpContext http, ISender sender, CancellationToken cancellationToken)
     {
         var session = await http.AuthenticateAsync(AppSessionHandler.SchemeName);
         if (!session.Succeeded)
@@ -265,7 +274,7 @@ public static class AuthEndpoints
         var kind = http.User.FindFirst(AppSessionHandler.ClientKindClaim)!.Value;
         var current = await sender.Send(new GetCurrentUser.Query(), cancellationToken);
         if (kind == SessionKindText.Web)
-            await SlideAsync(http, store, sessionId, cancellationToken);
+            await SlideAsync(http, sessionId);
 
         return Results.Json(new MeAnswer(current.Identifier, current.Name, sessionId, kind));
     }
