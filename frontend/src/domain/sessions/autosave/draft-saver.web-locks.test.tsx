@@ -100,6 +100,19 @@ test('a page that gets the entry back from a tab that sent each word sends its n
   await expect.poll(() => saver.getSnapshot().status.kind).toBe('saved')
 })
 
+test('a take from a tab that holds no lock leaves the editor editing, with its words', async () => {
+  const lock = lockOfEntry(owner, 'entry-of-a-take-with-no-lock')
+  let handOvers = 0
+  lock.join({ ...aShownParty, handOver: () => ((handOvers += 1), null) })
+  await expect.poll(() => lock.editingPlace).toBe('here')
+
+  // A tab of an older build wakes with a grant of Edit here that another tab stole since, and asks for the words.
+  lock.hearTake('a-tab-with-an-old-grant')
+
+  expect(lock.editingPlace).toBe('here')
+  expect(handOvers).toBe(0)
+})
+
 test('Edit here that a release drops before the lock answers leaves a later Edit here working', async () => {
   const name = `recall.edit.${owner}.client-session`
   const freeFirst = anotherTabHolds(name)

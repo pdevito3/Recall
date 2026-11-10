@@ -141,6 +141,12 @@ interface Request {
   isPending: boolean
 }
 
+/** The wait of a grant for the words of the tab that held the lock. Each gives the first hand-over that came, or null. */
+interface HandOverCatch {
+  ask(): Promise<HandOver | null>
+  end(): HandOver | null
+}
+
 export class EntryLock {
   readonly name: string
   private place: EditingPlace = 'waiting'
@@ -271,6 +277,8 @@ export class EntryLock {
 
   hearTake(by: string) {
     if (by === thisTab) return
+    // With Web Locks, only a steal ends the lock that this tab holds, and that end gives the words. A take of a tab that holds no lock, as one that woke with an old grant, changes nothing.
+    if (this.place === 'here' && this.unlock !== null && hasWebLocks()) return
     const handed = this.place === 'here' ? null : this.untakenHanded()
     if (handed !== null) {
       // The words stay here until the taker says that it took them.
@@ -326,10 +334,20 @@ export class EntryLock {
         }
         isHeld = true
         if (this.waitInLine === waitInLine) this.waitInLine = null
+        // The tab that held the lock gives its words when it loses the lock, and they can come before the answer below.
+        const handOver = this.catchHandOver()
+        // A tab that wakes from a freeze runs a grant that another tab can have stolen since. The lock manager answers in order, so a steal before this answer ends the request first.
+        await webLocks.query()
+        if (this.isClosed || request.isDropped || request.isLost) {
+          // The tab that gave words keeps them until a tab says that it took them, so the words go to the tab that holds the lock.
+          handOver.end()
+          if (request.isLost) this.waitAgain(how, request)
+          return
+        }
         const held = new Promise<void>((resolve) => {
           this.unlock = resolve
         })
-        await this.grant(how === 'steal', request)
+        await this.grant(request, how === 'steal', handOver)
         await held
       })
       .catch((error: unknown) => {
@@ -349,7 +367,15 @@ export class EntryLock {
       return
     }
     this.unlock = () => undefined
-    void this.grant(how === 'steal', request)
+    void this.grant(request, how === 'steal', this.catchHandOver())
+  }
+
+  /** The lock manager took the lock from this tab before this tab acted on the grant, so this tab holds no words and waits as before. */
+  private waitAgain(how: Ask, request: Request) {
+    if (this.request !== request) return
+    if (how === 'steal') this.isTaking = false
+    if (this.place === 'waiting') this.becomeReader()
+    else this.ask('inLine')
   }
 
   private becomeReader() {
@@ -359,13 +385,13 @@ export class EntryLock {
     this.askForTheEntry()
   }
 
-  private async grant(isTake: boolean, request: Request) {
+  private async grant(request: Request, isTake: boolean, handOver: HandOverCatch) {
     writeMark(this.name)
     // Words that this tab gave when it lost the lock, and that no tab took, come back with the lock.
     const ownHanded = this.untakenHanded()
     this.lastHanded = null
     const wasHere = this.place === 'here'
-    const fromOthers = isTake ? await this.askForHandOver() : null
+    const fromOthers = isTake ? await handOver.ask() : handOver.end()
     if (isTake) this.isTaking = false
     if (this.isClosed || request.isDropped) return
     const handed = ownHanded === null ? fromOthers : { from: fromOthers?.from ?? thisTab, drafts: [...ownHanded, ...(fromOthers?.drafts ?? [])] }
@@ -411,17 +437,31 @@ export class EntryLock {
     this.lastHanded = handed.drafts
   }
 
-  private askForHandOver(): Promise<HandOver | null> {
-    return new Promise((resolve) => {
-      const limit = setTimeout(() => finish(null), handOverWaitMs)
-      const finish = (handed: HandOver | null) => {
+  /** From now on, the first hand-over to this tab ends the wait. `ask` asks the other tabs for their words and waits for them a short time, and `end` waits no more. */
+  private catchHandOver(): HandOverCatch {
+    let limit: ReturnType<typeof setTimeout> | undefined
+    let caught: HandOver | null | undefined
+    let finish: (handed: HandOver | null) => void = () => undefined
+    const handed = new Promise<HandOver | null>((resolve) => {
+      finish = (one) => {
         clearTimeout(limit)
         if (this.handOverWaiter === finish) this.handOverWaiter = null
-        resolve(handed)
+        if (caught === undefined) caught = one
+        resolve(one)
       }
-      this.handOverWaiter = finish
-      talk({ kind: 'take', lock: this.name, by: thisTab })
     })
+    this.handOverWaiter = finish
+    return {
+      ask: () => {
+        if (this.handOverWaiter === finish) limit = setTimeout(() => finish(null), handOverWaitMs)
+        talk({ kind: 'take', lock: this.name, by: thisTab })
+        return handed
+      },
+      end: () => {
+        finish(null)
+        return caught ?? null
+      },
+    }
   }
 
   /** Another tab took the entry. Each saver stops, and its words go to that tab. A lock that this tab still holds goes free, so a wrong mark cannot keep it. */

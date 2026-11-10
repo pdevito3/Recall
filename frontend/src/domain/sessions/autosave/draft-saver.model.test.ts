@@ -273,7 +273,11 @@ class ModelLocks {
   private line: LockAsk[] = []
 
   managerFor(tab: Tab) {
-    return { request: (name: string, options: LockOptions, callback: (lock: Lock | null) => Promise<unknown>) => this.request(tab, name, options, callback) }
+    return {
+      request: (name: string, options: LockOptions, callback: (lock: Lock | null) => Promise<unknown>) => this.request(tab, name, options, callback),
+      // The manager answers each tab in order, so an answer comes after each end of a lock that the manager sent the tab before.
+      query: () => new Promise<LockManagerSnapshot>((resolve) => clock.set(() => asTab(tab, () => resolve({ held: [], pending: [] })), 0)),
+    }
   }
 
   holderOf(name: string) {
@@ -1444,6 +1448,86 @@ test('on a full storage, words that a frozen editor hands over when it wakes sho
   expect(tokensIn(allKeys(storage))).toEqual([])
   first.run(() => first.mod.stopDraftSavers())
   second.run(() => second.mod.stopDraftSavers())
+})
+
+for (const isFullAtTheWake of [true, false]) {
+  test(`a tab that wakes with an old grant of Edit here takes no words and no edit from the editor, with ${isFullAtTheWake ? 'a full storage' : 'room in storage'}`, async () => {
+    let isFull = false
+    const storage = storageWith(() => isFull)
+    vi.stubGlobal('localStorage', storage)
+    world = new ModelServer()
+    channels = new ModelChannels()
+    locks = new ModelLocks()
+    everyTab.clear()
+    const first = await aTabOn('entry-1')
+    first.type('w1x')
+    await pass(2000)
+    const row = world.rows[0] as Row
+    const frozen = await aSecondTabOn(row)
+    frozen.editHere()
+    frozen.freeze()
+    await pass(100)
+    first.editHere()
+    await pass(1000)
+    expect(first.page?.place).toBe('here')
+    const third = await aSecondTabOn(row)
+    isFull = isFullAtTheWake
+    world.isDown = true
+    first.type('w2x')
+    await pass(1500)
+    third.editHere()
+    await pass(1000)
+    first.editHere()
+    await pass(1000)
+    expect(first.page?.place).toBe('here')
+
+    frozen.wake()
+    await pass(1000)
+    expect(first.type('w3x')).toBe(true)
+    await pass(1000)
+
+    expect(first.page?.place).toBe('here')
+    expect(tokensIn(first.page?.editor ?? '')).toEqual(['w1x', 'w2x', 'w3x'])
+    expect(frozen.page?.place).toBe('elsewhere')
+    world.isDown = false
+    isFull = false
+    await pass(60_000)
+    expect(tokensIn(row.text)).toEqual(['w1x', 'w2x', 'w3x'])
+    for (const tab of [first, frozen, third]) tab.run(() => tab.mod.stopDraftSavers())
+  })
+}
+
+test('on a full storage, a tab that gets the lock while the editor gives its words after a steal takes the words', async () => {
+  let isFull = false
+  const storage = storageWith(() => isFull)
+  vi.stubGlobal('localStorage', storage)
+  world = new ModelServer()
+  channels = new ModelChannels()
+  locks = new ModelLocks()
+  everyTab.clear()
+  const first = await aTabOn('entry-1')
+  first.type('w1x')
+  await pass(2000)
+  const row = world.rows[0] as Row
+  const second = await aSecondTabOn(row)
+  isFull = true
+  world.isDown = true
+  first.type('w2x')
+  await pass(1500)
+
+  // The steal ends the lock of the editor, and the tab that stole reloads before it acts on the lock.
+  second.editHere()
+  second.close()
+  const third = await aSecondTabOn(row)
+  await pass(1000)
+
+  expect(third.page?.place).toBe('here')
+  expect(tokensIn(third.page?.editor ?? '')).toEqual(['w1x', 'w2x'])
+  world.isDown = false
+  isFull = false
+  await pass(60_000)
+  expect(tokensIn(row.text)).toEqual(['w1x', 'w2x'])
+  for (const tab of [first, third]) tab.run(() => tab.mod.stopDraftSavers())
 })
 
 test('a reload with a second tab open keeps the words on the screen, whichever tab took the key', async () => {
