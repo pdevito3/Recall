@@ -4,7 +4,7 @@ import type { RecordingDto } from '@/api/generated/models/types/recording-dto'
 import { getRecording } from '@/api/generated/recordings/clients/get-recording'
 import { retryRecording } from '@/api/generated/recordings/clients/retry-recording'
 import { SessionKeys } from '@/domain/sessions/apis/session.keys'
-import { refreshTimelineHead } from '@/domain/sessions/apis/timeline-cache'
+import { refreshTimelineHead, tellOtherTabsOfNewWords } from '@/domain/sessions/apis/timeline-cache'
 import { isProblemDetailsError, retryUnlessRefused } from '@/lib/problem-details'
 
 import { CaptureKeys } from './capture.keys'
@@ -23,6 +23,7 @@ export function useRecording(recordingId: string | null) {
       // The text joins the entry as the work goes, so the timeline and the entry read it when it ends.
       if (recording.status === 'Transcribed') {
         void refreshTimelineHead(queryClient)
+        tellOtherTabsOfNewWords()
         void queryClient.invalidateQueries({ queryKey: SessionKeys.detail(recording.sessionId) })
       }
       return recording

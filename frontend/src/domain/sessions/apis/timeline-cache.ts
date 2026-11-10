@@ -2,6 +2,7 @@ import type { InfiniteData, QueryClient } from '@tanstack/react-query'
 
 import type { SessionPageDto } from '@/api/generated/models/types/session-page-dto'
 import type { SessionSummaryDto } from '@/api/generated/models/types/session-summary-dto'
+import { openChannel } from '@/lib/browser-channel'
 
 import { SessionKeys } from './session.keys'
 
@@ -53,4 +54,22 @@ export function removeTimelineRow(queryClient: QueryClient, id: string) {
 export function refreshTimelineHead(queryClient: QueryClient) {
   queryClient.setQueryData<TimelineData>(SessionKeys.timeline(), (data) => data && withFirstPageOnly(data))
   return queryClient.invalidateQueries({ queryKey: SessionKeys.timeline() })
+}
+
+let otherTabs: BroadcastChannel | null | undefined
+
+/** Opens at the first use, so a page that shows no timeline and gets no words opens no channel. */
+const channelToOtherTabs = () => (otherTabs === undefined ? (otherTabs = openChannel('recall.timeline')) : otherTabs)
+
+/** Only the tab that follows a recording reads its end, so it tells the other tabs of this browser that its words came. */
+export function tellOtherTabsOfNewWords() {
+  channelToOtherTabs()?.postMessage('words')
+}
+
+/** Reads the first page of the timeline again when another tab tells of new words. */
+export function followNewWordsOfOtherTabs(queryClient: QueryClient): () => void {
+  const channel = channelToOtherTabs()
+  const refresh = () => void refreshTimelineHead(queryClient)
+  channel?.addEventListener('message', refresh)
+  return () => channel?.removeEventListener('message', refresh)
 }

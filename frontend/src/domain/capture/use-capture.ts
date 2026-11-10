@@ -1,6 +1,7 @@
-import { onlineManager } from '@tanstack/react-query'
+import { onlineManager, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 
+import { refreshTimelineHead } from '@/domain/sessions/apis/timeline-cache'
 import { useOwner } from '@/domain/sessions/autosave/use-draft-saver'
 
 import { isNotFound, useRecording, useRetryRecording } from './apis/get-recording'
@@ -93,6 +94,7 @@ export function useCapture() {
   const latest = stored ? followedCapture(stored.captures, recordedHere) : null
   const recording = useRecording(latest?.isFinished ? latest.recordingId : null)
   const retry = useRetryRecording()
+  const queryClient = useQueryClient()
   useMicPermission()
 
   // The person deleted the entry of these words, so the card has nothing left to follow.
@@ -123,7 +125,9 @@ export function useCapture() {
     isRetrying: retry.isPending,
     retryError: retry.error,
     sendAgain: (clientRecordingId: string) => void tryAgainToSend(clientRecordingId),
-    discard: (clientRecordingId: string) => void discardStoredAudio(stored?.captures.filter((one) => one.clientRecordingId === clientRecordingId) ?? []),
+    // A discard can delete the entry that the recording made, so the timeline reads its first page again.
+    discard: (clientRecordingId: string) =>
+      void discardStoredAudio(stored?.captures.filter((one) => one.clientRecordingId === clientRecordingId) ?? []).then(() => refreshTimelineHead(queryClient)),
   }
 }
 

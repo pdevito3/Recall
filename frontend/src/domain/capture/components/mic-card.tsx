@@ -191,17 +191,17 @@ function WordsOfTheEntry({ sessionId }: { sessionId: string }) {
 }
 
 /** A discard loses audio for good, so a second tap confirms it. */
-function DiscardAudio({ onDiscard }: { onDiscard: () => void }) {
+function DiscardAudio({ onDiscard, name }: { onDiscard: () => void; name?: string }) {
   const [isAsking, setIsAsking] = useState(false)
   if (!isAsking) {
     return (
-      <Button variant="outline" className="h-11 px-4" onPress={() => setIsAsking(true)}>
+      <Button variant="outline" className="h-11 px-4" aria-label={name && `Discard ${name}`} onPress={() => setIsAsking(true)}>
         Discard
       </Button>
     )
   }
   return (
-    <div role="group" aria-label="Discard this audio" className="flex basis-full flex-col items-center gap-2">
+    <div role="group" aria-label={name ? `Discard ${name}` : 'Discard this audio'} className="flex basis-full flex-col items-center gap-2">
       <span className="text-sm">This audio goes for good.</span>
       <div className="flex flex-wrap justify-center gap-2">
         <Button variant="destructive" className="h-11 px-4" onPress={onDiscard}>
@@ -222,29 +222,32 @@ function WaitingCaptures({ capture }: { capture: Capture }) {
   return (
     <div className="flex w-full max-w-md flex-col gap-2 border-t pt-3">
       <p className="text-xs text-muted-foreground">
-        {waiting.length === 1 ? 'One more recording waits' : `${waiting.length} more recordings wait`} in this browser to upload.
+        {waiting.length === 1 ? 'One more recording is' : `${waiting.length} more recordings are`} in this browser.
       </p>
       <ul aria-label="Other recordings in this browser" className="flex flex-col gap-2">
-        {waiting.map((other) => (
-          <li key={other.clientRecordingId} className="flex flex-col items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-            <p className="wrap-anywhere">
-              {clock(other.durationMs)} of audio from {timeOf(other.startedAt, zone)}.{' '}
-              {other.problem?.kind === 'refused' ? (
-                <span className="text-destructive">The server did not take it: {other.problem.text}</span>
-              ) : (
-                'It uploads next.'
-              )}
-            </p>
-            <div className="flex flex-wrap justify-center gap-2">
-              {other.problem?.kind === 'refused' && (
-                <Button className="h-11 px-4" onPress={() => capture.sendAgain(other.clientRecordingId)}>
-                  Send again
-                </Button>
-              )}
-              <DiscardAudio onDiscard={() => capture.discard(other.clientRecordingId)} />
-            </div>
-          </li>
-        ))}
+        {waiting.map((other) => {
+          const name = `the ${clock(other.durationMs)} recording from ${timeOf(other.startedAt, zone)}`
+          return (
+            <li key={other.clientRecordingId} className="flex flex-col items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+              <p className="wrap-anywhere">
+                {clock(other.durationMs)} of audio from {timeOf(other.startedAt, zone)}.{' '}
+                {other.problem?.kind === 'refused' ? (
+                  <span className="text-destructive">The server did not take it: {other.problem.text}</span>
+                ) : (
+                  'It uploads next.'
+                )}
+              </p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {other.problem?.kind === 'refused' && (
+                  <Button className="h-11 px-4" aria-label={`Send again ${name}`} onPress={() => capture.sendAgain(other.clientRecordingId)}>
+                    Send again
+                  </Button>
+                )}
+                <DiscardAudio name={name} onDiscard={() => capture.discard(other.clientRecordingId)} />
+              </div>
+            </li>
+          )
+        })}
       </ul>
     </div>
   )

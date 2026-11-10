@@ -9,12 +9,14 @@ import type { SessionDto } from '@/api/generated/models/types/session-dto'
 import type { UserSettingDto } from '@/api/generated/models/types/user-setting-dto'
 // The app sends each request through this client, and it gives the words of a failure.
 import '@/lib/api-client'
-import { settleUnsentWords } from '@/domain/auth/apis/unsent-words-at-logout'
+import { answerAboutUnsentWords, settleUnsentWords } from '@/domain/auth/apis/unsent-words-at-logout'
+import { useResumeUnsentDrafts } from '@/domain/sessions/autosave/use-resume-unsent-drafts'
+import { createQueryClient } from '@/lib/query-client'
 import { notePageUser } from '@/lib/page-user'
 import type { Answer } from '@/test/answer'
 import { member, signedInMember } from '@/test/session'
 
-import { addCapture, capturesOf, removeCapture, storeSlice, type StoredCapture } from '../audio-store'
+import { addCapture, capturesOf, removeCapture, storeSlice, updateCapture, type StoredCapture } from '../audio-store'
 import { useSendStoredAudio } from '../use-send-stored-audio'
 import { MicCard } from './mic-card'
 
@@ -86,16 +88,22 @@ function Home() {
   return <MicCard />
 }
 
-async function openHome(answers: Answer[]) {
+// The layout also joins the other tabs, so that a sign-out in one tab settles each tab.
+function HomeInTheLayout() {
+  useResumeUnsentDrafts()
+  return <Home />
+}
+
+async function openHome(answers: Answer[], { client = new QueryClient({ defaultOptions: { queries: { retry: false } } }), component = Home } = {}) {
   await commands.answerRequests([...onServer, ...answers])
-  const rootRoute = createRootRoute({ component: Home })
+  const rootRoute = createRootRoute({ component })
   const routeTree = rootRoute.addChildren([
     createRoute({ getParentRoute: () => rootRoute, path: '/sessions/$id' }),
     createRoute({ getParentRoute: () => rootRoute, path: '/transcription-engine' }),
   ])
   const router = createRouter({ routeTree, history: createMemoryHistory({ initialEntries: ['/'] }) })
   return render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={client}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
@@ -175,8 +183,14 @@ test('one tap records into a new entry, and the card follows the audio until the
   expect(sent[sent.length - 1]).toBe('POST /api/v1/recordings/rec_1/finish')
   expect((await capturesOf(member.identifier))[0]).toMatchObject({ isFinished: true, sentSlices: (await capturesOf(member.identifier))[0].storedSlices })
 
+  // The timeline of another tab reads again when the words come.
+  const otherTab = new BroadcastChannel('recall.timeline')
+  onTestFinished(() => otherTab.close())
+  const heard = vi.fn()
+  otherTab.onmessage = ({ data }) => heard(data)
   await commands.answerRequests([...onServer, recordingAnswer('GET', '/api/v1/recordings/rec_1', { status: 'Transcribed' })])
   await cardSays(screen,'Your words are in', 10_000)
+  await expect.poll(() => heard.mock.calls).toEqual([['words']])
   await expect.element(screen.getByText(spoken)).toBeVisible()
   await expect.element(screen.getByRole('link', { name: 'Open entry' })).toHaveAttribute('href', '/sessions/ses_1')
 })
@@ -261,16 +275,26 @@ test('each older recording that the server refused can go again or go for good',
     recordingAnswer('GET', '/api/v1/recordings/rec_1', { status: 'Transcribing' }),
     { method: 'PUT', path: '/api/v1/recordings/rec_0/slices/0', body: {} },
     recordingAnswer('POST', '/api/v1/recordings/rec_0/finish', { id: 'rec_0', clientRecordingId: 'cap_0', status: 'Received' }),
+    // The server refused the only slice of rec_2, so it holds none.
+    recordingAnswer('GET', '/api/v1/recordings/rec_2', { id: 'rec_2', clientRecordingId: 'cap_2', status: 'Receiving', storedSlices: [] }),
+    { method: 'DELETE', path: '/api/v1/recordings/rec_2', status: 204 },
+    { method: 'GET', path: '/api/v1/sessions/ses_1/recordings', body: [] },
   ])
   await cardSays(screen, 'Writing the words')
   const others = screen.getByRole('list', { name: 'Other recordings in this browser' })
   await expect.element(others.getByRole('listitem')).toHaveLength(2)
   await expect.element(others.getByRole('listitem').first().getByText('The server did not take it: The audio is larger than 8 MiB.')).toBeVisible()
+  await expect.element(screen.getByText('2 more recordings are in this browser.')).toBeVisible()
+  // A screen reader that lists the buttons tells each row apart.
+  const sendAgainNames = others.getByRole('button', { name: /^Send again the 0:04 recording from / }).elements().map((button) => button.getAttribute('aria-label'))
+  expect(sendAgainNames).toHaveLength(2)
+  expect(new Set(sendAgainNames).size).toBe(2)
 
   // Act
-  await userEvent.click(others.getByRole('listitem').nth(1).getByRole('button', { name: 'Discard' }))
-  await userEvent.click(others.getByRole('group', { name: 'Discard this audio' }).getByRole('button', { name: 'Discard audio' }))
-  await userEvent.click(others.getByRole('listitem').first().getByRole('button', { name: 'Send again' }))
+  await userEvent.click(others.getByRole('listitem').nth(1).getByRole('button', { name: /^Discard the 0:04 recording from / }))
+  await userEvent.click(others.getByRole('group', { name: /^Discard the 0:04 recording from / }).getByRole('button', { name: 'Discard audio' }))
+  await expect.element(others.getByRole('listitem')).toHaveLength(1)
+  await userEvent.click(others.getByRole('listitem').first().getByRole('button', { name: /^Send again the 0:04 recording from / }))
 
   // Assert
   await expect.element(others).not.toBeInTheDocument()
@@ -278,7 +302,36 @@ test('each older recording that the server refused can go again or go for good',
     { clientRecordingId: 'cap_0', isFinished: true },
     { clientRecordingId: 'cap_1', isFinished: true },
   ])
-  expect((await commands.takeSentRequests()).map(({ method, path }) => `${method} ${path}`)).toEqual(['PUT /api/v1/recordings/rec_0/slices/0', 'POST /api/v1/recordings/rec_0/finish'])
+  // The entry holds words, so it stays.
+  expect((await commands.takeSentRequests()).map(({ method, path }) => `${method} ${path}`)).toEqual([
+    'DELETE /api/v1/recordings/rec_2',
+    'PUT /api/v1/recordings/rec_0/slices/0',
+    'POST /api/v1/recordings/rec_0/finish',
+  ])
+})
+
+test('a discard of a refused recording leaves no empty recording and no empty entry on the server', async () => {
+  // Arrange
+  const untouched: SessionDto = { ...entry, id: 'ses_2', rawText: '', rawDraftRevision: 0, rawLatestRevision: 0 }
+  await aRefusedCapture('cap_2', 'rec_2', 120_000)
+  await updateCapture('cap_2', { sessionId: 'ses_2' })
+  const screen = await openHome([
+    recordingAnswer('GET', '/api/v1/recordings/rec_2', { id: 'rec_2', sessionId: 'ses_2', clientRecordingId: 'cap_2', status: 'Receiving', storedSlices: [] }),
+    { method: 'DELETE', path: '/api/v1/recordings/rec_2', status: 204 },
+    { method: 'GET', path: '/api/v1/sessions/ses_2', body: untouched },
+    { method: 'GET', path: '/api/v1/sessions/ses_2/recordings', body: [] },
+    { method: 'DELETE', path: '/api/v1/sessions/ses_2', status: 204 },
+  ])
+  await cardSays(screen, 'The audio is larger than 8 MiB. The audio stays in this browser.')
+
+  // Act
+  await userEvent.click(screen.getByRole('button', { name: 'Discard' }))
+  await userEvent.click(screen.getByRole('group', { name: 'Discard this audio' }).getByRole('button', { name: 'Discard audio' }))
+
+  // Assert
+  await cardSays(screen, 'Tap to record')
+  await expect.poll(() => capturesOf(member.identifier)).toEqual([])
+  expect((await commands.takeSentRequests()).map(({ method, path }) => `${method} ${path}`)).toEqual(['DELETE /api/v1/recordings/rec_2', 'DELETE /api/v1/sessions/ses_2'])
 })
 
 test('the card lets go of the words of an entry that the person deleted, and stops asking for them', async () => {
@@ -287,7 +340,8 @@ test('the card lets go of the words of an entry that the person deleted, and sto
   await aFinishedCapture()
 
   // Act
-  const screen = await openHome([{ method: 'GET', path: '/api/v1/recordings/rec_1', status: 404, body: { status: 404, title: 'Not found' } }])
+  // The query client of the app tries a failed read again, so a read that the server refuses must not.
+  const screen = await openHome([{ method: 'GET', path: '/api/v1/recordings/rec_1', status: 404, body: { status: 404, title: 'Not found' } }], { client: createQueryClient() })
 
   // Assert
   await cardSays(screen, 'Tap to record')
@@ -377,6 +431,53 @@ test('a sign-out during a recording stops it and sends all of its audio first, s
   const [capture] = await capturesOf(member.identifier)
   expect(capture).toMatchObject({ isEnded: true, isFinished: true, sentSlices: capture.storedSlices })
   expect((await commands.takeSentRequests()).map(({ method, path }) => `${method} ${path}`).pop()).toBe('POST /api/v1/recordings/rec_1/finish')
+})
+
+test('a sign-out in another tab stops the recording of this tab first', { timeout: 30_000 }, async () => {
+  // Arrange
+  notePageUser(member.identifier)
+  micGivesATone()
+  const screen = await openHome(recordAndSend, { component: HomeInTheLayout })
+  await userEvent.click(screen.getByRole('button', { name: 'Record' }))
+  await cardSays(screen, 'Recording')
+  const tabs = new BroadcastChannel('recall.tabs')
+  onTestFinished(() => tabs.close())
+  const settled = new Promise((resolve) => {
+    tabs.onmessage = ({ data }: MessageEvent<{ kind: string; nonce: string }>) => {
+      if (data.kind === 'settled' && data.nonce === 'n1') resolve(data)
+    }
+  })
+
+  // Act
+  tabs.postMessage({ kind: 'settle', nonce: 'n1' })
+
+  // Assert
+  await settled
+  expect((await capturesOf(member.identifier))[0]).toMatchObject({ isEnded: true })
+  await cardSays(screen, 'Writing the words', 10_000)
+})
+
+test('a sign-out sends at once the audio that waits for a retry, so it asks nothing', { timeout: 30_000 }, async () => {
+  // Arrange
+  notePageUser(member.identifier)
+  // The longest wait of each retry, so that the third wait is longer than the quiet limit of the sign-out.
+  vi.spyOn(Math, 'random').mockReturnValue(0.99)
+  await aFinishedCapture({ isFinished: false })
+  const screen = await openHome([recordingAnswer('POST', '/api/v1/recordings/rec_1/finish', {}, 503)])
+  await expect.poll(async () => (await commands.takeSentRequests()).length, { timeout: 10_000 }).toBeGreaterThan(0)
+  await expect.poll(async () => (await commands.takeSentRequests()).length, { timeout: 10_000 }).toBeGreaterThan(0)
+  await expect.poll(async () => (await commands.takeSentRequests()).length, { timeout: 10_000 }).toBeGreaterThan(0)
+  await commands.answerRequests([...onServer, recordingAnswer('POST', '/api/v1/recordings/rec_1/finish', { status: 'Received' }), recordingAnswer('GET', '/api/v1/recordings/rec_1', { status: 'Received' })])
+  // A question here would hold the sign-out, so the test answers it and the sign-out fails.
+  const beforeAQuestion = vi.fn(() => setTimeout(() => answerAboutUnsentWords('stay')))
+
+  // Act
+  await settleUnsentWords(beforeAQuestion)
+
+  // Assert
+  expect(beforeAQuestion).not.toHaveBeenCalled()
+  expect(await capturesOf(member.identifier)).toMatchObject([{ isFinished: true }])
+  await cardSays(screen, 'Writing the words')
 })
 
 // After the tests that record, because the mic state of the tab keeps this stop until the next tap.
