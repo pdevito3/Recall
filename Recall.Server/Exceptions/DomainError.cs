@@ -40,6 +40,9 @@ public enum DomainErrorKind
     /// <summary>The disk of the database or of the file store has no room. Nothing changed, and the same request works when the disk has room.</summary>
     DiskFull,
 
+    /// <summary>The write did not get the write lock of the database within its limit. Nothing changed, and the same request can work later.</summary>
+    DatabaseBusy,
+
     /// <summary>A server fault. Its message stays on the server.</summary>
     Unexpected,
 }
@@ -63,7 +66,9 @@ public sealed record DomainError(
     private const string ConcurrentChangeTitle = "Other users changed the record at the same time.";
     private const string DiskFullTitle = "The disk of the server is full.";
     private const string DiskFullDetail = "The disk of the server is full, so nothing changed. Ask the Owner to free some space, then try again.";
+    private const string DatabaseBusyTitle = "The server is busy.";
     private const int SqliteFull = 13;
+    private const int SqliteBusy = 5;
 
     // On Unix, the HResult of an IOException is the errno: ENOSPC, and EDQUOT on Linux and on macOS.
     private const int NoSpaceErrno = 28;
@@ -115,6 +120,7 @@ public sealed record DomainError(
             ex.Message,
             string.IsNullOrEmpty(ex.Property) ? [] : new() { [ex.Property] = [ex.Message] }),
         _ when IsDiskFull(exception) => new(DomainErrorKind.DiskFull, DiskFullTitle, DiskFullDetail, null),
+        _ when IsDatabaseBusy(exception) => new(DomainErrorKind.DatabaseBusy, DatabaseBusyTitle, DatabaseBusyException.BusyMessage, null),
         _ => new(DomainErrorKind.Unexpected, "An error occurred while processing your request.", null, null),
     };
 
@@ -123,8 +129,13 @@ public sealed record DomainError(
                or IOException { HResult: NoSpaceErrno or LinuxQuotaErrno or MacQuotaErrno }
            || (exception.InnerException is { } inner && IsDiskFull(inner));
 
+    private static bool IsDatabaseBusy(Exception exception)
+        => exception is DatabaseBusyException or SqliteException { SqliteErrorCode: SqliteBusy }
+           || (exception.InnerException is { } inner && IsDatabaseBusy(inner));
+
     /// <summary>
     /// True when the exception is an expected outcome of a bad request, not a server fault.
     /// </summary>
-    public static bool IsClientError(Exception exception) => From(exception).Kind is not (DomainErrorKind.Unexpected or DomainErrorKind.DiskFull);
+    public static bool IsClientError(Exception exception)
+        => From(exception).Kind is not (DomainErrorKind.Unexpected or DomainErrorKind.DiskFull or DomainErrorKind.DatabaseBusy);
 }
