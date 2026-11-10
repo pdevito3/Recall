@@ -339,7 +339,7 @@ export class EntryLock {
         // A tab that wakes from a freeze runs a grant that another tab can have stolen since. The lock manager answers in order, so a steal before this answer ends the request first.
         await webLocks.query()
         if (this.isClosed || request.isDropped || request.isLost) {
-          // Words that came for this grant go on to the tab that holds the lock, and this tab keeps them until a tab says that it took them.
+          // Words that came for this grant go on to the tab that edits next, and this tab keeps them until a tab says that it took them.
           const caught = handOver.end()
           if (caught !== null && caught.drafts.length > 0) this.forward({ from: caught.from, drafts: [...(this.untakenHanded() ?? []), ...caught.drafts] })
           if (request.isLost) this.waitAgain(how, request)

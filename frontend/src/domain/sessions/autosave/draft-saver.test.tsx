@@ -1268,6 +1268,21 @@ test('words that came in a hand-over go on from their own key, and a late copy o
   saver.stop()
 })
 
+test('a take that brings the same state twice, as a tab that forwards words that the giver also kept, saves it once', async () => {
+  vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
+  const saver = aSaver()
+  const entry = entryWith('handed words', { stateId: 'another-tab.3' })
+
+  saver.takeOver({ from: 'another-tab', drafts: [{ storageKey: null, entry }, { storageKey: null, entry }] })
+  saver.flush()
+  await vi.waitFor(() => expect(saveRawDraft).toHaveBeenCalledOnce())
+
+  expect(wordsInKeys()).toEqual(['handed words'])
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  expect(saveRawDraft).toHaveBeenCalledOnce()
+  saver.stop()
+})
+
 test('a late hand-over of words that this tab does not hold goes with its own base beside the page', async () => {
   vi.mocked(saveRawDraft).mockReturnValue(new Promise(() => undefined))
   const saver = aSaver()

@@ -548,7 +548,8 @@ export class DraftSaver implements LockParty {
     // A page that edits only from now opens the words of the saver when it opens its editor.
     this.update({ editing: 'here' })
     if (main) this.adopt(main.entry, main.storageKey)
-    for (const other of others) this.helpWith(other)
+    // A forward can bring a state that the tab that gave it also kept, and a state goes once.
+    for (const other of others) if (!this.takenStates.has(other.entry.stateId ?? '')) this.helpWith(other)
     if (this.heldWords !== null && this.newWordsListeners.size === 0) void this.joinHoldWithNoPage()
     return statesOf(ofThisDraft)
   }
