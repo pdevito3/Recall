@@ -63,7 +63,7 @@ public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore 
 
     private async Task QueueWaitingAsync(JournalOwner owner, CancellationToken cancellationToken)
     {
-        await SweepStepAsync(owner.UserId, () => EndQuietUploadsAsync(owner, cancellationToken));
+        await EndQuietUploadsAsync(owner, cancellationToken);
         await using var scope = scopeFactory.CreateJournalScope(owner);
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var waiting = await dbContext.Recordings
