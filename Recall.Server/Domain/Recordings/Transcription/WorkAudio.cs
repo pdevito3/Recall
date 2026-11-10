@@ -34,14 +34,26 @@ public sealed class WorkAudio(IOptions<TranscriptionOptions> options)
     public async Task<string> PrepareAsync(TranscriptionInput input, CancellationToken cancellationToken)
     {
         var wav = Path.Combine(input.WorkFolder, RecordingFiles.WorkAudioName);
-        if (!File.Exists(wav))
+        // A late part (REC-24) can replace the audio during a decode, and a decode of the old audio must not take its place.
+        while (!File.Exists(wav))
+        {
+            var decoded = StampOf(input.AudioPath);
             await DecodeAsync(input.AudioPath, wav, Path.Combine(input.WorkFolder, RecordingFiles.PartialWorkAudioName), cancellationToken);
+            if (StampOf(input.AudioPath) != decoded)
+                DeleteLeftover(wav);
+        }
 
         var samples = new FileInfo(wav).Length / BytesPerSample;
         if (samples > Recording.MaxDuration.TotalSeconds * Recording.SamplesPerSecond)
             throw new TranscriptionEngineException(RecordingProblem.TooLong);
 
         return wav;
+    }
+
+    private static (long Length, DateTime WrittenAt)? StampOf(string path)
+    {
+        var file = new FileInfo(path);
+        return file.Exists ? (file.Length, file.LastWriteTimeUtc) : null;
     }
 
     private async Task DecodeAsync(string audio, string wav, string partial, CancellationToken cancellationToken)

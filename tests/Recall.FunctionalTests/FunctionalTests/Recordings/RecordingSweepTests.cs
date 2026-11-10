@@ -165,7 +165,7 @@ public class RecordingSweepTests : TestBase
 
     [Test]
     [Property("Rule", "REC-23")]
-    public async Task an_upload_with_no_new_slice_for_a_day_ends_with_the_slices_that_came_and_a_late_slice_gets_409()
+    public async Task an_upload_with_no_new_slice_for_a_day_ends_with_the_slices_that_came_and_a_late_slice_inside_them_gets_409()
     {
         // Arrange
         var (admin, _) = await JournalScenario.AddPeopleAsync();
@@ -208,6 +208,38 @@ public class RecordingSweepTests : TestBase
         (await FactoryClient.PostAsync(ApiRoutes.Recordings.Retry(empty.Id), null)).StatusCode.ShouldBe(HttpStatusCode.Conflict);
 
         (await FactoryClient.GetRecordingAsync(recent.Id)).Status.ShouldBe(nameof(RecordingStatus.Receiving));
+    }
+
+    [Test]
+    [Property("Rule", "REC-23")]
+    public async Task a_quiet_upload_that_cannot_end_holds_no_other_upload_and_not_the_queue_of_its_owner()
+    {
+        // Arrange
+        var (admin, _) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(admin.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        var broken = await FactoryClient.AddRecordingAsync(session.Id);
+        (await FactoryClient.PutSliceAsync(broken.Id, 0, RecordingScenario.WebmStart)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var quiet = await FactoryClient.AddRecordingAsync(session.Id);
+        (await FactoryClient.PutSliceAsync(quiet.Id, 0, RecordingScenario.WebmStart)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var jobGone = await FactoryClient.AddFinishedRecordingAsync(session.Id);
+        await JournalScenario.ExecuteOutOfBandAsync(
+            "DELETE FROM backwave_jobs WHERE wire_name = $kind AND CAST(payload AS TEXT) LIKE $id", ("$kind", "transcribe-recording"), ("$id", $"%{jobGone.Id}%"));
+        Directory.Delete(Path.Combine(SharedStore.LocalPathOf(RecordingFiles.Folder(admin.TenantId, admin.Id, broken.Id)), "slices"), recursive: true);
+        var quietSince = DateTimeOffset.UtcNow - Recording.QuietUploadEndsAfter - TimeSpan.FromMinutes(1);
+        foreach (var id in new[] { broken.Id, quiet.Id })
+            await JournalScenario.ExecuteOutOfBandAsync(
+                "UPDATE recordings SET last_modified_on = $at WHERE id = $id", ("$at", Recall.Server.Databases.Sqlite.UtcTextConverter.ToText(quietSince)), ("$id", id));
+        var sweep = new RecordingSweep(Services.GetRequiredService<IServiceScopeFactory>(), SharedStore, Services.GetRequiredService<IJobStore>(), TimeProvider.System);
+
+        // Act
+        await sweep.QueueWaitingRecordingsAsync(CancellationToken.None);
+
+        // Assert
+        (await FactoryClient.GetRecordingAsync(broken.Id)).Status.ShouldBe(nameof(RecordingStatus.Receiving));
+        (await FactoryClient.GetRecordingAsync(quiet.Id)).Status.ShouldNotBe(nameof(RecordingStatus.Receiving));
+        (await CountJobsAsync("transcribe-recording", quiet.Id)).ShouldBeGreaterThan(0);
+        (await CountJobsAsync("transcribe-recording", jobGone.Id)).ShouldBeGreaterThan(0);
     }
 
     // The timer exists only after the first sweep, so one advance can come too early.

@@ -813,6 +813,10 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("problem");
 
+                    b.Property<int?>("QuietEndThroughSlice")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("quiet_end_through_slice");
+
                     b.Property<string>("SessionId")
                         .IsRequired()
                         .HasMaxLength(50)

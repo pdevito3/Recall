@@ -47,8 +47,9 @@ public static class FinishRecording
                 return recording.ToDto(stored, modelStore.Status, jobHostStatus.TranscriptionIsStopped);
             }
 
+            var joinedThrough = recording.QuietEndThroughSlice;
             recording.Finish(stored, request.Dto.SliceCount, request.Dto.ByteLength, await RecordingWork.ChosenEngineAsync(dbContext, cancellationToken));
-            await RecordingWork.WriteAudioAsync(fileStore, recording, slices, cancellationToken);
+            await RecordingWork.WriteAudioAsync(fileStore, recording, slices, joinedThrough, _logger, cancellationToken);
 
             await dbContext.SaveChangesAsync(cancellationToken);
             await RecordingWork.TryQueueTranscriptionAsync(dbContext, jobStore, recording, timeProvider, _logger);
@@ -137,16 +138,44 @@ public static class RecordingWork
         }
     }
 
-    /// <summary>Joins the slices, in the order of their index, into the audio file of the Recording.</summary>
-    public static Task WriteAudioAsync(FileStore fileStore, Recording recording, IReadOnlyList<RecordingSlice> slices, CancellationToken cancellationToken)
-        => fileStore.WriteAsync(RecordingFiles.Audio(recording), async (target, ct) =>
+    /// <summary>
+    /// Joins the slices, in the order of their index, into the audio file of the Recording. After a quiet end (REC-23) the
+    /// file holds the slices through <paramref name="joinedThrough"/>, and their files are gone, so the late part (REC-24)
+    /// joins after the bytes of those slices. A repeat reads the same bytes, so it writes the same file. The decoded audio
+    /// of the shorter file goes, so the next run decodes the whole file.
+    /// </summary>
+    public static async Task WriteAudioAsync(
+        FileStore fileStore, Recording recording, IReadOnlyList<RecordingSlice> slices, int? joinedThrough, ILogger logger, CancellationToken cancellationToken)
+    {
+        var joinedBytes = slices.Where(s => s.Index <= (joinedThrough ?? -1)).Sum(s => s.ByteLength);
+        await fileStore.WriteAsync(RecordingFiles.Audio(recording), async (target, ct) =>
         {
-            foreach (var slice in slices.OrderBy(s => s.Index))
+            if (joinedBytes > 0)
+                await CopyJoinedAudioAsync(fileStore, recording, joinedBytes, target, ct);
+            foreach (var slice in slices.Where(s => s.Index > (joinedThrough ?? -1)).OrderBy(s => s.Index))
             {
                 await using var part = fileStore.OpenRead(RecordingFiles.Slice(recording, slice.Index, slice.Sha256));
                 await part.CopyToAsync(target, ct);
             }
         }, cancellationToken);
+        if (joinedThrough is not null)
+            TryDeleteWorkAudio(fileStore, recording.TenantId, recording.UserId, recording.Id, logger);
+    }
+
+    private static async Task CopyJoinedAudioAsync(FileStore fileStore, Recording recording, long joinedBytes, Stream target, CancellationToken cancellationToken)
+    {
+        await using var joined = fileStore.OpenRead(RecordingFiles.Audio(recording));
+        var buffer = new byte[81_920];
+        var left = joinedBytes;
+        while (left > 0)
+        {
+            var read = await joined.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, left)), cancellationToken);
+            if (read == 0)
+                throw new IOException($"The audio of recording {recording.Id} is shorter than its joined slices.");
+            await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+            left -= read;
+        }
+    }
 
     public static void TryDeleteSlices(FileStore fileStore, Recording recording, ILogger logger)
     {
