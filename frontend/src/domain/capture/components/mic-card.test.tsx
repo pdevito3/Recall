@@ -170,14 +170,15 @@ test('on a phone the card keeps its height while the mic starts, so nothing move
 
   // Assert
   await cardSays(screen, 'Starting the mic')
-  expect(card.element().getBoundingClientRect().height).toBe(idleHeight)
-  // The mic of this page outlives the test, so it starts and stops, and the next test finds it idle. With no network nothing goes out.
+  const startingHeight = card.element().getBoundingClientRect().height
+  // The mic of this page outlives the test, so it starts and stops before the check, and the next test finds it idle. With no network nothing goes out.
   onlineManager.setOnline(false)
   onTestFinished(() => onlineManager.setOnline(true))
   micStarts(aTone())
   await userEvent.click(screen.getByRole('button', { name: 'Stop recording' }))
   await expect.element(screen.getByRole('button', { name: 'Record', exact: true })).toBeInTheDocument()
   await screen.unmount()
+  expect(startingHeight).toBe(idleHeight)
 })
 
 test('one tap records into a new entry, and the card follows the audio until the words are in', { timeout: 30_000 }, async () => {
