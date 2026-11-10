@@ -1139,8 +1139,8 @@ class ModelRun {
         this.crash(other)
         continue
       }
-      // As on the page, another tab with words only in its memory shows them alone, and the person copies them before the tab goes.
-      const shownAtTheLeave = other === tab ? [] : other.look(() => other.mod.wordsOfThisTabOnlyInMemory())
+      // As on the page, each tab with words only in its memory shows them alone, also the tab that signs out, and the person copies them before the tab goes.
+      const shownAtTheLeave = other.look(() => other.mod.wordsOfThisTabOnlyInMemory())
       if (shownAtTheLeave.length > 0) {
         this.note(`tab ${other.name} shows its words in memory before it goes: ${shownAtTheLeave.join(' | ')}`)
         for (const token of tokensIn(shownAtTheLeave.join(' '))) this.trace.discarded.add(token)

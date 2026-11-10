@@ -167,7 +167,7 @@ All tabs of a browser share one session cookie. A tab that a person left open se
 | A cookie and a read with no header | The request runs. |
 | A bearer token | The Server does not read the header. |
 
-The check is in the Server, because a check in the SPA alone leaves a race: the cookie can change while a save is on its way. When the SPA gets this refusal, or when `GET /auth/me` names another person, it stops each save, clears the private data from the page, keeps the unsent words under the key of the first person, and goes to `/auth/login?anotherPerson=1`. A tab also leaves in this way when another tab signs out. The tab does not wait and does not ask, because the private text must leave the screen at once. So when the browser had no room to keep some words, those words go at that moment. The page told the person about this risk when the write failed, and it offered `Copy words`. That page shows the sign-in choices and a message, and it does not go to the journal of the person who is signed in. See `docs/frontend.md`.
+The check is in the Server, because a check in the SPA alone leaves a race: the cookie can change while a save is on its way. When the SPA gets this refusal, or when `GET /auth/me` names another person, it stops each save, clears the private data from the page, keeps the unsent words under the key of the first person, and goes to `/auth/login?anotherPerson=1`. The tab does not wait and does not ask, because the private text must leave the screen at once. So when the browser had no room to keep some words, those words go at that moment, and the sign-in page says that they are gone. The page told the person about this risk when the write failed, and it offered `Copy words`. That page shows the sign-in choices and a message, and it does not go to the journal of the person who is signed in. See `docs/frontend.md`.
 
 A cookie value works only as a cookie and only on a web session. A bearer value works only in the header and only on a native session. So a stolen cookie value cannot skip this rule.
 
@@ -193,7 +193,7 @@ The mark is `SameSite=Lax`, because a provider on another site returns with a cr
 
 ### Other tabs, Back, and other browsers
 
-A logout tells the other open tabs of this browser with a `BroadcastChannel` message. Each tab hides its page, clears its data, and goes to the signed-out page, with no wait and no prompt. While the provider of the first tab has not returned, this page has the note of the next section. If the logout fails, the other tabs stay as they are.
+A logout tells the other open tabs of this browser with a `BroadcastChannel` message. Each tab clears its data and goes to the signed-out page. A tab with words that only its memory holds first shows those words alone, with a Copy, and goes when the person selects `Leave this page`. A tab with no such words hides its page and goes with no wait. While the provider of the first tab has not returned, this page has the note of the next section. If the logout fails, the other tabs stay as they are.
 
 The browser can keep a page in its back-forward cache, and Back then shows this page with no load. A page hides itself when it enters this cache. After a restore, it stays hidden until `/auth/me` answers:
 

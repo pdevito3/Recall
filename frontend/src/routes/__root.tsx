@@ -17,8 +17,9 @@ import { BreadcrumbNameProvider } from '@/components/breadcrumb-name-provider'
 import { Button } from '@/components/ui/button'
 import { login, returnUrlOf } from '@/domain/auth/apis/auth-actions'
 import { authUserQuery } from '@/domain/auth/apis/get-user'
-import { useHasLeftThePage } from '@/domain/auth/apis/page-of-another-person'
+import { useLeftTheApp } from '@/domain/auth/apis/leave-the-app'
 import { PageOfAnotherPerson } from '@/domain/auth/components/page-of-another-person'
+import { WordsLeftAtSignOut } from '@/domain/auth/components/words-left-at-sign-out'
 import { DraftNotices } from '@/domain/sessions/components/draft-notices'
 import { FileStoreNotice } from '@/domain/file-store/components/file-store-notice'
 import { MembershipCheckFailedNotice } from '@/domain/membership/components/membership-notice'
@@ -33,8 +34,6 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
 } from '@/components/ui/breadcrumb'
-import { useWordsLeftAtSignOut } from '@/domain/auth/apis/words-left-at-sign-out'
-import { WordsLeftAtSignOut } from '@/domain/auth/components/words-left-at-sign-out'
 
 declare module '@tanstack/react-router' {
   interface StaticDataRouteOption {
@@ -53,14 +52,14 @@ const UnsentWordsAtLogoutDialog = lazyOverlay(
 )
 
 function RootComponent() {
-  return useHasLeftThePage() ? <PageOfAnotherPerson /> : <SessionGate />
+  const left = useLeftTheApp()
+  if (left?.why === 'anotherPerson') return <PageOfAnotherPerson hasLostWords={left.hasLostWords} />
+  return left ? <WordsLeftAtSignOut {...left} /> : <SessionGate />
 }
 
 function SessionGate() {
   const session = useQuery(authUserQuery)
-  const wordsLeft = useWordsLeftAtSignOut()
 
-  if (wordsLeft) return <WordsLeftAtSignOut {...wordsLeft} />
   // A failed refetch keeps the data of the last answer, and that answer still decides.
   if (session.data === null) return <GoToLogin />
   if (session.data) return <Layout />

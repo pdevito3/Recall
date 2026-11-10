@@ -65,6 +65,7 @@ export function UnsentWordsAtLogoutDialog() {
       <ResponsiveDialogHeader>
         <ResponsiveDialogTitle>Some of your words did not reach the server</ResponsiveDialogTitle>
         <ResponsiveDialogDescription>
+          {question?.isAskedAgain && 'The words changed after your answer, so check this new list. '}
           {canKeep ? keepingText(unsent) : 'This browser has no room to keep some of them, so a sign-out loses them. Stay signed in to copy them from the notice on the page that holds them.'}
           {' If you discard them, these words go from this device, and you cannot get them back.'}
           {isATagUnsavedToo && ' A change of your tags also did not reach the server, and a sign-out loses it.'}

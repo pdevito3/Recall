@@ -2,13 +2,12 @@ import { useMutation, type QueryClient } from '@tanstack/react-query'
 
 import { Notification, toastQueue } from '@/components/notification'
 import { apiClient } from '@/lib/api-client'
-import { wordsOfThisTabOnlyInMemory } from '@/domain/sessions/autosave/draft-saver'
 import { openChannel } from '@/lib/browser-channel'
 import { checkLastPersonOfThisBrowser, noteSignInOfAnotherTab, sessionChannelName } from '@/lib/page-user'
 import { authUserQuery, getUser } from './get-user'
 
-import { settleUnsentWords, StayedSignedIn, stopSaversBeforeLeaving } from './unsent-words-at-logout'
-import { showWordsLeftAtSignOut, wordsLeftAtSignOut } from './words-left-at-sign-out'
+import { hidePage, leaveTheApp, showPage } from './leave-the-app'
+import { settleUnsentWords, StayedSignedIn } from './unsent-words-at-logout'
 
 const serverMaxReturnPathLength = 2048
 
@@ -48,7 +47,7 @@ export function login(returnUrl: string = '/'): void {
     void logoutInFlight.then(() => login(returnUrl))
     return
   }
-  window.location.replace(afterSignOut ?? `/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`)
+  leaveTheApp({ why: 'sessionEnded', to: afterSignOut ?? `/auth/login?returnUrl=${encodeURIComponent(returnUrl)}` })
 }
 
 export async function logout(): Promise<void> {
@@ -76,51 +75,26 @@ async function settleUnsentWordsAndSignOut() {
     leaveNoSign()
     afterSignOut = data?.provider_logout_url ?? afterSignOut ?? signedOutPage
     otherTabs?.postMessage('signed-out')
-    hidePage()
-    window.location.replace(afterSignOut)
+    leaveTheApp({ why: 'signedOut', to: afterSignOut })
   } finally {
     stopShowingWork()
   }
 }
 
 /**
- * Opacity and not visibility: `visibility` inherits, and an element with `transition-all` would keep showing it for the
- * time of its transition. Opacity leaves the text to a screen reader, to a search in the page, and to the keyboard, so
- * `inert` closes those.
- */
-function hidePage() {
-  document.documentElement.style.opacity = '0'
-  document.documentElement.inert = true
-}
-
-function showPage() {
-  document.documentElement.style.opacity = ''
-  document.documentElement.inert = false
-}
-
-/**
  * The session of this tab ended elsewhere, so its private text goes before anything else can happen.
  *
- * Rule for the code that holds unsent words (R12 and later): this tab leaves with no wait and no prompt, and its query
- * cache is gone. So unsent words must be in the outbox of their owner, in localStorage, when `pagehide` fires. Write them
- * in a synchronous `pagehide` listener or sooner, and never only in React state or the query cache. A sign-out must not
- * remove them, because the next login of the same owner finds and sends them, and the key names the owner, so another
- * person who signs in on this device cannot read them.
- *
- * A write that finds no room in storage leaves words only in memory, also after the sign-out listed this tab. Those words
- * stay on the screen, alone, so the person can copy them before the page goes.
+ * Rule for the code that holds unsent words (R12 and later): this tab leaves with no wait, and its query cache is gone. So
+ * unsent words must be in the outbox of their owner, in localStorage, when `pagehide` fires. Write them in a synchronous
+ * `pagehide` listener or sooner, and never only in React state or the query cache. A sign-out must not remove them,
+ * because the next login of the same owner finds and sends them, and the key names the owner, so another person who
+ * signs in on this device cannot read them. Words that a write with no room left only in memory stay on the screen,
+ * alone, until the person leaves (`leaveTheApp`).
  */
-function leaveAsSignedOut(queryClient: QueryClient) {
-  if (wordsLeftAtSignOut()) return
-  // A stopped saver holds no words, so this reads them first.
-  const wordsOnlyHere = wordsOfThisTabOnlyInMemory()
+function leaveAsSignedOut(queryClient: QueryClient, why: 'signedOutInAnotherTab' | 'sessionEnded') {
   afterSignOut ??= signedOutPage
-  const leave = () => window.location.replace(afterSignOut ?? signedOutPage)
-  if (wordsOnlyHere.length > 0) showWordsLeftAtSignOut(wordsOnlyHere, leave)
-  else hidePage()
-  stopSaversBeforeLeaving()
+  leaveTheApp({ why, to: afterSignOut })
   queryClient.clear()
-  if (wordsOnlyHere.length === 0) leave()
 }
 
 /**
@@ -132,7 +106,7 @@ async function checkSessionOfRestoredPage(queryClient: QueryClient) {
   const noAnswer = new Promise<undefined>((settle) => setTimeout(settle, restoredPageCheckLimitMs))
   const user = await Promise.race([getUser().catch(() => undefined), noAnswer])
   if (restore !== newestRestore) return
-  if (user === null) leaveAsSignedOut(queryClient)
+  if (user === null) leaveAsSignedOut(queryClient, 'sessionEnded')
   else if (user && user.sid === sessionOfHiddenPage) showPage()
   // A new load shows the alert of a failed check, or the pages of the session that lives now, and the words of this page stay hidden.
   else window.location.reload()
@@ -148,7 +122,7 @@ export function guardPageAgainstEndedSession(queryClient: QueryClient) {
   otherTabs = openChannel(sessionChannelName)
   if (otherTabs) {
     otherTabs.onmessage = ({ data }: MessageEvent<'signed-out' | { signedInAs: string }>) => {
-      if (data === 'signed-out') leaveAsSignedOut(queryClient)
+      if (data === 'signed-out') leaveAsSignedOut(queryClient, 'signedOutInAnotherTab')
       else noteSignInOfAnotherTab(data.signedInAs)
     }
   }

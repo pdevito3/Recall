@@ -12,6 +12,8 @@ type Choice = 'keep' | 'discard' | 'stay'
 interface Question {
   unsent: UnsentWords[]
   isATagUnsaved: boolean
+  /** The words changed after an answer, so the person answers the new list. */
+  isAskedAgain: boolean
   answer: (choice: Choice) => void
 }
 
@@ -53,7 +55,7 @@ export function stopSaversBeforeLeaving() {
 }
 
 /** Each tab tries to send its words, and then the list names all the words that did not go, also those of another tab. */
-async function listUnsentWords(): Promise<Omit<Question, 'answer'>> {
+async function listUnsentWords(): Promise<Pick<Question, 'unsent' | 'isATagUnsaved'>> {
   const [otherTabs] = await Promise.all([askOtherTabsToSettle(settleLimitMs), withinLimit(settleDraftSavers()), withinLimit(settleSettingSaver()), withinLimit(settleMetadataSavers())])
   // Tags have no outbox, so a sign-out loses a change of a tag that the Server did not take.
   return { unsent: unsentWordsOnThisDevice(pageUserOf(), otherTabs), isATagUnsaved: isAnyTagChangeUnsaved() || otherTabs.some(({ hasUnsavedTags }) => hasUnsavedTags) }
@@ -61,12 +63,14 @@ async function listUnsentWords(): Promise<Omit<Question, 'answer'>> {
 
 /** The words can change while the person reads the list. So each answer lists again, and the person answers the new list when it loses something that the answered list did not name. */
 export async function settleUnsentWords(beforeAQuestion: () => void, afterAnAnswer: () => void = () => undefined): Promise<() => void> {
-  let listed = await listUnsentWords()
+  const first = await listUnsentWords()
+  let listed = first
   let choice: Choice = 'keep'
   while (listed.unsent.length > 0 || listed.isATagUnsaved) {
     beforeAQuestion()
     const { unsent, isATagUnsaved } = listed
-    choice = await new Promise<Choice>((answer) => setQuestion({ unsent, isATagUnsaved, answer }))
+    const isAskedAgain = listed !== first
+    choice = await new Promise<Choice>((answer) => setQuestion({ unsent, isATagUnsaved, isAskedAgain, answer }))
     if (choice === 'stay') throw new StayedSignedIn()
     afterAnAnswer()
     const now = await listUnsentWords()
@@ -75,7 +79,6 @@ export async function settleUnsentWords(beforeAQuestion: () => void, afterAnAnsw
   }
   const { unsent } = listed
   return () => {
-    stopSaversBeforeLeaving()
     if (choice === 'discard') for (const { discard } of unsent) discard()
     removeNoticesOfWordsInHistory(pageUserOf())
     writePointer(null)

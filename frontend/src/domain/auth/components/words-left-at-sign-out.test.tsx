@@ -12,7 +12,7 @@ test('each text that only the page holds has its own Copy, and the page goes onl
     return Promise.resolve()
   })
   const leave = vi.fn()
-  const screen = await render(<WordsLeftAtSignOut words={[doc('first words'), doc('second words')]} leave={leave} />)
+  const screen = await render(<WordsLeftAtSignOut why="signedOutInAnotherTab" words={[doc('first words'), doc('second words')]} leave={leave} />)
 
   const list = screen.getByRole('list', { name: 'Words that only this page holds' })
   await expect.element(list.getByText('first words')).toBeVisible()
@@ -22,4 +22,14 @@ test('each text that only the page holds has its own Copy, and the page goes onl
 
   await screen.getByRole('button', { name: 'Leave this page' }).click()
   expect(leave).toHaveBeenCalledOnce()
+})
+
+test.each([
+  ['signedOut', 'You signed out'],
+  ['signedOutInAnotherTab', 'You signed out in another tab'],
+  ['sessionEnded', 'Your session ended'],
+] as const)('the screen after %s names what happened', async (why, title) => {
+  const screen = await render(<WordsLeftAtSignOut why={why} words={[doc('first words')]} leave={vi.fn()} />)
+
+  await expect.element(screen.getByRole('heading', { level: 1, name: title })).toBeVisible()
 })

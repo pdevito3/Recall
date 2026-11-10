@@ -40,7 +40,9 @@ public static class AuthPages
 
     public const string PromptLogin = "login";
 
-    public const string AnotherPersonMessage = "Another person signed in on this browser, so the page that you had open closed. Any words that this browser could not send wait on this device. They go to your journal when you sign in here again.";
+    public const string AnotherPersonMessage = "Another person signed in on this browser, so the page that you had open closed. The unsent words of that page wait on this device. They go to your journal when you sign in here again.";
+
+    public const string AnotherPersonLostWordsMessage = "Another person signed in on this browser, so the page that you had open closed. That page held words that this browser had no room to keep, and they are gone. Its other unsent words wait on this device, and they go to your journal when you sign in here again.";
 
     public sealed record ChooserMode(string Id, string DisplayName, LoginModeState State);
 

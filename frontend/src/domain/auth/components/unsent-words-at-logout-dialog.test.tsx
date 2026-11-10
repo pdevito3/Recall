@@ -88,13 +88,16 @@ test('words that only a page holds cannot be kept, and the person can stay', asy
   await stayed
 })
 
-test('words that go to memory while the person reads the list are asked about again, so a keep keeps each word', async () => {
+test('words that go to memory while the person reads the list are asked about again, with a cue, so a keep keeps each word', async () => {
   const { screen, finished } = await dialogFor([words('words of another tab')])
+  const cue = screen.getByText(/The words changed after your answer, so check this new list\./)
+  await expect.element(cue).not.toBeInTheDocument()
   vi.mocked(unsentWordsOnThisDevice).mockReturnValue([words('words of another tab', { isOnlyInMemory: true })])
   const stayed = expect(finished).rejects.toThrow()
 
   await screen.getByRole('button', { name: 'Keep words and sign out' }).click()
 
+  await expect.element(cue).toBeVisible()
   await expect.element(screen.getByRole('button', { name: 'Stay signed in' })).toBeVisible()
   await expect.element(screen.getByRole('button', { name: 'Keep words and sign out' })).not.toBeInTheDocument()
   await screen.getByRole('button', { name: 'Stay signed in' }).click()
