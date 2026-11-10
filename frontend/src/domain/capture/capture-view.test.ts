@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { RecordingDto } from '@/api/generated/models/types/recording-dto'
 
 import type { StoredCapture } from './audio-store'
-import { canTapToRecord, captureViewOf, micReducer, readyShowsForMs, waitingBesides, type CaptureInputs, type MicState } from './capture-view'
+import { canTapToRecord, captureViewOf, followedCapture, micReducer, readyShowsForMs, waitingBesides, type CaptureInputs, type MicState } from './capture-view'
 
 const startedAt = Date.parse('2026-11-10T08:00:00Z')
 
@@ -171,8 +171,38 @@ describe('the mic card', () => {
     expect(captureViewOf(inputs({ latest, recording, now: startedAt + 10 * readyShowsForMs })).kind).toBe('failed')
   })
 
-  it('counts the other captures that still hold audio in this browser', () => {
-    const captures = [aCapture({ clientRecordingId: 'a' }), aCapture({ clientRecordingId: 'b', isFinished: true }), aCapture({ clientRecordingId: 'c' }), aCapture({ clientRecordingId: 'd' })]
-    expect(waitingBesides(captures)).toBe(2)
+  it('lists the other captures that still hold audio in this browser, and not one that another tab records now', () => {
+    const [a, b, c, live, d] = [
+      aCapture({ clientRecordingId: 'a' }),
+      aCapture({ clientRecordingId: 'b', isFinished: true }),
+      aCapture({ clientRecordingId: 'c' }),
+      aCapture({ clientRecordingId: 'live', isEnded: false }),
+      aCapture({ clientRecordingId: 'd' }),
+    ]
+    expect(waitingBesides([a, b, c, live, d], d)).toEqual([a, c])
+  })
+
+  it('says that the entry was deleted when its recording stopped for that reason', () => {
+    expect(captureViewOf(inputs({ mic: micReducer({ kind: 'recording', startedAt }, { type: 'entryDeleted' }) })).kind).toBe('entryDeleted')
+    expect(canTapToRecord('entryDeleted')).toBe(true)
+  })
+})
+
+describe('the capture that the card of a tab follows', () => {
+  const first = aCapture({ clientRecordingId: 'first', isEnded: true })
+  const secondLive = aCapture({ clientRecordingId: 'second', isEnded: false })
+
+  it('is not the recording of another tab', () => {
+    expect(followedCapture([secondLive], new Set())).toBeNull()
+    expect(followedCapture([first, secondLive], new Set())).toBe(first)
+  })
+
+  it('is the own capture of the tab, also when another tab recorded after it', () => {
+    const second = { ...secondLive, isEnded: true }
+    expect(followedCapture([first, second], new Set(['first']))).toBe(first)
+  })
+
+  it('is the newest ended capture in a tab that recorded nothing, as after a reopen', () => {
+    expect(followedCapture([first, { ...secondLive, isEnded: true }], new Set())?.clientRecordingId).toBe('second')
   })
 })

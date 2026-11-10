@@ -6,8 +6,11 @@ import { cleanup, render } from 'vitest-browser-react'
 
 import type { RecordingDto } from '@/api/generated/models/types/recording-dto'
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
+import type { UserSettingDto } from '@/api/generated/models/types/user-setting-dto'
 // The app sends each request through this client, and it gives the words of a failure.
 import '@/lib/api-client'
+import { settleUnsentWords } from '@/domain/auth/apis/unsent-words-at-logout'
+import { notePageUser } from '@/lib/page-user'
 import type { Answer } from '@/test/answer'
 import { member, signedInMember } from '@/test/session'
 
@@ -230,6 +233,171 @@ test('a refusal of the server shows its words, and Send again sends the audio ag
   // Assert
   await cardSays(screen, 'Writing the words')
   expect((await commands.takeSentRequests()).map(({ method, path }) => `${method} ${path}`)).toEqual(['PUT /api/v1/recordings/rec_1/slices/0', 'POST /api/v1/recordings/rec_1/finish'])
+})
+
+const setting: UserSettingDto = { timeZone: 'Europe/Lisbon', timeZoneIsKnown: true, locationCaptureEnabled: false, requirePeopleProposalApproval: false, version: 1 }
+
+async function aRefusedCapture(clientRecordingId: string, recordingId: string, agoMs: number) {
+  await aFinishedCapture({
+    clientRecordingId,
+    recordingId,
+    startedAt: new Date(Date.now() - agoMs).toISOString(),
+    storedSlices: 0,
+    storedBytes: 0,
+    sentSlices: 0,
+    isFinished: false,
+    problem: { kind: 'refused', text: 'The audio is larger than 8 MiB.' },
+  })
+  await storeSlice(clientRecordingId, 0, new Uint8Array([1, 2, 3]).buffer, 4_000)
+}
+
+test('each older recording that the server refused can go again or go for good', async () => {
+  // Arrange
+  await aRefusedCapture('cap_0', 'rec_0', 180_000)
+  await aRefusedCapture('cap_2', 'rec_2', 120_000)
+  await aFinishedCapture()
+  const screen = await openHome([
+    { method: 'GET', path: '/api/v1/me/settings', body: setting },
+    recordingAnswer('GET', '/api/v1/recordings/rec_1', { status: 'Transcribing' }),
+    { method: 'PUT', path: '/api/v1/recordings/rec_0/slices/0', body: {} },
+    recordingAnswer('POST', '/api/v1/recordings/rec_0/finish', { id: 'rec_0', clientRecordingId: 'cap_0', status: 'Received' }),
+  ])
+  await cardSays(screen, 'Writing the words')
+  const others = screen.getByRole('list', { name: 'Other recordings in this browser' })
+  await expect.element(others.getByRole('listitem')).toHaveLength(2)
+  await expect.element(others.getByRole('listitem').first().getByText('The server did not take it: The audio is larger than 8 MiB.')).toBeVisible()
+
+  // Act
+  await userEvent.click(others.getByRole('listitem').nth(1).getByRole('button', { name: 'Discard' }))
+  await userEvent.click(others.getByRole('group', { name: 'Discard this audio' }).getByRole('button', { name: 'Discard audio' }))
+  await userEvent.click(others.getByRole('listitem').first().getByRole('button', { name: 'Send again' }))
+
+  // Assert
+  await expect.element(others).not.toBeInTheDocument()
+  expect((await capturesOf(member.identifier)).map(({ clientRecordingId, isFinished }) => ({ clientRecordingId, isFinished }))).toEqual([
+    { clientRecordingId: 'cap_0', isFinished: true },
+    { clientRecordingId: 'cap_1', isFinished: true },
+  ])
+  expect((await commands.takeSentRequests()).map(({ method, path }) => `${method} ${path}`)).toEqual(['PUT /api/v1/recordings/rec_0/slices/0', 'POST /api/v1/recordings/rec_0/finish'])
+})
+
+test('the card lets go of the words of an entry that the person deleted, and stops asking for them', async () => {
+  // Arrange
+  performance.clearResourceTimings()
+  await aFinishedCapture()
+
+  // Act
+  const screen = await openHome([{ method: 'GET', path: '/api/v1/recordings/rec_1', status: 404, body: { status: 404, title: 'Not found' } }])
+
+  // Assert
+  await cardSays(screen, 'Tap to record')
+  await expect.poll(() => capturesOf(member.identifier)).toEqual([])
+  await new Promise((resolve) => setTimeout(resolve, 3_500))
+  const readsOfTheRecording = performance.getEntriesByType('resource').filter(({ name }) => new URL(name).pathname === '/api/v1/recordings/rec_1')
+  expect(readsOfTheRecording).toHaveLength(1)
+})
+
+/** The sRGB channels of a CSS color, from the canvas of the browser, as the theme gives colors in oklch. */
+function channelsOf(color: string) {
+  const context = document.createElement('canvas').getContext('2d')!
+  context.fillStyle = color
+  context.fillRect(0, 0, 1, 1)
+  return [...context.getImageData(0, 0, 1, 1).data.slice(0, 3)]
+}
+
+function contrastOf(first: string, second: string) {
+  const luminanceOf = (color: string) => {
+    const [red, green, blue] = channelsOf(color).map((value) => (value / 255 <= 0.04045 ? value / 255 / 12.92 : ((value / 255 + 0.055) / 1.055) ** 2.4))
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+  }
+  const [light, dark] = [luminanceOf(first), luminanceOf(second)].sort((a, b) => b - a)
+  return (light + 0.05) / (dark + 0.05)
+}
+
+const recordAndSend: Answer[] = [
+  { method: 'POST', path: '/api/v1/sessions', status: 201, body: entry },
+  recordingAnswer('POST', '/api/v1/sessions/ses_1/recordings', { status: 'Receiving' }, 201),
+  ...Array.from({ length: 20 }, (_, index): Answer => ({ method: 'PUT', path: `/api/v1/recordings/rec_1/slices/${index}`, body: {} })),
+  recordingAnswer('POST', '/api/v1/recordings/rec_1/finish', { status: 'Received' }),
+  recordingAnswer('GET', '/api/v1/recordings/rec_1', { status: 'Transcribing' }),
+]
+
+test('a person on the keyboard starts and stops the recording with the focus on the mic', async () => {
+  // Arrange
+  await page.viewport(1280, 800)
+  micGivesATone()
+  const screen = await openHome(recordAndSend)
+  await cardSays(screen, 'Tap to record')
+  screen.getByRole('button', { name: 'Record' }).element().focus()
+
+  // Act
+  await userEvent.keyboard('{Enter}')
+  await cardSays(screen, 'Recording')
+  await userEvent.keyboard('{Enter}')
+
+  // Assert
+  await cardSays(screen, 'Writing the words', 10_000)
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Record' }).element())
+})
+
+test('in dark mode the stop icon stands out from the red of the button', async () => {
+  // Arrange
+  document.documentElement.classList.add('dark')
+  onTestFinished(() => document.documentElement.classList.remove('dark'))
+  micGivesATone()
+  const screen = await openHome(recordAndSend)
+
+  // Act
+  await userEvent.click(screen.getByRole('button', { name: 'Record' }))
+
+  // Assert
+  const stop = screen.getByRole('button', { name: 'Stop recording' })
+  await expect.element(stop).toBeVisible()
+  const { backgroundColor, color } = getComputedStyle(stop.element())
+  expect(contrastOf(backgroundColor, color)).toBeGreaterThanOrEqual(3)
+  await userEvent.click(stop)
+  await cardSays(screen, 'Writing the words', 10_000)
+})
+
+test('a sign-out during a recording stops it and sends all of its audio first, so it asks nothing', { timeout: 30_000 }, async () => {
+  // Arrange
+  notePageUser(member.identifier)
+  micGivesATone()
+  const screen = await openHome(recordAndSend)
+  await userEvent.click(screen.getByRole('button', { name: 'Record' }))
+  await cardSays(screen, 'Recording')
+  await expect.poll(async () => (await capturesOf(member.identifier))[0]?.storedSlices ?? 0, { timeout: 5_000 }).toBeGreaterThanOrEqual(2)
+  const beforeAQuestion = vi.fn()
+
+  // Act
+  await settleUnsentWords(beforeAQuestion)
+
+  // Assert
+  expect(beforeAQuestion).not.toHaveBeenCalled()
+  const [capture] = await capturesOf(member.identifier)
+  expect(capture).toMatchObject({ isEnded: true, isFinished: true, sentSlices: capture.storedSlices })
+  expect((await commands.takeSentRequests()).map(({ method, path }) => `${method} ${path}`).pop()).toBe('POST /api/v1/recordings/rec_1/finish')
+})
+
+// After the tests that record, because the mic state of the tab keeps this stop until the next tap.
+test('a deleted entry stops its recording, and the card says why', { timeout: 20_000 }, async () => {
+  // Arrange
+  micGivesATone()
+  const screen = await openHome([
+    { method: 'POST', path: '/api/v1/sessions', status: 201, body: entry },
+    recordingAnswer('POST', '/api/v1/sessions/ses_1/recordings', { status: 'Receiving' }, 201),
+    // The person deleted the entry in another tab, and its Recording went with it.
+    { method: 'PUT', path: '/api/v1/recordings/rec_1/slices/0', status: 404, body: { status: 404, title: 'Not found' } },
+  ])
+
+  // Act
+  await userEvent.click(screen.getByRole('button', { name: 'Record' }))
+
+  // Assert
+  await cardSays(screen, 'The entry was deleted', 10_000)
+  await cardSays(screen, 'The entry of this recording was deleted, so the recording stopped. Tap to record a new entry.')
+  await expect.element(screen.getByRole('button', { name: 'Record' })).toBeEnabled()
+  expect(await capturesOf(member.identifier)).toEqual([])
 })
 
 test('on plain HTTP the card says that the mic needs HTTPS, and the mic stays off', async () => {

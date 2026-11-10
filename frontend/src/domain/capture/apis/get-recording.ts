@@ -5,6 +5,7 @@ import { getRecording } from '@/api/generated/recordings/clients/get-recording'
 import { retryRecording } from '@/api/generated/recordings/clients/retry-recording'
 import { SessionKeys } from '@/domain/sessions/apis/session.keys'
 import { refreshTimelineHead } from '@/domain/sessions/apis/timeline-cache'
+import { isProblemDetailsError, retryUnlessRefused } from '@/lib/problem-details'
 
 import { CaptureKeys } from './capture.keys'
 
@@ -27,9 +28,13 @@ export function useRecording(recordingId: string | null) {
       return recording
     },
     enabled: recordingId !== null,
+    // A 404 says that the person deleted the entry, and its Recording went with it, so no later read can find it.
+    retry: retryUnlessRefused,
     refetchInterval: (query) => (hasEnded(query.state.data) ? false : pollWhileWorkingMs),
   })
 }
+
+export const isNotFound = (error: unknown) => isProblemDetailsError(error) && error.status === 404
 
 export function useRetryRecording() {
   const queryClient = useQueryClient()

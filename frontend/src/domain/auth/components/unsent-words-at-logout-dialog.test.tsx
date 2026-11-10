@@ -1,7 +1,13 @@
 import { afterEach, expect, test, vi } from 'vitest'
+import { commands } from 'vitest/browser'
 import { render } from 'vitest-browser-react'
 
+import { addCapture, capturesOf, confirmSlice, endCapture, removeCapture, storeSlice, updateCapture, type UploadProblem } from '@/domain/capture/audio-store'
 import { unsentWordsOnThisDevice, type UnsentWords } from '@/domain/sessions/autosave/draft-saver'
+// The app sends each request through this client.
+import '@/lib/api-client'
+import { notePageUser } from '@/lib/page-user'
+import { member } from '@/test/session'
 import { settleUnsentWords } from '../apis/unsent-words-at-logout'
 import { UnsentWordsAtLogoutDialog } from './unsent-words-at-logout-dialog'
 
@@ -23,8 +29,71 @@ async function dialogFor(unsent: UnsentWords[]) {
   return { screen, finished }
 }
 
-afterEach(() => {
+afterEach(async () => {
   vi.restoreAllMocks()
+  for (const capture of await capturesOf(member.identifier)) await removeCapture(capture.clientRecordingId)
+})
+
+/** A recording of 0:03 whose first slice of two is on the Server. This page runs no upload, so nothing sends the rest. */
+async function audioThatDidNotGo(problem: UploadProblem | null = null) {
+  notePageUser(member.identifier)
+  await addCapture({
+    clientRecordingId: 'cap_1',
+    owner: member.identifier,
+    clientSessionId: 'c1',
+    startedAt: new Date(Date.now() - 60_000).toISOString(),
+    format: 'Webm',
+    storedSlices: 0,
+    storedBytes: 0,
+    sentSlices: 0,
+    durationMs: 0,
+    isEnded: false,
+    sessionId: 'ses_1',
+    recordingId: 'rec_1',
+    isFinished: false,
+    problem: null,
+    touchedAt: Date.now(),
+  })
+  await storeSlice('cap_1', 0, new Uint8Array(1_000).buffer, 1_000)
+  await storeSlice('cap_1', 1, new Uint8Array(500).buffer, 3_000)
+  // The Server confirmed the first slice, so this browser let it go.
+  await confirmSlice('cap_1', 0)
+  await endCapture('cap_1')
+  await updateCapture('cap_1', { problem })
+}
+
+test('audio that did not go is named at a sign-out, and a keep leaves it in this browser', { timeout: 15_000 }, async () => {
+  await audioThatDidNotGo()
+  vi.mocked(unsentWordsOnThisDevice).mockReturnValue([])
+  const screen = await render(<UnsentWordsAtLogoutDialog />)
+  const finished = settleUnsentWords(() => undefined)
+
+  await expect.element(screen.getByRole('heading', { name: 'Some of your audio did not reach the server' }), { timeout: 10_000 }).toBeVisible()
+  await expect.element(screen.getByText(/0:03 of audio did not reach the server\. If you keep it, it stays in this browser and uploads when you sign in here again\./)).toBeVisible()
+  await expect.element(screen.getByRole('list', { name: 'Audio that did not reach the server' }).getByText('A recording of 0:03')).toBeVisible()
+  await screen.getByRole('button', { name: 'Keep audio and sign out' }).click()
+
+  ;(await finished)()
+  expect(await capturesOf(member.identifier)).toMatchObject([{ clientRecordingId: 'cap_1', storedSlices: 2, sentSlices: 1 }])
+})
+
+test('a discard at a sign-out ends the part that the server has, and the audio goes from this browser', async () => {
+  // A refusal waits for the person, so the send before the sign-out has nothing to try.
+  await audioThatDidNotGo({ kind: 'refused', text: 'The audio is larger than 8 MiB.' })
+  await commands.answerRequests([
+    { method: 'GET', path: '/api/v1/recordings/rec_1', body: { id: 'rec_1', sessionId: 'ses_1', clientRecordingId: 'cap_1', format: 'Webm', engine: 'Local', status: 'Receiving', problem: 'None', problemText: null, storedSlices: [0], byteLength: 1_000, transcribedMs: 0, version: 1 } },
+    { method: 'POST', path: '/api/v1/recordings/rec_1/finish', body: { id: 'rec_1', sessionId: 'ses_1', clientRecordingId: 'cap_1', format: 'Webm', engine: 'Local', status: 'Received', problem: 'None', problemText: null, storedSlices: [0], byteLength: 1_000, transcribedMs: 0, version: 2 } },
+  ])
+  vi.mocked(unsentWordsOnThisDevice).mockReturnValue([])
+  const screen = await render(<UnsentWordsAtLogoutDialog />)
+  const finished = settleUnsentWords(() => undefined)
+
+  await expect.element(screen.getByRole('list', { name: 'Audio that did not reach the server' }).getByText('The server refused this audio.')).toBeVisible()
+  await screen.getByRole('button', { name: 'Discard audio and sign out' }).click()
+
+  ;(await finished)()
+  expect(await commands.takeSentRequests()).toEqual([{ method: 'POST', path: '/api/v1/recordings/rec_1/finish', body: { sliceCount: 1, byteLength: 1_000 } }])
+  expect(await capturesOf(member.identifier)).toEqual([])
 })
 
 test('the dialog names each text, so a discard removes only words that the person saw', async () => {

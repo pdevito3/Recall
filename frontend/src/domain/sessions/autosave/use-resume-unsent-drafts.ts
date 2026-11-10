@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 
+import { stopRecordingOfThisTab } from '@/domain/capture/use-capture'
 import { resumeUnsentSetting } from '@/domain/settings/apis/user-setting'
 
 import { isAnyWordOnlyInMemory, refreshWordsOfEditors, resumeUnsentDrafts, settleDraftSavers, wordsOfThisTabOnlyInMemory } from './draft-saver'
@@ -12,7 +13,8 @@ import { useOwner } from './use-draft-saver'
 const settleLimitForAnotherTabMs = 4_000
 
 async function settleForASignOutInAnotherTab() {
-  await Promise.race([settleDraftSavers(), new Promise((resolve) => setTimeout(resolve, settleLimitForAnotherTabMs))])
+  // The recording stops first, so the tab that signs out sends its last slice and its end with the rest of the audio.
+  await Promise.race([Promise.all([settleDraftSavers(), stopRecordingOfThisTab()]), new Promise((resolve) => setTimeout(resolve, settleLimitForAnotherTabMs))])
   return { wordsOnlyInMemory: wordsOfThisTabOnlyInMemory(), hasUnsavedTags: isAnyTagChangeUnsaved() }
 }
 

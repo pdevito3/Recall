@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import type { StoredCapture } from './audio-store'
-import { finishedCapturesToForget, nextCaptureToSend, nextUploadStep, retryDelayMs, verdictOf, type UploadStep } from './upload-plan'
+import { readyShowsForMs } from './capture-view'
+import { finishedCapturesToForget, isNothingLeftToTry, nextCaptureToSend, nextUploadStep, progressOf, retryDelayMs, unsentAudioOf, verdictOf, type UploadStep } from './upload-plan'
 
 const aCapture = (changes: Partial<StoredCapture> = {}): StoredCapture => ({
   clientRecordingId: 'c1',
@@ -95,10 +96,39 @@ describe('the queue', () => {
     expect(nextCaptureToSend([refused, live])).toBeNull()
   })
 
-  it('forgets each finished capture but the newest, which the card follows', () => {
+  it('forgets a finished capture once its words no longer show, but keeps the newest', () => {
+    const endedAt = Date.parse('2026-11-10T08:00:03.000Z')
     const old = aCapture({ clientRecordingId: 'a', isFinished: true })
     const waiting = aCapture({ clientRecordingId: 'b' })
     const newest = aCapture({ clientRecordingId: 'c', isFinished: true })
-    expect(finishedCapturesToForget([old, waiting, newest]).map((capture) => capture.clientRecordingId)).toEqual(['a'])
+    expect(finishedCapturesToForget([old, waiting, newest], endedAt + readyShowsForMs).map((capture) => capture.clientRecordingId)).toEqual(['a'])
+  })
+
+  it('keeps a finished capture whose words still show, because the tab that recorded it follows it after another tab records', () => {
+    const endedAt = Date.parse('2026-11-10T08:00:03.000Z')
+    const ofThisTab = aCapture({ clientRecordingId: 'a', isFinished: true })
+    const ofTheOtherTab = aCapture({ clientRecordingId: 'b', isFinished: true })
+    expect(finishedCapturesToForget([ofThisTab, ofTheOtherTab], endedAt + 60_000)).toEqual([])
+  })
+})
+
+describe('the send before a sign-out', () => {
+  it('counts only the captures that hold audio that the Server does not have', () => {
+    const finished = aCapture({ clientRecordingId: 'a', isFinished: true })
+    const empty = aCapture({ clientRecordingId: 'b', storedSlices: 0, isEnded: true })
+    const unsent = aCapture({ clientRecordingId: 'c', isEnded: true, sentSlices: 1 })
+    expect(unsentAudioOf([finished, empty, unsent])).toEqual([unsent])
+  })
+
+  it('is done when nothing is left, or when each capture that is left waits for the person', () => {
+    expect(isNothingLeftToTry([])).toBe(true)
+    expect(isNothingLeftToTry([aCapture({ problem: { kind: 'refused', text: 'No.' } })])).toBe(true)
+    expect(isNothingLeftToTry([aCapture({ problem: { kind: 'serverDown' } })])).toBe(false)
+  })
+
+  it('sees each step of an upload that worked as progress', () => {
+    const before = progressOf([aCapture({ sessionId: 'ses_1', recordingId: 'rec_1', sentSlices: 1 })])
+    expect(progressOf([aCapture({ sessionId: 'ses_1', recordingId: 'rec_1', sentSlices: 2 })])).not.toBe(before)
+    expect(progressOf([aCapture({ sessionId: 'ses_1', recordingId: 'rec_1', sentSlices: 1, problem: { kind: 'serverDown' } })])).toBe(before)
   })
 })

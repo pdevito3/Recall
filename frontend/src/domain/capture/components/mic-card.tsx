@@ -19,20 +19,17 @@ import { Link } from '@/components/ui/link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useTranscriptionEngine } from '@/domain/model-providers/apis/transcription-engine'
 import { sessionQueryOptions } from '@/domain/sessions/apis/get-session'
+import { useJournalZone } from '@/domain/settings/apis/user-setting'
 import { plainPreviewOf } from '@/domain/sessions/editor/content'
 import { focusEditorIn } from '@/domain/sessions/editor/focus-editor'
 import { cn } from '@/lib/utils'
 
+import { clock, timeOf } from '../audio-time'
 import type { CaptureKind, CaptureView } from '../capture-view'
 import { httpsGuideUrl } from '../https-guide'
 import { useCapture, type Capture } from '../use-capture'
 
 const typeInstead = ' You can type your entry now.'
-
-const clock = (ms: number) => {
-  const seconds = Math.floor(ms / 1000)
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
-}
 
 /** The words of each state. A state that holds audio says where the audio is, because that is what the person needs to know. */
 function wordsOf(view: CaptureView): { title: string; line: string } {
@@ -90,6 +87,8 @@ function wordsOf(view: CaptureView): { title: string; line: string } {
         title: 'This browser has no room for more audio',
         line: 'The recording stopped. The audio before the stop is safe and uploads. Free some space on this device, then record again.',
       }
+    case 'entryDeleted':
+      return { title: 'The entry was deleted', line: 'The entry of this recording was deleted, so the recording stopped. Tap to record a new entry.' }
   }
 }
 
@@ -191,6 +190,64 @@ function WordsOfTheEntry({ sessionId }: { sessionId: string }) {
   )
 }
 
+/** A discard loses audio for good, so a second tap confirms it. */
+function DiscardAudio({ onDiscard }: { onDiscard: () => void }) {
+  const [isAsking, setIsAsking] = useState(false)
+  if (!isAsking) {
+    return (
+      <Button variant="outline" className="h-11 px-4" onPress={() => setIsAsking(true)}>
+        Discard
+      </Button>
+    )
+  }
+  return (
+    <div role="group" aria-label="Discard this audio" className="flex flex-wrap items-center justify-center gap-2">
+      <span className="text-sm">This audio goes for good.</span>
+      <Button variant="destructive" className="h-11 px-4" onPress={onDiscard}>
+        Discard audio
+      </Button>
+      <Button variant="outline" className="h-11 px-4" autoFocus onPress={() => setIsAsking(false)}>
+        Keep
+      </Button>
+    </div>
+  )
+}
+
+/** The other recordings that still hold audio in this browser. The queue sends each one by itself, and a refused one waits for the person. */
+function WaitingCaptures({ capture }: { capture: Capture }) {
+  const { waiting } = capture
+  const zone = useJournalZone()
+  return (
+    <div className="flex w-full max-w-md flex-col gap-2 border-t pt-3">
+      <p className="text-xs text-muted-foreground">
+        {waiting.length === 1 ? 'One more recording waits' : `${waiting.length} more recordings wait`} in this browser to upload.
+      </p>
+      <ul aria-label="Other recordings in this browser" className="flex flex-col gap-2">
+        {waiting.map((other) => (
+          <li key={other.clientRecordingId} className="flex flex-col items-center gap-2 rounded-lg bg-muted px-3 py-2 text-sm">
+            <p className="wrap-anywhere">
+              {clock(other.durationMs)} of audio from {timeOf(other.startedAt, zone)}.{' '}
+              {other.problem?.kind === 'refused' ? (
+                <span className="text-destructive">The server did not take it: {other.problem.text}</span>
+              ) : (
+                'It uploads next.'
+              )}
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {other.problem?.kind === 'refused' && (
+                <Button className="h-11 px-4" onPress={() => capture.sendAgain(other.clientRecordingId)}>
+                  Send again
+                </Button>
+              )}
+              <DiscardAudio onDiscard={() => capture.discard(other.clientRecordingId)} />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 function Actions({ view, capture }: { view: CaptureView; capture: Capture }) {
   switch (view.kind) {
     case 'denied':
@@ -225,7 +282,12 @@ function Actions({ view, capture }: { view: CaptureView; capture: Capture }) {
         </div>
       )
     case 'refused':
-      return <Button className="h-11 px-4" onPress={() => capture.sendAgain(view.clientRecordingId)}>Send again</Button>
+      return (
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button className="h-11 px-4" onPress={() => capture.sendAgain(view.clientRecordingId)}>Send again</Button>
+          <DiscardAudio key={view.clientRecordingId} onDiscard={() => capture.discard(view.clientRecordingId)} />
+        </div>
+      )
     case 'ready':
       return <WordsOfTheEntry sessionId={view.sessionId} />
     case 'sending':
@@ -249,14 +311,16 @@ export function MicCard() {
       aria-label="Record an entry"
       className={cn('flex flex-col items-center gap-4 rounded-2xl border bg-card px-4 py-6 text-center md:py-8', isProblem(view.kind) && 'border-destructive/30')}
     >
+      {/* While the mic starts, the button stays focusable with aria-disabled: a disabled button drops the focus to the page. */}
       <button
         type="button"
-        disabled={isOff || view.kind === 'starting' || !capture.isLoaded}
+        disabled={isOff || !capture.isLoaded}
+        aria-disabled={view.kind === 'starting' || undefined}
         aria-label={isRecording ? 'Stop recording' : 'Record'}
-        onClick={isRecording ? capture.stop : capture.record}
+        onClick={view.kind === 'starting' ? undefined : isRecording ? capture.stop : capture.record}
         className={cn(
           'relative grid size-24 place-items-center rounded-full shadow-lg transition-transform outline-none focus-visible:ring-4 focus-visible:ring-ring/50 active:scale-95 md:size-28',
-          isRecording ? 'bg-destructive text-white' : 'bg-primary text-primary-foreground',
+          isRecording ? 'bg-destructive text-destructive-foreground' : 'bg-primary text-primary-foreground',
           (isOff || view.kind === 'starting') && 'bg-muted text-muted-foreground shadow-none',
         )}
       >
@@ -281,11 +345,7 @@ export function MicCard() {
 
       <Actions view={view} capture={capture} />
 
-      {capture.waiting > 0 && (
-        <p className="text-xs text-muted-foreground">
-          {capture.waiting === 1 ? 'One more recording waits' : `${capture.waiting} more recordings wait`} in this browser to upload.
-        </p>
-      )}
+      {capture.waiting.length > 0 && <WaitingCaptures capture={capture} />}
       {view.kind === 'idle' && capture.isLoaded && <EnginePlace />}
     </section>
   )

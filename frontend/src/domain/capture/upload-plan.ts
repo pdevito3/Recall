@@ -1,4 +1,5 @@
 import type { StoredCapture, UploadProblem } from './audio-store'
+import { readyShowsForMs } from './capture-view'
 
 /** The next call that moves a capture to the Server. Each call is idempotent on the Server, so a repeat after a lost answer is safe. */
 export type UploadStep =
@@ -66,9 +67,22 @@ export function nextCaptureToSend(captures: StoredCapture[]): StoredCapture | nu
   }) ?? null
 }
 
-/** Finished captures hold no audio. The card follows the newest one, so the queue keeps only that one. */
-export function finishedCapturesToForget(captures: StoredCapture[]): StoredCapture[] {
-  const finished = captures.filter((capture) => capture.isFinished)
+/**
+ * Finished captures hold no audio, only what a card needs to follow the words. A tab follows its own capture, also when
+ * another tab recorded after it, so each one stays while its words can show, and the newest stays for good.
+ */
+export function finishedCapturesToForget(captures: StoredCapture[], now: number): StoredCapture[] {
   const newest = captures[captures.length - 1]
-  return finished.filter((capture) => capture !== newest)
+  const endedAt = (capture: StoredCapture) => Date.parse(capture.startedAt) + capture.durationMs
+  return captures.filter((capture) => capture.isFinished && capture !== newest && now - endedAt(capture) >= readyShowsForMs)
 }
+
+/** The captures that hold audio that the Server does not have all of. */
+export const unsentAudioOf = (captures: StoredCapture[]) => captures.filter((capture) => !capture.isFinished && capture.storedSlices > 0)
+
+/** The send before a sign-out is done when no capture can move: each one left waits for the person to send it again. */
+export const isNothingLeftToTry = (unsent: StoredCapture[]) => unsent.every((capture) => capture.problem?.kind === 'refused')
+
+/** Changes each time a step of an upload works, so that the send before a sign-out can tell that it still moves. */
+export const progressOf = (unsent: StoredCapture[]) =>
+  unsent.map((capture) => `${capture.clientRecordingId}:${capture.sessionId}:${capture.recordingId}:${capture.sentSlices}`).join(',')

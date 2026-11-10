@@ -2,6 +2,7 @@ import { onlineManager, type QueryClient } from '@tanstack/react-query'
 
 import { addRecording } from '@/api/generated/recordings/clients/add-recording'
 import { finishRecording } from '@/api/generated/recordings/clients/finish-recording'
+import { getRecording } from '@/api/generated/recordings/clients/get-recording'
 import { storeRecordingSlice } from '@/api/generated/recordings/clients/store-recording-slice'
 import { addSession } from '@/api/generated/sessions/clients/add-session'
 import { refreshTimelineHead } from '@/domain/sessions/apis/timeline-cache'
@@ -11,7 +12,17 @@ import { isProblemDetailsError } from '@/lib/problem-details'
 import { CaptureKeys } from './apis/capture.keys'
 import { capturesOf, confirmSlice, endCapture, readSlice, removeCapture, subscribeToAudioStore, updateCapture, type StoredCapture } from './audio-store'
 import { isRecordingLive } from './mic-recorder'
-import { finishedCapturesToForget, nextCaptureToSend, nextUploadStep, retryDelayMs, verdictOf, type UploadStep } from './upload-plan'
+import {
+  finishedCapturesToForget,
+  isNothingLeftToTry,
+  nextCaptureToSend,
+  nextUploadStep,
+  progressOf,
+  retryDelayMs,
+  unsentAudioOf,
+  verdictOf,
+  type UploadStep,
+} from './upload-plan'
 
 /** A call that hangs holds the queue, so each one ends after this long and goes again. */
 const callLimitMs = 60_000
@@ -109,8 +120,13 @@ class UploadQueue {
 
   /** Clears a refusal, so the queue sends the capture again. */
   async tryAgain(clientRecordingId: string) {
-    this.failures = 0
     await updateCapture(clientRecordingId, { problem: null })
+    this.sendNow()
+  }
+
+  /** Ends a wait after a failure, as a sign-out needs the audio sent now. */
+  sendNow() {
+    this.failures = 0
     this.wake()
   }
 
@@ -145,7 +161,7 @@ class UploadQueue {
     for (const capture of captures) {
       if (!capture.isEnded && !(await isRecordingLive(capture.clientRecordingId, capture.touchedAt))) await endCapture(capture.clientRecordingId)
     }
-    for (const old of finishedCapturesToForget(captures)) await removeCapture(old.clientRecordingId)
+    for (const old of finishedCapturesToForget(captures, Date.now())) await removeCapture(old.clientRecordingId)
     return nextCaptureToSend(await capturesOf(this.owner))
   }
 
@@ -233,3 +249,48 @@ export function sendStoredAudioOf(owner: string, queryClient: QueryClient): () =
 }
 
 export const tryAgainToSend = (clientRecordingId: string) => current?.tryAgain(clientRecordingId)
+
+/** A send before a sign-out goes on while each upload step works, and gives up after this long with no step that worked. */
+const signOutQuietLimitMs = 5_000
+const signOutLimitMs = 60_000
+const signOutReadEveryMs = 200
+
+/**
+ * Sends the audio of the person now, and answers the captures that still hold audio that the Server does not have. A long
+ * recording takes many calls, so the send goes on while it moves, and not for a fixed time.
+ */
+export async function sendStoredAudioBeforeSignOut(owner: string): Promise<StoredCapture[]> {
+  const startedAt = Date.now()
+  let unsent = unsentAudioOf(await capturesOf(owner))
+  if (!onlineManager.isOnline()) return unsent
+  current?.sendNow()
+  let progress = progressOf(unsent)
+  let movedAt = startedAt
+  while (!isNothingLeftToTry(unsent) && Date.now() - movedAt < signOutQuietLimitMs && Date.now() - startedAt < signOutLimitMs) {
+    await new Promise((resolve) => setTimeout(resolve, signOutReadEveryMs))
+    unsent = unsentAudioOf(await capturesOf(owner))
+    if (progressOf(unsent) !== progress) {
+      progress = progressOf(unsent)
+      movedAt = Date.now()
+    }
+  }
+  return unsent
+}
+
+/**
+ * The person chose to let audio go at a sign-out. The part that the Server has turns into words, if the Server still
+ * answers, so a Recording does not wait for an end that never comes. Then the audio goes from this browser.
+ */
+export async function discardStoredAudio(captures: StoredCapture[]): Promise<void> {
+  for (const capture of captures) {
+    if (capture.recordingId && capture.sentSlices > 0) await finishWhatTheServerHas(capture.recordingId).catch(() => undefined)
+    await removeCapture(capture.clientRecordingId).catch(() => undefined)
+  }
+}
+
+async function finishWhatTheServerHas(recordingId: string) {
+  const recording = await getRecording({ path: { id: recordingId }, ...callOptions(), signal: AbortSignal.timeout(signOutQuietLimitMs) })
+  const sliceCount = recording.storedSlices.length
+  if (recording.status !== 'Receiving' || sliceCount === 0) return
+  await finishRecording({ path: { id: recordingId }, body: { sliceCount, byteLength: recording.byteLength }, ...callOptions(), signal: AbortSignal.timeout(signOutQuietLimitMs) })
+}

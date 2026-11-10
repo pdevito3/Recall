@@ -104,16 +104,24 @@ async function inTransaction<T>(mode: IDBTransactionMode, work: (stores: Stores)
 }
 
 const listeners = new Set<() => void>()
-const otherTabs = openChannel(changeChannelName)
-otherTabs?.addEventListener('message', () => listeners.forEach((listener) => listener()))
+let otherTabs: BroadcastChannel | null | undefined
+
+/** Opens at the first use, so a page that never touches the audio, and the sign-out code that imports this, open no channel. */
+function channelToOtherTabs() {
+  if (otherTabs !== undefined) return otherTabs
+  otherTabs = openChannel(changeChannelName)
+  otherTabs?.addEventListener('message', () => listeners.forEach((listener) => listener()))
+  return otherTabs
+}
 
 function announceChange() {
   listeners.forEach((listener) => listener())
-  otherTabs?.postMessage('changed')
+  channelToOtherTabs()?.postMessage('changed')
 }
 
 /** Calls `listener` after each change of the store, in this tab or in another tab of this browser. */
 export function subscribeToAudioStore(listener: () => void): () => void {
+  channelToOtherTabs()
   listeners.add(listener)
   return () => listeners.delete(listener)
 }
@@ -143,6 +151,13 @@ export async function capturesOf(owner: string): Promise<StoredCapture[]> {
   return all.filter((capture) => capture.owner === owner).sort((a, b) => a.startedAt.localeCompare(b.startedAt))
 }
 
+/** The capture of a slice left the store while it recorded: the queue let it go because the person deleted its entry. */
+export class CaptureGoneError extends Error {
+  constructor() {
+    super('The capture of this slice is not in this browser.')
+  }
+}
+
 /**
  * Writes the slice and counts it in one transaction, so a count never names a slice that is not here. The write is
  * strict: the browser puts it on disk before it answers, because a closed tab must not lose a second that the card showed as saved.
@@ -152,7 +167,7 @@ export async function storeSlice(clientRecordingId: string, index: number, bytes
     'readwrite',
     async ({ captures, slices }) => {
       const capture = await answerOf<StoredCapture | undefined>(captures.get(clientRecordingId))
-      if (!capture) throw new Error('The capture of this slice is not in this browser.')
+      if (!capture) throw new CaptureGoneError()
       if (capture.storedSlices !== index) throw new Error(`Slice ${index} came after ${capture.storedSlices} slices.`)
       const slice: StoredSlice = { clientRecordingId, index, bytes }
       await answerOf(slices.put(slice))
