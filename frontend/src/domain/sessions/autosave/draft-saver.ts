@@ -1117,3 +1117,7 @@ export function unsentWordsOnThisDevice(owner: string | null, otherTabs: OtherTa
   const inMemoryOfOtherTabs = otherTabs.flatMap(({ wordsOnlyInMemory }) => wordsOnlyInMemory.map((words) => ({ words, isRefused: false, isOnlyInMemory: true, discard: () => undefined })))
   return [...ofThisTab, ...inKeysOfOtherTabs, ...inMemoryOfOtherTabs]
 }
+
+/** A list goes stale: a tab whose write finds no room removes its key, and its words are then only in its memory. So an answer holds only while each word that a sign-out loses now is a word that the answered list named as lost. */
+export const losesOnlyNamedWords = (answered: UnsentWords[], now: UnsentWords[]) =>
+  now.every(({ words, isOnlyInMemory }) => !isOnlyInMemory || answered.some((named) => named.isOnlyInMemory && named.words === words))

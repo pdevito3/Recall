@@ -1,7 +1,7 @@
 import { ESLint, Linter } from 'eslint'
 import tseslint from 'typescript-eslint'
 import { describe, expect, it } from 'vitest'
-import { codeToWordsRules, noPageActionRule, serverStatePlugin, stringSelectorMessage } from './eslint.config.js'
+import { codeToWordsRules, loginPageRules, noPageActionRule, serverStatePlugin, stringSelectorMessage, wayOutRules } from './eslint.config.js'
 
 const pageAction = "import type { Page } from '@playwright/test'\nexport const save = (page: Page) => page.click('#save')\n"
 
@@ -330,5 +330,49 @@ describe('words made from a code', () => {
 
   it('accepts a replace that does not make words from a code', async () => {
     expect(await messagesFor("export const slug = (text) => text.replaceAll(' ', '_')")).toEqual([])
+  })
+})
+
+describe('the way out of the app', () => {
+  const messagesFor = async (code, filePath) => {
+    const eslint = new ESLint({ cwd: import.meta.dirname })
+    const [result] = await eslint.lintText(code, { filePath })
+    return result.messages.map((message) => message.message)
+  }
+  const wayOut = wayOutRules[0].message
+
+  it.each([
+    'window.location.reload()',
+    'location.reload()',
+    'window.location.assign(to)',
+    'window.location.replace(to)',
+    'document.location.replace(to)',
+    'window.location.href = to',
+    'location.href = to',
+    'window.location = to',
+    'location = to',
+  ])('reports %s in the app, in a test, and in the zone helpers', async (statement) => {
+    const code = `export const go = (to) => { ${statement}; return to }`
+    for (const filePath of ['src/components/page-error.tsx', 'src/domain/sessions/a.test.ts', 'src/routes/a.test.tsx', 'src/lib/zoned-time.ts'])
+      expect(await messagesFor(code, filePath), filePath).toEqual([wayOut])
+  })
+
+  it('reports a login page in the app, and not in a test', async () => {
+    const code = "export const pages = ['/auth/login?signedOut=1', `/auth/login?returnUrl=${encodeURIComponent('/')}`]"
+
+    expect(await messagesFor(code, 'src/domain/auth/apis/auth-actions.ts')).toEqual([loginPageRules[0].message, loginPageRules[0].message])
+    expect(await messagesFor(code, 'src/domain/auth/apis/auth-actions.test.ts')).toEqual([])
+  })
+
+  it('takes each way out in leave-the-app.ts, and still checks it for the other rules', async () => {
+    const code = "export const go = (to) => { window.location.replace('/auth/login?signedOut=1' + to); return new Date().getHours() }"
+
+    expect(await messagesFor(code, 'src/domain/auth/apis/leave-the-app.ts')).toEqual([expect.stringContaining('zone of the browser')])
+  })
+
+  it('takes a read of the location and a replace on a string', async () => {
+    const code = 'export const here = () => window.location.pathname.replace(/\\/$/, "") + window.location.href'
+
+    expect(await messagesFor(code, 'src/components/a.tsx')).toEqual([])
   })
 })

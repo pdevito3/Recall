@@ -1102,14 +1102,22 @@ class ModelRun {
   private async signOut(tab: Tab) {
     const index = tab.name
     // As on the page, the dialog lists the words once each tab reported and the savers of this tab settled, or at 5 s. The person answers at once.
-    const listed = tab
+    const list = () => passUntil(tab
       .run(() => Promise.all([tab.keys.askOtherTabsToSettle(5000), Promise.race([tab.mod.settleDraftSavers(), delay(5000)])]))
-      .then(([otherTabs]) => tab.run(() => tab.mod.unsentWordsOnThisDevice(owner, otherTabs)))
-    const shown = await passUntil(listed)
+      .then(([otherTabs]) => tab.run(() => tab.mod.unsentWordsOnThisDevice(owner, otherTabs))))
+    let shown = await list()
     const discards = this.random.chance(0.3)
-    if (!discards && shown.some(({ isOnlyInMemory }) => isOnlyInMemory)) {
-      this.note(`tab ${index} would sign out, and the dialog names words in memory, so the person stays`)
-      return
+    for (;;) {
+      if (!discards && shown.some(({ isOnlyInMemory }) => isOnlyInMemory)) {
+        this.note(`tab ${index} would sign out, and the dialog names words in memory, so the person stays`)
+        return
+      }
+      if (shown.length === 0) break
+      // As on the page, the answer lists again, and the person answers the new list when the words changed.
+      const now = await list()
+      if (tab.look(() => tab.mod.losesOnlyNamedWords(shown, now))) break
+      this.note(`tab ${index} lists again at the answer, and words of the list are only in memory now, so the dialog asks again`)
+      shown = now
     }
     if (discards) {
       for (const token of tokensIn(shown.map(({ words }) => words).join(' '))) this.trace.discarded.add(token)
@@ -1124,10 +1132,18 @@ class ModelRun {
       if (other.page?.saver.hasConflict()) for (const token of tokensIn(other.page.editor ?? '')) this.trace.knownToBeGone.add(token)
     }
     tab.run(() => tab.mod.removeNoticesOfWordsInHistory(owner))
+    // The other tabs hear of the sign-out when the Server answers the logout.
+    await vi.advanceTimersByTimeAsync(world.latencyMs())
     for (const other of [...this.tabs]) {
       if (other.isFrozen) {
         this.crash(other)
         continue
+      }
+      // As on the page, each tab with words only in its memory shows them alone, also the tab that signs out, and the person copies them before the tab goes.
+      const shownAtTheLeave = other.look(() => other.mod.wordsOfThisTabOnlyInMemory())
+      if (shownAtTheLeave.length > 0) {
+        this.note(`tab ${other.name} shows its words in memory before it goes: ${shownAtTheLeave.join(' | ')}`)
+        for (const token of tokensIn(shownAtTheLeave.join(' '))) this.trace.discarded.add(token)
       }
       other.close()
       this.removeTab(other)

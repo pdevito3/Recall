@@ -41,13 +41,13 @@ function keepingText(unsent: UnsentWords[]) {
 
 function WordsThatDidNotGo({ unsent }: { unsent: UnsentWords[] }) {
   return (
-    <ul aria-label="Words that did not reach the server" className="mt-3 max-h-48 space-y-2 overflow-y-auto rounded-lg border p-3 text-sm">
+    <ul aria-label="Entries with words that did not reach the server" className="mt-3 max-h-48 space-y-2 overflow-y-auto rounded-lg border p-3 text-sm">
       {unsent.map(({ words, isRefused, isOnlyInMemory }, index) => (
         <li key={index} className="space-y-1.5">
           <p dir="auto" className="line-clamp-2 wrap-anywhere">{plainPreviewOf(words, previewLength)}</p>
           <CopyWords words={words} />
-          {isRefused && <p className="text-destructive">The server refused these words.</p>}
-          {isOnlyInMemory && <p className="text-destructive">Only an open page holds these words.</p>}
+          {isRefused && <p className="text-destructive">The server refused the newest text of this entry.</p>}
+          {isOnlyInMemory && <p className="text-destructive">Only an open page holds the newest text of this entry.</p>}
         </li>
       ))}
     </ul>
@@ -65,6 +65,7 @@ export function UnsentWordsAtLogoutDialog() {
       <ResponsiveDialogHeader>
         <ResponsiveDialogTitle>Some of your words did not reach the server</ResponsiveDialogTitle>
         <ResponsiveDialogDescription>
+          {question?.isAskedAgain && 'The words changed after your answer, so check this new list. '}
           {canKeep ? keepingText(unsent) : 'This browser has no room to keep some of them, so a sign-out loses them. Stay signed in to copy them from the notice on the page that holds them.'}
           {' If you discard them, these words go from this device, and you cannot get them back.'}
           {isATagUnsavedToo && ' A change of your tags also did not reach the server, and a sign-out loses it.'}

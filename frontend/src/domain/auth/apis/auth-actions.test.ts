@@ -5,6 +5,34 @@ import { returnUrlOf } from './auth-actions'
 
 const at = (pathname: string, search = '', hash = '') => ({ pathname, search, hash })
 
+let wordsInMemory: string[] = []
+let wordsInAKey: string[] = []
+
+/** Words that a write with no room left only in the memory of this tab, and words in a key, which the dialog of a sign-out lists. */
+const holdInMemory = (words: string[], inAKey: string[] = []) => {
+  wordsInMemory = words
+  wordsInAKey = inAKey
+  vi.doMock('@/domain/sessions/autosave/draft-saver', async (original) => ({
+    ...(await original<typeof import('@/domain/sessions/autosave/draft-saver')>()),
+    wordsOfThisTabOnlyInMemory: () => wordsInMemory,
+    unsentWordsOnThisDevice: () => [
+      ...wordsInMemory.map((words) => ({ words, isRefused: false, isOnlyInMemory: true, discard: () => undefined })),
+      ...wordsInAKey.map((words) => ({ words, isRefused: false, isOnlyInMemory: false, discard: () => undefined })),
+    ],
+  }))
+}
+
+const thisPage = { pathname: '/sessions/ses_1', search: '?channel=raw', hash: '#end' }
+
+const listenersOf = () => {
+  const listeners = new Map<string, (event: { persisted: boolean }) => void>()
+  return {
+    listeners,
+    addEventListener: (type: string, listener: (event: { persisted: boolean }) => void) => listeners.set(type, listener),
+    removeEventListener: (type: string, listener: unknown) => listeners.get(type) === listener && listeners.delete(type),
+  }
+}
+
 describe('the return URL of the login', () => {
   it('is the path, the query, and the hash of the page', () => {
     expect(returnUrlOf(at('/about', '?tab=team', '#people'))).toBe('/about?tab=team#people')
@@ -37,17 +65,90 @@ describe('the return URL of the login', () => {
 describe('a login after a sign-out', () => {
   const freshActions = async () => {
     const replace = vi.fn()
-    vi.stubGlobal('window', { location: { replace } })
+    const { listeners, addEventListener, removeEventListener } = listenersOf()
+    vi.stubGlobal('window', { location: { replace }, addEventListener, removeEventListener })
     vi.stubGlobal('document', { documentElement: { style: {} } })
     vi.resetModules()
     const { apiClient } = await import('@/lib/api-client')
     const post = vi.spyOn(apiClient, 'post').mockResolvedValue({ status: 204 })
-    return { replace, post, ...(await import('./auth-actions')) }
+    const { leftTheApp } = await import('./leave-the-app')
+    const { LeftTheAppFirst } = await import('./unsent-words-at-logout')
+    return { replace, post, listeners, leftTheApp, LeftTheAppFirst, ...(await import('./auth-actions')) }
   }
+
+  /** The dialog of the sign-out shows at the first note of the work that it waits for. */
+  const questionAsked = async () => {
+    const { toastQueue } = await import('@/components/notification')
+    await vi.waitFor(() => expect(toastQueue.visibleToasts).toEqual([]), { timeout: 8000 })
+  }
+
+  it('closes the question of a sign-out when the session ends meanwhile, and shows the words that only the memory holds at once', { timeout: 15_000 }, async () => {
+    holdInMemory(['words in memory'])
+    const { replace, post, leftTheApp, LeftTheAppFirst, login, logout } = await freshActions()
+    const signingOut = logout()
+    await questionAsked()
+
+    login('/about')
+
+    await expect(signingOut).rejects.toBeInstanceOf(LeftTheAppFirst)
+    expect(leftTheApp()).toMatchObject({ why: 'sessionEnded', words: ['words in memory'] })
+    expect(post).not.toHaveBeenCalled()
+    expect(replace).not.toHaveBeenCalled()
+  })
+
+  it('leaves at once when the session ends while the question of a sign-out waits on words in a key, which wait for the next login', { timeout: 15_000 }, async () => {
+    holdInMemory([], ['words in a key'])
+    const { replace, post, LeftTheAppFirst, login, logout } = await freshActions()
+    const signingOut = logout()
+    await questionAsked()
+
+    login('/about')
+
+    expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?returnUrl=%2Fabout')
+    await expect(signingOut).rejects.toBeInstanceOf(LeftTheAppFirst)
+    expect(post).not.toHaveBeenCalled()
+  })
 
   afterEach(() => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+    vi.doUnmock('@/domain/sessions/autosave/draft-saver')
+  })
+
+  it('shows the words that only the memory holds after the logout, also words typed while it ran, and leaves only at Leave', async () => {
+    holdInMemory([])
+    const { replace, post, listeners, leftTheApp, logout } = await freshActions()
+    post.mockImplementation(async () => {
+      wordsInMemory = ['typed while the logout ran']
+      return { status: 204 }
+    })
+
+    await logout()
+
+    expect(replace).not.toHaveBeenCalled()
+    expect(leftTheApp()).toMatchObject({ why: 'signedOut', words: ['typed while the logout ran'] })
+    expect(document.documentElement.style.opacity).not.toBe('0')
+    expect(listeners.has('beforeunload')).toBe(true)
+    const left = leftTheApp()
+    if (left?.why === 'anotherPerson') throw new Error('expected the screen of words')
+    left?.leave()
+    expect(listeners.has('beforeunload')).toBe(false)
+    expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?signedOut=1')
+  })
+
+  it('shows the words that only the memory holds when the session ends with no message, and keeps the way back', async () => {
+    holdInMemory(['words in memory'])
+    const { replace, leftTheApp, login } = await freshActions()
+
+    login('/about')
+    login('/about')
+
+    expect(replace).not.toHaveBeenCalled()
+    expect(leftTheApp()).toMatchObject({ why: 'sessionEnded', words: ['words in memory'] })
+    const left = leftTheApp()
+    if (left?.why === 'anotherPerson') throw new Error('expected the screen of words')
+    left?.leave()
+    expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?returnUrl=%2Fabout')
   })
 
   it('goes to the signed-out page, because a stopped navigation leaves a document that still calls the API', async () => {
@@ -122,6 +223,7 @@ describe('a login after a sign-out', () => {
     post.mockReturnValue(new Promise((settle) => (resolve = settle)))
 
     const signingOut = logout()
+    await vi.waitFor(() => expect(post).toHaveBeenCalled(), { timeout: 3000 })
     login('/about')
     expect(replace).not.toHaveBeenCalled()
     resolve({ status: 200, data: { provider_logout_url: providerLogoutUrl } })
@@ -138,8 +240,9 @@ describe('a login after a sign-out', () => {
     post.mockReturnValue(new Promise((_, fail) => (reject = fail)))
 
     const signingOut = logout()
+    await vi.waitFor(() => expect(post).toHaveBeenCalled(), { timeout: 3000 })
     login('/about')
-    await vi.waitFor(() => expect(post).toHaveBeenCalled())
+    expect(replace).not.toHaveBeenCalled()
     reject(new Error('no answer'))
     await expect(signingOut).rejects.toThrow('no answer')
 
@@ -212,9 +315,8 @@ describe('a sign-out in another tab', () => {
     channels.length = 0
     const replace = vi.fn()
     const reload = vi.fn()
-    const listeners = new Map<string, (event: { persisted: boolean }) => void>()
-    const addEventListener = (type: string, listener: (event: { persisted: boolean }) => void) => listeners.set(type, listener)
-    vi.stubGlobal('window', { location: { replace, reload }, addEventListener })
+    const { listeners, addEventListener, removeEventListener } = listenersOf()
+    vi.stubGlobal('window', { location: { replace, reload, ...thisPage }, addEventListener, removeEventListener })
     vi.stubGlobal('document', { documentElement: { style: {} }, addEventListener: () => undefined })
     vi.stubGlobal('BroadcastChannel', function (this: (typeof channels)[number]) {
       this.postMessage = vi.fn()
@@ -231,14 +333,15 @@ describe('a sign-out in another tab', () => {
     const userKey = (await import('./get-user')).authUserQuery.queryKey
     const hidePage = () => listeners.get('pagehide')!({ persisted: true })
     const restorePage = () => listeners.get('pageshow')!({ persisted: true })
-    return { replace, reload, post, get, queryClient, userKey, hidePage, restorePage, channel: channels[0]!, ...actions }
+    const { leftTheApp } = await import('./leave-the-app')
+    return { replace, reload, post, get, queryClient, userKey, hidePage, restorePage, leftTheApp, channel: channels[0]!, ...actions }
   }
 
   const answerWithUser = (sid: string) => ({ status: 200, data: { sub: '1', name: 'A Person', sid, client_kind: 'web' } })
   const opacityOfPage = () => document.documentElement.style.opacity
 
   it('compares with the session at the time that the page was hidden, because a refetch can bring the session of the next person', async () => {
-    const { reload, get, queryClient, userKey, hidePage, restorePage } = await guardedActions()
+    const { replace, reload, get, queryClient, userKey, hidePage, restorePage } = await guardedActions()
     queryClient.setQueryData(userKey, answerWithUser('first').data as never)
     hidePage()
     queryClient.setQueryData(userKey, answerWithUser('second').data as never)
@@ -246,12 +349,88 @@ describe('a sign-out in another tab', () => {
 
     restorePage()
 
-    await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledExactlyOnceWith('/sessions/ses_1?channel=raw'))
     expect(opacityOfPage()).toBe('0')
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('shows the words that only the memory holds when a restored page finds a newer session of the same person, and loads again at Leave', async () => {
+    holdInMemory(['words in memory'])
+    const { replace, reload, get, queryClient, userKey, hidePage, restorePage, leftTheApp } = await guardedActions()
+    queryClient.setQueryData(userKey, answerWithUser('first').data as never)
+    hidePage()
+    get.mockResolvedValue(answerWithUser('second'))
+
+    restorePage()
+
+    await vi.waitFor(() => expect(leftTheApp()).toMatchObject({ why: 'sessionEnded', words: ['words in memory'] }))
+    expect(opacityOfPage()).toBe('')
+    const left = leftTheApp()
+    if (left?.why === 'anotherPerson') throw new Error('expected the screen of words')
+    left?.leave()
+    expect(replace).toHaveBeenCalledExactlyOnceWith('/sessions/ses_1?channel=raw')
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('leaves for another person and says that the words are gone when a restored page finds the session of another person', async () => {
+    holdInMemory(['words in memory'])
+    const { replace, reload, get, queryClient, userKey, hidePage, restorePage, leftTheApp } = await guardedActions()
+    const pageUser = await import('@/lib/page-user')
+    const { leaveThePageOfAnotherPerson } = await import('./page-of-another-person')
+    pageUser.setPageUserMismatchHandler(() => leaveThePageOfAnotherPerson(queryClient))
+    pageUser.notePageUser('1')
+    queryClient.setQueryData(userKey, answerWithUser('first').data as never)
+    hidePage()
+    get.mockResolvedValue({ status: 200, data: { sub: '2', name: 'Another Person', sid: 'of another', client_kind: 'web' } })
+
+    restorePage()
+
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?anotherPerson=1&wordsLost=1'))
+    await new Promise((settled) => setTimeout(settled))
+    expect(leftTheApp()).toEqual({ why: 'anotherPerson', hasLostWords: true })
+    expect(replace).toHaveBeenCalledOnce()
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('shows the words that only the memory holds when a restored page gets no answer about its session', async () => {
+    holdInMemory(['words in memory'])
+    const { reload, get, queryClient, userKey, hidePage, restorePage, leftTheApp } = await guardedActions()
+    queryClient.setQueryData(userKey, answerWithUser('first').data as never)
+    hidePage()
+    get.mockReturnValue(new Promise(() => undefined) as never)
+
+    restorePage()
+
+    await vi.waitFor(() => expect(leftTheApp()).toMatchObject({ why: 'sessionUnchecked', words: ['words in memory'] }), { timeout: 5000 })
+    expect(opacityOfPage()).toBe('')
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('shows the words that only the memory holds when the user query reads null, before the root route unmounts the app', async () => {
+    holdInMemory(['words in memory'])
+    const { replace, queryClient, userKey, leftTheApp } = await guardedActions()
+    queryClient.setQueryData(userKey, answerWithUser('first').data as never)
+
+    queryClient.setQueryData(userKey, null)
+
+    expect(leftTheApp()).toMatchObject({ why: 'sessionEnded', words: ['words in memory'] })
+    const left = leftTheApp()
+    if (left?.why === 'anotherPerson') throw new Error('expected the screen of words')
+    left?.leave()
+    expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?returnUrl=%2Fsessions%2Fses_1%3Fchannel%3Draw%23end')
+  })
+
+  it('goes to the login once when the user query reads null, also at a first load and at a later null', async () => {
+    const { replace, queryClient, userKey } = await guardedActions()
+
+    queryClient.setQueryData(userKey, null)
+    queryClient.setQueryData(userKey, null)
+
+    expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?returnUrl=%2Fsessions%2Fses_1%3Fchannel%3Draw%23end')
   })
 
   it('shows the page again when the session of the page lives', async () => {
-    const { reload, get, queryClient, userKey, hidePage, restorePage } = await guardedActions()
+    const { replace, reload, get, queryClient, userKey, hidePage, restorePage } = await guardedActions()
     queryClient.setQueryData(userKey, answerWithUser('first').data as never)
     hidePage()
     expect(document.documentElement.inert).toBe(true)
@@ -262,6 +441,7 @@ describe('a sign-out in another tab', () => {
     await vi.waitFor(() => expect(opacityOfPage()).toBe(''))
     expect(document.documentElement.inert).toBe(false)
     expect(reload).not.toHaveBeenCalled()
+    expect(replace).not.toHaveBeenCalled()
   })
 
   it('ignores the answer of an earlier restore, because the session can have ended since then', async () => {
@@ -287,6 +467,7 @@ describe('a sign-out in another tab', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+    vi.doUnmock('@/domain/sessions/autosave/draft-saver')
   })
 
   it('hides the page, clears the data of this tab, and goes to the signed-out page', async () => {
@@ -298,6 +479,63 @@ describe('a sign-out in another tab', () => {
     expect(document.documentElement.style.opacity).toBe('0')
     expect(queryClient.getQueryCache().getAll()).toHaveLength(0)
     expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?signedOut=1')
+  })
+
+  it('shows the words that only its memory holds, alone, and leaves only when the person says so', async () => {
+    holdInMemory(['words in memory'])
+    const { replace, queryClient, channel, leftTheApp } = await guardedActions()
+    queryClient.setQueryData(['private'], 'words of this person')
+
+    channel.onmessage!({ data: 'signed-out' })
+    channel.onmessage!({ data: 'signed-out' })
+
+    expect(queryClient.getQueryCache().getAll()).toHaveLength(0)
+    expect(leftTheApp()).toMatchObject({ why: 'signedOutInAnotherTab', words: ['words in memory'] })
+    expect(opacityOfPage()).not.toBe('0')
+    expect(replace).not.toHaveBeenCalled()
+    const left = leftTheApp()
+    if (left?.why === 'anotherPerson') throw new Error('expected the screen of words')
+    left?.leave()
+    expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?signedOut=1')
+  })
+
+  it('shows the page with the words that only its memory holds when a restored page finds its session ended', async () => {
+    holdInMemory(['words in memory'])
+    const { replace, get, queryClient, userKey, hidePage, restorePage, leftTheApp } = await guardedActions()
+    queryClient.setQueryData(userKey, answerWithUser('first').data as never)
+    hidePage()
+    get.mockResolvedValue({ status: 204 })
+
+    restorePage()
+
+    await vi.waitFor(() => expect(leftTheApp()).toMatchObject({ why: 'sessionEnded', words: ['words in memory'] }))
+    expect(opacityOfPage()).toBe('')
+    expect(document.documentElement.inert).toBe(false)
+    expect(replace).not.toHaveBeenCalled()
+  })
+
+  it('drops the words at once when another person signs in, also those of a shown screen, and says that they are gone', async () => {
+    holdInMemory(['words in memory'])
+    const { replace, queryClient, channel, leftTheApp } = await guardedActions()
+    const { leaveThePageOfAnotherPerson } = await import('./page-of-another-person')
+    channel.onmessage!({ data: 'signed-out' })
+    wordsInMemory = []
+
+    leaveThePageOfAnotherPerson(queryClient)
+
+    expect(leftTheApp()).toEqual({ why: 'anotherPerson', hasLostWords: true })
+    expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?anotherPerson=1&wordsLost=1')
+  })
+
+  it('does not say that words are gone when another person signs in and the tab held none only in memory', async () => {
+    holdInMemory([])
+    const { replace, queryClient, leftTheApp } = await guardedActions()
+    const { leaveThePageOfAnotherPerson } = await import('./page-of-another-person')
+
+    leaveThePageOfAnotherPerson(queryClient)
+
+    expect(leftTheApp()).toEqual({ why: 'anotherPerson', hasLostWords: false })
+    expect(replace).toHaveBeenCalledExactlyOnceWith('/auth/login?anotherPerson=1')
   })
 
   it('tells the other tabs only when the Server answered, because a failed sign-out leaves the session alive', async () => {
@@ -318,7 +556,7 @@ describe('a browser with no BroadcastChannel', () => {
   })
 
   it('still guards the page, because a tab with no channel must open', async () => {
-    vi.stubGlobal('window', { location: { replace: vi.fn(), reload: vi.fn() }, addEventListener: () => undefined })
+    vi.stubGlobal('window', { location: { replace: vi.fn(), reload: vi.fn() }, ...listenersOf() })
     vi.stubGlobal('document', { documentElement: { style: {} }, addEventListener: () => undefined })
     vi.stubGlobal('BroadcastChannel', undefined)
     vi.resetModules()
