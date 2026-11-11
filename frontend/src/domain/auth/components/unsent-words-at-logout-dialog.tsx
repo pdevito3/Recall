@@ -61,7 +61,7 @@ function WordsThatDidNotGo({ unsent }: { unsent: UnsentWords[] }) {
 /** The server removed the audio that this part would join, so the part can never upload. */
 const isGone = ({ problem }: StoredCapture) => problem?.kind === 'refused' && problem.canSendAgain === false
 
-const wordsStartText ='The words of audio that the server has start when you sign in here again, or on their own about a day later.'
+const wordsStartText = 'The words of audio that the server has start when you sign in here again, or on their own about a day later.'
 
 function audioText(audio: StoredCapture[]) {
   const missing = audio.filter((capture) => !waitsOnlyForItsEnd(capture))
