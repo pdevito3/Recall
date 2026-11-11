@@ -14,6 +14,7 @@ test('each text that only the page holds has its own Copy, and the page goes onl
   const leave = vi.fn()
   const screen = await render(<WordsLeftAtSignOut why="signedOutInAnotherTab" words={[doc('first words'), doc('second words')]} leave={leave} />)
 
+  await expect.element(screen.getByText('Some words of these entries did not reach the server', { exact: false })).toBeVisible()
   const list = screen.getByRole('list', { name: 'Entries with words that only this page holds' })
   await expect.element(list.getByText('first words')).toBeVisible()
   await list.getByRole('button', { name: 'Copy words' }).nth(1).click()
@@ -34,4 +35,5 @@ test.each([
   const screen = await render(<WordsLeftAtSignOut why={why} words={[doc('first words')]} leave={vi.fn()} />)
 
   await expect.element(screen.getByRole('heading', { level: 1, name: title })).toBeVisible()
+  await expect.element(screen.getByText('Some words of this entry did not reach the server', { exact: false })).toBeVisible()
 })

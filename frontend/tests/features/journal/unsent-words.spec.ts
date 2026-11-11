@@ -866,6 +866,22 @@ test.describe('words that the browser has no room to keep', () => {
     await expect.poll(() => page.url()).toContain('/auth/login?returnUrl=')
   })
 
+  test('when the session ends while the logout dialog asks about them, the dialog closes and the tab shows them alone', async ({ page, api }) => {
+    const { unsent, session } = await holdWordsOnlyInMemory(page, api)
+    await unsent.logOut()
+    await expect(unsent.at.logoutDialog).toContainText('no room', { timeout: 10_000 })
+    api.mock(authApi.loginOpens(), { method: 'get', path: authPaths.me, status: 204 }, { method: 'put', path: sessionsPaths.rawDraft(session.id), status: 401 })
+
+    await unsent.signalThatTheConnectionReturned()
+
+    await expect(unsent.at.leftAs('Your session ended')).toContainText('Words with no room', { timeout: 15_000 })
+    await expect(unsent.at.logoutDialog).toHaveCount(0)
+    expect(await unsent.warnsAtAClose()).toBe(true)
+    await unsent.at.leaveThePage.click()
+    await expect.poll(() => page.url()).toContain('/auth/login?returnUrl=')
+    expect(api.all('post', authPaths.logout)).toHaveLength(0)
+  })
+
   test('when a restored page finds its session ended, the page shows them alone', async ({ page, api }) => {
     const { unsent } = await holdWordsOnlyInMemory(page, api)
     api.mock(authApi.loginOpens(), { method: 'get', path: authPaths.me, status: 204 })
@@ -874,6 +890,20 @@ test.describe('words that the browser has no room to keep', () => {
 
     await expect(unsent.at.leftAs('Your session ended')).toContainText('Words with no room')
     expect(await unsent.pageShows()).toBe(true)
+  })
+
+  test('when a restored page finds a newer session of the same person, the page shows them alone, and loads again at Leave', async ({ page, api }) => {
+    const { unsent } = await holdWordsOnlyInMemory(page, api)
+    const pageOfTheWords = page.url()
+    api.mock({ method: 'get', path: authPaths.me, status: 200, body: { sub: actorSubject, name: 'Bob Smith', sid: 'a-newer-session', client_kind: 'web' } })
+
+    await unsent.restoreThePage()
+
+    await expect(unsent.at.leftAs('Your session ended')).toContainText('Words with no room')
+    expect(await unsent.pageShows()).toBe(true)
+    await unsent.at.leaveThePage.click()
+    await expect(unsent.at.leftAs('Your session ended')).toHaveCount(0)
+    expect(page.url()).toBe(pageOfTheWords)
   })
 
   test('when another person signs in, the tab drops them at once, and the next page says that they are gone', async ({ page, api }) => {
