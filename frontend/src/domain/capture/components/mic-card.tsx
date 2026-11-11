@@ -320,15 +320,18 @@ const statusClass = 'flex max-w-md flex-col items-center gap-1.5'
 const titleClass = 'text-lg font-semibold text-balance'
 const lineClass = 'text-sm text-balance text-muted-foreground'
 
-/** An unseen copy of the idle words while the mic records, or of the clock and the recording words while it does not. */
+/** An unseen copy of the idle words and the engine line while the mic records, or of the clock and the recording words while it does not. */
 function RoomOfTheOtherMicState({ isRecording }: { isRecording: boolean }) {
   return (
     <div aria-hidden className="invisible flex w-full flex-col items-center gap-4 [grid-area:1/1]">
       {isRecording ? (
-        <div className={statusClass}>
-          <p className={titleClass}>{wordsOf({ kind: 'idle' }).title}</p>
-          <p className={lineClass}>{wordsOf({ kind: 'idle' }).line}</p>
-        </div>
+        <>
+          <div className={statusClass}>
+            <p className={titleClass}>{wordsOf({ kind: 'idle' }).title}</p>
+            <p className={lineClass}>{wordsOf({ kind: 'idle' }).line}</p>
+          </div>
+          <EnginePlace />
+        </>
       ) : (
         <>
           <div className={clockClass}>
@@ -378,7 +381,8 @@ export function MicCard() {
         <HugeiconsIcon icon={isRecording ? StopIcon : view.kind === 'insecure' ? SquareLock01Icon : isOff ? MicOff01Icon : Mic01Icon} size={40} className="relative" />
       </button>
 
-      {/* The idle card and the recording card share one room, the larger of the two, so the card does not change size under the finger. */}
+      {/* The idle card and the recording card share one room, the larger of the two, so the card does not change size under the finger.
+          The clock takes the room of the engine line, so the idle card is no taller than it was. */}
       <div className="grid w-full justify-items-center">
         <div className="flex w-full flex-col items-center gap-4 [grid-area:1/1]">
           {isRecording && (
@@ -411,6 +415,7 @@ export function MicCard() {
               )}
             </p>
           </div>
+          {(view.kind === 'idle' || isStarting) && capture.isLoaded && <EnginePlace />}
         </div>
         {isAtTheMic && <RoomOfTheOtherMicState isRecording={isRecording} />}
       </div>
@@ -418,12 +423,6 @@ export function MicCard() {
       <Actions view={view} capture={capture} />
 
       {capture.waiting.length > 0 && <WaitingCaptures capture={capture} />}
-      {/* While it records, the line of the engine keeps its room. */}
-      {isAtTheMic && capture.isLoaded && (
-        <div aria-hidden={isRecording || undefined} className={cn(isRecording && 'invisible')}>
-          <EnginePlace />
-        </div>
-      )}
     </section>
   )
 }
