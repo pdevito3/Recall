@@ -5,25 +5,30 @@ import { progressOf, unsentAudioOf } from '@/domain/capture/upload-plan'
 import { endOnServer, forgetCaptures, sendStoredAudioBeforeSignOut } from '@/domain/capture/upload-queue'
 import { stopRecordingOfThisTab } from '@/domain/capture/use-capture'
 import { writePointer } from '@/domain/sessions/autosave/composer-pointer'
-import { removeNoticesOfWordsInHistory, settleDraftSavers, stopDraftSavers, unsentWordsOnThisDevice, type UnsentWords } from '@/domain/sessions/autosave/draft-saver'
+import { losesOnlyNamedWords, removeNoticesOfWordsInHistory, settleDraftSavers, stopDraftSavers, unsentWordsOnThisDevice, type UnsentWords } from '@/domain/sessions/autosave/draft-saver'
 import { askOtherTabsToSettle } from '@/domain/sessions/autosave/tab-keys'
 import { isAnyTagChangeUnsaved, settleMetadataSavers, stopMetadataSavers } from '@/domain/sessions/autosave/tag-savers'
 import { settleSettingSaver, stopSettingSaver } from '@/domain/settings/apis/user-setting'
 import { pageUserOf } from '@/lib/page-user'
 
-type Choice = 'keep' | 'discard' | 'stay'
+type Choice = 'keep' | 'discard' | 'stay' | 'left'
 
 interface Question {
   unsent: UnsentWords[]
   /** The recordings whose audio the Server does not have all of. */
   audio: StoredCapture[]
   isATagUnsaved: boolean
+  /** The words changed after an answer, so the person answers the new list. */
+  isAskedAgain: boolean
   answer: (choice: Choice) => void
 }
 
 const settleLimitMs = 5_000
 
 let question: Question | null = null
+let hasLeftTheApp = false
+/** The recordings that the person answered about in the sign-out that now leaves, so the way out does not name them again. */
+let answeredAudio = new Set<string>()
 const listeners = new Set<() => void>()
 
 const subscribe = (listener: () => void) => {
@@ -40,7 +45,7 @@ const setQuestion = (next: Question | null) => {
 
 export const useQuestionAboutUnsentWords = () => useSyncExternalStore(subscribe, () => question)
 
-export function answerAboutUnsentWords(choice: Choice) {
+export function answerAboutUnsentWords(choice: Exclude<Choice, 'left'>) {
   question?.answer(choice)
   setQuestion(null)
 }
@@ -51,12 +56,23 @@ const withinLimit = (settled: Promise<boolean>) =>
 /** The person chose to stay and copy the words, so the logout ends with no error. */
 export class StayedSignedIn extends Error {}
 
-/** A tab that leaves its session stops each saver first. A saver that still runs would ask at `beforeunload`, and a stay there leaves a hidden page. */
+/** The tab left the app another way before the sign-out ended, and that way shows the words, so the logout ends with no error. */
+export class LeftTheAppFirst extends Error {}
+
+/**
+ * A tab that leaves its session stops each saver first. A saver that still runs would ask at `beforeunload`, and a stay
+ * there leaves a hidden page. Its dialog goes with the app, so an open question ends, and no later one opens.
+ */
 export function stopSaversBeforeLeaving() {
   stopDraftSavers()
   stopSettingSaver()
   stopMetadataSavers()
+  hasLeftTheApp = true
+  question?.answer('left')
+  setQuestion(null)
 }
+
+export const isAnsweredAtSignOut = ({ clientRecordingId }: StoredCapture) => answeredAudio.has(clientRecordingId)
 
 /**
  * Asks until the person answers, and follows the audio store meanwhile: audio that reaches the Server leaves the question,
@@ -87,12 +103,8 @@ function ask(first: Omit<Question, 'answer'>, owner: string | null) {
   })
 }
 
-/**
- * Each tab stops its recording and tries to send its words, then the audio goes, and then the person sees all the words
- * and the audio that did not go, also those of another tab. What the person discards leaves this device only after the
- * sign-out works, so a sign-out that fails, as with no network, loses nothing.
- */
-export async function settleUnsentWords(beforeAQuestion: () => void): Promise<() => Promise<void>> {
+/** Each tab stops its recording and tries to send its words, and then the list names all the words that did not go, also those of another tab. */
+async function listUnsentWords(): Promise<Pick<Question, 'unsent' | 'isATagUnsaved'>> {
   const [otherTabs] = await Promise.all([
     askOtherTabsToSettle(settleLimitMs),
     withinLimit(settleDraftSavers()),
@@ -100,19 +112,43 @@ export async function settleUnsentWords(beforeAQuestion: () => void): Promise<()
     withinLimit(settleMetadataSavers()),
     stopRecordingOfThisTab(),
   ])
-  const owner = pageUserOf()
-  const unsentAudio = owner ? await sendStoredAudioBeforeSignOut(owner).catch((): StoredCapture[] => []) : []
-  const unsent = unsentWordsOnThisDevice(pageUserOf(), otherTabs)
   // Tags have no outbox, so a sign-out loses a change of a tag that the Server did not take.
-  const isATagUnsaved = isAnyTagChangeUnsaved() || otherTabs.some(({ hasUnsavedTags }) => hasUnsavedTags)
-  const hasNoQuestion = unsent.length === 0 && unsentAudio.length === 0 && !isATagUnsaved
-  if (!hasNoQuestion) beforeAQuestion()
-  const { choice, audio } = hasNoQuestion ? { choice: 'keep' as const, audio: [] } : await ask({ unsent, audio: unsentAudio, isATagUnsaved }, owner)
-  if (choice === 'stay') throw new StayedSignedIn()
-  // The Server part of a discard needs the session, so it goes before the sign-out ends it.
-  if (choice === 'discard') await endOnServer(audio)
+  return { unsent: unsentWordsOnThisDevice(pageUserOf(), otherTabs), isATagUnsaved: isAnyTagChangeUnsaved() || otherTabs.some(({ hasUnsavedTags }) => hasUnsavedTags) }
+}
+
+/**
+ * The words can change while the person reads the list. So each answer lists again, and the person answers the new list
+ * when it loses something that the answered list did not name. The audio goes once before the first question, and the
+ * question follows the audio store after that. What the person discards leaves this device only after the sign-out works,
+ * so a sign-out that fails, as with no network, loses nothing.
+ */
+export async function settleUnsentWords(beforeAQuestion: () => void, afterAnAnswer: () => void = () => undefined): Promise<() => Promise<void>> {
+  const first = await listUnsentWords()
+  const owner = pageUserOf()
+  let audio = owner ? await sendStoredAudioBeforeSignOut(owner).catch((): StoredCapture[] => []) : []
+  let listed = first
+  let choice: Choice = 'keep'
+  while (listed.unsent.length > 0 || audio.length > 0 || listed.isATagUnsaved) {
+    if (hasLeftTheApp) throw new LeftTheAppFirst()
+    beforeAQuestion()
+    const { unsent, isATagUnsaved } = listed
+    ;({ choice, audio } = await ask({ unsent, audio, isATagUnsaved, isAskedAgain: listed !== first }, owner))
+    if (choice === 'stay') throw new StayedSignedIn()
+    if (choice === 'left') throw new LeftTheAppFirst()
+    afterAnAnswer()
+    const now = await listUnsentWords()
+    if (losesOnlyNamedWords(unsent, now.unsent) && (isATagUnsaved || !now.isATagUnsaved)) break
+    listed = now
+  }
+  const { unsent } = listed
+  if (choice === 'discard') {
+    // The Server part of a discard needs the session, so it goes before the sign-out ends it.
+    await endOnServer(audio)
+    // The session ended meanwhile, and the way out that it took shows this audio as kept in this browser.
+    if (hasLeftTheApp) throw new LeftTheAppFirst()
+  }
   return async () => {
-    stopSaversBeforeLeaving()
+    answeredAudio = new Set(audio.map(({ clientRecordingId }) => clientRecordingId))
     if (choice === 'discard') {
       for (const { discard } of unsent) discard()
       await forgetCaptures(audio)

@@ -162,7 +162,7 @@ public static class AuthEndpoints
             ? new AuthPages.OpenProviderSession(openSession.DisplayName, await openSession.ProbeAsync(cancellationToken), openSessionLogoutUrl)
             : null;
         var chooser = modes.All.Zip(states, (mode, state) => new AuthPages.ChooserMode(mode.Id, mode.DisplayName, state)).ToList();
-        var message = isForPageOfAnotherPerson ? AuthPages.AnotherPersonMessage : hasError ? "The last sign-in did not finish." : null;
+        var message = isForPageOfAnotherPerson ? (query.ContainsKey("wordsLost") ? AuthPages.AnotherPersonLostWordsMessage : AuthPages.AnotherPersonMessage) : hasError ? "The last sign-in did not finish." : null;
         return AuthPages.Chooser(chooser, returnPath, isSignedOut, message, providerSession, asksTheProviderAgain: isForPageOfAnotherPerson);
     }
 

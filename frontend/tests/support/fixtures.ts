@@ -54,6 +54,11 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
       const served = requestRecorder()
       const missed: string[] = []
       const openCalls: Route[] = []
+      // A test that fails before it settles a `heldUntil` would leave its call open, and the wait of `unrouteAll` would never end.
+      let endHeldCalls!: () => void
+      const testEnded = new Promise<void>((resolve) => {
+        endHeldCalls = resolve
+      })
 
       // On the context, so that a second tab of the test gets the same answers.
       await context.route(
@@ -78,7 +83,7 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
             return
           }
           if (newestMock.delayMs) await new Promise((resolve) => setTimeout(resolve, newestMock.delayMs))
-          if (newestMock.heldUntil) await newestMock.heldUntil
+          if (newestMock.heldUntil) await Promise.race([newestMock.heldUntil, testEnded])
           await route.fulfill({
             status: newestMock.status,
             headers: newestMock.headers,
@@ -95,6 +100,7 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
         all: served.all,
       })
 
+      endHeldCalls()
       await Promise.all(openCalls.map((route) => route.abort().catch(() => undefined)))
       // Let an in-flight handler finish, so that a late call is still recorded.
       await page.unrouteAll({ behavior: 'wait' })

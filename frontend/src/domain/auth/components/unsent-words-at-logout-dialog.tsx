@@ -7,15 +7,14 @@ import {
   ResponsiveDialogTitle,
 } from '@/components/ui/responsive-dialog'
 
-import type { StoredCapture } from '@/domain/capture/audio-store'
-import { clock } from '@/domain/capture/audio-time'
 import { waitsOnlyForItsEnd } from '@/domain/capture/capture-view'
-import { unsentMsOf } from '@/domain/capture/upload-plan'
 import type { UnsentWords } from '@/domain/sessions/autosave/draft-saver'
 import { CopyWords } from '@/domain/sessions/components/draft-notices'
 import { plainPreviewOf } from '@/domain/sessions/editor/content'
 
 import { answerAboutUnsentWords, useQuestionAboutUnsentWords } from '../apis/unsent-words-at-logout'
+import { audioText, isGone, wordsStartText } from './audio-text'
+import { AudioThatDidNotGo } from './audio-that-did-not-go'
 
 const previewLength = 200
 
@@ -45,38 +44,17 @@ function keepingText(unsent: UnsentWords[]) {
 
 function WordsThatDidNotGo({ unsent }: { unsent: UnsentWords[] }) {
   return (
-    <ul aria-label="Words that did not reach the server" className="mt-3 max-h-48 space-y-2 overflow-y-auto rounded-lg border p-3 text-sm">
+    <ul aria-label="Entries with words that did not reach the server" className="mt-3 max-h-48 space-y-2 overflow-y-auto rounded-lg border p-3 text-sm">
       {unsent.map(({ words, isRefused, isOnlyInMemory }, index) => (
         <li key={index} className="space-y-1.5">
           <p dir="auto" className="line-clamp-2 wrap-anywhere">{plainPreviewOf(words, previewLength)}</p>
           <CopyWords words={words} />
-          {isRefused && <p className="text-destructive">The server refused these words.</p>}
-          {isOnlyInMemory && <p className="text-destructive">Only an open page holds these words.</p>}
+          {isRefused && <p className="text-destructive">The server refused the newest text of this entry.</p>}
+          {isOnlyInMemory && <p className="text-destructive">Only an open page holds the newest text of this entry.</p>}
         </li>
       ))}
     </ul>
   )
-}
-
-/** The server removed the audio that this part would join, so the part can never upload. */
-const isGone = ({ problem }: StoredCapture) => problem?.kind === 'refused' && problem.canSendAgain === false
-
-const wordsStartText = 'The words of audio that the server has start when you sign in here again, or on their own about a day later.'
-
-function audioText(audio: StoredCapture[]) {
-  const missing = audio.filter((capture) => !waitsOnlyForItsEnd(capture))
-  const notStarted = missing.length < audio.length ? ` ${wordsStartText}` : ''
-  if (missing.length === 0) return notStarted.trim()
-  const total = clock(missing.reduce((sum, capture) => sum + unsentMsOf(capture), 0))
-  const goneCount = missing.filter(isGone).length
-  const keep =
-    goneCount === 0
-      ? 'If you keep it, it stays in this browser and uploads when you sign in here again.'
-      : goneCount === missing.length
-        ? 'If you keep it, it stays in this browser, but it cannot upload, because the server removed the audio that it would join.'
-        : 'If you keep it, it stays in this browser. The audio that the server can take uploads when you sign in here again, and the rest cannot, because the server removed the audio that it would join.'
-  const refused = missing.some(({ problem }) => problem?.kind === 'refused' && problem.canSendAgain !== false) ? ' A recording that the server refused waits on the journal page for you to send it again.' : ''
-  return `${total} of audio did not reach the server. ${keep}${refused}${notStarted}`
 }
 
 /** Each slice of each recording is on the server, and only the start of the words did not go, so a sign-out loses no audio. */
@@ -110,20 +88,6 @@ function namesOf(hasWords: boolean, hasAudio: boolean, isEachGone: boolean) {
   return { title: 'Some of your words and audio did not reach the server', thing: 'all', discarded: ` If you discard them, these words and this audio go from this device, and you cannot get them back.${tryWords}` }
 }
 
-function AudioThatDidNotGo({ audio }: { audio: StoredCapture[] }) {
-  return (
-    <ul aria-label="Audio that did not reach the server" className="mt-3 space-y-2 rounded-lg border p-3 text-sm">
-      {audio.map((capture) => (
-        <li key={capture.clientRecordingId}>
-          A recording of {clock(capture.durationMs)}.{' '}
-          {waitsOnlyForItsEnd(capture) ? 'The server has all of it, and has not started on the words yet.' : `The server lacks ${clock(unsentMsOf(capture))} of it.`}
-          {capture.problem?.kind === 'refused' && <p className="text-destructive">The server refused this audio.</p>}
-        </li>
-      ))}
-    </ul>
-  )
-}
-
 export function UnsentWordsAtLogoutDialog() {
   const question = useQuestionAboutUnsentWords()
   const audio = question?.audio ?? []
@@ -141,14 +105,15 @@ export function UnsentWordsAtLogoutDialog() {
       <ResponsiveDialogHeader>
         <ResponsiveDialogTitle>{names.title}</ResponsiveDialogTitle>
         <ResponsiveDialogDescription>
+          {question?.isAskedAgain && 'The words changed after your answer, so check this new list. '}
           {hasWords && (canKeep ? keepingText(unsent) : 'This browser has no room to keep some of them, so a sign-out loses them. Stay signed in to copy them from the notice on the page that holds them.')}
-          {audio.length > 0 && `${hasWords ? ' ' : ''}${audioText(audio)}`}
+          {audio.length > 0 && `${hasWords ? ' ' : ''}${audioText(audio, 'If you keep it, it')}`}
           {names.discarded}
           {isATagUnsavedToo && ' A change of your tags also did not reach the server, and a sign-out loses it.'}
         </ResponsiveDialogDescription>
       </ResponsiveDialogHeader>
       {hasWords && <WordsThatDidNotGo unsent={unsent} />}
-      {audio.length > 0 && <AudioThatDidNotGo audio={audio} />}
+      {audio.length > 0 && <AudioThatDidNotGo audio={audio} className="mt-3" />}
       <ResponsiveDialogFooter className={canKeep && isATagUnsavedToo ? 'sm:flex-col-reverse' : undefined}>
         <ResponsiveDialogClose variant="destructive" onPress={() => answerAboutUnsentWords('discard')}>
           Discard {names.thing} and sign out

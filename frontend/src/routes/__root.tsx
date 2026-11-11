@@ -15,10 +15,10 @@ import { AppSidebar } from '@/components/app-sidebar'
 import { useCurrentBreadcrumbName } from '@/components/breadcrumb-name'
 import { BreadcrumbNameProvider } from '@/components/breadcrumb-name-provider'
 import { Button } from '@/components/ui/button'
-import { login, returnUrlOf } from '@/domain/auth/apis/auth-actions'
 import { authUserQuery } from '@/domain/auth/apis/get-user'
-import { useHasLeftThePage } from '@/domain/auth/apis/page-of-another-person'
+import { useLeftTheApp } from '@/domain/auth/apis/leave-the-app'
 import { PageOfAnotherPerson } from '@/domain/auth/components/page-of-another-person'
+import { WordsLeftAtSignOut } from '@/domain/auth/components/words-left-at-sign-out'
 import { useSendStoredAudio } from '@/domain/capture/use-send-stored-audio'
 import { DraftNotices } from '@/domain/sessions/components/draft-notices'
 import { FileStoreNotice } from '@/domain/file-store/components/file-store-notice'
@@ -52,37 +52,22 @@ const UnsentWordsAtLogoutDialog = lazyOverlay(
 )
 
 function RootComponent() {
-  const hasLeftThePage = useHasLeftThePage()
-  return (
-    <>
-      {hasLeftThePage ? <PageOfAnotherPerson /> : <SessionGate />}
-      {/* A session that ends during a sign-out takes the layout away, and the sign-out still waits for this answer. */}
-      <UnsentWordsAtLogoutDialog />
-    </>
-  )
+  const left = useLeftTheApp()
+  if (left?.why === 'anotherPerson') return <PageOfAnotherPerson hasLostWords={left.hasLostWords} />
+  return left ? <WordsLeftAtSignOut {...left} /> : <SessionGate />
 }
 
 function SessionGate() {
   const session = useQuery(authUserQuery)
 
-  // A failed refetch keeps the data of the last answer, and that answer still decides.
-  if (session.data === null) return <GoToLogin />
+  // A failed refetch keeps the data of the last answer, and that answer still decides. A null answer already left the
+  // app (`guardPageAgainstEndedSession`), so the words that only the memory holds show before this unmounts the app.
+  if (session.data === null) return null
   if (session.data) return <Layout />
   // A refetch with no data sets the query back to pending and clears the error, so the count of errors keeps the alert.
   if (session.errorUpdateCount > 0) {
     return <SessionCheckFailed isRetrying={session.isFetching} onRetry={() => void session.refetch()} />
   }
-  return null
-}
-
-function GoToLogin() {
-  // StrictMode runs an effect twice in a dev build, and a second location.replace aborts the navigation of the first
-  const isGoing = useRef(false)
-  useEffect(() => {
-    if (isGoing.current) return
-    isGoing.current = true
-    login(returnUrlOf(window.location))
-  }, [])
   return null
 }
 
@@ -145,6 +130,7 @@ function LayoutContent() {
           <MembershipCheckFailedNotice />
           <FileStoreNotice />
           <DraftNotices />
+          <UnsentWordsAtLogoutDialog />
           <div ref={content} className="flex flex-1 flex-col gap-4 p-4 pt-0">
             <Outlet />
           </div>
