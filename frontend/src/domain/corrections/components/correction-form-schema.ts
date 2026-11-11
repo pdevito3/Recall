@@ -11,8 +11,7 @@ export const mishearingMaxLength = maxLengthOf(correctionForCreationDtoSchema.sh
 
 export const CORRECTION_FIELDS = ['canonicalTerm', 'mishearings', 'hardReplace'] as const
 
-/** The mishearings of the form, one on each line. */
-export function linesOf(text: string): string[] {
+function mishearingsOf(text: string): string[] {
   return text
     .split('\n')
     .map((line) => line.trim())
@@ -27,7 +26,7 @@ export const correctionFormSchema = z.object({
   mishearings: z
     .string()
     .refine(
-      (text) => linesOf(text).every((line) => [...line].length <= mishearingMaxLength),
+      (text) => mishearingsOf(text).every((line) => [...line].length <= mishearingMaxLength),
       `Use ${mishearingMaxLength} characters or fewer on each line.`,
     ),
   hardReplace: z.boolean(),
@@ -48,12 +47,11 @@ export function valuesOf(correction: CorrectionDto): CorrectionFormValues {
 }
 
 export function bodyOf(values: CorrectionFormValues): CorrectionForCreationDto {
-  return { canonicalTerm: values.canonicalTerm.trim(), mishearings: linesOf(values.mishearings), hardReplace: values.hardReplace }
+  return { canonicalTerm: values.canonicalTerm.trim(), mishearings: mishearingsOf(values.mishearings), hardReplace: values.hardReplace }
 }
 
 const folded = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase()
 
-/** The Corrections whose term or a mishearing holds `search`, with no regard to case or accents. */
 export function matching(corrections: CorrectionDto[], search: string): CorrectionDto[] {
   const text = folded(search.trim())
   if (!text) return corrections

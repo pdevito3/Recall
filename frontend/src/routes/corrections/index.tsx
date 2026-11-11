@@ -21,9 +21,8 @@ function CorrectionsRoute() {
   const { search = '' } = Route.useSearch()
   const navigate = Route.useNavigate()
   const headingRef = useRef<HTMLHeadingElement>(null)
-  // A search that the user typed before Back does not replace the search that Back opened
-  const handleSearch = (text: string, base: string) =>
-    navigate({ search: (prev) => ((prev.search ?? '') === base ? { search: text || undefined } : prev), replace: true })
+  const handleSearch = (text: string, searchWhenTyped: string) =>
+    navigate({ search: (prev) => ((prev.search ?? '') === searchWhenTyped ? { search: text || undefined } : prev), replace: true })
 
   return (
     <Page>

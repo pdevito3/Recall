@@ -20,9 +20,8 @@ import { CorrectionForm } from './correction-form'
 import { matching, termMaxLength } from './correction-form-schema'
 
 interface CorrectionsListProps {
-  /** The search in the URL. */
   search: string
-  onSearch: (text: string, base: string) => void
+  onSearch: (text: string, searchWhenTyped: string) => void
   headingRef: RefObject<HTMLHeadingElement | null>
 }
 

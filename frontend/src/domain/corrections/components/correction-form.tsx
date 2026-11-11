@@ -49,7 +49,6 @@ function FieldMessage({ id, message }: { id: string; message?: string }) {
 }
 
 interface CorrectionFormProps {
-  /** The Correction to change. A form with none adds a new one. */
   correction?: CorrectionDto
   onSaved: () => void
 }

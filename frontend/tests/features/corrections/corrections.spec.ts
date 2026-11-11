@@ -10,10 +10,19 @@ test.describe('the corrections of a journal', () => {
     await corrections.open()
 
     await expect(corrections.at.term('GRDB')).toBeVisible()
-    await expect(corrections.at.list.getByText('Heard as grid b, great db', { exact: true })).toBeVisible()
-    await expect(corrections.at.list.getByText('Always replaced', { exact: true })).toHaveCount(1)
+    await expect(corrections.at.heardAs('grid b, great db')).toBeVisible()
+    await expect(corrections.at.alwaysReplaced).toHaveCount(1)
     await expect(corrections.at.term('Kubernetes')).toBeVisible()
     expect(api.last('get', correctionsPaths.list)?.query.get('pageSize')).toBe('100')
+  })
+
+  test('lists the terms in alphabetical order with no regard to case', async ({ page, api }) => {
+    api.mock(correctionsApi.listIs([aCorrection('cor_1', 'Zoë'), aCorrection('cor_2', 'pnpm'), aCorrection('cor_3', 'GRDB')]))
+    const corrections = correctionsPage(page)
+
+    await corrections.open()
+
+    await expect(corrections.at.rows).toHaveText([/^GRDB/, /^pnpm/, /^Zoë/])
   })
 
   test('says that the list is empty', async ({ page, api }) => {
@@ -101,7 +110,7 @@ test.describe('the corrections of a journal', () => {
       version: 1,
     })
     await expect(corrections.at.dialog).toHaveCount(0)
-    await expect(corrections.at.list.getByText('Always replaced', { exact: true })).toBeVisible()
+    await expect(corrections.at.alwaysReplaced).toBeVisible()
   })
 
   test('deletes a correction after a confirm, and puts the focus on the heading', async ({ page, api }) => {

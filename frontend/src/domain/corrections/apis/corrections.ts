@@ -15,6 +15,8 @@ import { CorrectionKeys } from './correction.keys'
 
 const directoryPageSize = 100
 
+const termOrder = new Intl.Collator(undefined, { numeric: true })
+
 async function readDirectory(signal: AbortSignal): Promise<CorrectionDto[]> {
   const corrections: CorrectionDto[] = []
   for (let pageNumber = 1; ; pageNumber++) {
@@ -24,7 +26,8 @@ async function readDirectory(signal: AbortSignal): Promise<CorrectionDto[]> {
       options: { suppressErrorToast: true },
     })
     corrections.push(...result.data)
-    if (!parsePagination(result).hasNext) return corrections
+    if (!parsePagination(result).hasNext)
+      return corrections.sort((one, other) => termOrder.compare(one.canonicalTerm, other.canonicalTerm) || (one.id < other.id ? -1 : 1))
   }
 }
 
