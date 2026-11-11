@@ -64,7 +64,7 @@ export type CaptureView =
   /** `isOnServer`: each slice is on the Server, and only the call that starts the words waits. */
   | { kind: 'offline'; durationMs: number; isOnServer: boolean }
   | { kind: 'serverDown'; durationMs: number; isOnServer: boolean }
-  | { kind: 'refused'; text: string; clientRecordingId: string }
+  | { kind: 'refused'; text: string; clientRecordingId: string; canSendAgain: boolean }
   | { kind: 'transcribing'; problemText: string | null }
   /** `problemText`: the words came, but the Server names a problem, such as a part of the audio that it lost. */
   | { kind: 'ready'; sessionId: string; problemText: string | null }
@@ -94,7 +94,9 @@ export const waitsOnlyForItsEnd = (capture: StoredCapture) => capture.isEnded &&
 
 function viewOfUpload(capture: StoredCapture, isOnline: boolean): CaptureView {
   const { durationMs } = capture
-  if (capture.problem?.kind === 'refused') return { kind: 'refused', text: capture.problem.text, clientRecordingId: capture.clientRecordingId }
+  if (capture.problem?.kind === 'refused') {
+    return { kind: 'refused', text: capture.problem.text, clientRecordingId: capture.clientRecordingId, canSendAgain: capture.problem.canSendAgain !== false }
+  }
   const isOnServer = waitsOnlyForItsEnd(capture)
   if (!isOnline || capture.problem?.kind === 'offline') return { kind: 'offline', durationMs, isOnServer }
   if (capture.problem?.kind === 'serverDown') return { kind: 'serverDown', durationMs, isOnServer }

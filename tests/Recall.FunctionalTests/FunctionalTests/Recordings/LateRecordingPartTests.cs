@@ -3,6 +3,7 @@ namespace Recall.FunctionalTests.FunctionalTests.Recordings;
 using System.Net;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using BackWave.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Recall.Server.Domain.Recordings;
@@ -261,7 +262,8 @@ public class LateRecordingPartTests : TestBase
 
         // Assert
         late.StatusCode.ShouldBe(HttpStatusCode.Conflict);
-        (await late.Content.ReadAsStringAsync()).ShouldContain("The server removed the audio of this recording");
+        var body = await late.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("errors").GetProperty(Recording.AudioField)[0].GetString()!.ShouldContain("The server removed the audio of this recording");
         (await FactoryClient.GetRecordingAsync(recording.Id)).Status.ShouldBe(nameof(RecordingStatus.Transcribed));
     }
 

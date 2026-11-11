@@ -232,6 +232,24 @@ test('the browser lets the audio go when the person deleted the entry, and its r
   expect(queryClient.getQueryState(SessionKeys.timeline())?.isInvalidated).toBe(true)
 })
 
+test('a refusal because the server removed the audio keeps the audio and offers no send again', async () => {
+  // Arrange
+  const detail = 'The server removed the audio of this recording, so a late part cannot join it.'
+  await commands.answerRequests([
+    ...serverTakesAll,
+    { method: 'PUT', path: '/api/v1/recordings/rec_1/slices/0', status: 409, body: { status: 409, title: 'Conflict', detail, errors: { audio: [detail] } } },
+  ])
+  const capture = await aStoredCapture()
+  await endCapture(capture.clientRecordingId)
+
+  // Act
+  startQueue()
+
+  // Assert
+  await expect.poll(async () => (await theCapture())?.problem, { timeout: 5_000 }).toEqual({ kind: 'refused', text: detail, canSendAgain: false })
+  expect(await readSlice(capture.clientRecordingId, 0)).not.toBeNull()
+})
+
 test('a refusal keeps the audio and stops the queue until the person sends again', async () => {
   // Arrange
   await commands.answerRequests([...serverTakesAll, { method: 'PUT', path: '/api/v1/recordings/rec_1/slices/0', status: 422, body: { status: 422, title: 'Invalid', detail: 'The slice is too large.' } }])

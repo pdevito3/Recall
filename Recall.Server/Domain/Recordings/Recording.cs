@@ -23,6 +23,9 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
     private const string ByteLengthField = "byteLength";
     private const string StatusField = "status";
 
+    /// <summary>The field of a refusal that holds for good: the audio is gone, so a client cannot send the rest again.</summary>
+    public const string AudioField = "audio";
+
     [NotSensitive] public string TenantId { get; private set; } = default!;
 
     [NotSensitive] public string UserId { get; private set; } = default!;
@@ -118,7 +121,7 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
         if (QuietEndThroughSlice is null)
             throw new ConflictException(StatusField, "This recording is finished, so it takes no new slice.");
         if (AudioDeletedAt is not null)
-            throw new ConflictException(StatusField, "The server removed the audio of this recording, so a late part cannot join it.");
+            throw new ConflictException(AudioField, "The server removed the audio of this recording, so a late part cannot join it.");
 
         Status = RecordingStatus.Receiving;
         Problem = RecordingProblem.None;

@@ -40,16 +40,18 @@ export interface StepFailure {
   status: number | null
   text: string
   isOnline: boolean
+  /** The Server removed the audio of the Recording, so it takes no more of it. */
+  isAudioGone?: boolean
 }
 
 const waitsAndTriesAgain = (status: number) => status === 401 || status === 408 || status === 429 || status >= 500
 
-export function verdictOf(step: UploadStep, { status, text, isOnline }: StepFailure): FailureVerdict {
+export function verdictOf(step: UploadStep, { status, text, isOnline, isAudioGone }: StepFailure): FailureVerdict {
   if (status === null || waitsAndTriesAgain(status)) return { kind: 'retry', problem: isOnline ? { kind: 'serverDown' } : { kind: 'offline' } }
   // The create of a deleted Session gives 409, and a Recording in a deleted Session gives 404.
   if ((step.kind === 'createEntry' && status === 409) || (step.kind === 'createRecording' && status === 404)) return { kind: 'newEntry' }
   if ((step.kind === 'sendSlice' || step.kind === 'finish') && status === 404) return { kind: 'gone' }
-  return { kind: 'refused', problem: { kind: 'refused', text } }
+  return { kind: 'refused', problem: isAudioGone ? { kind: 'refused', text, canSendAgain: false } : { kind: 'refused', text } }
 }
 
 const firstWaitMs = 1_000

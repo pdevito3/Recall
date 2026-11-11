@@ -2,7 +2,11 @@ import type { RecordingForCreationDtoFormatEnumKey } from '@/api/generated/model
 import { openChannel } from '@/lib/browser-channel'
 
 /** Why the last upload step of a capture did not work. The audio stays in this browser in each case. */
-export type UploadProblem = { kind: 'offline' } | { kind: 'serverDown' } | { kind: 'refused'; text: string }
+export type UploadProblem =
+  | { kind: 'offline' }
+  | { kind: 'serverDown' }
+  /** `canSendAgain` is false when no send can work, as when the Server removed the audio that the rest would join. */
+  | { kind: 'refused'; text: string; canSendAgain?: false }
 
 /**
  * One recording of this browser, from the tap to the finish on the Server. Slices `sentSlices` to `storedSlices - 1` wait

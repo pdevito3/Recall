@@ -65,8 +65,15 @@ function audioText(audio: StoredCapture[]) {
   const notStarted = missing.length < audio.length ? ` ${wordsStartText}` : ''
   if (missing.length === 0) return notStarted.trim()
   const total = clock(missing.reduce((sum, capture) => sum + unsentMsOf(capture), 0))
-  const refused = missing.some(({ problem }) => problem?.kind === 'refused') ? ' A recording that the server refused waits on the journal page for you to send it again.' : ''
-  return `${total} of audio did not reach the server. If you keep it, it stays in this browser and uploads when you sign in here again.${refused}${notStarted}`
+  const goneCount = missing.filter(({ problem }) => problem?.kind === 'refused' && problem.canSendAgain === false).length
+  const keep =
+    goneCount === 0
+      ? 'If you keep it, it stays in this browser and uploads when you sign in here again.'
+      : goneCount === missing.length
+        ? 'If you keep it, it stays in this browser, but it cannot upload, because the server removed the audio that it would join.'
+        : 'If you keep it, it stays in this browser. The audio that the server can take uploads when you sign in here again, and the rest cannot, because the server removed the audio that it would join.'
+  const refused = missing.some(({ problem }) => problem?.kind === 'refused' && problem.canSendAgain !== false) ? ' A recording that the server refused waits on the journal page for you to send it again.' : ''
+  return `${total} of audio did not reach the server. ${keep}${refused}${notStarted}`
 }
 
 /** Each slice of each recording is on the server, and only the start of the words did not go, so a sign-out loses no audio. */

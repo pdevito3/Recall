@@ -77,6 +77,22 @@ test('audio that did not go is named at a sign-out, and a keep leaves it in this
   expect(await capturesOf(member.identifier)).toMatchObject([{ clientRecordingId: 'cap_1', storedSlices: 2, sentSlices: 1 }])
 })
 
+test('audio whose recording lost its audio on the server is not said to upload at a sign-in, nor to wait to go again', { timeout: 15_000 }, async () => {
+  await audioThatDidNotGo({ kind: 'refused', text: 'The server removed the audio of this recording, so a late part cannot join it.', canSendAgain: false })
+  vi.mocked(unsentWordsOnThisDevice).mockReturnValue([])
+  const screen = await render(<UnsentWordsAtLogoutDialog />)
+  const finished = settleUnsentWords(() => undefined)
+
+  const text = screen.getByText(/0:01 of audio did not reach the server\./)
+  await expect.element(text, { timeout: 10_000 }).toBeVisible()
+  expect(text.element().textContent).toMatch(/^0:01 of audio did not reach the server\. If you keep it, it stays in this browser, but it cannot upload, because the server removed the audio that it would join\. If you discard it/)
+  expect(text.element().textContent).not.toMatch(/journal page|sign in here again/)
+  await screen.getByRole('button', { name: 'Keep audio and sign out' }).click()
+
+  await (await finished)()
+  expect(await capturesOf(member.identifier)).toMatchObject([{ clientRecordingId: 'cap_1' }])
+})
+
 test('a discard at a sign-out ends the part that the server has, and the audio goes from this browser', async () => {
   // A refusal waits for the person, so the send before the sign-out has nothing to try.
   await audioThatDidNotGo({ kind: 'refused', text: 'The audio is larger than 8 MiB.' })

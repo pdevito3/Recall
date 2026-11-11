@@ -16,7 +16,7 @@ import { notePageUser } from '@/lib/page-user'
 import type { Answer } from '@/test/answer'
 import { member, signedInMember } from '@/test/session'
 
-import { addCapture, capturesOf, removeCapture, storeSlice, updateCapture, type StoredCapture } from '../audio-store'
+import { addCapture, capturesOf, removeCapture, storeSlice, updateCapture, type StoredCapture, type UploadProblem } from '../audio-store'
 import { useSendStoredAudio } from '../use-send-stored-audio'
 import { MicCard } from './mic-card'
 
@@ -294,9 +294,27 @@ test('a refusal of the server shows its words, and Send again sends the audio ag
   expect((await commands.takeSentRequests()).map(({ method, path }) => `${method} ${path}`)).toEqual(['PUT /api/v1/recordings/rec_1/slices/0', 'POST /api/v1/recordings/rec_1/finish'])
 })
 
+test('a late part whose recording lost its audio on the server offers Discard and no Send again', async () => {
+  // Arrange
+  const text = 'The server removed the audio of this recording, so a late part cannot join it.'
+  await aFinishedCapture({ storedSlices: 0, storedBytes: 0, sentSlices: 0, isFinished: false, problem: { kind: 'refused', text, canSendAgain: false } })
+  await storeSlice('cap_1', 0, new Uint8Array([1, 2, 3]).buffer, 1_000)
+  await aRefusedCapture('cap_0', 'rec_0', 180_000, { kind: 'refused', text, canSendAgain: false })
+
+  // Act
+  const screen = await openHome([{ method: 'GET', path: '/api/v1/me/settings', body: setting }])
+
+  // Assert
+  await cardSays(screen, `${text} The audio stays in this browser.`)
+  const card = screen.getByRole('region', { name: 'Record an entry' })
+  await expect.element(card.getByRole('button', { name: 'Discard' }).first()).toBeVisible()
+  await expect.element(card.getByRole('button', { name: /^Discard the 0:04 recording from / })).toBeVisible()
+  expect(card.getByRole('button', { name: /^Send again/ }).elements()).toHaveLength(0)
+})
+
 const setting: UserSettingDto = { timeZone: 'Europe/Lisbon', timeZoneIsKnown: true, locationCaptureEnabled: false, requirePeopleProposalApproval: false, version: 1 }
 
-async function aRefusedCapture(clientRecordingId: string, recordingId: string, agoMs: number) {
+async function aRefusedCapture(clientRecordingId: string, recordingId: string, agoMs: number, problem: UploadProblem = { kind: 'refused', text: 'The audio is larger than 8 MiB.' }) {
   await aFinishedCapture({
     clientRecordingId,
     recordingId,
@@ -305,7 +323,7 @@ async function aRefusedCapture(clientRecordingId: string, recordingId: string, a
     storedBytes: 0,
     sentSlices: 0,
     isFinished: false,
-    problem: { kind: 'refused', text: 'The audio is larger than 8 MiB.' },
+    problem,
   })
   await storeSlice(clientRecordingId, 0, new Uint8Array([1, 2, 3]).buffer, 4_000)
 }

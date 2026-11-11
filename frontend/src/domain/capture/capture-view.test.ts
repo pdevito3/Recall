@@ -148,7 +148,12 @@ describe('the mic card', () => {
 
   it('shows the words of a refusal, with the capture to send again', () => {
     const latest = aCapture({ problem: { kind: 'refused', text: 'The audio format is not known.' } })
-    expect(captureViewOf(inputs({ latest }))).toEqual({ kind: 'refused', text: 'The audio format is not known.', clientRecordingId: 'c1' })
+    expect(captureViewOf(inputs({ latest }))).toEqual({ kind: 'refused', text: 'The audio format is not known.', clientRecordingId: 'c1', canSendAgain: true })
+  })
+
+  it('offers no send again of a late part whose recording lost its audio on the server', () => {
+    const latest = aCapture({ problem: { kind: 'refused', text: 'The server removed the audio.', canSendAgain: false } })
+    expect(captureViewOf(inputs({ latest }))).toEqual({ kind: 'refused', text: 'The server removed the audio.', clientRecordingId: 'c1', canSendAgain: false })
   })
 
   it('follows the Server row once the Server has all of the audio', () => {

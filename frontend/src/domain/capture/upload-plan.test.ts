@@ -76,6 +76,10 @@ describe('a failed step', () => {
     expect(verdictOf(send, failure(422))).toEqual({ kind: 'refused', problem: { kind: 'refused', text: 'The Server refused it.' } })
     expect(verdictOf(send, failure(409))).toEqual({ kind: 'refused', problem: { kind: 'refused', text: 'The Server refused it.' } })
   })
+
+  it('keeps the audio of a late part whose recording lost its audio, and offers no send again', () => {
+    expect(verdictOf(send, { ...failure(409), isAudioGone: true })).toEqual({ kind: 'refused', problem: { kind: 'refused', text: 'The Server refused it.', canSendAgain: false } })
+  })
 })
 
 describe('the wait before a next try', () => {

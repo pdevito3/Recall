@@ -11,7 +11,7 @@ import { deleteSession } from '@/api/generated/sessions/clients/delete-session'
 import { getSession } from '@/api/generated/sessions/clients/get-session'
 import { refreshTimelineHead } from '@/domain/sessions/apis/timeline-cache'
 import { newUuid } from '@/lib/new-uuid'
-import { isProblemDetailsError } from '@/lib/problem-details'
+import { isProblemDetailsError, validationErrorsOf } from '@/lib/problem-details'
 
 import { CaptureKeys } from './apis/capture.keys'
 import { capturesOf, confirmSlice, endCapture, readSlice, removeCapture, subscribeToAudioStore, updateCapture, type StoredCapture } from './audio-store'
@@ -38,6 +38,8 @@ const failureOf = (error: unknown) => ({
   status: isProblemDetailsError(error) ? (error.status ?? null) : null,
   text: error instanceof Error ? error.message : 'The Server refused the audio.',
   isOnline: onlineManager.isOnline(),
+  // The field of the refusal that holds for good (`Recording.AudioField` on the Server).
+  isAudioGone: 'audio' in validationErrorsOf(error),
 })
 
 const callOptions = () => ({ signal: AbortSignal.timeout(callLimitMs), options: { suppressErrorToast: true } })

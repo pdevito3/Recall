@@ -248,7 +248,7 @@ function WaitingCaptures({ capture }: { capture: Capture }) {
                 )}
               </p>
               <div className="flex flex-wrap justify-center gap-2">
-                {other.problem?.kind === 'refused' && (
+                {other.problem?.kind === 'refused' && other.problem.canSendAgain !== false && (
                   <Button className="h-11 px-4" aria-label={`Send again ${name}`} onPress={() => capture.sendAgain(other.clientRecordingId)}>
                     Send again
                   </Button>
@@ -299,7 +299,7 @@ function Actions({ view, capture }: { view: CaptureView; capture: Capture }) {
     case 'refused':
       return (
         <div className="flex flex-wrap justify-center gap-2">
-          <Button className="h-11 px-4" onPress={() => capture.sendAgain(view.clientRecordingId)}>Send again</Button>
+          {view.canSendAgain && <Button className="h-11 px-4" onPress={() => capture.sendAgain(view.clientRecordingId)}>Send again</Button>}
           <DiscardAudio key={view.clientRecordingId} onDiscard={() => capture.discard(view.clientRecordingId)} />
         </div>
       )
