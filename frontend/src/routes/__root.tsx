@@ -15,7 +15,6 @@ import { AppSidebar } from '@/components/app-sidebar'
 import { useCurrentBreadcrumbName } from '@/components/breadcrumb-name'
 import { BreadcrumbNameProvider } from '@/components/breadcrumb-name-provider'
 import { Button } from '@/components/ui/button'
-import { login, returnUrlOf } from '@/domain/auth/apis/auth-actions'
 import { authUserQuery } from '@/domain/auth/apis/get-user'
 import { useLeftTheApp } from '@/domain/auth/apis/leave-the-app'
 import { PageOfAnotherPerson } from '@/domain/auth/components/page-of-another-person'
@@ -60,24 +59,14 @@ function RootComponent() {
 function SessionGate() {
   const session = useQuery(authUserQuery)
 
-  // A failed refetch keeps the data of the last answer, and that answer still decides.
-  if (session.data === null) return <GoToLogin />
+  // A failed refetch keeps the data of the last answer, and that answer still decides. A null answer already left the
+  // app (`guardPageAgainstEndedSession`), so the words that only the memory holds show before this unmounts the app.
+  if (session.data === null) return null
   if (session.data) return <Layout />
   // A refetch with no data sets the query back to pending and clears the error, so the count of errors keeps the alert.
   if (session.errorUpdateCount > 0) {
     return <SessionCheckFailed isRetrying={session.isFetching} onRetry={() => void session.refetch()} />
   }
-  return null
-}
-
-function GoToLogin() {
-  // StrictMode runs an effect twice in a dev build, and a second location.replace aborts the navigation of the first
-  const isGoing = useRef(false)
-  useEffect(() => {
-    if (isGoing.current) return
-    isGoing.current = true
-    login(returnUrlOf(window.location))
-  }, [])
   return null
 }
 

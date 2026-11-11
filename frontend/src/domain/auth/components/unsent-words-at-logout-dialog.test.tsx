@@ -32,7 +32,7 @@ test('the dialog names each text, so a discard removes only words that the perso
   const two = words('words of another tab')
   const { screen, finished } = await dialogFor([one, two])
 
-  const list = screen.getByRole('list', { name: 'Words that did not reach the server' })
+  const list = screen.getByRole('list', { name: 'Entries with words that did not reach the server' })
   await expect.element(list.getByText('first words')).toBeVisible()
   await expect.element(list.getByText('words of another tab')).toBeVisible()
   await screen.getByRole('button', { name: 'Discard words and sign out' }).click()
@@ -50,7 +50,7 @@ test('each text has its own Copy, so a person can take words before a sign-out',
   })
   const { screen, finished } = await dialogFor([words('first words'), words('words of another tab')])
 
-  const list = screen.getByRole('list', { name: 'Words that did not reach the server' })
+  const list = screen.getByRole('list', { name: 'Entries with words that did not reach the server' })
   await list.getByRole('button', { name: 'Copy words' }).nth(1).click()
 
   await vi.waitFor(() => expect(copied).toEqual(['words of another tab']))
@@ -107,7 +107,7 @@ test('words that go to memory while the person reads the list are asked about ag
 test('a list of many long texts stays in its box, and the buttons stay in view', async () => {
   const { screen, finished } = await dialogFor(Array.from({ length: 30 }, (_, index) => words(`words ${index} `.repeat(40))))
 
-  const list = screen.getByRole('list', { name: 'Words that did not reach the server' }).element()
+  const list = screen.getByRole('list', { name: 'Entries with words that did not reach the server' }).element()
   expect(list.clientHeight).toBeLessThan(200)
   await expect.element(screen.getByRole('button', { name: 'Keep words and sign out' })).toBeInViewport()
 

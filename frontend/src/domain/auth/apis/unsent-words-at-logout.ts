@@ -7,7 +7,7 @@ import { isAnyTagChangeUnsaved, settleMetadataSavers, stopMetadataSavers } from 
 import { settleSettingSaver, stopSettingSaver } from '@/domain/settings/apis/user-setting'
 import { pageUserOf } from '@/lib/page-user'
 
-type Choice = 'keep' | 'discard' | 'stay'
+type Choice = 'keep' | 'discard' | 'stay' | 'left'
 
 interface Question {
   unsent: UnsentWords[]
@@ -20,6 +20,7 @@ interface Question {
 const settleLimitMs = 5_000
 
 let question: Question | null = null
+let hasLeftTheApp = false
 const listeners = new Set<() => void>()
 
 const subscribe = (listener: () => void) => {
@@ -36,7 +37,7 @@ const setQuestion = (next: Question | null) => {
 
 export const useQuestionAboutUnsentWords = () => useSyncExternalStore(subscribe, () => question)
 
-export function answerAboutUnsentWords(choice: Choice) {
+export function answerAboutUnsentWords(choice: Exclude<Choice, 'left'>) {
   question?.answer(choice)
   setQuestion(null)
 }
@@ -47,11 +48,20 @@ const withinLimit = (settled: Promise<boolean>) =>
 /** The person chose to stay and copy the words, so the logout ends with no error. */
 export class StayedSignedIn extends Error {}
 
-/** A tab that leaves its session stops each saver first. A saver that still runs would ask at `beforeunload`, and a stay there leaves a hidden page. */
+/** The tab left the app another way before the sign-out ended, and that way shows the words, so the logout ends with no error. */
+export class LeftTheAppFirst extends Error {}
+
+/**
+ * A tab that leaves its session stops each saver first. A saver that still runs would ask at `beforeunload`, and a stay
+ * there leaves a hidden page. Its dialog goes with the app, so an open question ends, and no later one opens.
+ */
 export function stopSaversBeforeLeaving() {
   stopDraftSavers()
   stopSettingSaver()
   stopMetadataSavers()
+  hasLeftTheApp = true
+  question?.answer('left')
+  setQuestion(null)
 }
 
 /** Each tab tries to send its words, and then the list names all the words that did not go, also those of another tab. */
@@ -67,11 +77,13 @@ export async function settleUnsentWords(beforeAQuestion: () => void, afterAnAnsw
   let listed = first
   let choice: Choice = 'keep'
   while (listed.unsent.length > 0 || listed.isATagUnsaved) {
+    if (hasLeftTheApp) throw new LeftTheAppFirst()
     beforeAQuestion()
     const { unsent, isATagUnsaved } = listed
     const isAskedAgain = listed !== first
     choice = await new Promise<Choice>((answer) => setQuestion({ unsent, isATagUnsaved, isAskedAgain, answer }))
     if (choice === 'stay') throw new StayedSignedIn()
+    if (choice === 'left') throw new LeftTheAppFirst()
     afterAnAnswer()
     const now = await listUnsentWords()
     if (losesOnlyNamedWords(unsent, now.unsent) && (isATagUnsaved || !now.isATagUnsaved)) break

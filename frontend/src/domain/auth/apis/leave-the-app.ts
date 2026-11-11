@@ -6,8 +6,19 @@ import { stopSaversBeforeLeaving } from './unsent-words-at-logout'
 
 export const signInForAnotherPersonPage = '/auth/login?anotherPerson=1'
 
-/** Each way out of the signed-in app. A session that ends with no message to this tab (a 401, a revoke, an expiry, a restore of an ended page) is `sessionEnded`. */
-export type Departure = { why: 'anotherPerson' } | { why: 'signedOut' | 'signedOutInAnotherTab' | 'sessionEnded'; to: string }
+export const signedOutPage = '/auth/login?signedOut=1'
+
+export const loginPageFor = (returnUrl: string) => `/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`
+
+/** A load of the same page. A replace with the same URL and a hash only moves to the hash, so the hash stays out. */
+export const thisPageAgain = () => window.location.pathname + window.location.search
+
+/**
+ * Each way out of the signed-in app. A session that ends with no message to this tab (a 401, a revoke, an expiry, a
+ * restore of an ended page, a restore into a newer session) is `sessionEnded`. A restored page with no answer about its
+ * session is `sessionUnchecked`, and a load again from the error page is `pageDidNotLoad`.
+ */
+export type Departure = { why: 'anotherPerson' } | { why: 'signedOut' | 'signedOutInAnotherTab' | 'sessionEnded' | 'sessionUnchecked' | 'pageDidNotLoad'; to: string }
 
 export type LeftTheApp =
   | { why: 'anotherPerson'; hasLostWords: boolean }
@@ -50,10 +61,11 @@ export function showPage() {
 const warnOfTheLoss = (event: BeforeUnloadEvent) => event.preventDefault()
 
 /**
- * The one way out of the signed-in app. Words that only the memory of this tab holds have no other place, so the tab
- * shows them alone with a Copy before it goes, and goes only when the person says so. Another person must not read
- * them, so for that reason the words go at once, and the next page says that they are gone. A later reason to leave
- * keeps a shown screen of words, except another person.
+ * The one way out of the signed-in app, and the lint rule `no-restricted-syntax` in eslint.config.js refuses each other
+ * navigation in src. Words that only the memory of this tab holds have no other place, so the tab shows them alone with
+ * a Copy before it goes, and goes only when the person says so. Another person must not read them, so for that reason
+ * the words go at once, and the next page says that they are gone. A later reason to leave keeps a shown screen of
+ * words, except another person. An open question of a sign-out closes, because its dialog goes with the app.
  */
 export function leaveTheApp(departure: Departure) {
   if (left && (departure.why !== 'anotherPerson' || left.why === 'anotherPerson')) return
