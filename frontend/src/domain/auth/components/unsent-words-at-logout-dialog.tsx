@@ -46,8 +46,8 @@ function WordsThatDidNotGo({ unsent }: { unsent: UnsentWords[] }) {
         <li key={index} className="space-y-1.5">
           <p dir="auto" className="line-clamp-2 wrap-anywhere">{plainPreviewOf(words, previewLength)}</p>
           <CopyWords words={words} />
-          {isRefused && <p className="text-destructive">The server refused these words.</p>}
-          {isOnlyInMemory && <p className="text-destructive">Only an open page holds these words.</p>}
+          {isRefused && <p className="text-destructive">The server refused the newest text of this entry.</p>}
+          {isOnlyInMemory && <p className="text-destructive">Only an open page holds the newest text of this entry.</p>}
         </li>
       ))}
     </ul>
