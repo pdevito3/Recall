@@ -50,7 +50,7 @@ public class RecordingRaceTests : TestBase
     /// The first two slices, ended by the sweep after a day with no new slice (REC-23), so a third slice is a late part (REC-24).
     /// The sweep reads each owner, so the tests that use it run one at a time, and each ends only its own Recording.
     /// </summary>
-    private static async Task QuietEndAsync(TestingServiceScope scope, Recording recording, RecordingSweep sweep)
+    internal static async Task QuietEndAsync(TestingServiceScope scope, Recording recording, RecordingSweep sweep)
     {
         await scope.SendAsync(new StoreRecordingSlice.Command(recording.Id, 0, Slice));
         await scope.SendAsync(new StoreRecordingSlice.Command(recording.Id, 1, SecondSlice));

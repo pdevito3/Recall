@@ -203,12 +203,12 @@ test('one tap records into a new entry, and the card follows the audio until the
   await userEvent.click(screen.getByRole('button', { name: 'Record' }))
 
   // Assert
-  await cardSays(screen,'Recording')
+  await cardSays(screen, 'Recording')
   await expect.poll(async () => (await capturesOf(member.identifier))[0]?.storedSlices ?? 0, { timeout: 5_000 }).toBeGreaterThanOrEqual(2)
   expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(390)
 
   await userEvent.click(screen.getByRole('button', { name: 'Stop recording' }))
-  await cardSays(screen,'Writing the words', 10_000)
+  await cardSays(screen, 'Writing the words', 10_000)
   const sent = (await commands.takeSentRequests()).map(({ method, path }) => `${method} ${path}`)
   expect(sent.filter((call) => call === 'POST /api/v1/sessions')).toHaveLength(1)
   expect(sent[sent.length - 1]).toBe('POST /api/v1/recordings/rec_1/finish')
@@ -220,7 +220,7 @@ test('one tap records into a new entry, and the card follows the audio until the
   const heard = vi.fn()
   otherTab.onmessage = ({ data }) => heard(data)
   await commands.answerRequests([...onServer, recordingAnswer('GET', '/api/v1/recordings/rec_1', { status: 'Transcribed' })])
-  await cardSays(screen,'Your words are in', 10_000)
+  await cardSays(screen, 'Your words are in', 10_000)
   await expect.poll(() => heard.mock.calls).toEqual([['words']])
   await expect.element(screen.getByText(spoken)).toBeVisible()
   await expect.element(screen.getByRole('link', { name: 'Open entry' })).toHaveAttribute('href', '/sessions/ses_1')
@@ -231,15 +231,15 @@ test('a failed transcription keeps the audio on the server, and Try again starts
   await aFinishedCapture()
   const noWords = 'The audio is stored, but the server heard no words in it. Listen to it to check, or try again.'
   const screen = await openHome([recordingAnswer('GET', '/api/v1/recordings/rec_1', { status: 'Failed', problem: 'NoWordsFound', problemText: noWords })])
-  await cardSays(screen,'No words came from this audio')
-  await cardSays(screen,noWords)
+  await cardSays(screen, 'No words came from this audio')
+  await cardSays(screen, noWords)
   await commands.answerRequests([...onServer, recordingAnswer('POST', '/api/v1/recordings/rec_1/retry', { status: 'Received' }), recordingAnswer('GET', '/api/v1/recordings/rec_1', { status: 'Received' })])
 
   // Act
   await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
 
   // Assert
-  await cardSays(screen,'Writing the words')
+  await cardSays(screen, 'Writing the words')
   expect((await commands.takeSentRequests()).map(({ method, path }) => `${method} ${path}`)).toContain('POST /api/v1/recordings/rec_1/retry')
 })
 
@@ -252,8 +252,8 @@ test('a transcription that failed because the server lost the audio does not say
   const screen = await openHome([recordingAnswer('GET', '/api/v1/recordings/rec_1', { status: 'Failed', problem: 'AudioMissing', problemText: missing })])
 
   // Assert
-  await cardSays(screen,'No words came from this audio')
-  await cardSays(screen,missing)
+  await cardSays(screen, 'No words came from this audio')
+  await cardSays(screen, missing)
   await expect.element(screen.getByText('safe', { exact: false })).not.toBeInTheDocument()
 })
 
@@ -266,8 +266,8 @@ test('words that came with a lost part of the audio say that they have a gap, wi
   const screen = await openHome([recordingAnswer('GET', '/api/v1/recordings/rec_1', { status: 'Transcribed', problemText: lost })])
 
   // Assert
-  await cardSays(screen,'Your words are in, with a gap')
-  await cardSays(screen,lost)
+  await cardSays(screen, 'Your words are in, with a gap')
+  await cardSays(screen, lost)
   await expect.element(screen.getByRole('status').getByText('Your words are in, with a gap')).not.toHaveClass(/text-destructive/)
   expect(document.querySelector('section[aria-label="Record an entry"] [role="status"] svg')?.getAttribute('class')).toContain('text-amber-600')
 })
@@ -283,7 +283,7 @@ test('with no network the card says that the audio is safe in this browser and w
   await aFinishedCapture({ sessionId: null, recordingId: null, sentSlices: 0, isFinished: false, durationMs: 65_000 })
 
   // Assert
-  await cardSays(screen,'No network. The upload waits')
+  await cardSays(screen, 'No network. The upload waits')
   await cardSays(screen, '1:05 of audio is safe in this browser.')
   expect(await commands.takeSentRequests()).toEqual([])
   // The queue of this page sends when the network comes back, so it stops before the test goes online again.
@@ -631,7 +631,7 @@ test('on plain HTTP the card says that the mic needs HTTPS, and the mic stays of
   const screen = await openHome([])
 
   // Assert
-  await cardSays(screen,'The mic needs HTTPS')
+  await cardSays(screen, 'The mic needs HTTPS')
   await expect.element(screen.getByRole('button', { name: 'Record' })).toBeDisabled()
   await expect.element(screen.getByRole('link', { name: 'Turn on HTTPS' })).toBeVisible()
 })
@@ -661,8 +661,8 @@ test('a denied mic says how to allow it, and lets the person type instead', asyn
   await userEvent.click(screen.getByRole('button', { name: 'Record' }))
 
   // Assert
-  await cardSays(screen,'The browser blocks the mic')
-  await cardSays(screen,'set Microphone to Allow, then try again. You can type your entry now.')
+  await cardSays(screen, 'The browser blocks the mic')
+  await cardSays(screen, 'set Microphone to Allow, then try again. You can type your entry now.')
   await expect.element(screen.getByRole('button', { name: 'Type instead' })).toBeVisible()
   await expect.element(screen.getByRole('button', { name: 'Try again' })).toBeEnabled()
   expect(await capturesOf(member.identifier)).toEqual([])

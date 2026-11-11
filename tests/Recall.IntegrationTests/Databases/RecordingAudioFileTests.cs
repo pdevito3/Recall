@@ -83,6 +83,35 @@ public class RecordingAudioFileTests : TestBase
         AudioFiles(store, recording).ShouldHaveSingleItem();
     }
 
+    [Test]
+    [Property("Rule", "REC-24")]
+    [NotInParallel("QuietEndAsync")]
+    public async Task a_late_finish_that_loses_its_save_deletes_only_its_own_audio_file_and_joins_again()
+    {
+        // Arrange
+        var pause = PauseAtQuery.After("recordings.finish.slices");
+        await using var services = pause.BuildServices();
+        var (underTest, rival, recording) = await RecordingRaceTests.ScopesWithARecordingAsync(services);
+        await RecordingRaceTests.QuietEndAsync(rival, recording, rival.GetService<RecordingSweep>());
+        await rival.SendAsync(new StoreRecordingSlice.Command(recording.Id, 2, LateSlice));
+        var store = rival.GetService<FileStore>();
+
+        // Act
+        var finish = underTest.SendAsync(new FinishRecording.Command(recording.Id,
+            new RecordingFinishDto { SliceCount = 3, ByteLength = Slice.Length + SecondSlice.Length + LateSlice.Length }));
+        await pause.ReachedAsync();
+        // A rival save that joins nothing, so the first save of the finish loses on the version.
+        await TestFixture.ExecuteOutOfBandAsync("UPDATE recordings SET version = version + 1 WHERE id = @id", ("@id", recording.Id));
+        pause.Release();
+        var finished = await finish;
+
+        // Assert
+        finished.Status.ShouldBe(nameof(RecordingStatus.Received));
+        finished.ProblemText.ShouldBeNull();
+        RecordingRaceTests.StoredAudio(rival, recording).ShouldBe([.. Slice, .. SecondSlice, .. LateSlice]);
+        AudioFiles(store, recording).ShouldHaveSingleItem();
+    }
+
     private static bool Changes(DbContext context, Recording recording, Func<Recording, bool> matches)
         => context.ChangeTracker.Entries<Recording>().Any(e => e.Entity.Id == recording.Id && e.State == EntityState.Modified && matches(e.Entity));
 }
