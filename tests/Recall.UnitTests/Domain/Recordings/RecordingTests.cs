@@ -24,6 +24,119 @@ public class RecordingTests
     }
 
     [Test]
+    public void a_quiet_upload_ends_with_the_slices_that_came_also_with_a_gap()
+    {
+        // Arrange
+        var recording = Receiving();
+        recording.StoreSlice(0, 10);
+        recording.StoreSlice(2, 5);
+
+        // Act
+        recording.EndQuietUpload(2, TranscriptionEngineKind.Cloud);
+
+        // Assert
+        recording.Status.ShouldBe(RecordingStatus.Received);
+        recording.Engine.ShouldBe(TranscriptionEngineKind.Cloud);
+        recording.ByteLength.ShouldBe(15);
+        Should.Throw<ConflictException>(() => recording.StoreSlice(1, 5));
+    }
+
+    [Test]
+    public void a_quiet_upload_with_no_slice_fails_with_its_reason_and_a_retry_cannot_start_it()
+    {
+        // Arrange
+        var recording = Receiving();
+
+        // Act
+        recording.EndQuietUpload(0, TranscriptionEngineKind.Local);
+
+        // Assert
+        recording.Status.ShouldBe(RecordingStatus.Failed);
+        recording.Problem.ShouldBe(RecordingProblem.NoAudioReceived);
+        Should.Throw<ConflictException>(() => recording.Retry(TranscriptionEngineKind.Local));
+        recording.Status.ShouldBe(RecordingStatus.Failed);
+    }
+
+    [Test]
+    public void only_an_upload_that_still_receives_can_end_as_quiet()
+    {
+        // Arrange
+        var recording = Received();
+
+        // Act and assert
+        Should.Throw<ConflictException>(() => recording.EndQuietUpload(1, TranscriptionEngineKind.Local));
+        recording.Status.ShouldBe(RecordingStatus.Received);
+    }
+
+    [Test]
+    [Arguments(RecordingStatus.Received)]
+    [Arguments(RecordingStatus.Transcribing)]
+    [Arguments(RecordingStatus.Transcribed)]
+    public void a_late_slice_after_a_quiet_end_opens_the_upload_again_and_the_finish_needs_only_the_late_part(RecordingStatus statusAtReturn)
+    {
+        // Arrange
+        var recording = Receiving();
+        recording.StoreSlice(0, 10);
+        recording.StoreSlice(2, 5);
+        recording.EndQuietUpload(2, TranscriptionEngineKind.Local);
+        if (statusAtReturn != RecordingStatus.Received)
+            recording.BeginAttempt();
+        if (statusAtReturn == RecordingStatus.Transcribed)
+        {
+            recording.AdvanceTo(16_000, 16_000, hasWords: true);
+            recording.Complete(Now);
+        }
+
+        // Act
+        recording.StoreSlice(3, 4);
+
+        // Assert
+        recording.Status.ShouldBe(RecordingStatus.Receiving);
+        recording.Problem.ShouldBe(RecordingProblem.None);
+        recording.ByteLength.ShouldBe(19);
+        recording.AudioGrewSince(2).ShouldBeTrue();
+        Should.Throw<ConflictException>(() => recording.StoreSlice(1, 5));
+        recording.Finish([0, 2, 3], 4, 19, TranscriptionEngineKind.Local);
+        recording.Status.ShouldBe(RecordingStatus.Received);
+        recording.QuietEndThroughSlice.ShouldBeNull();
+        recording.TranscribedSamples.ShouldBe(statusAtReturn == RecordingStatus.Transcribed ? 16_000 : 0);
+        Should.Throw<ConflictException>(() => recording.StoreSlice(4, 1));
+    }
+
+    [Test]
+    public void an_upload_that_ended_with_no_audio_takes_its_first_slice()
+    {
+        // Arrange
+        var recording = Receiving();
+        recording.EndQuietUpload(0, TranscriptionEngineKind.Local);
+
+        // Act
+        recording.StoreSlice(0, 10);
+
+        // Assert
+        recording.Status.ShouldBe(RecordingStatus.Receiving);
+        recording.Problem.ShouldBe(RecordingProblem.None);
+    }
+
+    [Test]
+    public void a_late_slice_after_the_audio_was_removed_is_a_conflict_and_changes_nothing()
+    {
+        // Arrange
+        var recording = Receiving();
+        recording.StoreSlice(0, 10);
+        recording.EndQuietUpload(1, TranscriptionEngineKind.Local);
+        recording.BeginAttempt();
+        recording.AdvanceTo(16_000, 16_000, hasWords: true);
+        recording.Complete(Now);
+        recording.MarkAudioDeleted(Now);
+
+        // Act and assert
+        Should.Throw<ConflictException>(() => recording.StoreSlice(1, 5)).Message.ShouldContain("removed the audio");
+        recording.Status.ShouldBe(RecordingStatus.Transcribed);
+        recording.ByteLength.ShouldBe(10);
+    }
+
+    [Test]
     public void a_new_recording_is_receiving_on_the_local_engine()
     {
         // Arrange and act

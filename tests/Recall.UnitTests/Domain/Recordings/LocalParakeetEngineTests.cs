@@ -46,7 +46,7 @@ public class LocalParakeetEngineTests
             return new LocalParakeetEngine(new ModelStore(settings), new WorkAudio(settings), settings);
         }
 
-        public TranscriptionInput Input(long start = 0) => new(Path.Combine(Folder, "audio.webm"), Folder, start);
+        public TranscriptionInput Input(long start = 0) => new(Path.Combine(Folder, "audio.webm"), Path.Combine(Folder, "work.wav"), start);
     }
 
     private static async Task<List<TranscriptChunk>> CollectAsync(ITranscriptionEngine engine, TranscriptionInput input, CancellationToken cancellationToken = default)

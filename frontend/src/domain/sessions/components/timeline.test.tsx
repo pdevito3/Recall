@@ -95,3 +95,34 @@ test('each day of the Journal links to the Summary of its own day', async () => 
     .element(screen.getByRole('link', { name: `Summary of ${headingOf(sixDaysAgo)}` }))
     .toHaveAttribute('href', `/summaries?period=Day&date=${sixDaysAgo.toString()}`)
 })
+
+test('a fast load shows the entries with no flash of the loading words', async () => {
+  // Arrange
+  let didTheWordsShow = false
+  const watch = new MutationObserver(() => {
+    didTheWordsShow ||= document.body.textContent?.includes('Loading your entries') ?? false
+  })
+  watch.observe(document.body, { childList: true, subtree: true, characterData: true })
+
+  // Act
+  const { screen } = await renderJournal()
+
+  // Assert
+  await expect.element(screen.getByText('Walked to the lake after work and met Sam for coffee.')).toBeVisible()
+  watch.disconnect()
+  expect(didTheWordsShow).toBe(false)
+})
+
+test('a slow load says that the entries load', async () => {
+  // Arrange
+  const firstPage = '/api/v1/sessions?pageSize=50'
+  await commands.holdRequests(firstPage)
+
+  // Act
+  const { screen } = await renderJournal()
+
+  // Assert
+  await expect.element(screen.getByRole('status', { name: 'Loading your entries' })).toBeVisible()
+  await commands.releaseRequests(firstPage)
+  await expect.element(screen.getByText('Walked to the lake after work and met Sam for coffee.')).toBeVisible()
+})

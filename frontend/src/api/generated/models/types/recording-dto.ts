@@ -46,7 +46,8 @@ export const recordingDtoProblemEnum = {
     ProviderUnavailable: "ProviderUnavailable",
     ProviderRefused: "ProviderRefused",
     ProviderBadAnswer: "ProviderBadAnswer",
-    ProviderKeyUnreadable: "ProviderKeyUnreadable"
+    ProviderKeyUnreadable: "ProviderKeyUnreadable",
+    NoAudioReceived: "NoAudioReceived"
 } as const;
 
 export type RecordingDtoProblemEnumKey = (typeof recordingDtoProblemEnum)[keyof typeof recordingDtoProblemEnum];

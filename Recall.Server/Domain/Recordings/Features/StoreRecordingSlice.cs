@@ -53,7 +53,7 @@ public static class StoreRecordingSlice
 
             if (request.Index == 0)
                 ValidationException.Must(RecordingFiles.StartsAsFormat(recording.Format, request.Body), "body",
-                    "The first slice is not audio in the format that this Recording names.");
+                    "The first slice is not audio in the format that this recording names.");
 
             recording.StoreSlice(request.Index, request.Body.Length);
             dbContext.RecordingSlices.Add(RecordingSlice.Of(recording, request.Index, request.Body.Length, sha256));

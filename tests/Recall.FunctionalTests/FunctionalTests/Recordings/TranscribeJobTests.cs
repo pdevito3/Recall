@@ -228,7 +228,7 @@ public class TranscribeJobTests : TestBase
     {
         // Arrange
         var (recording, admin) = await FinishedRecordingAsync();
-        Services.GetRequiredService<FileStore>().Delete(FileKey.ForTenant(admin.TenantId, RecordingFiles.RootFolder, admin.Id, recording.Id, "audio.webm"));
+        Services.GetRequiredService<FileStore>().Delete(RecordingFiles.Audio(RecordingScenario.RowOf(recording.Id, admin)));
 
         // Act
         await RunAsync(JobWith(Saying("words")), recording, admin);
@@ -257,8 +257,8 @@ public class TranscribeJobTests : TestBase
     private static async IAsyncEnumerable<TranscriptChunk> DeleteThenSay(HttpClient client, RecordingDto recording, TranscriptionInput input, [EnumeratorCancellation] CancellationToken token)
     {
         (await client.DeleteAsync(ApiRoutes.Recordings.GetRecord(recording.Id), token)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
-        Directory.CreateDirectory(input.WorkFolder);
-        await File.WriteAllBytesAsync(Path.Combine(input.WorkFolder, "work.wav"), [1], token);
+        Directory.CreateDirectory(Path.GetDirectoryName(input.WorkAudioPath)!);
+        await File.WriteAllBytesAsync(input.WorkAudioPath, [1], token);
         yield return new TranscriptChunk(16_000, 16_000, "words");
     }
 
@@ -295,15 +295,15 @@ public class TranscribeJobTests : TestBase
 
     private static async IAsyncEnumerable<TranscriptChunk> WriteWorkAudioThen(IAsyncEnumerable<TranscriptChunk> chunks, TranscriptionInput input)
     {
-        await File.WriteAllBytesAsync(Path.Combine(input.WorkFolder, RecordingFiles.WorkAudioName), [1]);
-        await File.WriteAllBytesAsync(Path.Combine(input.WorkFolder, RecordingFiles.PartialWorkAudioName), [1]);
+        await File.WriteAllBytesAsync(input.WorkAudioPath, [1]);
+        await File.WriteAllBytesAsync(input.WorkAudioPath + RecordingFiles.PartialSuffix, [1]);
         await foreach (var chunk in chunks)
             yield return chunk;
     }
 
     private static FakeEngine WritingWorkAudio(FakeEngine engine) => new(true, (input, token) => WriteWorkAudioThen(engine.RunAsync(input, token), input));
 
-    private static FileKey WorkAudioOf(RecordingDto recording, User owner) => RecordingFiles.WorkAudio(owner.TenantId, owner.Id, recording.Id);
+    private static FileKey WorkAudioOf(RecordingDto recording, User owner) => RecordingFiles.WorkAudio(RecordingScenario.RowOf(recording.Id, owner));
 
     private static bool Exists(FileKey key) => Services.GetRequiredService<FileStore>().Exists(key);
 
@@ -318,7 +318,7 @@ public class TranscribeJobTests : TestBase
         // Act
         await RunAsync(job, recording, admin);
         var removed = !Exists(WorkAudioOf(recording, admin));
-        var partialRemoved = !Exists(RecordingFiles.PartialWorkAudio(admin.TenantId, admin.Id, recording.Id));
+        var partialRemoved = !Exists(RecordingFiles.PartialWorkAudio(RecordingScenario.RowOf(recording.Id, admin)));
         var retry = await FactoryClient.PostAsync(ApiRoutes.Recordings.Retry(recording.Id), null);
         await RunAsync(JobWith(WritingWorkAudio(Saying("first words", "next words"))), recording, admin);
 

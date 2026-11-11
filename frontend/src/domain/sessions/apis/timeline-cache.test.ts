@@ -4,7 +4,7 @@ import { expect, test, vi } from 'vitest'
 import type { SessionSummaryDto } from '@/api/generated/models/types/session-summary-dto'
 
 import { SessionKeys } from './session.keys'
-import { patchTimelineRow, withFirstPageOnly, withRowPatched, withRowRemoved, type TimelineData } from './timeline-cache'
+import { followNewWordsOfOtherTabs, patchTimelineRow, tellOtherTabsOfNewWords, withFirstPageOnly, withRowPatched, withRowRemoved, type TimelineData } from './timeline-cache'
 
 const row = (id: string): SessionSummaryDto =>
   ({ id, preview: 'old' }) as SessionSummaryDto
@@ -64,4 +64,25 @@ test('a row that changes during a read reads again, so the read does not put the
   await vi.waitFor(() => expect(client.isFetching()).toBe(0))
   expect(client.getQueryData<TimelineData>(SessionKeys.timeline())?.pages[0].items[0].preview).toBe('saved words')
   stop()
+})
+
+test('new words in another tab read the timeline of this tab again, and this tab tells the others of its own', async () => {
+  const read = vi.fn(() => Promise.resolve({ items: [row('a')], nextCursor: null }))
+  const client = new QueryClient()
+  const observer = new InfiniteQueryObserver(client, { queryKey: SessionKeys.timeline(), queryFn: read, initialPageParam: undefined, getNextPageParam: () => undefined, staleTime: Infinity })
+  const stop = observer.subscribe(() => undefined)
+  const stopFollowing = followNewWordsOfOtherTabs(client)
+  const otherTab = new BroadcastChannel('recall.timeline')
+  const heard = vi.fn()
+  otherTab.onmessage = heard
+  await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(1))
+
+  otherTab.postMessage('words')
+  tellOtherTabsOfNewWords()
+
+  await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2))
+  await vi.waitFor(() => expect(heard).toHaveBeenCalledTimes(1))
+  stopFollowing()
+  stop()
+  otherTab.close()
 })

@@ -52,6 +52,7 @@ const idleSnapshot: DraftSnapshot = { status: { kind: 'idle' }, conflict: null, 
 const noSubscription = () => () => undefined
 
 const isTheEntryGone = (error: unknown) => isProblemDetailsError(error) && error.status === 404
+const isTouchFirst = () => window.matchMedia('(pointer: coarse)').matches
 const isWritingNow = () => document.activeElement?.closest('[contenteditable="true"]') != null
 
 const openingWords = (saver: DraftSaver | null, sessionId: string | null, cached: SessionDto | undefined) => {
@@ -294,7 +295,8 @@ export function useComposer() {
   return {
     editorKey: editor.key,
     words: editor.words,
-    autoFocus: mayTakeFocusOnThisPage() || editor.takesFocus,
+    // On a phone, a focus opens the keyboard over the mic card, and the mic is the first thing a person reaches for there.
+    autoFocus: (mayTakeFocusOnThisPage() && !isTouchFirst()) || editor.takesFocus,
     status: shownStatusOf(snapshot),
     conflict: saver && !isReading ? snapshot.conflict : null,
     composingSessionId: sessionId,

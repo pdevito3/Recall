@@ -13,7 +13,11 @@ import { render } from 'vitest-browser-react'
 import { commands, userEvent } from 'vitest/browser'
 
 import { Link } from '@/components/ui/link'
+import { guardPageAgainstEndedSession } from '@/domain/auth/apis/auth-actions'
 import { AuthKeys } from '@/domain/auth/apis/auth.keys'
+import { LeftTheAppFirst, settleUnsentWords } from '@/domain/auth/apis/unsent-words-at-logout'
+import { addCapture, capturesOf, removeCapture, storeSlice } from '@/domain/capture/audio-store'
+import { notePageUser } from '@/lib/page-user'
 import { MembershipKeys } from '@/domain/membership/apis/membership.keys'
 import { Route as RootRoute } from '@/routes/__root'
 import { routeTree } from '@/routeTree.gen'
@@ -96,7 +100,7 @@ async function renderLayoutAt(path: string) {
     </QueryClientProvider>,
   )
   await expect.element(screen.getByRole('main')).toBeVisible()
-  return { screen, router }
+  return { screen, router, queryClient }
 }
 
 test('the breadcrumb of a route with params shows the name that the route declares', async () => {
@@ -252,4 +256,44 @@ test('a session answer that is not a user shows that the session check failed, a
   await expect.element(alert.getByText('We could not check whether you are signed in. Try again in a moment.')).toBeVisible()
   await expect.element(alert.getByRole('button', { name: 'Try Again' })).toBeVisible()
   expect(screen.getByRole('navigation', { name: 'Main' }).elements()).toHaveLength(0)
+})
+
+// A way out holds for the rest of the life of the page, so this test is the last one.
+test('a session that ends while the sign-out question names audio closes the question, and the screen of the way out names the audio, which stays in this browser', { timeout: 15_000 }, async () => {
+  notePageUser(member.identifier)
+  // A refusal waits for the person, so the send before the sign-out has nothing to try.
+  await addCapture({
+    clientRecordingId: 'cap_expiry',
+    owner: member.identifier,
+    clientSessionId: 'c1',
+    startedAt: new Date(Date.now() - 60_000).toISOString(),
+    format: 'Webm',
+    storedSlices: 0,
+    storedBytes: 0,
+    sentSlices: 0,
+    durationMs: 0,
+    isEnded: true,
+    sessionId: 'ses_1',
+    recordingId: 'rec_1',
+    isFinished: false,
+    problem: { kind: 'refused', text: 'The audio is larger than 8 MiB.' },
+    touchedAt: Date.now(),
+  })
+  await storeSlice('cap_expiry', 0, new Uint8Array(1_000).buffer, 1_000)
+  const { screen, queryClient } = await renderLayoutAt('/')
+  guardPageAgainstEndedSession(queryClient)
+  const finished = settleUnsentWords(() => undefined)
+  await expect.element(screen.getByRole('alertdialog'), { timeout: 10_000 }).toBeVisible()
+
+  // The session ended on the Server, and the next answer of the session check says so.
+  queryClient.setQueryData(AuthKeys.user(), null)
+
+  await expect(finished).rejects.toBeInstanceOf(LeftTheAppFirst)
+  await expect.element(screen.getByRole('heading', { level: 1, name: 'Your session ended' })).toBeVisible()
+  expect(screen.getByRole('alertdialog').elements()).toHaveLength(0)
+  await expect.element(screen.getByText('0:01 of audio did not reach the server. It stays in this browser and uploads when you sign in here again.', { exact: false })).toBeVisible()
+  await expect.element(screen.getByRole('list', { name: 'Audio that did not reach the server' }).getByText('The server refused this audio.')).toBeVisible()
+  expect(await capturesOf(member.identifier)).toMatchObject([{ clientRecordingId: 'cap_expiry', storedSlices: 1, isFinished: false }])
+  expect(window.location.pathname).not.toMatch(/^\/auth\//)
+  await removeCapture('cap_expiry')
 })

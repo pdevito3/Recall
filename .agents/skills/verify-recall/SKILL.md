@@ -72,8 +72,10 @@ Each line starts with `ok` or `FAIL`. Exit code 0 means the stack is worth drivi
 The harness is `scripts/browse.mjs`. It loads Playwright from `frontend/node_modules`, opens Chromium at the `web` URL, runs one recipe, and saves the evidence. It hides the TanStack Router Devtools button of the dev build, because the production build has no devtools. In a narrow window, the button covers the right end of the header, and a tap on the current page fails with `intercepts pointer events`.
 
 ```bash
-node $S/scripts/browse.mjs $S/recipes/<feature>.mjs [--headed] [--label <name>] [--keep-data]
+node $S/scripts/browse.mjs $S/recipes/<feature>.mjs [--headed] [--label <name>] [--keep-data] [--fake-mic <file.wav>]
 ```
+
+A recipe that exports `needsMic = true` runs in the full Chromium build with a fake mic, and the mic is allowed for the `web` URL. The fake mic beeps. With `--fake-mic`, it plays the WAV file in a loop.
 
 The command prints `ok` or `FAIL` for each step, then `PASSED` or `FAILED` and the evidence path. The exit code is 0 only when the recipe does not throw, the page has no uncaught error or console error, and the recipe has no unhandled promise rejection. A step error that the recipe catches logs `FAIL` but does not fail the run.
 
@@ -112,6 +114,7 @@ A recipe is an ES module with a default export. `browse.mjs` gives it these valu
 | `login(user)` | Logs in through the Server and the IdP of the stack. It returns `{ name }`, the `name` claim of the session. Compare the screen with this name. Without `user`, the first user of the IdP signs in: `admin@example.com` (`Admin User`) for ZeroFactor, `bob` (`Bob Smith`) for DuendeDemo. The other users are `user@example.com` and `alice`. The first login of a new database makes that user the Owner, an Admin of the tenant `Recall`. With signup closed, each other person gets the refusal page of the Server, so `login()` fails for them. |
 | `logout()` | Logs out of the app and the IdP. The page ends on the signed-out page of the Server, `/auth/login?signedOut=1`. |
 | `stack` | The content of `stack.json` (`stack.urls.web`, `stack.urls.server`, and more). |
+| `speech` | The path of the WAV file of `--fake-mic`, or `null`. With `null`, the fake mic of a `needsMic` recipe beeps. |
 
 Minimal recipe:
 
