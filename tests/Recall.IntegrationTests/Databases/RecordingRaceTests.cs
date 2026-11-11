@@ -177,6 +177,30 @@ public class RecordingRaceTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "REC-24")]
+    [NotInParallel(nameof(QuietEndAsync))]
+    public async Task a_late_finish_that_a_rival_late_finish_beat_keeps_the_whole_audio()
+    {
+        // Arrange
+        var pause = PauseAtQuery.After("recordings.finish.slices");
+        await using var services = pause.BuildServices();
+        var (underTest, rival, recording) = await ScopesWithARecordingAsync(services);
+        await QuietEndAsync(rival, recording, rival.GetService<RecordingSweep>());
+        await rival.SendAsync(new StoreRecordingSlice.Command(recording.Id, 2, LateSlice));
+
+        // Act
+        var finish = FinishWithTheLateSliceAsync(underTest, recording);
+        await pause.ReachedAsync();
+        var beat = await FinishWithTheLateSliceAsync(rival, recording);
+        pause.Release();
+        var answer = await finish;
+
+        // Assert
+        answer.Status.ShouldBe(beat.Status);
+        StoredAudio(rival, recording).ShouldBe([.. Slice, .. SecondSlice, .. LateSlice]);
+    }
+
+    [Test]
     [Arguments("recordings.slice.existing")]
     [Arguments("recordings.slice.live")]
     [Property("Rule", "REC-11")]
