@@ -23,7 +23,7 @@ afterEach(() => {
   stopDraftSavers()
   vi.restoreAllMocks()
   localStorage.clear()
-  window.location.hash = ''
+  history.replaceState(null, '', window.location.pathname + window.location.search)
 })
 
 test('lists the words that the person typed while the Server signed out, because the answer of the sign-out does not stop the savers', async () => {

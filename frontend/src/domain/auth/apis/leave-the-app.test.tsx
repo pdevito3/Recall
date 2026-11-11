@@ -21,7 +21,7 @@ afterEach(() => {
   stopDraftSavers()
   vi.restoreAllMocks()
   localStorage.clear()
-  window.location.hash = ''
+  history.replaceState(null, '', window.location.pathname + window.location.search)
 })
 
 test('lists the words that only the memory holds, because a stopped saver holds none', () => {
