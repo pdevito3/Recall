@@ -187,4 +187,21 @@ public class PageUserCheckTests
         page.ShouldContain(AuthPages.AnotherPersonMessage);
         page.ShouldContain("Sign in with");
     }
+
+    [Test]
+    public async Task the_sign_in_page_for_a_page_of_another_person_says_that_words_with_no_room_are_gone_and_does_not_say_that_they_wait()
+    {
+        // Arrange
+        using var browser = NewBrowser();
+        await browser.LoginWebAsync(NewSubject());
+
+        // Act
+        var afterMismatch = await browser.GetAsync("/auth/login?anotherPerson=1&wordsLost=1");
+
+        // Assert
+        afterMismatch.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var page = await afterMismatch.Content.ReadAsStringAsync();
+        page.ShouldContain(AuthPages.AnotherPersonLostWordsMessage);
+        page.ShouldNotContain(AuthPages.AnotherPersonMessage);
+    }
 }

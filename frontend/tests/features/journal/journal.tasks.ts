@@ -398,6 +398,16 @@ export function unsentWords(page: Page) {
 
     signOutInAnotherTab: () => page.evaluate(() => new BroadcastChannel('recall.session').postMessage('signed-out')),
 
+    signInOfAnotherPersonInAnotherTab: () => page.evaluate(() => new BroadcastChannel('recall.session').postMessage({ signedInAs: 'another-person' })),
+
+    /** The events of a restore from the back-forward cache. The mocks of this spec cannot make Chromium keep the page there. */
+    async restoreThePage() {
+      await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })))
+      await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })))
+    },
+
+    pageShows: () => page.evaluate(() => document.documentElement.style.opacity !== '0' && !document.documentElement.inert),
+
     async openSettings() {
       await page.goto('/settings')
       await expect(at.settingsHeading).toBeVisible({ timeout: firstPaintMs })

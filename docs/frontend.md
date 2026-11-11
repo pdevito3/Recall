@@ -170,7 +170,7 @@ Each page needs a session. The root route (`routes/__root.tsx`) reads `authUserQ
 | State of the session query | The root route shows |
 |---|---|
 | Loading | Nothing |
-| No session (`null`) | Nothing. It goes to `/auth/login` with the path, the query, and the hash as `returnUrl`. |
+| No session (`null`) | Nothing. The tab already left through `leaveTheApp`, to `/auth/login` with the path, the query, and the hash as `returnUrl`. See [Leaving the app](#leaving-the-app). |
 | Error, and no earlier answer | An alert and Try Again. It does not go to the login. While the check runs again, Try Again is pending and takes no press. |
 | A user | The layout and the page |
 
@@ -178,17 +178,23 @@ The app does not poll the session. It finds an ended session at the next call to
 
 | The check gives | `apiClient` |
 |---|---|
-| `null` | Shows no toast. The root route goes to the login. |
+| `null` | Shows no toast. The tab leaves for the login. |
 | A user | Shows "The Server did not accept your sign-in for this request." unless the call sets `suppressErrorToast`. The page stays. |
 | An error | Shows the same toast as for a user. The root route keeps the last answer. |
 
 A 401 of `/auth/me` is a failed check. It does not start a check again.
 
-After a logout, the login goes where the logout went: to the logout of the provider, or to the signed-out page. A call that answers 401 after the logout finds no session, and a login with a return URL would abort that navigation. While a logout runs, a login waits for its answer.
+After a logout, the login goes where the logout went: to the logout of the provider, or to the signed-out page. A call that answers 401 after the logout finds no session, and a login with a return URL would abort that navigation. While the Server signs out, a login waits for its answer. A login does not wait for the question about unsent words, because a session that ended can name no provider.
 
 The session check shows no error toast. The alert is the only message for a failed check. A failed refetch shows no message of its own, because the page still works with the last answer.
 
 Thus a page always has a session. Do not add a Login button or a signed-out state to a page.
+
+### Leaving the app
+
+`leaveTheApp` in `frontend/src/domain/auth/apis/leave-the-app.ts` is the only way out of the signed-in app. Each reason to leave calls it: a sign-out in this tab or in another tab, a user query that reads `null`, a restored page with an ended or a newer session, a restored page with no answer about its session, the session of another person, and `Load the page again` on the error page. Words that only the memory of the tab holds have no key, so the tab shows them first, as the table of [Unsent words](#unsent-words) says. An open question about unsent words at a sign-out closes, and that sign-out ends with no error.
+
+The rule `no-restricted-syntax` in `frontend/eslint.config.js` (`wayOutRules` and `loginPageRules`) refuses each other way out in `src`: a `reload`, `assign`, or `replace` of `location`, an assignment to `location` or `location.href`, and a path that starts with `/auth/login`. A test can name the login page, but it cannot leave the page of the test. To add a way out, add a reason to `Departure` and call `leaveTheApp`.
 
 ### Unsent words
 
@@ -202,7 +208,8 @@ The words of an entry save in the background. Until the Server holds them, they 
 | A save has a base that is not the current Draft number | The Server answers `Lost`, keeps the words in a Revision, and the Draft stays. The time on the device does not decide. The app reads the Draft before it saves again. If the Draft holds each word of the save, no notice shows. If not, the page keeps the words on the screen and says so. `Add my words to the newest words` joins the words and saves from the read. A later save cannot push a chunk out of the Draft with no read. With no page open, a notice names the words and links to History, and it stays after a reload, until the person closes it or signs out. |
 | A retry or another tab sends a save whose first reply did not come | The Server answers `Kept` or `Lost` for a save that it knows. The number in a `Kept` is not a base. The app reads the Draft inside the same send, and it follows the same rule as for a loss. If this read fails, also with a refusal of the Server, the app sends the same save again, and no notice shows until a read answers. A read that finds the entry gone moves the words to a new entry. A later save that is still running decides instead, because the Draft can hold it. |
 | A person logs out | A toast says that the app works. Each tab sends its unsent words, and the wait is up to 5 s. If the Server holds them all, the logout goes on. If not, an alert dialog names the words, also those of another tab, each with a Copy. The person can keep them on this device or discard them. A discard removes the exact keys that the dialog named. Words that only the memory of a tab holds cannot stay, so the dialog offers `Stay signed in` in place of `Keep`. The logout then clears the pointer and ends the session. |
-| The session belongs to another person (see [One browser, two people](authentication.md#one-browser-two-people)) | The tab stops each saver, clears the query cache and the toasts, keeps the words under the key of the first person, and goes to `/auth/login?anotherPerson=1`. |
+| The tab leaves the app: a sign-out in this tab or in another tab, a session that ends with no message (a 401, a restore of a page whose session ended or changed), a restore with no answer about the session, or a new load from the error page | Words that only the memory of the tab holds have no key. The tab shows them alone, each with a Copy, and it goes only when the person selects `Leave this page`. A close of the tab asks first. See [Leaving the app](#leaving-the-app). |
+| The session belongs to another person (see [One browser, two people](authentication.md#one-browser-two-people)) | The tab stops each saver, clears the query cache and the toasts, keeps the words under the key of the first person, and goes to `/auth/login?anotherPerson=1`. Words that only the memory of the tab holds go at once, because the new person must not read them. Then the page says that they are gone, with `&wordsLost=1`. |
 
 Kept words go out when the same person signs in on this browser again. A refused text cannot go, so it returns as a notice with a Copy and a Discard. The next person sees no sign of them in the app. The browser tools of the device can still read them, and the dialog says so.
 
@@ -252,11 +259,11 @@ The app cannot change this delay. No web API forces the commit.
 | 200,000 characters | 11.2 s |
 | 1,100,000 characters | 50 s, and 98 s at a reload |
 
-**Tags.** A change of tags has no key, so a reload or a crash loses a change that did not reach the Server. A sign-out asks first. A reload with an open prompt about the same field drops the choice in the prompt, and the row keeps the value that the Server has.
+**Tags.** A change of tags has no key, so a reload or a crash loses a change that did not reach the Server. A sign-out asks first. A session that ends with no message (a 401, or a sign-out in another tab) does not ask, and the screen of words that only the memory holds does not name a tag change. A reload with an open prompt about the same field drops the choice in the prompt, and the row keeps the value that the Server has.
 
 **A reload while the server is down.** No app code runs, so the app cannot show a message. A plain HTTP origin cannot have a service worker, because a service worker needs a secure context. A reverse proxy that stays up shows its own error page. Caddy sends a 502 with an empty body, and the person sees a white page. With nothing listening, the person sees the connection error page of the browser. The words stay in their keys, and they go out when the page opens again after the server returns.
 
-**A sign-out in another tab.** A tab that does not answer within 500 ms cannot report words that only its memory holds, so the sign-out in another tab cannot name them. A frozen tab, or a tab in a long paste, does this. Words that a tab types after the dialog opened stay in the key of that tab, and they return with a notice at the next sign-in. With no room in storage, those later words have no key, and they go with the page, with no warning.
+**A sign-out in another tab.** A tab that does not answer within 500 ms cannot report words that only its memory holds, so the sign-out in another tab cannot name them. A frozen tab, or a tab in a long paste, does this. Words that a tab types after the dialog opened stay in the key of that tab, and they return with a notice at the next sign-in. With no room in storage, those later words have no key, so the tab shows them alone with a Copy before it leaves. A discard removes the text that the dialog named, so words that the person discarded return when they share a key with words typed after the list.
 
 **No room in storage.** A key holds the newest words of its saver or nothing. When a write finds no room and the words changed, the older key goes, and the page says that the words are only there. A crash then loses them. A hand-over writes the words to a key again when storage has room.
 
