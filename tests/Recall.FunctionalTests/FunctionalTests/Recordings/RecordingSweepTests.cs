@@ -212,6 +212,41 @@ public class RecordingSweepTests : TestBase
 
     [Test]
     [Property("Rule", "REC-23")]
+    public async Task a_quiet_upload_with_a_slice_file_that_the_server_lost_ends_with_a_gap_and_says_so()
+    {
+        // Arrange
+        var (admin, _) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(admin.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        var recording = await FactoryClient.AddRecordingAsync(session.Id);
+        (await FactoryClient.PutSliceAsync(recording.Id, 0, RecordingScenario.WebmStart)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await FactoryClient.PutSliceAsync(recording.Id, 1, RecordingScenario.Bytes(4, 1))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await FactoryClient.PutSliceAsync(recording.Id, 2, RecordingScenario.Bytes(4, 2))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var slices = Path.Combine(SharedStore.LocalPathOf(RecordingFiles.Folder(admin.TenantId, admin.Id, recording.Id)), "slices");
+        foreach (var file in Directory.GetFiles(slices, "000001-*"))
+            File.Delete(file);
+        await JournalScenario.ExecuteOutOfBandAsync(
+            "UPDATE recordings SET last_modified_on = $at WHERE id = $id",
+            ("$at", Recall.Server.Databases.Sqlite.UtcTextConverter.ToText(DateTimeOffset.UtcNow - Recording.QuietUploadEndsAfter - TimeSpan.FromMinutes(1))),
+            ("$id", recording.Id));
+        var sweep = new RecordingSweep(Services.GetRequiredService<IServiceScopeFactory>(), SharedStore, Services.GetRequiredService<IJobStore>(), TimeProvider.System);
+
+        // Act
+        await sweep.QueueWaitingRecordingsAsync(CancellationToken.None);
+
+        // Assert
+        var ended = await FactoryClient.GetRecordingAsync(recording.Id);
+        ended.Status.ShouldBe(nameof(RecordingStatus.Received));
+        ended.ProblemText.ShouldBe("Part of the audio of this recording was lost on the server, so the words of that part are missing. Tell the Owner of this server.");
+        using var audio = SharedStore.OpenRead(FileKey.ForTenant(admin.TenantId, RecordingFiles.RootFolder, admin.Id, recording.Id, "audio.webm"));
+        using var bytes = new MemoryStream();
+        await audio.CopyToAsync(bytes);
+        bytes.ToArray().ShouldBe(RecordingScenario.WebmStart.Concat(RecordingScenario.Bytes(4, 2)).ToArray());
+        Directory.GetFiles(slices).ShouldBeEmpty();
+    }
+
+    [Test]
+    [Property("Rule", "REC-23")]
     public async Task a_quiet_upload_that_cannot_end_holds_no_other_upload_and_not_the_queue_of_its_owner()
     {
         // Arrange
@@ -225,7 +260,8 @@ public class RecordingSweepTests : TestBase
         var jobGone = await FactoryClient.AddFinishedRecordingAsync(session.Id);
         await JournalScenario.ExecuteOutOfBandAsync(
             "DELETE FROM backwave_jobs WHERE wire_name = $kind AND CAST(payload AS TEXT) LIKE $id", ("$kind", "transcribe-recording"), ("$id", $"%{jobGone.Id}%"));
-        Directory.Delete(Path.Combine(SharedStore.LocalPathOf(RecordingFiles.Folder(admin.TenantId, admin.Id, broken.Id)), "slices"), recursive: true);
+        // A folder where the audio goes makes each write of the audio fail.
+        Directory.CreateDirectory(Path.Combine(SharedStore.LocalPathOf(RecordingFiles.Folder(admin.TenantId, admin.Id, broken.Id)), "audio.webm"));
         var quietSince = DateTimeOffset.UtcNow - Recording.QuietUploadEndsAfter - TimeSpan.FromMinutes(1);
         foreach (var id in new[] { broken.Id, quiet.Id })
             await JournalScenario.ExecuteOutOfBandAsync(

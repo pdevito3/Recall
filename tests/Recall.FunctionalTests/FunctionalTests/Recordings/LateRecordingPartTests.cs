@@ -264,4 +264,49 @@ public class LateRecordingPartTests : TestBase
         (await late.Content.ReadAsStringAsync()).ShouldContain("The server removed the audio of this recording");
         (await FactoryClient.GetRecordingAsync(recording.Id)).Status.ShouldBe(nameof(RecordingStatus.Transcribed));
     }
+
+    [Test]
+    [Property("Rule", "REC-24")]
+    public async Task a_late_finish_removes_the_decoded_copy_of_the_shorter_audio()
+    {
+        // Arrange
+        var (recording, owner) = await QuietEndedWithWordsAsync("first part");
+        var workAudio = RecordingFiles.WorkAudio(owner.TenantId, owner.Id, recording.Id);
+        await Store.WriteAsync(workAudio, new MemoryStream([1, 2, 3]), CancellationToken.None);
+        (await FactoryClient.PutSliceAsync(recording.Id, 2, [3, 3])).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Act
+        var finish = await FactoryClient.FinishAsync(recording.Id, 3, RecordingScenario.WebmStart.Length + SecondSlice.Length + 2);
+
+        // Assert
+        finish.StatusCode.ShouldBe(HttpStatusCode.OK);
+        Store.Exists(workAudio).ShouldBeFalse();
+    }
+
+    [Test]
+    [Property("Rule", "REC-24")]
+    public async Task a_late_slice_whose_file_the_server_lost_leaves_a_gap_the_other_words_join_and_the_recording_says_so()
+    {
+        // Arrange
+        var (recording, owner) = await QuietEndedWithWordsAsync("first part");
+        byte[] third = [3, 3, 3];
+        byte[] fourth = [4, 4];
+        (await FactoryClient.PutSliceAsync(recording.Id, 2, third)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await FactoryClient.PutSliceAsync(recording.Id, 3, fourth)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var slices = Store.LocalPathOf(FileKey.ForTenant(owner.TenantId, RecordingFiles.RootFolder, owner.Id, recording.Id, "slices"));
+        foreach (var file in Directory.GetFiles(slices, "000002-*"))
+            File.Delete(file);
+
+        // Act
+        var finish = await FactoryClient.FinishAsync(recording.Id, 4, RecordingScenario.WebmStart.Length + SecondSlice.Length + third.Length + fourth.Length);
+        await RunJobAsync(Saying("first part", "late part"), recording, owner);
+
+        // Assert
+        finish.StatusCode.ShouldBe(HttpStatusCode.OK);
+        StoredAudio(recording, owner).ShouldBe([.. RecordingScenario.WebmStart, .. SecondSlice, .. fourth]);
+        var ended = await FactoryClient.GetRecordingAsync(recording.Id);
+        ended.Status.ShouldBe(nameof(RecordingStatus.Transcribed));
+        ended.ProblemText.ShouldBe("Part of the audio of this recording was lost on the server, so the words of that part are missing. Tell the Owner of this server.");
+        (await PlainRawAsync(recording.SessionId)).ShouldBe("first part\nlate part");
+    }
 }

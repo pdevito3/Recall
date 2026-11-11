@@ -1,8 +1,15 @@
 namespace Recall.IntegrationTests.Databases;
 
+using System.Security.Cryptography;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Recall.Server.Databases;
+using Recall.Server.Databases.Sqlite;
 using Recall.Server.Domain.Recordings;
+using Recall.Server.Domain.Recordings.Dtos;
 using Recall.Server.Domain.Recordings.Features;
+using Recall.Server.Domain.Recordings.Jobs;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Exceptions;
 using Recall.Server.Resources.Storage;
@@ -34,6 +41,140 @@ public class RecordingRaceTests : TestBase
 
     private static bool FolderIsGone(TestingServiceScope scope, Recording recording)
         => !scope.GetService<FileStore>().FolderNamesUnder(RecordingFiles.OwnerFolder(recording.TenantId, recording.UserId)).Contains(recording.Id);
+
+    private static readonly byte[] SecondSlice = [2, 2];
+
+    private static readonly byte[] LateSlice = [3, 3, 3];
+
+    /// <summary>
+    /// The first two slices, ended by the sweep after a day with no new slice (REC-23), so a third slice is a late part (REC-24).
+    /// The sweep reads each owner, so the tests that use it run one at a time, and each ends only its own Recording.
+    /// </summary>
+    private static async Task QuietEndAsync(TestingServiceScope scope, Recording recording, RecordingSweep sweep)
+    {
+        await scope.SendAsync(new StoreRecordingSlice.Command(recording.Id, 0, Slice));
+        await scope.SendAsync(new StoreRecordingSlice.Command(recording.Id, 1, SecondSlice));
+        await TestFixture.ExecuteOutOfBandAsync(
+            "UPDATE recordings SET last_modified_on = @at WHERE id = @id",
+            ("@at", UtcTextConverter.ToText(DateTimeOffset.UtcNow - Recording.QuietUploadEndsAfter - TimeSpan.FromMinutes(1))),
+            ("@id", recording.Id));
+        await sweep.QueueWaitingRecordingsAsync(CancellationToken.None);
+    }
+
+    private static Task<RecordingDto> FinishWithTheLateSliceAsync(TestingServiceScope scope, Recording recording)
+        => scope.SendAsync(new FinishRecording.Command(recording.Id, new RecordingFinishDto { SliceCount = 3, ByteLength = Slice.Length + SecondSlice.Length + LateSlice.Length }));
+
+    private static byte[] StoredAudio(TestingServiceScope scope, Recording recording)
+    {
+        using var file = scope.GetService<FileStore>().OpenRead(RecordingFiles.Audio(recording));
+        using var copy = new MemoryStream();
+        file.CopyTo(copy);
+        return copy.ToArray();
+    }
+
+    [Test]
+    [Property("Rule", "REC-24")]
+    [NotInParallel(nameof(QuietEndAsync))]
+    public async Task a_late_slice_during_the_start_of_a_run_keeps_its_file_and_joins_the_audio()
+    {
+        // Arrange
+        var pause = PauseAtQuery.After("recordings.transcribe.begin");
+        await using var services = TestFixture.BuildServiceProvider(s => s
+            .AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider())
+            .ConfigureDbContext<AppDbContext>((_, options) => options.AddInterceptors(pause)),
+            TestFixture.UnpooledConnectionString);
+        var (underTest, rival, recording) = await ScopesWithARecordingAsync(services);
+        await QuietEndAsync(rival, recording, rival.GetService<RecordingSweep>());
+
+        // Act
+        var begin = underTest.SendAsync(new BeginTranscription.Command(recording.Id, TranscriptionEngineKind.Local, EngineIsReady: true));
+        await pause.ReachedAsync();
+        await rival.SendAsync(new StoreRecordingSlice.Command(recording.Id, 2, LateSlice));
+        pause.Release();
+        await begin;
+        var finished = await FinishWithTheLateSliceAsync(rival, recording);
+
+        // Assert
+        finished.Status.ShouldBe(nameof(RecordingStatus.Received));
+        StoredAudio(rival, recording).ShouldBe([.. Slice, .. SecondSlice, .. LateSlice]);
+    }
+
+    [Test]
+    [Property("Rule", "REC-24")]
+    [NotInParallel(nameof(QuietEndAsync))]
+    public async Task the_quiet_end_removes_only_the_files_of_the_slices_that_it_joined()
+    {
+        // Arrange
+        var afterSave = new RivalAfterSave();
+        await using var services = TestFixture.BuildServiceProvider(s => s
+            .ConfigureDbContext<AppDbContext>((_, options) => options.AddInterceptors(afterSave)),
+            TestFixture.UnpooledConnectionString);
+        var (_, rival, recording) = await ScopesWithARecordingAsync(services);
+        var store = rival.GetService<FileStore>();
+        var lateFile = RecordingFiles.Slice(recording, 2, Convert.ToHexStringLower(SHA256.HashData(LateSlice)));
+        // The file of a late slice that is on its way, written after the save of the quiet end and before its own save.
+        afterSave.Arm(
+            context => context.ChangeTracker.Entries<Recording>().Any(e => e.Entity.Id == recording.Id && e.State == EntityState.Modified && e.Entity.QuietEndThroughSlice is not null),
+            () => store.WriteAsync(lateFile, new MemoryStream(LateSlice), CancellationToken.None));
+
+        // Act
+        await QuietEndAsync(rival, recording, services.GetRequiredService<RecordingSweep>());
+
+        // Assert
+        store.Exists(lateFile).ShouldBeTrue();
+        Directory.GetFiles(store.LocalPathOf(RecordingFiles.Slices(recording))).Select(Path.GetFileName).ShouldBe([Path.GetFileName(store.LocalPathOf(lateFile))]);
+        StoredAudio(rival, recording).ShouldBe([.. Slice, .. SecondSlice]);
+    }
+
+    [Test]
+    [Property("Rule", "REC-24")]
+    [NotInParallel(nameof(QuietEndAsync))]
+    public async Task a_late_slice_during_the_removal_of_the_kept_audio_keeps_the_audio()
+    {
+        // Arrange
+        var pause = PauseAtQuery.After("recordings.audio.remove");
+        await using var services = pause.BuildServices();
+        var (underTest, rival, recording) = await ScopesWithARecordingAsync(services);
+        await QuietEndAsync(rival, recording, rival.GetService<RecordingSweep>());
+        await TestFixture.ExecuteOutOfBandAsync(
+            "UPDATE recordings SET status = 'Transcribed', has_text = 1, audio_kept_until = '2000-01-01T00:00:00.000000Z' WHERE id = @id", ("@id", recording.Id));
+
+        // Act
+        var remove = underTest.SendAsync(new RemoveKeptAudio.Command(recording.Id));
+        await pause.ReachedAsync();
+        await rival.SendAsync(new StoreRecordingSlice.Command(recording.Id, 2, LateSlice));
+        pause.Release();
+        await remove;
+        var finished = await FinishWithTheLateSliceAsync(rival, recording);
+
+        // Assert
+        finished.Status.ShouldBe(nameof(RecordingStatus.Received));
+        StoredAudio(rival, recording).ShouldBe([.. Slice, .. SecondSlice, .. LateSlice]);
+    }
+
+    [Test]
+    [Property("Rule", "REC-3")]
+    public async Task a_finish_that_a_rival_finish_beat_gives_the_answer_of_a_repeat()
+    {
+        // Arrange
+        var pause = PauseAtQuery.After("recordings.finish.slices");
+        await using var services = pause.BuildServices();
+        var (underTest, rival, recording) = await ScopesWithARecordingAsync(services);
+        await rival.SendAsync(new StoreRecordingSlice.Command(recording.Id, 0, Slice));
+        await rival.SendAsync(new StoreRecordingSlice.Command(recording.Id, 1, SecondSlice));
+        var dto = new RecordingFinishDto { SliceCount = 2, ByteLength = Slice.Length + SecondSlice.Length };
+
+        // Act
+        var finish = underTest.SendAsync(new FinishRecording.Command(recording.Id, dto));
+        await pause.ReachedAsync();
+        await rival.SendAsync(new FinishRecording.Command(recording.Id, dto));
+        pause.Release();
+        var answer = await finish;
+
+        // Assert
+        answer.Status.ShouldBe(nameof(RecordingStatus.Received));
+        StoredAudio(rival, recording).ShouldBe([.. Slice, .. SecondSlice]);
+    }
 
     [Test]
     [Arguments("recordings.slice.existing")]
