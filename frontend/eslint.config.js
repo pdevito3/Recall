@@ -382,6 +382,71 @@ export const codeToWordsRules = [
   },
 ]
 
+// docs/frontend/code-style.md, section "Dates and times": the SPA shows and reads a time in the zone of its place,
+// through src/lib/zoned-time.ts. These APIs use the zone of the browser. A test sets its clock from local parts.
+const browserZoneRules = [
+  {
+    selector: 'CallExpression[callee.property.name=/^toLocale(Date|Time)?String$/]',
+    message: 'This uses the zone of the browser. Use formatInstant (a time of a place) or formatDate (a date with no time) from @/lib/zoned-time. For a number, use Intl.NumberFormat.',
+  },
+  {
+    selector: "MemberExpression[object.name='Intl'][property.name='DateTimeFormat']",
+    message: 'Use formatInstant (a time of a place) or formatDate (a date with no time) from @/lib/zoned-time. They set the zone.',
+  },
+  {
+    selector: 'CallExpression[arguments.length=0][callee.property.name=/^get(FullYear|Month|Date|Day|Hours|Minutes|Seconds|TimezoneOffset)$/]',
+    message: 'This reads the date or the time in the zone of the browser. Use wallClockAt(instant, zone) or todayAt(zone, now) from @/lib/zoned-time.',
+  },
+  {
+    selector: 'CallExpression[callee.property.name=/^set(FullYear|Month|Date|Hours|Minutes|Seconds)$/]',
+    message: 'This sets the date or the time in the zone of the browser. Use instantAt(wallClock, zone) from @/lib/zoned-time.',
+  },
+  {
+    selector: "NewExpression[callee.name='Date'][arguments.length>1]",
+    message: 'This makes a time in the zone of the browser. Use new CalendarDate(...) for a date, or instantAt(wallClock, zone) from @/lib/zoned-time for a time of a place.',
+  },
+  {
+    selector: "ImportDeclaration[source.value='@internationalized/date'] > ImportSpecifier[imported.name=/^(getLocalTimeZone|today|now|DateFormatter)$/]",
+    message: 'Use todayAt(zone, now) and browserTimeZone() from @/lib/zoned-time, and its formatters. Take the zone of the place, not of the browser.',
+  },
+  {
+    selector: "ImportDeclaration[source.value=/^(react-aria|@react-aria\\u002Fi18n)(\\u002F|$)/] > ImportSpecifier[imported.name=/^(useDateFormatter|DateFormatter)$/]",
+    message: 'The React Aria date formatter formats in the zone of the browser unless it is given one. Use formatInstant (a time of a place) or formatDate (a date with no time) from @/lib/zoned-time.',
+  },
+  {
+    selector: 'ImportDeclaration[source.value=/^date-fns/]',
+    message: 'date-fns formats in the zone of the browser. Use @/lib/zoned-time.',
+  },
+]
+
+const leaveTheAppFile = 'src/domain/auth/apis/leave-the-app.ts'
+
+// docs/frontend.md, section "Leaving the app": leaveTheApp is the only way out of the signed-in app, because only it shows
+// the words that only the memory of the tab holds before the page goes. A login page is a way out too, so only
+// leave-the-app.ts names one.
+const wayOutMessage = 'Leave the app with leaveTheApp from @/domain/auth/apis/leave-the-app. A navigation or a reload here loses the words that only the memory of the tab holds (docs/frontend.md, section "Leaving the app").'
+export const wayOutRules = [
+  {
+    selector: "MemberExpression[property.name=/^(reload|assign|replace)$/]:matches([object.name='location'], [object.property.name='location'])",
+    message: wayOutMessage,
+  },
+  {
+    selector: "AssignmentExpression > MemberExpression.left:matches([object.name='location'], [object.property.name='location'], [property.name='location'][object.name=/^(window|document|globalThis|self)$/])",
+    message: wayOutMessage,
+  },
+  {
+    selector: "AssignmentExpression > Identifier.left[name='location']",
+    message: wayOutMessage,
+  },
+]
+const loginPageMessage = 'Name a login page only in leave-the-app.ts, and leave with leaveTheApp (docs/frontend.md, section "Leaving the app").'
+export const loginPageRules = [
+  {
+    selector: 'Literal[value=/^\\/auth\\/login/], TemplateElement[value.raw=/^\\/auth\\/login/]',
+    message: loginPageMessage,
+  },
+]
+
 const testOnlyRule = {
   selector: "MemberExpression[property.name='only']:matches([object.name='test'], [object.object.name='test'])",
   message: 'Remove test.only. CI runs each test.',
@@ -538,52 +603,22 @@ export default tseslint.config(
     },
   },
   {
-    // docs/frontend/code-style.md, section "Dates and times": the SPA shows and reads a time in the zone of its place,
-    // through src/lib/zoned-time.ts. These APIs use the zone of the browser. A test sets its clock from local parts.
     files: ['src/**/*.{ts,tsx}'],
-    ignores: ['src/lib/zoned-time.ts', 'src/**/*.test.{ts,tsx}'],
-    rules: {
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector: 'CallExpression[callee.property.name=/^toLocale(Date|Time)?String$/]',
-          message: 'This uses the zone of the browser. Use formatInstant (a time of a place) or formatDate (a date with no time) from @/lib/zoned-time. For a number, use Intl.NumberFormat.',
-        },
-        {
-          selector: "MemberExpression[object.name='Intl'][property.name='DateTimeFormat']",
-          message: 'Use formatInstant (a time of a place) or formatDate (a date with no time) from @/lib/zoned-time. They set the zone.',
-        },
-        {
-          selector: 'CallExpression[arguments.length=0][callee.property.name=/^get(FullYear|Month|Date|Day|Hours|Minutes|Seconds|TimezoneOffset)$/]',
-          message: 'This reads the date or the time in the zone of the browser. Use wallClockAt(instant, zone) or todayAt(zone, now) from @/lib/zoned-time.',
-        },
-        {
-          selector: 'CallExpression[callee.property.name=/^set(FullYear|Month|Date|Hours|Minutes|Seconds)$/]',
-          message: 'This sets the date or the time in the zone of the browser. Use instantAt(wallClock, zone) from @/lib/zoned-time.',
-        },
-        {
-          selector: "NewExpression[callee.name='Date'][arguments.length>1]",
-          message: 'This makes a time in the zone of the browser. Use new CalendarDate(...) for a date, or instantAt(wallClock, zone) from @/lib/zoned-time for a time of a place.',
-        },
-        {
-          selector: "ImportDeclaration[source.value='@internationalized/date'] > ImportSpecifier[imported.name=/^(getLocalTimeZone|today|now|DateFormatter)$/]",
-          message: 'Use todayAt(zone, now) and browserTimeZone() from @/lib/zoned-time, and its formatters. Take the zone of the place, not of the browser.',
-        },
-        {
-          selector: "ImportDeclaration[source.value=/^(react-aria|@react-aria\\u002Fi18n)(\\u002F|$)/] > ImportSpecifier[imported.name=/^(useDateFormatter|DateFormatter)$/]",
-          message: 'The React Aria date formatter formats in the zone of the browser unless it is given one. Use formatInstant (a time of a place) or formatDate (a date with no time) from @/lib/zoned-time.',
-        },
-        {
-          selector: 'ImportDeclaration[source.value=/^date-fns/]',
-          message: 'date-fns formats in the zone of the browser. Use @/lib/zoned-time.',
-        },
-        ...codeToWordsRules,
-      ],
-    },
+    ignores: ['src/lib/zoned-time.ts', 'src/**/*.test.{ts,tsx}', leaveTheAppFile],
+    rules: { 'no-restricted-syntax': ['error', ...browserZoneRules, ...codeToWordsRules, ...wayOutRules, ...loginPageRules] },
+  },
+  {
+    files: [leaveTheAppFile],
+    rules: { 'no-restricted-syntax': ['error', ...browserZoneRules, ...codeToWordsRules] },
+  },
+  {
+    // A test names a login page in what it expects, and it does not leave the page that runs it.
+    files: ['src/**/*.test.{ts,tsx}'],
+    rules: { 'no-restricted-syntax': ['error', ...wayOutRules] },
   },
   {
     // The zone helpers may use the zone of the browser, but they name a zone in words too.
     files: ['src/lib/zoned-time.ts'],
-    rules: { 'no-restricted-syntax': ['error', ...codeToWordsRules] },
+    rules: { 'no-restricted-syntax': ['error', ...codeToWordsRules, ...wayOutRules, ...loginPageRules] },
   },
 )
