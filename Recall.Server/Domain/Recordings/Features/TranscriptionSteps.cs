@@ -14,7 +14,7 @@ using Transcription;
 
 public static class BeginTranscription
 {
-    public sealed record Start(string AudioPath, string WorkFolder, long StartSample, AudioProvider? Provider, TranscriptionChoice? Choice, int? HighestSlice);
+    public sealed record Start(string AudioPath, string WorkAudioPath, long StartSample, AudioProvider? Provider, TranscriptionChoice? Choice, int? HighestSlice);
 
     /// <summary>A job of another engine does nothing, so two engines never work on one Recording at a time.</summary>
     public sealed record Command(string Id, TranscriptionEngineKind Engine, bool EngineIsReady) : IRequest<Start?>, IRunsAgainWhenRaced;
@@ -71,7 +71,7 @@ public static class BeginTranscription
             {
                 start = new Start(
                     fileStore.LocalPathOf(RecordingFiles.Audio(recording)),
-                    fileStore.LocalPathOf(RecordingFiles.Folder(recording)),
+                    fileStore.LocalPathOf(RecordingFiles.WorkAudio(recording)),
                     recording.TranscribedSamples,
                     provider,
                     choice,
@@ -274,7 +274,7 @@ public static class RemoveEndedWorkAudio
                 .AsNoTracking()
                 .GetById(request.Id, cancellationToken);
             if (!recording.WaitsForTranscription)
-                RecordingWork.TryDeleteWorkAudio(fileStore, recording.TenantId, recording.UserId, recording.Id, _logger);
+                RecordingWork.TryDeleteWorkAudio(fileStore, recording, _logger);
         }
     }
 }
@@ -324,7 +324,8 @@ public static class RemoveKeptAudio
                 .TagWithOperationCallSite("recordings.audio.remove")
                 .GetById(request.Id, cancellationToken);
             // The mark is saved before the files go, so a late part (REC-24) that opened the Recording first keeps its audio.
-            // A job that runs again after the save removes the files that a fault left.
+            // After the mark no slice joins, so all the files of the Recording go: the audio, its decoded copy, and a slice
+            // file that a lost save left. A job that runs again after the save removes the files that a fault left.
             if (recording.AudioDeletedAt is null)
             {
                 var now = timeProvider.GetUtcNow();
@@ -335,8 +336,7 @@ public static class RemoveKeptAudio
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
 
-            fileStore.Delete(RecordingFiles.Audio(recording));
-            fileStore.Delete(RecordingFiles.WorkAudio(recording));
+            fileStore.DeleteUnder(RecordingFiles.Folder(recording));
             _logger.Here().Information("Removed the kept audio of recording {RecordingId}", recording.Id);
         }
     }

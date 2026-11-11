@@ -33,13 +33,6 @@ public class RecordingApiTests : TestBase
         return (session.Id, admin, member);
     }
 
-    private static byte[] StoredAudio(RecordingDto recording, string tenantId, string userId)
-    {
-        using var file = Store.OpenRead(FileKey.ForTenant(tenantId, RecordingFiles.RootFolder, userId, recording.Id, recording.AudioFileName!));
-        using var copy = new MemoryStream();
-        file.CopyTo(copy);
-        return copy.ToArray();
-    }
 
     [Test]
     [Property("Rule", "REC-1")]
@@ -252,7 +245,7 @@ public class RecordingApiTests : TestBase
         finished.Status.ShouldBe(nameof(RecordingStatus.Received));
         finished.HighestStoredSlice.ShouldBe(1);
         finished.ByteLength.ShouldBe(RecordingScenario.WebmStart.Length + second.Length);
-        StoredAudio(finished, admin.TenantId, admin.Id).ShouldBe([.. RecordingScenario.WebmStart, .. second]);
+        RecordingScenario.StoredAudio(finished.Id, admin).ShouldBe([.. RecordingScenario.WebmStart, .. second]);
     }
 
     [Test]
@@ -487,12 +480,17 @@ public class RecordingApiTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "REC-24")]
     public async Task the_delete_of_a_session_takes_its_recordings_and_their_files()
     {
         // Arrange
         var (sessionId, admin, _) = await SignedInWithSessionAsync();
         var recording = await FactoryClient.AddFinishedRecordingAsync(sessionId);
-        var folder = RecordingFiles.Folder(admin.TenantId, admin.Id, recording.Id);
+        var row = RecordingScenario.RowOf(recording.Id, admin);
+        // The file of a slice whose save lost to the finish, which no step joins.
+        var leftover = RecordingFiles.Slice(row, 2, "0011");
+        using (var content = new MemoryStream([1]))
+            await Store.WriteAsync(leftover, content, CancellationToken.None);
 
         // Act
         var delete = await FactoryClient.DeleteAsync(ApiRoutes.Sessions.GetRecord(sessionId));
@@ -501,7 +499,8 @@ public class RecordingApiTests : TestBase
         delete.StatusCode.ShouldBe(HttpStatusCode.NoContent);
         (await FactoryClient.GetAsync(ApiRoutes.Recordings.GetRecord(recording.Id))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         Store.FolderNamesUnder(RecordingFiles.OwnerFolder(admin.TenantId, admin.Id)).ShouldNotContain(recording.Id);
-        Should.Throw<Recall.Server.Exceptions.NotFoundException>(() => Store.OpenRead(FileKey.Of($"{folder}/audio.webm")));
+        Store.Exists(RecordingFiles.Audio(row)).ShouldBeFalse();
+        Store.Exists(leftover).ShouldBeFalse();
     }
 
     [Test]

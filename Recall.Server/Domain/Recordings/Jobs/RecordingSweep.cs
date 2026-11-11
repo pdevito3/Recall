@@ -144,10 +144,7 @@ public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore 
             .ToListAsync(cancellationToken);
         var joinedThrough = recording.QuietEndThroughSlice;
         recording.EndQuietUpload(slices.Count, await RecordingWork.ChosenEngineAsync(dbContext, cancellationToken));
-        if (slices.Count > 0)
-            await RecordingWork.WriteAudioAsync(dbContext, fileStore, recording, slices, joinedThrough, _logger, cancellationToken);
-        await dbContext.SaveChangesAsync(cancellationToken);
-        RecordingWork.TryDeleteJoinedSlices(fileStore, recording, slices, _logger);
+        await RecordingWork.JoinAudioAndSaveAsync(dbContext, fileStore, recording, slices, joinedThrough, _logger, cancellationToken);
         _logger.Here().Information("Ended the quiet upload of recording {RecordingId} with {SliceCount} slices", recording.Id, slices.Count);
     }
 
@@ -156,19 +153,22 @@ public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore 
         await using var scope = scopeFactory.CreateJournalScope(owner);
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var now = timeProvider.GetUtcNow();
-        var folders = fileStore.FolderNamesUnder(RecordingFiles.OwnerFolder(owner.TenantId, owner.UserId)).ToList();
+        var folders = fileStore.FolderNamesUnder(RecordingFiles.OwnerFolder(owner.TenantId, owner.UserId)).ToHashSet(StringComparer.Ordinal);
         var rows = await dbContext.Recordings
             .TagWithOperationCallSite("recordings.sweep.rows")
             .AsNoTracking()
-            .Select(r => new { r.Id, r.Status, r.AudioKeptUntil, r.AudioDeletedAt })
             .ToListAsync(cancellationToken);
 
         var known = rows.Select(r => r.Id).ToHashSet(StringComparer.Ordinal);
         foreach (var folder in folders.Where(name => !known.Contains(name)))
             RecordingWork.TryDeleteFolder(fileStore, RecordingFiles.Folder(owner.TenantId, owner.UserId, folder), folder, _logger);
 
+        // A Recording whose audio went takes no slice again (REC-24), so a file that a lost write left after the removal goes too.
+        foreach (var removed in rows.Where(r => r.AudioDeletedAt is not null && folders.Contains(r.Id)))
+            RecordingWork.TryDeleteFolder(fileStore, RecordingFiles.Folder(removed), removed.Id, _logger);
+
         foreach (var ended in rows.Where(r => r.Status is RecordingStatus.Transcribed or RecordingStatus.Failed))
-            RecordingWork.TryDeleteWorkAudio(fileStore, owner.TenantId, owner.UserId, ended.Id, _logger);
+            RecordingWork.TryDeleteWorkAudio(fileStore, ended, _logger);
 
         var overdue = rows
             .Where(r => r.Status == RecordingStatus.Transcribed && r.AudioDeletedAt is null && r.AudioKeptUntil <= now)

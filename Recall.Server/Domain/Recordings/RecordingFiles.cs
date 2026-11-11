@@ -8,11 +8,11 @@ public static class RecordingFiles
 
     public const int SliceSignatureBytes = 8;
 
-    public const string WorkAudioName = "work.wav";
-
-    public const string PartialWorkAudioName = WorkAudioName + ".part";
-
     private const string SlicesFolder = "slices";
+
+    private const string WorkAudioExtension = ".wav";
+
+    public const string PartialSuffix = ".part";
 
     public static FileKey OwnerFolder(string tenantId, string userId) => FileKey.ForTenant(tenantId, RootFolder, userId);
 
@@ -27,16 +27,29 @@ public static class RecordingFiles
     public static FileKey Slice(Recording recording, int index, string sha256)
         => FileKey.ForTenant(recording.TenantId, RootFolder, recording.UserId, recording.Id, SlicesFolder, $"{index:D6}-{sha256}");
 
-    public static FileKey WorkAudio(string tenantId, string userId, string recordingId)
-        => FileKey.ForTenant(tenantId, RootFolder, userId, recordingId, WorkAudioName);
+    /// <summary>
+    /// The joined audio that the row names. Each read of the audio uses this key. A Recording with no joined audio gets the
+    /// download name, which holds no file, because each join writes a file of its own name.
+    /// </summary>
+    public static FileKey Audio(Recording recording) => Audio(recording, AudioNameOf(recording));
 
-    public static FileKey PartialWorkAudio(string tenantId, string userId, string recordingId)
-        => FileKey.ForTenant(tenantId, RootFolder, userId, recordingId, PartialWorkAudioName);
+    public static FileKey Audio(Recording recording, string audioFile) => InFolder(recording, audioFile);
 
-    public static FileKey WorkAudio(Recording recording) => WorkAudio(recording.TenantId, recording.UserId, recording.Id);
+    /// <summary>The decoded copy of the audio that the row names. A new audio file gets a new decoded copy, so a decode never mixes two audio files.</summary>
+    public static FileKey WorkAudio(Recording recording) => WorkAudio(recording, AudioNameOf(recording));
 
-    public static FileKey Audio(Recording recording)
-        => FileKey.ForTenant(recording.TenantId, RootFolder, recording.UserId, recording.Id, recording.AudioFileName);
+    public static FileKey WorkAudio(Recording recording, string audioFile)
+        => InFolder(recording, Path.ChangeExtension(audioFile, WorkAudioExtension));
+
+    public static FileKey PartialWorkAudio(Recording recording) => PartialWorkAudio(recording, AudioNameOf(recording));
+
+    public static FileKey PartialWorkAudio(Recording recording, string audioFile)
+        => InFolder(recording, Path.ChangeExtension(audioFile, WorkAudioExtension) + PartialSuffix);
+
+    private static string AudioNameOf(Recording recording) => recording.AudioFile ?? recording.AudioFileName;
+
+    private static FileKey InFolder(Recording recording, string name)
+        => FileKey.ForTenant(recording.TenantId, RootFolder, recording.UserId, recording.Id, name);
 
     public static bool StartsAsFormat(RecordingFormat format, ReadOnlySpan<byte> bytes) => format switch
     {

@@ -103,13 +103,7 @@ public class LateRecordingPartTests : TestBase
         return ProseMirrorToPlainText.Render(session!.RawText);
     }
 
-    private static byte[] StoredAudio(RecordingDto recording, User owner)
-    {
-        using var file = Store.OpenRead(FileKey.ForTenant(owner.TenantId, RecordingFiles.RootFolder, owner.Id, recording.Id, "audio.webm"));
-        using var copy = new MemoryStream();
-        file.CopyTo(copy);
-        return copy.ToArray();
-    }
+    private static byte[] StoredAudio(RecordingDto recording, User owner) => RecordingScenario.StoredAudio(recording.Id, owner);
 
     [Test]
     [Property("Rule", "REC-24")]
@@ -273,7 +267,7 @@ public class LateRecordingPartTests : TestBase
     {
         // Arrange
         var (recording, owner) = await QuietEndedWithWordsAsync("first part");
-        var workAudio = RecordingFiles.WorkAudio(owner.TenantId, owner.Id, recording.Id);
+        var workAudio = RecordingFiles.WorkAudio(RecordingScenario.RowOf(recording.Id, owner));
         await Store.WriteAsync(workAudio, new MemoryStream([1, 2, 3]), CancellationToken.None);
         (await FactoryClient.PutSliceAsync(recording.Id, 2, [3, 3])).StatusCode.ShouldBe(HttpStatusCode.OK);
 
@@ -283,6 +277,67 @@ public class LateRecordingPartTests : TestBase
         // Assert
         finish.StatusCode.ShouldBe(HttpStatusCode.OK);
         Store.Exists(workAudio).ShouldBeFalse();
+    }
+
+    [Test]
+    [Property("Rule", "REC-24")]
+    public async Task a_late_part_after_a_quiet_end_that_lost_a_slice_file_ends_and_its_words_come()
+    {
+        // Arrange
+        var (admin, _) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(admin.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        var recording = await FactoryClient.AddRecordingAsync(session.Id);
+        byte[] third = [7, 7, 7];
+        byte[] late = [3, 3];
+        (await FactoryClient.PutSliceAsync(recording.Id, 0, RecordingScenario.WebmStart)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await FactoryClient.PutSliceAsync(recording.Id, 1, SecondSlice)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await FactoryClient.PutSliceAsync(recording.Id, 2, third)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        foreach (var file in Directory.GetFiles(Store.LocalPathOf(RecordingFiles.Slices(RecordingScenario.RowOf(recording.Id, admin))), "000001-*"))
+            File.Delete(file);
+        await MakeQuietForADayAsync(recording.Id);
+        await SweepAsync();
+        await RunJobAsync(Saying("first part"), recording, admin);
+        (await FactoryClient.PutSliceAsync(recording.Id, 3, late)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var total = RecordingScenario.WebmStart.Length + SecondSlice.Length + third.Length + late.Length;
+
+        // Act
+        var finish = await FactoryClient.FinishAsync(recording.Id, 4, total);
+        var again = await FactoryClient.FinishAsync(recording.Id, 4, total);
+        await RunJobAsync(Saying("first part", "late part"), recording, admin);
+        await MakeQuietForADayAsync(recording.Id);
+        await SweepAsync();
+
+        // Assert
+        finish.StatusCode.ShouldBe(HttpStatusCode.OK, await finish.Content.ReadAsStringAsync());
+        again.StatusCode.ShouldBe(HttpStatusCode.OK);
+        StoredAudio(recording, admin).ShouldBe([.. RecordingScenario.WebmStart, .. third, .. late]);
+        var ended = await FactoryClient.GetRecordingAsync(recording.Id);
+        ended.Status.ShouldBe(nameof(RecordingStatus.Transcribed));
+        ended.ProblemText.ShouldBe("Part of the audio of this recording was lost on the server, so the words of that part are missing. Tell the Owner of this server.");
+        (await PlainRawAsync(session.Id)).ShouldBe("first part\nlate part");
+    }
+
+    [Test]
+    [Property("Rule", "REC-24")]
+    public async Task a_late_part_after_the_server_lost_the_joined_audio_ends_and_says_that_the_audio_is_missing()
+    {
+        // Arrange
+        var (recording, owner) = await QuietEndedWithWordsAsync("first part");
+        Store.Delete(RecordingFiles.Audio(RecordingScenario.RowOf(recording.Id, owner)));
+        (await FactoryClient.PutSliceAsync(recording.Id, 2, [3, 3])).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Act
+        var finish = await FactoryClient.FinishAsync(recording.Id, 3, RecordingScenario.WebmStart.Length + SecondSlice.Length + 2);
+        await RunJobAsync(Saying("first part", "late part"), recording, owner);
+
+        // Assert
+        finish.StatusCode.ShouldBe(HttpStatusCode.OK, await finish.Content.ReadAsStringAsync());
+        var ended = await FactoryClient.GetRecordingAsync(recording.Id);
+        ended.Status.ShouldBe(nameof(RecordingStatus.Failed));
+        ended.Problem.ShouldBe(nameof(RecordingProblem.AudioMissing));
+        (await PlainRawAsync(recording.SessionId)).ShouldBe("first part");
+        Directory.GetFiles(Store.LocalPathOf(RecordingFiles.Slices(RecordingScenario.RowOf(recording.Id, owner)))).ShouldBeEmpty();
     }
 
     [Test]

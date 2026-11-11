@@ -99,7 +99,7 @@ public class CloudTranscriptionTests : TestBase
         var recording = await scenario.Client.AddFinishedRecordingAsync(session.Id);
         var work = new MemoryStream(AudioParts.WavOf(PcmOf(samples)));
         await Services.GetRequiredService<FileStore>().WriteAsync(
-            RecordingFiles.WorkAudio(scenario.Member.TenantId, scenario.Member.Id, recording.Id), work, CancellationToken.None);
+            RecordingFiles.WorkAudio(RecordingScenario.RowOf(recording.Id, scenario.Member)), work, CancellationToken.None);
         return recording;
     }
 

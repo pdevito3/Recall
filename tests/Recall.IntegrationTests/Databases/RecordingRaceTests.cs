@@ -21,7 +21,7 @@ public class RecordingRaceTests : TestBase
 {
     private static readonly byte[] Slice = [0x1A, 0x45, 0xDF, 0xA3, 1];
 
-    private static async Task<(TestingServiceScope UnderTest, TestingServiceScope Rival, Recording Recording)> ScopesWithARecordingAsync(IServiceProvider services)
+    internal static async Task<(TestingServiceScope UnderTest, TestingServiceScope Rival, Recording Recording)> ScopesWithARecordingAsync(IServiceProvider services)
     {
         await new TestingServiceScope().StartGraph(out _)
             .AddTenant(out var tenant)
@@ -64,9 +64,11 @@ public class RecordingRaceTests : TestBase
     private static Task<RecordingDto> FinishWithTheLateSliceAsync(TestingServiceScope scope, Recording recording)
         => scope.SendAsync(new FinishRecording.Command(recording.Id, new RecordingFinishDto { SliceCount = 3, ByteLength = Slice.Length + SecondSlice.Length + LateSlice.Length }));
 
-    private static byte[] StoredAudio(TestingServiceScope scope, Recording recording)
+    /// <summary>The audio in the file that the saved row names, as each read of the audio of the server does.</summary>
+    internal static byte[] StoredAudio(TestingServiceScope scope, Recording recording)
     {
-        using var file = scope.GetService<FileStore>().OpenRead(RecordingFiles.Audio(recording));
+        var saved = scope.GetService<AppDbContext>().Recordings.AsNoTracking().Single(r => r.Id == recording.Id);
+        using var file = scope.GetService<FileStore>().OpenRead(RecordingFiles.Audio(saved));
         using var copy = new MemoryStream();
         file.CopyTo(copy);
         return copy.ToArray();

@@ -761,6 +761,10 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("audio_deleted_at");
 
+                    b.Property<string>("AudioFile")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("audio_file");
+
                     b.Property<string>("AudioKeptUntil")
                         .HasColumnType("TEXT")
                         .HasColumnName("audio_kept_until");

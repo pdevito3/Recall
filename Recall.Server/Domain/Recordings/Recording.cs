@@ -67,6 +67,13 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
     /// <summary>The file of a stored slice was gone when the audio was joined, so the audio has a gap, and its words have one too.</summary>
     public bool HasLostAudio { get; private set; }
 
+    /// <summary>
+    /// The file in the folder of the Recording that holds its joined audio, or null before the first join. Each join writes a
+    /// new file, and only the save that names it here makes it the audio. See <see cref="Features.RecordingWork.JoinAudioAndSaveAsync"/>.
+    /// </summary>
+    [NotSensitive] public string? AudioFile { get; private set; }
+
+    /// <summary>The name that a download of the audio gets.</summary>
     public string AudioFileName => Format == RecordingFormat.Webm ? "audio.webm" : "audio.mp4";
 
     public string AudioContentType => Format == RecordingFormat.Webm ? "audio/webm" : "audio/mp4";
@@ -288,6 +295,12 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
     public void MarkAudioDeleted(DateTimeOffset now) => AudioDeletedAt = now;
 
     public void MarkAudioLost() => HasLostAudio = true;
+
+    /// <summary>A name that no other join can take, so two joins that race never write one file.</summary>
+    public string NewAudioFileName() => $"audio-{Guid.CreateVersion7():N}{Path.GetExtension(AudioFileName)}";
+
+    /// <summary>Names the file that a join wrote. The save of this change is what makes the file the audio.</summary>
+    public void UseAudioFile(string audioFile) => AudioFile = audioFile;
 
     private void RequireWaitingForTranscription()
     {

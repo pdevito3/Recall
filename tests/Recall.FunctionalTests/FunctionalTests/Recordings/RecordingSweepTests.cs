@@ -191,13 +191,7 @@ public class RecordingSweepTests : TestBase
         ended.Status.ShouldNotBe(nameof(RecordingStatus.Receiving));
         ended.StoredSlices.ShouldBe([0, 2]);
         (await CountJobsAsync("transcribe-recording", withGap.Id)).ShouldBeGreaterThan(0);
-        var audio = FileKey.ForTenant(admin.TenantId, RecordingFiles.RootFolder, admin.Id, withGap.Id, "audio.webm");
-        using (var file = SharedStore.OpenRead(audio))
-        using (var bytes = new MemoryStream())
-        {
-            await file.CopyToAsync(bytes);
-            bytes.ToArray().ShouldBe(RecordingScenario.WebmStart.Concat(RecordingScenario.Bytes(4)).ToArray());
-        }
+        RecordingScenario.StoredAudio(withGap.Id, admin).ShouldBe(RecordingScenario.WebmStart.Concat(RecordingScenario.Bytes(4)).ToArray());
 
         (await FactoryClient.PutSliceAsync(withGap.Id, 1, RecordingScenario.Bytes(4))).StatusCode.ShouldBe(HttpStatusCode.Conflict);
 
@@ -238,15 +232,13 @@ public class RecordingSweepTests : TestBase
         var ended = await FactoryClient.GetRecordingAsync(recording.Id);
         ended.Status.ShouldBe(nameof(RecordingStatus.Received));
         ended.ProblemText.ShouldBe("Part of the audio of this recording was lost on the server, so the words of that part are missing. Tell the Owner of this server.");
-        using var audio = SharedStore.OpenRead(FileKey.ForTenant(admin.TenantId, RecordingFiles.RootFolder, admin.Id, recording.Id, "audio.webm"));
-        using var bytes = new MemoryStream();
-        await audio.CopyToAsync(bytes);
-        bytes.ToArray().ShouldBe(RecordingScenario.WebmStart.Concat(RecordingScenario.Bytes(4, 2)).ToArray());
+        RecordingScenario.StoredAudio(recording.Id, admin).ShouldBe(RecordingScenario.WebmStart.Concat(RecordingScenario.Bytes(4, 2)).ToArray());
         Directory.GetFiles(slices).ShouldBeEmpty();
     }
 
     [Test]
     [Property("Rule", "REC-23")]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     public async Task a_quiet_upload_that_cannot_end_holds_no_other_upload_and_not_the_queue_of_its_owner()
     {
         // Arrange
@@ -260,8 +252,9 @@ public class RecordingSweepTests : TestBase
         var jobGone = await FactoryClient.AddFinishedRecordingAsync(session.Id);
         await JournalScenario.ExecuteOutOfBandAsync(
             "DELETE FROM backwave_jobs WHERE wire_name = $kind AND CAST(payload AS TEXT) LIKE $id", ("$kind", "transcribe-recording"), ("$id", $"%{jobGone.Id}%"));
-        // A folder where the audio goes makes each write of the audio fail.
-        Directory.CreateDirectory(Path.Combine(SharedStore.LocalPathOf(RecordingFiles.Folder(admin.TenantId, admin.Id, broken.Id)), "audio.webm"));
+        // A slice file that the server cannot read makes each join of the audio fail.
+        foreach (var file in Directory.GetFiles(Path.Combine(SharedStore.LocalPathOf(RecordingFiles.Folder(admin.TenantId, admin.Id, broken.Id)), "slices")))
+            File.SetUnixFileMode(file, UnixFileMode.None);
         var quietSince = DateTimeOffset.UtcNow - Recording.QuietUploadEndsAfter - TimeSpan.FromMinutes(1);
         foreach (var id in new[] { broken.Id, quiet.Id })
             await JournalScenario.ExecuteOutOfBandAsync(
@@ -372,9 +365,10 @@ public class RecordingSweepTests : TestBase
         var recording = await FactoryClient.AddFinishedRecordingAsync(session.Id);
         await JournalScenario.ExecuteOutOfBandAsync("UPDATE recordings SET status = $status WHERE id = $id", ("$status", status), ("$id", recording.Id));
         using var folder = new SweptFolder();
-        var workAudio = RecordingFiles.WorkAudio(admin.TenantId, admin.Id, recording.Id);
-        var audio = FileKey.ForTenant(admin.TenantId, RecordingFiles.RootFolder, admin.Id, recording.Id, "audio.webm");
-        var partial = RecordingFiles.PartialWorkAudio(admin.TenantId, admin.Id, recording.Id);
+        var row = RecordingScenario.RowOf(recording.Id, admin);
+        var workAudio = RecordingFiles.WorkAudio(row);
+        var audio = RecordingFiles.Audio(row);
+        var partial = RecordingFiles.PartialWorkAudio(row);
         await folder.WriteAsync(workAudio);
         await folder.WriteAsync(partial);
         await folder.WriteAsync(audio);
@@ -401,6 +395,11 @@ public class RecordingSweepTests : TestBase
         await JournalScenario.ExecuteOutOfBandAsync(
             "UPDATE recordings SET status = 'Transcribed', audio_kept_until = '2000-01-01T00:00:00.000000Z' WHERE id = $id", ("$id", recording.Id));
         var job = Services.GetRequiredService<TranscribeRecordingJob>();
+        var row = RecordingScenario.RowOf(recording.Id, admin);
+        // The file of a slice whose save lost to the finish, which no step joins.
+        var leftover = RecordingFiles.Slice(row, 2, "0011");
+        using (var content = new MemoryStream([1]))
+            await SharedStore.WriteAsync(leftover, content, CancellationToken.None);
 
         // Act
         await job.DeleteRecordingAudioAsync(recording.Id, admin.Id, admin.TenantId, CancellationToken.None);
@@ -409,7 +408,32 @@ public class RecordingSweepTests : TestBase
         var read = await FactoryClient.GetRecordingAsync(recording.Id);
         read.AudioFileName.ShouldBeNull();
         (await FactoryClient.GetAsync(ApiRoutes.Recordings.File(recording.Id, "audio.webm"))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        Should.Throw<NotFoundException>(() => SharedStore.OpenRead(FileKey.ForTenant(admin.TenantId, RecordingFiles.RootFolder, admin.Id, recording.Id, "audio.webm")));
+        SharedStore.Exists(RecordingFiles.Audio(row)).ShouldBeFalse();
+        SharedStore.Exists(leftover).ShouldBeFalse();
+    }
+
+    [Test]
+    [Property("Rule", "REC-24")]
+    public async Task the_sweep_removes_the_files_that_a_lost_write_left_after_the_removal_of_the_audio()
+    {
+        // Arrange
+        var (admin, _) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(admin.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        var recording = await FactoryClient.AddFinishedRecordingAsync(session.Id);
+        await JournalScenario.ExecuteOutOfBandAsync(
+            "UPDATE recordings SET status = 'Transcribed', audio_kept_until = '2000-01-01T00:00:00.000000Z' WHERE id = $id", ("$id", recording.Id));
+        await Services.GetRequiredService<TranscribeRecordingJob>().DeleteRecordingAudioAsync(recording.Id, admin.Id, admin.TenantId, CancellationToken.None);
+        using var folder = new SweptFolder();
+        // A slice whose file write passed the check before the removal, and whose save lost after it.
+        var leftover = RecordingFiles.Slice(RecordingScenario.RowOf(recording.Id, admin), 2, "0011");
+        await folder.WriteAsync(leftover);
+
+        // Act
+        await folder.Sweep.RunAsync(CancellationToken.None);
+
+        // Assert
+        folder.Holds(leftover).ShouldBeFalse();
     }
 
     [Test]
