@@ -28,6 +28,8 @@ test.each([
   ['signedOut', 'You signed out'],
   ['signedOutInAnotherTab', 'You signed out in another tab'],
   ['sessionEnded', 'Your session ended'],
+  ['sessionUnchecked', 'We could not check your session'],
+  ['pageDidNotLoad', 'This page did not load'],
 ] as const)('the screen after %s names what happened', async (why, title) => {
   const screen = await render(<WordsLeftAtSignOut why={why} words={[doc('first words')]} leave={vi.fn()} />)
 
