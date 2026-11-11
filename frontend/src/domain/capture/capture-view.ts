@@ -66,7 +66,8 @@ export type CaptureView =
   | { kind: 'serverDown'; durationMs: number; isOnServer: boolean }
   | { kind: 'refused'; text: string; clientRecordingId: string }
   | { kind: 'transcribing'; problemText: string | null }
-  | { kind: 'ready'; sessionId: string }
+  /** `problemText`: the words came, but the Server names a problem, such as a part of the audio that it lost. */
+  | { kind: 'ready'; sessionId: string; problemText: string | null }
   | { kind: 'failed'; recordingId: string; sessionId: string; problemText: string | null }
 
 export type CaptureKind = CaptureView['kind']
@@ -107,7 +108,7 @@ function viewOfText(capture: StoredCapture, recording: RecordingDto | undefined,
   }
   if (recording.status === 'Failed') return { kind: 'failed', recordingId: recording.id, sessionId: recording.sessionId, problemText: recording.problemText ?? null }
   const endedAt = Date.parse(capture.startedAt) + capture.durationMs
-  return now - endedAt < readyShowsForMs ? { kind: 'ready', sessionId: recording.sessionId } : { kind: 'idle' }
+  return now - endedAt < readyShowsForMs ? { kind: 'ready', sessionId: recording.sessionId, problemText: recording.problemText ?? null } : { kind: 'idle' }
 }
 
 /** What the mic card shows. A recording of this tab comes first, then the newest capture, then the mic at rest. */

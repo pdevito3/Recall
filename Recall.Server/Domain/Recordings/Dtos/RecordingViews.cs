@@ -18,7 +18,7 @@ public static class RecordingViews
             ? GetTranscriptionStatus.JobsStoppedText
             : recording is { Status: RecordingStatus.Failed, Problem: RecordingProblem.ProviderUnavailable }
                 ? ProviderGaveUpText
-                : ProblemTextOf(recording.Problem, model),
+                : ProblemTextOf(recording.Problem, model) ?? (recording.HasLostAudio ? LostAudioText : null),
         HighestStoredSlice = recording.HighestStoredSlice,
         StoredSlices = storedSlices,
         ByteLength = recording.ByteLength,
@@ -32,6 +32,9 @@ public static class RecordingViews
     /// <summary>The tries of the job ended, so no new try comes unless a person asks for one.</summary>
     public const string ProviderGaveUpText = "The audio is stored, but the provider that makes the text did not answer on any try. "
         + "Try again later. If it keeps failing, ask an Admin to check the provider.";
+
+    /// <summary>The words of the other parts still come, so this text stays after the end, until a problem that asks for more shows.</summary>
+    public const string LostAudioText = "Part of the audio of this recording was lost on the server, so the words of that part are missing. Tell the Owner of this server.";
 
     public static string? ProblemTextOf(RecordingProblem problem, ModelStatus model) => problem switch
     {

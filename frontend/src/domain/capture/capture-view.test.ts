@@ -156,7 +156,9 @@ describe('the mic card', () => {
     expect(captureViewOf(inputs({ latest }))).toEqual({ kind: 'transcribing', problemText: null })
     const waiting = aRecording({ status: 'Received', problemText: 'The speech model downloads.' })
     expect(captureViewOf(inputs({ latest, recording: waiting }))).toEqual({ kind: 'transcribing', problemText: 'The speech model downloads.' })
-    expect(captureViewOf(inputs({ latest, recording: aRecording({ status: 'Transcribed' }) }))).toEqual({ kind: 'ready', sessionId: 'ses_1' })
+    expect(captureViewOf(inputs({ latest, recording: aRecording({ status: 'Transcribed' }) }))).toEqual({ kind: 'ready', sessionId: 'ses_1', problemText: null })
+    const lost = aRecording({ status: 'Transcribed', problemText: 'Part of the audio was lost.' })
+    expect(captureViewOf(inputs({ latest, recording: lost }))).toEqual({ kind: 'ready', sessionId: 'ses_1', problemText: 'Part of the audio was lost.' })
     expect(captureViewOf(inputs({ latest, recording: aRecording({ status: 'Failed', problemText: 'No speech was found.' }) }))).toEqual({
       kind: 'failed',
       recordingId: 'rec_1',

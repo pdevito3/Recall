@@ -69,7 +69,7 @@ function wordsOf(view: CaptureView): { title: string; line: string } {
     case 'transcribing':
       return { title: 'Writing the words', line: view.problemText ?? 'The server has your audio. You can close this page. The words come to your journal.' }
     case 'ready':
-      return { title: 'Your words are in', line: 'A new entry holds the words of this recording.' }
+      return { title: 'Your words are in', line: view.problemText ?? 'A new entry holds the words of this recording.' }
     case 'failed':
       return { title: 'No words came from this audio', line: `${view.problemText ?? 'The transcription failed.'} The audio is safe on the server.` }
     case 'denied':

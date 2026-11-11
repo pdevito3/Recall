@@ -145,9 +145,9 @@ public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore 
         var joinedThrough = recording.QuietEndThroughSlice;
         recording.EndQuietUpload(slices.Count, await RecordingWork.ChosenEngineAsync(dbContext, cancellationToken));
         if (slices.Count > 0)
-            await RecordingWork.WriteAudioAsync(fileStore, recording, slices, joinedThrough, _logger, cancellationToken);
+            await RecordingWork.WriteAudioAsync(dbContext, fileStore, recording, slices, joinedThrough, _logger, cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
-        RecordingWork.TryDeleteSlices(fileStore, recording, _logger);
+        RecordingWork.TryDeleteJoinedSlices(fileStore, recording, slices, _logger);
         _logger.Here().Information("Ended the quiet upload of recording {RecordingId} with {SliceCount} slices", recording.Id, slices.Count);
     }
 

@@ -791,6 +791,10 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("format");
 
+                    b.Property<bool>("HasLostAudio")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("has_lost_audio");
+
                     b.Property<bool>("HasText")
                         .HasColumnType("INTEGER")
                         .HasColumnName("has_text");

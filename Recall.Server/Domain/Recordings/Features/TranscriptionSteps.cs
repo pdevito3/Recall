@@ -33,7 +33,6 @@ public static class BeginTranscription
             if (!recording.WaitsForTranscription || recording.Engine != request.Engine)
                 return null;
 
-            RecordingWork.TryDeleteSlices(fileStore, recording, _logger);
             AudioProvider? provider = null;
             TranscriptionChoice? choice = null;
             if (recording.Engine == TranscriptionEngineKind.Cloud)
@@ -324,14 +323,20 @@ public static class RemoveKeptAudio
             var recording = await dbContext.Recordings
                 .TagWithOperationCallSite("recordings.audio.remove")
                 .GetById(request.Id, cancellationToken);
-            var now = timeProvider.GetUtcNow();
-            if (!recording.CanDeleteAudio(now))
-                return;
+            // The mark is saved before the files go, so a late part (REC-24) that opened the Recording first keeps its audio.
+            // A job that runs again after the save removes the files that a fault left.
+            if (recording.AudioDeletedAt is null)
+            {
+                var now = timeProvider.GetUtcNow();
+                if (!recording.CanDeleteAudio(now))
+                    return;
+
+                recording.MarkAudioDeleted(now);
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
 
             fileStore.Delete(RecordingFiles.Audio(recording));
             fileStore.Delete(RecordingFiles.WorkAudio(recording));
-            recording.MarkAudioDeleted(now);
-            await dbContext.SaveChangesAsync(cancellationToken);
             _logger.Here().Information("Removed the kept audio of recording {RecordingId}", recording.Id);
         }
     }

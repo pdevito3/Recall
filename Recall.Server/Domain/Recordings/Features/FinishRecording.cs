@@ -4,6 +4,7 @@ using System.Diagnostics;
 using BackWave.Storage;
 using Databases;
 using Dtos;
+using Exceptions;
 using Jobs;
 using MediatR;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -49,11 +50,11 @@ public static class FinishRecording
 
             var joinedThrough = recording.QuietEndThroughSlice;
             recording.Finish(stored, request.Dto.SliceCount, request.Dto.ByteLength, await RecordingWork.ChosenEngineAsync(dbContext, cancellationToken));
-            await RecordingWork.WriteAudioAsync(fileStore, recording, slices, joinedThrough, _logger, cancellationToken);
+            await RecordingWork.WriteAudioAsync(dbContext, fileStore, recording, slices, joinedThrough, _logger, cancellationToken);
 
             await dbContext.SaveChangesAsync(cancellationToken);
             await RecordingWork.TryQueueTranscriptionAsync(dbContext, jobStore, recording, timeProvider, _logger);
-            RecordingWork.TryDeleteSlices(fileStore, recording, _logger);
+            RecordingWork.TryDeleteJoinedSlices(fileStore, recording, slices, _logger);
 
             Activity.Current?.SetTag("app.recording.byte_length", recording.ByteLength);
             _logger.Here().Information("Finished the upload of recording {RecordingId}", recording.Id);
@@ -144,22 +145,65 @@ public static class RecordingWork
     /// joins after the bytes of those slices. A repeat reads the same bytes, so it writes the same file. The decoded audio
     /// of the shorter file goes, so the next run decodes the whole file.
     /// </summary>
-    public static async Task WriteAudioAsync(
-        FileStore fileStore, Recording recording, IReadOnlyList<RecordingSlice> slices, int? joinedThrough, ILogger logger, CancellationToken cancellationToken)
+    /// <remarks>
+    /// A slice file goes only after a save that joined it. So a file that is gone here was joined by a rival that saved
+    /// first, and the run starts again and reads that save. With no such save the file is lost: the other slices join with
+    /// a gap, as after a quiet end, and the Recording says so. With no joined audio, or no slice to join, it writes no
+    /// audio, and the transcription fails with <see cref="RecordingProblem.AudioMissing"/>.
+    /// </remarks>
+    public static async Task WriteAudioAsync(AppDbContext dbContext, FileStore fileStore, Recording recording,
+        IReadOnlyList<RecordingSlice> slices, int? joinedThrough, ILogger logger, CancellationToken cancellationToken)
     {
         var joinedBytes = slices.Where(s => s.Index <= (joinedThrough ?? -1)).Sum(s => s.ByteLength);
-        await fileStore.WriteAsync(RecordingFiles.Audio(recording), async (target, ct) =>
+        var late = slices.Where(s => s.Index > (joinedThrough ?? -1)).OrderBy(s => s.Index).ToList();
+        var kept = late.Where(s => fileStore.Exists(SliceFile(recording, s))).ToList();
+        var hasJoinedAudio = joinedBytes == 0 || fileStore.Exists(RecordingFiles.Audio(recording));
+        if (kept.Count < late.Count || !hasJoinedAudio)
         {
-            if (joinedBytes > 0)
-                await CopyJoinedAudioAsync(fileStore, recording, joinedBytes, target, ct);
-            foreach (var slice in slices.Where(s => s.Index > (joinedThrough ?? -1)).OrderBy(s => s.Index))
+            await StartAgainWhenARivalSavedAsync(dbContext, recording, cancellationToken);
+            recording.MarkAudioLost();
+            logger.Here().Warning("The audio of recording {RecordingId} lost {LostSlices} slice files and {LostJoinedBytes} joined bytes",
+                recording.Id, late.Count - kept.Count, hasJoinedAudio ? 0 : joinedBytes);
+            if (!hasJoinedAudio || (joinedBytes == 0 && kept.Count == 0))
+                return;
+        }
+
+        try
+        {
+            await fileStore.WriteAsync(RecordingFiles.Audio(recording), async (target, ct) =>
             {
-                await using var part = fileStore.OpenRead(RecordingFiles.Slice(recording, slice.Index, slice.Sha256));
-                await part.CopyToAsync(target, ct);
-            }
-        }, cancellationToken);
+                if (joinedBytes > 0)
+                    await CopyJoinedAudioAsync(fileStore, recording, joinedBytes, target, ct);
+                foreach (var slice in kept)
+                {
+                    await using var part = fileStore.OpenRead(SliceFile(recording, slice));
+                    await part.CopyToAsync(target, ct);
+                }
+            }, cancellationToken);
+        }
+        catch (NotFoundException)
+        {
+            // A rival saved and removed the files during the write. The write left the audio as it was.
+            await StartAgainWhenARivalSavedAsync(dbContext, recording, cancellationToken);
+            throw;
+        }
+
         if (joinedThrough is not null)
             TryDeleteWorkAudio(fileStore, recording.TenantId, recording.UserId, recording.Id, logger);
+    }
+
+    private static FileKey SliceFile(Recording recording, RecordingSlice slice) => RecordingFiles.Slice(recording, slice.Index, slice.Sha256);
+
+    private static async Task StartAgainWhenARivalSavedAsync(AppDbContext dbContext, Recording recording, CancellationToken cancellationToken)
+    {
+        var saved = await dbContext.Recordings
+            .TagWithOperationCallSite("recordings.audio.saved_version")
+            .AsNoTracking()
+            .Where(r => r.Id == recording.Id)
+            .Select(r => (uint?)r.Version)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (saved != recording.Version)
+            throw new StaleVersionException();
     }
 
     private static async Task CopyJoinedAudioAsync(FileStore fileStore, Recording recording, long joinedBytes, Stream target, CancellationToken cancellationToken)
@@ -177,11 +221,16 @@ public static class RecordingWork
         }
     }
 
-    public static void TryDeleteSlices(FileStore fileStore, Recording recording, ILogger logger)
+    /// <summary>
+    /// Call after the save that joined <paramref name="joined"/>. Only their files go: a late slice (REC-24) can write its
+    /// file beside them before its own save.
+    /// </summary>
+    public static void TryDeleteJoinedSlices(FileStore fileStore, Recording recording, IEnumerable<RecordingSlice> joined, ILogger logger)
     {
         try
         {
-            fileStore.DeleteUnder(RecordingFiles.Slices(recording));
+            foreach (var slice in joined)
+                fileStore.Delete(SliceFile(recording, slice));
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

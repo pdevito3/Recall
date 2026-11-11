@@ -61,6 +61,9 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
 
     public DateTimeOffset? AudioDeletedAt { get; private set; }
 
+    /// <summary>The file of a stored slice was gone when the audio was joined, so the audio has a gap, and its words have one too.</summary>
+    public bool HasLostAudio { get; private set; }
+
     public string AudioFileName => Format == RecordingFormat.Webm ? "audio.webm" : "audio.mp4";
 
     public string AudioContentType => Format == RecordingFormat.Webm ? "audio/webm" : "audio/mp4";
@@ -280,6 +283,8 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
         => Status == RecordingStatus.Transcribed && AudioDeletedAt is null && AudioKeptUntil is { } until && until <= now;
 
     public void MarkAudioDeleted(DateTimeOffset now) => AudioDeletedAt = now;
+
+    public void MarkAudioLost() => HasLostAudio = true;
 
     private void RequireWaitingForTranscription()
     {
