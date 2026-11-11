@@ -352,8 +352,16 @@ export function MicCard() {
       )}
       {/* Until the store answers, the card does not know of stored audio, so it says nothing rather than Tap to record. */}
       <div role="status" className={cn('flex max-w-md flex-col items-center gap-1.5', !capture.isLoaded && !isOff && 'invisible')}>
-        <p className={cn('flex items-center gap-2 text-lg font-semibold', isRecording && 'sr-only', isProblem(view.kind) && 'text-destructive')}>
-          {icon && <HugeiconsIcon icon={icon} size={20} aria-hidden className={cn(view.kind === 'transcribing' && 'animate-spin [animation-duration:2s]', view.kind === 'ready' && 'text-emerald-600 dark:text-emerald-400')} />}
+        {/* The icon flows with the words, so a title that wraps keeps it at the start of its first line. */}
+        <p className={cn('text-lg font-semibold text-balance', isRecording && 'sr-only', isProblem(view.kind) && 'text-destructive')}>
+          {icon && (
+            <HugeiconsIcon
+              icon={icon}
+              size={20}
+              aria-hidden
+              className={cn('me-2 inline-block align-[-3px]', view.kind === 'transcribing' && 'animate-spin [animation-duration:2s]', view.kind === 'ready' && 'text-emerald-600 dark:text-emerald-400')}
+            />
+          )}
           {words.title}
         </p>
         {/* While the mic starts, the line keeps the room of the idle line, so the card does not shrink and grow again under the finger. */}

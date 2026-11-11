@@ -274,6 +274,32 @@ test('with no network after each slice went, the card says that the server has t
   await screen.unmount()
 })
 
+test('on a phone the icon of a title that wraps sits at the start of its first line', async () => {
+  // Arrange
+  await page.viewport(390, 800)
+  await aFinishedCapture({ isFinished: false, durationMs: 3_000, problem: { kind: 'serverDown' } })
+
+  // Act
+  const screen = await openHome([{ method: 'POST', path: '/api/v1/recordings/rec_1/finish', status: 503, body: { status: 503, title: 'Service Unavailable' } }])
+
+  // Assert
+  await cardSays(screen, 'The server does not answer. The words wait')
+  const title = screen.getByRole('region', { name: 'Record an entry' }).getByText('The server does not answer. The words wait').element()
+  const words = [...title.childNodes].find((node) => node.nodeType === Node.TEXT_NODE)!
+  const firstLetter = document.createRange()
+  firstLetter.setStart(words, 0)
+  firstLetter.setEnd(words, 1)
+  const letter = firstLetter.getBoundingClientRect()
+  const icon = title.querySelector('svg')!.getBoundingClientRect()
+  // The title takes two lines at this width.
+  expect(title.getBoundingClientRect().height).toBeGreaterThan(letter.height * 1.5)
+  expect(letter.left - icon.right).toBeGreaterThanOrEqual(0)
+  expect(letter.left - icon.right).toBeLessThanOrEqual(12)
+  expect(Math.abs((icon.top + icon.bottom) / 2 - (letter.top + letter.bottom) / 2)).toBeLessThanOrEqual(3)
+  expect(icon.width).toBe(20)
+  await screen.unmount()
+})
+
 test('a refusal of the server shows its words, and Send again sends the audio again', async () => {
   // Arrange
   await aFinishedCapture({ storedSlices: 0, storedBytes: 0, sentSlices: 0, isFinished: false, problem: { kind: 'refused', text: 'The audio is larger than 8 MiB.' } })
