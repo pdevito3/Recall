@@ -201,8 +201,9 @@ The browser can keep a page in its back-forward cache, and Back then shows this 
 |---|---|
 | The session of this page | Shows itself again, with no new load |
 | No session | Goes to the signed-out page |
-| Another session, for example of the next person on this device | Loads again, so the words of this page stay hidden |
-| A failed call, or no answer in 3 seconds | Loads again, and shows the alert of the session check if the call still fails. With no network, the browser shows its own error page, because Recall has no offline page and the words of this page must stay hidden |
+| A newer session of the same person | Loads again. Words that only the memory of the page holds show alone first, under `Your session ended` |
+| The session of another person, for example of the next person on this device | Goes to `/auth/login?anotherPerson=1` at once, so the words of this page stay hidden. With words that only the memory held, the login page says that they are gone |
+| A failed call, or no answer in 3 seconds | Loads again, and shows the alert of the session check if the call still fails. Words that only the memory of the page holds show alone first, under `We could not check your session`. The check of the last person of this browser still sends the page to the login at once when another person signed in here. With no network, the browser shows its own error page, because Recall has no offline page |
 
 So in a live session, Back from this cache costs one call of `/auth/me`.
 
