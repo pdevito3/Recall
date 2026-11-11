@@ -14,7 +14,7 @@ using Transcription;
 
 public static class BeginTranscription
 {
-    public sealed record Start(string AudioPath, string WorkFolder, long StartSample, AudioProvider? Provider, TranscriptionChoice? Choice);
+    public sealed record Start(string AudioPath, string WorkAudioPath, long StartSample, AudioProvider? Provider, TranscriptionChoice? Choice, int? HighestSlice);
 
     /// <summary>A job of another engine does nothing, so two engines never work on one Recording at a time.</summary>
     public sealed record Command(string Id, TranscriptionEngineKind Engine, bool EngineIsReady) : IRequest<Start?>, IRunsAgainWhenRaced;
@@ -33,7 +33,6 @@ public static class BeginTranscription
             if (!recording.WaitsForTranscription || recording.Engine != request.Engine)
                 return null;
 
-            RecordingWork.TryDeleteSlices(fileStore, recording, _logger);
             AudioProvider? provider = null;
             TranscriptionChoice? choice = null;
             if (recording.Engine == TranscriptionEngineKind.Cloud)
@@ -72,10 +71,11 @@ public static class BeginTranscription
             {
                 start = new Start(
                     fileStore.LocalPathOf(RecordingFiles.Audio(recording)),
-                    fileStore.LocalPathOf(RecordingFiles.Folder(recording)),
+                    fileStore.LocalPathOf(RecordingFiles.WorkAudio(recording)),
                     recording.TranscribedSamples,
                     provider,
-                    choice);
+                    choice,
+                    recording.HighestStoredSlice);
             }
 
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -222,13 +222,14 @@ public static class SaveTranscriptChunk
 
 public static class CompleteTranscription
 {
-    public sealed record Command(string Id) : IRequest, IRunsAgainWhenRaced;
+    /// <summary>The highest slice of the audio at the begin of the run. The answer is false when the audio grew since (REC-24), and the run begins again.</summary>
+    public sealed record Command(string Id, int? HighestSlice) : IRequest<bool>, IRunsAgainWhenRaced;
 
-    public sealed class Handler(AppDbContext dbContext, TimeProvider timeProvider) : IRequestHandler<Command>
+    public sealed class Handler(AppDbContext dbContext, TimeProvider timeProvider) : IRequestHandler<Command, bool>
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
 
-        public async Task Handle(Command request, CancellationToken cancellationToken)
+        public async Task<bool> Handle(Command request, CancellationToken cancellationToken)
         {
             Activity.Current?.SetTag("app.recording_id", request.Id);
 
@@ -236,7 +237,9 @@ public static class CompleteTranscription
                 .TagWithOperationCallSite("recordings.transcribe.complete")
                 .GetById(request.Id, cancellationToken);
             if (!recording.WaitsForTranscription)
-                return;
+                return true;
+            if (recording.AudioGrewSince(request.HighestSlice))
+                return false;
 
             recording.Complete(timeProvider.GetUtcNow());
             if (recording.AudioKeptUntil is { } until)
@@ -251,6 +254,7 @@ public static class CompleteTranscription
             }
 
             _logger.Here().Information("Recording {RecordingId} is {Status}, {Problem}", recording.Id, recording.Status, recording.Problem);
+            return true;
         }
     }
 }
@@ -270,20 +274,21 @@ public static class RemoveEndedWorkAudio
                 .AsNoTracking()
                 .GetById(request.Id, cancellationToken);
             if (!recording.WaitsForTranscription)
-                RecordingWork.TryDeleteWorkAudio(fileStore, recording.TenantId, recording.UserId, recording.Id, _logger);
+                RecordingWork.TryDeleteWorkAudio(fileStore, recording, _logger);
         }
     }
 }
 
 public static class FailTranscription
 {
-    public sealed record Command(string Id, RecordingProblem Problem) : IRequest, IRunsAgainWhenRaced;
+    /// <summary>The fault of a run on audio that grew since its begin (REC-24) fails nothing, and the answer is false, so the run begins again.</summary>
+    public sealed record Command(string Id, RecordingProblem Problem, int? HighestSlice) : IRequest<bool>, IRunsAgainWhenRaced;
 
-    public sealed class Handler(AppDbContext dbContext) : IRequestHandler<Command>
+    public sealed class Handler(AppDbContext dbContext) : IRequestHandler<Command, bool>
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
 
-        public async Task Handle(Command request, CancellationToken cancellationToken)
+        public async Task<bool> Handle(Command request, CancellationToken cancellationToken)
         {
             Activity.Current?.SetTag("app.recording_id", request.Id);
 
@@ -291,11 +296,14 @@ public static class FailTranscription
                 .TagWithOperationCallSite("recordings.transcribe.fail")
                 .GetById(request.Id, cancellationToken);
             if (!recording.WaitsForTranscription)
-                return;
+                return true;
+            if (recording.AudioGrewSince(request.HighestSlice))
+                return false;
 
             recording.Fail(request.Problem);
             await dbContext.SaveChangesAsync(cancellationToken);
             _logger.Here().Information("Recording {RecordingId} failed with {Problem}", recording.Id, request.Problem);
+            return true;
         }
     }
 }
@@ -315,14 +323,20 @@ public static class RemoveKeptAudio
             var recording = await dbContext.Recordings
                 .TagWithOperationCallSite("recordings.audio.remove")
                 .GetById(request.Id, cancellationToken);
-            var now = timeProvider.GetUtcNow();
-            if (!recording.CanDeleteAudio(now))
-                return;
+            // The mark is saved before the files go, so a late part (REC-24) that opened the Recording first keeps its audio.
+            // After the mark no slice joins, so all the files of the Recording go: the audio, its decoded copy, and a slice
+            // file that a lost save left. A job that runs again after the save removes the files that a fault left.
+            if (recording.AudioDeletedAt is null)
+            {
+                var now = timeProvider.GetUtcNow();
+                if (!recording.CanDeleteAudio(now))
+                    return;
 
-            fileStore.Delete(RecordingFiles.Audio(recording));
-            fileStore.Delete(RecordingFiles.WorkAudio(recording));
-            recording.MarkAudioDeleted(now);
-            await dbContext.SaveChangesAsync(cancellationToken);
+                recording.MarkAudioDeleted(now);
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+
+            fileStore.DeleteUnder(RecordingFiles.Folder(recording));
             _logger.Here().Information("Removed the kept audio of recording {RecordingId}", recording.Id);
         }
     }

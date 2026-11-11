@@ -87,7 +87,7 @@ public sealed class TranscribeRecordingJob(
     private enum Run
     {
         Ended,
-        ChoiceChanged,
+        BeginAgain,
     }
 
     /// <summary>
@@ -98,7 +98,7 @@ public sealed class TranscribeRecordingJob(
     {
         try
         {
-            var input = new TranscriptionInput(start.AudioPath, start.WorkFolder, start.StartSample, start.Provider);
+            var input = new TranscriptionInput(start.AudioPath, start.WorkAudioPath, start.StartSample, start.Provider);
             var from = start.StartSample;
             await foreach (var chunk in engine.RunAsync(input, cancellationToken))
             {
@@ -109,11 +109,12 @@ public sealed class TranscribeRecordingJob(
                 if (start.Choice is { } choice && !await SendAsync(owner, new TranscriptionChoiceHolds.Query(choice.ModelProviderId, choice.Version), cancellationToken))
                 {
                     _logger.Here().Information("The provider choice changed during recording {RecordingId}, so it begins again from its saved text", recordingId);
-                    return Run.ChoiceChanged;
+                    return Run.BeginAgain;
                 }
             }
 
-            await SendAsync(owner, new CompleteTranscription.Command(recordingId), cancellationToken);
+            if (!await SendAsync(owner, new CompleteTranscription.Command(recordingId, start.HighestSlice), cancellationToken))
+                return AudioGrew(recordingId);
         }
         catch (TranscriptionEngineException exception) when (exception.TryAgain)
         {
@@ -123,10 +124,17 @@ public sealed class TranscribeRecordingJob(
         }
         catch (TranscriptionEngineException exception)
         {
-            await SendAsync(owner, new FailTranscription.Command(recordingId, exception.Problem), cancellationToken);
+            if (!await SendAsync(owner, new FailTranscription.Command(recordingId, exception.Problem, start.HighestSlice), cancellationToken))
+                return AudioGrew(recordingId);
         }
 
         return Run.Ended;
+    }
+
+    private Run AudioGrew(string recordingId)
+    {
+        _logger.Here().Information("A late part made the audio of recording {RecordingId} longer during the run, so it begins again from its saved text", recordingId);
+        return Run.BeginAgain;
     }
 
     private async Task<TResponse> SendAsync<TResponse>(JournalOwner owner, IRequest<TResponse> command, CancellationToken cancellationToken)

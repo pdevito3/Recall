@@ -7046,7 +7046,8 @@
               "ProviderUnavailable",
               "ProviderRefused",
               "ProviderBadAnswer",
-              "ProviderKeyUnreadable"
+              "ProviderKeyUnreadable",
+              "NoAudioReceived"
             ],
             "type": "string"
           },

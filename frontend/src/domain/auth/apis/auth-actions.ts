@@ -1,4 +1,4 @@
-import { hashKey, useMutation, type QueryClient } from '@tanstack/react-query'
+import { hashKey, onlineManager, useMutation, type QueryClient } from '@tanstack/react-query'
 
 import { Notification, toastQueue } from '@/components/notification'
 import { apiClient } from '@/lib/api-client'
@@ -75,9 +75,9 @@ export async function logout(): Promise<void> {
   }
 }
 
-async function signOutOnTheServer(leaveNoSign: () => void) {
+async function signOutOnTheServer(leaveNoSign: () => Promise<void>) {
   const { data } = await apiClient.post<LogoutAnswer>('/auth/logout', undefined, { suppressErrorToast: true })
-  leaveNoSign()
+  await leaveNoSign()
   afterSignOut = data?.provider_logout_url ?? afterSignOut ?? signedOutPage
   otherTabs?.postMessage('signed-out')
   leaveTheApp({ why: 'signedOut', to: afterSignOut })
@@ -162,7 +162,12 @@ export function useLogout() {
     // By default a mutation waits with no sign while the browser has no network, and the logout must ask about unsent words now.
     networkMode: 'always',
     onError: (error) => {
-      if (!(error instanceof StayedSignedIn || error instanceof LeftTheAppFirst)) Notification.error('You are still signed in, because signing out did not finish. Try again.')
+      if (error instanceof StayedSignedIn || error instanceof LeftTheAppFirst) return
+      Notification.error(
+        onlineManager.isOnline()
+          ? 'You are still signed in, because signing out did not finish. Try again.'
+          : 'You are still signed in, because a sign-out needs the network. Try again when you are online.',
+      )
     },
   })
 }

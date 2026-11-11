@@ -19,6 +19,7 @@ import { authUserQuery } from '@/domain/auth/apis/get-user'
 import { useLeftTheApp } from '@/domain/auth/apis/leave-the-app'
 import { PageOfAnotherPerson } from '@/domain/auth/components/page-of-another-person'
 import { WordsLeftAtSignOut } from '@/domain/auth/components/words-left-at-sign-out'
+import { useSendStoredAudio } from '@/domain/capture/use-send-stored-audio'
 import { DraftNotices } from '@/domain/sessions/components/draft-notices'
 import { FileStoreNotice } from '@/domain/file-store/components/file-store-notice'
 import { MembershipCheckFailedNotice } from '@/domain/membership/components/membership-notice'
@@ -91,6 +92,7 @@ function Layout() {
 
 function LayoutContent() {
   useResumeUnsentDrafts()
+  useSendStoredAudio()
   const routerState = useRouterState()
   const page = routerState.matches[routerState.matches.length - 1]
   const isNotFound = routerState.matches.some((match) => match.globalNotFound)

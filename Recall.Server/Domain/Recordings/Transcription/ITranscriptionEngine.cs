@@ -12,7 +12,7 @@ public interface ITranscriptionEngine
 }
 
 /// <summary><paramref name="Provider"/> is set only for <see cref="TranscriptionEngineKind.Cloud"/>.</summary>
-public sealed record TranscriptionInput(string AudioPath, string WorkFolder, long StartSample, AudioProvider? Provider = null);
+public sealed record TranscriptionInput(string AudioPath, string WorkAudioPath, long StartSample, AudioProvider? Provider = null);
 
 /// <summary>The provider that takes the audio. The endpoint holds the key, so it prints nothing.</summary>
 public sealed record AudioProvider(ModelEndpoint Endpoint, string Model)

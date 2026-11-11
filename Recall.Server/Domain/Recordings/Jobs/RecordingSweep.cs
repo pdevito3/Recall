@@ -63,6 +63,7 @@ public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore 
 
     private async Task QueueWaitingAsync(JournalOwner owner, CancellationToken cancellationToken)
     {
+        await EndQuietUploadsAsync(owner, cancellationToken);
         await using var scope = scopeFactory.CreateJournalScope(owner);
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var waiting = await dbContext.Recordings
@@ -91,24 +92,83 @@ public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore 
         }, cancellationToken);
     }
 
+    /// <summary>
+    /// A Recording that got no new slice for <see cref="Recording.QuietUploadEndsAfter"/> ends with the slices that came, and the
+    /// queue below then makes its text. Each stored slice writes the row, so the time of the last write is the time of the last slice.
+    /// A slice that comes later opens the upload again (REC-24). A slice that races this save makes the save fail, and the next
+    /// sweep looks again. Each Recording ends in its own scope, so one that fails holds no other and not the queue below.
+    /// </summary>
+    private async Task EndQuietUploadsAsync(JournalOwner owner, CancellationToken cancellationToken)
+    {
+        var endBefore = timeProvider.GetUtcNow() - Recording.QuietUploadEndsAfter;
+        List<string> quiet;
+        await using (var scope = scopeFactory.CreateJournalScope(owner))
+        {
+            // Few Recordings are Receiving at a time, and the time compares here, as SQLite cannot compare a DateTimeOffset.
+            var receiving = await scope.ServiceProvider.GetRequiredService<AppDbContext>().Recordings
+                .TagWithOperationCallSite("recordings.sweep.receiving")
+                .AsNoTracking()
+                .Where(r => r.Status == RecordingStatus.Receiving)
+                .Select(r => new { r.Id, r.LastModifiedOn })
+                .ToListAsync(cancellationToken);
+            quiet = receiving.Where(r => r.LastModifiedOn is { } changed && changed <= endBefore).Select(r => r.Id).ToList();
+        }
+
+        foreach (var id in quiet)
+        {
+            try
+            {
+                await EndQuietUploadAsync(owner, id, endBefore, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                _logger.Here().Warning("Could not end the quiet upload of recording {RecordingId}, because of {FaultType}. A later sweep tries again", id, exception.GetType().Name);
+            }
+        }
+    }
+
+    private async Task EndQuietUploadAsync(JournalOwner owner, string id, DateTimeOffset endBefore, CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateJournalScope(owner);
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var recording = await dbContext.Recordings
+            .TagWithOperationCallSite("recordings.sweep.quiet")
+            .GetById(id, cancellationToken);
+        if (recording.Status != RecordingStatus.Receiving || !(recording.LastModifiedOn <= endBefore))
+            return;
+
+        var slices = await dbContext.RecordingSlices
+            .TagWithOperationCallSite("recordings.sweep.quiet_slices")
+            .AsNoTracking()
+            .Where(s => s.RecordingId == recording.Id)
+            .ToListAsync(cancellationToken);
+        var joinedThrough = recording.QuietEndThroughSlice;
+        recording.EndQuietUpload(slices.Count, await RecordingWork.ChosenEngineAsync(dbContext, cancellationToken));
+        await RecordingWork.JoinAudioAndSaveAsync(dbContext, fileStore, recording, slices, joinedThrough, _logger, cancellationToken);
+        _logger.Here().Information("Ended the quiet upload of recording {RecordingId} with {SliceCount} slices", recording.Id, slices.Count);
+    }
+
     private async Task SweepFilesOfOwnerAsync(JournalOwner owner, CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateJournalScope(owner);
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var now = timeProvider.GetUtcNow();
-        var folders = fileStore.FolderNamesUnder(RecordingFiles.OwnerFolder(owner.TenantId, owner.UserId)).ToList();
+        var folders = fileStore.FolderNamesUnder(RecordingFiles.OwnerFolder(owner.TenantId, owner.UserId)).ToHashSet(StringComparer.Ordinal);
         var rows = await dbContext.Recordings
             .TagWithOperationCallSite("recordings.sweep.rows")
             .AsNoTracking()
-            .Select(r => new { r.Id, r.Status, r.AudioKeptUntil, r.AudioDeletedAt })
             .ToListAsync(cancellationToken);
 
         var known = rows.Select(r => r.Id).ToHashSet(StringComparer.Ordinal);
         foreach (var folder in folders.Where(name => !known.Contains(name)))
             RecordingWork.TryDeleteFolder(fileStore, RecordingFiles.Folder(owner.TenantId, owner.UserId, folder), folder, _logger);
 
+        // A Recording whose audio went takes no slice again (REC-24), so a file that a lost write left after the removal goes too.
+        foreach (var removed in rows.Where(r => r.AudioDeletedAt is not null && folders.Contains(r.Id)))
+            RecordingWork.TryDeleteFolder(fileStore, RecordingFiles.Folder(removed), removed.Id, _logger);
+
         foreach (var ended in rows.Where(r => r.Status is RecordingStatus.Transcribed or RecordingStatus.Failed))
-            RecordingWork.TryDeleteWorkAudio(fileStore, owner.TenantId, owner.UserId, ended.Id, _logger);
+            RecordingWork.TryDeleteWorkAudio(fileStore, ended, _logger);
 
         var overdue = rows
             .Where(r => r.Status == RecordingStatus.Transcribed && r.AudioDeletedAt is null && r.AudioKeptUntil <= now)

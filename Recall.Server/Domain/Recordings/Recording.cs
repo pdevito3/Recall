@@ -14,11 +14,17 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
     public static readonly TimeSpan AudioKeptAfterText = TimeSpan.FromDays(7);
     public static readonly TimeSpan MaxDuration = TimeSpan.FromHours(4);
 
+    /// <summary>An upload that gets no new slice for this long ends with the slices that came. See <see cref="EndQuietUpload"/>.</summary>
+    public static readonly TimeSpan QuietUploadEndsAfter = TimeSpan.FromHours(24);
+
     private const string ClientRecordingIdField = "clientRecordingId";
     private const string SliceField = "index";
     private const string SliceCountField = "sliceCount";
     private const string ByteLengthField = "byteLength";
     private const string StatusField = "status";
+
+    /// <summary>The field of a refusal that holds for good: the audio is gone, so a client cannot send the rest again.</summary>
+    public const string AudioField = "audio";
 
     [NotSensitive] public string TenantId { get; private set; } = default!;
 
@@ -38,6 +44,12 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
 
     public int? HighestStoredSlice { get; private set; }
 
+    /// <summary>
+    /// Set while the upload stays as the sweep ended it (REC-23): the highest slice in the audio file, or -1 with no slice.
+    /// A late slice above it opens the upload again (REC-24), and a finish clears it.
+    /// </summary>
+    public int? QuietEndThroughSlice { get; private set; }
+
     public long ByteLength { get; private set; }
 
     public long? DurationMs { get; private set; }
@@ -52,6 +64,16 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
 
     public DateTimeOffset? AudioDeletedAt { get; private set; }
 
+    /// <summary>The file of a stored slice was gone when the audio was joined, so the audio has a gap, and its words have one too.</summary>
+    public bool HasLostAudio { get; private set; }
+
+    /// <summary>
+    /// The file in the folder of the Recording that holds its joined audio, or null before the first join. Each join writes a
+    /// new file, and only the save that names it here makes it the audio. See <see cref="Features.RecordingWork.JoinAudioAndSaveAsync"/>.
+    /// </summary>
+    [NotSensitive] public string? AudioFile { get; private set; }
+
+    /// <summary>The name that a download of the audio gets.</summary>
     public string AudioFileName => Format == RecordingFormat.Webm ? "audio.webm" : "audio.mp4";
 
     public string AudioContentType => Format == RecordingFormat.Webm ? "audio/webm" : "audio/mp4";
@@ -84,14 +106,33 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
     public void StoreSlice(int index, long byteLength)
     {
         ValidateSliceIndex(index);
+        if (index <= QuietEndThroughSlice)
+            throw new ConflictException(SliceField, "The server ended this upload with a later slice, so this slice cannot join the audio.");
         if (Status != RecordingStatus.Receiving)
-            throw new ConflictException(StatusField, "This Recording is finished, so it takes no new slice.");
+            OpenForLatePart();
 
         if (ByteLength + byteLength > MaxBytes)
-            throw new ConflictException(ByteLengthField, "This Recording is too large to store. The slices that are stored stay.");
+            throw new ConflictException(ByteLengthField, "This recording is too large to store. The slices that are stored stay.");
 
         ByteLength += byteLength;
         HighestStoredSlice = Math.Max(HighestStoredSlice ?? -1, index);
+    }
+
+    /// <summary>
+    /// REC-24: a client that kept the rest of the audio, and comes back after the sweep ended the upload, sends it here. The
+    /// upload opens again, and the finish adds the late part to the audio, so its words come after the words that the entry has.
+    /// A slice inside the audio that the sweep joined cannot join it, because the words after it are already made.
+    /// </summary>
+    private void OpenForLatePart()
+    {
+        if (QuietEndThroughSlice is null)
+            throw new ConflictException(StatusField, "This recording is finished, so it takes no new slice.");
+        if (AudioDeletedAt is not null)
+            throw new ConflictException(AudioField, "The server removed the audio of this recording, so a late part cannot join it.");
+
+        Status = RecordingStatus.Receiving;
+        Problem = RecordingProblem.None;
+        AttemptsWithoutProgress = 0;
     }
 
     public static IReadOnlyList<int> MissingSlices(IEnumerable<int> stored, int sliceCount)
@@ -104,15 +145,40 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
     public void Finish(IReadOnlyCollection<int> stored, int sliceCount, long byteLength, TranscriptionEngineKind engine)
     {
         if (Status != RecordingStatus.Receiving)
-            throw new ConflictException(StatusField, "This Recording is already finished.");
+            throw new ConflictException(StatusField, "This recording is already finished.");
 
         ValidationException.Must(sliceCount is > 0 and <= MaxSlices, SliceCountField, $"A Recording has from 1 to {MaxSlices} slices.");
-        if (MissingSlices(stored, sliceCount).Count > 0)
+        // A gap that the sweep joined stays a gap (REC-24), so only the slices after the joined audio must all be here.
+        if (MissingSlices(stored, sliceCount).Any(index => index > QuietEndThroughSlice.GetValueOrDefault(-1)))
             throw new ConflictException(SliceCountField, "Some slices are missing. Send them, then finish again.");
-        if (stored.Count != sliceCount)
+        if (stored.Any(index => index >= sliceCount))
             throw new ConflictException(SliceCountField, "More slices are stored than this finish names.");
         if (byteLength != ByteLength)
             throw new ConflictException(ByteLengthField, "The stored slices do not have the byte length that this finish names.");
+
+        Status = RecordingStatus.Received;
+        Engine = engine;
+        QuietEndThroughSlice = null;
+    }
+
+    /// <summary>
+    /// A client that never sends the rest or the finish must not leave a Recording that waits for good. The slices that came
+    /// make the audio, in the order of their index, also with a gap, so the text of each part that the server has still comes.
+    /// With no slice there is no audio, so the Recording fails with a reason, and a retry cannot start it. The client can still
+    /// send the rest later (REC-24).
+    /// </summary>
+    public void EndQuietUpload(int storedSliceCount, TranscriptionEngineKind engine)
+    {
+        if (Status != RecordingStatus.Receiving)
+            throw new ConflictException(StatusField, "This recording is already finished.");
+
+        QuietEndThroughSlice = HighestStoredSlice ?? -1;
+        if (storedSliceCount == 0)
+        {
+            Status = RecordingStatus.Failed;
+            Problem = RecordingProblem.NoAudioReceived;
+            return;
+        }
 
         Status = RecordingStatus.Received;
         Engine = engine;
@@ -165,6 +231,12 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
     /// </summary>
     public bool Joins(long fromSample, long endSample) => endSample <= TranscribedSamples || fromSample == TranscribedSamples;
 
+    /// <summary>
+    /// A run reads the audio as it was at its begin. A late part (REC-24) makes the audio longer, so a run that began before it
+    /// must not end the Recording: the run begins again and goes on from the saved text.
+    /// </summary>
+    public bool AudioGrewSince(int? highestSliceAtBegin) => HighestStoredSlice != highestSliceAtBegin;
+
     public bool AdvanceTo(long endSample, long totalSamples, bool hasWords)
     {
         DurationMs = totalSamples * 1000 / SamplesPerSecond;
@@ -205,7 +277,9 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
             return;
 
         if (Status != RecordingStatus.Failed)
-            throw new ConflictException(StatusField, "Only a Recording that failed or that waits for its text can run again.");
+            throw new ConflictException(StatusField, "Only a recording that failed or that waits for its text can run again.");
+        if (Problem == RecordingProblem.NoAudioReceived)
+            throw new ConflictException(StatusField, "No audio of this recording reached the server, so there is no audio to make text of.");
 
         Engine = engine;
         Status = RecordingStatus.Received;
@@ -220,10 +294,18 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
 
     public void MarkAudioDeleted(DateTimeOffset now) => AudioDeletedAt = now;
 
+    public void MarkAudioLost() => HasLostAudio = true;
+
+    /// <summary>A name that no other join can take, so two joins that race never write one file.</summary>
+    public string NewAudioFileName() => $"audio-{Guid.CreateVersion7():N}{Path.GetExtension(AudioFileName)}";
+
+    /// <summary>Names the file that a join wrote. The save of this change is what makes the file the audio.</summary>
+    public void UseAudioFile(string audioFile) => AudioFile = audioFile;
+
     private void RequireWaitingForTranscription()
     {
         if (!WaitsForTranscription)
-            throw new ConflictException(StatusField, "This Recording is not waiting for its text.");
+            throw new ConflictException(StatusField, "This recording is not waiting for its text.");
     }
 
     protected Recording() : base(IdPrefix) { }
@@ -274,4 +356,5 @@ public enum RecordingProblem
     ProviderRefused,
     ProviderBadAnswer,
     ProviderKeyUnreadable,
+    NoAudioReceived,
 }

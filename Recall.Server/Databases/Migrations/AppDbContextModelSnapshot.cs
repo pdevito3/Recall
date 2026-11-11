@@ -761,6 +761,10 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("audio_deleted_at");
 
+                    b.Property<string>("AudioFile")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("audio_file");
+
                     b.Property<string>("AudioKeptUntil")
                         .HasColumnType("TEXT")
                         .HasColumnName("audio_kept_until");
@@ -791,6 +795,10 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("format");
 
+                    b.Property<bool>("HasLostAudio")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("has_lost_audio");
+
                     b.Property<bool>("HasText")
                         .HasColumnType("INTEGER")
                         .HasColumnName("has_text");
@@ -812,6 +820,10 @@ namespace Recall.Server.Databases.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("TEXT")
                         .HasColumnName("problem");
+
+                    b.Property<int?>("QuietEndThroughSlice")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("quiet_end_through_slice");
 
                     b.Property<string>("SessionId")
                         .IsRequired()

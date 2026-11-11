@@ -18,7 +18,7 @@ public static class RecordingViews
             ? GetTranscriptionStatus.JobsStoppedText
             : recording is { Status: RecordingStatus.Failed, Problem: RecordingProblem.ProviderUnavailable }
                 ? ProviderGaveUpText
-                : ProblemTextOf(recording.Problem, model),
+                : ProblemTextOf(recording.Problem, model) ?? (recording.HasLostAudio ? LostAudioText : null),
         HighestStoredSlice = recording.HighestStoredSlice,
         StoredSlices = storedSlices,
         ByteLength = recording.ByteLength,
@@ -33,12 +33,15 @@ public static class RecordingViews
     public const string ProviderGaveUpText = "The audio is stored, but the provider that makes the text did not answer on any try. "
         + "Try again later. If it keeps failing, ask an Admin to check the provider.";
 
+    /// <summary>The words of the other parts still come, so this text stays after the end, until a problem that asks for more shows.</summary>
+    public const string LostAudioText = "Part of the audio of this recording was lost on the server, so the words of that part are missing. Tell the Owner of this server.";
+
     public static string? ProblemTextOf(RecordingProblem problem, ModelStatus model) => problem switch
     {
         RecordingProblem.None => null,
         RecordingProblem.WaitingForModel => ModelTextOf(model) ?? "The audio is stored and waits for its turn.",
         RecordingProblem.AudioUnreadable => "The audio is stored, but the server cannot read it. Download it to keep a copy, then record again.",
-        RecordingProblem.AudioMissing => "The server cannot find the audio of this Recording. Tell the Owner of this server.",
+        RecordingProblem.AudioMissing => "The server cannot find the audio of this recording. Tell the Owner of this server.",
         RecordingProblem.DiskFull => "The audio is stored, but the disk of the server is full, so the server cannot make the text. Ask the Owner to free some space, then try again.",
         RecordingProblem.DiskRefused => "The audio is stored, but the disk of the server refused the work, so the server cannot make the text. Ask the Owner to check the disk and its permissions, then try again.",
         RecordingProblem.OutOfMemory => "The audio is stored, but the speech engine was stopped, and the server ran out of memory during the same try. Ask the Owner to check the memory of the server, then try again.",
@@ -54,6 +57,7 @@ public static class RecordingViews
         RecordingProblem.ProviderRefused => "The audio is stored, but the provider that makes the text refused it. Ask an Admin to check the key, the model, and the limits of the provider, then try again.",
         RecordingProblem.ProviderBadAnswer => "The audio is stored, but the provider that makes the text gave an answer that the server cannot read. Ask an Admin to check the model of the provider, then try again.",
         RecordingProblem.ProviderKeyUnreadable => "The audio is stored, but this server cannot read the key of the provider that makes the text. Ask an Admin to enter the key again, then try again.",
+        RecordingProblem.NoAudioReceived => "No audio of this recording reached the server within a day, so the server ended it.",
         _ => null,
     };
 

@@ -7,6 +7,7 @@ import { sessionsApi } from './api/sessions-api'
 import { fileStoreApi } from './api/file-store-api'
 import { recordingsApi } from './api/recordings-api'
 import { aSetting, settingsApi } from './api/settings-api'
+import { transcriptionEngineApi } from './api/summaries-api'
 import { usersApi } from './api/users-api'
 import { answers, isMockedPath, requestRecorder, type HttpMethod, type MockRoute, type ServedRequest } from './api/mock-route'
 import { as, type Identity } from './auth/actors'
@@ -48,6 +49,7 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
         sessionsApi.timelineIs([]),
         peopleApi.listIs([]),
         modelProvidersApi.activeIs(null),
+        transcriptionEngineApi.isLocal(),
       ]
       const served = requestRecorder()
       const missed: string[] = []

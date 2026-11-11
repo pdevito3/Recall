@@ -1,0 +1,143 @@
+import type { RecordingDto } from '@/api/generated/models/types/recording-dto'
+
+import type { StoredCapture } from './audio-store'
+
+export type MicFailure = 'denied' | 'noMic' | 'micBusy' | 'micFailed' | 'unsupported'
+
+/** The mic of this tab. What happens to the audio after the recorder stops is in the store, not here. */
+export type MicState =
+  | { kind: 'idle' }
+  | { kind: 'starting' }
+  | { kind: 'recording'; startedAt: number }
+  | { kind: 'failed'; failure: MicFailure }
+  /** This browser refused to store a slice, so the recording stopped with the slices that are safe. */
+  | { kind: 'storeFailed' }
+  /** The entry of the recording was deleted while it recorded, and its audio went with it, so the recording stopped. */
+  | { kind: 'entryDeleted' }
+
+export type MicEvent =
+  | { type: 'tap' }
+  | { type: 'started'; startedAt: number }
+  | { type: 'startFailed'; failure: MicFailure }
+  | { type: 'ended' }
+  | { type: 'storeFailed' }
+  | { type: 'entryDeleted' }
+  /** The browser says at page open that this site may not use the mic. */
+  | { type: 'permissionDenied' }
+  /** The person allowed the mic in the settings of the site, so the denied card goes. */
+  | { type: 'permissionAllowed' }
+
+export function micReducer(state: MicState, event: MicEvent): MicState {
+  switch (event.type) {
+    case 'tap':
+      return state.kind === 'starting' || state.kind === 'recording' ? state : { kind: 'starting' }
+    case 'started':
+      return state.kind === 'starting' ? { kind: 'recording', startedAt: event.startedAt } : state
+    case 'startFailed':
+      return state.kind === 'starting' ? { kind: 'failed', failure: event.failure } : state
+    case 'ended':
+      return state.kind === 'recording' ? { kind: 'idle' } : state
+    case 'storeFailed':
+      return { kind: 'storeFailed' }
+    case 'entryDeleted':
+      return { kind: 'entryDeleted' }
+    case 'permissionDenied':
+      return state.kind === 'idle' ? { kind: 'failed', failure: 'denied' } : state
+    case 'permissionAllowed':
+      return state.kind === 'failed' && state.failure === 'denied' ? { kind: 'idle' } : state
+  }
+}
+
+export type CaptureView =
+  | { kind: 'insecure' }
+  | { kind: 'idle' }
+  | { kind: 'starting' }
+  | { kind: 'recording'; startedAt: number }
+  | { kind: MicFailure }
+  | { kind: 'storeFailed' }
+  | { kind: 'entryDeleted' }
+  /** The browser refuses to read or keep the audio store, as some private windows do, so a recording could not be safe. */
+  | { kind: 'noStore' }
+  /** The recording ended, and its audio waits in this browser for the upload to start. */
+  | { kind: 'stored'; durationMs: number }
+  | { kind: 'sending'; sentSlices: number; totalSlices: number; durationMs: number }
+  /** `isOnServer`: each slice is on the Server, and only the call that starts the words waits. */
+  | { kind: 'offline'; durationMs: number; isOnServer: boolean }
+  | { kind: 'serverDown'; durationMs: number; isOnServer: boolean }
+  | { kind: 'refused'; text: string; clientRecordingId: string; canSendAgain: boolean }
+  | { kind: 'transcribing'; problemText: string | null }
+  /** `problemText`: the words came, but the Server names a problem, such as a part of the audio that it lost. */
+  | { kind: 'ready'; sessionId: string; problemText: string | null }
+  | { kind: 'failed'; recordingId: string; sessionId: string; problemText: string | null }
+
+export type CaptureKind = CaptureView['kind']
+
+export interface CaptureInputs {
+  isSecure: boolean
+  canRecord: boolean
+  /** False when the audio store of the browser refused the read. */
+  canStore: boolean
+  mic: MicState
+  /** The capture that the card of this tab follows, from `followedCapture`. */
+  latest: StoredCapture | null
+  /** The Server row of `latest`, once the Server has all of its audio. */
+  recording: RecordingDto | undefined
+  isOnline: boolean
+  now: number
+}
+
+/** A text that is ready shows until this long after the recording, so a page open the next day starts at the mic. */
+export const readyShowsForMs = 60 * 60 * 1000
+
+/** Each slice is on the Server, and only the call that starts the words did not go. */
+export const waitsOnlyForItsEnd = (capture: StoredCapture) => capture.isEnded && capture.recordingId !== null && capture.sentSlices === capture.storedSlices
+
+function viewOfUpload(capture: StoredCapture, isOnline: boolean): CaptureView {
+  const { durationMs } = capture
+  if (capture.problem?.kind === 'refused') {
+    return { kind: 'refused', text: capture.problem.text, clientRecordingId: capture.clientRecordingId, canSendAgain: capture.problem.canSendAgain !== false }
+  }
+  const isOnServer = waitsOnlyForItsEnd(capture)
+  if (!isOnline || capture.problem?.kind === 'offline') return { kind: 'offline', durationMs, isOnServer }
+  if (capture.problem?.kind === 'serverDown') return { kind: 'serverDown', durationMs, isOnServer }
+  if (capture.isEnded && capture.sentSlices === 0 && capture.recordingId === null) return { kind: 'stored', durationMs }
+  return { kind: 'sending', sentSlices: capture.sentSlices, totalSlices: capture.storedSlices, durationMs }
+}
+
+function viewOfText(capture: StoredCapture, recording: RecordingDto | undefined, now: number): CaptureView {
+  if (!recording || recording.status === 'Receiving' || recording.status === 'Received' || recording.status === 'Transcribing') {
+    return { kind: 'transcribing', problemText: recording?.problemText ?? null }
+  }
+  if (recording.status === 'Failed') return { kind: 'failed', recordingId: recording.id, sessionId: recording.sessionId, problemText: recording.problemText ?? null }
+  const endedAt = Date.parse(capture.startedAt) + capture.durationMs
+  return now - endedAt < readyShowsForMs ? { kind: 'ready', sessionId: recording.sessionId, problemText: recording.problemText ?? null } : { kind: 'idle' }
+}
+
+/** What the mic card shows. A recording of this tab comes first, then the newest capture, then the mic at rest. */
+export function captureViewOf({ isSecure, canRecord, canStore, mic, latest, recording, isOnline, now }: CaptureInputs): CaptureView {
+  if (!isSecure) return { kind: 'insecure' }
+  if (!canRecord) return { kind: 'unsupported' }
+  if (!canStore) return { kind: 'noStore' }
+  if (mic.kind === 'failed') return { kind: mic.failure }
+  if (mic.kind !== 'idle') return mic
+  if (!latest) return { kind: 'idle' }
+  if (!latest.isFinished) return viewOfUpload(latest, isOnline)
+  return viewOfText(latest, recording, now)
+}
+
+/**
+ * The capture that the card of a tab follows: the newest that this tab recorded, or else the newest that no tab records
+ * now. So a tab never shows the recording of another tab, and a reopened tab follows the capture of the closed one.
+ */
+export function followedCapture(captures: StoredCapture[], recordedHere: ReadonlySet<string>): StoredCapture | null {
+  const own = captures.filter((capture) => recordedHere.has(capture.clientRecordingId))
+  const ended = captures.filter((capture) => capture.isEnded)
+  return own[own.length - 1] ?? ended[ended.length - 1] ?? null
+}
+
+/** The captures besides the followed one that still hold audio in this browser and that no tab records now. */
+export const waitingBesides = (captures: StoredCapture[], followed: StoredCapture | null) =>
+  captures.filter((capture) => capture !== followed && capture.isEnded && !capture.isFinished)
+
+/** A tap starts a recording in each state but these. */
+export const canTapToRecord = (kind: CaptureKind) => kind !== 'insecure' && kind !== 'unsupported' && kind !== 'noStore' && kind !== 'starting'

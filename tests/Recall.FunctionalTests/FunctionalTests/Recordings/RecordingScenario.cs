@@ -3,7 +3,14 @@ namespace Recall.FunctionalTests.FunctionalTests.Recordings;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Recall.Server.Databases;
+using Recall.Server.Domain.Recordings;
 using Recall.Server.Domain.Recordings.Dtos;
+using Recall.Server.Domain.Tenants;
+using Recall.Server.Domain.Users;
+using Recall.Server.Resources.Storage;
 using Shouldly;
 using TestUtilities;
 
@@ -44,5 +51,22 @@ internal static class RecordingScenario
         (await client.PutSliceAsync(recording.Id, 1, Bytes(4))).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await client.FinishAsync(recording.Id, 2, WebmStart.Length + 4)).StatusCode.ShouldBe(HttpStatusCode.OK);
         return await client.GetRecordingAsync(recording.Id);
+    }
+
+    /// <summary>The row of the Recording. Its audio file is the one that the row names.</summary>
+    public static Recording RowOf(string recordingId, User owner)
+    {
+        using var scope = TestingWebApplicationFactory.Instance.Services.GetRequiredService<IServiceScopeFactory>()
+            .CreateJournalScope(new JournalOwner(owner.Id, owner.TenantId));
+        return scope.ServiceProvider.GetRequiredService<AppDbContext>().Recordings.AsNoTracking().Single(r => r.Id == recordingId);
+    }
+
+    public static byte[] StoredAudio(string recordingId, User owner)
+    {
+        var store = TestingWebApplicationFactory.Instance.Services.GetRequiredService<FileStore>();
+        using var file = store.OpenRead(RecordingFiles.Audio(RowOf(recordingId, owner)));
+        using var copy = new MemoryStream();
+        file.CopyTo(copy);
+        return copy.ToArray();
     }
 }

@@ -30,12 +30,15 @@ public sealed class WorkAudio(IOptions<TranscriptionOptions> options)
         ("Task finished with error code: -22 (Invalid argument)", RecordingProblem.AudioUnreadable),
     ];
 
-    /// <summary>The path of the WAV file. A file from an earlier attempt is used again.</summary>
+    /// <summary>
+    /// The path of the WAV file. A file from an earlier attempt is used again. An audio file never changes after its join, and
+    /// a late part (REC-24) writes a new one with a new decoded copy, so the copy always matches its audio.
+    /// </summary>
     public async Task<string> PrepareAsync(TranscriptionInput input, CancellationToken cancellationToken)
     {
-        var wav = Path.Combine(input.WorkFolder, RecordingFiles.WorkAudioName);
+        var wav = input.WorkAudioPath;
         if (!File.Exists(wav))
-            await DecodeAsync(input.AudioPath, wav, Path.Combine(input.WorkFolder, RecordingFiles.PartialWorkAudioName), cancellationToken);
+            await DecodeAsync(input.AudioPath, wav, wav + RecordingFiles.PartialSuffix, cancellationToken);
 
         var samples = new FileInfo(wav).Length / BytesPerSample;
         if (samples > Recording.MaxDuration.TotalSeconds * Recording.SamplesPerSecond)

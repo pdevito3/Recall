@@ -12,7 +12,7 @@ test('each text that only the page holds has its own Copy, and the page goes onl
     return Promise.resolve()
   })
   const leave = vi.fn()
-  const screen = await render(<WordsLeftAtSignOut why="signedOutInAnotherTab" words={[doc('first words'), doc('second words')]} leave={leave} />)
+  const screen = await render(<WordsLeftAtSignOut why="signedOutInAnotherTab" words={[doc('first words'), doc('second words')]} audio={[]} leave={leave} />)
 
   await expect.element(screen.getByText('Some words of these entries did not reach the server', { exact: false })).toBeVisible()
   const list = screen.getByRole('list', { name: 'Entries with words that only this page holds' })
@@ -32,7 +32,7 @@ test.each([
   ['sessionUnchecked', 'We could not check your session'],
   ['pageDidNotLoad', 'This page did not load'],
 ] as const)('the screen after %s names what happened', async (why, title) => {
-  const screen = await render(<WordsLeftAtSignOut why={why} words={[doc('first words')]} leave={vi.fn()} />)
+  const screen = await render(<WordsLeftAtSignOut why={why} words={[doc('first words')]} audio={[]} leave={vi.fn()} />)
 
   await expect.element(screen.getByRole('heading', { level: 1, name: title })).toBeVisible()
   await expect.element(screen.getByText('Some words of this entry did not reach the server', { exact: false })).toBeVisible()
