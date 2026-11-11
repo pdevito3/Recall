@@ -25,9 +25,11 @@ public class Correction : BaseEntity, ITenantable, IJournalOwned
 
     public bool HardReplace { get; private set; }
 
-    public static Correction Create(string tenantId, string userId, string canonicalTerm, IEnumerable<string?>? mishearings, bool hardReplace)
+    public static Correction Create(string tenantId, string userId, string canonicalTerm, IEnumerable<string?>? mishearings, bool hardReplace, string? id = null)
     {
         var correction = new Correction { TenantId = tenantId, UserId = userId };
+        if (id is not null)
+            correction.SetId(id);
         correction.Apply(canonicalTerm, mishearings, hardReplace);
         return correction;
     }

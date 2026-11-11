@@ -5,6 +5,12 @@
 
 export type CorrectionForCreationDto = {
     /**
+     * @description The ID that the device made for this Correction, or null for a new ID. A second create with this ID returns the same Correction.
+     * @maxLength 50
+     * @type string | undefined
+    */
+    id?: string | null;
+    /**
      * @maxLength 200
      * @type string
     */

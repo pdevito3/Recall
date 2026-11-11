@@ -8,7 +8,9 @@ import type { AddCorrectionOptions, AddCorrectionResponses } from '../types/add-
 import { client, unwrapResult } from '../../.kubb/client'
 
 /**
- * @summary Adds a Correction of the caller.
+ * @summary Adds a Correction of the caller, or returns the Correction that already has the ID that the body names. The
+ * first create gives 201 and a replay gives 200, so a device can send it again after a lost response. A replay of
+ * a deleted Correction gives 409.
  * {@link /api/v1/corrections}
  */
 export function addCorrection<ThrowOnError extends boolean = true>(options: Options<AddCorrectionOptions, ThrowOnError>): Promise<UnwrappedResult<AddCorrectionResponses, ThrowOnError>> {

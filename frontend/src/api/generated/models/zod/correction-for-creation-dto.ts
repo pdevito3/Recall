@@ -6,6 +6,7 @@
 import * as z from 'zod'
 
 export const correctionForCreationDtoSchema = z.object({
+  id: z.string().max(50).nullish().describe('The ID that the device made for this Correction, or null for a new ID. A second create with this ID returns the same Correction.'),
   canonicalTerm: z.string().max(200),
   mishearings: z.array(z.string().max(200)),
   hardReplace: z.boolean(),
