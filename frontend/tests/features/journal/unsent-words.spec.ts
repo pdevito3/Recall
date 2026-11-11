@@ -1,6 +1,6 @@
 import type { BrowserContext, Page } from '@playwright/test'
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
-import { authApi } from '@tests/support/api/auth-api'
+import { authApi, authPaths } from '@tests/support/api/auth-api'
 import { aSetting, settingsApi, settingsPaths } from '@tests/support/api/settings-api'
 import { sessionsApi, sessionsPaths } from '@tests/support/api/sessions-api'
 import type { MockRoute } from '@tests/support/api/mock-route'
@@ -812,6 +812,78 @@ test.describe('words that the browser has no room to keep', () => {
     await unsent.at.leaveThePage.click()
     await expect.poll(() => page.url()).toContain('signedOut=1')
     expect(dialogs()).toBe(0)
+  })
+
+  const holdWordsOnlyInMemory = async (page: Page, api: Api) => {
+    const unsent = unsentWords(page)
+    const session = aSession().build()
+    api.mock(sessionsApi.creates(session), { method: 'put', path: sessionsPaths.rawDraft(session.id), status: 503 })
+    const journal = journalPage(page)
+    await journal.open()
+    await unsent.fillTheStorage()
+    await journal.typeWithoutWaiting('Words with no room')
+    await expect(unsent.at.onlyInMemory).toBeVisible()
+    return { unsent, session }
+  }
+
+  test('at a logout, words typed while the logout call runs show alone, and the tab warns before it closes', async ({ page, api }) => {
+    const unsent = unsentWords(page)
+    const session = aSession().build()
+    let answerTheLogout!: () => void
+    const logoutAnswers = new Promise<void>((settle) => (answerTheLogout = settle))
+    api.mock(sessionsApi.creates(session), { method: 'put', path: sessionsPaths.rawDraft(session.id), status: 503 }, authApi.loginOpens(), { method: 'post', path: authPaths.logout, status: 204, heldUntil: logoutAnswers })
+    const journal = journalPage(page)
+    await journal.open()
+    await journal.typeWithoutWaiting('Words in a key')
+    await expect.poll(() => unsent.keys()).toHaveLength(1)
+    await unsent.fillTheStorage()
+    await unsent.logOut()
+    await unsent.answerTheLogoutDialog('Keep words and sign out')
+    await expect.poll(() => api.all('post', authPaths.logout).length).toBe(1)
+
+    await journal.typeWithoutWaiting(' and words during the logout')
+    await expect(unsent.at.onlyInMemory).toBeVisible()
+    answerTheLogout()
+
+    const screen = unsent.at.leftAs('You signed out')
+    await expect(screen).toContainText('Words in a key')
+    await expect(screen).toContainText('words during the logout')
+    expect(page.url()).not.toContain('signedOut=1')
+    expect(await unsent.warnsAtAClose()).toBe(true)
+    await unsent.at.leaveThePage.click()
+    await unsent.reachTheSignedOutPage()
+  })
+
+  test('when the session ends with no message, the tab shows them alone, and keeps the way back to the page', async ({ page, api }) => {
+    const { unsent, session } = await holdWordsOnlyInMemory(page, api)
+    api.mock(authApi.loginOpens(), { method: 'get', path: authPaths.me, status: 204 }, { method: 'put', path: sessionsPaths.rawDraft(session.id), status: 401 })
+
+    await unsent.signalThatTheConnectionReturned()
+
+    await expect(unsent.at.leftAs('Your session ended')).toContainText('Words with no room', { timeout: 15_000 })
+    expect(page.url()).not.toContain('/auth/login')
+    await unsent.at.leaveThePage.click()
+    await expect.poll(() => page.url()).toContain('/auth/login?returnUrl=')
+  })
+
+  test('when a restored page finds its session ended, the page shows them alone', async ({ page, api }) => {
+    const { unsent } = await holdWordsOnlyInMemory(page, api)
+    api.mock(authApi.loginOpens(), { method: 'get', path: authPaths.me, status: 204 })
+
+    await unsent.restoreThePage()
+
+    await expect(unsent.at.leftAs('Your session ended')).toContainText('Words with no room')
+    expect(await unsent.pageShows()).toBe(true)
+  })
+
+  test('when another person signs in, the tab drops them at once, and the next page says that they are gone', async ({ page, api }) => {
+    const { unsent } = await holdWordsOnlyInMemory(page, api)
+    api.mock(signInPage)
+
+    await unsent.signInOfAnotherPersonInAnotherTab()
+
+    await expect.poll(() => page.url()).toContain('/auth/login?anotherPerson=1&wordsLost=1')
+    await expect(unsent.at.wholePage).not.toContainText('Words with no room')
   })
 })
 

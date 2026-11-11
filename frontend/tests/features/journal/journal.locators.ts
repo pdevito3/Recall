@@ -108,6 +108,7 @@ export const unsent = (page: Page) => ({
   copyOnlyInMemory: page.getByRole('alert', { name: 'Words only in this page' }).getByRole('button', { name: 'Copy words' }),
   leftAtSignOut: page.getByRole('alert', { name: 'You signed out in another tab' }),
   copyLeftAtSignOut: page.getByRole('alert', { name: 'You signed out in another tab' }).getByRole('button', { name: 'Copy words' }),
+  leftAs: (title: string) => page.getByRole('alert', { name: title, exact: true }),
   leaveThePage: page.getByRole('button', { name: 'Leave this page' }),
   waiting: page.getByRole('alert', { name: 'Words not saved yet' }),
   copyWaiting: page.getByRole('alert', { name: 'Words not saved yet' }).getByRole('button', { name: 'Copy words' }),
