@@ -155,9 +155,9 @@ afterEach(async () => {
   for (const capture of await capturesOf(member.identifier)) await removeCapture(capture.clientRecordingId)
 })
 
-test('on a phone the card keeps its height while the mic starts, so nothing moves under the finger', async () => {
+test.each([390, 1280])('at %i px the card keeps its height while the mic starts and records, so nothing moves under the finger', async (width) => {
   // Arrange
-  await page.viewport(390, 800)
+  await page.viewport(width, 800)
   let micStarts: (stream: MediaStream) => void = () => {}
   vi.spyOn(navigator.mediaDevices, 'getUserMedia').mockImplementation(() => new Promise<MediaStream>((resolve) => (micStarts = resolve)))
   const screen = await openHome([])
@@ -175,10 +175,13 @@ test('on a phone the card keeps its height while the mic starts, so nothing move
   onlineManager.setOnline(false)
   onTestFinished(() => onlineManager.setOnline(true))
   micStarts(aTone())
+  await cardSays(screen, 'Each second saves in this browser')
+  const recordingHeight = card.element().getBoundingClientRect().height
   await userEvent.click(screen.getByRole('button', { name: 'Stop recording' }))
   await expect.element(screen.getByRole('button', { name: 'Record', exact: true })).toBeInTheDocument()
   await screen.unmount()
   expect(startingHeight).toBe(idleHeight)
+  expect(recordingHeight).toBe(idleHeight)
 })
 
 test('one tap records into a new entry, and the card follows the audio until the words are in', { timeout: 30_000 }, async () => {
@@ -226,9 +229,10 @@ test('one tap records into a new entry, and the card follows the audio until the
 test('a failed transcription keeps the audio on the server, and Try again starts it again', async () => {
   // Arrange
   await aFinishedCapture()
-  const screen = await openHome([recordingAnswer('GET', '/api/v1/recordings/rec_1', { status: 'Failed', problem: 'NoWordsFound', problemText: 'No speech was found in the audio.' })])
+  const noWords = 'The audio is stored, but the server heard no words in it. Listen to it to check, or try again.'
+  const screen = await openHome([recordingAnswer('GET', '/api/v1/recordings/rec_1', { status: 'Failed', problem: 'NoWordsFound', problemText: noWords })])
   await cardSays(screen,'No words came from this audio')
-  await cardSays(screen,'No speech was found in the audio. The audio is safe on the server.')
+  await cardSays(screen,noWords)
   await commands.answerRequests([...onServer, recordingAnswer('POST', '/api/v1/recordings/rec_1/retry', { status: 'Received' }), recordingAnswer('GET', '/api/v1/recordings/rec_1', { status: 'Received' })])
 
   // Act
@@ -237,6 +241,35 @@ test('a failed transcription keeps the audio on the server, and Try again starts
   // Assert
   await cardSays(screen,'Writing the words')
   expect((await commands.takeSentRequests()).map(({ method, path }) => `${method} ${path}`)).toContain('POST /api/v1/recordings/rec_1/retry')
+})
+
+test('a transcription that failed because the server lost the audio does not say that the audio is safe', async () => {
+  // Arrange
+  await aFinishedCapture()
+  const missing = 'The server cannot find the audio of this recording. Tell the Owner of this server.'
+
+  // Act
+  const screen = await openHome([recordingAnswer('GET', '/api/v1/recordings/rec_1', { status: 'Failed', problem: 'AudioMissing', problemText: missing })])
+
+  // Assert
+  await cardSays(screen,'No words came from this audio')
+  await cardSays(screen,missing)
+  await expect.element(screen.getByText('safe', { exact: false })).not.toBeInTheDocument()
+})
+
+test('words that came with a lost part of the audio say that they have a gap, with no check mark', async () => {
+  // Arrange
+  await aFinishedCapture()
+  const lost = 'Part of the audio of this recording was lost on the server, so the words of that part are missing. Tell the Owner of this server.'
+
+  // Act
+  const screen = await openHome([recordingAnswer('GET', '/api/v1/recordings/rec_1', { status: 'Transcribed', problemText: lost })])
+
+  // Assert
+  await cardSays(screen,'Your words are in, with a gap')
+  await cardSays(screen,lost)
+  await expect.element(screen.getByRole('status').getByText('Your words are in, with a gap')).not.toHaveClass(/text-destructive/)
+  expect(document.querySelector('section[aria-label="Record an entry"] [role="status"] svg')?.getAttribute('class')).toContain('text-amber-600')
 })
 
 test('with no network the card says that the audio is safe in this browser and waits', async () => {

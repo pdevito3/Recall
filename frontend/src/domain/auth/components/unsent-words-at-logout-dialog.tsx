@@ -58,14 +58,17 @@ function WordsThatDidNotGo({ unsent }: { unsent: UnsentWords[] }) {
   )
 }
 
-const wordsStartText = 'The words of audio that the server has start when you sign in here again, or on their own about a day later.'
+/** The server removed the audio that this part would join, so the part can never upload. */
+const isGone = ({ problem }: StoredCapture) => problem?.kind === 'refused' && problem.canSendAgain === false
+
+const wordsStartText ='The words of audio that the server has start when you sign in here again, or on their own about a day later.'
 
 function audioText(audio: StoredCapture[]) {
   const missing = audio.filter((capture) => !waitsOnlyForItsEnd(capture))
   const notStarted = missing.length < audio.length ? ` ${wordsStartText}` : ''
   if (missing.length === 0) return notStarted.trim()
   const total = clock(missing.reduce((sum, capture) => sum + unsentMsOf(capture), 0))
-  const goneCount = missing.filter(({ problem }) => problem?.kind === 'refused' && problem.canSendAgain === false).length
+  const goneCount = missing.filter(isGone).length
   const keep =
     goneCount === 0
       ? 'If you keep it, it stays in this browser and uploads when you sign in here again.'
@@ -98,9 +101,11 @@ function WordsNotStartedDialog({ isATagUnsavedToo }: { isATagUnsavedToo: boolean
 }
 
 /** The question names what did not go: words, audio, or both. */
-function namesOf(hasWords: boolean, hasAudio: boolean) {
+function namesOf(hasWords: boolean, hasAudio: boolean, isEachGone: boolean) {
   if (!hasAudio) return { title: 'Some of your words did not reach the server', thing: 'words', discarded: ' If you discard them, these words go from this device, and you cannot get them back.' }
-  const tryWords = ' Recall first tries to make words of the part of the audio that the server has.'
+  const tryWords = isEachGone
+    ? ' The server already made the words of the part of the audio that it had.'
+    : ' Recall first tries to make words of the part of the audio that the server has.'
   if (!hasWords) return { title: 'Some of your audio did not reach the server', thing: 'audio', discarded: ` If you discard it, the audio goes from this browser, and you cannot get it back.${tryWords}` }
   return { title: 'Some of your words and audio did not reach the server', thing: 'all', discarded: ` If you discard them, these words and this audio go from this device, and you cannot get them back.${tryWords}` }
 }
@@ -129,7 +134,8 @@ export function UnsentWordsAtLogoutDialog() {
   const unsent = question?.unsent ?? []
   const hasWords = unsent.length > 0
   const canKeep = !unsent.some(({ isOnlyInMemory }) => isOnlyInMemory)
-  const names = namesOf(hasWords, hasMissingAudio)
+  const missingAudio = audio.filter((capture) => !waitsOnlyForItsEnd(capture))
+  const names = namesOf(hasWords, hasMissingAudio, missingAudio.length > 0 && missingAudio.every(isGone))
   return (
     <ResponsiveDialog role="alertdialog" isOpen={question !== null} isDismissable={false} isKeyboardDismissDisabled showCloseButton={false}>
       <ResponsiveDialogHeader>

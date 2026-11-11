@@ -69,9 +69,12 @@ function wordsOf(view: CaptureView): { title: string; line: string } {
     case 'transcribing':
       return { title: 'Writing the words', line: view.problemText ?? 'The server has your audio. You can close this page. The words come to your journal.' }
     case 'ready':
-      return { title: 'Your words are in', line: view.problemText ?? 'A new entry holds the words of this recording.' }
+      return view.problemText
+        ? { title: 'Your words are in, with a gap', line: view.problemText }
+        : { title: 'Your words are in', line: 'A new entry holds the words of this recording.' }
     case 'failed':
-      return { title: 'No words came from this audio', line: `${view.problemText ?? 'The transcription failed.'} The audio is safe on the server.` }
+      // The text of the server says where the audio is, because only the server knows: it can also have lost the audio.
+      return { title: 'No words came from this audio', line: view.problemText ?? 'The transcription failed.' }
     case 'denied':
       return {
         title: 'The browser blocks the mic',
@@ -312,6 +315,35 @@ function Actions({ view, capture }: { view: CaptureView; capture: Capture }) {
   }
 }
 
+const clockClass = '-mb-2 flex flex-col items-center gap-2'
+const statusClass = 'flex max-w-md flex-col items-center gap-1.5'
+const titleClass = 'text-lg font-semibold text-balance'
+const lineClass = 'text-sm text-balance text-muted-foreground'
+
+/** An unseen copy of the idle words while the mic records, or of the clock and the recording words while it does not. */
+function RoomOfTheOtherMicState({ isRecording }: { isRecording: boolean }) {
+  return (
+    <div aria-hidden className="invisible flex w-full flex-col items-center gap-4 [grid-area:1/1]">
+      {isRecording ? (
+        <div className={statusClass}>
+          <p className={titleClass}>{wordsOf({ kind: 'idle' }).title}</p>
+          <p className={lineClass}>{wordsOf({ kind: 'idle' }).line}</p>
+        </div>
+      ) : (
+        <>
+          <div className={clockClass}>
+            <p className="text-4xl font-semibold tabular-nums">{clock(0)}</p>
+            <div className="h-8" />
+          </div>
+          <div className={statusClass}>
+            <p className={lineClass}>{wordsOf({ kind: 'recording', startedAt: 0 }).line}</p>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 /** The mic of the journal home. One tap records into a new entry, and the card follows the audio until its words are in the journal. */
 export function MicCard() {
   const capture = useCapture()
@@ -320,7 +352,9 @@ export function MicCard() {
   const isStarting = view.kind === 'starting'
   const isOff = isMicOff(view.kind)
   const words = wordsOf(view)
-  const icon = iconOf[view.kind]
+  const hasAGap = view.kind === 'ready' && view.problemText !== null
+  const icon = hasAGap ? AlertCircleIcon : iconOf[view.kind]
+  const isAtTheMic = view.kind === 'idle' || isStarting || isRecording
 
   return (
     <section
@@ -344,41 +378,52 @@ export function MicCard() {
         <HugeiconsIcon icon={isRecording ? StopIcon : view.kind === 'insecure' ? SquareLock01Icon : isOff ? MicOff01Icon : Mic01Icon} size={40} className="relative" />
       </button>
 
-      {isRecording && (
-        <div aria-hidden className="-mb-2 flex flex-col items-center gap-2">
-          <RecordingClock startedAt={view.startedAt} />
-          <LevelMeter level={capture.level} />
+      {/* The idle card and the recording card share one room, the larger of the two, so the card does not change size under the finger. */}
+      <div className="grid w-full justify-items-center">
+        <div className="flex w-full flex-col items-center gap-4 [grid-area:1/1]">
+          {isRecording && (
+            <div aria-hidden className={clockClass}>
+              <RecordingClock startedAt={view.startedAt} />
+              <LevelMeter level={capture.level} />
+            </div>
+          )}
+          {/* Until the store answers, the card does not know of stored audio, so it says nothing rather than Tap to record. */}
+          <div role="status" className={cn(statusClass, !capture.isLoaded && !isOff && 'invisible')}>
+            {/* The icon flows with the words, so a title that wraps keeps it at the start of its first line. */}
+            <p className={cn(titleClass, isRecording && 'sr-only', isProblem(view.kind) && 'text-destructive')}>
+              {icon && (
+                <HugeiconsIcon
+                  icon={icon}
+                  size={20}
+                  aria-hidden
+                  className={cn('me-2 inline-block align-[-3px]', view.kind === 'transcribing' && 'animate-spin [animation-duration:2s]', view.kind === 'ready' && (hasAGap ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'))}
+                />
+              )}
+              {words.title}
+            </p>
+            {/* While the mic starts, the line keeps the room of the idle line. */}
+            <p className={cn(lineClass, 'grid')}>
+              <span className="[grid-area:1/1]">{words.line}</span>
+              {isStarting && (
+                <span aria-hidden className="invisible [grid-area:1/1]">
+                  {wordsOf({ kind: 'idle' }).line}
+                </span>
+              )}
+            </p>
+          </div>
         </div>
-      )}
-      {/* Until the store answers, the card does not know of stored audio, so it says nothing rather than Tap to record. */}
-      <div role="status" className={cn('flex max-w-md flex-col items-center gap-1.5', !capture.isLoaded && !isOff && 'invisible')}>
-        {/* The icon flows with the words, so a title that wraps keeps it at the start of its first line. */}
-        <p className={cn('text-lg font-semibold text-balance', isRecording && 'sr-only', isProblem(view.kind) && 'text-destructive')}>
-          {icon && (
-            <HugeiconsIcon
-              icon={icon}
-              size={20}
-              aria-hidden
-              className={cn('me-2 inline-block align-[-3px]', view.kind === 'transcribing' && 'animate-spin [animation-duration:2s]', view.kind === 'ready' && 'text-emerald-600 dark:text-emerald-400')}
-            />
-          )}
-          {words.title}
-        </p>
-        {/* While the mic starts, the line keeps the room of the idle line, so the card does not shrink and grow again under the finger. */}
-        <p className="grid text-sm text-balance text-muted-foreground">
-          <span className="[grid-area:1/1]">{words.line}</span>
-          {isStarting && (
-            <span aria-hidden className="invisible [grid-area:1/1]">
-              {wordsOf({ kind: 'idle' }).line}
-            </span>
-          )}
-        </p>
+        {isAtTheMic && <RoomOfTheOtherMicState isRecording={isRecording} />}
       </div>
 
       <Actions view={view} capture={capture} />
 
       {capture.waiting.length > 0 && <WaitingCaptures capture={capture} />}
-      {(view.kind === 'idle' || isStarting) && capture.isLoaded && <EnginePlace />}
+      {/* While it records, the line of the engine keeps its room. */}
+      {isAtTheMic && capture.isLoaded && (
+        <div aria-hidden={isRecording || undefined} className={cn(isRecording && 'invisible')}>
+          <EnginePlace />
+        </div>
+      )}
     </section>
   )
 }

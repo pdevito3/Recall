@@ -86,7 +86,8 @@ test('audio whose recording lost its audio on the server is not said to upload a
   const text = screen.getByText(/0:01 of audio did not reach the server\./)
   await expect.element(text, { timeout: 10_000 }).toBeVisible()
   expect(text.element().textContent).toMatch(/^0:01 of audio did not reach the server\. If you keep it, it stays in this browser, but it cannot upload, because the server removed the audio that it would join\. If you discard it/)
-  expect(text.element().textContent).not.toMatch(/journal page|sign in here again/)
+  expect(text.element().textContent).not.toMatch(/journal page|sign in here again|first tries to make words/)
+  expect(text.element().textContent).toMatch(/you cannot get it back\. The server already made the words of the part of the audio that it had\.$/)
   await screen.getByRole('button', { name: 'Keep audio and sign out' }).click()
 
   await (await finished)()
