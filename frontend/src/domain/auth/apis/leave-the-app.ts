@@ -52,8 +52,8 @@ const warnOfTheLoss = (event: BeforeUnloadEvent) => event.preventDefault()
 /**
  * The one way out of the signed-in app. Words that only the memory of this tab holds have no other place, so the tab
  * shows them alone with a Copy before it goes, and goes only when the person says so. Another person must not read
- * them, so for that reason the words go at once, and the next page says that they are gone. A shown screen of words
- * stays at a later reason to leave, except that one.
+ * them, so for that reason the words go at once, and the next page says that they are gone. A later reason to leave
+ * keeps a shown screen of words, except another person.
  */
 export function leaveTheApp(departure: Departure) {
   if (left && (departure.why !== 'anotherPerson' || left.why === 'anotherPerson')) return
