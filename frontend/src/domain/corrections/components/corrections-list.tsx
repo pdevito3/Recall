@@ -124,10 +124,8 @@ function DeleteCorrection({
 
   const handleDelete = () =>
     remove.mutate(correction.id, {
-      onSuccess: () => {
-        Notification.success('Correction deleted')
-        headingRef.current?.focus()
-      },
+      onSuccess: () => Notification.success('Correction deleted'),
+      onSettled: () => headingRef.current?.focus(),
     })
 
   return (

@@ -1,5 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQueryClient } from '@tanstack/react-query'
+import { useRef } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 
 import type { CorrectionDto } from '@/api/generated/models/types/correction-dto'
@@ -65,6 +66,7 @@ export function CorrectionForm({ correction, onSaved }: CorrectionFormProps) {
   const latest = useLoadLatest(form, CORRECTION_FIELDS)
   const { errors } = form.formState
   const save = correction ? update : add
+  const isSending = useRef(false)
 
   const handleSaved = () => {
     Notification.success('Correction saved')
@@ -72,16 +74,21 @@ export function CorrectionForm({ correction, onSaved }: CorrectionFormProps) {
   }
 
   const handleSubmit = form.handleSubmit((values) => {
-    if (save.isPending) return
+    if (isSending.current) return
+    isSending.current = true
     serverErrors.clear()
     latest.clear()
+    const callbacks = {
+      onSuccess: handleSaved,
+      onError: serverErrors.show,
+      onSettled: () => {
+        isSending.current = false
+      },
+    }
     if (correction) {
-      update.mutate(
-        { id: correction.id, body: { ...bodyOf(values), version: values.version } },
-        { onSuccess: handleSaved, onError: serverErrors.show },
-      )
+      update.mutate({ id: correction.id, body: { ...bodyOf(values), version: values.version } }, callbacks)
     } else {
-      add.mutate(bodyOf(values), { onSuccess: handleSaved, onError: serverErrors.show })
+      add.mutate(bodyOf(values), callbacks)
     }
   }, focusFirstError(form, CORRECTION_FIELDS))
 
