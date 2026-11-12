@@ -19,15 +19,15 @@ public static class JournalTriggers
         string? clientSessionIdColumn = null)
     {
         string ClientId(string row) => clientSessionIdColumn is null ? "NULL" : $"{row}.{clientSessionIdColumn}";
-        var refuseTheIdOfAnotherPerson = idsMadeBy == IdsMadeBy.Device
-            ? $"SELECT RAISE(ABORT, '{IdTakenMessage}') WHERE EXISTS (SELECT 1 FROM sync_changes WHERE entity_type = '{entityType}' AND entity_id = new.id AND user_id <> new.user_id);"
+        var refuseATakenId = idsMadeBy == IdsMadeBy.Device
+            ? $"SELECT RAISE(ABORT, '{IdTakenMessage}') WHERE EXISTS (SELECT 1 FROM sync_changes WHERE entity_type = '{entityType}' AND entity_id = new.id AND (user_id <> new.user_id OR is_tombstone));"
             : string.Empty;
 
         migrationBuilder.Sql($"""
             CREATE TRIGGER {table}_sync_insert BEFORE INSERT ON {table}
             BEGIN
                 SELECT RAISE(ABORT, '{OwnerDeletedMessage}') WHERE (SELECT is_deleted FROM users WHERE id = new.user_id) = 1;
-                {refuseTheIdOfAnotherPerson}
+                {refuseATakenId}
                 INSERT OR REPLACE INTO sync_changes (user_id, entity_type, entity_id, client_session_id, is_tombstone)
                 VALUES (new.user_id, '{entityType}', new.id, {ClientId("new")}, 0);
             END;

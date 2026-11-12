@@ -3,13 +3,11 @@ namespace Recall.Server.Domain.Corrections.Features;
 using System.Diagnostics;
 using Databases;
 using Dtos;
-using Exceptions;
 using Mappings;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Resources;
 using Serilog;
-using Sync;
 
 public static class AddCorrection
 {
@@ -36,12 +34,6 @@ public static class AddCorrection
                         .FirstOrDefaultAsync(c => c.Id == dto.Id, ct);
                     if (existing is not null)
                         return new Result(existing.ToCorrectionDto(), false);
-
-                    var deleted = await dbContext.SyncChanges
-                        .TagWithOperationCallSite("corrections.add.tombstone")
-                        .AnyAsync(c => c.IsTombstone && c.EntityType == SyncEntityType.Correction && c.EntityId == dto.Id, ct);
-                    if (deleted)
-                        throw new ConflictException("id", JournalTriggers.IdTakenMessage);
                 }
 
                 var added = Correction.Create(owner.TenantId, owner.UserId, dto.CanonicalTerm, dto.Mishearings, dto.HardReplace, dto.Id);

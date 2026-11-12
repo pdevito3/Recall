@@ -2,6 +2,7 @@ namespace Recall.FunctionalTests.FunctionalTests.Corrections;
 
 using System.Net;
 using System.Net.Http.Json;
+using Recall.Server.Databases;
 using Recall.Server.Domain.Corrections.Dtos;
 using Sessions;
 using Shouldly;
@@ -50,7 +51,7 @@ public class CorrectionCreateReplayTests : TestBase
         var list = await FactoryClient.GetFromJsonAsync<CorrectionDto[]>(ApiRoutes.Corrections.Root);
 
         // Assert
-        replay.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        await ShouldRefuseTheId(replay);
         list.ShouldBeEmpty();
     }
 
@@ -70,7 +71,7 @@ public class CorrectionCreateReplayTests : TestBase
         var memberCorrection = await FactoryClient.GetFromJsonAsync<CorrectionDto>(ApiRoutes.Corrections.GetRecord(DeviceId));
 
         // Assert
-        taken.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        await ShouldRefuseTheId(taken);
         adminList.ShouldBeEmpty();
         memberCorrection!.CanonicalTerm.ShouldBe("Kubernetes");
     }
@@ -92,7 +93,7 @@ public class CorrectionCreateReplayTests : TestBase
         var memberFeed = await FactoryClient.PullAsync();
 
         // Assert
-        taken.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        await ShouldRefuseTheId(taken);
         adminList.ShouldBeEmpty();
         memberFeed.Tombstones.ShouldContain(t => t.EntityType == "Correction" && t.Id == DeviceId);
     }
@@ -137,5 +138,11 @@ public class CorrectionCreateReplayTests : TestBase
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
         list.ShouldBeEmpty();
+    }
+
+    private static async Task ShouldRefuseTheId(HttpResponseMessage response)
+    {
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await response.Content.ReadAsStringAsync()).ShouldContain(JournalTriggers.IdTakenMessage);
     }
 }
