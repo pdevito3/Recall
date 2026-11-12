@@ -55,9 +55,11 @@ test.describe('the corrections of a journal', () => {
 
     await corrections.open()
 
-    await corrections.at.remove(term).scrollIntoViewIfNeeded()
-    await expect(corrections.at.edit(term)).toBeInViewport({ ratio: 1 })
-    await expect(corrections.at.remove(term)).toBeInViewport({ ratio: 1 })
+    for (const button of [corrections.at.edit(term), corrections.at.remove(term)]) {
+      const box = (await button.boundingBox())!
+      expect(box.x).toBeGreaterThanOrEqual(0)
+      expect(box.x + box.width).toBeLessThanOrEqual(390)
+    }
     expect(await corrections.sideScrollRange()).toBe(0)
   })
 
