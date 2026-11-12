@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 import { settingsPaths } from '@tests/support/api/settings-api'
 import { settings } from './settings.locators'
 
@@ -7,6 +7,27 @@ export function settingsPage(page: Page) {
 
   return {
     at,
+
+    async isInsideTheWindow(element: Locator) {
+      const box = await element.boundingBox()
+      const width = page.viewportSize()?.width ?? 0
+      return box !== null && box.x >= 0 && box.x + box.width <= width
+    },
+
+    /** As a browser in a zone that its tzdata does not have: Intl names no zone, which an explicit zone still has. */
+    hideTheZoneOfTheBrowser: () =>
+      page.addInitScript(() => {
+        const hideZone = (format: Intl.DateTimeFormat, options?: Intl.DateTimeFormatOptions) => {
+          if (options?.timeZone) return format
+          const resolved = format.resolvedOptions.bind(format)
+          format.resolvedOptions = () => ({ ...resolved(), timeZone: undefined as unknown as string })
+          return format
+        }
+        Intl.DateTimeFormat = new Proxy(Intl.DateTimeFormat, {
+          construct: (Real, [locales, options]: [string | undefined, Intl.DateTimeFormatOptions | undefined]) => hideZone(new Real(locales, options), options),
+          apply: (Real, _, [locales, options]: [string | undefined, Intl.DateTimeFormatOptions | undefined]) => hideZone(new Real(locales, options), options),
+        })
+      }),
 
     sideScrollRange: () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
 

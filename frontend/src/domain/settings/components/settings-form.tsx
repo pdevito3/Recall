@@ -1,27 +1,33 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useMemo, useSyncExternalStore } from 'react'
+import { useFilter } from 'react-aria-components'
 
 import { QueryError } from '@/components/query-error'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Combobox, ComboboxContent, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox'
+import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SaveStatusLine } from '@/domain/sessions/components/save-status'
 import { StaleChangePrompts } from '@/domain/sessions/components/stale-change-prompts'
 import { userSettingDtoTimeZoneModeEnum } from '@/api/generated/models/types/user-setting-dto'
 import { followsTheDevice, journalZoneOf, settingSaver, useUserSetting, type SettingChange } from '@/domain/settings/apis/user-setting'
 import { useCurrentUser } from '@/domain/users/apis/get-current-user'
-import { browserTimeZone, parseTimeZone, timeZoneLabel, type TimeZone } from '@/lib/zoned-time'
+import { deviceTimeZone, parseTimeZone, timeZoneLabel, type TimeZone } from '@/lib/zoned-time'
 
 interface ZoneOption {
   id: string
   label: string
 }
 
-const zoneOption = (id: string): ZoneOption => ({ id, label: `${id.replaceAll('/', ' / ')} (${timeZoneLabel(id as TimeZone)})` })
+const placeOf = (zone: string) => zone.replaceAll('/', ' / ')
+
+const zoneOption = (id: string): ZoneOption => ({ id, label: `${placeOf(id)} (${timeZoneLabel(id as TimeZone)})` })
 
 const automaticKey = 'automatic'
 
-const automaticOption = (zone: TimeZone): ZoneOption => ({ id: automaticKey, label: `Automatic (${zone.replaceAll('/', ' / ')})` })
+const automaticOption = (zone: TimeZone | null): ZoneOption => ({ id: automaticKey, label: zone ? `Automatic (${placeOf(zone)})` : 'Automatic' })
+
+// A zone id has an underscore for a space, as in America/New_York, so a typed space also matches an underscore.
+const withUnderscores = (search: string) => search.replaceAll(' ', '_')
 
 let listedZones: ZoneOption[] | undefined
 
@@ -45,8 +51,9 @@ export function SettingsForm() {
   const saver = settingSaver(queryClient)
   const status = useSyncExternalStore(saver.subscribe, saver.getStatus)
   const asks = useSyncExternalStore(saver.subscribe, saver.asks)
+  const { contains } = useFilter({ sensitivity: 'base' })
   const zone = journalZoneOf(setting.data)
-  const deviceZone = browserTimeZone()
+  const deviceZone = deviceTimeZone()
   const zones = useMemo(() => [automaticOption(deviceZone), ...zoneOptions(zone)], [deviceZone, zone])
 
   if (setting.isPending) {
@@ -58,6 +65,7 @@ export function SettingsForm() {
 
   const values: SettingChange = { ...setting.data, ...saver.pendingFields() }
   const change = (patch: Partial<SettingChange>) => saver.edit(patch)
+  const zoneInUse = journalZoneOf({ ...setting.data, ...values })
 
   return (
     <div className="flex flex-col gap-8">
@@ -72,20 +80,26 @@ export function SettingsForm() {
         )}
         <Combobox
           aria-label="Time zone"
+          aria-describedby="settings-zone-in-use"
           defaultItems={zones}
+          defaultFilter={(text, search) => contains(text, search) || contains(text, withUnderscores(search))}
+          allowsEmptyCollection
           selectedKey={followsTheDevice(values) ? automaticKey : (values.timeZone ?? null)}
           onSelectionChange={(key) => {
-            if (key === automaticKey) change({ timeZoneMode: userSettingDtoTimeZoneModeEnum.FollowDevice, timeZone: deviceZone })
+            if (key === automaticKey) change({ timeZoneMode: userSettingDtoTimeZoneModeEnum.FollowDevice, timeZone: null })
             else if (typeof key === 'string') change({ timeZoneMode: userSettingDtoTimeZoneModeEnum.Fixed, timeZone: parseTimeZone(key) })
           }}
         >
-          <ComboboxInput />
+          <ComboboxInput className="[&_input]:text-ellipsis" />
           <ComboboxContent>
-            <ComboboxList>
+            <ComboboxList renderEmptyState={() => <ComboboxEmpty>No time zone matches your search.</ComboboxEmpty>}>
               {(item: ZoneOption) => <ComboboxItem id={item.id} textValue={item.label}>{item.label}</ComboboxItem>}
             </ComboboxList>
           </ComboboxContent>
         </Combobox>
+        <p id="settings-zone-in-use" className="text-sm text-muted-foreground wrap-anywhere">
+          New entries use the day in {zoneOption(zoneInUse).label}.
+        </p>
       </section>
       <section className="flex flex-col gap-3" aria-labelledby="settings-entries">
         <div className="flex flex-wrap items-baseline justify-between gap-x-4">

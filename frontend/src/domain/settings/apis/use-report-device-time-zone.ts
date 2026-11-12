@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 
 import { reportDeviceTimeZone } from '@/api/generated/user-settings/clients/report-device-time-zone'
-import { browserTimeZone } from '@/lib/zoned-time'
+import { deviceTimeZone } from '@/lib/zoned-time'
 
 import { SettingKeys } from './setting.keys'
 import { followsTheDevice, useUserSetting } from './user-setting'
@@ -13,8 +13,14 @@ export function useReportDeviceTimeZone() {
   const queryClient = useQueryClient()
   const setting = useUserSetting().data
   useEffect(() => {
-    if (!setting || !followsTheDevice(setting)) return
-    const zone = browserTimeZone()
+    if (!setting) return
+    if (!followsTheDevice(setting)) {
+      // A later pick of Automatic saves no zone, so the row keeps this zone until a report.
+      reportedZones.clear()
+      return
+    }
+    const zone = deviceTimeZone()
+    if (zone === null) return
     if (setting.timeZone === zone || reportedZones.has(zone)) return
     reportedZones.add(zone)
     void reportDeviceTimeZone({ body: { timeZone: zone }, options: { suppressErrorToast: true } })

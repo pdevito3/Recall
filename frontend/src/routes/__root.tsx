@@ -24,6 +24,7 @@ import { DraftNotices } from '@/domain/sessions/components/draft-notices'
 import { FileStoreNotice } from '@/domain/file-store/components/file-store-notice'
 import { MembershipCheckFailedNotice } from '@/domain/membership/components/membership-notice'
 import { useResumeUnsentDrafts } from '@/domain/sessions/autosave/use-resume-unsent-drafts'
+import { useReportDeviceTimeZone } from '@/domain/settings/apis/use-report-device-time-zone'
 import { HrefRouterProvider } from '@/components/ui/link'
 import { lazyOverlay } from '@/components/ui/lazy-overlay'
 import { Separator } from '@/components/ui/separator'
@@ -93,6 +94,7 @@ function Layout() {
 function LayoutContent() {
   useResumeUnsentDrafts()
   useSendStoredAudio()
+  useReportDeviceTimeZone()
   const routerState = useRouterState()
   const page = routerState.matches[routerState.matches.length - 1]
   const isNotFound = routerState.matches.some((match) => match.globalNotFound)
