@@ -76,6 +76,54 @@ public class CorrectionCreateReplayTests : TestBase
     }
 
     [Test]
+    public async Task the_deleted_id_of_another_user_gives_409_and_their_feed_keeps_the_delete()
+    {
+        // Arrange
+        var (admin, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        await FactoryClient.PostAsJsonAsync(ApiRoutes.Corrections.Root, new { id = DeviceId, canonicalTerm = "Kubernetes" });
+        await FactoryClient.DeleteAsync(ApiRoutes.Corrections.GetRecord(DeviceId));
+        FactoryClient.SignInAsAppUser(admin.Identifier);
+
+        // Act
+        var taken = await FactoryClient.PostAsJsonAsync(ApiRoutes.Corrections.Root, new { id = DeviceId, canonicalTerm = "Other" });
+        var adminList = await FactoryClient.GetFromJsonAsync<CorrectionDto[]>(ApiRoutes.Corrections.Root);
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var memberFeed = await FactoryClient.PullAsync();
+
+        // Assert
+        taken.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        adminList.ShouldBeEmpty();
+        memberFeed.Tombstones.ShouldContain(t => t.EntityType == "Correction" && t.Id == DeviceId);
+    }
+
+    [Test]
+    public async Task replays_sent_at_the_same_time_make_one_correction_and_each_gets_it()
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(member.Identifier);
+        var ids = Enumerable.Range(0, 10).Select(_ => $"cor_{Guid.CreateVersion7():N}").ToList();
+
+        // Act
+        var answers = new List<HttpResponseMessage>();
+        foreach (var id in ids)
+        {
+            var body = new { id, canonicalTerm = "Kubernetes" };
+            var sends = Enumerable.Range(0, 4).Select(_ => FactoryClient.PostAsJsonAsync(ApiRoutes.Corrections.Root, body));
+            answers.AddRange(await Task.WhenAll(sends));
+        }
+        var list = await FactoryClient.GetFromJsonAsync<CorrectionDto[]>(ApiRoutes.Corrections.Root);
+
+        // Assert
+        var refused = answers.Where(response => response.StatusCode is not (HttpStatusCode.Created or HttpStatusCode.OK));
+        (await Task.WhenAll(refused.Select(async response => $"{(int)response.StatusCode} {await response.Content.ReadAsStringAsync()}")))
+            .ShouldBeEmpty();
+        answers.Count(response => response.StatusCode == HttpStatusCode.Created).ShouldBe(ids.Count);
+        list!.Select(c => c.Id).ShouldBe(ids, ignoreOrder: true);
+    }
+
+    [Test]
     public async Task an_id_of_another_kind_gives_422()
     {
         // Arrange

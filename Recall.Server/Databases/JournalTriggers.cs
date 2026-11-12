@@ -9,15 +9,25 @@ using Microsoft.EntityFrameworkCore.Migrations;
 public static class JournalTriggers
 {
     public const string OwnerDeletedMessage = "The owner of this row is deleted.";
+    public const string IdTakenMessage = "This ID was deleted or another person uses it, so it cannot be used. Drop the local copy.";
 
-    public static void AddSyncFeed(this MigrationBuilder migrationBuilder, string table, string entityType, string? clientSessionIdColumn = null)
+    public static void AddSyncFeed(
+        this MigrationBuilder migrationBuilder,
+        string table,
+        string entityType,
+        IdsMadeBy idsMadeBy,
+        string? clientSessionIdColumn = null)
     {
         string ClientId(string row) => clientSessionIdColumn is null ? "NULL" : $"{row}.{clientSessionIdColumn}";
+        var refuseTheIdOfAnotherPerson = idsMadeBy == IdsMadeBy.Device
+            ? $"SELECT RAISE(ABORT, '{IdTakenMessage}') WHERE EXISTS (SELECT 1 FROM sync_changes WHERE entity_type = '{entityType}' AND entity_id = new.id AND user_id <> new.user_id);"
+            : string.Empty;
 
         migrationBuilder.Sql($"""
             CREATE TRIGGER {table}_sync_insert BEFORE INSERT ON {table}
             BEGIN
                 SELECT RAISE(ABORT, '{OwnerDeletedMessage}') WHERE (SELECT is_deleted FROM users WHERE id = new.user_id) = 1;
+                {refuseTheIdOfAnotherPerson}
                 INSERT OR REPLACE INTO sync_changes (user_id, entity_type, entity_id, client_session_id, is_tombstone)
                 VALUES (new.user_id, '{entityType}', new.id, {ClientId("new")}, 0);
             END;
@@ -108,4 +118,10 @@ public static class JournalTriggers
             DELETE FROM sync_changes WHERE user_id = new.id;
         END;
         """);
+}
+
+public enum IdsMadeBy
+{
+    Server,
+    Device,
 }

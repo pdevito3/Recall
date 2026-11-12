@@ -15,7 +15,7 @@ public static class AddCorrection
 {
     public sealed record Result(CorrectionDto Correction, bool IsNew);
 
-    public sealed record Command(CorrectionForCreationDto Dto) : IRequest<Result>;
+    public sealed record Command(CorrectionForCreationDto Dto) : IRequest<Result>, IRunsAgainWhenRaced;
 
     public sealed class Handler(AppDbContext dbContext) : IRequestHandler<Command, Result>
     {
@@ -41,7 +41,7 @@ public static class AddCorrection
                         .TagWithOperationCallSite("corrections.add.tombstone")
                         .AnyAsync(c => c.IsTombstone && c.EntityType == SyncEntityType.Correction && c.EntityId == dto.Id, ct);
                     if (deleted)
-                        throw new ConflictException("id", "This correction was deleted, so it cannot come back. Drop the local copy.");
+                        throw new ConflictException("id", JournalTriggers.IdTakenMessage);
                 }
 
                 var added = Correction.Create(owner.TenantId, owner.UserId, dto.CanonicalTerm, dto.Mishearings, dto.HardReplace, dto.Id);
