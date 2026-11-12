@@ -26,10 +26,10 @@ function UnsavedTagsDialog() {
         <ResponsiveDialogDescription>A sign-out loses this change. Stay signed in to keep it on the entry page.</ResponsiveDialogDescription>
       </ResponsiveDialogHeader>
       <ResponsiveDialogFooter>
-        <ResponsiveDialogClose variant="destructive" onPress={() => answerAboutUnsentWords('keep')}>
+        <ResponsiveDialogClose onPress={() => answerAboutUnsentWords('keep')}>
           Sign out without this change
         </ResponsiveDialogClose>
-        <ResponsiveDialogClose onPress={() => answerAboutUnsentWords('stay')}>Stay signed in</ResponsiveDialogClose>
+        <ResponsiveDialogClose variant="default" onPress={() => answerAboutUnsentWords('stay')}>Stay signed in</ResponsiveDialogClose>
       </ResponsiveDialogFooter>
     </ResponsiveDialog>
   )
@@ -69,10 +69,10 @@ function WordsNotStartedDialog({ isATagUnsavedToo }: { isATagUnsavedToo: boolean
         </ResponsiveDialogDescription>
       </ResponsiveDialogHeader>
       <ResponsiveDialogFooter>
-        <ResponsiveDialogClose variant={isATagUnsavedToo ? 'destructive' : undefined} onPress={() => answerAboutUnsentWords('keep')}>
+        <ResponsiveDialogClose variant={isATagUnsavedToo ? undefined : 'default'} onPress={() => answerAboutUnsentWords('keep')}>
           Sign out
         </ResponsiveDialogClose>
-        <ResponsiveDialogClose onPress={() => answerAboutUnsentWords('stay')}>Stay signed in</ResponsiveDialogClose>
+        <ResponsiveDialogClose variant={isATagUnsavedToo ? 'default' : undefined} onPress={() => answerAboutUnsentWords('stay')}>Stay signed in</ResponsiveDialogClose>
       </ResponsiveDialogFooter>
     </ResponsiveDialog>
   )
@@ -115,13 +115,13 @@ export function UnsentWordsAtLogoutDialog() {
       {hasWords && <WordsThatDidNotGo unsent={unsent} />}
       {audio.length > 0 && <AudioThatDidNotGo audio={audio} className="mt-3" />}
       <ResponsiveDialogFooter className={canKeep && isATagUnsavedToo ? 'sm:flex-col-reverse' : undefined}>
-        <ResponsiveDialogClose variant="destructive" onPress={() => answerAboutUnsentWords('discard')}>
+        <ResponsiveDialogClose onPress={() => answerAboutUnsentWords('discard')}>
           Discard {names.thing} and sign out
         </ResponsiveDialogClose>
-        <ResponsiveDialogClose onPress={() => answerAboutUnsentWords(canKeep ? 'keep' : 'stay')}>
+        <ResponsiveDialogClose variant={canKeep && isATagUnsavedToo ? undefined : 'default'} onPress={() => answerAboutUnsentWords(canKeep ? 'keep' : 'stay')}>
           {canKeep ? `Keep ${names.thing} and sign out` : 'Stay signed in'}
         </ResponsiveDialogClose>
-        {canKeep && isATagUnsavedToo && <ResponsiveDialogClose onPress={() => answerAboutUnsentWords('stay')}>Stay signed in</ResponsiveDialogClose>}
+        {canKeep && isATagUnsavedToo && <ResponsiveDialogClose variant="default" onPress={() => answerAboutUnsentWords('stay')}>Stay signed in</ResponsiveDialogClose>}
       </ResponsiveDialogFooter>
     </ResponsiveDialog>
   )

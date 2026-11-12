@@ -82,7 +82,7 @@ export function ModelProviderCard({ provider }: { provider: ModelProviderDto }) 
         </CardTitle>
         <CardAction>
           <ResponsiveDialogTrigger>
-            <Button variant="destructive" isPending={remove.isPending}>
+            <Button variant="outline" isPending={remove.isPending}>
               Delete
             </Button>
             <ResponsiveDialog>

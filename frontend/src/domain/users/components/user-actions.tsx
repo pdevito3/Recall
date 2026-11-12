@@ -134,7 +134,7 @@ function ChangeRoleForm({ user, onChangeRole }: Pick<UserActionsProps, 'user' | 
 function ConfirmDelete({ user, pendingAction, onDelete }: UserActionsProps) {
   return (
     <ResponsiveDialogTrigger>
-      <Button variant="destructive" {...buttonState('Delete', pendingAction)}>
+      <Button variant="outline" {...buttonState('Delete', pendingAction)}>
         Delete
       </Button>
       <ResponsiveDialog>
