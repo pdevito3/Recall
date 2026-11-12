@@ -16,6 +16,8 @@ export type AddCorrectionHeaders = {
     "X-Recall-User"?: string;
 };
 
+export type AddCorrectionStatus200 = CorrectionDto;
+
 export type AddCorrectionStatus201 = CorrectionDto;
 
 export type AddCorrectionStatus400 = ValidationProblemDetails;
@@ -23,6 +25,8 @@ export type AddCorrectionStatus400 = ValidationProblemDetails;
 export type AddCorrectionStatus401 = unknown;
 
 export type AddCorrectionStatus403 = ProblemDetails;
+
+export type AddCorrectionStatus409 = ValidationProblemDetails;
 
 export type AddCorrectionStatus422 = ValidationProblemDetails;
 
@@ -38,10 +42,12 @@ export type AddCorrectionOptions = {
 };
 
 export type AddCorrectionResponses = {
+    "200": AddCorrectionStatus200;
     "201": AddCorrectionStatus201;
     "400": AddCorrectionStatus400;
     "401": AddCorrectionStatus401;
     "403": AddCorrectionStatus403;
+    "409": AddCorrectionStatus409;
     "422": AddCorrectionStatus422;
     "507": AddCorrectionStatus507;
 };
@@ -49,4 +55,4 @@ export type AddCorrectionResponses = {
 /**
  * @description Union of all possible responses
 */
-export type AddCorrectionResponse = AddCorrectionStatus201;
+export type AddCorrectionResponse = (AddCorrectionStatus200 | AddCorrectionStatus201);

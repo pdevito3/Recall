@@ -11,6 +11,8 @@ import { validationProblemDetailsSchema } from '../../models/zod/validation-prob
 
 export const addCorrectionHeaderXRecallUserSchema = z.string().optional().describe('The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.')
 
+export const addCorrectionStatus200Schema = correctionDtoSchema
+
 export const addCorrectionStatus201Schema = correctionDtoSchema
 
 export const addCorrectionStatus400Schema = validationProblemDetailsSchema
@@ -19,12 +21,14 @@ export const addCorrectionStatus401Schema = z.unknown()
 
 export const addCorrectionStatus403Schema = problemDetailsSchema
 
+export const addCorrectionStatus409Schema = validationProblemDetailsSchema
+
 export const addCorrectionStatus422Schema = validationProblemDetailsSchema
 
 export const addCorrectionStatus507Schema = problemDetailsSchema
 
-export const addCorrectionResponseSchema = addCorrectionStatus201Schema
+export const addCorrectionResponseSchema = z.union([addCorrectionStatus200Schema, addCorrectionStatus201Schema])
 
-export const addCorrectionErrorSchema = z.union([addCorrectionStatus400Schema, addCorrectionStatus401Schema, addCorrectionStatus403Schema, addCorrectionStatus422Schema, addCorrectionStatus507Schema])
+export const addCorrectionErrorSchema = z.union([addCorrectionStatus400Schema, addCorrectionStatus401Schema, addCorrectionStatus403Schema, addCorrectionStatus409Schema, addCorrectionStatus422Schema, addCorrectionStatus507Schema])
 
 export const addCorrectionBodySchema = correctionForCreationDtoSchema

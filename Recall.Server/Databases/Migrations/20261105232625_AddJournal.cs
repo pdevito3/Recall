@@ -271,10 +271,10 @@ namespace Recall.Server.Databases.Migrations
                 column: "user_id",
                 unique: true);
 
-            migrationBuilder.AddSyncFeed("sessions", "Session", clientSessionIdColumn: "client_session_id");
-            migrationBuilder.AddSyncFeed("people", "Person");
-            migrationBuilder.AddSyncFeed("corrections", "Correction");
-            migrationBuilder.AddSyncFeed("user_settings", "UserSettings");
+            migrationBuilder.AddSyncFeed("sessions", "Session", IdsMadeBy.Server, clientSessionIdColumn: "client_session_id");
+            migrationBuilder.AddSyncFeed("people", "Person", IdsMadeBy.Server);
+            migrationBuilder.AddSyncFeed("corrections", "Correction", IdsMadeBy.Server);
+            migrationBuilder.AddSyncFeed("user_settings", "UserSettings", IdsMadeBy.Server);
             migrationBuilder.AddAppendOnlyGuards("raw_revisions");
             migrationBuilder.AddAppendOnlyGuards("cleaned_revisions");
             migrationBuilder.AddOwnerPurge();
