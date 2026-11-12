@@ -133,6 +133,49 @@ test('a second Enter while the save is out does not send it again', async () => 
   expect(sent.filter((request) => request.method === 'POST')).toHaveLength(1)
 })
 
+test('two submits in one task send one POST', async () => {
+  // Arrange
+  const { screen } = await renderPageAt('/corrections', [
+    { method: 'POST', path: '/api/v1/corrections', status: 201, body: { ...grdb, id: 'cor_3', canonicalTerm: 'Tallinn' } },
+  ])
+  await userEvent.click(screen.getByRole('button', { name: 'Add correction', exact: true }))
+  const dialog = screen.getByRole('dialog')
+  await userEvent.fill(dialog.getByRole('textbox', { name: 'Term' }), 'Tallinn')
+  await commands.takeSentRequests()
+  await commands.holdRequests('/api/v1/corrections')
+
+  // Act
+  const form = dialog.getByRole('textbox', { name: 'Term' }).element().closest('form')!
+  form.requestSubmit()
+  form.requestSubmit()
+  await expect.element(dialog.getByRole('button', { name: 'Save correction' })).toHaveAttribute('data-pending', 'true')
+  await commands.releaseRequests('/api/v1/corrections')
+
+  // Assert
+  await expect.element(screen.getByRole('dialog')).not.toBeInTheDocument()
+  const sent = await commands.takeSentRequests()
+  expect(sent.filter((request) => request.method === 'POST')).toHaveLength(1)
+})
+
+test('a delete of a correction that another device deleted puts the focus on the heading', async () => {
+  // Arrange
+  const notFound = { type: 'urn:recall:problem:not-found', title: 'Not found', status: 404, detail: 'The correction was not found.' }
+  const { screen } = await renderPageAt('/corrections')
+  await userEvent.click(screen.getByRole('button', { name: 'Delete GRDB' }))
+  await commands.answerRequests([
+    ...signedInMember,
+    { method: 'GET', path: '/api/v1/corrections', headers: pagination, body: [cafe] },
+    { method: 'DELETE', path: '/api/v1/corrections/cor_1', status: 404, body: notFound },
+  ])
+
+  // Act
+  await userEvent.click(screen.getByRole('button', { name: 'Delete correction' }))
+
+  // Assert
+  await expect.element(screen.getByRole('button', { name: 'Delete GRDB' })).not.toBeInTheDocument()
+  await expect.element(screen.getByRole('heading', { level: 1, name: 'Corrections' })).toHaveFocus()
+})
+
 test('the term takes as many emoji as the Server takes characters', async () => {
   // Arrange
   const term = '😀'.repeat(150)
