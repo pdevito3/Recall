@@ -1058,8 +1058,13 @@ const everySaver = () => [...new Set([...savers.values(), ...helpers])]
 let shownNotices: DraftNotice[] = []
 const noticeListeners = new Set<() => void>()
 
+const isSameNotice = (one: DraftNotice, other: DraftNotice) =>
+  Object.keys(one).length === Object.keys(other).length && Object.entries(one).every(([key, value]) => Object.is(value, other[key as keyof DraftNotice]))
+
 function refreshDraftNotices() {
-  shownNotices = everySaver().flatMap((saver) => saver.notice() ?? [])
+  const notices = everySaver().flatMap((saver) => saver.notice() ?? [])
+  if (notices.length === shownNotices.length && notices.every((notice, index) => isSameNotice(notice, shownNotices[index]))) return
+  shownNotices = notices
   for (const listener of noticeListeners) listener()
 }
 
