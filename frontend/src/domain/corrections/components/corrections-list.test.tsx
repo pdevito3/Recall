@@ -110,6 +110,29 @@ test('a stale save keeps the edits, and the latest takes the field that another 
   ])
 })
 
+test('a second Enter while the save is out does not send it again', async () => {
+  // Arrange
+  const { screen } = await renderPageAt('/corrections', [
+    { method: 'POST', path: '/api/v1/corrections', status: 201, body: { ...grdb, id: 'cor_3', canonicalTerm: 'Tallinn' } },
+  ])
+  await userEvent.click(screen.getByRole('button', { name: 'Add correction', exact: true }))
+  const dialog = screen.getByRole('dialog')
+  await userEvent.fill(dialog.getByRole('textbox', { name: 'Term' }), 'Tallinn')
+  await commands.takeSentRequests()
+  await commands.holdRequests('/api/v1/corrections')
+
+  // Act
+  await userEvent.keyboard('{Enter}')
+  await expect.element(dialog.getByRole('button', { name: 'Save correction' })).toHaveAttribute('data-pending', 'true')
+  await userEvent.keyboard('{Enter}')
+  await commands.releaseRequests('/api/v1/corrections')
+
+  // Assert
+  await expect.element(screen.getByRole('dialog')).not.toBeInTheDocument()
+  const sent = await commands.takeSentRequests()
+  expect(sent.filter((request) => request.method === 'POST')).toHaveLength(1)
+})
+
 test('the term takes as many emoji as the Server takes characters', async () => {
   // Arrange
   const term = '😀'.repeat(150)

@@ -4,7 +4,7 @@ import type { CorrectionDto } from '@/api/generated/models/types/correction-dto'
 import type { CorrectionForCreationDto } from '@/api/generated/models/types/correction-for-creation-dto'
 import { correctionForCreationDtoSchema } from '@/api/generated/models/zod/correction-for-creation-dto'
 import { correctionForUpdateDtoSchema } from '@/api/generated/models/zod/correction-for-update-dto'
-import { maxLengthOf, stringWithMaxLengthOf } from '@/lib/api-contract'
+import { maxLengthOf } from '@/lib/api-contract'
 
 export const termMaxLength = maxLengthOf(correctionForCreationDtoSchema.shape.canonicalTerm)
 export const mishearingMaxLength = maxLengthOf(correctionForCreationDtoSchema.shape.mishearings.element)
@@ -19,10 +19,10 @@ function mishearingsOf(text: string): string[] {
 }
 
 export const correctionFormSchema = z.object({
-  canonicalTerm: stringWithMaxLengthOf(correctionForCreationDtoSchema.shape.canonicalTerm).refine(
-    (term) => term.trim().length > 0,
-    'Please provide a term.',
-  ),
+  canonicalTerm: z
+    .string()
+    .refine((term) => term.trim().length > 0, 'Please provide a term.')
+    .refine((term) => [...term.trim()].length <= termMaxLength, `Use ${termMaxLength} characters or fewer.`),
   mishearings: z
     .string()
     .refine(

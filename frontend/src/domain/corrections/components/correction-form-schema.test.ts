@@ -24,6 +24,11 @@ describe('the limits of the correction form', () => {
     expect(messagesOf({ canonicalTerm: 'a'.repeat(201) })).toEqual(['Use 200 characters or fewer.'])
   })
 
+  test('does not count the spaces that the Server trims from the term', () => {
+    // Arrange, Act, and Assert
+    expect(messagesOf({ canonicalTerm: ` ${'a'.repeat(200)} ` })).toEqual([])
+  })
+
   test('refuses a blank term with the words of the Server', () => {
     // Arrange, Act, and Assert
     expect(messagesOf({ canonicalTerm: '   ' })).toEqual(['Please provide a term.'])

@@ -72,6 +72,7 @@ export function CorrectionForm({ correction, onSaved }: CorrectionFormProps) {
   }
 
   const handleSubmit = form.handleSubmit((values) => {
+    if (save.isPending) return
     serverErrors.clear()
     latest.clear()
     if (correction) {
