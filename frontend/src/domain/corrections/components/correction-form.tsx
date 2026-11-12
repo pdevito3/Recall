@@ -147,8 +147,9 @@ export function CorrectionForm({ correction, onSaved }: CorrectionFormProps) {
         name="hardReplace"
         render={({ field }) => (
           <div className="flex flex-col gap-1">
+            {/* The tap area grows past the row, so the hint stays under the label on a phone */}
             <Checkbox
-              className="max-md:min-h-11"
+              className="relative max-md:before:absolute max-md:before:inset-x-0 max-md:before:-inset-y-3.5"
               isSelected={field.value}
               onChange={field.onChange}
               inputRef={field.ref}
