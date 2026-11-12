@@ -14,6 +14,7 @@ import {
   ResponsiveDialogTitle,
   ResponsiveDialogTrigger,
 } from '@/components/ui/responsive-dialog'
+import { isProblemDetailsError } from '@/lib/problem-details'
 
 import { useCorrectionDirectory, useDeleteCorrection } from '../apis/corrections'
 import { CorrectionForm } from './correction-form'
@@ -124,8 +125,13 @@ function DeleteCorrection({
 
   const handleDelete = () =>
     remove.mutate(correction.id, {
-      onSuccess: () => Notification.success('Correction deleted'),
-      onSettled: () => headingRef.current?.focus(),
+      onSuccess: () => {
+        Notification.success('Correction deleted')
+        headingRef.current?.focus()
+      },
+      onError: (error) => {
+        if (isProblemDetailsError(error) && error.status === 404) headingRef.current?.focus()
+      },
     })
 
   return (
