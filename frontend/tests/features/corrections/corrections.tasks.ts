@@ -18,6 +18,17 @@ export function correctionsPage(page: Page) {
 
     sideScrollRange: () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
 
+    alwaysReplaceLayout: () =>
+      at.alwaysReplace.evaluate((input) => {
+        const label = input.closest('label')!
+        const text = document.createRange()
+        text.selectNodeContents(label.lastChild!)
+        const box = text.getBoundingClientRect()
+        const hint = document.getElementById(input.getAttribute('aria-describedby')!)!.getBoundingClientRect()
+        const row = label.getBoundingClientRect()
+        return { x: box.left + box.width / 2, y: row.top + row.height / 2, gapAboveHint: hint.top - box.bottom }
+      }),
+
     async add(term: string, mishearings: string[], alwaysReplace = false) {
       await at.add.click()
       await at.termField.fill(term)

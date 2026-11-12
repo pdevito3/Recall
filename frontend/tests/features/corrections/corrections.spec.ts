@@ -61,6 +61,21 @@ test.describe('the corrections of a journal', () => {
     expect(await corrections.sideScrollRange()).toBe(0)
   })
 
+  test('on a phone, always replace takes a 44 px tap and keeps its hint under it', async ({ page, api }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    api.mock(correctionsApi.listIs([]))
+    const corrections = correctionsPage(page)
+    await corrections.open()
+    await corrections.at.add.click()
+
+    const label = await corrections.alwaysReplaceLayout()
+    expect(label.gapAboveHint).toBeLessThanOrEqual(8)
+    await page.mouse.click(label.x, label.y - 21)
+    await expect(corrections.at.alwaysReplace).toBeChecked()
+    await page.mouse.click(label.x, label.y + 21)
+    await expect(corrections.at.alwaysReplace).not.toBeChecked()
+  })
+
   test('adds a correction with its mishearings', async ({ page, api }) => {
     const added = aCorrection('cor_3', 'GRDB', ['grid b', 'great db'], true)
     api.mock(correctionsApi.listIs([]))
