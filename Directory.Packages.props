@@ -7,9 +7,9 @@
     <!-- Speech: the worker that turns audio into text -->
     <PackageVersion Include="org.k2fsa.sherpa.onnx" Version="2.0.1" />
     <!-- Aspire -->
-    <PackageVersion Include="Aspire.Hosting.JavaScript" Version="13.6.4" />
-    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.6.4" />
-    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.6.4" />
+    <PackageVersion Include="Aspire.Hosting.JavaScript" Version="13.6.5" />
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.6.5" />
+    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.6.5" />
     <PackageVersion Include="Labcoat.Aspire.Hosting" Version="1.1.2" />
     <!-- Entity Framework -->
     <PackageVersion Include="EFCore.NamingConventions" Version="10.0.1" />
