@@ -176,6 +176,20 @@ test('a delete of a correction that another device deleted puts the focus on the
   await expect.element(screen.getByRole('heading', { level: 1, name: 'Corrections' })).toHaveFocus()
 })
 
+test('a delete that the Server fails keeps the focus on the row that is still there', async () => {
+  // Arrange
+  const failed = { type: 'about:blank', title: 'Internal Server Error', status: 500, detail: 'Something went wrong.' }
+  const { screen } = await renderPageAt('/corrections', [{ method: 'DELETE', path: '/api/v1/corrections/cor_1', status: 500, body: failed }])
+  await userEvent.click(screen.getByRole('button', { name: 'Delete GRDB' }))
+
+  // Act
+  await userEvent.click(screen.getByRole('button', { name: 'Delete correction' }))
+
+  // Assert
+  await expect.element(screen.getByRole('dialog')).not.toBeInTheDocument()
+  await expect.element(screen.getByRole('button', { name: 'Delete GRDB' })).toHaveFocus()
+})
+
 test('the term takes as many emoji as the Server takes characters', async () => {
   // Arrange
   const term = '😀'.repeat(150)
