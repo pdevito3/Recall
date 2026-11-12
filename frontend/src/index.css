@@ -31,7 +31,7 @@
   --muted-foreground: oklch(0.5544 0.0407 257.4166);
   --accent: oklch(0.9683 0.0069 247.8956);
   --accent-foreground: oklch(0.2077 0.0398 265.7549);
-  /* Darker than red-700, so that red text is 4.5:1 also on the 20% tint of a hovered destructive button. */
+  /* Darker than red-700, so that red text is 4.5:1 also on the 20% tint of a hovered destructive badge link. */
   --destructive: oklch(0.485 0.205 27.4);
   --destructive-foreground: oklch(1.0000 0 0);
   --border: oklch(0.9288 0.0126 255.5078);

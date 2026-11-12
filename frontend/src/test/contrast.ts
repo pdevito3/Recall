@@ -49,22 +49,27 @@ export function contrastOf(element: Element): number {
   return ratio(over(painted(getComputedStyle(element).color), background), background)
 }
 
-// The color of the last box-shadow layer that has a spread, which is the Tailwind ring. A ring offset comes before it.
+// The colors of the box-shadow layers that have a spread. The last is the Tailwind ring, and a ring offset comes before it.
 // The computed value puts the color first in each layer, for example `oklab(0.5 0.1 0.1 / 0.8) 0px 0px 0px 3px`.
-function ringColorOf(element: Element): string {
+function ringLayersOf(element: Element): { ring: string; offset?: string } {
   const layers = getComputedStyle(element).boxShadow.split(/,(?![^(]*\))/)
-  const spreads = layers.filter((layer) => /0px 0px 0px [1-9][\d.]*px\s*$/.test(layer))
+  const spreads = layers
+    .filter((layer) => /0px 0px 0px [1-9][\d.]*px\s*$/.test(layer))
+    .map((layer) => layer.trim().replace(/(\s+-?[\d.]+px)+$/, ''))
   const ring = spreads[spreads.length - 1]
   if (!ring) throw new Error('The element shows no focus ring.')
-  return ring.trim().replace(/(\s+-?[\d.]+px)+$/, '')
+  return { ring, offset: spreads[spreads.length - 2] }
 }
 
 /**
  * The lower contrast ratio of the focus ring of `element` against its two neighbors: the background outside the
- * element and the background of the element. WCAG 1.4.11 asks 3:1 against the adjacent colors.
+ * element, and the ring offset or, with no offset, the background of the element. WCAG 1.4.11 asks 3:1 against the
+ * adjacent colors.
  */
 export function focusRingContrastOf(element: Element): number {
   const outside = backgroundOf(element.parentElement ?? document.body)
-  const ring = over(painted(ringColorOf(element)), outside)
-  return Math.min(ratio(ring, outside), ratio(ring, backgroundOf(element)))
+  const { ring, offset } = ringLayersOf(element)
+  const ringColor = over(painted(ring), outside)
+  const inside = offset ? over(painted(offset), outside) : backgroundOf(element)
+  return Math.min(ratio(ringColor, outside), ratio(ringColor, inside))
 }

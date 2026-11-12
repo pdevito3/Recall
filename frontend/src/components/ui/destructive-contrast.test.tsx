@@ -10,7 +10,7 @@ import { JollyCalendar } from '@/components/ui/calendar'
 import { JollyDateField } from '@/components/ui/datefield'
 import { contrastOf, focusRingContrastOf } from '@/test/contrast'
 
-// WCAG 1.4.3 asks 4.5:1 for text below 18 px. Each surface below shows the destructive color as 14 px text.
+// WCAG 1.4.3 asks 4.5:1 for text below 18 px. Each surface below shows 14 px text in the destructive color or on it.
 const minimumRatio = 4.5
 
 function Surfaces({ theme }: { theme: 'light' | 'dark' }) {
