@@ -195,6 +195,17 @@
   max-width: calc(100% - 24px);
 }
 
+/* Grows the tap area 14 px above and below, so a 16 px row takes a 44 px tap and the layout does not move. */
+@utility tap-area-y {
+  position: relative;
+  &::before {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    inset-block: -14px;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
