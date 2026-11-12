@@ -15,17 +15,22 @@ public sealed class AddCorrectionEndpoint : IEndpoint
         .RequireAuthorization()
         .ProducesValidationProblem()
         .ProducesProblem(StatusCodes.Status403Forbidden)
+        .ProducesValidationProblem(StatusCodes.Status409Conflict)
         .ProducesValidationProblem(StatusCodes.Status422UnprocessableEntity);
 
     /// <summary>
-    /// Adds a Correction of the caller.
+    /// Adds a Correction of the caller, or returns the Correction that already has the ID that the body names. The
+    /// first create gives 201 and a replay gives 200, so a device can send it again after a lost response. A replay of
+    /// a deleted Correction gives 409.
     /// </summary>
-    public static async Task<CreatedAtRoute<CorrectionDto>> Handle(
+    public static async Task<Results<CreatedAtRoute<CorrectionDto>, Ok<CorrectionDto>>> Handle(
         CorrectionForCreationDto dto,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new AddCorrection.Command(dto), cancellationToken);
-        return TypedResults.CreatedAtRoute(result, "GetCorrection", new { id = result.Id });
+        return result.IsNew
+            ? TypedResults.CreatedAtRoute(result.Correction, "GetCorrection", new { id = result.Correction.Id })
+            : TypedResults.Ok(result.Correction);
     }
 }

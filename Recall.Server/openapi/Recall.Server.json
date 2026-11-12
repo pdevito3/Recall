@@ -589,7 +589,7 @@
         "tags": [
           "Corrections"
         ],
-        "summary": "Adds a Correction of the caller.",
+        "summary": "Adds a Correction of the caller, or returns the Correction that already has the ID that the body names. The\nfirst create gives 201 and a replay gives 200, so a device can send it again after a lost response. A replay of\na deleted Correction gives 409.",
         "operationId": "AddCorrection",
         "parameters": [
           {
@@ -622,6 +622,16 @@
               }
             }
           },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CorrectionDto"
+                }
+              }
+            }
+          },
           "400": {
             "description": "Bad Request",
             "content": {
@@ -638,6 +648,16 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
                 }
               }
             }
@@ -6344,6 +6364,14 @@
         ],
         "type": "object",
         "properties": {
+          "id": {
+            "maxLength": 50,
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The ID that the device made for this Correction, or null for a new ID. It is `cor_` and lower-case letters\nor digits, such as `cor_` and a UUID with no hyphens. Another form gives 422. A second create with this ID\nreturns the same Correction."
+          },
           "canonicalTerm": {
             "maxLength": 200,
             "type": "string"

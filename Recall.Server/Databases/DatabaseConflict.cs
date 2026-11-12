@@ -25,6 +25,10 @@ public static class DatabaseConflict
             && failed.Message.Contains(JournalTriggers.OwnerDeletedMessage, StringComparison.Ordinal))
             return new ForbiddenAccessException(JournalTriggers.OwnerDeletedMessage);
 
+        if (exception.InnerException is SqliteException { SqliteErrorCode: ConstraintFailed } taken
+            && taken.Message.Contains(JournalTriggers.IdTakenMessage, StringComparison.Ordinal))
+            return new ConflictException("id", JournalTriggers.IdTakenMessage, exception);
+
         if (LostToAHardDelete(exception))
             return new StaleVersionException(exception);
 

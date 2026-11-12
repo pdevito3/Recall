@@ -11,7 +11,7 @@ public sealed class CorrectionConfiguration : IEntityTypeConfiguration<Correctio
 {
     public void Configure(EntityTypeBuilder<Correction> builder)
     {
-        builder.HasKey(e => e.Id);
+        builder.HasKey(e => e.Id).ForStaleVersion();
         builder.Property(e => e.Id).HasMaxLength(EntityId.MaxLength).UseCollation(EntityId.Collation);
         builder.Property(e => e.TenantId).IsRequired().HasMaxLength(EntityId.MaxLength).UseCollation(EntityId.Collation);
         builder.Property(e => e.UserId).IsRequired().HasMaxLength(EntityId.MaxLength).UseCollation(EntityId.Collation);
