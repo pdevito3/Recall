@@ -63,6 +63,8 @@ const renderComposer = async (first: ShownComposer) => {
   return { screen, show: (next: ShownComposer) => screen.rerender(shown({ ...first, ...next })) }
 }
 
+const typingSeventeenLinesMs = 60_000
+
 const typeLinesUpToTheBar = async () => {
   await page.getByRole('textbox', { name: 'New entry' }).click()
   for (let line = 1; line <= 16; line++) await userEvent.keyboard(`line ${line} of the words{Enter}`)
@@ -99,7 +101,7 @@ test.each(statuses)('at 320 px with a font of 24 px the line with the caret stay
   }
   await userEvent.keyboard('the last line')
   caretIsAboveTheBar()
-})
+}, typingSeventeenLinesMs)
 
 test.each(statuses.filter(({ kind }) => kind !== 'idle'))('at 320 px with a font of 24 px a status $kind that makes the bar taller keeps the line with the caret above the bar', async (status) => {
   const { show } = await renderComposer({ status: { kind: 'idle' } })
@@ -109,7 +111,7 @@ test.each(statuses.filter(({ kind }) => kind !== 'idle'))('at 320 px with a font
   await show({ status })
 
   await vi.waitFor(caretIsAboveTheBar)
-})
+}, typingSeventeenLinesMs)
 
 test('at 320 px with a font of 24 px a merge that adds lines while the person writes keeps the line with the caret above the bar', async () => {
   const { show } = await renderComposer({ status: { kind: 'waitingForAnotherWriter' } })
@@ -123,7 +125,7 @@ test('at 320 px with a font of 24 px a merge that adds lines while the person wr
 
   await expect.element(page.getByText('line 24 of the merged words')).toBeInTheDocument()
   caretIsAboveTheBar()
-})
+}, typingSeventeenLinesMs)
 
 test('while the merged words wait to save, the page does not say that they are in the newest words, and says it once they save', async () => {
   const { show } = await renderComposer({ status: { kind: 'waitingForAnotherWriter' }, isMergeNoted: true })

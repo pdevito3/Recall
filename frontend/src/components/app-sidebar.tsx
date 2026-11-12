@@ -5,6 +5,7 @@ import {
   Mic01Icon,
   Note01Icon,
   Settings01Icon,
+  TextCheckIcon,
   UserGroupIcon,
   UserMultipleIcon,
 } from "@hugeicons/core-free-icons"
@@ -52,6 +53,11 @@ const navItems = [
     title: "People",
     url: "/people",
     icon: UserMultipleIcon,
+  },
+  {
+    title: "Corrections",
+    url: "/corrections",
+    icon: TextCheckIcon,
   },
   {
     title: "Settings",

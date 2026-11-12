@@ -17,6 +17,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as UsersIndexRouteImport } from './routes/users/index'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as PeopleIndexRouteImport } from './routes/people/index'
+import { Route as CorrectionsIndexRouteImport } from './routes/corrections/index'
 import { Route as UsersIdIndexRouteImport } from './routes/users/$id/index'
 import { Route as SessionsIdIndexRouteImport } from './routes/sessions/$id/index'
 
@@ -60,6 +61,11 @@ const PeopleIndexRoute = PeopleIndexRouteImport.update({
   path: '/people/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CorrectionsIndexRoute = CorrectionsIndexRouteImport.update({
+  id: '/corrections/',
+  path: '/corrections/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const UsersIdIndexRoute = UsersIdIndexRouteImport.update({
   id: '/users/$id/',
   path: '/users/$id/',
@@ -77,6 +83,7 @@ export interface FileRoutesByFullPath {
   '/model-providers': typeof ModelProvidersRoute
   '/summaries': typeof SummariesRoute
   '/transcription-engine': typeof TranscriptionEngineRoute
+  '/corrections': typeof CorrectionsIndexRoute
   '/people': typeof PeopleIndexRoute
   '/settings': typeof SettingsIndexRoute
   '/users': typeof UsersIndexRoute
@@ -89,6 +96,7 @@ export interface FileRoutesByTo {
   '/model-providers': typeof ModelProvidersRoute
   '/summaries': typeof SummariesRoute
   '/transcription-engine': typeof TranscriptionEngineRoute
+  '/corrections': typeof CorrectionsIndexRoute
   '/people': typeof PeopleIndexRoute
   '/settings': typeof SettingsIndexRoute
   '/users': typeof UsersIndexRoute
@@ -102,6 +110,7 @@ export interface FileRoutesById {
   '/model-providers': typeof ModelProvidersRoute
   '/summaries': typeof SummariesRoute
   '/transcription-engine': typeof TranscriptionEngineRoute
+  '/corrections/': typeof CorrectionsIndexRoute
   '/people/': typeof PeopleIndexRoute
   '/settings/': typeof SettingsIndexRoute
   '/users/': typeof UsersIndexRoute
@@ -116,6 +125,7 @@ export interface FileRouteTypes {
     | '/model-providers'
     | '/summaries'
     | '/transcription-engine'
+    | '/corrections'
     | '/people'
     | '/settings'
     | '/users'
@@ -128,6 +138,7 @@ export interface FileRouteTypes {
     | '/model-providers'
     | '/summaries'
     | '/transcription-engine'
+    | '/corrections'
     | '/people'
     | '/settings'
     | '/users'
@@ -140,6 +151,7 @@ export interface FileRouteTypes {
     | '/model-providers'
     | '/summaries'
     | '/transcription-engine'
+    | '/corrections/'
     | '/people/'
     | '/settings/'
     | '/users/'
@@ -153,6 +165,7 @@ export interface RootRouteChildren {
   ModelProvidersRoute: typeof ModelProvidersRoute
   SummariesRoute: typeof SummariesRoute
   TranscriptionEngineRoute: typeof TranscriptionEngineRoute
+  CorrectionsIndexRoute: typeof CorrectionsIndexRoute
   PeopleIndexRoute: typeof PeopleIndexRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
   UsersIndexRoute: typeof UsersIndexRoute
@@ -218,6 +231,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PeopleIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/corrections/': {
+      id: '/corrections/'
+      path: '/corrections'
+      fullPath: '/corrections'
+      preLoaderRoute: typeof CorrectionsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/users/$id/': {
       id: '/users/$id/'
       path: '/users/$id'
@@ -241,6 +261,7 @@ const rootRouteChildren: RootRouteChildren = {
   ModelProvidersRoute: ModelProvidersRoute,
   SummariesRoute: SummariesRoute,
   TranscriptionEngineRoute: TranscriptionEngineRoute,
+  CorrectionsIndexRoute: CorrectionsIndexRoute,
   PeopleIndexRoute: PeopleIndexRoute,
   SettingsIndexRoute: SettingsIndexRoute,
   UsersIndexRoute: UsersIndexRoute,

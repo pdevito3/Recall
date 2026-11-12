@@ -6,13 +6,15 @@ import { afterEach, beforeEach } from 'vitest'
 import { commands } from 'vitest/browser'
 import { cleanup } from 'vitest-browser-react'
 
-import type { Answer } from './answer'
+import { testHeader, type Answer } from './answer'
 
 // The commands are in vitest.commands.ts. They run in Node and drive the Playwright page.
 declare module 'vitest/browser' {
   interface BrowserCommands {
     /** Answers each request that matches an answer. A later answer wins. `[]` removes all answers. */
     answerRequests: (answers: Answer[]) => Promise<void>
+    /** Removes all answers and forgets the requests so far. A request of an earlier test does not count after this. */
+    beginTest: (test: string) => Promise<void>
     takeUnansweredRequests: () => Promise<string[]>
     /** The method, pathname, and JSON body of each request other than a GET since the last call. */
     takeSentRequests: () => Promise<{ method: string; path: string; body: unknown }[]>
@@ -29,13 +31,19 @@ declare module 'vitest/browser' {
   }
 }
 
-// vitest-browser-react unmounts the page of the last test only before the next test. Unmount it first, so that a
-// late request of the last test does not count as one of this test.
+// vitest-browser-react unmounts the page of the last test only before the next test, so a request of the last test
+// can reach the route late.
+let test = 0
+const send = XMLHttpRequest.prototype.send
+XMLHttpRequest.prototype.send = function (body) {
+  this.setRequestHeader(testHeader, String(test))
+  send.call(this, body)
+}
+
 beforeEach(async () => {
   await cleanup()
-  await commands.answerRequests([])
-  await commands.takeUnansweredRequests()
-  await commands.takeSentRequests()
+  test += 1
+  await commands.beginTest(String(test))
 })
 
 // A request with no answer gets an error from the dev server. A test can still pass by mistake, for example when
