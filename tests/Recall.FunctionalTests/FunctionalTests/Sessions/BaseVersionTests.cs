@@ -158,7 +158,7 @@ public class BaseVersionTests : TestBase
         (await SaveSettingsAsync(await SettingsAsync(), capture: false, zone: "UTC")).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // Act
-        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = "UTC", locationCaptureEnabled = true, requirePeopleProposalApproval = true });
+        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZoneMode = "Fixed", timeZone = "UTC", locationCaptureEnabled = true, requirePeopleProposalApproval = true });
         var stored = await SettingsAsync();
 
         // Assert
@@ -273,7 +273,7 @@ public class BaseVersionTests : TestBase
         var session = await AddSessionAsync();
 
         // Act
-        var settings = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = "UTC", locationCaptureEnabled = true, requirePeopleProposalApproval = true, savedAt = DateTimeOffset.UtcNow });
+        var settings = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZoneMode = "Fixed", timeZone = "UTC", locationCaptureEnabled = true, requirePeopleProposalApproval = true, savedAt = DateTimeOffset.UtcNow });
         var metadata = await FactoryClient.PutAsJsonAsync(ApiRoutes.Sessions.Metadata(IdOf(session)), new { activity = "Walking", moods = Array.Empty<string>(), userTopics = Food, savedAt = DateTimeOffset.UtcNow });
         var settingsReason = await settings.Content.ReadAsStringAsync();
         var metadataReason = await metadata.Content.ReadAsStringAsync();
@@ -338,7 +338,7 @@ public class BaseVersionTests : TestBase
         await JournalScenario.ExecuteOutOfBandAsync("UPDATE user_settings SET time_zone = @zone WHERE user_id = @id", ("@zone", notOnThisHost), ("@id", member.Id));
 
         // Act
-        var retry = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = notOnThisHost, locationCaptureEnabled = true, requirePeopleProposalApproval = true, version = 0 });
+        var retry = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZoneMode = "Fixed", timeZone = notOnThisHost, locationCaptureEnabled = true, requirePeopleProposalApproval = true, version = 0 });
 
         // Assert
         retry.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -355,6 +355,7 @@ public class BaseVersionTests : TestBase
         // Act
         var saved = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new
         {
+            timeZoneMode = defaults.GetProperty("timeZoneMode").GetString(),
             timeZone = defaults.GetProperty("timeZone").GetString(),
             locationCaptureEnabled = defaults.GetProperty("locationCaptureEnabled").GetBoolean(),
             requirePeopleProposalApproval = defaults.GetProperty("requirePeopleProposalApproval").GetBoolean(),
@@ -378,6 +379,7 @@ public class BaseVersionTests : TestBase
         // Act
         var refused = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new
         {
+            timeZoneMode = "Fixed",
             timeZone = "UTC",
             locationCaptureEnabled = true,
             requirePeopleProposalApproval = true,
@@ -402,6 +404,7 @@ public class BaseVersionTests : TestBase
         // Act
         var retry = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new
         {
+            timeZoneMode = defaults.GetProperty("timeZoneMode").GetString(),
             timeZone = defaults.GetProperty("timeZone").GetString(),
             locationCaptureEnabled = defaults.GetProperty("locationCaptureEnabled").GetBoolean(),
             requirePeopleProposalApproval = defaults.GetProperty("requirePeopleProposalApproval").GetBoolean(),
@@ -426,7 +429,7 @@ public class BaseVersionTests : TestBase
         var current = await SettingsAsync();
 
         // Act
-        var off = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = "UTC", locationCaptureEnabled = false, requirePeopleProposalApproval = true, version = current.GetProperty("version").GetUInt32(), savedAt = DateTimeOffset.UtcNow.AddDays(-1) });
+        var off = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZoneMode = "Fixed", timeZone = "UTC", locationCaptureEnabled = false, requirePeopleProposalApproval = true, version = current.GetProperty("version").GetUInt32(), savedAt = DateTimeOffset.UtcNow.AddDays(-1) });
         var stored = await SettingsAsync();
 
         // Assert
@@ -464,6 +467,7 @@ public class BaseVersionTests : TestBase
     private Task<HttpResponseMessage> SaveSettingsAsync(JsonElement read, bool capture, string zone)
         => FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new
         {
+            timeZoneMode = "Fixed",
             timeZone = zone,
             locationCaptureEnabled = capture,
             requirePeopleProposalApproval = true,

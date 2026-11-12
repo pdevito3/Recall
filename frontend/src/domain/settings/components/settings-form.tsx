@@ -4,13 +4,13 @@ import { useMemo, useSyncExternalStore } from 'react'
 import { QueryError } from '@/components/query-error'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Combobox, ComboboxContent, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox'
-import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SaveStatusLine } from '@/domain/sessions/components/save-status'
 import { StaleChangePrompts } from '@/domain/sessions/components/stale-change-prompts'
-import { journalZoneOf, settingSaver, useUserSetting, type SettingChange } from '@/domain/settings/apis/user-setting'
+import { userSettingDtoTimeZoneModeEnum } from '@/api/generated/models/types/user-setting-dto'
+import { followsTheDevice, journalZoneOf, settingSaver, useUserSetting, type SettingChange } from '@/domain/settings/apis/user-setting'
 import { useCurrentUser } from '@/domain/users/apis/get-current-user'
-import { parseTimeZone, timeZoneLabel, type TimeZone } from '@/lib/zoned-time'
+import { browserTimeZone, parseTimeZone, timeZoneLabel, type TimeZone } from '@/lib/zoned-time'
 
 interface ZoneOption {
   id: string
@@ -18,6 +18,10 @@ interface ZoneOption {
 }
 
 const zoneOption = (id: string): ZoneOption => ({ id, label: `${id.replaceAll('/', ' / ')} (${timeZoneLabel(id as TimeZone)})` })
+
+const automaticKey = 'automatic'
+
+const automaticOption = (zone: TimeZone): ZoneOption => ({ id: automaticKey, label: `Automatic (${zone.replaceAll('/', ' / ')})` })
 
 let listedZones: ZoneOption[] | undefined
 
@@ -29,6 +33,7 @@ function zoneOptions(savedZone: TimeZone): ZoneOption[] {
 }
 
 const settingLabels: Record<keyof SettingChange, string> = {
+  timeZoneMode: 'Time zone',
   timeZone: 'Time zone',
   locationCaptureEnabled: 'Save my location with each new entry',
   requirePeopleProposalApproval: 'Ask me before AI adds a person to an entry',
@@ -41,7 +46,8 @@ export function SettingsForm() {
   const status = useSyncExternalStore(saver.subscribe, saver.getStatus)
   const asks = useSyncExternalStore(saver.subscribe, saver.asks)
   const zone = journalZoneOf(setting.data)
-  const zones = useMemo(() => zoneOptions(zone), [zone])
+  const deviceZone = browserTimeZone()
+  const zones = useMemo(() => [automaticOption(deviceZone), ...zoneOptions(zone)], [deviceZone, zone])
 
   if (setting.isPending) {
     return <p role="status" aria-label="Loading your settings" className="text-muted-foreground">Loading your settings</p>
@@ -58,7 +64,7 @@ export function SettingsForm() {
       <StaleChangePrompts asks={asks} labelOf={(field) => settingLabels[field]} onAnswer={(ask, usesYours) => saver.answerAsk(ask, usesYours)} />
       <section className="flex flex-col gap-2" aria-labelledby="settings-zone">
         <h2 id="settings-zone" className="text-lg font-semibold">Time zone</h2>
-        <p className="text-sm text-muted-foreground">Your time zone decides the day that each entry belongs to.</p>
+        <p className="text-sm text-muted-foreground">Your time zone decides the day of each new entry. Automatic follows the time zone of the device that you use, and an entry keeps its day when you travel.</p>
         {setting.data.timeZone && !setting.data.timeZoneIsKnown && (
           <p role="alert" className="text-sm text-destructive wrap-anywhere">
             This server does not know your saved time zone, so your days use UTC. Pick a time zone to fix your days.
@@ -66,13 +72,13 @@ export function SettingsForm() {
         )}
         <Combobox
           aria-label="Time zone"
-          items={zones}
-          selectedKey={values.timeZone ?? null}
+          defaultItems={zones}
+          selectedKey={followsTheDevice(values) ? automaticKey : (values.timeZone ?? null)}
           onSelectionChange={(key) => {
-            if (typeof key === 'string') change({ timeZone: parseTimeZone(key) })
+            if (key === automaticKey) change({ timeZoneMode: userSettingDtoTimeZoneModeEnum.FollowDevice, timeZone: deviceZone })
+            else if (typeof key === 'string') change({ timeZoneMode: userSettingDtoTimeZoneModeEnum.Fixed, timeZone: parseTimeZone(key) })
           }}
         >
-          <Label className="sr-only">Time zone</Label>
           <ComboboxInput />
           <ComboboxContent>
             <ComboboxList>

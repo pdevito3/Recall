@@ -30,8 +30,8 @@ export interface RowSaverState<F> {
 export interface StaleRules<F> {
   asksFirst?: (field: keyof F, value: F[keyof F]) => boolean
   neverAsks?: (field: keyof F, value: F[keyof F]) => boolean
-  /** The app chose this value and the person did not, so the value of the row wins with no question. */
-  yieldsToTheRow?: (field: keyof F, before: F[keyof F]) => boolean
+  /** The value moved, but no person chose it, as a zone that a device reported. Yours applies with no question. */
+  sameChoice?: (field: keyof F, before: F, fresh: F) => boolean
   /** This value goes to the Server only from a click in the live page. No key holds it, and a failed save never sends it again. */
   onlyFromALiveClick?: (field: keyof F, value: F[keyof F]) => boolean
 }
@@ -60,12 +60,12 @@ export function planAfterStale<F extends object>({ changed, before, fresh, hadNo
   for (const field of fieldsIn(changed)) {
     const yours = changed[field] as F[keyof F]
     const now = fresh[field]
-    if (isSame(yours, now) || rules?.yieldsToTheRow?.(field, before[field])) continue
+    if (isSame(yours, now)) continue
     // A save with no reply can be a key from days ago, so even a choice that never asks must not go over a later choice.
     if (rules?.neverAsks?.(field, yours) && !hadNoReply) {
       plan.apply[field] = yours as F[typeof field]
       plan.appliedWithNoAsk.push(field)
-    } else if (rules?.asksFirst?.(field, yours) || hadNoReply || !isSame(before[field], now)) {
+    } else if (rules?.asksFirst?.(field, yours) || hadNoReply || (!isSame(before[field], now) && !rules?.sameChoice?.(field, before, fresh))) {
       plan.asks.push({ field, yours, now })
     } else {
       plan.apply[field] = yours as F[typeof field]

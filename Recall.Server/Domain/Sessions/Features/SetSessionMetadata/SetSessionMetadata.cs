@@ -8,7 +8,6 @@ using MediatR;
 using Metadata;
 using Resources;
 using Serilog;
-using UserSettings;
 
 public static class SetSessionMetadata
 {
@@ -29,7 +28,7 @@ public static class SetSessionMetadata
             await dbContext.SaveChangesAsync(cancellationToken);
 
             _logger.Here().Information("Took a metadata change of session {SessionId}, applied {Applied}", session.Id, applied);
-            return session.ToSessionDto(await dbContext.LoadJournalZoneAsync(cancellationToken));
+            return session.ToSessionDto();
         }
     }
 }

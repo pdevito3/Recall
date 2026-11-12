@@ -6,7 +6,7 @@ public sealed record SessionDto
     public string ClientSessionId { get; init; } = default!;
     public DateTimeOffset StartedAt { get; init; }
 
-    /// <summary>The date of <see cref="StartedAt"/> in the time zone of the User. It changes when the time zone changes.</summary>
+    /// <summary>The date of <see cref="StartedAt"/> in the zone that the create stored. A later change of the settings does not move it.</summary>
     public DateOnly JournalingDay { get; init; }
 
     public string RawText { get; init; } = default!;

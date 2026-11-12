@@ -3,6 +3,7 @@ namespace Recall.Server.Databases.EntityConfigurations;
 using Domain;
 using Domain.Sessions;
 using Domain.Tenants;
+using Domain.TimeZones;
 using Domain.Users;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -19,6 +20,7 @@ public sealed class SessionConfiguration : IEntityTypeConfiguration<Session>
         builder.Property(e => e.TenantId).IsRequired().HasMaxLength(EntityId.MaxLength).UseCollation(EntityId.Collation);
         builder.Property(e => e.UserId).IsRequired().HasMaxLength(EntityId.MaxLength).UseCollation(EntityId.Collation);
         builder.Property(e => e.ClientSessionId).IsRequired().HasMaxLength(Session.ClientSessionIdMaxLength);
+        builder.Property(e => e.TimeZone).IsRequired().HasMaxLength(TimeZoneId.MaxLength);
         builder.Property(e => e.Preview).IsRequired().HasMaxLength(Session.PreviewMaxLength);
         builder.Property(e => e.Synopsis).HasMaxLength(Session.SynopsisMaxLength);
         builder.Property(e => e.Activity).IsRequired().HasMaxLength(Session.MetadataValueMaxLength);

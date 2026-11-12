@@ -3,6 +3,7 @@ namespace Recall.UnitTests.Domain.Sessions;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Content;
 using Recall.Server.Domain.Sessions.Metadata;
+using Recall.Server.Domain.TimeZones;
 using Recall.Server.Exceptions;
 using Shouldly;
 
@@ -13,7 +14,7 @@ public class SessionTests
     private static readonly DateTimeOffset Noon = new(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset Now = Noon.AddDays(1);
 
-    private static Session NewSession() => Session.Create("ten_1", "usr_1", "device-1", Noon, null, Now);
+    private static Session NewSession() => Session.Create("ten_1", "usr_1", "device-1", Noon, null, TimeZoneId.Utc, Now);
 
     private static CleanupOutcome Outcome(string cleaned, string synopsis) => new(cleaned, synopsis, [], [], []);
 
@@ -73,7 +74,7 @@ public class SessionTests
     public void a_start_time_in_the_future_becomes_the_time_of_the_server()
     {
         // Act
-        var session = Session.Create("ten_1", "usr_1", "device-1", Now.AddYears(1), null, Now);
+        var session = Session.Create("ten_1", "usr_1", "device-1", Now.AddYears(1), null, TimeZoneId.Utc, Now);
 
         // Assert
         session.StartedAt.ShouldBe(Now);
@@ -84,7 +85,7 @@ public class SessionTests
     public void a_start_time_with_an_offset_is_the_same_instant()
     {
         // Act
-        var session = Session.Create("ten_1", "usr_1", "device-1", new DateTimeOffset(2026, 6, 1, 15, 0, 0, TimeSpan.FromHours(3)), null, Now);
+        var session = Session.Create("ten_1", "usr_1", "device-1", new DateTimeOffset(2026, 6, 1, 15, 0, 0, TimeSpan.FromHours(3)), null, TimeZoneId.Utc, Now);
 
         // Assert
         session.StartedAt.ShouldBe(Noon);
@@ -312,7 +313,7 @@ public class SessionTests
         var claimed = new DateTimeOffset(2026, 5, 1, 10, 0, 0, TimeSpan.FromHours(5)).AddTicks(1234567);
 
         // Act
-        var session = Session.Create("ten_1", "usr_1", "device-1", claimed, null, Noon);
+        var session = Session.Create("ten_1", "usr_1", "device-1", claimed, null, TimeZoneId.Utc, Noon);
 
         // Assert
         session.StartedAt.Offset.ShouldBe(TimeSpan.Zero);

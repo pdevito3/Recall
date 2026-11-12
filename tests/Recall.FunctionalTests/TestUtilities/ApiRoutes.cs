@@ -99,6 +99,7 @@ public static class ApiRoutes
     public static class UserSettings
     {
         public static string Root => $"{Base}/me/settings";
+        public static string DeviceTimeZone => $"{Base}/me/settings/device-time-zone";
     }
 
     public static class FileStore

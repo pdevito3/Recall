@@ -6,7 +6,6 @@ using Dtos;
 using Mappings;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using UserSettings;
 
 /// <summary>Reads the Summary of a period with no change. A period of no Summary gives <c>Missing</c>.</summary>
 public static class GetSummary
@@ -21,8 +20,7 @@ public static class GetSummary
             var key = PeriodKey.Holding(request.Period, request.Date);
             Activity.Current?.SetTag("app.summary.period", key.Period.ToString());
 
-            var zone = await dbContext.LoadJournalZoneAsync(cancellationToken);
-            var sources = await dbContext.LoadSourcesAsync(zone, key, cancellationToken);
+            var sources = await dbContext.LoadSourcesAsync(key, cancellationToken);
             var summary = await dbContext.Summaries
                 .TagWithOperationCallSite("summaries.get")
                 .AsNoTracking()

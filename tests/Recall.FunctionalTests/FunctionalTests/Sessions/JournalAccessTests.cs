@@ -87,6 +87,7 @@ public class JournalAccessTests : TestBase
         await FactoryClient.PostAsJsonAsync(ApiRoutes.Corrections.Root, new { canonicalTerm = "A term of the member" });
         await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new
         {
+            timeZoneMode = "Fixed",
             timeZone = "Europe/Tallinn",
             locationCaptureEnabled = true,
             requirePeopleProposalApproval = false,

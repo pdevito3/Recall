@@ -3,15 +3,13 @@ namespace Recall.Server.Domain.Sessions.Mappings;
 using Content;
 using Dtos;
 using Riok.Mapperly.Abstractions;
-using TimeZones;
 
 [Mapper]
 public static partial class SessionMapper
 {
-    public static SessionDto ToSessionDto(this Session session, TimeZoneId zone)
+    public static SessionDto ToSessionDto(this Session session)
         => session.ToDtoWithoutDerivedValues() with
         {
-            JournalingDay = zone.ToLocal(session.StartedAt).Date,
             Topics = TopicsOf(session.UserTopics, session.AiTopics),
             CleanupFailure = session.CleanupFailure.ToString(),
             Suggestions = SuggestionsOf(session),
@@ -56,7 +54,6 @@ public static partial class SessionMapper
     };
 
     [MapProperty(nameof(Session.MentionedPersonIds), nameof(SessionDto.PersonIds))]
-    [MapperIgnoreTarget(nameof(SessionDto.JournalingDay))]
     [MapperIgnoreTarget(nameof(SessionDto.Topics))]
     [MapperIgnoreTarget(nameof(SessionDto.CleanupFailure))]
     [MapperIgnoreTarget(nameof(SessionDto.Suggestions))]
@@ -66,6 +63,7 @@ public static partial class SessionMapper
     [MapperIgnoreSource(nameof(Session.TopicSuggestions))]
     [MapperIgnoreSource(nameof(Session.MoodSuggestions))]
     [MapperIgnoreSource(nameof(Session.PeopleProposals))]
+    [MapperIgnoreSource(nameof(Session.TimeZone))]
     [MapperIgnoreSource(nameof(Session.TenantId))]
     [MapperIgnoreSource(nameof(Session.UserId))]
     [MapperIgnoreSource(nameof(Session.Preview))]

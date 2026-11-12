@@ -120,18 +120,20 @@ public class SessionApiTests : TestBase
 
     [Test]
     [Property("Rule", "SES-26")]
-    public async Task a_settings_change_with_only_the_zone_and_the_version_gives_400()
+    public async Task a_settings_change_with_only_the_zone_and_the_version_or_with_no_mode_gives_400()
     {
         // Arrange
         var (_, member) = await JournalScenario.AddPeopleAsync();
         FactoryClient.SignInAsAppUser(member.Identifier);
 
         // Act
-        var partial = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = "UTC", version = 0 });
-        var noZone = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { locationCaptureEnabled = false, requirePeopleProposalApproval = true, version = 0 });
+        var partial = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZoneMode = "Fixed", timeZone = "UTC", version = 0 });
+        var noMode = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = "UTC", locationCaptureEnabled = false, requirePeopleProposalApproval = true, version = 0 });
+        var noZone = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZoneMode = "FollowDevice", locationCaptureEnabled = false, requirePeopleProposalApproval = true, version = 0 });
 
         // Assert
         partial.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        noMode.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         noZone.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
@@ -566,25 +568,26 @@ public class SessionApiTests : TestBase
     }
 
     [Test]
-    [Property("Rule", "SES-26")]
+    [Property("Rule", "SES-46")]
     [Arguments(null)]
     [Arguments("")]
     [Arguments("   ")]
-    public async Task a_settings_change_with_no_zone_stores_none_and_replies_with_a_null_zone(string? zone)
+    public async Task a_change_to_follow_the_device_with_no_zone_keeps_the_zone_until_a_device_reports_one(string? zone)
     {
         // Arrange
         var (_, member) = await JournalScenario.AddPeopleAsync();
         FactoryClient.SignInAsAppUser(member.Identifier);
-        var withZone = new { timeZone = "Europe/Riga", locationCaptureEnabled = false, requirePeopleProposalApproval = false, version = 0 };
+        var withZone = new { timeZoneMode = "Fixed", timeZone = "Europe/Riga", locationCaptureEnabled = false, requirePeopleProposalApproval = false, version = 0 };
         (await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, withZone)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // Act
-        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = zone, locationCaptureEnabled = false, requirePeopleProposalApproval = false, version = 1 });
+        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZoneMode = "FollowDevice", timeZone = zone, locationCaptureEnabled = false, requirePeopleProposalApproval = false, version = 1 });
         var stored = await FactoryClient.GetFromJsonAsync<UserSettingDto>(ApiRoutes.UserSettings.Root);
 
         // Assert
-        (await change.Content.ReadFromJsonAsync<UserSettingDto>())!.TimeZone.ShouldBeNull();
-        stored!.TimeZone.ShouldBeNull();
+        var reply = (await change.Content.ReadFromJsonAsync<UserSettingDto>())!;
+        (reply.TimeZoneMode, reply.TimeZone).ShouldBe(("FollowDevice", "Europe/Riga"));
+        (stored!.TimeZoneMode, stored.TimeZone).ShouldBe(("FollowDevice", "Europe/Riga"));
     }
 
     [Test]
@@ -633,7 +636,7 @@ public class SessionApiTests : TestBase
         // Arrange
         var (_, member) = await JournalScenario.AddPeopleAsync();
         FactoryClient.SignInAsAppUser(member.Identifier);
-        var change = new { timeZone = "Pacific/Chatham", locationCaptureEnabled = false, requirePeopleProposalApproval = false, version = 0 };
+        var change = new { timeZoneMode = "Fixed", timeZone = "Pacific/Chatham", locationCaptureEnabled = false, requirePeopleProposalApproval = false, version = 0 };
 
         // Act
         (await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, change)).StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -900,6 +903,7 @@ public class SessionApiTests : TestBase
         var off = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.Root, location);
         var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new
         {
+            timeZoneMode = "FollowDevice",
             timeZone = (string?)null,
             locationCaptureEnabled = true,
             requirePeopleProposalApproval = true,
@@ -918,7 +922,7 @@ public class SessionApiTests : TestBase
 
     [Test]
     [Property("Rule", "SES-3")]
-    public async Task a_change_of_the_time_zone_moves_a_session_to_its_new_day()
+    public async Task a_change_of_the_time_zone_keeps_the_day_of_each_session_and_gives_its_day_to_new_ones()
     {
         // Arrange
         var (_, member) = await JournalScenario.AddPeopleAsync();
@@ -928,17 +932,20 @@ public class SessionApiTests : TestBase
         // Act
         var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new
         {
+            timeZoneMode = "Fixed",
             timeZone = "America/Chicago",
             locationCaptureEnabled = false,
             requirePeopleProposalApproval = true,
             version = 0,
         });
         var read = await FactoryClient.GetFromJsonAsync<SessionDto>(ApiRoutes.Sessions.GetRecord(session.Id));
+        var next = await FactoryClient.AddSessionAsync(new DateTimeOffset(2026, 6, 2, 2, 0, 0, TimeSpan.Zero));
 
         // Assert
         session.JournalingDay.ShouldBe(new DateOnly(2026, 6, 2));
         (await change.Content.ReadFromJsonAsync<UserSettingDto>())!.TimeZone.ShouldBe("America/Chicago");
-        read!.JournalingDay.ShouldBe(new DateOnly(2026, 6, 1));
+        read!.JournalingDay.ShouldBe(new DateOnly(2026, 6, 2));
+        next.JournalingDay.ShouldBe(new DateOnly(2026, 6, 1));
     }
 
     [Test]

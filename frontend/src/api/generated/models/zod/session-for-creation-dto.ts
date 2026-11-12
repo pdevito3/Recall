@@ -8,6 +8,7 @@ import * as z from 'zod'
 export const sessionForCreationDtoSchema = z.object({
   clientSessionId: z.string().max(100).describe('The ID that the device made for this Session. A second create with this ID returns the same Session.'),
   startedAt: z.iso.datetime().describe('A time in the future becomes the time of the server.'),
+  timeZone: z.string().max(100).nullish().describe('The IANA zone that the device used for the day when the person started the Session: the zone that the person picked, or the\nzone of the device. Null, or a zone that this host does not know, gives the zone of the settings.'),
   latitude: z.number().nullish().describe('The server does not store a location when capture is off in the settings of the User.'),
   longitude: z.number().nullish(),
 })

@@ -10,7 +10,6 @@ using People.Mappings;
 using Sessions;
 using Sessions.Dtos;
 using Sessions.Mappings;
-using UserSettings;
 using UserSettings.Mappings;
 
 public static class GetSyncChangePage
@@ -39,14 +38,13 @@ public static class GetSyncChangePage
 
             var last = page[^1].Sequence;
             var live = page.Where(c => !c.IsTombstone).Select(c => c.EntityType).ToHashSet();
-            var zone = await dbContext.LoadJournalZoneAsync(cancellationToken);
             return new SyncChangePageDto
             {
                 Cursor = SyncCursor.Of(last),
                 HasMore = hasMore,
                 Sessions = live.Contains(SyncEntityType.Session)
                     ? (await RowsAsync(dbContext.Sessions, SyncEntityType.Session, "sync.sessions", after, last, cancellationToken))
-                        .Select(s => s.ToSessionDto(zone)).ToList()
+                        .Select(s => s.ToSessionDto()).ToList()
                     : [],
                 People = live.Contains(SyncEntityType.Person)
                     ? (await RowsAsync(dbContext.People, SyncEntityType.Person, "sync.people", after, last, cancellationToken))

@@ -1,4 +1,5 @@
 import type { RecordingForCreationDtoFormatEnumKey } from '@/api/generated/models/types/recording-for-creation-dto'
+import type { SessionForCreationDto } from '@/api/generated/models/types/session-for-creation-dto'
 import { openChannel } from '@/lib/browser-channel'
 
 /** Why the last upload step of a capture did not work. The audio stays in this browser in each case. */
@@ -19,6 +20,7 @@ export interface StoredCapture {
   /** The new entry of this recording. It changes only when the Server says that the person deleted the entry before its first slice. */
   clientSessionId: string
   startedAt: string
+  timeZone?: SessionForCreationDto['timeZone']
   format: RecordingForCreationDtoFormatEnumKey
   storedSlices: number
   storedBytes: number

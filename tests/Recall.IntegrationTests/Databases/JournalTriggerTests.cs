@@ -11,6 +11,7 @@ using Recall.Server.Domain.Summaries;
 using Recall.Server.Domain.Sessions.Dtos;
 using Recall.Server.Domain.Sync;
 using Recall.Server.Domain.Tenants.Features;
+using Recall.Server.Domain.TimeZones;
 using Recall.Server.Domain.Users.Features;
 using Recall.SharedTestHelpers.EntityGraphs;
 using Shouldly;
@@ -136,7 +137,7 @@ public class JournalTriggerTests : TestBase
             .BuildAsync();
         scope.SetUserWithDefaults(identifier: admin.Identifier);
         var now = DateTimeOffset.UtcNow;
-        await scope.InsertAsync(Session.Create(tenant.Id, admin.Id, Guid.NewGuid().ToString(), now, null, now));
+        await scope.InsertAsync(Session.Create(tenant.Id, admin.Id, Guid.NewGuid().ToString(), now, null, TimeZoneId.Utc, now));
 
         // Act
         await scope.SendAsync(new DeleteTenant.Command(tenant.Id));

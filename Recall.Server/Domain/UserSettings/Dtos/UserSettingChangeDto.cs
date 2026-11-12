@@ -5,7 +5,15 @@ using TimeZones;
 
 public sealed record UserSettingChangeDto
 {
-    /// <summary>The IANA time zone that gives the Journaling day. Null means UTC. The stored zone is always allowed, also when this host does not know it.</summary>
+    /// <summary>FollowDevice to take the zone from the device, or Fixed to keep the zone in <c>timeZone</c>.</summary>
+    [RequiredField]
+    [EnumNames<TimeZoneMode>]
+    public string TimeZoneMode { get; init; } = default!;
+
+    /// <summary>
+    /// For Fixed, the IANA time zone that the person picked. For FollowDevice, the zone of this device now, or null to keep the zone
+    /// that holds. The stored zone is always allowed, also when this host does not know it.
+    /// </summary>
     [SchemaMaxLength(typeof(TimeZoneId), nameof(TimeZoneId.MaxLength))]
     public string? TimeZone { get; init; }
     public required bool LocationCaptureEnabled { get; init; }

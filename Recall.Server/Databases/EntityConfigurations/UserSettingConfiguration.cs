@@ -16,7 +16,9 @@ public sealed class UserSettingConfiguration : IEntityTypeConfiguration<UserSett
         builder.Property(e => e.Id).HasMaxLength(EntityId.MaxLength).UseCollation(EntityId.Collation);
         builder.Property(e => e.TenantId).IsRequired().HasMaxLength(EntityId.MaxLength).UseCollation(EntityId.Collation);
         builder.Property(e => e.UserId).IsRequired().HasMaxLength(EntityId.MaxLength).UseCollation(EntityId.Collation);
-        builder.Property(e => e.TimeZone).HasMaxLength(TimeZoneId.MaxLength);
+        builder.Ignore(e => e.TimeZone);
+        builder.Property<TimeZoneMode>("TimeZoneMode").HasConversion<string>().HasMaxLength(30);
+        builder.Property<string?>("TimeZoneValue").HasColumnName("time_zone").HasMaxLength(TimeZoneId.MaxLength);
 
         builder.HasOne<Tenant>().WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.ClientNoAction);
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.ClientNoAction);

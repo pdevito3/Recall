@@ -27,14 +27,14 @@ public class PeopleProposalTests
     public void a_person_whom_cleaned_tags_is_not_offered_again()
     {
         // Arrange
-        var session = Session.Create("ten_1", "usr_1", "device-1", Noon, null, Noon);
+        var session = Session.Create("ten_1", "usr_1", "device-1", Noon, null, TimeZoneId.Utc, Noon);
         session.SaveRaw(DraftSave.Of("raw words", 0, Noon));
         session.BeginCleanup();
         var proposals = new[] { new PersonProposal("Sam", "per_sam"), new PersonProposal("Kim", "per_kim"), new PersonProposal("Lee", null) };
         session.CompleteCleanup(new CleanupOutcome(Tagged("per_sam", "Sam"), "A recap", [], [], proposals), session.Raw.DraftRevision, Noon);
 
         // Act
-        var dto = session.ToSessionDto(TimeZoneId.Of("UTC"));
+        var dto = session.ToSessionDto();
 
         // Assert
         dto.PeopleProposals.Select(proposal => proposal.Label).ShouldBe(["Kim", "Lee"]);

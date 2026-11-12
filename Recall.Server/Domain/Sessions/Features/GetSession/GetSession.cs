@@ -6,7 +6,6 @@ using Dtos;
 using Mappings;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using UserSettings;
 
 public static class GetSession
 {
@@ -22,7 +21,7 @@ public static class GetSession
                 .TagWithOperationCallSite("sessions.get")
                 .AsNoTracking()
                 .GetById(request.Id, cancellationToken);
-            return session.ToSessionDto(await dbContext.LoadJournalZoneAsync(cancellationToken));
+            return session.ToSessionDto();
         }
     }
 }

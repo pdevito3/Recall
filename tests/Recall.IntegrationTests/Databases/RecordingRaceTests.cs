@@ -11,6 +11,7 @@ using Recall.Server.Domain.Recordings.Dtos;
 using Recall.Server.Domain.Recordings.Features;
 using Recall.Server.Domain.Recordings.Jobs;
 using Recall.Server.Domain.Sessions;
+using Recall.Server.Domain.TimeZones;
 using Recall.Server.Exceptions;
 using Recall.Server.Resources.Storage;
 using Recall.SharedTestHelpers.EntityGraphs;
@@ -32,7 +33,7 @@ public class RecordingRaceTests : TestBase
         underTest.SetUserWithDefaults(identifier: owner.Identifier);
         rival.SetUserWithDefaults(identifier: owner.Identifier);
 
-        var session = Session.Create(tenant.Id, owner.Id, $"race-{Guid.NewGuid():N}", DateTimeOffset.UnixEpoch, null, DateTimeOffset.UnixEpoch);
+        var session = Session.Create(tenant.Id, owner.Id, $"race-{Guid.NewGuid():N}", DateTimeOffset.UnixEpoch, null, TimeZoneId.Utc, DateTimeOffset.UnixEpoch);
         var recording = Recording.Create(tenant.Id, owner.Id, session.Id, $"race-{Guid.NewGuid():N}", RecordingFormat.Webm);
         await new TestingServiceScope().InsertAsync(session);
         await new TestingServiceScope().InsertAsync(recording);

@@ -13,6 +13,7 @@ using Recall.Server.Domain.People;
 using Recall.Server.Domain.Recordings;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Summaries;
+using Recall.Server.Domain.TimeZones;
 using Recall.Server.Domain.Users;
 using Recall.Server.Resources.Storage;
 using Recall.Server.Resources.Entrypoints;
@@ -80,6 +81,7 @@ public class EndpointAccessSweepTests : TestBase
         ["DeleteCorrection"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetUserSetting"] = new(JournalOfEachMember, OwnerOnly: true),
         ["ChangeUserSetting"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["ReportDeviceTimeZone"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetFileStoreStatus"] = new("Each member can lose a recording to this fault, and the reply is one flag with no tenant data."),
         ["AddRecording"] = new(JournalOfEachMember, OwnerOnly: true),
         ["StoreRecordingSlice"] = new(JournalOfEachMember, OwnerOnly: true),
@@ -355,7 +357,7 @@ public class EndpointAccessSweepTests : TestBase
         await InsertAsync(tenant);
         await InsertAsync(users);
         await InsertAsync(agent);
-        var session = Session.Create(tenant.Id, admin.Id, $"sweep-{Guid.NewGuid():N}", DateTimeOffset.UnixEpoch, null, DateTimeOffset.UtcNow);
+        var session = Session.Create(tenant.Id, admin.Id, $"sweep-{Guid.NewGuid():N}", DateTimeOffset.UnixEpoch, null, TimeZoneId.Utc, DateTimeOffset.UtcNow);
         session.SaveRaw(DraftSave.Of("sweep words", 0, DateTimeOffset.UnixEpoch));
         session.SaveCleaned(DraftSave.Of("sweep words", 0, DateTimeOffset.UnixEpoch));
         var person = Person.Create(tenant.Id, admin.Id, "Sweep person");

@@ -1,3 +1,5 @@
+import type { SessionForCreationDto } from '@/api/generated/models/types/session-for-creation-dto'
+
 import type { Stamped } from './save-queue'
 import { keysUnder, removeKey, writeKeyOfThisTab, type KeyOfATab } from './tab-keys'
 
@@ -6,6 +8,7 @@ export interface OutboxEntry {
   channel: 'raw' | 'cleaned'
   clientSessionId: string
   startedAt: string
+  timeZone?: SessionForCreationDto['timeZone']
   sessionId: string | null
   baseRevision: number
   /**
@@ -52,6 +55,7 @@ function parseEntry(stored: string | null): OutboxEntry | null {
       && (entry.channel === 'raw' || entry.channel === 'cleaned')
       && typeof entry.clientSessionId === 'string'
       && typeof entry.startedAt === 'string'
+      && (entry.timeZone == null || typeof entry.timeZone === 'string')
       && (entry.sessionId === null || typeof entry.sessionId === 'string')
       && typeof entry.baseRevision === 'number'
       && (entry.baseText == null || typeof entry.baseText === 'string')

@@ -27,3 +27,14 @@ test('rows of one day form one group, in the order of the list', () => {
     ['2026-11-05', ['c']],
   ])
 })
+
+test('a Session that keeps the day of an earlier zone joins its day, and the days stay newest first', () => {
+  const row = (id: string, journalingDay: string) => ({ id, journalingDay }) as SessionSummaryDto
+
+  const groups = groupByDay([row('in-los-angeles', '2026-11-10'), row('in-tokyo', '2026-11-11'), row('older', '2026-11-10')])
+
+  expect(groups.map((group) => [group.day, group.rows.map((r) => r.id)])).toEqual([
+    ['2026-11-11', ['in-tokyo']],
+    ['2026-11-10', ['in-los-angeles', 'older']],
+  ])
+})

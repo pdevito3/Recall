@@ -137,7 +137,7 @@ public sealed class SummaryJobs(IServiceScopeFactory scopeFactory, IModelProvide
         var keys = stored.Select(s => new PeriodKey(s.Period, s.StartDate)).Append(yesterday).ToList();
         var first = keys.Min(k => k.Start);
         var end = keys.Max(k => k.End);
-        var sources = await dbContext.LoadSourcesAsync(zone, first, end, cancellationToken);
+        var sources = await dbContext.LoadSourcesAsync(first, end, cancellationToken);
 
         var targets = stored
             .Where(s => s.RunState == SummaryRunState.Failed
@@ -161,8 +161,7 @@ public sealed class SummaryJobs(IServiceScopeFactory scopeFactory, IModelProvide
     {
         await using var scope = scopeFactory.CreateJournalScope(owner);
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var zone = await dbContext.LoadJournalZoneAsync(cancellationToken);
-        var sources = await dbContext.LoadSourcesAsync(zone, first, end, cancellationToken);
+        var sources = await dbContext.LoadSourcesAsync(first, end, cancellationToken);
 
         var provider = await dbContext.ModelProviders.AsNoTracking()
             .TagWithOperationCallSite("summaries.job.provider")

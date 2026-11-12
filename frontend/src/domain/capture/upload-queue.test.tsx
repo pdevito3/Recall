@@ -54,6 +54,7 @@ async function aStoredCapture(changes: Partial<StoredCapture> = {}, slices: stri
     owner,
     clientSessionId: newUuid(),
     startedAt: '2026-11-10T08:00:00.000Z',
+    timeZone: 'Asia/Tokyo',
     format: 'Webm',
     storedSlices: 0,
     storedBytes: 0,
@@ -99,7 +100,7 @@ test('the queue makes the entry and the recording, sends each slice in order, an
     'PUT /api/v1/recordings/rec_1/slices/1',
     'POST /api/v1/recordings/rec_1/finish',
   ])
-  expect(sent[0].body).toEqual({ clientSessionId: capture.clientSessionId, startedAt: capture.startedAt })
+  expect(sent[0].body).toEqual({ clientSessionId: capture.clientSessionId, startedAt: capture.startedAt, timeZone: 'Asia/Tokyo' })
   expect(sent[1].body).toEqual({ clientRecordingId: capture.clientRecordingId, format: 'Webm' })
   expect(sent[4].body).toEqual({ sliceCount: 2, byteLength: 7 })
   expect(await readSlice(capture.clientRecordingId, 0)).toBeNull()

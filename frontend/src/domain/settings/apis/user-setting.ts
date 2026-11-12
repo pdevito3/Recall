@@ -1,6 +1,7 @@
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 
-import type { UserSettingDto } from '@/api/generated/models/types/user-setting-dto'
+import { userSettingDtoTimeZoneModeEnum, type UserSettingDto } from '@/api/generated/models/types/user-setting-dto'
+import type { SessionForCreationDto } from '@/api/generated/models/types/session-for-creation-dto'
 import { changeUserSetting } from '@/api/generated/user-settings/clients/change-user-setting'
 import { getUserSetting } from '@/api/generated/user-settings/clients/get-user-setting'
 import { refreshTimelineHead } from '@/domain/sessions/apis/timeline-cache'
@@ -9,7 +10,7 @@ import { RowSaver, type RowSaverState } from '@/domain/sessions/autosave/row-sav
 import { keysUnder, removeKey, takeKeysOfTabsThatLeft, writeKeyOfThisTab, type KeyOfATab } from '@/domain/sessions/autosave/tab-keys'
 import { pageUserOf } from '@/lib/page-user'
 import { retryUnlessRefused } from '@/lib/problem-details'
-import { parseTimeZone, type TimeZone } from '@/lib/zoned-time'
+import { browserTimeZone, parseTimeZone, type TimeZone } from '@/lib/zoned-time'
 
 import { SettingKeys } from './setting.keys'
 
@@ -26,7 +27,11 @@ export function useUserSetting() {
   return useQuery(userSettingOptions)
 }
 
+export const followsTheDevice = (setting: Pick<UserSettingDto, 'timeZoneMode'>) => setting.timeZoneMode === userSettingDtoTimeZoneModeEnum.FollowDevice
+
+/** The zone of the day on this device: the zone of this browser while the setting follows the device, or the zone that the person picked. */
 export function journalZoneOf(setting: UserSettingDto | undefined): TimeZone {
+  if (setting && followsTheDevice(setting)) return browserTimeZone()
   try {
     return parseTimeZone(setting?.timeZone ?? 'UTC')
   } catch {
@@ -38,7 +43,12 @@ export function useJournalZone(): TimeZone {
   return journalZoneOf(useUserSetting().data)
 }
 
-export type SettingChange = Pick<UserSettingDto, 'timeZone' | 'locationCaptureEnabled' | 'requirePeopleProposalApproval'>
+export function captureZoneOf(queryClient: QueryClient): SessionForCreationDto['timeZone'] {
+  const setting = queryClient.getQueryData<UserSettingDto>(SettingKeys.mine())
+  return setting && journalZoneOf(setting)
+}
+
+export type SettingChange = Pick<UserSettingDto, 'timeZoneMode' | 'timeZone' | 'locationCaptureEnabled' | 'requirePeopleProposalApproval'>
 
 let saver: RowSaver<SettingChange, UserSettingDto> | undefined
 
@@ -46,7 +56,8 @@ let ownKey: string | null = null
 
 const prefixOf = (owner: string) => `recall.unsent-setting.${encodeURIComponent(owner).replaceAll('.', '%2E')}.`
 
-const settingFieldsOf = ({ timeZone, locationCaptureEnabled, requirePeopleProposalApproval }: SettingChange): SettingChange => ({
+const settingFieldsOf = ({ timeZoneMode, timeZone, locationCaptureEnabled, requirePeopleProposalApproval }: SettingChange): SettingChange => ({
+  timeZoneMode,
   timeZone,
   locationCaptureEnabled,
   requirePeopleProposalApproval,
@@ -116,9 +127,8 @@ export function settingSaver(queryClient: QueryClient) {
     rules: {
       asksFirst: (field, value) => field === 'locationCaptureEnabled' && value === true,
       neverAsks: (field, value) => field === 'locationCaptureEnabled' && value === false,
+      sameChoice: (field, before, fresh) => field === 'timeZone' && followsTheDevice(before) && followsTheDevice(fresh),
       onlyFromALiveClick: (field, value) => field === 'locationCaptureEnabled' && value === true,
-      // The first save of a zone comes from the browser. A zone on the row is a choice of the person.
-      yieldsToTheRow: (field, before) => field === 'timeZone' && !before,
     },
     onAppliedWithNoAsk: () => Notification.info('Your location is no longer saved with new entries. Your settings changed elsewhere first, and this change still applied.'),
     onStateChange: (state) => {

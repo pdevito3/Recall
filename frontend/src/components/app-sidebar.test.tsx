@@ -13,6 +13,7 @@ import type { Answer } from '@/test/answer'
 import { signedInMember } from '@/test/session'
 
 const setting: UserSettingDto = {
+  timeZoneMode: 'Fixed',
   timeZone: 'Europe/Lisbon',
   timeZoneIsKnown: true,
   locationCaptureEnabled: false,

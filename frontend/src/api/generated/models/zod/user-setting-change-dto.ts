@@ -6,7 +6,8 @@
 import * as z from 'zod'
 
 export const userSettingChangeDtoSchema = z.object({
-  timeZone: z.string().max(100).nullish().describe('The IANA time zone that gives the Journaling day. Null means UTC. The stored zone is always allowed, also when this host does not know it.'),
+  timeZoneMode: z.enum(['FollowDevice', 'Fixed']).describe('FollowDevice to take the zone from the device, or Fixed to keep the zone in `timeZone`.'),
+  timeZone: z.string().max(100).nullish().describe('For Fixed, the IANA time zone that the person picked. For FollowDevice, the zone of this device now, or null to keep the zone\nthat holds. The stored zone is always allowed, also when this host does not know it.'),
   locationCaptureEnabled: z.boolean(),
   requirePeopleProposalApproval: z.boolean(),
   version: z.int().min(0).max(4294967295).describe('The `version` of the settings that the client read. A save from another version gets 409, unless the row already holds these values.'),

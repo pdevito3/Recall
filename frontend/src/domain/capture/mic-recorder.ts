@@ -1,7 +1,7 @@
 import type { RecordingForCreationDtoFormatEnumKey } from '@/api/generated/models/types/recording-for-creation-dto'
 import { newUuid } from '@/lib/new-uuid'
 
-import { addCapture, endCapture, storeSlice } from './audio-store'
+import { addCapture, endCapture, storeSlice, type StoredCapture } from './audio-store'
 import type { MicFailure } from './capture-view'
 
 /** The recorder hands over a slice each second, and each slice is stored before the next. */
@@ -104,7 +104,7 @@ function levelMeterOf(stream: MediaStream) {
  * written before the next one, so the store never holds a gap, and a failed write stops the recording with the slices
  * that are safe.
  */
-export async function startRecording(owner: string, onSliceFailed: (error: unknown) => void): Promise<ActiveRecording> {
+export async function startRecording(owner: string, timeZone: StoredCapture['timeZone'], onSliceFailed: (error: unknown) => void): Promise<ActiveRecording> {
   const chosen = recordingFormat()
   if (!chosen) throw new MicStartError('unsupported')
 
@@ -124,6 +124,7 @@ export async function startRecording(owner: string, onSliceFailed: (error: unkno
     owner,
     clientSessionId: newUuid(),
     startedAt: new Date(startedAt).toISOString(),
+    timeZone,
     format: chosen.format,
     storedSlices: 0,
     storedBytes: 0,

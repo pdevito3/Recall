@@ -23,6 +23,11 @@ export function journalPage(page: Page) {
       await expect(at.composer).toBeVisible({ timeout: firstPaintMs })
     },
 
+    async openUntilQuiet() {
+      await page.goto('/', { waitUntil: 'networkidle' })
+      await expect(at.composer).toBeVisible({ timeout: firstPaintMs })
+    },
+
     async write(words: string) {
       const saved = aDraftSaveAnswered()
       await at.composer.click()
@@ -344,6 +349,11 @@ export function unsentWords(page: Page) {
 
     stored: (key: string) => page.evaluate((k) => localStorage.getItem(k), key),
     keys: () => page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('recall.unsent.'))),
+    async waitForTheCreateToWriteItsKey(sessionId: string) {
+      const sessionIdsInTheKeys = () =>
+        page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('recall.unsent.')).map((key) => (JSON.parse(localStorage.getItem(key)!) as { sessionId: string | null }).sessionId))
+      await expect.poll(sessionIdsInTheKeys).toEqual([sessionId])
+    },
     /** The words of each key. A tab that takes the words of a key writes them to a key of its own. */
     wordsInTheKeys: () =>
       page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('recall.unsent.')).map((key) => (JSON.parse(localStorage.getItem(key)!) as { change: { value: string } | null }).change?.value ?? null)),

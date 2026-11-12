@@ -213,7 +213,7 @@ public class CleanupResultRoutesTests : TestBase
     {
         // Arrange
         await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
-        var settings = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { locationCaptureEnabled = false, requirePeopleProposalApproval = false, version = 0 });
+        var settings = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZoneMode = "FollowDevice", locationCaptureEnabled = false, requirePeopleProposalApproval = false, version = 0 });
         settings.EnsureSuccessStatusCode();
         var words = string.Concat(Enumerable.Repeat("Quinn. ", Session.DraftMaxLength / 100));
 
@@ -315,7 +315,7 @@ public class CleanupResultRoutesTests : TestBase
     {
         // Arrange
         await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
-        var settings = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new UserSettingChangeDto { TimeZone = "Europe/Tallinn", LocationCaptureEnabled = false, RequirePeopleProposalApproval = false, Version = 0 });
+        var settings = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new UserSettingChangeDto { TimeZoneMode = "Fixed", TimeZone = "Europe/Tallinn", LocationCaptureEnabled = false, RequirePeopleProposalApproval = false, Version = 0 });
         settings.StatusCode.ShouldBe(HttpStatusCode.OK, await settings.Content.ReadAsStringAsync());
 
         // Act
@@ -517,7 +517,7 @@ public class CleanupResultRoutesTests : TestBase
     {
         // Arrange
         await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
-        var settings = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new UserSettingChangeDto { TimeZone = "Europe/Tallinn", LocationCaptureEnabled = false, RequirePeopleProposalApproval = false, Version = 0 });
+        var settings = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new UserSettingChangeDto { TimeZoneMode = "Fixed", TimeZone = "Europe/Tallinn", LocationCaptureEnabled = false, RequirePeopleProposalApproval = false, Version = 0 });
         settings.StatusCode.ShouldBe(HttpStatusCode.OK, await settings.Content.ReadAsStringAsync());
         var session = await scenario.SessionWithWordsAsync("raw words");
 
@@ -536,7 +536,7 @@ public class CleanupResultRoutesTests : TestBase
     {
         // Arrange
         await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
-        var settings = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new UserSettingChangeDto { TimeZone = "Europe/Tallinn", LocationCaptureEnabled = false, RequirePeopleProposalApproval = false, Version = 0 });
+        var settings = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new UserSettingChangeDto { TimeZoneMode = "Fixed", TimeZone = "Europe/Tallinn", LocationCaptureEnabled = false, RequirePeopleProposalApproval = false, Version = 0 });
         settings.StatusCode.ShouldBe(HttpStatusCode.OK, await settings.Content.ReadAsStringAsync());
         var session = await scenario.SessionWithWordsAsync("raw words");
         var stored = await PostAsync(ApiRoutes.Sessions.CleanupResult(session.Id), new { cleanedMarkdown = "I met **Sam** Lee and Ann", peopleProposal = SamLeeAndAnn, baseRawRevision = 1, baseCleanedRevision = 0 });
@@ -558,7 +558,7 @@ public class CleanupResultRoutesTests : TestBase
     {
         // Arrange
         await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
-        var settings = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new UserSettingChangeDto { TimeZone = "Europe/Tallinn", LocationCaptureEnabled = false, RequirePeopleProposalApproval = false, Version = 0 });
+        var settings = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new UserSettingChangeDto { TimeZoneMode = "Fixed", TimeZone = "Europe/Tallinn", LocationCaptureEnabled = false, RequirePeopleProposalApproval = false, Version = 0 });
         settings.StatusCode.ShouldBe(HttpStatusCode.OK, await settings.Content.ReadAsStringAsync());
         var session = await scenario.SessionWithWordsAsync("raw words");
 

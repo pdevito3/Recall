@@ -1,6 +1,7 @@
 namespace Recall.UnitTests.Domain.Sessions;
 
 using Recall.Server.Domain.Sessions;
+using Recall.Server.Domain.TimeZones;
 using Recall.Server.Exceptions;
 using Shouldly;
 
@@ -13,7 +14,7 @@ public class SessionCleanupBaseTests
 
     private static Session CleanSession()
     {
-        var session = Session.Create("ten_1", "usr_1", "device-1", Noon, null, Noon);
+        var session = Session.Create("ten_1", "usr_1", "device-1", Noon, null, TimeZoneId.Utc, Noon);
         session.SaveRaw(DraftSave.Of("raw words", 0, Noon));
         session.BeginCleanup();
         session.CompleteCleanup(Outcome("first clean words"), session.Raw.DraftRevision, Noon);

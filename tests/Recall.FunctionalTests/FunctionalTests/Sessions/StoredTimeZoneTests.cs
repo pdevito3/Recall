@@ -19,14 +19,14 @@ public class StoredTimeZoneTests : TestBase
     {
         var (_, member) = await JournalScenario.AddPeopleAsync();
         FactoryClient.SignInAsAppUser(member.Identifier);
-        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = "UTC", locationCaptureEnabled = false, requirePeopleProposalApproval = true, version = 0 });
+        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZoneMode = "Fixed", timeZone = "UTC", locationCaptureEnabled = false, requirePeopleProposalApproval = true, version = 0 });
         change.StatusCode.ShouldBe(HttpStatusCode.OK);
         await JournalScenario.ExecuteOutOfBandAsync("UPDATE user_settings SET time_zone = @zone WHERE user_id = @id", ("@zone", zone), ("@id", member.Id));
         return member.Id;
     }
 
     [Test]
-    [Property("Rule", "SES-3")]
+    [Property("Rule", "SES-46")]
     [Arguments(NotOnThisHost)]
     [Arguments("america/chicago")]
     [Arguments(" ")]
@@ -57,7 +57,7 @@ public class StoredTimeZoneTests : TestBase
     }
 
     [Test]
-    [Property("Rule", "SES-3")]
+    [Property("Rule", "SES-46")]
     public async Task a_reader_logs_one_warning_with_no_zone_in_it()
     {
         // Arrange
@@ -76,7 +76,7 @@ public class StoredTimeZoneTests : TestBase
     }
 
     [Test]
-    [Property("Rule", "SES-3")]
+    [Property("Rule", "SES-46")]
     public async Task the_settings_show_the_stored_zone_and_that_the_server_does_not_know_it()
     {
         // Arrange
@@ -95,16 +95,16 @@ public class StoredTimeZoneTests : TestBase
     }
 
     [Test]
-    [Property("Rule", "SES-3")]
+    [Property("Rule", "SES-46")]
     public async Task a_person_corrects_the_zone_and_can_change_other_settings_before_that()
     {
         // Arrange
         await SignInWithStoredZoneAsync();
 
         // Act
-        var echo = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = NotOnThisHost, locationCaptureEnabled = true, requirePeopleProposalApproval = true, version = 1 });
-        var otherUnknown = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = "Mars/Elsewhere", locationCaptureEnabled = true, requirePeopleProposalApproval = true, version = 2 });
-        var corrected = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = "America/Chicago", locationCaptureEnabled = true, requirePeopleProposalApproval = true, version = 2 });
+        var echo = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZoneMode = "Fixed", timeZone = NotOnThisHost, locationCaptureEnabled = true, requirePeopleProposalApproval = true, version = 1 });
+        var otherUnknown = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZoneMode = "Fixed", timeZone = "Mars/Elsewhere", locationCaptureEnabled = true, requirePeopleProposalApproval = true, version = 2 });
+        var corrected = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZoneMode = "Fixed", timeZone = "America/Chicago", locationCaptureEnabled = true, requirePeopleProposalApproval = true, version = 2 });
 
         // Assert
         echo.StatusCode.ShouldBe(HttpStatusCode.OK);

@@ -4,6 +4,7 @@ using System.Text;
 using Content;
 using Exceptions;
 using Metadata;
+using TimeZones;
 
 public class Session : BaseEntity, ITenantable, IJournalOwned
 {
@@ -34,6 +35,9 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
     [NotSensitive] public string ClientSessionId { get; private set; } = default!;
 
     [Sensitive] public DateTimeOffset StartedAt { get; private set; }
+
+    /// <summary>The IANA zone of the Journaling day. A create sets it, and a later change of the settings does not move the day (SES-3).</summary>
+    [Sensitive] public string TimeZone { get; private set; } = default!;
 
     [Sensitive] public DraftSlot Raw { get; private set; } = DraftSlot.Empty;
 
@@ -82,6 +86,11 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
 
     [Sensitive] public double? Longitude { get; private set; }
 
+    public DateOnly JournalingDay => JournalingDayOf(StartedAt, TimeZone);
+
+    /// <summary>The day of the start in the zone of the Session. A zone that this host does not know gives the UTC day.</summary>
+    public static DateOnly JournalingDayOf(DateTimeOffset startedAt, string timeZone) => TimeZoneId.OrUtc(timeZone).ToLocal(startedAt).Date;
+
     public CleanupStatus CleanupStatus => CleanupStatusOf(CleanupRun, Raw.DraftRevision, LastCleanupRawRevision);
 
     public static CleanupStatus CleanupStatusOf(CleanupRunState run, int rawDraftRevision, int? lastCleanupRawRevision)
@@ -101,7 +110,8 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
     }
 
     public static Session Create(
-        string tenantId, string userId, string clientSessionId, DateTimeOffset claimedStartedAt, CapturedLocation? location, DateTimeOffset now)
+        string tenantId, string userId, string clientSessionId, DateTimeOffset claimedStartedAt, CapturedLocation? location, TimeZoneId zone,
+        DateTimeOffset now)
     {
         ValidationException.ThrowWhenNullOrWhitespace(clientSessionId, ClientSessionIdField, "Please provide a client session ID.");
         ValidationException.ThrowWhenLongerThan(clientSessionId, ClientSessionIdMaxLength, ClientSessionIdField,
@@ -115,6 +125,7 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
             UserId = userId,
             ClientSessionId = clientSessionId,
             StartedAt = StoredInstantOf(claimedStartedAt < now ? claimedStartedAt : now),
+            TimeZone = zone.Value,
             Latitude = location?.Latitude,
             Longitude = location?.Longitude,
         };

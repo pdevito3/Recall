@@ -4,6 +4,7 @@ using Recall.Server.Domain.Corrections;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Content;
 using Recall.Server.Domain.Sessions.Metadata;
+using Recall.Server.Domain.TimeZones;
 using Recall.Server.Exceptions;
 using Shouldly;
 
@@ -14,7 +15,7 @@ public class WordsThatAreNotADocumentTests
     private static readonly DateTimeOffset Noon = new(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset Now = Noon.AddDays(1);
 
-    private static Session NewSession() => Session.Create("ten_1", "usr_1", "device-1", Noon, null, Now);
+    private static Session NewSession() => Session.Create("ten_1", "usr_1", "device-1", Noon, null, TimeZoneId.Utc, Now);
 
     private static DraftSave Save(string text) => DraftSave.Of(text, 0, Noon);
 

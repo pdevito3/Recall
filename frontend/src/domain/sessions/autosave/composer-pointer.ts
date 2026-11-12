@@ -1,3 +1,5 @@
+import type { SessionForCreationDto } from '@/api/generated/models/types/session-for-creation-dto'
+
 const resumeWithinMs = 60 * 60 * 1000
 const pointerKey = 'recall.composer'
 
@@ -5,6 +7,7 @@ export interface ComposerPointer {
   owner: string
   clientSessionId: string
   startedAt: string
+  timeZone?: SessionForCreationDto['timeZone']
   sessionId: string | null
   touchedAt: number
 }

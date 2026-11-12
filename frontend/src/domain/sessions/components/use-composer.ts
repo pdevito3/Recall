@@ -4,7 +4,7 @@ import { flushSync } from 'react-dom'
 
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
 import { Notification } from '@/components/notification'
-import { locationCaptureIsOn, locationWaitsForAnAnswer, useUserSetting } from '@/domain/settings/apis/user-setting'
+import { captureZoneOf, locationCaptureIsOn, locationWaitsForAnAnswer, useUserSetting } from '@/domain/settings/apis/user-setting'
 import { mayTakeFocusOnThisPage } from '@/lib/first-page'
 import { isProblemDetailsError } from '@/lib/problem-details'
 import { newUuid } from '@/lib/new-uuid'
@@ -219,7 +219,7 @@ export function useComposer() {
 
   const beginEntry = useCallback(
     (text: string) => {
-      const pointer = { owner, clientSessionId: newUuid(), startedAt: new Date().toISOString(), sessionId: null, touchedAt: Date.now() }
+      const pointer = { owner, clientSessionId: newUuid(), startedAt: new Date().toISOString(), timeZone: captureZoneOf(queryClient), sessionId: null, touchedAt: Date.now() }
       const started = draftSaverFor(
         {
           ...pointer,

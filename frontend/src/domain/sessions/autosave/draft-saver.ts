@@ -2,6 +2,7 @@ import { notifyManager, type QueryClient } from '@tanstack/react-query'
 
 import type { DraftSaveResultDto } from '@/api/generated/models/types/draft-save-result-dto'
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
+import type { SessionForCreationDto } from '@/api/generated/models/types/session-for-creation-dto'
 import { addSession } from '@/api/generated/sessions/clients/add-session'
 import { getCleanedRevision } from '@/api/generated/sessions/clients/get-cleaned-revision'
 import { getRawRevision } from '@/api/generated/sessions/clients/get-raw-revision'
@@ -111,6 +112,7 @@ export interface DraftTarget {
   channel: DraftChannel
   clientSessionId: string
   startedAt: string
+  timeZone?: SessionForCreationDto['timeZone']
   sessionId: string | null
   baseRevision: number
   /** The text of the Draft at `baseRevision`, so that a merge takes only the change of the person. Null for a key of an older version, as `OutboxEntry` says. */
@@ -667,6 +669,7 @@ export class DraftSaver implements LockParty {
       body: {
         clientSessionId: this.target.clientSessionId,
         startedAt: this.target.startedAt,
+        timeZone: this.target.timeZone ?? null,
         latitude: location?.latitude ?? null,
         longitude: location?.longitude ?? null,
       },
@@ -972,6 +975,7 @@ export class DraftSaver implements LockParty {
       channel: this.target.channel,
       clientSessionId: this.target.clientSessionId,
       startedAt: this.target.startedAt,
+      timeZone: this.target.timeZone,
       sessionId: this.snapshot.sessionId,
       baseRevision: this.snapshot.baseRevision,
       baseText: this.baseText,
@@ -1043,7 +1047,7 @@ export function resumeUnsentDrafts(owner: string, queryClient: QueryClient) {
       existing.needTheEntry()
       continue
     }
-    draftSaverFor({ owner, channel: entry.channel, clientSessionId: entry.clientSessionId, startedAt: entry.startedAt, sessionId: entry.sessionId, baseRevision: entry.baseRevision, baseText: entry.baseText }, queryClient)
+    draftSaverFor({ owner, channel: entry.channel, clientSessionId: entry.clientSessionId, startedAt: entry.startedAt, timeZone: entry.timeZone, sessionId: entry.sessionId, baseRevision: entry.baseRevision, baseText: entry.baseText }, queryClient)
   }
   refreshWordsOfEditors()
   refreshDraftNotices()

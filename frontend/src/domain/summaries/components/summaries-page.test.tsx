@@ -34,7 +34,7 @@ const weekPath = '/api/v1/summaries/Week/2026-06-03'
 
 // Far from the zone of the browser in the component suite (Pacific/Kiritimati, UTC+14), so the two dates are never the same.
 const settingZone = 'Pacific/Pago_Pago'
-const setting: UserSettingDto = { timeZone: settingZone, timeZoneIsKnown: true, locationCaptureEnabled: false, requirePeopleProposalApproval: false, version: 1 }
+const setting: UserSettingDto = { timeZoneMode: 'Fixed', timeZone: settingZone, timeZoneIsKnown: true, locationCaptureEnabled: false, requirePeopleProposalApproval: false, version: 1 }
 const sent: string[] = []
 let recorder = 0
 

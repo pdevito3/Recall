@@ -14,7 +14,6 @@ using ModelProviders;
 using Resources;
 using Resources.Jobs;
 using Serilog;
-using UserSettings;
 
 public static class StartCleanup
 {
@@ -58,7 +57,7 @@ public static class StartCleanup
                 _logger.Here().Information("Started Cleanup {CleanupRunId} of session {SessionId}", runId, session.Id);
             }
 
-            return session.ToSessionDto(await dbContext.LoadJournalZoneAsync(cancellationToken));
+            return session.ToSessionDto();
         }
     }
 }

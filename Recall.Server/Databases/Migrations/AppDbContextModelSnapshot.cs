@@ -1102,6 +1102,12 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnName("tenant_id")
                         .UseCollation("BINARY");
 
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("time_zone");
+
                     b.PrimitiveCollection<string>("TopicSuggestions")
                         .IsRequired()
                         .HasMaxLength(30150)
@@ -1416,7 +1422,13 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnName("tenant_id")
                         .UseCollation("BINARY");
 
-                    b.Property<string>("TimeZone")
+                    b.Property<string>("TimeZoneMode")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("time_zone_mode");
+
+                    b.Property<string>("TimeZoneValue")
                         .HasMaxLength(100)
                         .HasColumnType("TEXT")
                         .HasColumnName("time_zone");

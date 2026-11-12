@@ -12,7 +12,6 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Resources;
 using Serilog;
-using UserSettings;
 
 public static class RecordCleanupResult
 {
@@ -58,7 +57,7 @@ public static class RecordCleanupResult
                 _logger.Here().Information("Took a Cleanup result from a device for session {SessionId}", session.Id);
             }
 
-            return session.ToSessionDto(await dbContext.LoadJournalZoneAsync(cancellationToken));
+            return session.ToSessionDto();
         }
 
         private static string HashOf(CleanupOutput output, int baseRawRevision, int baseCleanedRevision)

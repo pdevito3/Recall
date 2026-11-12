@@ -440,15 +440,28 @@ test.describe('writing a new entry', () => {
   })
 })
 
-test.describe('the time zone of a new user', () => {
-  test('sets the zone of the browser once, so that the days are right', async ({ page, api }) => {
-    api.mock(settingsApi.are(aSetting({ timeZone: null })), settingsApi.saves(aSetting()))
+test.describe('the time zone of the device', () => {
+  test('a setting that follows the device gets the zone of the browser once, with no change of the settings', async ({ page, api }) => {
+    const zone = test.info().project.use.timezoneId!
+    api.mock(settingsApi.are(aSetting({ timeZoneMode: 'FollowDevice', timeZone: null })), settingsApi.takesTheDeviceZone(aSetting({ timeZoneMode: 'FollowDevice', timeZone: zone, version: 2 })))
     const journal = journalPage(page)
 
     await journal.open()
 
-    await expect.poll(() => api.all('put', settingsPaths.mine)).toHaveLength(1)
-    expect((api.last('put', settingsPaths.mine)?.body as { timeZone: string }).timeZone).toBeTruthy()
+    await expect.poll(() => api.all('put', settingsPaths.deviceTimeZone)).toHaveLength(1)
+    expect(api.last('put', settingsPaths.deviceTimeZone)?.body).toEqual({ timeZone: zone })
+    expect(api.all('put', settingsPaths.mine)).toHaveLength(0)
+  })
+
+  test('a zone that the person picked gets no report', async ({ page, api }) => {
+    api.mock(settingsApi.are(aSetting({ timeZoneMode: 'Fixed', timeZone: 'Asia/Tokyo' })))
+    const journal = journalPage(page)
+
+    await journal.openUntilQuiet()
+
+    const tokyoToday = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Tokyo', weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())
+    await expect(journal.at.heading).toHaveText(tokyoToday)
+    expect(api.all('put', settingsPaths.deviceTimeZone)).toHaveLength(0)
   })
 })
 

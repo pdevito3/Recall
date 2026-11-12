@@ -1,16 +1,16 @@
 namespace Recall.Server.Domain.UserSettings.Mappings;
 
 using Dtos;
-using Riok.Mapperly.Abstractions;
 
-[Mapper]
-public static partial class UserSettingMapper
+public static class UserSettingMapper
 {
-    [MapperIgnoreSource(nameof(UserSetting.Id))]
-    [MapperIgnoreSource(nameof(UserSetting.TenantId))]
-    [MapperIgnoreSource(nameof(UserSetting.UserId))]
-    [MapperIgnoreSource(nameof(UserSetting.LastModifiedOn))]
-    [MapperIgnoreSource(nameof(UserSetting.IsDeleted))]
-    [MapperIgnoreSource(nameof(UserSetting.DomainEvents))]
-    public static partial UserSettingDto ToUserSettingDto(this UserSetting setting);
+    public static UserSettingDto ToUserSettingDto(this UserSetting setting) => new()
+    {
+        TimeZoneMode = setting.TimeZone.Mode.ToString(),
+        TimeZone = setting.TimeZone.Zone,
+        TimeZoneIsKnown = setting.TimeZoneIsKnown,
+        LocationCaptureEnabled = setting.LocationCaptureEnabled,
+        RequirePeopleProposalApproval = setting.RequirePeopleProposalApproval,
+        Version = setting.Version,
+    };
 }

@@ -13,7 +13,7 @@ The root of the journal: one act of journaling by a User. A Session has no paren
 _Avoid_: Entry (the Session is the entry)
 
 **Journaling day**:
-The calendar day of a Session in the time zone of its User. A Session stores absolute UTC. The Journaling day is a grouping that the app derives from that time, and it is not a record.
+The calendar day of a Session in the time zone that its device used when the Session started. A Session stores absolute UTC and that zone. The Journaling day is a grouping that the app derives from the two, and it is not a record. A Session keeps its day when the User travels or changes the zone of the settings.
 _Avoid_: Date, parent day
 
 **Raw**:

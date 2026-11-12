@@ -16,6 +16,8 @@ public sealed partial class TimeZoneId : ValueObject
         .Where(zone => zone.HasIanaId)
         .ToFrozenDictionary(zone => zone.Id, zone => zone.Id, StringComparer.OrdinalIgnoreCase);
 
+    public static readonly TimeZoneId Utc = new("UTC");
+
     private TimeZoneInfo? _zone;
 
     public string Value { get; private set; } = null!;
@@ -36,6 +38,9 @@ public sealed partial class TimeZoneId : ValueObject
     /// <summary>The zone of a stored value, or null when this host does not know it. A restore onto other tzdata can reach this.</summary>
     public static TimeZoneId? TryOf(string? value)
         => value is not null && Lookup(value) is { } zone ? new TimeZoneId(zone, value) : null;
+
+    /// <summary>The zone of a stored value, or UTC when the value is null or this host does not know it.</summary>
+    public static TimeZoneId OrUtc(string? value) => TryOf(value) ?? Utc;
 
     public override string ToString() => Value;
 

@@ -40,7 +40,7 @@ export type SessionDto = {
     */
     startedAt: string;
     /**
-     * @description The date of DateTimeOffset SessionDto.StartedAt in the time zone of the User. It changes when the time zone changes.
+     * @description The date of DateTimeOffset SessionDto.StartedAt in the zone that the create stored. A later change of the settings does not move it.
      *
      * Format: `date`
      * @type string

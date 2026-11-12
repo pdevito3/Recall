@@ -117,6 +117,7 @@ public class SyncFeedTests : TestBase
         await FactoryClient.PostAsJsonAsync(ApiRoutes.Corrections.Root, new { canonicalTerm = "Kubernetes" });
         await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new
         {
+            timeZoneMode = "Fixed",
             timeZone = "Europe/Tallinn",
             locationCaptureEnabled = false,
             requirePeopleProposalApproval = true,

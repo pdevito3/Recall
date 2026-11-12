@@ -54,6 +54,7 @@ public class JournalFixtureTests
 
         var settings = await client.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new
         {
+            timeZoneMode = "Fixed",
             timeZone = "Europe/Tallinn",
             locationCaptureEnabled = true,
             requirePeopleProposalApproval = true,
@@ -64,6 +65,7 @@ public class JournalFixtureTests
 
         var staleSettings = await client.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new
         {
+            timeZoneMode = "Fixed",
             timeZone = "Europe/Paris",
             locationCaptureEnabled = false,
             requirePeopleProposalApproval = true,

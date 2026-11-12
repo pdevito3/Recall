@@ -51,7 +51,8 @@ test.describe('the settings of a person', () => {
 
     await settings.turnOnLocation()
 
-    const body = api.last('put', settingsPaths.mine)?.body as { timeZone: string; locationCaptureEnabled: boolean; version: number; savedAt?: string }
+    const body = api.last('put', settingsPaths.mine)?.body as { timeZoneMode: string; timeZone: string; locationCaptureEnabled: boolean; version: number; savedAt?: string }
+    expect(body.timeZoneMode).toBe('Fixed')
     expect(body.timeZone).toBe('America/Chicago')
     expect(body.locationCaptureEnabled).toBe(true)
     expect(body.version).toBe(aSetting().version)
@@ -69,6 +70,49 @@ test.describe('the settings of a person', () => {
       await expect(settings.at.zone).toHaveValue(shown)
     })
   }
+
+  test('shows Automatic with the zone of this browser while the setting follows the device', async ({ page, api }) => {
+    const zone = test.info().project.use.timezoneId!
+    api.mock(settingsApi.are(aSetting({ timeZoneMode: 'FollowDevice', timeZone: zone })))
+    const settings = settingsPage(page)
+
+    await settings.open()
+
+    await expect(settings.at.zone).toHaveValue(`Automatic (${zone.replaceAll('/', ' / ')})`)
+  })
+
+  test('picks a fixed zone from a search of the list', async ({ page, api }) => {
+    const zone = test.info().project.use.timezoneId!
+    api.mock(
+      settingsApi.are(aSetting({ timeZoneMode: 'FollowDevice', timeZone: zone })),
+      settingsApi.saves(aSetting({ timeZoneMode: 'Fixed', timeZone: 'Asia/Tokyo', version: 2 })),
+    )
+    const settings = settingsPage(page)
+    await settings.open()
+
+    await settings.at.zone.fill('tokyo')
+    await expect(settings.at.zoneOptions).toHaveText([/^Asia \/ Tokyo \(/])
+    await settings.pickZone('tokyo', /^Asia \/ Tokyo \(/)
+
+    expect(api.last('put', settingsPaths.mine)?.body).toMatchObject({ timeZoneMode: 'Fixed', timeZone: 'Asia/Tokyo' })
+    await expect(settings.at.zone).toHaveValue(/^Asia \/ Tokyo \(/)
+  })
+
+  test('picks Automatic, the first option, to follow the device again', async ({ page, api }) => {
+    const zone = test.info().project.use.timezoneId!
+    api.mock(
+      settingsApi.are(aSetting({ timeZoneMode: 'Fixed', timeZone: 'Asia/Tokyo' })),
+      settingsApi.saves(aSetting({ timeZoneMode: 'FollowDevice', timeZone: zone, version: 2 })),
+    )
+    const settings = settingsPage(page)
+    await settings.open()
+
+    const names = await settings.zoneNamesInOrder()
+    expect(names[0]).toBe(`Automatic (${zone.replaceAll('/', ' / ')})`)
+    await settings.pickZone('auto', /^Automatic/)
+
+    expect(api.last('put', settingsPaths.mine)?.body).toMatchObject({ timeZoneMode: 'FollowDevice', timeZone: zone })
+  })
 
   test('says so when the Server does not know the saved zone', async ({ page, api }) => {
     api.mock(settingsApi.are(aSetting({ timeZone: 'Mars/Olympus', timeZoneIsKnown: false })))
