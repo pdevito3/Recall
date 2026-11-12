@@ -1,9 +1,12 @@
+import { resetLocalTimeZone } from '@internationalized/date'
 import { QueryClient } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { commands } from 'vitest/browser'
 
+import type { UserSettingDto } from '@/api/generated/models/types/user-setting-dto'
+
 import { SettingKeys } from './setting.keys'
-import { locationCaptureIsOn, locationWaitsForAnAnswer, resumeUnsentSetting, settingSaver, userSettingOptions } from './user-setting'
+import { captureZoneOf, locationCaptureIsOn, locationWaitsForAnAnswer, resumeUnsentSetting, settingSaver, userSettingOptions } from './user-setting'
 
 const prefix = 'recall.unsent-setting.person-a.'
 const staleKey = {
@@ -89,4 +92,30 @@ test('no location is saved while any answer about location waits, in either dire
   expect(locationCaptureIsOn(queryClient)).toBe(false)
   // The second read starts while the first runs, so the query client joins them in one request.
   await vi.waitFor(() => expect(rowReads()).toBe(readsBefore + 1))
+})
+
+const aRow = (patch: Partial<UserSettingDto>): UserSettingDto => ({ timeZoneMode: 'Fixed', timeZone: 'UTC', timeZoneIsKnown: true, locationCaptureEnabled: false, requirePeopleProposalApproval: false, version: 1, ...patch })
+
+const captureZoneWith = (row: UserSettingDto) => {
+  const queryClient = new QueryClient()
+  queryClient.setQueryData(SettingKeys.mine(), row)
+  return captureZoneOf(queryClient)
+}
+
+test('a new entry sends the fixed zone of the row, also when this browser does not know the zone', () => {
+  expect(captureZoneWith(aRow({ timeZoneMode: 'Fixed', timeZone: 'Mars/Olympus_Mons' }))).toBe('Mars/Olympus_Mons')
+})
+
+test('a new entry sends no zone while the setting follows a browser that cannot name its zone, so the Server takes the zone of the row', () => {
+  const resolvedOptions = Intl.DateTimeFormat.prototype.resolvedOptions
+  vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockImplementation(function (this: Intl.DateTimeFormat) {
+    return { ...resolvedOptions.call(this), timeZone: undefined as unknown as string }
+  })
+  resetLocalTimeZone()
+  try {
+    expect(captureZoneWith(aRow({ timeZoneMode: 'FollowDevice', timeZone: 'Asia/Tokyo' }))).toBeNull()
+  } finally {
+    vi.restoreAllMocks()
+    resetLocalTimeZone()
+  }
 })

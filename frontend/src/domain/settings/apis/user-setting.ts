@@ -10,7 +10,7 @@ import { RowSaver, type RowSaverState } from '@/domain/sessions/autosave/row-sav
 import { keysUnder, removeKey, takeKeysOfTabsThatLeft, writeKeyOfThisTab, type KeyOfATab } from '@/domain/sessions/autosave/tab-keys'
 import { pageUserOf } from '@/lib/page-user'
 import { retryUnlessRefused } from '@/lib/problem-details'
-import { browserTimeZone, parseTimeZone, type TimeZone } from '@/lib/zoned-time'
+import { deviceTimeZone, parseTimeZone, type TimeZone } from '@/lib/zoned-time'
 
 import { SettingKeys } from './setting.keys'
 
@@ -29,11 +29,14 @@ export function useUserSetting() {
 
 export const followsTheDevice = (setting: Pick<UserSettingDto, 'timeZoneMode'>) => setting.timeZoneMode === userSettingDtoTimeZoneModeEnum.FollowDevice
 
-/** The zone of the day on this device: the zone of this browser while the setting follows the device, or the zone that the person picked. */
+function zoneSentWithANewEntry(setting: UserSettingDto): SessionForCreationDto['timeZone'] {
+  return followsTheDevice(setting) ? deviceTimeZone() : setting.timeZone
+}
+
 export function journalZoneOf(setting: UserSettingDto | undefined): TimeZone {
-  if (setting && followsTheDevice(setting)) return browserTimeZone()
+  const zone = setting && (zoneSentWithANewEntry(setting) ?? setting.timeZone)
   try {
-    return parseTimeZone(setting?.timeZone ?? 'UTC')
+    return parseTimeZone(zone ?? 'UTC')
   } catch {
     return 'UTC' as TimeZone
   }
@@ -45,7 +48,7 @@ export function useJournalZone(): TimeZone {
 
 export function captureZoneOf(queryClient: QueryClient): SessionForCreationDto['timeZone'] {
   const setting = queryClient.getQueryData<UserSettingDto>(SettingKeys.mine())
-  return setting && journalZoneOf(setting)
+  return setting && zoneSentWithANewEntry(setting)
 }
 
 export type SettingChange = Pick<UserSettingDto, 'timeZoneMode' | 'timeZone' | 'locationCaptureEnabled' | 'requirePeopleProposalApproval'>

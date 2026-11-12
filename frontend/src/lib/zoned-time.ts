@@ -24,9 +24,17 @@ export function parseTimeZone(value: string): TimeZone {
   return (resolved.toLowerCase() === value.toLowerCase() ? resolved : value) as TimeZone
 }
 
-/** The zone of the browser. Use it only for a time that belongs to the user, not to a place. */
+/** The zone that the browser names, or null when its tzdata does not have the zone of the system. */
+export function deviceTimeZone(): TimeZone | null {
+  return (getLocalTimeZone() as TimeZone | undefined) ?? null
+}
+
+/**
+ * The zone of the browser. Use it only for a time that belongs to the user, not to a place. A browser that cannot
+ * name its zone keeps its clock in UTC.
+ */
 export function browserTimeZone(): TimeZone {
-  return getLocalTimeZone() as TimeZone
+  return deviceTimeZone() ?? ('UTC' as TimeZone)
 }
 
 /**
