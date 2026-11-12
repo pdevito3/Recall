@@ -8,6 +8,7 @@ import { playwright } from '@vitest/browser-playwright'
 import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
 import {
   answerRequests,
+  beginTest,
   holdRequests,
   movePointerOnto,
   pressPointer,
@@ -176,6 +177,7 @@ export default defineConfig({
             trace: process.env.CI ? 'retain-on-failure' : 'off',
             commands: {
               answerRequests,
+              beginTest,
               holdRequests,
               movePointerOnto,
               pressPointer,

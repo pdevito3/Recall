@@ -20,3 +20,5 @@ export type Answer = {
       body: string
     }
 )
+
+export const testHeader = 'x-test-number'

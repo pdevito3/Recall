@@ -1,6 +1,6 @@
 import type { BrowserCommand } from 'vitest/node'
 
-import type { Answer } from './src/test/answer'
+import { testHeader, type Answer } from './src/test/answer'
 
 // Browser commands for the component tests. They run in Node and drive the Playwright page.
 // A test calls them with `commands` from 'vitest/browser'.
@@ -58,6 +58,7 @@ interface Answering {
   answers: Answer[]
   unanswered: Set<string>
   sent: SentRequest[]
+  test: string
 }
 
 const answering = new WeakMap<Page, Answering>()
@@ -91,10 +92,15 @@ export const answerRequests: BrowserCommand<[answers: Answer[]]> = async ({ page
     current.answers = answers
     return
   }
-  const state: Answering = { answers, unanswered: new Set(), sent: [] }
+  const state: Answering = { answers, unanswered: new Set(), sent: [], test: '' }
   answering.set(page, state)
   await page.route(isServerRequest, async (route) => {
     const request = route.request()
+    const test = request.headers()[testHeader]
+    if (test !== undefined && test !== state.test) {
+      await route.abort()
+      return
+    }
     if (request.method() !== 'GET') {
       state.sent.push({ method: request.method(), path: new URL(request.url()).pathname, body: jsonBodyOf(request) })
     }
@@ -112,6 +118,15 @@ export const answerRequests: BrowserCommand<[answers: Answer[]]> = async ({ page
       body: body(answer),
     })
   })
+}
+
+export const beginTest: BrowserCommand<[test: string]> = async (context, test) => {
+  await answerRequests(context, [])
+  const state = answering.get(context.page)
+  if (!state) return
+  state.test = test
+  state.unanswered.clear()
+  state.sent.splice(0)
 }
 
 export const takeUnansweredRequests: BrowserCommand<[]> = async ({ page }) => {
