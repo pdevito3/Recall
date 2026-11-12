@@ -3,6 +3,7 @@ import {
   CalendarDateTime,
   fromAbsolute,
   getLocalTimeZone,
+  resetLocalTimeZone,
   toCalendarDate,
   toCalendarDateTime,
   toZoned,
@@ -24,8 +25,12 @@ export function parseTimeZone(value: string): TimeZone {
   return (resolved.toLowerCase() === value.toLowerCase() ? resolved : value) as TimeZone
 }
 
-/** The zone that the browser names, or null when its tzdata does not have the zone of the system. */
+/**
+ * The zone that the browser names now, or null when its tzdata does not have the zone of the system. The zone of the
+ * system can change while the page is open, on a trip, and `getLocalTimeZone` keeps the first zone that it read.
+ */
 export function deviceTimeZone(): TimeZone | null {
+  resetLocalTimeZone()
   return (getLocalTimeZone() as TimeZone | undefined) ?? null
 }
 

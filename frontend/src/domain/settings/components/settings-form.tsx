@@ -26,8 +26,7 @@ const automaticKey = 'automatic'
 
 const automaticOption = (zone: TimeZone | null): ZoneOption => ({ id: automaticKey, label: zone ? `Automatic (${placeOf(zone)})` : 'Automatic' })
 
-// A zone id has an underscore for a space, as in America/New_York, so a typed space also matches an underscore.
-const withUnderscores = (search: string) => search.replaceAll(' ', '_')
+const withoutZoneSeparators = (text: string) => text.replace(/[\s/_]+/g, '')
 
 let listedZones: ZoneOption[] | undefined
 
@@ -82,7 +81,7 @@ export function SettingsForm() {
           aria-label="Time zone"
           aria-describedby="settings-zone-in-use"
           defaultItems={zones}
-          defaultFilter={(text, search) => contains(text, search) || contains(text, withUnderscores(search))}
+          defaultFilter={(text, search) => contains(withoutZoneSeparators(text), withoutZoneSeparators(search))}
           allowsEmptyCollection
           selectedKey={followsTheDevice(values) ? automaticKey : (values.timeZone ?? null)}
           onSelectionChange={(key) => {
