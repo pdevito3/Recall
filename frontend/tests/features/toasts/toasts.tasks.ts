@@ -109,6 +109,22 @@ export function toastDemoPage(page: Page) {
       return samples
     },
 
+    async spaceUnderText(message: string) {
+      const toast = at.toast(message)
+      const text = (await toast.getByText(message, { exact: true }).boundingBox())!
+      const box = (await toast.boundingBox())!
+      const bottomEdge = await toast.evaluate((node) => {
+        const style = getComputedStyle(node)
+        return parseFloat(style.paddingBottom) + parseFloat(style.borderBottomWidth)
+      })
+      return box.y + box.height - bottomEdge - (text.y + text.height)
+    },
+
+    async centerOf(element: Locator) {
+      const box = (await element.boundingBox())!
+      return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+    },
+
     async overlapAreaOf(a: Locator, b: Locator) {
       if (!(await a.isVisible()) || !(await b.isVisible())) return 0
       const [boxA, boxB] = [await a.boundingBox(), await b.boundingBox()]

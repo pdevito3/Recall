@@ -123,7 +123,7 @@ function RoomPage() {
       <PageHeading ref={headingRef}>{room.data.name}</PageHeading>
       {/* The other actions, as UserActions shows them */}
       <ResponsiveDialogTrigger>
-        <Button variant="destructive" isPending={remove.isPending}>Delete</Button>
+        <Button variant="outline" isPending={remove.isPending}>Delete</Button>
         <ResponsiveDialog>
           <ResponsiveDialogHeader>
             <ResponsiveDialogTitle>Delete this room?</ResponsiveDialogTitle>
