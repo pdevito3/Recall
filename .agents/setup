@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# Prepares a fresh Amp orb to build, test, and run Recall: the .NET SDK, the .NET tools, the NuGet and pnpm packages,
+# the Playwright Chromium, the development certificate, and Docker for the containers of the stack.
+# Amp runs it again on a stale snapshot, so each step skips the work that the snapshot already has.
+# See https://ampcode.com/docs/orbs.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+step() {
+  local name="$1"
+  shift
+  local start=$SECONDS
+  echo "==> $name"
+  "$@"
+  echo "<== $name ($((SECONDS - start))s)"
+}
+
+# The SDK of the Dockerfile. CI and the Dockerfile keep one SDK band, because a new band can add style errors.
+sdk_version="$(sed -n 's#^FROM .*mcr\.microsoft\.com/dotnet/sdk:\([0-9][0-9.]*\) .*#\1#p' Dockerfile | head -n 1)"
+if [ -z "$sdk_version" ]; then
+  echo "The Dockerfile has no mcr.microsoft.com/dotnet/sdk image, so setup cannot find the SDK version." >&2
+  exit 1
+fi
+dotnet_root="$HOME/.dotnet"
+
+install_dotnet() {
+  if [ -d "$dotnet_root/sdk/$sdk_version" ]; then
+    echo "SDK $sdk_version is installed"
+    return
+  fi
+  local installer_dir
+  installer_dir="$(mktemp -d)"
+  curl -fsSL --retry 3 https://dot.net/v1/dotnet-install.sh -o "$installer_dir/dotnet-install.sh"
+  bash "$installer_dir/dotnet-install.sh" --version "$sdk_version" --install-dir "$dotnet_root" --no-path
+  rm -rf -- "$installer_dir"
+}
+
+# Amp and the orb services start in login shells, so ~/.bash_profile gives them the SDK.
+persist_dotnet_env() {
+  local env_file="$HOME/.config/recall/dotnet-env.sh"
+  mkdir -p "$(dirname "$env_file")"
+  cat > "$env_file" <<EOF
+# Written by .agents/setup of Recall. Setup writes it again on each run.
+export DOTNET_ROOT="$dotnet_root"
+case ":\$PATH:" in
+  *":$dotnet_root:"*) ;;
+  *) export PATH="$dotnet_root:$dotnet_root/tools:\$PATH" ;;
+esac
+export DOTNET_CLI_TELEMETRY_OPTOUT=1
+export DOTNET_NOLOGO=1
+EOF
+  local source_line="[ -f \"$env_file\" ] && . \"$env_file\" # Recall .NET SDK"
+  if ! grep -Fqx "$source_line" "$HOME/.bash_profile" 2>/dev/null; then
+    printf '\n%s\n' "$source_line" >> "$HOME/.bash_profile"
+  fi
+  # The installer cannot change the environment of this script, so the rest of setup reads the file too.
+  # shellcheck disable=SC1090
+  . "$env_file"
+}
+
+# The default auth provider of the stack (ZeroFactor) and the other providers run as containers. The shell of an
+# agent does not get the docker group, so the socket is open to every user of this single-user orb.
+# .agents/resume starts the daemon.
+configure_docker() {
+  local drop_in=/etc/systemd/system/docker.socket.d/orb.conf
+  local wanted=$'[Socket]\nSocketMode=0666'
+  if [ "$(cat "$drop_in" 2>/dev/null)" != "$wanted" ]; then
+    sudo -n mkdir -p "$(dirname "$drop_in")"
+    printf '%s\n' "$wanted" | sudo -n tee "$drop_in" > /dev/null
+    sudo -n systemctl daemon-reload
+    # A running socket keeps its old mode until it restarts.
+    if systemctl is-active --quiet docker.socket; then
+      sudo -n systemctl restart docker.socket docker.service
+    fi
+  fi
+  if ! systemctl is-enabled --quiet docker.service; then
+    sudo -n systemctl enable docker.service docker.socket
+  fi
+}
+
+ensure_dev_cert() {
+  if dotnet dev-certs https --check > /dev/null 2>&1; then
+    echo "The development certificate exists"
+  else
+    dotnet dev-certs https
+  fi
+}
+
+step "Install the .NET SDK $sdk_version" install_dotnet
+step "Persist the .NET environment" persist_dotnet_env
+step "Configure Docker" configure_docker
+step "Restore the .NET tools" dotnet tool restore
+step "Restore the NuGet packages" dotnet restore Recall.slnx
+step "Create the development certificate" ensure_dev_cert
+step "Install the frontend packages" pnpm --dir frontend install --frozen-lockfile
+# Vitest browser mode and the Playwright suites use this Chromium.
+step "Install the Playwright Chromium" pnpm --dir frontend exec playwright install chromium
