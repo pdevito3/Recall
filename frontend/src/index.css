@@ -206,6 +206,16 @@
   }
 }
 
+@utility tap-area {
+  position: relative;
+  &::before {
+    content: '';
+    position: absolute;
+    --tap-target: 44px;
+    inset: min(0px, calc(50% - var(--tap-target) / 2));
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

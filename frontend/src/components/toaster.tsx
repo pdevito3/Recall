@@ -117,7 +117,7 @@ export function Toaster() {
             aria-label="Close"
             variant="ghost"
             size="icon-xs"
-            className="-m-1 shrink-0 text-muted-foreground hover:text-foreground"
+            className="-m-1 shrink-0 text-muted-foreground hover:text-foreground max-md:min-h-0 max-md:min-w-0 max-md:tap-area"
           >
             <HugeiconsIcon icon={Cancel01Icon} className="size-4" />
           </Button>
