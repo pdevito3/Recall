@@ -61,10 +61,7 @@ export function useUpdateCorrection() {
     mutationFn: ({ id, body }: { id: string; body: CorrectionForUpdateDto }) =>
       updateCorrection({ path: { id }, body, options: { suppressErrorToast: true } }),
     onMutate: ({ id }) => queryClient.cancelQueries({ queryKey: CorrectionKeys.detail(id) }),
-    onSuccess: (saved) => {
-      queryClient.setQueryData(CorrectionKeys.detail(saved.id), saved)
-      return queryClient.invalidateQueries({ queryKey: CorrectionKeys.directory() })
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: CorrectionKeys.directory() }),
   })
 }
 
@@ -72,6 +69,6 @@ export function useDeleteCorrection() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => deleteCorrection({ path: { id } }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: CorrectionKeys.directory() }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: CorrectionKeys.directory() }),
   })
 }

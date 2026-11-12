@@ -28,7 +28,6 @@ import {
   CORRECTION_FIELDS,
   correctionFormSchema,
   EMPTY_CORRECTION,
-  termMaxLength,
   valuesOf,
   type CorrectionFormValues,
 } from './correction-form-schema'
@@ -112,7 +111,6 @@ export function CorrectionForm({ correction, onSaved }: CorrectionFormProps) {
           dir="auto"
           autoComplete="off"
           spellCheck={false}
-          maxLength={termMaxLength}
           aria-invalid={Boolean(errors.canonicalTerm)}
           aria-describedby={errors.canonicalTerm ? 'correction-term-error' : undefined}
           {...form.register('canonicalTerm')}
@@ -169,7 +167,7 @@ export function CorrectionForm({ correction, onSaved }: CorrectionFormProps) {
 
       <ResponsiveDialogFooter>
         <ResponsiveDialogClose>Cancel</ResponsiveDialogClose>
-        <Button type="submit" isPending={save.isPending}>
+        <Button type="submit" isPending={save.isPending} isDisabled={latest.isLoading}>
           Save correction
         </Button>
       </ResponsiveDialogFooter>

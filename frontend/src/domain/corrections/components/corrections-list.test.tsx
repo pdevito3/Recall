@@ -109,3 +109,23 @@ test('a stale save keeps the edits, and the latest takes the field that another 
     },
   ])
 })
+
+test('the term takes as many emoji as the Server takes characters', async () => {
+  // Arrange
+  const term = '😀'.repeat(150)
+  const { screen } = await renderPageAt('/corrections', [
+    { method: 'POST', path: '/api/v1/corrections', status: 201, body: { ...grdb, id: 'cor_3', canonicalTerm: term } },
+  ])
+  await userEvent.click(screen.getByRole('button', { name: 'Add correction', exact: true }))
+  const dialog = screen.getByRole('dialog')
+  await userEvent.fill(dialog.getByRole('textbox', { name: 'Term' }), term)
+  await commands.takeSentRequests()
+
+  // Act
+  await userEvent.click(dialog.getByRole('button', { name: 'Save correction' }))
+
+  // Assert
+  await expect.element(screen.getByRole('dialog')).not.toBeInTheDocument()
+  const [sent] = await commands.takeSentRequests()
+  expect(sent?.body).toMatchObject({ canonicalTerm: term })
+})
