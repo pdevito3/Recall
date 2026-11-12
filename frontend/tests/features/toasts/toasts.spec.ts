@@ -13,6 +13,24 @@ test.describe('the toast region', () => {
   })
 })
 
+test.describe('a toast on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test('is as tall as its one line of text, and its Close button takes a 44 px tap', async ({ page }) => {
+    const demo = toastDemoPage(page)
+    await demo.open()
+    await demo.showToastsByKeyboard('Success')
+
+    expect(await demo.spaceUnderText('Changes saved')).toBeLessThanOrEqual(2)
+    const close = await demo.centerOf(demo.at.closeToast('Changes saved'))
+    for (const [dx, dy] of [[-21, 0], [21, 0], [0, -21], [0, 21]]) {
+      if (await demo.at.toasts.count() === 0) await demo.showToastsByKeyboard('Success')
+      await page.mouse.click(close.x + dx, close.y + dy)
+      await expect(demo.at.toasts).toHaveCount(0)
+    }
+  })
+})
+
 // React Aria lists the newest toast first.
 test.describe('the toasts on a phone on its side while a bottom sheet is open', () => {
   test.use({ viewport: { width: 667, height: 375 } })
