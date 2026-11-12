@@ -96,6 +96,7 @@ async function renderLayoutAt(path: string) {
   queryClient.setQueryData(FileStoreKeys.status(), { canWrite: true })
   queryClient.setQueryData(MembershipKeys.of(member.identifier), member)
   queryClient.setQueryData(SettingKeys.mine(), memberSetting)
+  await commands.answerRequests([{ method: 'GET', path: '/api/v1/me/settings', body: memberSetting }])
   const screen = await render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />

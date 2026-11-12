@@ -6,7 +6,7 @@ import { reportDeviceTimeZone } from '@/api/generated/user-settings/clients/repo
 import { deviceTimeZone, type TimeZone } from '@/lib/zoned-time'
 
 import { SettingKeys } from './setting.keys'
-import { followsTheDevice, useUserSetting } from './user-setting'
+import { followsTheDevice, userSettingOptions, useUserSetting } from './user-setting'
 
 let reportedZone: TimeZone | null = null
 
@@ -38,10 +38,19 @@ export function useReportDeviceTimeZone() {
   const setting = useUserSetting().data
   useEffect(() => reportTheZone(queryClient), [setting, queryClient])
   useEffect(() => {
+    let returning = false
     const reportAgainOnReturn = () => {
-      if (document.visibilityState !== 'visible') return
-      reportAgainNextTime()
-      reportTheZone(queryClient)
+      if (document.visibilityState !== 'visible' || returning) return
+      returning = true
+      void queryClient
+        .fetchQuery({ ...userSettingOptions, staleTime: 0 })
+        .then(() => {
+          reportAgainNextTime()
+          reportTheZone(queryClient)
+        }, () => undefined)
+        .finally(() => {
+          returning = false
+        })
     }
     document.addEventListener('visibilitychange', reportAgainOnReturn)
     window.addEventListener('focus', reportAgainOnReturn)

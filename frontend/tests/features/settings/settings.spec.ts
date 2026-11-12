@@ -196,8 +196,11 @@ test.describe('the settings of a person', () => {
   test('a page that stays open on a trip reports the new zone when the person comes back, and the zone of home after the trip', async ({ page, api }) => {
     const settings = settingsPage(page)
     const system = await settings.nameTheZoneOfTheSystem('America/Chicago')
+    const chicagoRow = { ...settingsApi.are(aSetting({ timeZoneMode: 'FollowDevice', timeZone: 'America/Chicago' })), once: true }
     api.mock(
-      settingsApi.are(aSetting({ timeZoneMode: 'FollowDevice', timeZone: 'America/Chicago' })),
+      settingsApi.are(aSetting({ timeZoneMode: 'FollowDevice', timeZone: 'Asia/Tokyo', version: 2 })),
+      chicagoRow,
+      chicagoRow,
       settingsApi.takesTheDeviceZone(aSetting({ timeZoneMode: 'FollowDevice', timeZone: 'America/Chicago', version: 3 })),
       { ...settingsApi.takesTheDeviceZone(aSetting({ timeZoneMode: 'FollowDevice', timeZone: 'Asia/Tokyo', version: 2 })), once: true },
     )
@@ -206,6 +209,7 @@ test.describe('the settings of a person', () => {
     await system.travelTo('Asia/Tokyo')
 
     await expect(settings.at.zone).toHaveValue('Automatic (Asia / Tokyo)')
+    await expect.poll(() => api.all('get', settingsPaths.mine).length).toBeGreaterThan(1)
     expect(api.all('put', settingsPaths.deviceTimeZone).map(({ body }) => body)).toEqual([{ timeZone: 'Asia/Tokyo' }])
 
     await system.travelTo('America/Chicago')
@@ -217,17 +221,35 @@ test.describe('the settings of a person', () => {
   test('a slow report of the zone does not take the place of a newer pick', async ({ page, api }) => {
     api.mock(
       settingsApi.are(aSetting({ timeZoneMode: 'FollowDevice', timeZone: 'Antarctica/Troll' })),
-      { ...settingsApi.takesTheDeviceZone(aSetting({ timeZoneMode: 'FollowDevice', timeZone: test.info().project.use.timezoneId!, version: 2 })), delayMs: 1500 },
+      { ...settingsApi.takesTheDeviceZone(aSetting({ timeZoneMode: 'FollowDevice', timeZone: test.info().project.use.timezoneId!, version: 2 })), delayMs: 3000 },
       settingsApi.saves(aSetting({ timeZoneMode: 'Fixed', timeZone: 'Asia/Tokyo', version: 3 })),
     )
     const settings = settingsPage(page)
+    const report = settings.aReportReply()
     await settings.open()
 
-    const reported = settings.reportReplies()
     await settings.pickZone('tokyo', /^Asia \/ Tokyo \(/)
-    await reported
+    expect(report.arrived()).toBe(false)
+    await report.reply
 
     await expect(settings.at.zone).toHaveValue(/^Asia \/ Tokyo \(/)
+  })
+
+  test('a return to the page takes the row back from another device that reported later', async ({ page, api }) => {
+    const settings = settingsPage(page)
+    const system = await settings.nameTheZoneOfTheSystem('America/Chicago')
+    api.mock(
+      settingsApi.are(aSetting({ timeZoneMode: 'FollowDevice', timeZone: 'Asia/Tokyo', version: 2 })),
+      { ...settingsApi.are(aSetting({ timeZoneMode: 'FollowDevice', timeZone: 'America/Chicago' })), once: true },
+      settingsApi.takesTheDeviceZone(aSetting({ timeZoneMode: 'FollowDevice', timeZone: 'America/Chicago', version: 3 })),
+    )
+    await settings.open()
+    await expect(settings.at.zone).toHaveValue('Automatic (America / Chicago)')
+
+    await system.travelTo('America/Chicago')
+
+    await expect.poll(() => api.all('put', settingsPaths.deviceTimeZone)).toHaveLength(1)
+    expect(api.last('put', settingsPaths.deviceTimeZone)?.body).toEqual({ timeZone: 'America/Chicago' })
   })
 
   test('says so when the Server does not know the saved zone', async ({ page, api }) => {

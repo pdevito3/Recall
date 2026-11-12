@@ -37,6 +37,7 @@ export function settingsPage(page: Page) {
         travelTo: (next: string) =>
           page.evaluate((nextZone) => {
             ;(window as unknown as { zoneOfTheSystem: string }).zoneOfTheSystem = nextZone
+            document.dispatchEvent(new Event('visibilitychange'))
             window.dispatchEvent(new Event('focus'))
           }, next),
       }
@@ -62,7 +63,13 @@ export function settingsPage(page: Page) {
       await saved
     },
 
-    reportReplies: () => page.waitForResponse((r) => new URL(r.url()).pathname === settingsPaths.deviceTimeZone),
+    aReportReply() {
+      let arrived = false
+      const reply = page.waitForResponse((r) => new URL(r.url()).pathname === settingsPaths.deviceTimeZone).then(() => {
+        arrived = true
+      })
+      return { arrived: () => arrived, reply }
+    },
 
     async turnOnLocation() {
       const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && new URL(r.url()).pathname === settingsPaths.mine)
