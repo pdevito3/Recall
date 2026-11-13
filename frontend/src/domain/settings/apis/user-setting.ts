@@ -29,12 +29,12 @@ export function useUserSetting() {
 
 export const followsTheDevice = (setting: Pick<UserSettingDto, 'timeZoneMode'>) => setting.timeZoneMode === userSettingDtoTimeZoneModeEnum.FollowDevice
 
-function zoneSentWithANewEntry(setting: UserSettingDto): SessionForCreationDto['timeZone'] {
-  return followsTheDevice(setting) ? deviceTimeZone() : setting.timeZone
+function zoneSentWithANewEntry(setting: UserSettingDto | undefined): SessionForCreationDto['timeZone'] {
+  return setting === undefined || followsTheDevice(setting) ? deviceTimeZone() : setting.timeZone
 }
 
 export function journalZoneOf(setting: UserSettingDto | undefined): TimeZone {
-  const zone = setting && (zoneSentWithANewEntry(setting) ?? setting.timeZone)
+  const zone = zoneSentWithANewEntry(setting) ?? setting?.timeZone
   try {
     return parseTimeZone(zone ?? 'UTC')
   } catch {
@@ -47,8 +47,7 @@ export function useJournalZone(): TimeZone {
 }
 
 export function captureZoneOf(queryClient: QueryClient): SessionForCreationDto['timeZone'] {
-  const setting = queryClient.getQueryData<UserSettingDto>(SettingKeys.mine())
-  return setting && zoneSentWithANewEntry(setting)
+  return zoneSentWithANewEntry(queryClient.getQueryData<UserSettingDto>(SettingKeys.mine()))
 }
 
 export type SettingChange = Pick<UserSettingDto, 'timeZoneMode' | 'timeZone' | 'locationCaptureEnabled' | 'requirePeopleProposalApproval'>
