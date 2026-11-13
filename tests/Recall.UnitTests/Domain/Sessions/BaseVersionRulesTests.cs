@@ -2,6 +2,7 @@ namespace Recall.UnitTests.Domain.Sessions;
 
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Metadata;
+using Recall.Server.Domain.TimeZones;
 using Recall.Server.Domain.UserSettings;
 using Recall.Server.Exceptions;
 using Shouldly;
@@ -10,7 +11,7 @@ public class BaseVersionRulesTests
 {
     private static readonly DateTimeOffset Noon = new(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
 
-    private static Session NewSession() => Session.Create("ten_1", "usr_1", "device-1", Noon.AddDays(-1), null, Noon);
+    private static Session NewSession() => Session.Create("ten_1", "usr_1", "device-1", Noon.AddDays(-1), null, TimeZoneId.Utc, Noon);
 
     private static SessionMetadata Topics(params string[] topics) => SessionMetadata.Of(null, null, topics);
 
@@ -24,12 +25,12 @@ public class BaseVersionRulesTests
         var setting = NewSetting();
 
         // Act
-        Action change = () => setting.Change("Europe/Tallinn", true, false, 5u);
+        Action change = () => setting.Change("Fixed", "Europe/Tallinn", true, false, 5u);
 
         // Assert
         change.ShouldThrow<StaleVersionException>();
         setting.LocationCaptureEnabled.ShouldBeFalse();
-        setting.TimeZone.ShouldBeNull();
+        setting.TimeZone.ShouldBe(new TimeZoneSetting.FollowDevice(null));
         setting.RequirePeopleProposalApproval.ShouldBeTrue();
     }
 
@@ -41,7 +42,7 @@ public class BaseVersionRulesTests
         var setting = NewSetting();
 
         // Act
-        Action change = () => setting.Change("Not/AZone", true, false, 5u);
+        Action change = () => setting.Change("Fixed", "Not/AZone", true, false, 5u);
 
         // Assert
         change.ShouldThrow<StaleVersionException>();
@@ -55,7 +56,7 @@ public class BaseVersionRulesTests
         var setting = NewSetting();
 
         // Act
-        var applied = setting.Change(null, false, true, 5u);
+        var applied = setting.Change("FollowDevice", null, false, true, 5u);
 
         // Assert
         applied.ShouldBeFalse();
@@ -69,7 +70,7 @@ public class BaseVersionRulesTests
         var setting = NewSetting();
 
         // Act
-        var applied = setting.Change(null, false, true, 0u);
+        var applied = setting.Change("FollowDevice", null, false, true, 0u);
 
         // Assert
         applied.ShouldBeTrue();
@@ -86,7 +87,7 @@ public class BaseVersionRulesTests
         var setting = NewSetting();
 
         // Act
-        var applied = setting.Change(zone, false, true, 5u);
+        var applied = setting.Change("FollowDevice", zone, false, true, 5u);
 
         // Assert
         applied.ShouldBeFalse();

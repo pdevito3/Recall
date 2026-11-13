@@ -10,7 +10,6 @@ using Microsoft.EntityFrameworkCore;
 using People;
 using Resources;
 using Serilog;
-using UserSettings;
 
 public static class RespondToPersonProposal
 {
@@ -45,7 +44,7 @@ public static class RespondToPersonProposal
                 _logger.Here().Information("Took a response to a people proposal of session {SessionId}, approve {Approve}", session.Id, request.Dto.Approve);
             }
 
-            return session.ToSessionDto(await dbContext.LoadJournalZoneAsync(cancellationToken));
+            return session.ToSessionDto();
         }
 
         private async Task<Person> PersonForAsync(Session session, PersonProposal proposal, PersonProposalResponseDto dto, CancellationToken cancellationToken)

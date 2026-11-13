@@ -1,34 +1,50 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useMemo, useSyncExternalStore } from 'react'
+import { useFilter } from 'react-aria-components'
 
 import { QueryError } from '@/components/query-error'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Combobox, ComboboxContent, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox'
-import { Label } from '@/components/ui/label'
+import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SaveStatusLine } from '@/domain/sessions/components/save-status'
 import { StaleChangePrompts } from '@/domain/sessions/components/stale-change-prompts'
-import { journalZoneOf, settingSaver, useUserSetting, type SettingChange } from '@/domain/settings/apis/user-setting'
+import { userSettingDtoTimeZoneModeEnum } from '@/api/generated/models/types/user-setting-dto'
+import { followsTheDevice, journalZoneOf, settingSaver, useUserSetting, zoneOfNewEntries, type SettingChange } from '@/domain/settings/apis/user-setting'
 import { useCurrentUser } from '@/domain/users/apis/get-current-user'
-import { parseTimeZone, timeZoneLabel, type TimeZone } from '@/lib/zoned-time'
+import { deviceTimeZone, timeZoneLabel, type TimeZone } from '@/lib/zoned-time'
 
 interface ZoneOption {
   id: string
   label: string
 }
 
-const zoneOption = (id: string): ZoneOption => ({ id, label: `${id.replaceAll('/', ' / ')} (${timeZoneLabel(id as TimeZone)})` })
+const placeOf = (zone: string) => zone.replaceAll('/', ' / ')
+
+function zoneOption(id: string): ZoneOption {
+  try {
+    return { id, label: `${placeOf(id)} (${timeZoneLabel(id as TimeZone)})` }
+  } catch {
+    return { id, label: placeOf(id) }
+  }
+}
+
+const automaticKey = 'automatic'
+
+const automaticOption = (zone: TimeZone | null): ZoneOption => ({ id: automaticKey, label: zone ? `Automatic (${placeOf(zone)})` : 'Automatic' })
+
+const withoutZoneSeparators = (text: string) => text.replace(/[\s/_]+/g, '')
 
 let listedZones: ZoneOption[] | undefined
 
 // The list of the browser leaves out UTC and the new name of a renamed zone, such as Asia/Kolkata. A label costs about 0.5 ms.
-function zoneOptions(savedZone: TimeZone): ZoneOption[] {
+function zoneOptions(savedZone: string | null | undefined): ZoneOption[] {
   listedZones ??= [...new Set(['UTC', ...Intl.supportedValuesOf('timeZone')])].sort().map(zoneOption)
-  if (listedZones.some(({ id }) => id === savedZone)) return listedZones
+  if (!savedZone || listedZones.some(({ id }) => id === savedZone)) return listedZones
   return [...listedZones, zoneOption(savedZone)].sort((a, b) => (a.id < b.id ? -1 : 1))
 }
 
 const settingLabels: Record<keyof SettingChange, string> = {
+  timeZoneMode: 'Time zone',
   timeZone: 'Time zone',
   locationCaptureEnabled: 'Save my location with each new entry',
   requirePeopleProposalApproval: 'Ask me before AI adds a person to an entry',
@@ -40,8 +56,11 @@ export function SettingsForm() {
   const saver = settingSaver(queryClient)
   const status = useSyncExternalStore(saver.subscribe, saver.getStatus)
   const asks = useSyncExternalStore(saver.subscribe, saver.asks)
+  const { contains } = useFilter({ sensitivity: 'base' })
   const zone = journalZoneOf(setting.data)
-  const zones = useMemo(() => zoneOptions(zone), [zone])
+  const deviceZone = deviceTimeZone()
+  const fixedZone = setting.data && !followsTheDevice(setting.data) ? setting.data.timeZone : null
+  const zones = useMemo(() => [automaticOption(deviceZone), ...zoneOptions(fixedZone)], [deviceZone, fixedZone])
 
   if (setting.isPending) {
     return <p role="status" aria-label="Loading your settings" className="text-muted-foreground">Loading your settings</p>
@@ -52,13 +71,14 @@ export function SettingsForm() {
 
   const values: SettingChange = { ...setting.data, ...saver.pendingFields() }
   const change = (patch: Partial<SettingChange>) => saver.edit(patch)
+  const zoneInUse = zoneOfNewEntries({ ...setting.data, ...values })
 
   return (
     <div className="flex flex-col gap-8">
       <StaleChangePrompts asks={asks} labelOf={(field) => settingLabels[field]} onAnswer={(ask, usesYours) => saver.answerAsk(ask, usesYours)} />
       <section className="flex flex-col gap-2" aria-labelledby="settings-zone">
         <h2 id="settings-zone" className="text-lg font-semibold">Time zone</h2>
-        <p className="text-sm text-muted-foreground">Your time zone decides the day that each entry belongs to.</p>
+        <p className="text-sm text-muted-foreground">Your time zone decides the day of each new entry. Automatic follows the time zone of the device that you use, and an entry keeps its day when you travel.</p>
         {setting.data.timeZone && !setting.data.timeZoneIsKnown && (
           <p role="alert" className="text-sm text-destructive wrap-anywhere">
             This server does not know your saved time zone, so your days use UTC. Pick a time zone to fix your days.
@@ -66,20 +86,26 @@ export function SettingsForm() {
         )}
         <Combobox
           aria-label="Time zone"
-          items={zones}
-          selectedKey={values.timeZone ?? null}
+          aria-describedby="settings-zone-in-use"
+          defaultItems={zones}
+          defaultFilter={(text, search) => contains(withoutZoneSeparators(text), withoutZoneSeparators(search))}
+          allowsEmptyCollection
+          selectedKey={followsTheDevice(values) ? automaticKey : (values.timeZone ?? null)}
           onSelectionChange={(key) => {
-            if (typeof key === 'string') change({ timeZone: parseTimeZone(key) })
+            if (key === automaticKey) change({ timeZoneMode: userSettingDtoTimeZoneModeEnum.FollowDevice, timeZone: null })
+            else if (typeof key === 'string') change({ timeZoneMode: userSettingDtoTimeZoneModeEnum.Fixed, timeZone: key })
           }}
         >
-          <Label className="sr-only">Time zone</Label>
-          <ComboboxInput />
+          <ComboboxInput className="[&_input]:text-ellipsis" />
           <ComboboxContent>
-            <ComboboxList>
+            <ComboboxList renderEmptyState={() => <ComboboxEmpty>No time zone matches your search.</ComboboxEmpty>}>
               {(item: ZoneOption) => <ComboboxItem id={item.id} textValue={item.label}>{item.label}</ComboboxItem>}
             </ComboboxList>
           </ComboboxContent>
         </Combobox>
+        <p id="settings-zone-in-use" className="text-sm text-muted-foreground wrap-anywhere">
+          New entries use the day in {zoneOption(zoneInUse).label}.
+        </p>
       </section>
       <section className="flex flex-col gap-3" aria-labelledby="settings-entries">
         <div className="flex flex-wrap items-baseline justify-between gap-x-4">

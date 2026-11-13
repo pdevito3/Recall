@@ -9,13 +9,13 @@ export interface DayGroup {
 }
 
 export function groupByDay(rows: SessionSummaryDto[]): DayGroup[] {
-  const groups: DayGroup[] = []
+  const groups = new Map<string, SessionSummaryDto[]>()
   for (const row of rows) {
-    const last = groups[groups.length - 1]
-    if (last?.day === row.journalingDay) last.rows.push(row)
-    else groups.push({ day: row.journalingDay, rows: [row] })
+    const group = groups.get(row.journalingDay)
+    if (group) group.push(row)
+    else groups.set(row.journalingDay, [row])
   }
-  return groups
+  return [...groups].map(([day, dayRows]) => ({ day, rows: dayRows })).sort((a, b) => b.day.localeCompare(a.day))
 }
 
 export function dayHeading(day: CalendarDate, today: CalendarDate): string {

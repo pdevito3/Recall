@@ -4943,6 +4943,90 @@
         }
       }
     },
+    "/api/v1/me/settings/device-time-zone": {
+      "put": {
+        "tags": [
+          "UserSettings"
+        ],
+        "summary": "Takes the zone that a device is in now. A row that follows the device stores it, and the Journaling day of new Sessions comes\nfrom it. A Fixed row stays as it is. The call sends no version, so a client can send it at each start with no read first.",
+        "operationId": "ReportDeviceTimeZone",
+        "parameters": [
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceTimeZoneDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSettingDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/users": {
       "post": {
         "tags": [
@@ -6447,6 +6531,19 @@
         },
         "description": "The signed-in caller as the Server sees it in the access token."
       },
+      "DeviceTimeZoneDto": {
+        "required": [
+          "timeZone"
+        ],
+        "type": "object",
+        "properties": {
+          "timeZone": {
+            "maxLength": 100,
+            "type": "string",
+            "description": "The IANA time zone that the device is in now."
+          }
+        }
+      },
       "DraftSaveDto": {
         "required": [
           "text",
@@ -7316,7 +7413,7 @@
           },
           "journalingDay": {
             "type": "string",
-            "description": "The date of DateTimeOffset SessionDto.StartedAt in the time zone of the User. It changes when the time zone changes.",
+            "description": "The date of DateTimeOffset SessionDto.StartedAt in the zone that the create stored. A later change of the settings does not move it.",
             "format": "date"
           },
           "rawText": {
@@ -7487,6 +7584,14 @@
             "type": "string",
             "description": "A time in the future becomes the time of the server.",
             "format": "date-time"
+          },
+          "timeZone": {
+            "maxLength": 100,
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The IANA zone that the device used for the day when the person started the Session: the zone that the person picked, or the\nzone of the device. Null, or a zone that this host does not know, gives the zone of the settings."
           },
           "latitude": {
             "type": [
@@ -8267,19 +8372,28 @@
       },
       "UserSettingChangeDto": {
         "required": [
+          "timeZoneMode",
           "locationCaptureEnabled",
           "requirePeopleProposalApproval",
           "version"
         ],
         "type": "object",
         "properties": {
+          "timeZoneMode": {
+            "enum": [
+              "FollowDevice",
+              "Fixed"
+            ],
+            "type": "string",
+            "description": "FollowDevice to take the zone from the device, or Fixed to keep the zone in `timeZone`."
+          },
           "timeZone": {
             "maxLength": 100,
             "type": [
               "null",
               "string"
             ],
-            "description": "The IANA time zone that gives the Journaling day. Null means UTC. The stored zone is always allowed, also when this host does not know it."
+            "description": "For Fixed, the IANA time zone that the person picked. For FollowDevice, the zone of this device now, or null to keep the zone\nthat holds. The stored zone is always allowed, also when this host does not know it."
           },
           "locationCaptureEnabled": {
             "type": "boolean"
@@ -8297,6 +8411,7 @@
       },
       "UserSettingDto": {
         "required": [
+          "timeZoneMode",
           "timeZoneIsKnown",
           "locationCaptureEnabled",
           "requirePeopleProposalApproval",
@@ -8304,11 +8419,20 @@
         ],
         "type": "object",
         "properties": {
+          "timeZoneMode": {
+            "enum": [
+              "FollowDevice",
+              "Fixed"
+            ],
+            "type": "string",
+            "description": "FollowDevice when the zone comes from the device of the person, or Fixed when the person picked it."
+          },
           "timeZone": {
             "type": [
               "null",
               "string"
-            ]
+            ],
+            "description": "The zone that gives the Journaling day now: the zone that the person picked, or the zone that a device reported last. Null means UTC."
           },
           "timeZoneIsKnown": {
             "type": "boolean",

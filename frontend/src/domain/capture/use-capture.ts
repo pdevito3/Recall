@@ -3,6 +3,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react'
 
 import { refreshTimelineHead } from '@/domain/sessions/apis/timeline-cache'
 import { useOwner } from '@/domain/sessions/autosave/use-draft-saver'
+import { captureZoneOf } from '@/domain/settings/apis/user-setting'
 
 import { isNotFound, useRecording, useRetryRecording } from './apis/get-recording'
 import { CaptureGoneError, capturesOf, removeCapture, subscribeToAudioStore, type StoredCapture } from './audio-store'
@@ -29,10 +30,10 @@ const subscribeToMic = (listener: () => void) => {
   return () => micListeners.delete(listener)
 }
 
-async function record(owner: string) {
+async function record(owner: string, timeZone: StoredCapture['timeZone']) {
   dispatch({ type: 'tap' })
   try {
-    const recording = await startRecording(owner, (error) => dispatch({ type: error instanceof CaptureGoneError ? 'entryDeleted' : 'storeFailed' }))
+    const recording = await startRecording(owner, timeZone, (error) => dispatch({ type: error instanceof CaptureGoneError ? 'entryDeleted' : 'storeFailed' }))
     active = recording
     recordedHere.add(recording.clientRecordingId)
     dispatch({ type: 'started', startedAt: recording.startedAt })
@@ -119,7 +120,7 @@ export function useCapture() {
     isLoaded: stored !== null,
     waiting: stored ? waitingBesides(stored.captures, latest) : [],
     level: () => active?.level() ?? 0,
-    record: () => void record(owner),
+    record: () => void record(owner, captureZoneOf(queryClient)),
     stop: () => void active?.stop(),
     retry: (recordingId: string) => retry.mutate(recordingId),
     isRetrying: retry.isPending,

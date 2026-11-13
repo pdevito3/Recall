@@ -638,7 +638,7 @@ test.describe('a setting that did not reach the Server', () => {
 
   test('to turn location on, from a tab that died, is dropped at the next load', async ({ page, api }) => {
     const unsent = unsentWords(page)
-    api.mock(settingsApi.are(aSetting({ timeZone: null })), { method: 'put', path: settingsPaths.mine, status: 503 })
+    api.mock(settingsApi.are(aSetting()), { method: 'put', path: settingsPaths.mine, status: 503 })
     await unsent.leftInStorage(`recall.unsent-setting.${actorSubject}.tab-that-died.1`, JSON.stringify({
       change: { value: { locationCaptureEnabled: true }, savedAt: '2026-11-06T15:31:00.000Z' },
       attempt: null,
@@ -835,7 +835,7 @@ test.describe('words that the browser has no room to keep', () => {
     const journal = journalPage(page)
     await journal.open()
     await journal.typeWithoutWaiting('Words in a key')
-    await expect.poll(() => unsent.keys()).toHaveLength(1)
+    await unsent.waitForTheCreateToWriteItsKey(session.id)
     await unsent.fillTheStorage()
     await unsent.logOut()
     await unsent.answerTheLogoutDialog('Keep words and sign out')

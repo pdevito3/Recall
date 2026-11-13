@@ -18,6 +18,12 @@ export type SessionForCreationDto = {
     */
     startedAt: string;
     /**
+     * @description The IANA zone that the device used for the day when the person started the Session: the zone that the person picked, or the\nzone of the device. Null, or a zone that this host does not know, gives the zone of the settings.
+     * @maxLength 100
+     * @type string | undefined
+    */
+    timeZone?: string | null;
+    /**
      * @description The server does not store a location when capture is off in the settings of the User.
      *
      * Format: `double`

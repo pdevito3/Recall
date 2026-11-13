@@ -22,7 +22,8 @@ import { MembershipKeys } from '@/domain/membership/apis/membership.keys'
 import { Route as RootRoute } from '@/routes/__root'
 import { routeTree } from '@/routeTree.gen'
 import { FileStoreKeys } from '@/domain/file-store/apis/file-store.keys'
-import { member, memberSession } from '@/test/session'
+import { SettingKeys } from '@/domain/settings/apis/setting.keys'
+import { member, memberSession, memberSetting } from '@/test/session'
 
 let showLateHeading = () => {}
 
@@ -94,6 +95,8 @@ async function renderLayoutAt(path: string) {
   queryClient.setQueryData(AuthKeys.user(), memberSession)
   queryClient.setQueryData(FileStoreKeys.status(), { canWrite: true })
   queryClient.setQueryData(MembershipKeys.of(member.identifier), member)
+  queryClient.setQueryData(SettingKeys.mine(), memberSetting)
+  await commands.answerRequests([{ method: 'GET', path: '/api/v1/me/settings', body: memberSetting }])
   const screen = await render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />

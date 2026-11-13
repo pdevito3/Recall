@@ -647,7 +647,7 @@ public class SummaryJobTests : TestBase
     private async Task SetZoneAsync(string zone)
     {
         var current = (await FactoryClient.GetFromJsonAsync<Recall.Server.Domain.UserSettings.Dtos.UserSettingDto>(ApiRoutes.UserSettings.Root))!;
-        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZone = zone, locationCaptureEnabled = false, requirePeopleProposalApproval = true, version = current.Version });
+        var change = await FactoryClient.PutAsJsonAsync(ApiRoutes.UserSettings.Root, new { timeZoneMode = "Fixed", timeZone = zone, locationCaptureEnabled = false, requirePeopleProposalApproval = true, version = current.Version });
         change.StatusCode.ShouldBe(HttpStatusCode.OK, await change.Content.ReadAsStringAsync());
     }
 

@@ -13,7 +13,9 @@ using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Metadata;
 using Recall.Server.Domain.Summaries;
 using Recall.Server.Domain.Sync;
+using Recall.Server.Domain.TimeZones;
 using Recall.Server.Domain.Users;
+using Recall.Server.Domain.UserSettings;
 using Recall.Server.Exceptions;
 using Recall.SharedTestHelpers.EntityGraphs;
 using Microsoft.EntityFrameworkCore;
@@ -55,7 +57,7 @@ public class StringColumnLengthTests
         ["agents.client_id"] = new("clientId", Text, v => TestGraph.Start(out _).AddTenant(out _).AddAgent(out _, a => a.ClientId = v)),
         ["people.label"] = new("label", Text, v => Person.Create("ten_1", "usr_1", v)),
         ["corrections.canonical_term"] = new("canonicalTerm", Text, v => Correction.Create("ten_1", "usr_1", v, [], false)),
-        ["sessions.client_session_id"] = new("clientSessionId", Text, v => Session.Create("ten_1", "usr_1", v, DateTimeOffset.UnixEpoch, null, DateTimeOffset.UnixEpoch)),
+        ["sessions.client_session_id"] = new("clientSessionId", Text, v => Session.Create("ten_1", "usr_1", v, DateTimeOffset.UnixEpoch, null, TimeZoneId.Utc, DateTimeOffset.UnixEpoch)),
         ["sessions.activity"] = new("activity", Text, v => SessionMetadata.Of(v, [], [])),
         ["sessions.raw_text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch), MessageNamesTheLimit: false),
         ["sessions.cleaned_text"] = new("text", DocumentWithNoWords, v => DraftSave.Of(v, 0, DateTimeOffset.UnixEpoch), MessageNamesTheLimit: false),
@@ -87,6 +89,8 @@ public class StringColumnLengthTests
         ["sessions.cleanup_run"] = Enum.GetNames<CleanupRunState>(),
         ["sync_changes.entity_type"] = Enum.GetNames<SyncEntityType>(),
         ["user_settings.time_zone"] = TimeZoneInfo.GetSystemTimeZones().Where(zone => zone.HasIanaId).Select(zone => zone.Id).ToList(),
+        ["user_settings.time_zone_mode"] = Enum.GetNames<TimeZoneMode>(),
+        ["sessions.time_zone"] = TimeZoneInfo.GetSystemTimeZones().Where(zone => zone.HasIanaId).Select(zone => zone.Id).ToList(),
         ["recordings.format"] = Enum.GetNames<RecordingFormat>(),
         ["recordings.engine"] = Enum.GetNames<TranscriptionEngineKind>(),
         ["recordings.status"] = Enum.GetNames<RecordingStatus>(),

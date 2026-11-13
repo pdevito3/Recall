@@ -44,7 +44,7 @@ const noMorePeople = {
   'x-pagination': JSON.stringify({ totalCount: 0, pageSize: 100, currentPageSize: 0, currentStartIndex: 1, currentEndIndex: 0, pageNumber: 1, totalPages: 1, hasPrevious: false, hasNext: false }),
 }
 
-const setting: UserSettingDto = { timeZone: 'Europe/Lisbon', timeZoneIsKnown: true, locationCaptureEnabled: false, requirePeopleProposalApproval: false, version: 1 }
+const setting: UserSettingDto = { timeZoneMode: 'Fixed', timeZone: 'Europe/Lisbon', timeZoneIsKnown: true, locationCaptureEnabled: false, requirePeopleProposalApproval: false, version: 1 }
 
 const recording = (change: Partial<RecordingDto>): RecordingDto => ({
   id: 'rec_1',

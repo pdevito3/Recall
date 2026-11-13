@@ -32,7 +32,7 @@ public static class GenerateSummary
 
             var zone = await dbContext.LoadJournalZoneAsync(cancellationToken);
             await schedules.TryEnsureAsync(owner.UserId, owner.TenantId, zone, cancellationToken);
-            var sources = (await dbContext.LoadSourcesAsync(zone, key, cancellationToken)).StateOf(key);
+            var sources = (await dbContext.LoadSourcesAsync(key, cancellationToken)).StateOf(key);
             var summary = await dbContext.Summaries
                 .TagWithOperationCallSite("summaries.generate.load")
                 .FindAsync(key, cancellationToken);

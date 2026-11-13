@@ -32,7 +32,7 @@ public static class ChangeUserSetting
                     .FirstOrDefaultAsync(ct);
                 var row = stored ?? UserSetting.DefaultsFor(owner.TenantId, owner.UserId);
 
-                applied = row.Change(dto.TimeZone, dto.LocationCaptureEnabled, dto.RequirePeopleProposalApproval, dto.Version);
+                applied = row.Change(dto.TimeZoneMode, dto.TimeZone, dto.LocationCaptureEnabled, dto.RequirePeopleProposalApproval, dto.Version);
                 if (!applied)
                     return row;
 
@@ -48,7 +48,7 @@ public static class ChangeUserSetting
             // The change is stored, so a busy job store does not fail the save: a client that sends it again with the old
             // version would get 409.
             if (applied)
-                await schedules.TryEnsureAsync(owner.UserId, owner.TenantId, UserSetting.ZoneOf(setting.TimeZone), cancellationToken);
+                await schedules.TryEnsureAsync(owner.UserId, owner.TenantId, setting.JournalZone, cancellationToken);
 
             _logger.Here().Information("Took a settings change of user {UserId}, applied {Applied}", owner.UserId, applied);
             return setting.ToUserSettingDto();

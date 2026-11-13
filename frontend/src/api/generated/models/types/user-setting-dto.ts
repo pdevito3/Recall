@@ -3,7 +3,23 @@
 * Do not edit manually.
 */
 
+export const userSettingDtoTimeZoneModeEnum = {
+    FollowDevice: "FollowDevice",
+    Fixed: "Fixed"
+} as const;
+
+export type UserSettingDtoTimeZoneModeEnumKey = (typeof userSettingDtoTimeZoneModeEnum)[keyof typeof userSettingDtoTimeZoneModeEnum];
+
 export type UserSettingDto = {
+    /**
+     * @description FollowDevice when the zone comes from the device of the person, or Fixed when the person picked it.
+     * @type string
+    */
+    timeZoneMode: UserSettingDtoTimeZoneModeEnumKey;
+    /**
+     * @description The zone that gives the Journaling day now: the zone that the person picked, or the zone that a device reported last. Null means UTC.
+     * @type string | undefined
+    */
     timeZone?: string | null;
     /**
      * @description False when this host does not know the stored zone. The Journaling day then comes from UTC until the person sets a zone.

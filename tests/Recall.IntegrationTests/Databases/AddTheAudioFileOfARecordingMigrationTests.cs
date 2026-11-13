@@ -8,6 +8,7 @@ using Recall.Server.Databases;
 using Recall.Server.Domain.Recordings;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Tenants;
+using Recall.Server.Domain.TimeZones;
 using Recall.SharedTestHelpers.EntityGraphs;
 using Recall.SharedTestHelpers.Utilities;
 using Shouldly;
@@ -74,7 +75,7 @@ public sealed class AddTheAudioFileOfARecordingMigrationTests : IAsyncDisposable
             await dbContext.SaveChangesAsync();
         }
 
-        var session = Session.Create(tenant.Id, owner.Id, $"migration-{Guid.NewGuid():N}", DateTimeOffset.UnixEpoch, null, DateTimeOffset.UnixEpoch);
+        var session = Session.Create(tenant.Id, owner.Id, $"migration-{Guid.NewGuid():N}", DateTimeOffset.UnixEpoch, null, TimeZoneId.Utc, DateTimeOffset.UnixEpoch);
         var recording = Recording.Create(tenant.Id, owner.Id, session.Id, $"migration-{Guid.NewGuid():N}", format);
         await using (var journal = factory.CreateJournalScope(new JournalOwner(owner.Id, owner.TenantId)))
         {

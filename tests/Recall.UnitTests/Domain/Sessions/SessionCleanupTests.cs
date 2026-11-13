@@ -2,6 +2,7 @@ namespace Recall.UnitTests.Domain.Sessions;
 
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Metadata;
+using Recall.Server.Domain.TimeZones;
 using Recall.Server.Exceptions;
 using Shouldly;
 
@@ -12,7 +13,7 @@ public class SessionCleanupTests
 
     private static Session SessionWithRaw()
     {
-        var session = Session.Create("ten_1", "usr_1", "device-1", Noon, null, Noon);
+        var session = Session.Create("ten_1", "usr_1", "device-1", Noon, null, TimeZoneId.Utc, Noon);
         session.SaveRaw(DraftSave.Of("raw words", 0, Noon));
         return session;
     }

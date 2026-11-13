@@ -6,7 +6,6 @@ using Dtos;
 using Mappings;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using UserSettings;
 
 public static class GetSummaryById
 {
@@ -22,8 +21,7 @@ public static class GetSummaryById
                 .TagWithOperationCallSite("summaries.get_by_id")
                 .AsNoTracking()
                 .GetById(request.Id, cancellationToken);
-            var zone = await dbContext.LoadJournalZoneAsync(cancellationToken);
-            var sources = await dbContext.LoadSourcesAsync(zone, summary.Key, cancellationToken);
+            var sources = await dbContext.LoadSourcesAsync(summary.Key, cancellationToken);
             return summary.ToSummaryDto(summary.Key, sources.StateOf(summary.Key));
         }
     }

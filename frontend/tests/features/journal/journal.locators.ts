@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test'
 
 export const journal = (page: Page) => ({
+  heading: page.getByRole('main').getByRole('heading', { level: 1 }),
   composer: page.getByRole('textbox', { name: 'New entry' }),
   done: page.getByRole('button', { name: 'Done', exact: true }),
   status: (text: string) => page.getByRole('status').filter({ hasText: text }),

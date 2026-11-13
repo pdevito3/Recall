@@ -48,7 +48,7 @@ async function take(capture: StoredCapture, step: UploadStep, queryClient: Query
   const id = capture.clientRecordingId
   switch (step.kind) {
     case 'createEntry': {
-      const created = await addSession({ body: { clientSessionId: capture.clientSessionId, startedAt: capture.startedAt }, ...callOptions() })
+      const created = await addSession({ body: { clientSessionId: capture.clientSessionId, startedAt: capture.startedAt, timeZone: capture.timeZone ?? null }, ...callOptions() })
       await updateCapture(id, { sessionId: created.id, problem: null })
       void refreshTimelineHead(queryClient)
       return

@@ -6,6 +6,8 @@ using System.Text.Json.Nodes;
 // It does not need to make sense to the domain.
 public static class SchemaSample
 {
+    private static readonly Dictionary<string, string> StringsThatARuleChecksAgainstAList = new() { ["timeZone"] = "UTC" };
+
     public static JsonNode? Of(JsonNode schema, JsonNode root)
     {
         if (schema["$ref"]?.GetValue<string>() is { } reference)
@@ -44,7 +46,7 @@ public static class SchemaSample
         {
             var property = properties?[name]
                 ?? throw new SweepSetupException($"The schema requires {name}, but it has no such property.");
-            sample[name] = Of(property, root);
+            sample[name] = StringsThatARuleChecksAgainstAList.TryGetValue(name, out var value) ? JsonValue.Create(value) : Of(property, root);
         }
         return sample;
     }

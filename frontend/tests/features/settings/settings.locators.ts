@@ -2,7 +2,11 @@ import type { Page } from '@playwright/test'
 
 export const settings = (page: Page) => ({
   heading: page.getByRole('heading', { level: 1, name: 'Settings' }),
-  zone: page.getByRole('combobox', { name: 'Time zone' }),
+  zone: page.getByRole('combobox', { name: 'Time zone', exact: true }),
+  zoneOption: (name: RegExp) => page.getByRole('option', { name }),
+  zoneOptions: page.getByRole('option'),
+  noZoneMatches: page.getByText('No time zone matches your search.', { exact: true }),
+  zoneInUse: page.getByText(/^New entries use /),
   location: page.getByRole('checkbox', { name: 'Save my location with each new entry' }),
   proposals: page.getByRole('checkbox', { name: 'Ask me before AI adds a person to an entry' }),
   signedInAs: (name: string) => page.getByText(`Signed in as ${name}`, { exact: true }),

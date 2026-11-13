@@ -7,8 +7,10 @@ using Recall.Server.Domain.People.Features;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Dtos;
 using Recall.Server.Domain.Sessions.Features;
+using Recall.Server.Domain.TimeZones;
 using Recall.Server.Domain.Users;
 using Recall.Server.Domain.Users.Features;
+using Recall.Server.Domain.UserSettings;
 using Recall.Server.Domain.UserSettings.Dtos;
 using Recall.Server.Domain.UserSettings.Features;
 using Recall.Server.Exceptions;
@@ -253,7 +255,7 @@ public class JournalRaceTests : TestBase
         // Assert
         (await Should.ThrowAsync<Exception>(retry)).ShouldBeOfType<StaleVersionException>();
         var stored = await ScopeOf(owner).ExecuteDbContextAsync(db => db.UserSettings.SingleAsync());
-        stored.TimeZone.ShouldBe("Europe/Paris");
+        stored.TimeZone.ShouldBe(new TimeZoneSetting.Fixed("Europe/Paris"));
         stored.Version.ShouldBe(2u);
     }
 
@@ -306,7 +308,7 @@ public class JournalRaceTests : TestBase
     {
         // Arrange
         var scope = new TestingServiceScope();
-        var session = Session.Create(TestFixture.DefaultTenant.Id, "usr_00000000000000000000000000000000", Guid.NewGuid().ToString(), Morning, null, Morning);
+        var session = Session.Create(TestFixture.DefaultTenant.Id, "usr_00000000000000000000000000000000", Guid.NewGuid().ToString(), Morning, null, TimeZoneId.Utc, Morning);
 
         // Act
         var save = () => scope.AddAsync(session);
@@ -424,7 +426,7 @@ public class JournalRaceTests : TestBase
         // Assert
         (await Should.ThrowAsync<Exception>(change)).ShouldBeOfType<StaleVersionException>();
         var stored = await ScopeOf(owner).ExecuteDbContextAsync(db => db.UserSettings.SingleAsync());
-        stored.TimeZone.ShouldBe("Europe/Paris");
+        stored.TimeZone.ShouldBe(new TimeZoneSetting.Fixed("Europe/Paris"));
     }
 
     [Test]
@@ -446,7 +448,7 @@ public class JournalRaceTests : TestBase
         // Assert
         (await Should.ThrowAsync<Exception>(change)).ShouldBeOfType<StaleVersionException>();
         var stored = await ScopeOf(owner).ExecuteDbContextAsync(db => db.UserSettings.SingleAsync());
-        stored.TimeZone.ShouldBe("Europe/Paris");
+        stored.TimeZone.ShouldBe(new TimeZoneSetting.Fixed("Europe/Paris"));
     }
 
     [Test]
@@ -468,7 +470,7 @@ public class JournalRaceTests : TestBase
         // Assert
         (await Should.ThrowAsync<Exception>(change)).ShouldBeOfType<StaleVersionException>();
         var stored = await ScopeOf(owner).ExecuteDbContextAsync(db => db.UserSettings.SingleAsync());
-        stored.TimeZone.ShouldBe("Europe/Paris");
+        stored.TimeZone.ShouldBe(new TimeZoneSetting.Fixed("Europe/Paris"));
     }
 
     private static string Mention(string personId, string label, string words)
@@ -478,8 +480,35 @@ public class JournalRaceTests : TestBase
     private static DraftSaveDto Save(string text, DateTimeOffset savedAt)
         => new() { Text = text, BaseRevision = 0, SavedAt = savedAt };
 
+    [Test]
+    [Property("Rule", "SES-46")]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task a_device_report_that_races_a_picked_zone_runs_again_and_the_picked_zone_holds(bool rowExists)
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        if (rowExists)
+            await ScopeOf(owner).SendAsync(new ReportDeviceTimeZone.Command(new DeviceTimeZoneDto { TimeZone = "Europe/Riga" }));
+        var version = rowExists ? 1u : 0u;
+        var pause = PauseAtQuery.After("user_settings.report_zone.load");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var report = ScopeOf(owner, services).SendAsync(new ReportDeviceTimeZone.Command(new DeviceTimeZoneDto { TimeZone = "America/Chicago" }));
+        await pause.ReachedAsync();
+        await ScopeOf(owner).SendAsync(new ChangeUserSetting.Command(Setting("Europe/Paris", version)));
+        pause.Release();
+
+        // Assert
+        (await report).TimeZone.ShouldBe("Europe/Paris");
+        var stored = await ScopeOf(owner).ExecuteDbContextAsync(db => db.UserSettings.SingleAsync());
+        stored.TimeZone.ShouldBe(new TimeZoneSetting.Fixed("Europe/Paris"));
+        stored.Version.ShouldBe(version + 1);
+    }
+
     private static UserSettingChangeDto Setting(string zone, uint version)
-        => new() { TimeZone = zone, LocationCaptureEnabled = false, RequirePeopleProposalApproval = true, Version = version };
+        => new() { TimeZoneMode = "Fixed", TimeZone = zone, LocationCaptureEnabled = false, RequirePeopleProposalApproval = true, Version = version };
 
     private static async Task<User> AddOwnerAsync()
     {

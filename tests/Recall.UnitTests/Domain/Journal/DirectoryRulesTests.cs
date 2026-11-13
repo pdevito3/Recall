@@ -2,6 +2,7 @@ namespace Recall.UnitTests.Domain.Journal;
 
 using Recall.Server.Domain.Corrections;
 using Recall.Server.Domain.People;
+using Recall.Server.Domain.TimeZones;
 using Recall.Server.Domain.UserSettings;
 using Recall.Server.Exceptions;
 using Shouldly;
@@ -77,7 +78,7 @@ public class DirectoryRulesTests
     public void a_user_with_no_zone_uses_utc()
     {
         // Act
-        var zone = UserSetting.ZoneOf(null);
+        var zone = TimeZoneId.OrUtc(null);
 
         // Assert
         zone.Value.ShouldBe("UTC");
@@ -90,7 +91,7 @@ public class DirectoryRulesTests
         var setting = UserSetting.DefaultsFor("ten_1", "usr_1");
 
         // Act
-        Action change = () => setting.Change("Not/AZone", false, true, 0u);
+        Action change = () => setting.Change("Fixed", "Not/AZone", false, true, 0u);
 
         // Assert
         change.ShouldThrow<ValidationException>().Property.ShouldBe("timeZone");

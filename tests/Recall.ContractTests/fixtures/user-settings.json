@@ -1,4 +1,5 @@
 {
+  "timeZoneMode": "Fixed",
   "timeZone": "Europe/Tallinn",
   "timeZoneIsKnown": true,
   "locationCaptureEnabled": true,

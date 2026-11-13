@@ -12,7 +12,7 @@ export const sessionDtoSchema = z.object({
   id: z.string(),
   clientSessionId: z.string(),
   startedAt: z.iso.datetime(),
-  journalingDay: z.iso.date().describe('The date of DateTimeOffset SessionDto.StartedAt in the time zone of the User. It changes when the time zone changes.'),
+  journalingDay: z.iso.date().describe('The date of DateTimeOffset SessionDto.StartedAt in the zone that the create stored. A later change of the settings does not move it.'),
   rawText: z.string(),
   rawDraftRevision: z.int32(),
   rawLatestRevision: z.int32(),

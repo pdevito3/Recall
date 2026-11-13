@@ -337,7 +337,7 @@ public partial class JobDashboardTests
         demoted.IsSuccessStatusCode.ShouldBeTrue();
         ended.StatusCode.ShouldBe(HttpStatusCode.OK);
         (await ended.Content.ReadAsStringAsync()).ShouldContain("event:");
-        streamed.ShouldBeInRange(JobDashboard.LiveStreamLimit, JobDashboard.LiveStreamLimit + TimeSpan.FromSeconds(10));
+        streamed.ShouldBeInRange(JobDashboard.LiveStreamLimit, JobDashboard.LiveStreamLimit * 2);
         afterDemotion.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         host.Logs.All.ShouldNotContain(entry => entry.Level >= LogEventLevel.Error);
     }

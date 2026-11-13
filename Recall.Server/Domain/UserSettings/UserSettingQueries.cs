@@ -15,16 +15,20 @@ public static class UserSettingQueries
         var setting = await dbContext.UserSettings
             .TagWithOperationCallSite("user_settings.zone")
             .AsNoTracking()
-            .Select(s => new { s.UserId, s.TimeZone })
             .FirstOrDefaultAsync(cancellationToken);
-        return setting is null ? UserSetting.ZoneOf(null) : JournalZoneOf(setting.UserId, setting.TimeZone);
+        return JournalZoneOf(setting);
     }
 
-    public static TimeZoneId JournalZoneOf(string userId, string? timeZone)
+    public static TimeZoneId JournalZoneOf(UserSetting? setting)
     {
-        if (!UserSetting.IsKnownZone(timeZone) && WarnedOwners.TryAdd(userId, true))
-            Log.ForContext(typeof(UserSettingQueries)).Warning("User {UserId} has a stored time zone that this host does not know, so the Journaling day comes from UTC", userId);
+        if (setting is { TimeZoneIsKnown: false } && WarnedOwners.TryAdd(setting.UserId, true))
+            Log.ForContext(typeof(UserSettingQueries)).Warning("User {UserId} has a stored time zone that this host does not know, so the Journaling day comes from UTC", setting.UserId);
 
-        return UserSetting.ZoneOf(timeZone);
+        return setting?.JournalZone ?? TimeZoneId.OrUtc(null);
     }
+
+    public static TimeZoneId ZoneOfANewSession(UserSetting? setting, string? zoneOfTheDevice)
+        => setting?.TimeZone is TimeZoneSetting.Fixed
+            ? JournalZoneOf(setting)
+            : TimeZoneId.TryOf(zoneOfTheDevice) ?? JournalZoneOf(setting);
 }

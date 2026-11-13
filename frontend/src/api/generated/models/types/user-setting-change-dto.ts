@@ -3,9 +3,21 @@
 * Do not edit manually.
 */
 
+export const userSettingChangeDtoTimeZoneModeEnum = {
+    FollowDevice: "FollowDevice",
+    Fixed: "Fixed"
+} as const;
+
+export type UserSettingChangeDtoTimeZoneModeEnumKey = (typeof userSettingChangeDtoTimeZoneModeEnum)[keyof typeof userSettingChangeDtoTimeZoneModeEnum];
+
 export type UserSettingChangeDto = {
     /**
-     * @description The IANA time zone that gives the Journaling day. Null means UTC. The stored zone is always allowed, also when this host does not know it.
+     * @description FollowDevice to take the zone from the device, or Fixed to keep the zone in `timeZone`.
+     * @type string
+    */
+    timeZoneMode: UserSettingChangeDtoTimeZoneModeEnumKey;
+    /**
+     * @description For Fixed, the IANA time zone that the person picked. For FollowDevice, the zone of this device now, or null to keep the zone\nthat holds. The stored zone is always allowed, also when this host does not know it.
      * @maxLength 100
      * @type string | undefined
     */

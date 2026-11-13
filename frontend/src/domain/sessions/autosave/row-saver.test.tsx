@@ -430,18 +430,6 @@ test('an unsaved change counts as unsaved, and a stopped saver does not', () => 
   expect(saver.hasUnsaved()).toBe(false)
 })
 
-test('a value that the app chose yields to the row, with no question', () => {
-  const plan = planAfterStale<Fields>({
-    changed: { zone: 'Europe/Athens', capture: true },
-    before: { zone: '', capture: false, topics: [] },
-    fresh: { zone: 'Africa/Cairo', capture: false, topics: [] },
-    hadNoReply: false,
-    rules: { yieldsToTheRow: (field, before) => field === 'zone' && before === '' },
-  })
-
-  expect(plan).toEqual({ apply: { capture: true }, asks: [], appliedWithNoAsk: [] })
-})
-
 test('a change that turns capture on applies with no prompt when the row did not change', async () => {
   const api = server()
   const { saver } = saverOn(api, { current: api.row.current })
@@ -756,6 +744,18 @@ test('the plan drops a field that the row holds, in any order of the items of a 
   })
 
   expect(plan).toEqual({ apply: { zone: 'B' }, asks: [], appliedWithNoAsk: [] })
+})
+
+test('a field that moved with no choice of a person takes yours with no question', () => {
+  const plan = planAfterStale<Fields>({
+    changed: { zone: 'Europe/Paris' },
+    before: { capture: false, zone: 'America/New_York', topics: [] },
+    fresh: { capture: false, zone: 'Asia/Tokyo', topics: [] },
+    hadNoReply: false,
+    rules: { sameChoice: (field) => field === 'zone' },
+  })
+
+  expect(plan).toEqual({ apply: { zone: 'Europe/Paris' }, asks: [], appliedWithNoAsk: [] })
 })
 
 type Click = 'on' | 'off' | 'other'

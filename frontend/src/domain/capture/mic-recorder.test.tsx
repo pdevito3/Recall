@@ -42,7 +42,7 @@ const hideTheTab = () => vi.spyOn(document, 'visibilityState', 'get').mockReturn
 test('a tab that goes to the background stores the part of a second that it heard', async () => {
   // Arrange
   micGivesATone()
-  recording = await startRecording(owner, () => undefined)
+  recording = await startRecording(owner, undefined, () => undefined)
   await wait(200)
 
   // Act
@@ -56,7 +56,7 @@ test('a tab that goes to the background stores the part of a second that it hear
 test('a tab that closes stores the part of a second that it heard', async () => {
   // Arrange
   micGivesATone()
-  recording = await startRecording(owner, () => undefined)
+  recording = await startRecording(owner, undefined, () => undefined)
   await wait(200)
 
   // Act
@@ -78,7 +78,7 @@ test('a slice that this browser refuses to store stops the recording', async () 
   })
 
   // Act
-  recording = await startRecording(owner, onSliceFailed)
+  recording = await startRecording(owner, undefined, onSliceFailed)
 
   // Assert
   const stopped = await Promise.race([recording.ended.then(() => true), wait(3 * sliceMs).then(() => false)])

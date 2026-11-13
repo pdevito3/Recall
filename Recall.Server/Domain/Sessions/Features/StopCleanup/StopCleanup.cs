@@ -8,7 +8,6 @@ using Mappings;
 using MediatR;
 using Resources;
 using Serilog;
-using UserSettings;
 
 /// <summary>
 /// The stop that a person asks for. The state commits first, so a result that comes after it changes nothing, and then the call
@@ -39,7 +38,7 @@ public static class StopCleanup
                 _logger.Here().Information("Stopped Cleanup {CleanupRunId} of session {SessionId}", runId, session.Id);
             }
 
-            return session.ToSessionDto(await dbContext.LoadJournalZoneAsync(cancellationToken));
+            return session.ToSessionDto();
         }
     }
 }

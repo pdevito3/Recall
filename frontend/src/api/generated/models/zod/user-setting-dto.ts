@@ -6,7 +6,8 @@
 import * as z from 'zod'
 
 export const userSettingDtoSchema = z.object({
-  timeZone: z.string().nullish(),
+  timeZoneMode: z.enum(['FollowDevice', 'Fixed']).describe('FollowDevice when the zone comes from the device of the person, or Fixed when the person picked it.'),
+  timeZone: z.string().nullish().describe('The zone that gives the Journaling day now: the zone that the person picked, or the zone that a device reported last. Null means UTC.'),
   timeZoneIsKnown: z.boolean().describe('False when this host does not know the stored zone. The Journaling day then comes from UTC until the person sets a zone.'),
   locationCaptureEnabled: z.boolean(),
   requirePeopleProposalApproval: z.boolean(),

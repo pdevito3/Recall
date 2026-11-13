@@ -8,7 +8,6 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Resources;
 using Serilog;
-using UserSettings;
 
 public static class ApplyWaitingCleanup
 {
@@ -35,7 +34,7 @@ public static class ApplyWaitingCleanup
             await dbContext.SaveChangesAsync(cancellationToken);
             _logger.Here().Information("Took the waiting Cleanup result into Cleaned of session {SessionId}", session.Id);
 
-            return session.ToSessionDto(await dbContext.LoadJournalZoneAsync(cancellationToken));
+            return session.ToSessionDto();
         }
     }
 }

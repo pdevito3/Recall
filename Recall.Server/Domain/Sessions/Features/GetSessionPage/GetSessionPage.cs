@@ -5,7 +5,6 @@ using Dtos;
 using Mappings;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using UserSettings;
 
 public static class GetSessionPage
 {
@@ -32,6 +31,7 @@ public static class GetSessionPage
                     s.Id,
                     s.ClientSessionId,
                     s.StartedAt,
+                    s.TimeZone,
                     s.Preview,
                     s.Synopsis,
                     s.CleanupRun,
@@ -48,7 +48,6 @@ public static class GetSessionPage
                 })
                 .ToKeysetPageAsync(request.Parameters.PageSize, cancellationToken);
 
-            var zone = await dbContext.LoadJournalZoneAsync(cancellationToken);
             return new SessionPageDto
             {
                 Items = page.Select(row => new SessionSummaryDto
@@ -56,7 +55,7 @@ public static class GetSessionPage
                     Id = row.Id,
                     ClientSessionId = row.ClientSessionId,
                     StartedAt = row.StartedAt,
-                    JournalingDay = zone.ToLocal(row.StartedAt).Date,
+                    JournalingDay = Session.JournalingDayOf(row.StartedAt, row.TimeZone),
                     Preview = row.Preview,
                     Synopsis = row.Synopsis,
                     CleanupStatus = Session.CleanupStatusOf(row.CleanupRun, row.DraftRevision, row.LastCleanupRawRevision).ToString(),

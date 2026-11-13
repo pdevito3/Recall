@@ -7,13 +7,19 @@ public class UserSetting : BaseEntity, ITenantable, IJournalOwned
 {
     public const string IdPrefix = "ust";
 
-    private static readonly TimeZoneId Utc = TimeZoneId.Of("UTC");
-
     [NotSensitive] public string TenantId { get; private set; } = default!;
 
     [NotSensitive] public string UserId { get; private set; } = default!;
 
-    [Sensitive] public string? TimeZone { get; private set; }
+    private TimeZoneMode TimeZoneMode { get; set; }
+
+    [Sensitive] private string? TimeZoneValue { get; set; }
+
+    public TimeZoneSetting TimeZone
+    {
+        get => TimeZoneSetting.Of(TimeZoneMode, TimeZoneValue);
+        private set => (TimeZoneMode, TimeZoneValue) = (value.Mode, value.Zone);
+    }
 
     public bool LocationCaptureEnabled { get; private set; }
 
@@ -21,26 +27,35 @@ public class UserSetting : BaseEntity, ITenantable, IJournalOwned
 
     public static UserSetting DefaultsFor(string tenantId, string userId) => new() { TenantId = tenantId, UserId = userId };
 
-    public bool TimeZoneIsKnown => IsKnownZone(TimeZone);
+    public bool TimeZoneIsKnown => TimeZoneValue is null || TimeZoneId.TryOf(TimeZoneValue) is not null;
 
-    public static bool IsKnownZone(string? timeZone) => timeZone is null || TimeZoneId.TryOf(timeZone) is not null;
+    public TimeZoneId JournalZone => TimeZoneId.OrUtc(TimeZoneValue);
 
-    public static TimeZoneId ZoneOf(string? timeZone) => TimeZoneId.TryOf(timeZone) ?? Utc;
-
-    /// <exception cref="ValidationException">The time zone is not an IANA zone, and it is not the stored zone.</exception>
-    public bool Change(string? timeZone, bool locationCaptureEnabled, bool requirePeopleProposalApproval, uint version)
+    /// <exception cref="ValidationException">The mode is not a mode, or the time zone is not an IANA zone and it is not the stored zone.</exception>
+    public bool Change(string? timeZoneMode, string? timeZone, bool locationCaptureEnabled, bool requirePeopleProposalApproval, uint version)
     {
-        var zone = string.IsNullOrWhiteSpace(timeZone) ? null : timeZone;
+        var zone = TimeZoneSetting.Parse(timeZoneMode, timeZone, TimeZone);
         var isStored = zone == TimeZone && locationCaptureEnabled == LocationCaptureEnabled && requirePeopleProposalApproval == RequirePeopleProposalApproval;
         if (isStored && version != Version)
             return false;
 
         GuardVersion(version);
 
-        // A client sends the whole row back, so a stored zone that this host does not know must not stop a change of the other settings.
-        TimeZone = zone is null || zone == TimeZone ? zone : TimeZoneId.Of(zone).Value;
+        TimeZone = zone.ValidatedExceptTheStoredZone(TimeZone);
         LocationCaptureEnabled = locationCaptureEnabled;
         RequirePeopleProposalApproval = requirePeopleProposalApproval;
+        return true;
+    }
+
+    /// <summary>A device reports the zone that it is in. Only a row that follows the device takes it.</summary>
+    /// <exception cref="ValidationException">The zone is not an IANA zone.</exception>
+    public bool ReportDeviceZone(string zone)
+    {
+        var next = TimeZone.WithReportedZone(zone);
+        if (next == TimeZone)
+            return false;
+
+        TimeZone = next;
         return true;
     }
 
