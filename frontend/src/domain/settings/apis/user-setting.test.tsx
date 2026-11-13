@@ -102,6 +102,10 @@ const captureZoneWith = (row: UserSettingDto) => {
   return captureZoneOf(queryClient)
 }
 
+test('a new entry that starts before the row loads sends the zone of this browser', () => {
+  expect(captureZoneOf(new QueryClient())).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone)
+})
+
 test('a new entry sends the fixed zone of the row, also when this browser does not know the zone', () => {
   expect(captureZoneWith(aRow({ timeZoneMode: 'Fixed', timeZone: 'Mars/Olympus_Mons' }))).toBe('Mars/Olympus_Mons')
 })

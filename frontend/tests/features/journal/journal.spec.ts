@@ -453,6 +453,28 @@ test.describe('the time zone of the device', () => {
     expect(api.all('put', settingsPaths.mine)).toHaveLength(0)
   })
 
+  test('an entry started before the settings answer carries the zone of this device', async ({ page, api }) => {
+    const zone = test.info().project.use.timezoneId!
+    let answerTheSettings = () => {}
+    const held = new Promise<void>((resolve) => (answerTheSettings = resolve))
+    const isNew = aSession().atRevision(0).saying('').build()
+    api.mock(
+      { ...settingsApi.are(aSetting({ timeZoneMode: 'FollowDevice', timeZone: 'Antarctica/Troll' })), heldUntil: held },
+      settingsApi.takesTheDeviceZone(aSetting({ timeZoneMode: 'FollowDevice', timeZone: zone, version: 2 })),
+      sessionsApi.creates(isNew),
+      sessionsApi.draftSaveWins(isNew, 1),
+    )
+    const journal = journalPage(page)
+    await journal.open()
+
+    await journal.write('Written just after landing')
+
+    await expect.poll(() => api.all('post', sessionsPaths.timeline).length).toBe(1)
+    const create = api.last('post', sessionsPaths.timeline)?.body as { timeZone?: string | null }
+    answerTheSettings()
+    expect(create.timeZone).toBe(zone)
+  })
+
   test('a zone that the person picked gets no report', async ({ page, api }) => {
     api.mock(settingsApi.are(aSetting({ timeZoneMode: 'Fixed', timeZone: 'Asia/Tokyo' })))
     const journal = journalPage(page)
