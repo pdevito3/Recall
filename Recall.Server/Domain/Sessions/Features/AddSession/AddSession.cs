@@ -9,7 +9,6 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Resources;
 using Serilog;
-using TimeZones;
 using UserSettings;
 
 public static class AddSession
@@ -47,7 +46,7 @@ public static class AddSession
                     throw new ConflictException("clientSessionId", "This Session was deleted, so it cannot come back. Drop the local copy.");
 
                 var location = CapturedLocation.Admit(setting?.LocationCaptureEnabled ?? false, dto.Latitude, dto.Longitude);
-                var zone = TimeZoneId.TryOf(dto.TimeZone) ?? UserSettingQueries.JournalZoneOf(setting);
+                var zone = UserSettingQueries.ZoneOfANewSession(setting, dto.TimeZone);
                 var session = Session.Create(owner.TenantId, owner.UserId, dto.ClientSessionId, dto.StartedAt, location, zone, timeProvider.GetUtcNow());
                 await dbContext.Sessions.AddAsync(session, ct);
                 await dbContext.SaveChangesAsync(ct);

@@ -26,4 +26,9 @@ public static class UserSettingQueries
 
         return setting?.JournalZone ?? TimeZoneId.OrUtc(null);
     }
+
+    public static TimeZoneId ZoneOfANewSession(UserSetting? setting, string? zoneOfTheDevice)
+        => setting?.TimeZone is TimeZoneSetting.Fixed
+            ? JournalZoneOf(setting)
+            : TimeZoneId.TryOf(zoneOfTheDevice) ?? JournalZoneOf(setting);
 }

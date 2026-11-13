@@ -128,7 +128,7 @@ An older client sends `savedAt` and no version. The POC client, and any client o
 
 ## Journaling day
 
-A Session keeps the zone that the device used when it started, so its day does not move when the person travels or changes the settings. Send that zone as `timeZone` on the create, also when the create waits offline. Use `journalingDay` from the Session in the sync feed and in each read. Derive a day only for a Session that the server has not taken yet, from `startedAt` and the zone that the device sent.
+A Session keeps the zone that the device used when it started, so its day does not move when the person travels or changes the settings. Send that zone as `timeZone` on the create, also when the create waits offline. When the settings have a Fixed zone, the server uses the Fixed zone, whatever zone the create sends. Use `journalingDay` from the Session in the sync feed and in each read. Derive a day only for a Session that the server has not taken yet, from `startedAt` and the zone that the device sent.
 
 While `timeZoneMode` is `FollowDevice`, send the zone of the device with `PUT /api/v1/me/settings/device-time-zone` at launch, when the app becomes active, and on `NSSystemTimeZoneDidChange`. The body is `{ timeZone }`, with no version. A row that is `Fixed` ignores the zone of the report and gives 200. While the row follows the device, a zone that the host does not know gives 422. A body with no `timeZone` gives 400 in either mode. The reply is the settings row, and the feed sends it too.
 
