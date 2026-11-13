@@ -33,10 +33,11 @@ function zoneSentWithANewEntry(setting: UserSettingDto | undefined): SessionForC
   return setting === undefined || followsTheDevice(setting) ? deviceTimeZone() : setting.timeZone
 }
 
+export const zoneOfNewEntries = (setting: UserSettingDto | undefined): string => zoneSentWithANewEntry(setting) ?? setting?.timeZone ?? 'UTC'
+
 export function journalZoneOf(setting: UserSettingDto | undefined): TimeZone {
-  const zone = zoneSentWithANewEntry(setting) ?? setting?.timeZone
   try {
-    return parseTimeZone(zone ?? 'UTC')
+    return parseTimeZone(zoneOfNewEntries(setting))
   } catch {
     return 'UTC' as TimeZone
   }

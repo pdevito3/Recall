@@ -9,9 +9,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { SaveStatusLine } from '@/domain/sessions/components/save-status'
 import { StaleChangePrompts } from '@/domain/sessions/components/stale-change-prompts'
 import { userSettingDtoTimeZoneModeEnum } from '@/api/generated/models/types/user-setting-dto'
-import { followsTheDevice, journalZoneOf, settingSaver, useUserSetting, type SettingChange } from '@/domain/settings/apis/user-setting'
+import { followsTheDevice, journalZoneOf, settingSaver, useUserSetting, zoneOfNewEntries, type SettingChange } from '@/domain/settings/apis/user-setting'
 import { useCurrentUser } from '@/domain/users/apis/get-current-user'
-import { deviceTimeZone, parseTimeZone, timeZoneLabel, type TimeZone } from '@/lib/zoned-time'
+import { deviceTimeZone, timeZoneLabel, type TimeZone } from '@/lib/zoned-time'
 
 interface ZoneOption {
   id: string
@@ -20,7 +20,13 @@ interface ZoneOption {
 
 const placeOf = (zone: string) => zone.replaceAll('/', ' / ')
 
-const zoneOption = (id: string): ZoneOption => ({ id, label: `${placeOf(id)} (${timeZoneLabel(id as TimeZone)})` })
+function zoneOption(id: string): ZoneOption {
+  try {
+    return { id, label: `${placeOf(id)} (${timeZoneLabel(id as TimeZone)})` }
+  } catch {
+    return { id, label: placeOf(id) }
+  }
+}
 
 const automaticKey = 'automatic'
 
@@ -31,9 +37,9 @@ const withoutZoneSeparators = (text: string) => text.replace(/[\s/_]+/g, '')
 let listedZones: ZoneOption[] | undefined
 
 // The list of the browser leaves out UTC and the new name of a renamed zone, such as Asia/Kolkata. A label costs about 0.5 ms.
-function zoneOptions(savedZone: TimeZone): ZoneOption[] {
+function zoneOptions(savedZone: string | null | undefined): ZoneOption[] {
   listedZones ??= [...new Set(['UTC', ...Intl.supportedValuesOf('timeZone')])].sort().map(zoneOption)
-  if (listedZones.some(({ id }) => id === savedZone)) return listedZones
+  if (!savedZone || listedZones.some(({ id }) => id === savedZone)) return listedZones
   return [...listedZones, zoneOption(savedZone)].sort((a, b) => (a.id < b.id ? -1 : 1))
 }
 
@@ -53,7 +59,8 @@ export function SettingsForm() {
   const { contains } = useFilter({ sensitivity: 'base' })
   const zone = journalZoneOf(setting.data)
   const deviceZone = deviceTimeZone()
-  const zones = useMemo(() => [automaticOption(deviceZone), ...zoneOptions(zone)], [deviceZone, zone])
+  const fixedZone = setting.data && !followsTheDevice(setting.data) ? setting.data.timeZone : null
+  const zones = useMemo(() => [automaticOption(deviceZone), ...zoneOptions(fixedZone)], [deviceZone, fixedZone])
 
   if (setting.isPending) {
     return <p role="status" aria-label="Loading your settings" className="text-muted-foreground">Loading your settings</p>
@@ -64,7 +71,7 @@ export function SettingsForm() {
 
   const values: SettingChange = { ...setting.data, ...saver.pendingFields() }
   const change = (patch: Partial<SettingChange>) => saver.edit(patch)
-  const zoneInUse = journalZoneOf({ ...setting.data, ...values })
+  const zoneInUse = zoneOfNewEntries({ ...setting.data, ...values })
 
   return (
     <div className="flex flex-col gap-8">
@@ -86,7 +93,7 @@ export function SettingsForm() {
           selectedKey={followsTheDevice(values) ? automaticKey : (values.timeZone ?? null)}
           onSelectionChange={(key) => {
             if (key === automaticKey) change({ timeZoneMode: userSettingDtoTimeZoneModeEnum.FollowDevice, timeZone: null })
-            else if (typeof key === 'string') change({ timeZoneMode: userSettingDtoTimeZoneModeEnum.Fixed, timeZone: parseTimeZone(key) })
+            else if (typeof key === 'string') change({ timeZoneMode: userSettingDtoTimeZoneModeEnum.Fixed, timeZone: key })
           }}
         >
           <ComboboxInput className="[&_input]:text-ellipsis" />
