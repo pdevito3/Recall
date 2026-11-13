@@ -164,6 +164,22 @@ public class DeviceTimeZoneTests : TestBase
 
     [Test]
     [Property("Rule", "SES-3")]
+    public async Task a_fixed_zone_wins_over_the_zone_that_a_create_sends()
+    {
+        // Arrange
+        await SignInAsync();
+        (await PickAsync("Europe/Paris", 0)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Act
+        var created = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.Root, new { clientSessionId = Guid.NewGuid().ToString(), startedAt = LateAtNight, timeZone = "America/Chicago" });
+
+        // Assert
+        created.StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await created.Content.ReadFromJsonAsync<SessionDto>())!.JournalingDay.ShouldBe(new DateOnly(2026, 6, 2));
+    }
+
+    [Test]
+    [Property("Rule", "SES-3")]
     [Arguments(null)]
     [Arguments("Mars/Olympus_Mons")]
     public async Task a_create_with_no_zone_or_an_unknown_zone_takes_the_zone_of_the_settings(string? zone)
