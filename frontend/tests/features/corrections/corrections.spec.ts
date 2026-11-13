@@ -142,5 +142,20 @@ test.describe('the corrections of a journal', () => {
     await expect(corrections.at.toast('Correction deleted')).toBeVisible()
     expect(await corrections.at.toasts.count()).toBe(1)
     await expect(corrections.at.heading).toBeFocused()
+    expect(api.last('delete', correctionsPaths.one('cor_1'))?.query.get('ifVersion')).toBe('1')
+  })
+
+  test('keeps a correction that changed on another device after the page loaded it, and shows the change', async ({ page, api }) => {
+    api.mock(correctionsApi.listIs([aCorrection('cor_1', 'GRDB')]))
+    const corrections = correctionsPage(page)
+    await corrections.open()
+
+    api.mock(correctionsApi.deleteIsStale('cor_1'), correctionsApi.listIs([{ ...aCorrection('cor_1', 'GRDB', ['girdb']), version: 2 }]))
+    await corrections.remove('cor_1', 'GRDB')
+
+    await expect(corrections.at.toast('This record changed after you loaded it.')).toBeVisible()
+    await expect(corrections.at.term('GRDB')).toBeVisible()
+    await expect(corrections.at.heardAs('girdb')).toBeVisible()
+    expect(api.last('delete', correctionsPaths.one('cor_1'))?.query.get('ifVersion')).toBe('1')
   })
 })

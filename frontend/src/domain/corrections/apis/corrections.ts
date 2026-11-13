@@ -68,7 +68,7 @@ export function useUpdateCorrection() {
 export function useDeleteCorrection() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => deleteCorrection({ path: { id } }),
+    mutationFn: ({ id, version }: { id: string; version: number }) => deleteCorrection({ path: { id }, query: { ifVersion: version } }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: CorrectionKeys.directory() }),
   })
 }

@@ -124,7 +124,7 @@ function DeleteCorrection({
   const remove = useDeleteCorrection()
 
   const handleDelete = () =>
-    remove.mutate(correction.id, {
+    remove.mutate({ id: correction.id, version: correction.version }, {
       onSuccess: () => {
         Notification.success('Correction deleted')
         headingRef.current?.focus()

@@ -40,6 +40,12 @@ public class Correction : BaseEntity, ITenantable, IJournalOwned
         Apply(canonicalTerm, mishearings, hardReplace);
     }
 
+    public void GuardDelete(uint? ifVersion)
+    {
+        if (ifVersion is { } version)
+            GuardVersion(version);
+    }
+
     private void Apply(string canonicalTerm, IEnumerable<string?>? mishearings, bool hardReplace)
     {
         ValidationException.ThrowWhenNullOrWhitespace(canonicalTerm, CanonicalTermField, "Please provide a term.");

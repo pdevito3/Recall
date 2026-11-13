@@ -773,7 +773,7 @@
         "tags": [
           "Corrections"
         ],
-        "summary": "Deletes a Correction of the caller.",
+        "summary": "Deletes a Correction of the caller. Send `ifVersion`, the version that the caller saw, so that a Correction that changed after it stays and the reply is 409. With no `ifVersion`, the delete goes at any version.",
         "operationId": "DeleteCorrection",
         "parameters": [
           {
@@ -782,6 +782,15 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "ifVersion",
+            "in": "query",
+            "schema": {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
             }
           },
           {

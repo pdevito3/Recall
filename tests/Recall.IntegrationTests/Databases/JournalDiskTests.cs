@@ -74,7 +74,7 @@ public class JournalDiskTests
         server.FilesHold(marker).ShouldBeTrue();
 
         // Act
-        await server.AsOwner().SendAsync(new DeleteCorrection.Command(correction.Correction.Id));
+        await server.AsOwner().SendAsync(new DeleteCorrection.Command(correction.Correction.Id, null));
 
         // Assert
         server.FilesHold(marker).ShouldBeFalse();
@@ -140,7 +140,7 @@ public class JournalDiskTests
         var correction = await server.AsOwner().SendAsync(new AddCorrection.Command(new CorrectionForCreationDto { CanonicalTerm = marker, Mishearings = [$"heard {marker}"] }));
 
         // Act
-        await QuietServer.SendAndAbortAfterTheCommitAsync(server.AsOwner(), new DeleteCorrection.Command(correction.Correction.Id));
+        await QuietServer.SendAndAbortAfterTheCommitAsync(server.AsOwner(), new DeleteCorrection.Command(correction.Correction.Id, null));
 
         // Assert
         server.FilesHold(marker).ShouldBeFalse();

@@ -41,4 +41,8 @@ export const correctionsApi = {
   deletes(id: string): MockRoute {
     return { method: 'delete', path: correctionsPaths.one(id), status: 204 }
   },
+
+  deleteIsStale(id: string): MockRoute {
+    return { method: 'delete', path: correctionsPaths.one(id), status: 409, body: aProblem().staleVersion().build() }
+  },
 }
