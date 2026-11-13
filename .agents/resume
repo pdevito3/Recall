@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Runs each time an Amp orb starts or wakes. The stack runs its auth provider as a container, so Docker must be up.
+# .agents/setup enables and configures Docker.
+set -euo pipefail
+
+if ! systemctl is-active --quiet docker.service; then
+  sudo -n systemctl start docker.service
+fi

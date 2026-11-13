@@ -313,3 +313,6 @@ __pycache__/
 # The files of docs/install.md
 recall-backup*
 compose.override.yaml
+
+# The portal files that Amp writes in an orb
+.amp/portals/*
