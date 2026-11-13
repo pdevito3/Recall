@@ -252,6 +252,33 @@ test.describe('the settings of a person', () => {
     expect(api.last('put', settingsPaths.deviceTimeZone)?.body).toEqual({ timeZone: 'America/Chicago' })
   })
 
+  test('a Fixed zone that this browser does not know shows as the picked zone, and the line names it', async ({ page, api }) => {
+    const settings = settingsPage(page)
+    await settings.browserLacksTheZone('America/Chicago')
+    api.mock(settingsApi.are(aSetting({ timeZoneMode: 'Fixed', timeZone: 'America/Chicago' })))
+
+    await settings.open()
+
+    await expect(settings.at.zone).toHaveValue('America / Chicago')
+    await expect(settings.at.zoneInUse).toHaveText('New entries use the day in America / Chicago.')
+  })
+
+  test('a Fixed zone that this browser does not know stays picked when the person picks it in the list', async ({ page, api }) => {
+    const settings = settingsPage(page)
+    await settings.browserLacksTheZone('America/Chicago')
+    api.mock(
+      settingsApi.are(aSetting({ timeZoneMode: 'Fixed', timeZone: 'America/Chicago' })),
+      settingsApi.saves(aSetting({ timeZoneMode: 'Fixed', timeZone: 'America/Chicago', version: 2 })),
+    )
+    await settings.open()
+
+    await settings.pickZone('chicago', /^America \/ Chicago$/)
+
+    expect(api.last('put', settingsPaths.mine)?.body).toMatchObject({ timeZoneMode: 'Fixed', timeZone: 'America/Chicago' })
+    await expect(settings.at.zone).toHaveValue('America / Chicago')
+    await expect(settings.at.zoneInUse).toHaveText('New entries use the day in America / Chicago.')
+  })
+
   test('says so when the Server does not know the saved zone', async ({ page, api }) => {
     api.mock(settingsApi.are(aSetting({ timeZone: 'Mars/Olympus', timeZoneIsKnown: false })))
     const settings = settingsPage(page)

@@ -43,6 +43,19 @@ export function settingsPage(page: Page) {
       }
     },
 
+    async browserLacksTheZone(zone: string) {
+      await page.addInitScript((refused) => {
+        const supported = Intl.supportedValuesOf
+        Intl.supportedValuesOf = (key) => supported(key).filter((each) => each !== refused)
+        Intl.DateTimeFormat = new Proxy(Intl.DateTimeFormat, {
+          construct: (Real, [locales, options]: [string | undefined, Intl.DateTimeFormatOptions | undefined]) => {
+            if (options?.timeZone === refused) throw new RangeError(`Invalid time zone specified: ${refused}`)
+            return new Real(locales, options)
+          },
+        })
+      }, zone)
+    },
+
     sideScrollRange: () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
 
     async open() {
