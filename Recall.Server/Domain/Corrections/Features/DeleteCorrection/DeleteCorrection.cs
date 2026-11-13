@@ -10,7 +10,7 @@ using Serilog;
 
 public static class DeleteCorrection
 {
-    public sealed record Command(string Id) : IRequest;
+    public sealed record Command(string Id, uint? IfVersion) : IRequest;
 
     public sealed class Handler(AppDbContext dbContext) : IRequestHandler<Command>
     {
@@ -23,6 +23,7 @@ public static class DeleteCorrection
             var correction = await dbContext.Corrections
                 .TagWithOperationCallSite("corrections.delete.load")
                 .GetById(request.Id, cancellationToken);
+            correction.GuardDelete(request.IfVersion);
             dbContext.Corrections.Remove(correction);
             await dbContext.SaveChangesAsync(cancellationToken);
 

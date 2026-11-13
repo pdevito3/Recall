@@ -39,6 +39,8 @@ A command for one intent, such as a new permission, a role change, or a delete, 
 public sealed record Command(string Id, [property: RequiredField] string Permission) : IRequest<UserDto>, IRunsAgainWhenRaced;
 ```
 
+A delete sends the version that the caller saw when another device can change the row and the caller decided on what it showed, as `DeleteCorrection` does with `ifVersion`. Such a delete gives 409 on a stale version, and it is not marked.
+
 `RaceRetryBehavior` catches the `StaleVersionException` of a marked command. It calls `AppDbContext.DiscardLostRace`, which clears the tracked entities and the recorded audit actions. Then it waits for a short random time and runs the handler again in the same DI scope. The lost save rolled back, so the database has none of its changes. The caller, the validation, and the request span stay those of the first run. Each lost run that runs again adds a `race.lost` event with `app.race.run` to the request span. After 20 lost runs, the behavior adds a `race.exhausted` event with `app.race.run` and throws a `ConcurrentChangeException`.
 
 Obey these rules for a marked command. A test enforces the first two.

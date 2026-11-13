@@ -8,7 +8,7 @@ import type { DeleteCorrectionOptions, DeleteCorrectionResponses } from '../type
 import { client, unwrapResult } from '../../.kubb/client'
 
 /**
- * @summary Deletes a Correction of the caller.
+ * @summary Deletes a Correction of the caller. Send `ifVersion`, the version that the caller saw, so that a Correction that changed after it stays and the reply is 409. With no `ifVersion`, the delete goes at any version.
  * {@link /api/v1/corrections/:id}
  */
 export function deleteCorrection<ThrowOnError extends boolean = true>(options: Options<DeleteCorrectionOptions, ThrowOnError>): Promise<UnwrappedResult<DeleteCorrectionResponses, ThrowOnError>> {

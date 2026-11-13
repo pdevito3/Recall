@@ -17,11 +17,11 @@ public sealed class DeleteCorrectionEndpoint : IEndpoint
         .ProducesValidationProblem(StatusCodes.Status409Conflict);
 
     /// <summary>
-    /// Deletes a Correction of the caller.
+    /// Deletes a Correction of the caller. Send `ifVersion`, the version that the caller saw, so that a Correction that changed after it stays and the reply is 409. With no `ifVersion`, the delete goes at any version.
     /// </summary>
-    public static async Task<NoContent> Handle(string id, IMediator mediator, CancellationToken cancellationToken)
+    public static async Task<NoContent> Handle(string id, uint? ifVersion, IMediator mediator, CancellationToken cancellationToken)
     {
-        await mediator.Send(new DeleteCorrection.Command(id), cancellationToken);
+        await mediator.Send(new DeleteCorrection.Command(id, ifVersion), cancellationToken);
         return TypedResults.NoContent();
     }
 }
