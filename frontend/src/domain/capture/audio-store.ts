@@ -34,6 +34,11 @@ export interface StoredCapture {
   isFinished: boolean
   problem: UploadProblem | null
   touchedAt: number
+  /**
+   * The ms of the audio at each `New paragraph` tap, from the `start` event of the recorder, in the order of the taps. A row
+   * of an older version has none, so read it as `?? []`.
+   */
+  paragraphTapsMs?: number[]
 }
 
 interface StoredSlice {
@@ -210,6 +215,16 @@ export async function confirmSlice(clientRecordingId: string, index: number): Pr
 
 export const endCapture = (clientRecordingId: string) =>
   changeCapture(clientRecordingId, (capture) => (capture.isEnded ? capture : { ...capture, isEnded: true, touchedAt: Date.now() }))
+
+/** The Server keeps at most this many taps of a Recording (`Recording.MaxParagraphTaps`), so a later tap is not stored. */
+export const maxParagraphTaps = 1_000
+
+/** Adds one tap to the capture. A capture that ended takes none, as the queue can already have built its finish. */
+export const storeParagraphTap = (clientRecordingId: string, atMs: number) =>
+  changeCapture(clientRecordingId, (capture) => {
+    const taps = capture.paragraphTapsMs ?? []
+    return capture.isEnded || taps.length >= maxParagraphTaps ? null : { ...capture, paragraphTapsMs: [...taps, atMs] }
+  })
 
 export const updateCapture = (clientRecordingId: string, patch: Partial<Omit<StoredCapture, 'clientRecordingId' | 'owner' | 'storedSlices' | 'storedBytes' | 'sentSlices'>>) =>
   changeCapture(clientRecordingId, (capture) => ({ ...capture, ...patch }))
