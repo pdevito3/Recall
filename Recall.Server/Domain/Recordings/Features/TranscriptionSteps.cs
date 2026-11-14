@@ -10,6 +10,7 @@ using ModelProviders.Clients;
 using Resources;
 using Resources.Storage;
 using Serilog;
+using Sessions.Content;
 using Transcription;
 
 public static class BeginTranscription
@@ -199,7 +200,7 @@ public static class SaveTranscriptChunk
                 var replaced = await dbContext.RawRevisions
                     .TagWithOperationCallSite("recordings.transcribe.replaced_chunk")
                     .FirstOrDefaultAsync(r => r.SessionId == session.Id && r.Number == session.Raw.DraftRevision && r.FromChunk, cancellationToken);
-                fits = session.TryAppendTranscript(words, timeProvider.GetUtcNow());
+                fits = session.TryAppendTranscript(ChunkParagraphs.Own(words), timeProvider.GetUtcNow());
                 if (!fits)
                 {
                     dbContext.DiscardLostRace();

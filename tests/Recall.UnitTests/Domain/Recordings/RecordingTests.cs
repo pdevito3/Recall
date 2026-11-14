@@ -227,8 +227,8 @@ public class RecordingTests
     public void transcript_text_keeps_its_characters_so_that_it_takes_no_extra_length()
     {
         // Arrange and act
-        var text = RawTranscript.Append("", "don't, käsi");
-        var appended = RawTranscript.Append(text, "сказал");
+        var text = RawTranscript.Append("", ChunkParagraphs.Own("don't, käsi"));
+        var appended = RawTranscript.Append(text, ChunkParagraphs.Own("сказал"));
 
         // Assert
         text.ShouldContain("don't, käsi");
@@ -686,7 +686,7 @@ public class RecordingTests
     public void words_become_a_document_when_raw_is_empty()
     {
         // Arrange and act
-        var text = RawTranscript.Append("", "first words");
+        var text = RawTranscript.Append("", ChunkParagraphs.Own("first words"));
 
         // Assert
         ProseMirrorToPlainText.Render(text).ShouldBe("first words");
@@ -696,10 +696,10 @@ public class RecordingTests
     public void words_go_after_the_paragraphs_of_a_document()
     {
         // Arrange
-        var raw = RawTranscript.Append("", "first words");
+        var raw = RawTranscript.Append("", ChunkParagraphs.Own("first words"));
 
         // Act
-        var text = RawTranscript.Append(raw, "next words");
+        var text = RawTranscript.Append(raw, ChunkParagraphs.Own("next words"));
 
         // Assert
         ProseMirrorToPlainText.Render(text).ShouldBe("first words\nnext words");
@@ -712,7 +712,7 @@ public class RecordingTests
         const string raw = """{"type":"doc","content":[{"type":"paragraph"}]}""";
 
         // Act
-        var text = RawTranscript.Append(raw, "words");
+        var text = RawTranscript.Append(raw, ChunkParagraphs.Own("words"));
 
         // Assert
         text.ShouldBe("""{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"words"}]}]}""");
@@ -722,7 +722,7 @@ public class RecordingTests
     public void words_go_after_plain_text()
     {
         // Arrange and act
-        var text = RawTranscript.Append("typed by hand", "heard words");
+        var text = RawTranscript.Append("typed by hand", ChunkParagraphs.Own("heard words"));
 
         // Assert
         text.ShouldBe("typed by hand\n\nheard words");
