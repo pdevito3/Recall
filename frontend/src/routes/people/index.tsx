@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { useRef } from 'react'
 
 import { Page } from '@/components/page'
 import { PageHeading } from '@/components/page-heading'
@@ -10,10 +11,12 @@ export const Route = createFileRoute('/people/')({
 })
 
 function PeopleRoute() {
+  const headingRef = useRef<HTMLHeadingElement>(null)
+
   return (
     <Page>
-      <PageHeading>People</PageHeading>
-      <PeopleList />
+      <PageHeading ref={headingRef}>People</PageHeading>
+      <PeopleList headingRef={headingRef} />
     </Page>
   )
 }

@@ -2,6 +2,7 @@ import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/r
 
 import type { PersonDto } from '@/api/generated/models/types/person-dto'
 import { addPerson } from '@/api/generated/people/clients/add-person'
+import { deletePerson } from '@/api/generated/people/clients/delete-person'
 import { getPersonList } from '@/api/generated/people/clients/get-person-list'
 import { renamePerson } from '@/api/generated/people/clients/rename-person'
 import { parsePagination } from '@/lib/pagination'
@@ -51,6 +52,20 @@ export function useRenamePerson() {
     mutationFn: ({ id, label }: { id: string; label: string }) =>
       renamePerson({ path: { id }, body: { label }, options: { suppressErrorToast: true } }),
     onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: PersonKeys.all }),
+        queryClient.invalidateQueries({ queryKey: SessionKeys.all }),
+      ])
+    },
+  })
+}
+
+/** A refused delete also refetches: after a 409 the list shows the name of the rename, and after a 404 it drops the Person. */
+export function useDeletePerson() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, version }: { id: string; version: number }) => deletePerson({ path: { id }, query: { ifVersion: version } }),
+    onSettled: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: PersonKeys.all }),
         queryClient.invalidateQueries({ queryKey: SessionKeys.all }),
