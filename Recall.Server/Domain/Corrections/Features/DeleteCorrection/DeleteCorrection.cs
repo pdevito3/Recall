@@ -12,7 +12,7 @@ public static class DeleteCorrection
 {
     public sealed record Command(string Id, uint? IfVersion) : IRequest;
 
-    public sealed class Handler(AppDbContext dbContext) : IRequestHandler<Command>
+    public sealed class Handler(AppDbContext dbContext, WalScrub walScrub) : IRequestHandler<Command>
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
 
@@ -27,7 +27,7 @@ public static class DeleteCorrection
             dbContext.Corrections.Remove(correction);
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            var scrubbed = await WalScrub.TryTruncateAsync(dbContext.Database.GetConnectionString()!);
+            var scrubbed = await walScrub.TruncateAsync(dbContext.Database.GetConnectionString()!);
             Activity.Current?.SetTag("app.correction.wal_scrubbed", scrubbed);
             _logger.Here().Information("Deleted correction {CorrectionId}, WAL scrubbed {WalScrubbed}", correction.Id, scrubbed);
         }

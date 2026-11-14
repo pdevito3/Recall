@@ -16,7 +16,7 @@ public static class DeleteSession
 {
     public sealed record Command(string Id) : IRequest, IRunsAgainWhenRaced;
 
-    public sealed class Handler(AppDbContext dbContext, FileStore fileStore) : IRequestHandler<Command>
+    public sealed class Handler(AppDbContext dbContext, FileStore fileStore, WalScrub walScrub) : IRequestHandler<Command>
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
 
@@ -38,7 +38,7 @@ public static class DeleteSession
             foreach (var recording in recordings)
                 RecordingWork.TryDeleteFolder(fileStore, RecordingFiles.Folder(recording), recording.Id, _logger);
 
-            var scrubbed = await WalScrub.TryTruncateAsync(dbContext.Database.GetConnectionString()!);
+            var scrubbed = await walScrub.TruncateAsync(dbContext.Database.GetConnectionString()!);
             Activity.Current?.SetTag("app.session.wal_scrubbed", scrubbed);
             _logger.Here().Information("Deleted session {SessionId}, WAL scrubbed {WalScrubbed}", session.Id, scrubbed);
         }

@@ -28,7 +28,7 @@ _Avoid_: Edited, final, processed
 The current, autosaved working text of Raw or of Cleaned. A Draft changes, and a Revision does not.
 
 **Revision**:
-An append-only snapshot of Raw or of Cleaned, made at a save point. Each change to the text makes one, and that includes the change that a Person rename makes _(agent default)_. Revisions are history inside one Session, and search reads only the current state.
+An append-only snapshot of Raw or of Cleaned, made at a save point. Each change to the text makes one, and that includes the change that a Person rename or a Person delete makes _(agent default)_. Revisions are history inside one Session, and search reads only the current state. The one exception to append-only: a transcript chunk replaces the Revision of the chunk just before it while that Revision is still the Draft, because the new chunk holds each of its words. So a Recording keeps one Revision of its text, not one for each chunk, and the numbers of the Revisions of Raw can have gaps _(agent default)_.
 _Avoid_: Version (the concurrency token of a row), history entry
 
 **Draft save rule**:
@@ -100,7 +100,7 @@ What the User physically did while journaling: a known activity or the free text
 _Avoid_: Unset, null activity
 
 **Person**:
-A record in the directory of one User. A mention in the text refers to the Person, and the People of a Session are the Persons that its Raw and its Cleaned mention. A rename changes the label of each mention and makes a Revision of each text that changes _(agent default)_.
+A record in the directory of one User. A mention in the text refers to the Person, and the People of a Session are the Persons that its Raw and its Cleaned mention. A rename changes the label of each mention and makes a Revision of each text that changes _(agent default)_. A delete turns each mention in the current Raw and Cleaned into its label as plain words, so no word of the User goes, and makes a Revision of each text that changes. The older Revisions keep their mentions, and a Synopsis and a Summary keep the name, because the name stays in the words. A client shows a mention whose Person is not in the directory as its label, with no link _(agent default)_.
 _Avoid_: Contact, person tag
 
 **Suggestion**:
@@ -132,7 +132,7 @@ A Summary whose last run gave no words. It shows a closed reason, such as no mod
 ### Identity
 
 **User**:
-A person with a login, and the owner of their journal data. Recall keeps one seeded tenant, so a tenant does not separate one person from another. All journal data belongs to exactly one User.
+A person with a login, and the owner of their journal data. Recall keeps one seeded tenant, so a tenant does not separate one person from another. All journal data belongs to exactly one User. A delete removes the journal and keeps the row of the User with its ID and its identifier, and with no name, email, or username.
 _Avoid_: Account
 
 **Admin**:

@@ -65,6 +65,28 @@ public static class JournalTriggers
             """);
     }
 
+    /// <summary>
+    /// A Revision of Raw that a chunk made can go while its Session stays, because the next chunk holds each of its words
+    /// (SES-48). A rebuild of <c>raw_revisions</c> calls <see cref="AddAppendOnlyGuards"/> and then this.
+    /// </summary>
+    public static void LetAChunkRevisionGo(this MigrationBuilder migrationBuilder)
+        => ReplaceTheDeleteGuardOfRaw(migrationBuilder, "old.from_chunk = 0 AND ");
+
+    public static void KeepEachRevisionOfRaw(this MigrationBuilder migrationBuilder)
+        => ReplaceTheDeleteGuardOfRaw(migrationBuilder, string.Empty);
+
+    private static void ReplaceTheDeleteGuardOfRaw(MigrationBuilder migrationBuilder, string kept)
+    {
+        migrationBuilder.Sql("DROP TRIGGER raw_revisions_refuse_delete;");
+        migrationBuilder.Sql($"""
+            CREATE TRIGGER raw_revisions_refuse_delete BEFORE DELETE ON raw_revisions
+            WHEN {kept}EXISTS (SELECT 1 FROM sessions WHERE id = old.session_id)
+            BEGIN
+                SELECT RAISE(ABORT, 'A Revision goes only with its Session.');
+            END;
+            """);
+    }
+
     public static void AddOwnerGuard(this MigrationBuilder migrationBuilder, string table) => migrationBuilder.Sql($"""
         CREATE TRIGGER {table}_refuse_deleted_owner BEFORE INSERT ON {table}
         BEGIN

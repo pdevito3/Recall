@@ -13,7 +13,7 @@ public static class DeleteModelProvider
 {
     public sealed record Command(string Id) : IRequest;
 
-    public sealed class Handler(AppDbContext dbContext, IPermissionGuard permissions) : IRequestHandler<Command>
+    public sealed class Handler(AppDbContext dbContext, IPermissionGuard permissions, WalScrub walScrub) : IRequestHandler<Command>
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
 
@@ -29,7 +29,7 @@ public static class DeleteModelProvider
             dbContext.ModelProviders.Remove(provider);
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            var scrubbed = await WalScrub.TryTruncateAsync(dbContext.Database.GetConnectionString()!);
+            var scrubbed = await walScrub.TruncateAsync(dbContext.Database.GetConnectionString()!);
             _logger.Here().Information("Deleted model provider {ModelProviderId}, WAL scrubbed {WalScrubbed}", provider.Id, scrubbed);
         }
     }

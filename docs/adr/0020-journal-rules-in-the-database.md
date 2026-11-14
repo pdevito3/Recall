@@ -5,14 +5,16 @@
 So these rules are triggers in the database. [`JournalTriggers`](../../Recall.Server/Databases/JournalTriggers.cs) holds them, and the first migration calls it:
 
 - **Sync feed.** A trigger on each journal table writes one line to `sync_changes` for each insert, update, and delete. A second change of a row replaces its line, with a new `AUTOINCREMENT` sequence. So a pull gives each row once, in the order of its newest change, also when two saves have one timestamp. A read needs no clock.
-- **Append-only.** A trigger refuses an update of a Revision, and a delete of a Revision whose Session stays.
+- **Append-only.** A trigger refuses an update of a Revision, and a delete of a Revision whose Session stays. The one exception is a Raw Revision with `from_chunk`: the next transcript chunk holds each of its words, so the chunk removes it while it is still the Draft. Without this, each chunk stored the whole Raw again, so the space of a Recording grew with the square of its length, about 90 MB at the cap of 4 hours. With it, a Recording keeps one Revision of its text.
 - **Purge.** When a User is soft-deleted, also through a delete of the tenant, a trigger hard-deletes each journal row of the User and the lines of the feed.
 
 ## What a delete removes
 
 A delete of a Session removes its row, and the foreign key removes its Revisions. The feed keeps a tombstone with the session ID and the client session ID, and no words. A replay of the create of that Session then gives 409, so a queued phone cannot bring it back.
 
-Each connection has `PRAGMA secure_delete = ON`, so SQLite overwrites the freed space. After a delete of a Session, a Correction, a User, or a tenant, the handler tries a `wal_checkpoint(TRUNCATE)`, which cuts the WAL to zero bytes and removes its old pages. A reader that holds on for more than the wait of 250 ms stops the truncate, and the handler does not retry. The old pages then stay in the database file until a later checkpoint passes the delete. A checkpoint does not remove them from the WAL. They stay there until later writes overwrite them, a later truncate runs, the journal size limit of 16 MiB cuts the file, or the last connection closes.
+Each connection has `PRAGMA secure_delete = ON`, so SQLite overwrites the freed space. After a delete of a Session, a Correction, a Person, a User, or a tenant, the handler tries a `wal_checkpoint(TRUNCATE)`, which cuts the WAL to zero bytes and removes its old pages. A reader that holds on for more than the wait of 250 ms stops the truncate, and the truncate is then owed. `WalScrub`, a hosted service, tries it again each minute until it passes, so the words leave the WAL within a minute after the reader ends. Until then, the old pages stay in the database file until a later checkpoint passes the delete. A checkpoint does not remove them from the WAL. They stay there until later writes overwrite them, the retry passes, the journal size limit of 16 MiB cuts the file, or the last connection closes.
+
+The debt is in memory and not a BackWave job. A job row would write to the disk after each delete, also when the truncate passed, and an idle server writes nothing. A restart loses the debt, and the truncate at the start pays it.
 
 A kill between the commit of a delete and the truncate leaves the words in the WAL. A boot alone does not clear them. So each start of the server runs the same truncate after its migrations and before Kestrel binds. It goes through the locks of SQLite and has the same wait. If another process holds a read open past the wait, the start goes on and logs that it did not scrub, and the words stay as the paragraph above says.
 

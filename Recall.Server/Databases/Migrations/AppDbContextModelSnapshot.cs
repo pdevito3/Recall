@@ -958,6 +958,10 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("number");
 
+                    b.Property<bool>("FromChunk")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("from_chunk");
+
                     b.Property<string>("SavedAt")
                         .IsRequired()
                         .HasColumnType("TEXT")

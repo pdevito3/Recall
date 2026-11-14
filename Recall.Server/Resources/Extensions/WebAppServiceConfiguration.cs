@@ -69,6 +69,8 @@ public static class WebAppServiceConfiguration
                     serviceProvider.GetRequiredService<TenantLookupInterceptor>());
         });
         builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>();
+        builder.Services.AddSingleton<WalScrub>();
+        builder.Services.AddHostedService(services => services.GetRequiredService<WalScrub>());
 
         builder.Services.AddDomainEvents(typeof(Program).Assembly);
     }

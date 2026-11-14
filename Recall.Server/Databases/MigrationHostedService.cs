@@ -8,7 +8,8 @@ using Sqlite;
 
 public class MigrationHostedService<TDbContext>(
     IServiceScopeFactory scopeFactory,
-    IConfiguration configuration)
+    IConfiguration configuration,
+    WalScrub walScrub)
     : IHostedService
     where TDbContext : DbContext
 {
@@ -49,9 +50,9 @@ public class MigrationHostedService<TDbContext>(
             await context.Database.MigrateAsync(cancellationToken);
 
             // A kill between the commit of a delete and its scrub leaves the deleted words in the WAL. This runs before Kestrel binds.
-            var scrubbed = await WalScrub.TryTruncateAsync(connectionString);
+            var scrubbed = await walScrub.TruncateAsync(connectionString);
             if (!scrubbed)
-                _logger.Here().Warning("Could not truncate the WAL at startup, so deleted words can stay in the WAL");
+                _logger.Here().Warning("Could not truncate the WAL at startup, so deleted words can stay in the WAL until a retry passes");
 
             _logger.Here().Information("Migrations complete for {DbContext}, WAL scrubbed {WalScrubbed}", typeof(TDbContext).Name, scrubbed);
         }

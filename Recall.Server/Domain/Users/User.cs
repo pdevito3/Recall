@@ -156,11 +156,16 @@ public class User : BaseEntity, ITenantable, IDeletedWithEvent
     /// <summary>
     /// Call it in the feature that removes the user. A handler of <see cref="UserDeleted"/> in another domain can then
     /// clear or mark a link to the user, in the same save. See <c>docs/backend/domain-events.md</c>.
+    /// The soft-deleted row stays, so the delete clears the name, the email, and the username of the person.
     /// </summary>
     public User Delete()
     {
         QueueDomainEvent(new UserDeleted(Id));
         DeleteQueued = true;
+        FirstName = string.Empty;
+        LastName = null;
+        Email = null;
+        Username = string.Empty;
         return this;
     }
 

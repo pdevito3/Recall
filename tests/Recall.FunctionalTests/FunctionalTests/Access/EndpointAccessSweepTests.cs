@@ -74,6 +74,7 @@ public class EndpointAccessSweepTests : TestBase
         ["GetPerson"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetPersonList"] = new(JournalOfEachMember, OwnerOnly: true),
         ["RenamePerson"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["DeletePerson"] = new(JournalOfEachMember, OwnerOnly: true),
         ["AddCorrection"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetCorrection"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetCorrectionList"] = new(JournalOfEachMember, OwnerOnly: true),
