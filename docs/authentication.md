@@ -311,7 +311,7 @@ The Server links that identity to the oldest live Admin of the oldest live tenan
 
 The claim cannot bring back a deleted tenant, so `DELETE /tenants/{id}` gives 409 for the last live tenant. Only a change outside the API can leave an install with no live tenant. When a tenant row stays but is marked as deleted, a login with no link gets `signup_closed`. A login with a link still signs in when only the tenant row changed and the user is live, and it gets `signup_closed` when the user is gone too. When no tenant row stays, the Server reads a new install, and the next login with no link becomes the Owner of a new tenant. The Server removes the file in each case. Restore the data directory from a backup.
 
-The claim is also the recovery path for a missing permission. A release can add an Admin permission, and an Admin who exists does not get it. To give it to an Admin who can sign in, create the file and sign in with that login. The Server gives that Admin each Admin permission back, logs a warning that names the file and the user ID, and removes the file.
+The claim is also the recovery path for a missing permission. A release that adds an Admin permission gives it to each Admin who exists with a migration (see [Add a permission](backend.md#add-a-permission)). If no Admin holds each Admin permission, for example after a change to the database outside the Server, each change to an Admin gets 409. To give each Admin permission to an Admin who can sign in, create the file and sign in with that login. The Server gives that Admin each Admin permission back, logs a warning that names the file and the user ID, and removes the file.
 
 The first login after you create a regular file removes it when the Server can, also when the claim changes nothing:
 
