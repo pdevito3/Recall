@@ -483,6 +483,8 @@ An agent is an OAuth client other than this app that calls the server, usually t
 
 ### How the server identifies the caller
 
+The server takes only access tokens. Most provider presets use the login client ID as `Auth:Audience`, and OIDC puts that client ID in the `aud` of each ID token. The `azp` of such an ID token names the login client, which the server counts as first party, so the server would read the ID token as a first-party user that acts as any user whose identifier is its `sub`. So the server refuses a token that names itself an ID token, a logout token, or a refresh token: `typ` `ID`, `Logout`, or `Refresh` (Keycloak), `tty` `idt` (FusionAuth), `token_use` `id` (Cognito), or an `events` claim. An Authentik ID token has no such claim, but it also has no `azp`, so the server takes it as a token of an unknown client.
+
 The server reads the client ID of the token from `client_id`, then `azp`, then `applicationId` (FusionAuth). It never takes a missing `sub` to mean a machine. `CallerIdentityResolver` decides the caller once for each request:
 
 | Token | Caller | Permissions | Rows |
