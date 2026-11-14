@@ -72,7 +72,7 @@ public class TranscribeJobTests : TestBase
 
     [Test]
     [Property("Rule", "REC-6")]
-    public async Task each_chunk_becomes_text_and_a_revision_and_the_audio_stays_seven_days()
+    public async Task each_chunk_becomes_text_in_one_revision_and_the_audio_stays_seven_days()
     {
         // Arrange
         var (recording, admin) = await FinishedRecordingAsync();
@@ -87,7 +87,9 @@ public class TranscribeJobTests : TestBase
         read.AudioFileName.ShouldBe("audio.webm");
         (await PlainRawAsync(recording.SessionId)).ShouldBe("first words\nnext words");
         var revisions = await FactoryClient.GetFromJsonAsync<System.Text.Json.JsonElement>(ApiRoutes.Sessions.RawRevisions(recording.SessionId));
-        revisions.GetProperty("items").GetArrayLength().ShouldBe(2);
+        var items = revisions.GetProperty("items");
+        items.GetArrayLength().ShouldBe(1);
+        items[0].GetProperty("number").GetInt32().ShouldBe(2);
     }
 
     [Test]

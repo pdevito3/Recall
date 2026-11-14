@@ -50,5 +50,12 @@ public class Person : BaseEntity, ITenantable, IJournalOwned
         ProposalKey = null;
     }
 
+    /// <summary>A delete runs again when a Session save races it, so a stale version that the caller saw must not run it again.</summary>
+    public void GuardDelete(uint? ifVersion)
+    {
+        if (ifVersion is { } version && version != Version)
+            throw new StaleSeenVersionException();
+    }
+
     protected Person() : base(IdPrefix) { }
 }

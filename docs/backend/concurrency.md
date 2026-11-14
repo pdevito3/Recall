@@ -39,7 +39,7 @@ A command for one intent, such as a new permission, a role change, or a delete, 
 public sealed record Command(string Id, [property: RequiredField] string Permission) : IRequest<UserDto>, IRunsAgainWhenRaced;
 ```
 
-A delete sends the version that the caller saw when another device can change the row and the caller decided on what it showed, as `DeleteCorrection` does with `ifVersion`. Such a delete gives 409 on a stale version, and it is not marked.
+A delete sends the version that the caller saw when another device can change the row and the caller decided on what it showed, as `DeleteCorrection` does with `ifVersion`. Such a delete gives 409 on a stale version, and it is not marked. `DeletePerson` also takes `ifVersion`, and it is marked, because it rewrites each Session that mentions the Person, and a Draft save of such a Session says nothing about the Person. So it checks the version with `StaleSeenVersionException`, which gives the same 409 and which `RaceRetryBehavior` does not catch, as a version of part of a row does. A run again reads the Person again, so a rename during the delete gives the 409 on that run.
 
 `RaceRetryBehavior` catches the `StaleVersionException` of a marked command. It calls `AppDbContext.DiscardLostRace`, which clears the tracked entities and the recorded audit actions. Then it waits for a short random time and runs the handler again in the same DI scope. The lost save rolled back, so the database has none of its changes. The caller, the validation, and the request span stay those of the first run. Each lost run that runs again adds a `race.lost` event with `app.race.run` to the request span. After 20 lost runs, the behavior adds a `race.exhausted` event with `app.race.run` and throws a `ConcurrentChangeException`.
 
@@ -53,7 +53,7 @@ Obey these rules for a marked command. A test enforces the first two.
 
 The tests do not see these breaks of the rules. Check them in the review:
 
-- A `Version` property with a different name, such as `RowVersion`. `RunAgainRequestTests` looks only for the name `Version`. `metadataVersion` is the one allowed case, because it has its own exception.
+- A `Version` property with a different name, such as `RowVersion`. `RunAgainRequestTests` looks only for the name `Version`. `metadataVersion` and the `ifVersion` of `DeletePerson` are the allowed cases, because each has its own exception.
 - A copy of a marked record with `with` in core code. `EntrypointBoundaryTests` does not count the copy method of a record.
 - A background job in the shared plumbing or the composition root that sends a marked command. `EntrypointBoundaryTests` reads only the core types. `DiscardLostRace` then clears the tracked changes of the job.
 

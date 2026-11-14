@@ -14,12 +14,19 @@ using Shouldly;
 public class DeleteUserCommandTests : TestBase
 {
     [Test]
-    public async Task can_delete_existing_user()
+    [Property("Rule", "SES-49")]
+    public async Task can_delete_existing_user_and_the_row_keeps_no_name_email_or_username()
     {
         // Arrange
         var testingServiceScope = new TestingServiceScope();
         await testingServiceScope.StartGraph(out _)
-            .AddUser(out var createdUser)
+            .AddUser(out var createdUser, u =>
+            {
+                u.FirstName = "Ada";
+                u.LastName = "Lovelace";
+                u.Email = "ada@example.com";
+                u.Username = "ada";
+            })
             .BuildAsync();
 
         // Act
@@ -34,6 +41,11 @@ public class DeleteUserCommandTests : TestBase
 
         userInDb.ShouldNotBeNull();
         userInDb.IsDeleted.ShouldBeTrue();
+        userInDb.FirstName.ShouldBeEmpty();
+        userInDb.LastName.ShouldBeNull();
+        userInDb.Email.ShouldBeNull();
+        userInDb.Username.ShouldBeEmpty();
+        userInDb.Identifier.ShouldBe(createdUser.Identifier);
     }
 
     [Test]

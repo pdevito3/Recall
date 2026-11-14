@@ -106,6 +106,11 @@ public sealed record DomainError(
             StaleVersionTitle,
             ex.Message,
             new() { [StaleVersionException.Field] = [ex.Message] }),
+        StaleSeenVersionException ex => new(
+            DomainErrorKind.StaleVersion,
+            StaleVersionTitle,
+            ex.Message,
+            new() { [StaleVersionException.Field] = [ex.Message] }),
         StaleMetadataVersionException ex => new(
             DomainErrorKind.StaleVersion,
             StaleVersionTitle,

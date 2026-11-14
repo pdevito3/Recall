@@ -306,6 +306,32 @@ public class SessionTests
     }
 
     [Test]
+    [Property("Rule", "SES-47")]
+    public void an_unlink_keeps_the_marks_of_the_mention_joins_only_words_with_the_same_marks_and_keeps_a_clean_session_clean()
+    {
+        // Arrange
+        const string strike = "[{\"type\":\"strike\"}]";
+        var text = "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Lunch with \"},"
+            + "{\"type\":\"mention\",\"attrs\":{\"personId\":\"" + PersonId + "\",\"label\":\"Sam\"},\"marks\":" + strike + "},"
+            + "{\"type\":\"text\",\"text\":\" today\",\"marks\":" + strike + "}]}]}";
+        var session = NewSession();
+        session.SaveRaw(Save(text, 0));
+        session.BeginCleanup();
+        session.CompleteCleanup(Outcome(text, "Lunch with Sam"), session.Raw.DraftRevision, Noon);
+
+        // Act
+        session.UnlinkPerson(PersonId, Noon.AddHours(1));
+
+        // Assert
+        session.Raw.Text.ShouldBe("{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Lunch with \"},"
+            + "{\"type\":\"text\",\"text\":\"Sam today\",\"marks\":" + strike + "}]}]}");
+        session.Cleaned.Text.ShouldBe(session.Raw.Text);
+        session.MentionedPersonIds.ShouldBeEmpty();
+        session.CleanupStatus.ShouldBe(CleanupStatus.Clean);
+        session.Synopsis.ShouldBe("Lunch with Sam");
+    }
+
+    [Test]
     [Property("Rule", "SES-3")]
     public void a_session_stores_its_start_as_utc_at_the_precision_of_the_database()
     {

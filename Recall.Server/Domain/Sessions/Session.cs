@@ -162,16 +162,24 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
             return false;
 
         Raw = Raw.Rewritten(text, now);
-        _appendedRawRevisions.Add(new RawRevision(Id, Raw.DraftRevision, now, text, wasDraft: true));
+        _appendedRawRevisions.Add(new RawRevision(Id, Raw.DraftRevision, now, text, wasDraft: true, fromChunk: true));
         RefreshFromDrafts();
         return true;
     }
 
     public void RenamePerson(string personId, string label, DateTimeOffset now)
+        => RewriteMentions(text => PersonMentions.Relabel(text, personId, label), now);
+
+    /// <summary>A delete of the Person keeps its label as plain words, so Raw keeps each word of the person (SES-47).</summary>
+    public void UnlinkPerson(string personId, DateTimeOffset now)
+        => RewriteMentions(text => PersonMentions.Unlink(text, personId), now);
+
+    // A change of the directory is not a change of the words, so it leaves Stale as it was (SES-10).
+    private void RewriteMentions(Func<string, string> rewrite, DateTimeOffset now)
     {
         var wasStale = IsStale(Raw.DraftRevision, LastCleanupRawRevision);
 
-        var raw = PersonMentions.Relabel(Raw.Text, personId, label);
+        var raw = rewrite(Raw.Text);
         if (raw != Raw.Text)
         {
             Raw = Raw.Rewritten(raw, now);
@@ -180,7 +188,7 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
                 LastCleanupRawRevision = Raw.DraftRevision;
         }
 
-        var cleaned = PersonMentions.Relabel(Cleaned.Text, personId, label);
+        var cleaned = rewrite(Cleaned.Text);
         if (cleaned != Cleaned.Text)
         {
             Cleaned = Cleaned.Rewritten(cleaned, now);

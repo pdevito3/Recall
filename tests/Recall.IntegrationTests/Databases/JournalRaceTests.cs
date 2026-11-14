@@ -409,6 +409,62 @@ public class JournalRaceTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "SES-47")]
+    public async Task a_person_delete_that_a_save_beat_after_the_load_runs_again_and_unlinks_the_new_words()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var person = await ScopeOf(owner).SendAsync(new AddPerson.Command(new PersonLabelDto { Label = "Sam" }));
+        var session = await AddSessionAsync(owner);
+        await ScopeOf(owner).SendAsync(new SaveRawDraft.Command(session.Id, Save(Mention(person.Id, "Sam", "First"), Morning)));
+        var pause = PauseAtQuery.After("people.delete.sessions");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var delete = ScopeOf(owner, services).SendAsync(new DeletePerson.Command(person.Id, person.Version));
+        await pause.ReachedAsync();
+        await ScopeOf(owner).SendAsync(new SaveRawDraft.Command(session.Id, new DraftSaveDto
+        {
+            Text = Mention(person.Id, "Sam", "Second"),
+            BaseRevision = 1,
+            SavedAt = Morning.AddMinutes(1),
+        }));
+        pause.Release();
+        await delete;
+
+        // Assert
+        var stored = await ScopeOf(owner).SendAsync(new GetSession.Query(session.Id));
+        stored.RawText.ShouldContain("Second Sam");
+        stored.PersonIds.ShouldBeEmpty();
+        stored.RawDraftRevision.ShouldBe(3);
+    }
+
+    [Test]
+    [Property("Rule", "SES-47")]
+    public async Task a_person_delete_at_a_version_that_a_rename_moved_after_the_load_gives_a_stale_version_and_keeps_the_mention()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var person = await ScopeOf(owner).SendAsync(new AddPerson.Command(new PersonLabelDto { Label = "Sam" }));
+        var session = await AddSessionAsync(owner);
+        await ScopeOf(owner).SendAsync(new SaveRawDraft.Command(session.Id, Save(Mention(person.Id, "Sam", "First"), Morning)));
+        var pause = PauseAtQuery.After("people.delete.load");
+        await using var services = pause.BuildServices();
+
+        // Act
+        var delete = ScopeOf(owner, services).SendAsync(new DeletePerson.Command(person.Id, person.Version));
+        await pause.ReachedAsync();
+        await ScopeOf(owner).SendAsync(new RenamePerson.Command(person.Id, new PersonLabelDto { Label = "Samuel" }));
+        pause.Release();
+
+        // Assert
+        (await Should.ThrowAsync<Exception>(delete)).ShouldBeOfType<StaleSeenVersionException>();
+        var stored = await ScopeOf(owner).SendAsync(new GetSession.Query(session.Id));
+        stored.PersonIds.ShouldBe([person.Id]);
+        stored.RawText.ShouldContain("Samuel");
+    }
+
+    [Test]
     [Property("Rule", "SES-31")]
     public async Task two_first_settings_changes_make_one_row_and_the_loser_is_refused()
     {

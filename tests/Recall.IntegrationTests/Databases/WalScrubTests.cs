@@ -1,6 +1,7 @@
 namespace Recall.IntegrationTests.Databases;
 
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Time.Testing;
 using Recall.Server.Databases.Sqlite;
 using Shouldly;
 
@@ -54,6 +55,35 @@ public class WalScrubTests
         // Assert
         scrubbed.ShouldBeFalse();
         new FileInfo(WalPath).Length.ShouldBeGreaterThan(0);
+    }
+
+    [Test]
+    [Property("Rule", "SES-27")]
+    public async Task a_truncate_that_a_reader_blocked_passes_on_a_retry_after_the_reader_ends()
+    {
+        // Arrange
+        await using var writer = await OpenAsync();
+        await RunAsync(writer, "PRAGMA journal_mode = WAL; CREATE TABLE words (text TEXT NOT NULL); INSERT INTO words VALUES ('some words');");
+        await using var reader = await OpenAsync();
+        await RunAsync(reader, "BEGIN; SELECT count(*) FROM words;");
+        await RunAsync(writer, "INSERT INTO words VALUES ('more words');");
+        var time = new FakeTimeProvider();
+        using var scrub = new WalScrub(time);
+        await scrub.StartAsync(CancellationToken.None);
+        (await scrub.TruncateAsync(ConnectionString)).ShouldBeFalse();
+        await RunAsync(reader, "COMMIT;");
+
+        // Act
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (new FileInfo(WalPath).Length > 0 && DateTime.UtcNow < deadline)
+        {
+            time.Advance(WalScrub.RetryInterval);
+            await Task.Delay(50);
+        }
+
+        // Assert
+        new FileInfo(WalPath).Length.ShouldBe(0);
+        await scrub.StopAsync(CancellationToken.None);
     }
 
     private async Task<SqliteConnection> OpenAsync()

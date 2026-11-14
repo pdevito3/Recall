@@ -194,12 +194,20 @@ public static class SaveTranscriptChunk
                 var session = await dbContext.Sessions
                     .TagWithOperationCallSite("recordings.transcribe.session")
                     .GetById(recording.SessionId, cancellationToken);
+                // When a chunk made the Draft, this chunk holds each of its words, so a Recording keeps one Revision of its
+                // text and not one for each chunk (SES-48).
+                var replaced = await dbContext.RawRevisions
+                    .TagWithOperationCallSite("recordings.transcribe.replaced_chunk")
+                    .FirstOrDefaultAsync(r => r.SessionId == session.Id && r.Number == session.Raw.DraftRevision && r.FromChunk, cancellationToken);
                 fits = session.TryAppendTranscript(words, timeProvider.GetUtcNow());
                 if (!fits)
                 {
                     dbContext.DiscardLostRace();
                     return await FailForLengthAsync(request.Id, cancellationToken);
                 }
+
+                if (replaced is not null)
+                    dbContext.RawRevisions.Remove(replaced);
             }
 
             await dbContext.SaveChangesAsync(cancellationToken);

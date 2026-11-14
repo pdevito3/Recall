@@ -3,6 +3,7 @@ namespace Recall.IntegrationTests.Databases;
 using System.Collections.Concurrent;
 using System.Globalization;
 using Recall.Server.Databases;
+using Recall.Server.Databases.Sqlite;
 using Recall.SharedTestHelpers.Utilities;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -29,7 +30,7 @@ public sealed class MigrationHostedServiceTests : IAsyncDisposable
         await using var services = TestFixture.BuildServiceProvider(
             s => s.AddLogging(logging => logging.AddProvider(logs)), _database.ConnectionString);
         var migrator = new MigrationHostedService<AppDbContext>(
-            services.GetRequiredService<IServiceScopeFactory>(), services.GetRequiredService<IConfiguration>());
+            services.GetRequiredService<IServiceScopeFactory>(), services.GetRequiredService<IConfiguration>(), services.GetRequiredService<WalScrub>());
 
         // Act
         await migrator.StartAsync(CancellationToken.None);
@@ -94,7 +95,7 @@ public sealed class MigrationHostedServiceTests : IAsyncDisposable
         try
         {
             return new MigrationHostedService<AppDbContext>(
-                services.GetRequiredService<IServiceScopeFactory>(), services.GetRequiredService<IConfiguration>());
+                services.GetRequiredService<IServiceScopeFactory>(), services.GetRequiredService<IConfiguration>(), services.GetRequiredService<WalScrub>());
         }
         finally
         {
