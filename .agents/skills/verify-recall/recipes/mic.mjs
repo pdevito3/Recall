@@ -60,7 +60,7 @@ export default async ({ page, context, expect, step, capture, login, speech }) =
     await expect(status).toContainText(/Your words are in|No words came from this audio/, { timeout: 900_000 })
     await capture('mic-result')
     if (!speech) {
-      await expect(status).toContainText('The audio is safe on the server')
+      await expect(status).toContainText('The audio is stored, but the server heard no words in it')
       await expect(card.getByRole('button', { name: 'Try again' })).toBeEnabled()
       return
     }
