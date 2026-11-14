@@ -17,6 +17,7 @@ import type { Answer } from '@/test/answer'
 import { member, signedInMember } from '@/test/session'
 
 import { addCapture, capturesOf, removeCapture, storeSlice, updateCapture, type StoredCapture, type UploadProblem } from '../audio-store'
+import { stopRecordingOfThisTab } from '../use-capture'
 import { useSendStoredAudio } from '../use-send-stored-audio'
 import { MicCard } from './mic-card'
 
@@ -86,6 +87,15 @@ const onServer: Answer[] = [
 function Home() {
   useSendStoredAudio()
   return <MicCard />
+}
+
+// The content of the layout has a gutter, so the card is narrower than the window.
+function HomeInTheGutter() {
+  return (
+    <div className="p-4 pt-0">
+      <Home />
+    </div>
+  )
 }
 
 // The layout also joins the other tabs, so that a sign-out in one tab settles each tab.
@@ -182,6 +192,73 @@ test.each([390, 1280])('at %i px the card keeps its height while the mic starts 
   await screen.unmount()
   expect(startingHeight).toBe(idleHeight)
   expect(recordingHeight).toBe(idleHeight)
+})
+
+test.each([
+  { width: 390, fontSize: 16 },
+  { width: 1280, fontSize: 16 },
+  { width: 320, fontSize: 24 },
+])('@REC-30 at $width px with a font of $fontSize px New paragraph shows only while recording, each press says so and is stored, and the card keeps its height and its width', async ({ width, fontSize }) => {
+  // Arrange
+  await page.viewport(width, 800)
+  document.documentElement.style.fontSize = `${fontSize}px`
+  onTestFinished(() => {
+    document.documentElement.style.fontSize = ''
+  })
+  micGivesATone()
+  const vibrate = vi.spyOn(navigator, 'vibrate').mockReturnValue(true)
+  const screen = await openHome([], { component: HomeInTheGutter })
+  await expect.element(screen.getByRole('link', { name: 'Change' })).toBeVisible()
+  // With no network nothing goes out, so the taps stay in the row of this browser.
+  onlineManager.setOnline(false)
+  onTestFinished(() => onlineManager.setOnline(true))
+  const card = screen.getByRole('region', { name: 'Record an entry' })
+  const idleHeight = card.element().getBoundingClientRect().height
+  const newParagraph = screen.getByRole('button', { name: 'New paragraph' })
+  await expect.element(newParagraph).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Record' }))
+  await cardSays(screen, 'Each second saves in this browser')
+  await expect.element(newParagraph).toBeVisible()
+  const recordingHeight = card.element().getBoundingClientRect().height
+
+  // Act
+  await userEvent.click(newParagraph)
+  await expect.element(screen.getByRole('status').getByText(/^New paragraph at 0:\d\d\.$/)).toBeInTheDocument()
+  await userEvent.click(newParagraph)
+
+  // Assert
+  await expect.poll(async () => (await capturesOf(member.identifier))[0]?.paragraphTapsMs?.length).toBe(2)
+  await expect.element(card.getByTestId('paragraph-marks')).toHaveTextContent('2')
+  expect(vibrate.mock.calls).toEqual([[15], [15]])
+  expect(newParagraph.element().getBoundingClientRect().height).toBeGreaterThanOrEqual(44)
+  expect(card.element().getBoundingClientRect().height).toBe(idleHeight)
+  expect(recordingHeight).toBe(idleHeight)
+  expect(card.element().scrollWidth).toBeLessThanOrEqual(card.element().clientWidth)
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width)
+  await userEvent.click(screen.getByRole('button', { name: 'Stop recording' }))
+  await expect.element(screen.getByRole('button', { name: 'Record', exact: true })).toBeInTheDocument()
+  await expect.element(newParagraph).not.toBeInTheDocument()
+  await screen.unmount()
+})
+
+test('a recording that ends with the focus on New paragraph moves the focus to the mic', async () => {
+  // Arrange
+  micGivesATone()
+  const screen = await openHome([])
+  await cardSays(screen, 'Tap to record')
+  onlineManager.setOnline(false)
+  onTestFinished(() => onlineManager.setOnline(true))
+  await userEvent.click(screen.getByRole('button', { name: 'Record' }))
+  await cardSays(screen, 'Each second saves in this browser')
+  screen.getByRole('button', { name: 'New paragraph' }).element().focus()
+
+  // Act
+  await stopRecordingOfThisTab()
+
+  // Assert
+  await expect.element(screen.getByRole('button', { name: 'Record', exact: true })).toBeInTheDocument()
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Record', exact: true }).element())
+  await screen.unmount()
 })
 
 test('one tap records into a new entry, and the card follows the audio until the words are in', { timeout: 30_000 }, async () => {

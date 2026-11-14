@@ -7,14 +7,16 @@ import {
   Loading03Icon,
   Mic01Icon,
   MicOff01Icon,
+  ParagraphIcon,
   SquareLock01Icon,
   StopIcon,
   WifiDisconnected01Icon,
 } from '@hugeicons/core-free-icons'
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button-variants'
 import { Link } from '@/components/ui/link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useTranscriptionEngine } from '@/domain/model-providers/apis/transcription-engine'
@@ -133,6 +135,50 @@ function RecordingClock({ startedAt }: { startedAt: number }) {
     return () => clearInterval(timer)
   }, [])
   return <p className="text-4xl font-semibold tabular-nums">{clock(Math.max(0, now - startedAt))}</p>
+}
+
+function ParagraphMarks({ count }: { count: number }) {
+  return (
+    <span data-testid="paragraph-marks" className="absolute start-full top-1/2 ms-3 inline-flex -translate-y-1/2 items-center gap-0.5 rounded-full bg-destructive/10 px-2 py-0.5 text-sm font-semibold text-destructive tabular-nums">
+      <span className="absolute inset-0 overflow-hidden rounded-full">
+        <span
+          key={count}
+          className="absolute inset-0 rounded-full bg-destructive/30 motion-safe:animate-ping motion-reduce:hidden"
+          style={{ animationIterationCount: 1, animationFillMode: 'forwards' }}
+        />
+      </span>
+      <HugeiconsIcon icon={ParagraphIcon} size={14} />
+      {count}
+    </span>
+  )
+}
+
+// The label wraps in a narrow card with a large font, and the room of the idle card wraps with it.
+const newParagraphClass = 'h-auto min-h-12 w-full max-w-xs px-6 py-2 text-base whitespace-normal'
+
+/** The time of a tap is the finger down, not the lift, which comes later in the audio. A press that slides off marks nothing. */
+function NewParagraphButton({ capture, focusWhenGone }: { capture: Capture; focusWhenGone: RefObject<HTMLButtonElement | null> }) {
+  const pressedAt = useRef(0)
+  const button = useRef<HTMLButtonElement>(null)
+  // The button goes when the recording ends. Not a `useEffect`: its cleanup runs after the button left the DOM, so the
+  // focus would already be on the page body.
+  useLayoutEffect(() => {
+    const element = button.current
+    const target = focusWhenGone.current
+    return () => {
+      if (element && document.activeElement === element) target?.focus()
+    }
+  }, [focusWhenGone])
+  const handlePress = async () => {
+    // Android has a vibration. iOS Safari has none, so the mark by the clock and the status say it there.
+    if (await capture.markParagraph(pressedAt.current)) navigator.vibrate?.(15)
+  }
+  return (
+    <Button ref={button} variant="outline" className={newParagraphClass} onPressStart={() => (pressedAt.current = performance.now())} onPress={() => void handlePress()}>
+      <HugeiconsIcon icon={ParagraphIcon} size={20} aria-hidden />
+      New paragraph
+    </Button>
+  )
 }
 
 const barCount = 24
@@ -341,6 +387,10 @@ function RoomOfTheOtherMicState({ isRecording }: { isRecording: boolean }) {
           <div className={statusClass}>
             <p className={lineClass}>{wordsOf({ kind: 'recording', startedAt: 0 }).line}</p>
           </div>
+          <div className={buttonVariants({ variant: 'outline', className: newParagraphClass })}>
+            <HugeiconsIcon icon={ParagraphIcon} size={20} />
+            New paragraph
+          </div>
         </>
       )}
     </div>
@@ -358,6 +408,8 @@ export function MicCard() {
   const hasAGap = view.kind === 'ready' && view.problemText !== null
   const icon = hasAGap ? AlertCircleIcon : iconOf[view.kind]
   const isAtTheMic = view.kind === 'idle' || isStarting || isRecording
+  const micButton = useRef<HTMLButtonElement>(null)
+  const taps = capture.paragraphTapsMs
 
   return (
     <section
@@ -366,6 +418,7 @@ export function MicCard() {
     >
       {/* While the mic starts, the button stays focusable with aria-disabled: a disabled button drops the focus to the page. */}
       <button
+        ref={micButton}
         type="button"
         disabled={isOff || !capture.isLoaded}
         aria-disabled={view.kind === 'starting' || undefined}
@@ -382,17 +435,20 @@ export function MicCard() {
       </button>
 
       {/* The idle card and the recording card share one room, the larger of the two, so the card does not change size under the finger.
-          The clock takes the room of the engine line, so the idle card is no taller than it was. */}
+          The idle card keeps the room of the clock and of New paragraph. */}
       <div className="grid w-full justify-items-center">
         <div className="flex w-full flex-col items-center gap-4 [grid-area:1/1]">
           {isRecording && (
             <div aria-hidden className={clockClass}>
-              <RecordingClock startedAt={view.startedAt} />
+              <div className="relative">
+                <RecordingClock startedAt={view.startedAt} />
+                {taps.length > 0 && <ParagraphMarks count={taps.length} />}
+              </div>
               <LevelMeter level={capture.level} />
             </div>
           )}
           {/* Until the store answers, the card does not know of stored audio, so it says nothing rather than Tap to record. */}
-          <div role="status" className={cn(statusClass, !capture.isLoaded && !isOff && 'invisible')}>
+          <div role="status" data-testid="mic-status" className={cn(statusClass, !capture.isLoaded && !isOff && 'invisible')}>
             {/* The icon flows with the words, so a title that wraps keeps it at the start of its first line. */}
             <p className={cn(titleClass, isRecording && 'sr-only', isProblem(view.kind) && 'text-destructive')}>
               {icon && (
@@ -416,6 +472,15 @@ export function MicCard() {
             </p>
           </div>
           {(view.kind === 'idle' || isStarting) && capture.isLoaded && <EnginePlace />}
+          {isRecording && (
+            <>
+              <NewParagraphButton capture={capture} focusWhenGone={micButton} />
+              {/* The clock and its marks are hidden from a screen reader, so this says each tap. A new node each time says it again. */}
+              <p role="status" className="sr-only">
+                {taps.length > 0 && <span key={taps.length}>New paragraph at {clock(taps[taps.length - 1])}.</span>}
+              </p>
+            </>
+          )}
         </div>
         {isAtTheMic && <RoomOfTheOtherMicState isRecording={isRecording} />}
       </div>

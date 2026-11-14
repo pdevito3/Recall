@@ -120,6 +120,8 @@ export function useCapture() {
     isLoaded: stored !== null,
     waiting: stored ? waitingBesides(stored.captures, latest) : [],
     level: () => active?.level() ?? 0,
+    paragraphTapsMs: micState.kind === 'recording' && latest?.clientRecordingId === active?.clientRecordingId ? (latest?.paragraphTapsMs ?? []) : [],
+    markParagraph: (pressedAt: number) => active?.markParagraph(pressedAt) ?? Promise.resolve(false),
     record: () => void record(owner, captureZoneOf(queryClient)),
     stop: () => void active?.stop(),
     retry: (recordingId: string) => retry.mutate(recordingId),

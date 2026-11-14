@@ -5,9 +5,10 @@ export const needsMic = true
 
 export default async ({ page, context, expect, step, capture, login, speech }) => {
   const card = page.getByRole('region', { name: 'Record an entry' })
-  const status = card.getByRole('status')
-  // The slices that the newest capture of this browser stored. A slice leaves the store when the Server confirms it, so count the capture row, not the slices.
-  const storedSlices = () =>
+  // While the card records, it has a second status that says each New paragraph tap.
+  const status = card.getByTestId('mic-status')
+  // The newest capture of this browser. A slice leaves the store when the Server confirms it, so count the capture row, not the slices.
+  const newestCapture = () =>
     page.evaluate(
       () =>
         new Promise((resolve, reject) => {
@@ -15,11 +16,12 @@ export default async ({ page, context, expect, step, capture, login, speech }) =
           open.onerror = () => reject(open.error)
           open.onsuccess = () => {
             const all = open.result.transaction('captures').objectStore('captures').getAll()
-            all.onsuccess = () => resolve(all.result.sort((a, b) => a.startedAt.localeCompare(b.startedAt)).at(-1)?.storedSlices ?? 0)
+            all.onsuccess = () => resolve(all.result.sort((a, b) => a.startedAt.localeCompare(b.startedAt)).at(-1) ?? null)
             all.onerror = () => reject(all.error)
           }
         }),
     )
+  const storedSlices = async () => (await newestCapture())?.storedSlices ?? 0
 
   await step('login', () => login())
 
@@ -37,6 +39,14 @@ export default async ({ page, context, expect, step, capture, login, speech }) =
     await expect(status).toContainText('Recording', { timeout: 15_000 })
     await expect.poll(storedSlices, { timeout: 15_000 }).toBeGreaterThanOrEqual(5)
     await capture('mic-recording')
+  })
+
+  await step('paragraph: New paragraph marks the time of the tap, and the card says it', async () => {
+    await card.getByRole('button', { name: 'New paragraph' }).click()
+    await expect(card.getByRole('status').filter({ hasText: /^New paragraph at / })).toHaveText(/^New paragraph at \d+:\d\d\.$/)
+    await expect(card.getByTestId('paragraph-marks')).toHaveText('1')
+    await expect.poll(async () => (await newestCapture())?.paragraphTapsMs?.length).toBe(1)
+    await capture('mic-paragraph')
   })
 
   await step('close: a reload in the middle of the recording keeps the audio, and the next page sends it', async () => {
