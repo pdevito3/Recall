@@ -1,6 +1,8 @@
 namespace Recall.Server.Domain.Recordings;
 
 using Exceptions;
+using Sessions.Content;
+using Transcription;
 
 public class Recording : BaseEntity, ITenantable, IJournalOwned
 {
@@ -11,6 +13,10 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
     public const int MaxSlices = 20_000;
     public const int MaxAttemptsWithoutProgress = 5;
     public const int SamplesPerSecond = 16_000;
+    public const int MaxParagraphTaps = 1_000;
+
+    /// <summary>A tap is at most 14,400,000 ms, 8 digits, and a comma, inside [ ].</summary>
+    public const int ParagraphTapsColumnMaxLength = MaxParagraphTaps * 9 + 2;
     public static readonly TimeSpan AudioKeptAfterText = TimeSpan.FromDays(7);
     public static readonly TimeSpan MaxDuration = TimeSpan.FromHours(4);
 
@@ -66,6 +72,18 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
 
     /// <summary>The file of a stored slice was gone when the audio was joined, so the audio has a gap, and its words have one too.</summary>
     public bool HasLostAudio { get; private set; }
+
+    /// <summary>
+    /// REC-25: each tap of New paragraph, in ms from the start of the audio, as <see cref="ParagraphTaps.Clean"/> leaves it.
+    /// Set once, at the first finish. Empty for a Recording with no taps.
+    /// </summary>
+    [NotSensitive] public IReadOnlyList<int> ParagraphTapsMs { get; private set; } = [];
+
+    /// <summary>
+    /// REC-28: a break after the last word of a chunk, or in a chunk with no words, that waits for the next words. It moves
+    /// only in <see cref="TakeChunk"/>, with the pointer, so a run that goes on from the pointer finds it as the last save left it.
+    /// </summary>
+    public bool NextWordsStartParagraph { get; private set; }
 
     /// <summary>
     /// The file in the folder of the Recording that holds its joined audio, or null before the first join. Each join writes a
@@ -142,7 +160,7 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
     }
 
     /// <summary>The engine is chosen here and at a retry of a failure only, so two engines never work on one Recording at a time.</summary>
-    public void Finish(IReadOnlyCollection<int> stored, int sliceCount, long byteLength, TranscriptionEngineKind engine)
+    public void Finish(IReadOnlyCollection<int> stored, int sliceCount, long byteLength, TranscriptionEngineKind engine, IReadOnlyList<int>? paragraphTapsMs = null)
     {
         if (Status != RecordingStatus.Receiving)
             throw new ConflictException(StatusField, "This recording is already finished.");
@@ -158,6 +176,9 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
 
         Status = RecordingStatus.Received;
         Engine = engine;
+        var sweepMadeTheFirstWords = QuietEndThroughSlice is >= 0;
+        if (!sweepMadeTheFirstWords)
+            ParagraphTapsMs = ParagraphTaps.Clean(paragraphTapsMs);
         QuietEndThroughSlice = null;
     }
 
@@ -237,16 +258,25 @@ public class Recording : BaseEntity, ITenantable, IJournalOwned
     /// </summary>
     public bool AudioGrewSince(int? highestSliceAtBegin) => HighestStoredSlice != highestSliceAtBegin;
 
-    public bool AdvanceTo(long endSample, long totalSamples, bool hasWords)
+    /// <summary>
+    /// Moves the pointer past one chunk and gives what the chunk adds to Raw, or null when the saved text holds it already
+    /// (REC-6) or it has no words. <see cref="Joins"/> has passed, so a chunk that moves the pointer starts at it. A lost slice
+    /// moves each later tap of the client (REC-23), so a Recording with lost audio places no tap (REC-27).
+    /// </summary>
+    public ChunkParagraphs? TakeChunk(long endSample, long totalSamples, string words, IReadOnlyList<WordTime>? wordTimes, bool draftIsFromChunk)
     {
         DurationMs = totalSamples * 1000 / SamplesPerSecond;
         if (endSample <= TranscribedSamples)
-            return false;
+            return null;
 
+        var cut = ParagraphBreaks.Of(
+            HasLostAudio ? [] : ParagraphTapsMs, startsParagraph: !HasText || NextWordsStartParagraph, draftIsFromChunk,
+            TranscribedSamples, endSample, totalSamples, words, wordTimes);
         TranscribedSamples = endSample;
         AttemptsWithoutProgress = 0;
-        HasText |= hasWords;
-        return true;
+        HasText |= words.Length > 0;
+        NextWordsStartParagraph = cut.NextWordsStartParagraph;
+        return cut.Added;
     }
 
     public void Complete(DateTimeOffset now)

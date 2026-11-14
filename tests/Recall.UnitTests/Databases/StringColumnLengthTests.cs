@@ -104,6 +104,7 @@ public class StringColumnLengthTests
     private static readonly HashSet<string> ServerWrittenColumns =
     [
         "recording_slices.sha256",
+        "recordings.paragraph_taps_ms",
         "cleaned_revisions.device_result_hash",
         "people.proposal_key",
         "audit_entries.action",

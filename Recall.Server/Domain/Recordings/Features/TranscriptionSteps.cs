@@ -10,7 +10,7 @@ using ModelProviders.Clients;
 using Resources;
 using Resources.Storage;
 using Serilog;
-using Sessions.Content;
+using Sessions;
 using Transcription;
 
 public static class BeginTranscription
@@ -149,9 +149,10 @@ public static class SaveTranscriptChunk
     /// <summary>
     /// A chunk of an engine that no longer has the Recording is refused, so a hand-over repeats no text. A chunk that does not
     /// start where the saved text ends is refused too, so text joins with no repeat and no gap whatever the cuts of the run.
+    /// <paramref name="WordTimes"/> are sample numbers as the engine gave them, null from the cloud engine, and never stored.
     /// </summary>
-    public sealed record Command(string Id, TranscriptionEngineKind Engine, long FromSample, long EndSample, long TotalSamples, string Words)
-        : IRequest<bool>, IRunsAgainWhenRaced;
+    public sealed record Command(string Id, TranscriptionEngineKind Engine, long FromSample, long EndSample, long TotalSamples, string Words,
+        IReadOnlyList<WordTime>? WordTimes = null) : IRequest<bool>, IRunsAgainWhenRaced;
 
     public sealed class Handler(AppDbContext dbContext, TimeProvider timeProvider) : IRequestHandler<Command, bool>
     {
@@ -182,26 +183,24 @@ public static class SaveTranscriptChunk
                 return false;
             }
 
-            var hasWords = words.Length > 0;
-            if (!recording.AdvanceTo(request.EndSample, request.TotalSamples, hasWords))
+            Session? session = null;
+            RawRevision? replaced = null;
+            if (words.Length > 0)
             {
-                await dbContext.SaveChangesAsync(cancellationToken);
-                return true;
-            }
-
-            var fits = true;
-            if (hasWords)
-            {
-                var session = await dbContext.Sessions
+                session = await dbContext.Sessions
                     .TagWithOperationCallSite("recordings.transcribe.session")
                     .GetById(recording.SessionId, cancellationToken);
                 // When a chunk made the Draft, this chunk holds each of its words, so a Recording keeps one Revision of its
                 // text and not one for each chunk (SES-48).
-                var replaced = await dbContext.RawRevisions
+                replaced = await dbContext.RawRevisions
                     .TagWithOperationCallSite("recordings.transcribe.replaced_chunk")
                     .FirstOrDefaultAsync(r => r.SessionId == session.Id && r.Number == session.Raw.DraftRevision && r.FromChunk, cancellationToken);
-                fits = session.TryAppendTranscript(ChunkParagraphs.Own(words), timeProvider.GetUtcNow());
-                if (!fits)
+            }
+
+            var added = recording.TakeChunk(request.EndSample, request.TotalSamples, words, request.WordTimes, draftIsFromChunk: session is null || replaced is not null);
+            if (added is not null && session is not null)
+            {
+                if (!session.TryAppendTranscript(added, timeProvider.GetUtcNow()))
                 {
                     dbContext.DiscardLostRace();
                     return await FailForLengthAsync(request.Id, cancellationToken);
@@ -213,7 +212,7 @@ public static class SaveTranscriptChunk
 
             await dbContext.SaveChangesAsync(cancellationToken);
             _logger.Here().Information("Saved a chunk of recording {RecordingId} up to sample {EndSample}", recording.Id, request.EndSample);
-            return fits;
+            return true;
         }
 
         private async Task<bool> FailForLengthAsync(string id, CancellationToken cancellationToken)

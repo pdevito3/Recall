@@ -24,6 +24,7 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
         builder.Property(e => e.Engine).HasConversion<string>().HasMaxLength(EnumColumnLength);
         builder.Property(e => e.Status).HasConversion<string>().HasMaxLength(EnumColumnLength);
         builder.Property(e => e.Problem).HasConversion<string>().HasMaxLength(EnumColumnLength);
+        builder.PrimitiveCollection(e => e.ParagraphTapsMs).HasMaxLength(Recording.ParagraphTapsColumnMaxLength);
 
         builder.HasOne<Tenant>().WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.ClientNoAction);
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.ClientNoAction);

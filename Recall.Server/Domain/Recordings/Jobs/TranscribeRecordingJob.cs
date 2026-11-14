@@ -102,7 +102,7 @@ public sealed class TranscribeRecordingJob(
             var from = start.StartSample;
             await foreach (var chunk in engine.RunAsync(input, cancellationToken))
             {
-                var fits = await SendAsync(owner, new SaveTranscriptChunk.Command(recordingId, engine.Kind, from, chunk.EndSample, chunk.TotalSamples, chunk.Text), cancellationToken);
+                var fits = await SendAsync(owner, new SaveTranscriptChunk.Command(recordingId, engine.Kind, from, chunk.EndSample, chunk.TotalSamples, chunk.Text, chunk.WordTimes), cancellationToken);
                 if (!fits)
                     return Run.Ended;
                 from = Math.Max(from, chunk.EndSample);

@@ -815,6 +815,16 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("last_modified_on");
 
+                    b.Property<bool>("NextWordsStartParagraph")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("next_words_start_paragraph");
+
+                    b.PrimitiveCollection<string>("ParagraphTapsMs")
+                        .IsRequired()
+                        .HasMaxLength(9002)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("paragraph_taps_ms");
+
                     b.Property<string>("Problem")
                         .IsRequired()
                         .HasMaxLength(30)

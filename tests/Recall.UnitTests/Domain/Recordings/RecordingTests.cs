@@ -83,7 +83,7 @@ public class RecordingTests
             recording.BeginAttempt();
         if (statusAtReturn == RecordingStatus.Transcribed)
         {
-            recording.AdvanceTo(16_000, 16_000, hasWords: true);
+            recording.TakeChunk(16_000, 16_000, "words", null, draftIsFromChunk: true);
             recording.Complete(Now);
         }
 
@@ -126,7 +126,7 @@ public class RecordingTests
         recording.StoreSlice(0, 10);
         recording.EndQuietUpload(1, TranscriptionEngineKind.Local);
         recording.BeginAttempt();
-        recording.AdvanceTo(16_000, 16_000, hasWords: true);
+        recording.TakeChunk(16_000, 16_000, "words", null, draftIsFromChunk: true);
         recording.Complete(Now);
         recording.MarkAudioDeleted(Now);
 
@@ -197,7 +197,7 @@ public class RecordingTests
         // Arrange
         var recording = Received();
         recording.BeginAttempt();
-        recording.AdvanceTo(32_000, 32_000, hasWords: false);
+        recording.TakeChunk(32_000, 32_000, "", null, draftIsFromChunk: true);
         recording.Complete(Now);
         recording.Problem.ShouldBe(RecordingProblem.NoWordsFound);
 
@@ -214,13 +214,13 @@ public class RecordingTests
         // Arrange
         var recording = Received();
         recording.BeginAttempt();
-        recording.AdvanceTo(16_000, 32_000, hasWords: true);
+        recording.TakeChunk(16_000, 32_000, "words", null, draftIsFromChunk: true);
 
         // Act
-        var advanced = recording.AdvanceTo(16_000, 32_000, hasWords: true);
+        var advanced = recording.TakeChunk(16_000, 32_000, "words", null, draftIsFromChunk: true);
 
         // Assert
-        advanced.ShouldBeFalse();
+        advanced.ShouldBeNull();
     }
 
     [Test]
@@ -352,7 +352,7 @@ public class RecordingTests
         // Arrange
         var recording = Received();
         recording.BeginAttempt();
-        recording.AdvanceTo(100, 1000, hasWords: true);
+        recording.TakeChunk(100, 1000, "words", null, draftIsFromChunk: true);
 
         // Act
         var result = recording.Joins(from, end);
@@ -453,7 +453,7 @@ public class RecordingTests
         recording.BeginAttempt();
 
         // Act
-        recording.AdvanceTo(16_000, 32_000, hasWords: true);
+        recording.TakeChunk(16_000, 32_000, "words", null, draftIsFromChunk: true);
 
         // Assert
         recording.AttemptsWithoutProgress.ShouldBe(0);
@@ -467,14 +467,170 @@ public class RecordingTests
         // Arrange
         var recording = Received();
         recording.BeginAttempt();
-        recording.AdvanceTo(16_000, 32_000, hasWords: true);
+        recording.TakeChunk(16_000, 32_000, "words", null, draftIsFromChunk: true);
 
         // Act
-        var advanced = recording.AdvanceTo(16_000, 32_000, hasWords: true);
+        var advanced = recording.TakeChunk(16_000, 32_000, "words", null, draftIsFromChunk: true);
 
         // Assert
-        advanced.ShouldBeFalse();
+        advanced.ShouldBeNull();
         recording.TranscribedSamples.ShouldBe(16_000);
+    }
+
+    private static Recording ReceivedWithTaps(params int[] tapsMs)
+    {
+        var recording = Receiving();
+        recording.StoreSlice(0, 10);
+        recording.Finish([0], 1, 10, TranscriptionEngineKind.Local, tapsMs);
+        return recording;
+    }
+
+    [Test]
+    [Property("Rule", "REC-25")]
+    public void a_finish_sorts_its_taps_and_drops_repeats_and_taps_outside_the_audio_and_never_refuses_them()
+    {
+        // Act
+        var recording = ReceivedWithTaps(9_000, 1_500, -1, 9_000, 14_400_000, 14_400_001, 0, int.MinValue, int.MaxValue);
+
+        // Assert
+        recording.Status.ShouldBe(RecordingStatus.Received);
+        recording.ParagraphTapsMs.ShouldBe([0, 1_500, 9_000, 14_400_000]);
+    }
+
+    [Test]
+    [Property("Rule", "REC-25")]
+    public void a_finish_keeps_the_first_thousand_taps()
+    {
+        // Arrange
+        var taps = Enumerable.Range(0, 1_500).Select(i => (1_499 - i) * 10).ToArray();
+
+        // Act
+        var recording = ReceivedWithTaps(taps);
+
+        // Assert
+        recording.ParagraphTapsMs.ShouldBe(Enumerable.Range(0, Recording.MaxParagraphTaps).Select(i => i * 10));
+    }
+
+    [Test]
+    [Property("Rule", "REC-25")]
+    public void a_finish_with_no_taps_stores_none()
+    {
+        // Arrange
+        var recording = Receiving();
+        recording.StoreSlice(0, 10);
+
+        // Act
+        recording.Finish([0], 1, 10, TranscriptionEngineKind.Local, null);
+
+        // Assert
+        recording.ParagraphTapsMs.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Property("Rule", "REC-25")]
+    public void a_second_finish_with_other_taps_is_refused_and_keeps_the_first_taps()
+    {
+        // Arrange
+        var recording = ReceivedWithTaps(1_000);
+
+        // Act
+        var second = () => recording.Finish([0], 1, 10, TranscriptionEngineKind.Local, [2_000, 3_000]);
+
+        // Assert
+        second.ShouldThrow<ConflictException>();
+        recording.ParagraphTapsMs.ShouldBe([1_000]);
+    }
+
+    [Test]
+    [Property("Rule", "REC-25")]
+    public void a_late_finish_after_a_quiet_end_stores_no_taps()
+    {
+        // Arrange
+        var recording = Receiving();
+        recording.StoreSlice(0, 10);
+        recording.EndQuietUpload(1, TranscriptionEngineKind.Local);
+        recording.StoreSlice(1, 5);
+
+        // Act
+        recording.Finish([0, 1], 2, 15, TranscriptionEngineKind.Local, [500, 1_500]);
+
+        // Assert
+        recording.Status.ShouldBe(RecordingStatus.Received);
+        recording.ParagraphTapsMs.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Property("Rule", "REC-25")]
+    public void a_finish_after_a_quiet_end_with_no_audio_keeps_its_taps()
+    {
+        // Arrange
+        var recording = Receiving();
+        recording.EndQuietUpload(0, TranscriptionEngineKind.Local);
+        recording.StoreSlice(0, 10);
+
+        // Act
+        recording.Finish([0], 1, 10, TranscriptionEngineKind.Local, [500, 1_500]);
+
+        // Assert
+        recording.Status.ShouldBe(RecordingStatus.Received);
+        recording.ParagraphTapsMs.ShouldBe([500, 1_500]);
+    }
+
+    [Test]
+    [Property("Rule", "REC-27")]
+    public void a_recording_with_lost_audio_places_no_tap_and_its_chunks_join_as_before()
+    {
+        // Arrange
+        var recording = ReceivedWithTaps(500);
+        recording.MarkAudioLost();
+
+        // Act
+        var added = recording.TakeChunk(16_000, 32_000, "first words", [new(1_600, 4_800), new(12_800, 14_400)], draftIsFromChunk: true);
+
+        // Assert
+        added.ShouldNotBeNull();
+        added.Paragraphs.ShouldBe(["first words"]);
+        added.JoinsLastParagraph.ShouldBeFalse();
+        recording.NextWordsStartParagraph.ShouldBeFalse();
+    }
+
+    [Test]
+    [Property("Rule", "REC-28")]
+    public void a_break_after_the_last_word_waits_with_the_pointer_and_starts_the_next_words()
+    {
+        // Arrange
+        var recording = ReceivedWithTaps(900);
+        var first = recording.TakeChunk(16_000, 32_000, "first words", [new(1_600, 4_800), new(6_400, 9_600)], draftIsFromChunk: true);
+
+        // Act
+        var again = recording.TakeChunk(16_000, 32_000, "first words", [new(1_600, 4_800), new(6_400, 9_600)], draftIsFromChunk: true);
+        var next = recording.TakeChunk(32_000, 32_000, "next words", [new(17_600, 20_800), new(22_400, 25_600)], draftIsFromChunk: true);
+
+        // Assert
+        first.ShouldNotBeNull();
+        first.Paragraphs.ShouldBe(["first words"]);
+        again.ShouldBeNull();
+        next.ShouldNotBeNull();
+        next.Paragraphs.ShouldBe(["next words"]);
+        next.JoinsLastParagraph.ShouldBeFalse();
+        recording.NextWordsStartParagraph.ShouldBeFalse();
+    }
+
+    [Test]
+    [Property("Rule", "REC-27")]
+    public void with_taps_a_chunk_goes_on_in_the_paragraph_of_the_chunk_before()
+    {
+        // Arrange
+        var recording = ReceivedWithTaps(30_000);
+        recording.TakeChunk(16_000, 48_000, "first words", [new(1_600, 4_800), new(6_400, 9_600)], draftIsFromChunk: true);
+
+        // Act
+        var next = recording.TakeChunk(32_000, 48_000, "next words", [new(17_600, 20_800), new(22_400, 25_600)], draftIsFromChunk: true);
+
+        // Assert
+        next.ShouldNotBeNull();
+        next.Paragraphs.ShouldBe(["next words"]);
+        next.JoinsLastParagraph.ShouldBeTrue();
     }
 
     [Test]
@@ -483,7 +639,7 @@ public class RecordingTests
         // Arrange
         var recording = Received();
         recording.BeginAttempt();
-        recording.AdvanceTo(16_000, 16_000, hasWords: true);
+        recording.TakeChunk(16_000, 16_000, "words", null, draftIsFromChunk: true);
 
         // Act
         recording.Complete(Now);
@@ -501,7 +657,7 @@ public class RecordingTests
         // Arrange
         var recording = Received();
         recording.BeginAttempt();
-        recording.AdvanceTo(16_000, 16_000, hasWords: false);
+        recording.TakeChunk(16_000, 16_000, "", null, draftIsFromChunk: true);
 
         // Act
         recording.Complete(Now);
@@ -533,7 +689,7 @@ public class RecordingTests
         // Arrange
         var recording = Received();
         recording.BeginAttempt();
-        recording.AdvanceTo(16_000, 32_000, hasWords: true);
+        recording.TakeChunk(16_000, 32_000, "words", null, draftIsFromChunk: true);
         recording.Fail(RecordingProblem.EngineCrashed);
 
         // Act
@@ -551,7 +707,7 @@ public class RecordingTests
         // Arrange
         var recording = Received();
         recording.BeginAttempt();
-        recording.AdvanceTo(16_000, 16_000, hasWords: true);
+        recording.TakeChunk(16_000, 16_000, "words", null, draftIsFromChunk: true);
         recording.Complete(Now);
 
         // Act and assert
