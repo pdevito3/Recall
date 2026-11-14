@@ -42,6 +42,10 @@ public class MigrationHostedService<TDbContext>(
 
             await using var scope = scopeFactory.CreateAsyncScope();
             var context = scope.ServiceProvider.GetRequiredService<TDbContext>();
+            var applied = await context.Database.GetAppliedMigrationsAsync(cancellationToken);
+            if (NewerVersionRefusal(applied, context.Database.GetMigrations()) is { } refusal)
+                throw new InvalidOperationException(refusal);
+
             await context.Database.MigrateAsync(cancellationToken);
 
             // A kill between the commit of a delete and its scrub leaves the deleted words in the WAL. This runs before Kestrel binds.
@@ -57,6 +61,17 @@ public class MigrationHostedService<TDbContext>(
             _logger.Here().Error(ex, "An error occurred while applying the database migrations.");
             throw;
         }
+    }
+
+    // EF applies only the migrations it knows and ignores the others, so an older binary would run on a schema it was not built for.
+    private static string? NewerVersionRefusal(IEnumerable<string> applied, IEnumerable<string> known)
+    {
+        var unknown = applied.Except(known).ToList();
+        return unknown.Count == 0
+            ? null
+            : $"The database holds migrations that this version of Recall does not know: {string.Join(", ", unknown)}. " +
+              "A newer version changed the database, and this version cannot run on it. " +
+              "Start the newer version again, or restore the backup that you made before the upgrade.";
     }
 
     public Task StopAsync(CancellationToken cancellationToken)

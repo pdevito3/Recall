@@ -42,6 +42,25 @@ public sealed class MigrationHostedServiceTests : IAsyncDisposable
     }
 
     [Test]
+    public async Task startup_on_a_database_that_a_newer_version_migrated_refuses_and_names_the_migration()
+    {
+        // Arrange
+        const string newer = "29991231000000_FromANewerVersion";
+        await using var services = TestFixture.BuildServiceProvider(_ => { }, _database.ConnectionString);
+        await Migrator(services, Logger.None).StartAsync(CancellationToken.None);
+        await using var connection = await OpenAsync();
+        await RunAsync(connection,
+            $"INSERT INTO __EFMigrationsHistory (migration_id, product_version) VALUES ('{newer}', '10.0.13');");
+
+        // Act
+        var refusal = await Should.ThrowAsync<InvalidOperationException>(
+            () => Migrator(services, Logger.None).StartAsync(CancellationToken.None));
+
+        // Assert
+        refusal.Message.ShouldContain(newer);
+    }
+
+    [Test]
     [Property("Rule", "SES-27")]
     [NotInParallel(nameof(MigrationHostedServiceTests))]
     public async Task a_startup_scrub_that_a_reader_blocks_warns_and_names_no_word()

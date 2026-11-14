@@ -245,7 +245,7 @@ With a folder in place of the volume, stop Recall and copy the folder with `sudo
 
 ## Upgrade
 
-1. Make a backup. An upgrade can change the database, and an older image is not made for the changed database. To go back to an older version, restore the backup.
+1. Make a backup. An upgrade can change the database, and an older image refuses to start on the changed database. To go back to an older version, restore the backup.
 2. Get the new version, and start it:
 
    ```bash
@@ -263,6 +263,7 @@ After the first release, you can use the published image in place of a build. Ru
 |---|---|---|
 | `docker compose ps` shows `Restarting`, and `docker compose logs` says `is on the mount` | `/data` is on a file system that the Server refuses. See [Keep your data](#keep-your-data) | Move `/data` to a local disk |
 | `docker compose ps` shows `Restarting`, and the log says `is not writable` | The user of the container cannot write to `/data` | With a folder, set `PUID` and `PGID` to its owner. With the Docker volume, remove `PUID` and `PGID` |
+| `docker compose ps` shows `Restarting`, and the log says `this version of Recall does not know` | An older image started on a database that a newer image changed | Start the newer image again. To stay on the older version, restore the backup that you made before the upgrade. See [Back up and restore](#back-up-and-restore) |
 | `docker compose ps` shows `Restarting`, and the log names `Auth:Providers:0` | A setting of the provider is missing or wrong | Correct the value in `.env`, and run `docker compose up -d` |
 | `docker compose ps` shows `unhealthy` | The last probe failed. This status can be as old as the probe interval | Run `docker compose exec recall /app/healthcheck.sh`. If it prints `Healthy`, the cause is gone, and the status changes at the next probe of Docker. If it prints another answer, read `docker compose logs recall` |
 | The probe prints `Degraded` | The database answers, but the file store cannot take a write, the background jobs have a transient store fault, or the key ring changed | For the key ring, see [The key ring changed](troubleshooting.md#the-key-ring-changed). For the file store, see the next two rows. For the jobs, do not restart: the jobs try again, and the status clears by itself when the store answers. If the probe prints `Unhealthy` and `The background jobs stopped`, see [The background jobs stopped](troubleshooting.md#the-background-jobs-stopped) |
