@@ -66,7 +66,7 @@ async function take(capture: StoredCapture, step: UploadStep, queryClient: Query
       return
     }
     case 'finish': {
-      const recording = await finishRecording({ path: { id: capture.recordingId! }, body: { sliceCount: step.sliceCount, byteLength: BigInt(step.byteLength) }, ...callOptions() })
+      const recording = await finishRecording({ path: { id: capture.recordingId! }, body: { sliceCount: step.sliceCount, byteLength: BigInt(step.byteLength), paragraphTapsMs: step.paragraphTapsMs }, ...callOptions() })
       queryClient.setQueryData(CaptureKeys.recording(recording.id), recording)
       await updateCapture(id, { isFinished: true, problem: null })
       return
@@ -308,13 +308,13 @@ export async function forgetCaptures(captures: StoredCapture[]): Promise<void> {
 
 const discardCallOptions = () => ({ ...callOptions(), signal: AbortSignal.timeout(signOutQuietLimitMs) })
 
-async function endCaptureOnServer({ sessionId, recordingId }: StoredCapture) {
+async function endCaptureOnServer({ sessionId, recordingId, paragraphTapsMs }: StoredCapture) {
   if (recordingId) {
     const recording = await getRecording({ path: { id: recordingId }, ...discardCallOptions() })
     if (recording.status !== 'Receiving') return
     const sliceCount = recording.storedSlices.length
     if (sliceCount > 0) {
-      await finishRecording({ path: { id: recordingId }, body: { sliceCount, byteLength: recording.byteLength }, ...discardCallOptions() })
+      await finishRecording({ path: { id: recordingId }, body: { sliceCount, byteLength: recording.byteLength, paragraphTapsMs: paragraphTapsMs ?? [] }, ...discardCallOptions() })
       return
     }
     await deleteRecording({ path: { id: recordingId }, ...discardCallOptions() })

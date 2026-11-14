@@ -109,7 +109,7 @@ test('a discard at a sign-out ends the part that the server has, and the audio g
   await screen.getByRole('button', { name: 'Discard audio and sign out' }).click()
 
   const leave = await finished
-  expect(await commands.takeSentRequests()).toEqual([{ method: 'POST', path: '/api/v1/recordings/rec_1/finish', body: { sliceCount: 1, byteLength: 1_000 } }])
+  expect(await commands.takeSentRequests()).toEqual([{ method: 'POST', path: '/api/v1/recordings/rec_1/finish', body: { sliceCount: 1, byteLength: 1_000, paragraphTapsMs: [] } }])
   // A sign-out that fails, as with no network, never calls this, so the audio stays until the sign-out works.
   expect(await capturesOf(member.identifier)).toMatchObject([{ clientRecordingId: 'cap_1' }])
   await leave()
