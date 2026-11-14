@@ -86,3 +86,50 @@ test('a slice that this browser refuses to store stops the recording', async () 
   expect(onSliceFailed).toHaveBeenCalledOnce()
   expect(await storedSlices()).toBe(0)
 })
+
+function heardStartOfTheRecorder() {
+  return new Promise<number>((resolve) => {
+    const start = MediaRecorder.prototype.start
+    vi.spyOn(MediaRecorder.prototype, 'start').mockImplementation(function (this: MediaRecorder, ...args: Parameters<MediaRecorder['start']>) {
+      this.addEventListener('start', (event) => resolve(event.timeStamp), { once: true })
+      return start.apply(this, args)
+    })
+  })
+}
+
+const storedTaps = async () => (await capturesOf(owner))[0]?.paragraphTapsMs
+
+test('@REC-30 a tap is stored with the capture in ms of the audio from the start event of the recorder', async () => {
+  // Arrange
+  micGivesATone()
+  const heard = heardStartOfTheRecorder()
+  recording = await startRecording(owner, undefined, () => undefined)
+  const startedAt = await heard
+
+  // Act
+  const first = await recording.markParagraph(startedAt + 1_234)
+  const second = await recording.markParagraph(startedAt + 5_678.4)
+
+  // Assert
+  expect([first, second]).toEqual([true, true])
+  expect(await storedTaps()).toEqual([1_234, 5_678])
+})
+
+test('@REC-30 a tap just before the stop is in the capture when it ends, and a tap after the stop is not stored', async () => {
+  // Arrange
+  micGivesATone()
+  const heard = heardStartOfTheRecorder()
+  recording = await startRecording(owner, undefined, () => undefined)
+  const startedAt = await heard
+  await wait(200)
+
+  // Act
+  const beforeTheStop = recording.markParagraph(startedAt + 150)
+  await recording.stop()
+  const afterTheStop = await recording.markParagraph(startedAt + 300)
+
+  // Assert
+  expect(await beforeTheStop).toBe(true)
+  expect(afterTheStop).toBe(false)
+  expect((await capturesOf(owner))[0]).toMatchObject({ isEnded: true, paragraphTapsMs: [150] })
+})

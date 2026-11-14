@@ -1,7 +1,7 @@
 import type { RecordingForCreationDtoFormatEnumKey } from '@/api/generated/models/types/recording-for-creation-dto'
 import { newUuid } from '@/lib/new-uuid'
 
-import { addCapture, endCapture, storeSlice, type StoredCapture } from './audio-store'
+import { addCapture, endCapture, storeParagraphTap, storeSlice, type StoredCapture } from './audio-store'
 import type { MicFailure } from './capture-view'
 
 /** The recorder hands over a slice each second, and each slice is stored before the next. */
@@ -67,12 +67,18 @@ export async function isRecordingLive(clientRecordingId: string, touchedAt: numb
 
 export interface ActiveRecording {
   clientRecordingId: string
+  /** Wall time, for the clock of the card and the time of the entry. It is not the clock of a tap. */
   startedAt: number
   /** The loudness now, from 0 to 1. */
   level: () => number
   stop: () => Promise<void>
   /** Settles when the recorder stops for any reason, such as a mic that goes away, and each slice is stored. */
   ended: Promise<void>
+  /**
+   * Marks a new paragraph at `pressedAt`, a `performance.now()` time from when the finger went down. Answers true when
+   * this browser stored the tap, and false when the recorder no longer runs or the capture takes no more taps.
+   */
+  markParagraph: (pressedAt: number) => Promise<boolean>
 }
 
 function levelMeterOf(stream: MediaStream) {
@@ -143,6 +149,9 @@ export async function startRecording(owner: string, timeZone: StoredCapture['tim
   let writes: Promise<unknown> = stored
   let nextIndex = 0
   let hasFailed = false
+  // The zero of a tap. `startedAt` is taken before `start()`, so it leads the audio by the start of the recorder. The page
+  // clock does not jump when the time of the system is set.
+  let audioStartedAt = 0
 
   recorder.ondataavailable = ({ data }) => {
     if (data.size === 0 || hasFailed) return
@@ -187,7 +196,10 @@ export async function startRecording(owner: string, timeZone: StoredCapture['tim
 
   try {
     await new Promise<void>((started, failed) => {
-      recorder.onstart = () => started()
+      recorder.onstart = (event) => {
+        audioStartedAt = event.timeStamp
+        started()
+      }
       recorder.onerror = () => failed(new MicStartError('micFailed'))
       recorder.start(sliceMs)
     })
@@ -209,5 +221,14 @@ export async function startRecording(owner: string, timeZone: StoredCapture['tim
       await ended
     },
     ended,
+    markParagraph: (pressedAt) => {
+      if (recorder.state !== 'recording' || hasFailed) return Promise.resolve(false)
+      const atMs = Math.max(0, Math.round(pressedAt - audioStartedAt))
+      // On the chain of writes, so the tap is in the row before `endCapture`, and the finish that the queue builds holds it.
+      const previous = writes
+      const tap = previous.then(() => storeParagraphTap(clientRecordingId, atMs))
+      writes = tap.then(() => undefined, () => previous)
+      return tap.then((row) => row !== null, () => false)
+    },
   }
 }
