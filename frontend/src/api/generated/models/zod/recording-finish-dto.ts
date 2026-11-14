@@ -8,4 +8,5 @@ import * as z from 'zod'
 export const recordingFinishDtoSchema = z.object({
   sliceCount: z.int32(),
   byteLength: z.coerce.bigint(),
+  paragraphTapsMs: z.array(z.int32()).nullish().describe('Each tap of New paragraph, in ms from the start of the audio. Optional, so a client with no button sends none. The\nserver never refuses them: it sorts them, drops repeats and taps outside 0 to 4 hours, and keeps the first 1,000. The\nfirst finish stores them, and a repeat finish keeps them.'),
 })

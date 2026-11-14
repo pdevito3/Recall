@@ -49,7 +49,8 @@ public static class FinishRecording
             }
 
             var joinedThrough = recording.QuietEndThroughSlice;
-            recording.Finish(stored, request.Dto.SliceCount, request.Dto.ByteLength, await RecordingWork.ChosenEngineAsync(dbContext, cancellationToken));
+            recording.Finish(stored, request.Dto.SliceCount, request.Dto.ByteLength, await RecordingWork.ChosenEngineAsync(dbContext, cancellationToken),
+                request.Dto.ParagraphTapsMs);
             await RecordingWork.JoinAudioAndSaveAsync(dbContext, fileStore, recording, slices, joinedThrough, _logger, cancellationToken);
             await RecordingWork.TryQueueTranscriptionAsync(dbContext, jobStore, recording, timeProvider, _logger);
 
