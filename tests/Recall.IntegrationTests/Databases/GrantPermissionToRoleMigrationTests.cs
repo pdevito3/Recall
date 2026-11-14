@@ -97,6 +97,37 @@ public sealed class GrantPermissionToRoleMigrationTests : IAsyncDisposable
         (await ScalarAsync("SELECT count(*) FROM user_permissions WHERE permission = 'read_users'")).ShouldBe(1L);
     }
 
+    [Test]
+    public async Task an_admin_of_the_first_migration_holds_each_permission_after_the_last_migration()
+    {
+        // Arrange
+        await using var context = CreateContext();
+        var migrator = context.GetService<IMigrator>();
+        await migrator.MigrateAsync("20261105074122_InitialSqlite");
+        await ExecuteAsync("""
+            INSERT INTO tenants (id, name, is_deleted, version) VALUES ('ten_first', 'First tenant', false, 1);
+            INSERT INTO users (id, tenant_id, first_name, last_name, identifier, username, email, role, is_deleted, version)
+            VALUES ('usr_owner', 'ten_first', 'Olga', 'Owner', 'idp-owner', 'olga', 'olga@example.com', 'Admin', false, 1);
+            INSERT INTO user_permissions (id, user_id, permission, is_deleted, version) VALUES
+                ('uperm_1', 'usr_owner', 'manage_users', false, 1),
+                ('uperm_2', 'usr_owner', 'manage_user_access', false, 1),
+                ('uperm_3', 'usr_owner', 'manage_tenant', false, 1),
+                ('uperm_4', 'usr_owner', 'manage_agents', false, 1),
+                ('uperm_5', 'usr_owner', 'read_audit_log', false, 1),
+                ('uperm_6', 'usr_owner', 'read_audit_log_sensitive', false, 1),
+                ('uperm_7', 'usr_owner', 'read_users', false, 1),
+                ('uperm_8', 'usr_owner', 'read_agents', false, 1);
+            """);
+
+        // Act
+        await migrator.MigrateAsync();
+
+        // Assert
+        var held = await PermissionsOfAsync("usr_owner");
+        held.ShouldBe(UserRole.Admin().GetDefaultPermissions().Select(p => p.Value), ignoreOrder: true,
+            "A new Admin permission needs a migration that calls GrantPermissionToRole(\"Admin\", ...).");
+    }
+
     private const string ArrangeSql = """
         INSERT INTO tenants (id, name, is_deleted, version) VALUES ('ten_migration', 'Migration tenant', false, 1);
         INSERT INTO users (id, tenant_id, first_name, last_name, identifier, username, email, role, is_deleted, version) VALUES
@@ -131,17 +162,22 @@ public sealed class GrantPermissionToRoleMigrationTests : IAsyncDisposable
         return await command.ExecuteScalarAsync();
     }
 
-    private async Task<List<string>> UsersWithAsync(string permission)
+    private Task<List<string>> UsersWithAsync(string permission)
+        => StringsAsync("SELECT user_id FROM user_permissions WHERE permission = @value AND NOT is_deleted", permission);
+
+    private Task<List<string>> PermissionsOfAsync(string userId)
+        => StringsAsync("SELECT permission FROM user_permissions WHERE user_id = @value AND NOT is_deleted", userId);
+
+    private async Task<List<string>> StringsAsync(string sql, string value)
     {
         await using var connection = new SqliteConnection(_database.ConnectionString);
         await connection.OpenAsync();
-        await using var command = new SqliteCommand(
-            "SELECT user_id FROM user_permissions WHERE permission = @permission AND NOT is_deleted", connection);
-        command.Parameters.AddWithValue("permission", permission);
+        await using var command = new SqliteCommand(sql, connection);
+        command.Parameters.AddWithValue("value", value);
         await using var reader = await command.ExecuteReaderAsync();
-        var userIds = new List<string>();
+        var values = new List<string>();
         while (await reader.ReadAsync())
-            userIds.Add(reader.GetString(0));
-        return userIds;
+            values.Add(reader.GetString(0));
+        return values;
     }
 }
