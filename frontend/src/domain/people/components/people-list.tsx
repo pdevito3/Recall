@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type RefObject } from 'react'
 
 import type { PersonDto } from '@/api/generated/models/types/person-dto'
+import { Notification } from '@/components/notification'
 import { QueryError } from '@/components/query-error'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,7 +15,8 @@ import {
   ResponsiveDialogTitle,
   ResponsiveDialogTrigger,
 } from '@/components/ui/responsive-dialog'
-import { useAddPerson, usePeopleDirectory, useRenamePerson } from '@/domain/people/apis/people'
+import { useAddPerson, useDeletePerson, usePeopleDirectory, useRenamePerson } from '@/domain/people/apis/people'
+import { isProblemDetailsError } from '@/lib/problem-details'
 
 const longestName = 200
 
@@ -23,7 +25,7 @@ function FailedSave({ error }: { error: Error | null }) {
   return <p role="alert" className="text-sm text-destructive wrap-anywhere">{error.message}</p>
 }
 
-export function PeopleList() {
+export function PeopleList({ headingRef }: { headingRef: RefObject<HTMLHeadingElement | null> }) {
   const directory = usePeopleDirectory()
 
   return (
@@ -42,7 +44,10 @@ export function PeopleList() {
           {directory.data.map((person) => (
             <li key={person.id} className="flex items-center justify-between gap-3 p-2 pl-3">
               <span dir="auto" className="min-w-0 wrap-anywhere">{person.label}</span>
-              <RenamePerson person={person} />
+              <div className="flex shrink-0 gap-1">
+                <RenamePerson person={person} />
+                <DeletePerson person={person} headingRef={headingRef} />
+              </div>
             </li>
           ))}
         </ul>
@@ -86,6 +91,44 @@ function RenamePerson({ person }: { person: PersonDto }) {
       <Button variant="ghost" aria-label={`Rename ${person.label}`}>Rename</Button>
       <ResponsiveDialog>
         <RenameForm id={person.id} initialLabel={person.label} onRenamed={() => setIsOpen(false)} />
+      </ResponsiveDialog>
+    </ResponsiveDialogTrigger>
+  )
+}
+
+function DeletePerson({ person, headingRef }: { person: PersonDto; headingRef: RefObject<HTMLHeadingElement | null> }) {
+  const remove = useDeletePerson()
+
+  const handleDelete = () =>
+    remove.mutate({ id: person.id, version: person.version }, {
+      onSuccess: () => {
+        Notification.success('Person deleted')
+        headingRef.current?.focus()
+      },
+      onError: (error) => {
+        if (isProblemDetailsError(error) && error.status === 404) headingRef.current?.focus()
+      },
+    })
+
+  return (
+    <ResponsiveDialogTrigger>
+      <Button variant="ghost" aria-label={`Delete ${person.label}`} isPending={remove.isPending}>
+        Delete
+      </Button>
+      <ResponsiveDialog>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Delete {person.label}?</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
+            Each entry that tags this person keeps the name as plain words, and its earlier versions keep the tag. You
+            cannot undo a delete.
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
+        <ResponsiveDialogFooter>
+          <ResponsiveDialogClose>Keep person</ResponsiveDialogClose>
+          <ResponsiveDialogClose variant="destructive" onPress={handleDelete}>
+            Delete person
+          </ResponsiveDialogClose>
+        </ResponsiveDialogFooter>
       </ResponsiveDialog>
     </ResponsiveDialogTrigger>
   )
