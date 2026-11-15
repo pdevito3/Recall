@@ -19,6 +19,7 @@ public static class CallerTelemetry
             CallerIdentity.JournalWork work => ("journal_work", null, null, null, work.TenantId),
             CallerIdentity.DelegatedAgent agent => ("delegated_agent", agent.Subject, agent.ClientId, agent.AgentId, agent.LiveUser.TenantId),
             CallerIdentity.MachineAgent agent => ("machine_agent", null, agent.ClientId, agent.AgentId, agent.TenantId),
+            CallerIdentity.PersonalAccessToken token => ("personal_access_token", token.Subject, token.TokenId, null, token.LiveUser.TenantId),
             CallerIdentity.UnknownClient client => ("unknown_client", null, client.ClientId, null, null),
             CallerIdentity.Anonymous => ("anonymous", null, null, null, null),
             _ => throw new UnreachableException($"No telemetry for the caller type {caller.GetType().Name}"),

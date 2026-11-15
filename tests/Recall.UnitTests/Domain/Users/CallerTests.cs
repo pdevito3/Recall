@@ -1,5 +1,7 @@
 namespace Recall.UnitTests.Domain.Users;
 
+using NSubstitute;
+using Recall.Server.Databases;
 using Recall.Server.Domain.Users;
 using Recall.Server.Exceptions;
 using Shouldly;
@@ -14,6 +16,7 @@ public class CallerTests
 
     private const string DelegatedClientId = "clinic-assistant";
     private const string MachineClientId = "fleet-sync";
+    private const string TokenId = "pat_0199f0c1a2b37c4d8e9f0a1b2c3d4e5f";
 
     private const string MachineClientDenial =
         "This client has no permissions. It can read only the data that needs no permission.";
@@ -29,6 +32,12 @@ public class CallerTests
 
     private static Caller.MachineAgent MachineAgentWith(params Permission[] grant)
         => new(MachineClientId, grant);
+
+    private static Caller.PersonalAccessToken TokenOf(Permission[] userPermissions, Permission[] grant)
+        => new(TokenId, userPermissions, grant);
+
+    private static string TokenLacks(Permission permission)
+        => $"This personal access token has no grant to {permission.Words}. Make a token that has it.";
 
     public static IEnumerable<Func<(string Case, Caller Caller, string? Denial)>> RequireManageUsersCases()
     {
@@ -77,6 +86,68 @@ public class CallerTests
             SelfId, "This agent has no grant to manage users. A tenant admin can grant it.");
         yield return () => ("delegated agent on another user, with the permission in both",
             DelegatedAgentOf([Permission.ManageUsers()], [Permission.ManageUsers()]), OtherId, null);
+    }
+
+    public static IEnumerable<Func<(string Case, Caller Caller, string? Denial)>> TokenRequireManageUsersCases()
+    {
+        yield return () => ("token whose user and grant hold it",
+            TokenOf([Permission.ManageUsers()], [Permission.ManageUsers()]), null);
+        yield return () => ("token whose user lacks it",
+            TokenOf([Permission.ManageTenant()], [Permission.ManageUsers(), Permission.ManageTenant()]),
+            "You cannot manage users. Ask an admin for access.");
+        yield return () => ("token whose grant lacks it",
+            TokenOf([Permission.ManageUsers()], [Permission.ManageTenant()]),
+            "This personal access token has no grant to manage users. Make a token that has it.");
+        yield return () => ("token whose user and grant both lack it", TokenOf([], []),
+            "You cannot manage users. Ask an admin for access.");
+    }
+
+    [Test]
+    [Property("Rule", "PAT-4")]
+    [MethodDataSource(nameof(TokenRequireManageUsersCases))]
+    public void a_token_holds_only_what_both_its_user_and_its_grant_hold(string @case, Caller caller, string? denial)
+    {
+        // Act
+        var act = () => caller.Require(Permission.ManageUsers());
+
+        // Assert
+        ShouldDenyWith(act, denial);
+    }
+
+    [Test]
+    [Property("Rule", "PAT-12")]
+    public void a_token_on_the_record_of_its_own_user_gets_no_self_exception()
+    {
+        // Arrange
+        var token = TokenOf([.. Permission.GetAll()], [Permission.ReadUsers()]);
+
+        // Act
+        var selfOr = () => token.RequireSelfOr(SelfId, Permission.ManageUsers());
+        var update = () => UserAction.Update().GuardBeforeLoad(token, SelfId);
+
+        // Assert
+        token.IsUser(SelfId).ShouldBeFalse();
+        ShouldDenyWith(selfOr, TokenLacks(Permission.ManageUsers()));
+        ShouldDenyWith(update, TokenLacks(Permission.ManageUsers()));
+        MemberWith().RequireSelfOr(SelfId, Permission.ManageUsers());
+        UserAction.Update().GuardBeforeLoad(MemberWith(), SelfId);
+    }
+
+    [Test]
+    [Property("Rule", "PAT-12")]
+    public async Task a_token_of_the_owner_does_not_pass_the_owner_gate()
+    {
+        // Arrange
+        var guard = Substitute.For<IPermissionGuard>();
+        guard.GetCallerAsync(Arg.Any<CancellationToken>())
+            .Returns(TokenOf([.. Permission.GetAll()], [.. Permission.GetAll()]));
+        await using var dbContext = new AppDbContextFactory().CreateDbContext([]);
+
+        // Act
+        var owner = await new OwnerGuard(guard, dbContext).CallerIfOwnerAsync(CancellationToken.None);
+
+        // Assert
+        owner.ShouldBeNull();
     }
 
     [Test]
@@ -165,6 +236,11 @@ public class CallerTests
                 [Permission.ManageTenant(), Permission.ManageAgents()]),
             [Permission.ManageTenant()]);
         yield return () => ("machine agent", MachineAgentWith(Permission.ManageTenant()), [Permission.ManageTenant()]);
+        yield return () => ("personal access token",
+            TokenOf(
+                [Permission.ManageUsers(), Permission.ReadUsers(), Permission.ReadAuditLog()],
+                [Permission.ReadUsers(), Permission.ReadAuditLog(), Permission.ManageAgents()]),
+            [Permission.ReadUsers(), Permission.ReadAuditLog()]);
     }
 
     [Test]
@@ -203,6 +279,9 @@ public class CallerTests
             => $"You cannot {permission.Words}. Ask an admin for access.",
         Caller.DelegatedAgent agent => NotGranted(permission),
         Caller.MachineAgent agent => NotGranted(permission),
+        Caller.PersonalAccessToken token when !token.UserPermissions.Contains(permission)
+            => $"You cannot {permission.Words}. Ask an admin for access.",
+        Caller.PersonalAccessToken => TokenLacks(permission),
         Caller.Outsider { Kind: OutsiderKind.Anonymous } => "Sign in to do this.",
         Caller.Outsider { Kind: OutsiderKind.MachineClient } => MachineClientDenial,
         Caller.Outsider { Kind: OutsiderKind.UnknownClient } => UnknownClientDenial,
@@ -219,6 +298,7 @@ public class CallerTests
         yield return () => ("read-only machine client", new Caller.Outsider(OutsiderKind.MachineClient), false);
         yield return () => ("unknown client", new Caller.Outsider(OutsiderKind.UnknownClient), false);
         yield return () => ("machine agent with every permission", MachineAgentWith([.. Permission.GetAll()]), false);
+        yield return () => ("token with every permission", TokenOf([.. Permission.GetAll()], [.. Permission.GetAll()]), false);
     }
 
     [Test]
@@ -241,6 +321,7 @@ public class CallerTests
         yield return () => ("no user record", new Caller.Outsider(OutsiderKind.NoUserRecord), null);
         yield return () => ("delegated agent with no permission", DelegatedAgentOf([], []), null);
         yield return () => ("machine agent with no permission", MachineAgentWith(), null);
+        yield return () => ("token with no permission", TokenOf([], []), null);
         yield return () => ("anonymous", new Caller.Outsider(OutsiderKind.Anonymous), "Sign in to do this.");
         yield return () => ("unknown client", new Caller.Outsider(OutsiderKind.UnknownClient), UnknownClientDenial);
     }

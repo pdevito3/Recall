@@ -10,6 +10,10 @@ public sealed class CallerIdentityTests
 {
     private static readonly string TenantId = EntityId.New(Tenant.IdPrefix);
     private static readonly string AgentId = EntityId.New(Agent.IdPrefix);
+    private static readonly LiveUser Person = new("usr_1", TenantId);
+
+    private static CallerIdentity.PersonalAccessToken TokenWith(JournalAccess journal)
+        => new("pat_1", "user-1", Person, new TokenGrant([Permission.ManageUsers()], journal));
 
     public static IEnumerable<Func<(string Case, CallerIdentity Identity, bool CanManage)>> ManageAllTenantsCases()
     {
@@ -20,6 +24,7 @@ public sealed class CallerIdentityTests
         yield return () => ("delegated agent",
             new CallerIdentity.DelegatedAgent(AgentId, "clinic-assistant", "user-1", new LiveUser("usr_1", TenantId)), false);
         yield return () => ("machine agent", new CallerIdentity.MachineAgent(AgentId, "fleet-sync", TenantId), false);
+        yield return () => ("personal access token", TokenWith(JournalAccess.ReadWrite), false);
         yield return () => ("unknown client", new CallerIdentity.UnknownClient("m2m"), false);
         yield return () => ("anonymous", new CallerIdentity.Anonymous(), false);
     }
@@ -31,5 +36,46 @@ public sealed class CallerIdentityTests
     {
         // Act & Assert
         identity.CanManageAllTenants.ShouldBe(canManage);
+    }
+
+    public static IEnumerable<Func<(string Case, CallerIdentity Identity, string? JournalOwnerId, bool CanWriteJournal)>> JournalCases()
+    {
+        yield return () => ("system work", new CallerIdentity.System(), null, false);
+        yield return () => ("client on the manage list", new CallerIdentity.AllTenantsClient("sync", CanManage: true), null, false);
+        yield return () => ("user", new CallerIdentity.User("user-1", Person), Person.UserId, true);
+        yield return () => ("user with no user record", new CallerIdentity.User("user-1", null), null, false);
+        yield return () => ("journal work", new CallerIdentity.JournalWork(Person.UserId, TenantId), Person.UserId, true);
+        yield return () => ("delegated agent",
+            new CallerIdentity.DelegatedAgent(AgentId, "clinic-assistant", "user-1", Person), null, false);
+        yield return () => ("machine agent", new CallerIdentity.MachineAgent(AgentId, "fleet-sync", TenantId), null, false);
+        yield return () => ("token with no journal access", TokenWith(JournalAccess.None), null, false);
+        yield return () => ("token that reads the journal", TokenWith(JournalAccess.Read), Person.UserId, false);
+        yield return () => ("token that reads and changes the journal", TokenWith(JournalAccess.ReadWrite), Person.UserId, true);
+        yield return () => ("unknown client", new CallerIdentity.UnknownClient("m2m"), null, false);
+        yield return () => ("anonymous", new CallerIdentity.Anonymous(), null, false);
+    }
+
+    [Test]
+    [Property("Rule", "PAT-6")]
+    [MethodDataSource(nameof(JournalCases))]
+    public void a_caller_owns_a_journal_only_as_its_person_and_a_token_only_with_journal_access(
+        string @case, CallerIdentity identity, string? journalOwnerId, bool canWriteJournal)
+    {
+        // Act & Assert
+        identity.JournalOwnerId.ShouldBe(journalOwnerId);
+        identity.CanWriteJournal.ShouldBe(canWriteJournal);
+    }
+
+    [Test]
+    [Arguments("none")]
+    [Arguments("read")]
+    [Arguments("read_write")]
+    public void a_token_sees_the_tenant_of_its_person_whatever_its_journal_access(string journal)
+    {
+        // Act
+        var scope = TokenWith(JournalAccess.FromName(journal)).Scope;
+
+        // Assert
+        scope.ShouldBe(TenantScope.ForTenant(TenantId));
     }
 }

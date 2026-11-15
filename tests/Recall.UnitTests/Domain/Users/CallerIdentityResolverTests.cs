@@ -216,6 +216,39 @@ public sealed class CallerIdentityResolverTests : IDisposable
         _sut.Current.ShouldBe(new CallerIdentity.AllTenantsClient(ManageClientId, CanManage: true));
     }
 
+    private static readonly PatClaims Token = new("pat_0199f0c1a2b37c4d8e9f0a1b2c3d4e5f",
+        new TokenGrant([Permission.ReadUsers()], JournalAccess.Read));
+
+    [Test]
+    public void an_app_session_with_the_claims_of_a_token_of_a_live_user_is_that_token()
+    {
+        // Arrange
+        _principalAccessor.Principal.Returns(Token.PrincipalOf(AppUser));
+
+        // Act & Assert
+        _sut.Current.ShouldBe(new CallerIdentity.PersonalAccessToken(Token.TokenId, AppUser, AppUserRecord, Token.Grant));
+    }
+
+    [Test]
+    public void a_token_whose_user_is_not_live_is_an_unknown_client()
+    {
+        // Arrange
+        _principalAccessor.Principal.Returns(Token.PrincipalOf("gone-user"));
+
+        // Act & Assert
+        _sut.Current.ShouldBe(new CallerIdentity.UnknownClient(Token.TokenId));
+    }
+
+    [Test]
+    public void the_claims_of_a_token_from_another_scheme_are_not_a_token()
+    {
+        // Arrange
+        SetCaller([.. Token.PrincipalOf(AppUser).Claims]);
+
+        // Act & Assert
+        _sut.Current.ShouldBe(new CallerIdentity.UnknownClient(Token.TokenId));
+    }
+
     private void SetCaller(params Claim[] claims)
         => _principalAccessor.Principal.Returns(new ClaimsPrincipal(new ClaimsIdentity(claims, "TestAuth")));
 }

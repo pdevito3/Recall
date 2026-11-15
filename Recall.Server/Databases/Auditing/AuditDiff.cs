@@ -26,8 +26,8 @@ internal sealed record DataChange(AuditSubject Subject, AuditEntryKind Kind, IRe
 /// <param name="Subject">The <c>sub</c> of the token. A provider can make it an email address, so the read shows it
 /// only with <c>read_audit_log_sensitive</c>.</param>
 /// <param name="ClientId">The client of the token.</param>
-/// <param name="UserId">The user record of a user, or of the user that a delegated agent acts for. Null when the
-/// user has no live user record yet, for example when the user starts a tenant.</param>
+/// <param name="UserId">The user record of a user, or of the user that a delegated agent or a personal access token
+/// acts for. Null when the user has no live user record yet, for example when the user starts a tenant.</param>
 /// <param name="AgentId">The agent record of a delegated or a machine agent.</param>
 internal sealed record AuditActor(string? Subject, string? ClientId, string? UserId, string? AgentId)
 {
@@ -40,6 +40,7 @@ internal sealed record AuditActor(string? Subject, string? ClientId, string? Use
             CallerIdentity.User { LiveUser: { } liveUser } => liveUser.UserId,
             CallerIdentity.JournalWork work => work.UserId,
             CallerIdentity.DelegatedAgent agent => agent.LiveUser.UserId,
+            CallerIdentity.PersonalAccessToken token => token.LiveUser.UserId,
             _ => null,
         },
         caller switch

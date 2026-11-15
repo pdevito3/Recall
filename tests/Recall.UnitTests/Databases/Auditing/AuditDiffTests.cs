@@ -149,6 +149,8 @@ public class AuditDiffTests
         yield return () => ("delegated agent",
             new CallerIdentity.DelegatedAgent("agt_1", "assistant", "sub-1", new LiveUser("usr_1", "ten_1")), "usr_1", "agt_1");
         yield return () => ("machine agent", new CallerIdentity.MachineAgent("agt_1", "sync", "ten_1"), null, "agt_1");
+        yield return () => ("personal access token", new CallerIdentity.PersonalAccessToken("pat_1", "sub-1",
+            new LiveUser("usr_1", "ten_1"), new TokenGrant([], JournalAccess.ReadWrite)), "usr_1", null);
         yield return () => ("client on an all-tenants list", new CallerIdentity.AllTenantsClient("sync", CanManage: true),
             null, null);
         yield return () => ("system work", new CallerIdentity.System(), null, null);

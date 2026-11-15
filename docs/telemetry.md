@@ -138,9 +138,9 @@ The behavior tags an exception type as `error.type`. A client error does not mar
 
 | Span tag | Log property | Value |
 |---|---|---|
-| `app.caller.kind` | `CallerKind` | `user`, `delegated_agent`, `machine_agent`, `all_tenants_client`, `unknown_client`, `anonymous`, or `system` |
-| `app.caller.subject` | `CallerSubject` | The `sub` claim of a user, also the user for whom a delegated agent acts |
-| `app.caller.client_id` | `CallerClientId` | The client of an agent or of a machine client |
+| `app.caller.kind` | `CallerKind` | `user`, `personal_access_token`, `delegated_agent`, `machine_agent`, `all_tenants_client`, `unknown_client`, `anonymous`, `journal_work`, or `system` |
+| `app.caller.subject` | `CallerSubject` | The `sub` claim of a user, also the user for whom a delegated agent or a personal access token acts |
+| `app.caller.client_id` | `CallerClientId` | The client of an agent or of a machine client, or the ID of a personal access token |
 | `app.caller.agent_id` | `CallerAgentId` | The id of the registered agent |
 | `app.caller.tenant_id` | `CallerTenantId` | The tenant of the caller |
 

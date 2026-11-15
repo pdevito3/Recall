@@ -73,13 +73,33 @@ public abstract record Caller
         public DelegatedAgent(string clientId, IEnumerable<Permission> userPermissions, IEnumerable<Permission> grant)
         {
             ClientId = clientId;
-            UserPermissions = userPermissions.ToFrozenSet();
-            Permissions = UserPermissions.Intersect(grant).ToFrozenSet();
+            (UserPermissions, Permissions) = Narrowing.Of(userPermissions, grant);
         }
 
         public string ClientId { get; }
 
         /// <summary>The rows of the user in <c>user_permissions</c>. A denial names the side that lacks it.</summary>
+        public IReadOnlySet<Permission> UserPermissions { get; }
+
+        public override IReadOnlySet<Permission> Permissions { get; }
+    }
+
+    /// <summary>
+    /// A personal access token of a member. It holds only the permissions that both the member and the grant of the
+    /// token have. It is not a <see cref="Member"/>, so <see cref="RequireSelfOr"/> gives it no exception for the record
+    /// of its user, and it is never the Owner.
+    /// </summary>
+    public sealed record PersonalAccessToken : Caller
+    {
+        public PersonalAccessToken(string tokenId, IEnumerable<Permission> userPermissions, IEnumerable<Permission> grant)
+        {
+            TokenId = tokenId;
+            (UserPermissions, Permissions) = Narrowing.Of(userPermissions, grant);
+        }
+
+        public string TokenId { get; }
+
+        /// <inheritdoc cref="DelegatedAgent.UserPermissions"/>
         public IReadOnlySet<Permission> UserPermissions { get; }
 
         public override IReadOnlySet<Permission> Permissions { get; }
@@ -161,17 +181,38 @@ public abstract record Caller
     private string DenialFor(Permission permission) => this switch
     {
         Member => UserLacks(permission),
-        DelegatedAgent agent when !agent.UserPermissions.Contains(permission) => UserLacks(permission),
-        DelegatedAgent => GrantLacks(permission),
-        MachineAgent => GrantLacks(permission),
+        DelegatedAgent agent => Narrowing.Denial(agent.UserPermissions, permission, AgentGrantLacks),
+        PersonalAccessToken token => Narrowing.Denial(token.UserPermissions, permission, TokenGrantLacks),
+        MachineAgent => AgentGrantLacks(permission),
         Outsider outsider => outsider.Denial,
         _ => throw new UnreachableException(),
     };
 
     private static string UserLacks(Permission permission) => $"You cannot {permission.Words}. Ask an admin for access.";
 
-    private static string GrantLacks(Permission permission)
+    private static string AgentGrantLacks(Permission permission)
         => $"This agent has no grant to {permission.Words}. A tenant admin can grant it.";
+
+    private static string TokenGrantLacks(Permission permission)
+        => $"This personal access token has no grant to {permission.Words}. Make a token that has it.";
+
+    /// <summary>
+    /// A caller that acts for a user holds only what both the user and its grant hold, so it is never stronger than
+    /// either. A denial names the side that lacks the permission.
+    /// </summary>
+    private static class Narrowing
+    {
+        public static (FrozenSet<Permission> User, FrozenSet<Permission> Held) Of(
+            IEnumerable<Permission> userPermissions, IEnumerable<Permission> grant)
+        {
+            var user = userPermissions.ToFrozenSet();
+            return (user, user.Intersect(grant).ToFrozenSet());
+        }
+
+        public static string Denial(IReadOnlySet<Permission> userPermissions, Permission permission,
+            Func<Permission, string> grantLacks)
+            => userPermissions.Contains(permission) ? grantLacks(permission) : UserLacks(permission);
+    }
 }
 
 /// <summary>Why a caller holds no permission.</summary>
