@@ -108,7 +108,7 @@ export function MultiSelectFilter({
             isSelected={matchAll}
             onChange={setMatchAll}
           >
-            <span className="text-sm">All must match</span>
+            All must match
           </Checkbox>
           <Button variant="outline" size="sm" onPress={toggleAll}>
             {allRootSelected ? 'Deselect All' : 'Select All'}
@@ -142,7 +142,7 @@ export function MultiSelectFilter({
                   onChange={() => toggleOption(option.value)}
                   className="flex-1"
                 >
-                  <span className="text-sm">{option.label}</span>
+                  {option.label}
                 </Checkbox>
                 {/* A touch screen has no hover, and a hidden button there still takes a tap, so it always shows. */}
                 <Button

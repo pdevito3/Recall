@@ -170,9 +170,7 @@ export function DateFilter({
           isSelected={exclude}
           onChange={setExclude}
         >
-          <Label className="text-sm font-medium leading-none">
-            Exclude {mode === 'between' ? 'date range' : 'dates'}
-          </Label>
+          Exclude {mode === 'between' ? 'date range' : 'dates'}
         </Checkbox>
 
         {/* Calendar with integrated quick selects and date input */}
