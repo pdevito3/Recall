@@ -25,7 +25,7 @@ public class BaseVersionRulesTests
         var setting = NewSetting();
 
         // Act
-        Action change = () => setting.Change("Fixed", "Europe/Tallinn", true, false, 5u);
+        Action change = () => setting.Change("Fixed", "Europe/Tallinn", true, false, true, 5u);
 
         // Assert
         change.ShouldThrow<StaleVersionException>();
@@ -36,13 +36,29 @@ public class BaseVersionRulesTests
 
     [Test]
     [Property("Rule", "SES-31")]
+    [Property("Rule", "SES-50")]
+    public void a_stale_settings_change_of_only_the_filler_words_throws_and_keeps_them()
+    {
+        // Arrange
+        var setting = NewSetting();
+
+        // Act
+        Action change = () => setting.Change("FollowDevice", null, false, true, false, 5u);
+
+        // Assert
+        change.ShouldThrow<StaleVersionException>();
+        setting.RemoveFillerWords.ShouldBeTrue();
+    }
+
+    [Test]
+    [Property("Rule", "SES-31")]
     public void a_stale_settings_change_with_a_zone_that_is_not_valid_gets_the_stale_refusal()
     {
         // Arrange
         var setting = NewSetting();
 
         // Act
-        Action change = () => setting.Change("Fixed", "Not/AZone", true, false, 5u);
+        Action change = () => setting.Change("Fixed", "Not/AZone", true, false, true, 5u);
 
         // Assert
         change.ShouldThrow<StaleVersionException>();
@@ -56,7 +72,7 @@ public class BaseVersionRulesTests
         var setting = NewSetting();
 
         // Act
-        var applied = setting.Change("FollowDevice", null, false, true, 5u);
+        var applied = setting.Change("FollowDevice", null, false, true, true, 5u);
 
         // Assert
         applied.ShouldBeFalse();
@@ -70,7 +86,7 @@ public class BaseVersionRulesTests
         var setting = NewSetting();
 
         // Act
-        var applied = setting.Change("FollowDevice", null, false, true, 0u);
+        var applied = setting.Change("FollowDevice", null, false, true, true, 0u);
 
         // Assert
         applied.ShouldBeTrue();
@@ -87,7 +103,7 @@ public class BaseVersionRulesTests
         var setting = NewSetting();
 
         // Act
-        var applied = setting.Change("FollowDevice", zone, false, true, 5u);
+        var applied = setting.Change("FollowDevice", zone, false, true, true, 5u);
 
         // Assert
         applied.ShouldBeFalse();

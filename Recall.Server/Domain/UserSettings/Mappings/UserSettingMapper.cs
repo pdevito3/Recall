@@ -11,6 +11,7 @@ public static class UserSettingMapper
         TimeZoneIsKnown = setting.TimeZoneIsKnown,
         LocationCaptureEnabled = setting.LocationCaptureEnabled,
         RequirePeopleProposalApproval = setting.RequirePeopleProposalApproval,
+        RemoveFillerWords = setting.RemoveFillerWords,
         Version = setting.Version,
     };
 }

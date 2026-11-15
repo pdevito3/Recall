@@ -25,6 +25,8 @@ public class UserSetting : BaseEntity, ITenantable, IJournalOwned
 
     public bool RequirePeopleProposalApproval { get; private set; } = true;
 
+    public bool RemoveFillerWords { get; private set; } = true;
+
     public static UserSetting DefaultsFor(string tenantId, string userId) => new() { TenantId = tenantId, UserId = userId };
 
     public bool TimeZoneIsKnown => TimeZoneValue is null || TimeZoneId.TryOf(TimeZoneValue) is not null;
@@ -32,10 +34,13 @@ public class UserSetting : BaseEntity, ITenantable, IJournalOwned
     public TimeZoneId JournalZone => TimeZoneId.OrUtc(TimeZoneValue);
 
     /// <exception cref="ValidationException">The mode is not a mode, or the time zone is not an IANA zone and it is not the stored zone.</exception>
-    public bool Change(string? timeZoneMode, string? timeZone, bool locationCaptureEnabled, bool requirePeopleProposalApproval, uint version)
+    public bool Change(string? timeZoneMode, string? timeZone, bool locationCaptureEnabled, bool requirePeopleProposalApproval, bool removeFillerWords, uint version)
     {
         var zone = TimeZoneSetting.Parse(timeZoneMode, timeZone, TimeZone);
-        var isStored = zone == TimeZone && locationCaptureEnabled == LocationCaptureEnabled && requirePeopleProposalApproval == RequirePeopleProposalApproval;
+        var isStored = zone == TimeZone
+            && locationCaptureEnabled == LocationCaptureEnabled
+            && requirePeopleProposalApproval == RequirePeopleProposalApproval
+            && removeFillerWords == RemoveFillerWords;
         if (isStored && version != Version)
             return false;
 
@@ -44,6 +49,7 @@ public class UserSetting : BaseEntity, ITenantable, IJournalOwned
         TimeZone = zone.ValidatedExceptTheStoredZone(TimeZone);
         LocationCaptureEnabled = locationCaptureEnabled;
         RequirePeopleProposalApproval = requirePeopleProposalApproval;
+        RemoveFillerWords = removeFillerWords;
         return true;
     }
 

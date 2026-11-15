@@ -32,7 +32,7 @@ public static class ChangeUserSetting
                     .FirstOrDefaultAsync(ct);
                 var row = stored ?? UserSetting.DefaultsFor(owner.TenantId, owner.UserId);
 
-                applied = row.Change(dto.TimeZoneMode, dto.TimeZone, dto.LocationCaptureEnabled, dto.RequirePeopleProposalApproval, dto.Version);
+                applied = row.Change(dto.TimeZoneMode, dto.TimeZone, dto.LocationCaptureEnabled, dto.RequirePeopleProposalApproval, dto.RemoveFillerWords ?? row.RemoveFillerWords, dto.Version);
                 if (!applied)
                     return row;
 
