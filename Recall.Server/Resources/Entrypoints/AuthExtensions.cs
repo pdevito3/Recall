@@ -4,6 +4,7 @@ using System.Security.Claims;
 using Domain.Users;
 using Mcp;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 
 /// <summary>
@@ -51,7 +52,11 @@ public static class AuthExtensions
                 {
                     OnTokenValidated = context =>
                     {
-                        if (NamesAnAppSession(context.Principal))
+                        if (context.SecurityToken is JsonWebToken token && IsNotAnAccessToken(token))
+                        {
+                            context.Fail("The token is an ID token, a logout token, or a refresh token, not an access token.");
+                        }
+                        else if (NamesAnAppSession(context.Principal))
                         {
                             context.Fail("A provider token cannot name an app session.");
                         }
@@ -72,6 +77,20 @@ public static class AuthExtensions
 
         return services;
     }
+
+    // An ID token of the login client has that client ID as its aud, and a provider preset can give the API the same audience.
+    // Its azp names a first-party client, so the Server would read it as a first-party user that acts as any user whose
+    // identifier is its sub. The token type has no standard claim, so this reads the claim of each provider that has one.
+    // An Authentik ID token has none, but it has no azp either, so CallerIdentityResolver takes it as a token of an unknown client.
+    private static bool IsNotAnAccessToken(JsonWebToken token) =>
+        // Keycloak: ID, Logout, or Refresh, and Bearer for an access token
+        (token.TryGetPayloadValue<string>("typ", out var typ) && typ is "ID" or "Logout" or "Refresh")
+        // FusionAuth: idt, and at for an access token
+        || (token.TryGetPayloadValue<string>("tty", out var tty) && tty == "idt")
+        // Cognito: id, and access for an access token
+        || (token.TryGetPayloadValue<string>("token_use", out var tokenUse) && tokenUse == "id")
+        // A back-channel logout token has an events claim (OpenID Connect Back-Channel Logout 1.0, section 2.4)
+        || token.TryGetPayloadValue<object>("events", out _);
 
     private static bool NamesAnAppSession(ClaimsPrincipal? principal)
     {
