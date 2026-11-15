@@ -14,6 +14,9 @@ public static class ParagraphBreaks
     /// <summary>The window of the widest gap.</summary>
     public const int SnapWindowMs = 1_000;
 
+    /// <summary>How long before its silence a tap still takes a gap. The engine ends a word up to about 0.4 s after the voice stops.</summary>
+    public const int SpeechEndLagMs = 600;
+
     /// <summary>How far, in words, an estimated break looks for a sentence end (REC-29).</summary>
     public const int SentenceEndReachWords = 12;
 
@@ -53,6 +56,8 @@ public static class ParagraphBreaks
         public long Middle => (From + To) / 2;
 
         public bool Holds(long tap) => From <= tap && tap <= To;
+
+        public bool Reaches(long tap, long lag) => From - lag <= tap && tap <= To;
 
         public long DistanceTo(long tap) => Holds(tap) ? 0 : Math.Min(Math.Abs(tap - From), Math.Abs(tap - To));
     }
@@ -148,10 +153,11 @@ public static class ParagraphBreaks
     private static int WidestGapNear(Boundary[] bounds, long tap)
     {
         var window = SnapWindowMs * SamplesPerMs;
+        var lag = SpeechEndLagMs * SamplesPerMs;
         var widest = -1;
         for (var k = 0; k < bounds.Length; k++)
         {
-            if ((bounds[k].Holds(tap) || Math.Abs(bounds[k].Middle - tap) <= window) && (widest < 0 || bounds[k].Width > bounds[widest].Width))
+            if ((bounds[k].Reaches(tap, lag) || Math.Abs(bounds[k].Middle - tap) <= window) && (widest < 0 || bounds[k].Width > bounds[widest].Width))
                 widest = k;
         }
 

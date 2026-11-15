@@ -63,6 +63,9 @@ public class ParagraphBreaksTests
         yield return () => ("a tap 0.3 s before the end of a pause of 4 s takes the pause, not a narrow gap whose middle is nearer",
             new([4_700], 0, 6_000, 6_000, "one two. three four", FourSecondPause),
             new(["one two.", "three four"], true, false));
+        yield return () => ("a tap 0.3 s after the voice stops, inside the last word on the clock of the engine, takes the pause after it",
+            new([1_100], 0, 6_000, 6_000, "one two. three four", [(100, 500), (600, 1_400), (5_000, 5_400), (5_500, 5_900)]),
+            new(["one two.", "three four"], true, false));
         yield return () => ("a wide gap whose edge is near the tap but whose middle is far does not win",
             new([1_300], 0, 5_400, 5_400, "one two. three four five", [(100, 500), (600, 1_000), (1_400, 1_800), (1_850, 2_000), (5_000, 5_400)]),
             new(["one two.", "three four five"], true, false));
