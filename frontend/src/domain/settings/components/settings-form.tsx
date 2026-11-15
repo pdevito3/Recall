@@ -48,6 +48,7 @@ const settingLabels: Record<keyof SettingChange, string> = {
   timeZone: 'Time zone',
   locationCaptureEnabled: 'Save my location with each new entry',
   requirePeopleProposalApproval: 'Ask me before AI adds a person to an entry',
+  removeFillerWords: 'Remove filler words, such as “um” and “uh”, from Cleaned',
 }
 
 export function SettingsForm() {
@@ -125,6 +126,13 @@ export function SettingsForm() {
           onChange={(requirePeopleProposalApproval) => change({ requirePeopleProposalApproval })}
         >
           Ask me before AI adds a person to an entry
+        </Checkbox>
+        <Checkbox
+          className="max-md:min-h-11"
+          isSelected={values.removeFillerWords}
+          onChange={(removeFillerWords) => change({ removeFillerWords })}
+        >
+          Remove filler words, such as “um” and “uh”, from Cleaned
         </Checkbox>
       </section>
       <section className="flex flex-col gap-2" aria-labelledby="settings-account">

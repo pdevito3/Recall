@@ -10,5 +10,6 @@ export const userSettingChangeDtoSchema = z.object({
   timeZone: z.string().max(100).nullish().describe('For Fixed, the IANA time zone that the person picked. For FollowDevice, the zone of this device now, or null to keep the zone\nthat holds. The stored zone is always allowed, also when this host does not know it.'),
   locationCaptureEnabled: z.boolean(),
   requirePeopleProposalApproval: z.boolean(),
+  removeFillerWords: z.boolean().nullish().describe('True to have the Cleanup prompt ask the model to remove filler words, stutters, and false starts from Cleaned. Null keeps the stored value, so a client that does not know this field does not change it.'),
   version: z.int().min(0).max(4294967295).describe('The `version` of the settings that the client read. A save from another version gets 409, unless the row already holds these values.'),
 })

@@ -4,5 +4,6 @@
   "timeZoneIsKnown": true,
   "locationCaptureEnabled": true,
   "requirePeopleProposalApproval": true,
+  "removeFillerWords": true,
   "version": 1
 }

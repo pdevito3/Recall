@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils"
 import { Label } from "@/components/ui/label"
 
 const labelVariants =
-  "text-sm font-medium leading-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-70 group-data-[invalid]:text-destructive"
+  "text-sm font-medium leading-4 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-70 group-data-[invalid]:text-destructive"
 
 const CheckboxGroup = AriaCheckboxGroup
 
@@ -32,7 +32,7 @@ const Checkbox = ({ className, children, ...props }: AriaCheckboxProps) => (
     {...props}
   >
     {composeRenderProps(children, (children, renderProps) => (
-      <>
+      <span className="flex items-start gap-x-2">
         <div
           className={cn(
             "flex size-4 shrink-0 items-center justify-center rounded-sm border border-primary text-current ring-offset-background",
@@ -69,7 +69,7 @@ const Checkbox = ({ className, children, ...props }: AriaCheckboxProps) => (
           </span>
         </div>
         {children}
-      </>
+      </span>
     ))}
   </AriaCheckbox>
 )

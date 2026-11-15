@@ -89,5 +89,11 @@ export function settingsPage(page: Page) {
       await at.location.click({ force: true })
       await saved
     },
+
+    async turnOffFillerWordRemoval() {
+      const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && new URL(r.url()).pathname === settingsPaths.mine)
+      await at.fillerWords.click({ force: true })
+      await saved
+    },
   }
 }

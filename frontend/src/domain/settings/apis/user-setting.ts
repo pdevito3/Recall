@@ -51,7 +51,7 @@ export function captureZoneOf(queryClient: QueryClient): SessionForCreationDto['
   return zoneSentWithANewEntry(queryClient.getQueryData<UserSettingDto>(SettingKeys.mine()))
 }
 
-export type SettingChange = Pick<UserSettingDto, 'timeZoneMode' | 'timeZone' | 'locationCaptureEnabled' | 'requirePeopleProposalApproval'>
+export type SettingChange = Pick<UserSettingDto, 'timeZoneMode' | 'timeZone' | 'locationCaptureEnabled' | 'requirePeopleProposalApproval' | 'removeFillerWords'>
 
 let saver: RowSaver<SettingChange, UserSettingDto> | undefined
 
@@ -59,11 +59,12 @@ let ownKey: string | null = null
 
 const prefixOf = (owner: string) => `recall.unsent-setting.${encodeURIComponent(owner).replaceAll('.', '%2E')}.`
 
-const settingFieldsOf = ({ timeZoneMode, timeZone, locationCaptureEnabled, requirePeopleProposalApproval }: SettingChange): SettingChange => ({
+const settingFieldsOf = ({ timeZoneMode, timeZone, locationCaptureEnabled, requirePeopleProposalApproval, removeFillerWords }: SettingChange): SettingChange => ({
   timeZoneMode,
   timeZone,
   locationCaptureEnabled,
   requirePeopleProposalApproval,
+  removeFillerWords,
 })
 
 function stateIn({ stored }: KeyOfATab): RowSaverState<SettingChange> | null {

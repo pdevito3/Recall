@@ -9,6 +9,7 @@ export const settings = (page: Page) => ({
   zoneInUse: page.getByText(/^New entries use /),
   location: page.getByRole('checkbox', { name: 'Save my location with each new entry' }),
   proposals: page.getByRole('checkbox', { name: 'Ask me before AI adds a person to an entry' }),
+  fillerWords: page.getByRole('checkbox', { name: 'Remove filler words, such as “um” and “uh”, from Cleaned' }),
   signedInAs: (name: string) => page.getByText(`Signed in as ${name}`, { exact: true }),
   userFailed: page.getByText('The Server could not load your user.', { exact: true }),
   unknownZone: page.getByRole('alert').filter({ hasText: 'This server does not know your saved time zone' }),

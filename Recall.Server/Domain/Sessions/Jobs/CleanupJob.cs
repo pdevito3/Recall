@@ -135,12 +135,16 @@ public sealed class CleanupJob(
         var corrections = await dbContext.Corrections.AsNoTracking()
             .TagWithOperationCallSite("sessions.cleanup_job.corrections")
             .ToListAsync(cancellationToken);
+        var removesFillerWords = await dbContext.UserSettings.AsNoTracking()
+            .TagWithOperationCallSite("sessions.cleanup_job.settings")
+            .Select(s => (bool?)s.RemoveFillerWords)
+            .FirstOrDefaultAsync(cancellationToken) ?? true;
 
         return new Work(
             step,
             new ModelEndpoint(provider.Kind, provider.BaseUrl, (read as ProtectedKeyRead.Readable)?.ApiKey),
             provider.Model,
-            CleanupPrompt.InstructionsWith(corrections),
+            CleanupPrompt.InstructionsWith(corrections, removesFillerWords),
             CleanupPrompt.TextOf(ProseMirrorToPlainText.Render(session.Raw.Text)),
             session.Raw.DraftRevision);
     }

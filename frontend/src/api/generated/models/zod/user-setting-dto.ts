@@ -11,5 +11,6 @@ export const userSettingDtoSchema = z.object({
   timeZoneIsKnown: z.boolean().describe('False when this host does not know the stored zone. The Journaling day then comes from UTC until the person sets a zone.'),
   locationCaptureEnabled: z.boolean(),
   requirePeopleProposalApproval: z.boolean(),
+  removeFillerWords: z.boolean().describe('True when the Cleanup prompt asks the model to remove filler words, stutters, and false starts from Cleaned. Raw keeps each word.'),
   version: z.int().min(0).max(4294967295),
 })

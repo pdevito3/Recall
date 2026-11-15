@@ -8494,6 +8494,13 @@
           "requirePeopleProposalApproval": {
             "type": "boolean"
           },
+          "removeFillerWords": {
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "description": "True to have the Cleanup prompt ask the model to remove filler words, stutters, and false starts from Cleaned. Null keeps the stored value, so a client that does not know this field does not change it."
+          },
           "version": {
             "maximum": 4294967295,
             "minimum": 0,
@@ -8508,6 +8515,7 @@
           "timeZoneIsKnown",
           "locationCaptureEnabled",
           "requirePeopleProposalApproval",
+          "removeFillerWords",
           "version"
         ],
         "type": "object",
@@ -8536,6 +8544,10 @@
           },
           "requirePeopleProposalApproval": {
             "type": "boolean"
+          },
+          "removeFillerWords": {
+            "type": "boolean",
+            "description": "True when the Cleanup prompt asks the model to remove filler words, stutters, and false starts from Cleaned. Raw keeps each word."
           },
           "version": {
             "maximum": 4294967295,

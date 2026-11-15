@@ -29,6 +29,11 @@ export type UserSettingDto = {
     locationCaptureEnabled: boolean;
     requirePeopleProposalApproval: boolean;
     /**
+     * @description True when the Cleanup prompt asks the model to remove filler words, stutters, and false starts from Cleaned. Raw keeps each word.
+     * @type boolean
+    */
+    removeFillerWords: boolean;
+    /**
      * @minLength 0
      * @maxLength 4294967295
      * @type integer

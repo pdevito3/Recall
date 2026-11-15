@@ -1425,6 +1425,10 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("location_capture_enabled");
 
+                    b.Property<bool>("RemoveFillerWords")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("remove_filler_words");
+
                     b.Property<bool>("RequirePeopleProposalApproval")
                         .HasColumnType("INTEGER")
                         .HasColumnName("require_people_proposal_approval");

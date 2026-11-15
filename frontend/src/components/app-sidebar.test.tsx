@@ -18,6 +18,7 @@ const setting: UserSettingDto = {
   timeZoneIsKnown: true,
   locationCaptureEnabled: false,
   requirePeopleProposalApproval: false,
+  removeFillerWords: true,
   version: 1,
 }
 

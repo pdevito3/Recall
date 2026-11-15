@@ -13,5 +13,9 @@ public sealed record UserSettingDto
     public bool TimeZoneIsKnown { get; init; }
     public bool LocationCaptureEnabled { get; init; }
     public bool RequirePeopleProposalApproval { get; init; }
+
+    /// <summary>True when the Cleanup prompt asks the model to remove filler words, stutters, and false starts from Cleaned. Raw keeps each word.</summary>
+    public bool RemoveFillerWords { get; init; }
+
     public uint Version { get; init; }
 }
