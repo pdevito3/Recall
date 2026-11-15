@@ -97,8 +97,9 @@ public static class AuthExtensions
         if (principal is null)
             return false;
 
-        return principal.FindFirst("client_id")?.Value == FirstPartyClientOptions.AppClientId
-            || principal.FindFirst("azp")?.Value == FirstPartyClientOptions.AppClientId
+        return CurrentUserService.ClientIdClaimTypes
+                .Select(type => principal.FindFirst(type)?.Value)
+                .Any(clientId => clientId == FirstPartyClientOptions.AppClientId || PatClaims.IsTokenId(clientId))
             || HasUserIdPrefix(principal.FindFirst("sub")?.Value)
             || HasUserIdPrefix(principal.FindFirst(ClaimTypes.NameIdentifier)?.Value);
     }
