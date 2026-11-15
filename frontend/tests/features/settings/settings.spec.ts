@@ -61,6 +61,22 @@ test.describe('the settings of a person', () => {
     await expect(settings.at.saved).toBeVisible()
   })
 
+  test('turns off the removal of filler words, and sends the other values as they are', { tag: '@SES-50' }, async ({ page, api }) => {
+    api.mock(settingsApi.are(aSetting()), settingsApi.saves(aSetting({ removeFillerWords: false })))
+    const settings = settingsPage(page)
+    await settings.open()
+    await expect(settings.at.fillerWords).toBeChecked()
+
+    await settings.turnOffFillerWordRemoval()
+
+    const body = api.last('put', settingsPaths.mine)?.body as { removeFillerWords: boolean; requirePeopleProposalApproval: boolean; locationCaptureEnabled: boolean }
+    expect(body.removeFillerWords).toBe(false)
+    expect(body.requirePeopleProposalApproval).toBe(aSetting().requirePeopleProposalApproval)
+    expect(body.locationCaptureEnabled).toBe(aSetting().locationCaptureEnabled)
+    await expect(settings.at.fillerWords).not.toBeChecked()
+    await expect(settings.at.saved).toBeVisible()
+  })
+
   for (const [saved, shown] of [['UTC', /^UTC \(/], ['Asia/Kolkata', /^Asia \/ Kolkata \(/]] as const) {
     test(`shows the saved zone ${saved}, which the list of the browser can leave out`, async ({ page, api }) => {
       api.mock(settingsApi.are(aSetting({ timeZone: saved })))
