@@ -76,6 +76,8 @@ public class AppDbContext(
 
     public string? CurrentJournalOwnerId => callerIdentityResolver.Current.JournalOwnerId;
 
+    internal bool CurrentCallerCanWriteJournal => callerIdentityResolver.Current.CanWriteJournal;
+
     internal bool IsRunningDomainEventHandlers => _saveStage == SaveStage.Dispatching;
 
     /// <summary>
@@ -315,6 +317,7 @@ public class AppDbContext(
     {
         // Entities that code removed from a collection become Deleted here.
         ChangeTracker.DetectChanges();
+        JournalWriteRule.Check(caller, ChangeTracker.Entries());
         RefuseAuditEntriesNotFromCapture();
 
         var auditModel = AuditModel.Of(Model);

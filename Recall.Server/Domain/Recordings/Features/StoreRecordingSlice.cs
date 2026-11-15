@@ -24,6 +24,7 @@ public static class StoreRecordingSlice
 
         public async Task<RecordingSliceDto> Handle(Command request, CancellationToken cancellationToken)
         {
+            dbContext.RequireJournalWriter();
             Activity.Current?.SetTag("app.recording_id", request.Id);
             Recording.ValidateSliceIndex(request.Index);
             ValidationException.Must(request.Body.Length > 0, "body", "A slice must have bytes.");
