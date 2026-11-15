@@ -195,7 +195,7 @@ public class SessionApiTests : TestBase
         await using var scope = services.GetRequiredService<IServiceScopeFactory>().CreateJournalScope(new JournalOwner(owner.Id, owner.TenantId));
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var row = await dbContext.Sessions.SingleAsync(s => s.Id == sessionId);
-        row.TryAppendTranscript(words, now ?? DateTimeOffset.UtcNow).ShouldBeTrue();
+        row.TryAppendTranscript(ChunkParagraphs.Own(words), now ?? DateTimeOffset.UtcNow).ShouldBeTrue();
         await dbContext.SaveChangesAsync();
     }
 

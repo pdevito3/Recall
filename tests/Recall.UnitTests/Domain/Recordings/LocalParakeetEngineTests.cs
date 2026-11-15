@@ -75,6 +75,23 @@ public class LocalParakeetEngineTests
     }
 
     [Test]
+    [Property("Rule", "REC-26")]
+    public async Task the_word_times_of_the_worker_come_through_as_sample_spans()
+    {
+        // Arrange
+        using var rig = new Rig();
+        var engine = rig.Engine(rig.Script("worker",
+            """echo '{"endSample":16000,"totalSamples":16000,"text":"heard words","wordTimes":[{"start":640,"end":4480},{"start":5120,"end":9600}]}'"""));
+
+        // Act
+        var chunks = await CollectAsync(engine, rig.Input());
+
+        // Assert
+        chunks.ShouldHaveSingleItem().Text.ShouldBe("heard words");
+        chunks[0].WordTimes.ShouldBe([new WordTime(640, 4_480), new WordTime(5_120, 9_600)]);
+    }
+
+    [Test]
     public async Task the_worker_gets_the_start_sample_of_the_attempt()
     {
         // Arrange

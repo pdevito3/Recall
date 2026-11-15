@@ -155,9 +155,9 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         return decision;
     }
 
-    public bool TryAppendTranscript(string words, DateTimeOffset now)
+    public bool TryAppendTranscript(ChunkParagraphs chunk, DateTimeOffset now)
     {
-        var text = RawTranscript.Append(Raw.Text, words);
+        var text = RawTranscript.Append(Raw.Text, chunk);
         if (text.Length > DraftMaxLength)
             return false;
 

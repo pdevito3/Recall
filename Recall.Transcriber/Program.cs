@@ -57,25 +57,61 @@ while (position < totalSamples)
         break;
 
     var length = ChunkCutter.CutLength(samples.AsSpan(0, read), maxSamples);
-    var text = Recognize(recognizer, samples.AsSpan(0, length).ToArray());
+    var (text, wordTimes) = Recognize(recognizer, samples.AsSpan(0, length).ToArray(), chunkStart: position);
     position += length;
-    lines.WriteLine(new JsonObject
+    var line = new JsonObject
     {
         ["endSample"] = position,
         ["totalSamples"] = totalSamples,
         ["text"] = text,
-    }.ToJsonString());
+    };
+    if (wordTimes is not null)
+        line["wordTimes"] = wordTimes;
+    lines.WriteLine(line.ToJsonString());
 }
 
 return 0;
 
-static string Recognize(OfflineRecognizer recognizer, float[] chunk)
+static (string Text, JsonArray? WordTimes) Recognize(OfflineRecognizer recognizer, float[] chunk, long chunkStart)
 {
     using var stream = recognizer.CreateStream();
     stream.AcceptWaveform(SamplesPerSecond, chunk);
     recognizer.Decode(stream);
-    return stream.Result.Text.Trim();
+    var result = stream.Result;
+    var text = result.Text.Trim();
+    return (text, WordTimesOf(text, result.Tokens, result.Timestamps, result.Durations, chunkStart));
 }
+
+// A token that starts a word begins with ▁, which the recognizer gives as a space. The times are seconds from the chunk.
+static JsonArray? WordTimesOf(string text, string[] tokens, float[]? timestamps, float[]? durations, long chunkStart)
+{
+    if (tokens.Length == 0 || timestamps?.Length != tokens.Length || durations?.Length != tokens.Length)
+        return null;
+
+    long SampleAt(float seconds) => chunkStart + (long)Math.Round(seconds * SamplesPerSecond);
+    var words = new List<(string Text, long Start, long End)>();
+    for (var i = 0; i < tokens.Length; i++)
+    {
+        var token = tokens[i];
+        var end = SampleAt(timestamps[i] + durations[i]);
+        if (words.Count == 0 || token.StartsWith(' ') || token.StartsWith('\u2581'))
+        {
+            words.Add((token.TrimStart(' ', '\u2581'), SampleAt(timestamps[i]), end));
+            continue;
+        }
+
+        var last = words[^1];
+        words[^1] = (last.Text + token, last.Start, IsSpoken(token) ? end : last.End);
+    }
+
+    words.RemoveAll(word => word.Text.Length == 0);
+    if (!words.Select(word => word.Text).SequenceEqual(text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)))
+        return null;
+
+    return [.. words.Select(word => new JsonObject { ["start"] = word.Start, ["end"] = word.End })];
+}
+
+static bool IsSpoken(string token) => token.Any(char.IsLetterOrDigit);
 
 static (long DataStart, long TotalSamples) FindSamples(FileStream wav)
 {

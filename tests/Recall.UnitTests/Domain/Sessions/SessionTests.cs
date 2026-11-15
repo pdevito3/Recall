@@ -32,7 +32,7 @@ public class SessionTests
         // Arrange
         var session = NewSession();
         session.SaveRaw(Save("typed", 0));
-        session.TryAppendTranscript("heard", Now).ShouldBeTrue();
+        session.TryAppendTranscript(ChunkParagraphs.Own("heard"), Now).ShouldBeTrue();
         var chunk = session.Raw.DraftRevision;
 
         // Act

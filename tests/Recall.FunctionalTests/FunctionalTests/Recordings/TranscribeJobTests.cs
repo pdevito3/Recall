@@ -481,4 +481,118 @@ public class TranscribeJobTests : TestBase
         (await FactoryClient.GetAsync(ApiRoutes.Recordings.File(recording.Id, "audio.webm"))).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await PlainRawAsync(recording.SessionId)).ShouldBe("words");
     }
+
+    private sealed record SpokenChunk(int EndMs, string Text, (int StartMs, int EndMs)[] Spans);
+
+    private static readonly SpokenChunk[] Spoken =
+    [
+        new(4_000, "one two. three four", [(200, 600), (700, 1_100), (2_200, 2_600), (2_700, 3_100)]),
+        new(8_000, "five six", [(4_200, 4_600), (4_700, 5_100)]),
+        new(12_000, "seven. eight nine", [(8_200, 8_600), (9_800, 10_200), (10_300, 10_700)]),
+    ];
+
+    private const int SamplesPerMs = Recording.SamplesPerSecond / 1000;
+
+    private static async IAsyncEnumerable<TranscriptChunk> SpokenChunks(TranscriptionInput input, CancellationTokenSource? stopAfterFirst, [EnumeratorCancellation] CancellationToken token = default)
+    {
+        foreach (var chunk in Spoken)
+        {
+            token.ThrowIfCancellationRequested();
+            if (chunk.EndMs * SamplesPerMs > input.StartSample)
+            {
+                yield return new TranscriptChunk(chunk.EndMs * SamplesPerMs, Spoken[^1].EndMs * SamplesPerMs, chunk.Text,
+                    [.. chunk.Spans.Select(s => new WordTime(s.StartMs * SamplesPerMs, s.EndMs * SamplesPerMs))]);
+            }
+
+            if (stopAfterFirst is not null)
+            {
+                await stopAfterFirst.CancelAsync();
+                token.ThrowIfCancellationRequested();
+            }
+
+            await Task.Yield();
+        }
+    }
+
+    private static FakeEngine SayingWithWordTimes() => new(true, (input, token) => SpokenChunks(input, null, token));
+
+    private async Task<(RecordingDto Recording, User Admin)> FinishedRecordingWithTapsAsync(params int[] tapsMs)
+    {
+        var (admin, _) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsAppUser(admin.Identifier);
+        var session = await FactoryClient.AddSessionAsync();
+        var recording = await FactoryClient.AddRecordingAsync(session.Id);
+        (await FactoryClient.PutSliceAsync(recording.Id, 0, RecordingScenario.WebmStart)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await FinishWithTapsAsync(recording.Id, tapsMs)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        return (await FactoryClient.GetRecordingAsync(recording.Id), admin);
+    }
+
+    private Task<HttpResponseMessage> FinishWithTapsAsync(string id, int[] tapsMs)
+        => FactoryClient.PostAsJsonAsync(ApiRoutes.Recordings.Finish(id), new { sliceCount = 1, byteLength = RecordingScenario.WebmStart.Length, paragraphTapsMs = tapsMs });
+
+    [Test]
+    [Property("Rule", "REC-26")]
+    [Property("Rule", "REC-27")]
+    public async Task two_taps_give_three_paragraphs_with_a_break_between_words_at_each_tap()
+    {
+        // Arrange
+        var (recording, admin) = await FinishedRecordingWithTapsAsync(9_000, 1_500);
+
+        // Act
+        await RunAsync(JobWith(SayingWithWordTimes()), recording, admin);
+
+        // Assert
+        (await FactoryClient.GetRecordingAsync(recording.Id)).Status.ShouldBe(nameof(RecordingStatus.Transcribed));
+        (await PlainRawAsync(recording.SessionId)).ShouldBe("one two.\nthree four five six seven.\neight nine");
+    }
+
+    [Test]
+    [Property("Rule", "REC-27")]
+    public async Task with_no_taps_each_chunk_stays_its_own_paragraph()
+    {
+        // Arrange
+        var (recording, admin) = await FinishedRecordingWithTapsAsync();
+
+        // Act
+        await RunAsync(JobWith(SayingWithWordTimes()), recording, admin);
+
+        // Assert
+        (await PlainRawAsync(recording.SessionId)).ShouldBe("one two. three four\nfive six\nseven. eight nine");
+    }
+
+    [Test]
+    [Property("Rule", "REC-28")]
+    public async Task a_break_that_waits_at_a_cut_survives_a_lease_return_and_a_run_again_adds_no_break_twice()
+    {
+        // Arrange
+        var (recording, admin) = await FinishedRecordingWithTapsAsync(3_900, 9_000);
+        using var stop = new CancellationTokenSource();
+        await Should.ThrowAsync<OperationCanceledException>(() => RunAsync(JobWith(new FakeEngine(true, (input, token) => SpokenChunks(input, stop, token))), recording, admin, stop.Token));
+        (await PlainRawAsync(recording.SessionId)).ShouldBe("one two. three four");
+
+        // Act
+        await RunAsync(JobWith(SayingWithWordTimes()), recording, admin);
+        await RunAsync(JobWith(SayingWithWordTimes()), recording, admin);
+
+        // Assert
+        (await PlainRawAsync(recording.SessionId)).ShouldBe("one two. three four\nfive six seven.\neight nine");
+    }
+
+    [Test]
+    [Property("Rule", "REC-25")]
+    [Property("Rule", "REC-28")]
+    public async Task a_repeat_finish_with_other_taps_gives_the_answer_of_the_repeat_and_keeps_the_first_taps()
+    {
+        // Arrange
+        var (recording, admin) = await FinishedRecordingWithTapsAsync(1_500, 9_000);
+
+        // Act
+        var repeat = await FinishWithTapsAsync(recording.Id, [500, 6_000, 11_000]);
+        await RunAsync(JobWith(SayingWithWordTimes()), recording, admin);
+
+        // Assert
+        repeat.StatusCode.ShouldBe(HttpStatusCode.OK);
+        RecordingScenario.RowOf(recording.Id, admin).ParagraphTapsMs.ShouldBe([1_500, 9_000]);
+        (await PlainRawAsync(recording.SessionId)).ShouldBe("one two.\nthree four five six seven.\neight nine");
+    }
 }

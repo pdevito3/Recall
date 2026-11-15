@@ -19,6 +19,13 @@ public sealed record RecordingFinishDto
 {
     public int SliceCount { get; init; }
     public long ByteLength { get; init; }
+
+    /// <summary>
+    /// Each tap of New paragraph, in ms from the start of the audio. Optional, so a client with no button sends none. The
+    /// server never refuses them: it sorts them, drops repeats and taps outside 0 to 4 hours, and keeps the first 1,000. The
+    /// first finish stores them, and a repeat finish keeps them.
+    /// </summary>
+    public IReadOnlyList<int>? ParagraphTapsMs { get; init; }
 }
 
 public sealed record RecordingSliceDto

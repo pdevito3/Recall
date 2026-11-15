@@ -20,7 +20,16 @@ public sealed record AudioProvider(ModelEndpoint Endpoint, string Model)
     public override string ToString() => nameof(AudioProvider);
 }
 
-public sealed record TranscriptChunk(long EndSample, long TotalSamples, string Text);
+/// <summary>
+/// The text of the samples from the pointer to <paramref name="EndSample"/>. <paramref name="WordTimes"/> is one span for each
+/// word of <paramref name="Text"/>, in order, where a word is a run of characters with no whitespace. An engine that cannot
+/// say when each word was spoken leaves it null. <see cref="ParagraphBreaks"/> checks the spans, so a wrong span costs a
+/// precise paragraph break, never a word.
+/// </summary>
+public sealed record TranscriptChunk(long EndSample, long TotalSamples, string Text, IReadOnlyList<WordTime>? WordTimes = null);
+
+/// <summary>When one word was spoken, in samples of the 16 kHz work audio from its start, not from the chunk.</summary>
+public readonly record struct WordTime(long Start, long End);
 
 /// <summary><paramref name="tryAgain"/> means that a later try can work, so the job keeps the audio waiting and runs again.</summary>
 public sealed class TranscriptionEngineException(RecordingProblem problem, bool tryAgain = false)
