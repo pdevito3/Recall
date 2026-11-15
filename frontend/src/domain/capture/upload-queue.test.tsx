@@ -10,7 +10,7 @@ import { newUuid } from '@/lib/new-uuid'
 import type { Answer } from '@/test/answer'
 
 import { addCapture, capturesOf, endCapture, readSlice, storeSlice, subscribeToAudioStore, type StoredCapture } from './audio-store'
-import { sendStoredAudioOf, tryAgainToSend } from './upload-queue'
+import { endOnServer, sendStoredAudioOf, tryAgainToSend } from './upload-queue'
 
 // The queue runs against the real IndexedDB of the test browser. Each test has its own owner, so the captures of one test
 // are not in the queue of the next.
@@ -81,10 +81,10 @@ const theCapture = async () => (await capturesOf(owner))[0]
 
 const sentPaths = async () => (await commands.takeSentRequests()).map(({ method, path }) => `${method} ${path}`)
 
-test('the queue makes the entry and the recording, sends each slice in order, and finishes with the count and the bytes', async () => {
+test('@REC-30 the queue makes the entry and the recording, sends each slice in order, and finishes with the count, the bytes, and the taps', async () => {
   // Arrange
   await commands.answerRequests(serverTakesAll)
-  const capture = await aStoredCapture()
+  const capture = await aStoredCapture({ paragraphTapsMs: [1_234, 5_678] })
   await endCapture(capture.clientRecordingId)
 
   // Act
@@ -102,7 +102,7 @@ test('the queue makes the entry and the recording, sends each slice in order, an
   ])
   expect(sent[0].body).toEqual({ clientSessionId: capture.clientSessionId, startedAt: capture.startedAt, timeZone: 'Asia/Tokyo' })
   expect(sent[1].body).toEqual({ clientRecordingId: capture.clientRecordingId, format: 'Webm' })
-  expect(sent[4].body).toEqual({ sliceCount: 2, byteLength: 7 })
+  expect(sent[4].body).toEqual({ sliceCount: 2, byteLength: 7, paragraphTapsMs: [1_234, 5_678] })
   expect(await readSlice(capture.clientRecordingId, 0)).toBeNull()
   expect(await readSlice(capture.clientRecordingId, 1)).toBeNull()
 })
@@ -267,4 +267,21 @@ test('a refusal keeps the audio and stops the queue until the person sends again
   await commands.answerRequests(serverTakesAll)
   await tryAgainToSend(capture.clientRecordingId)
   await expect.poll(async () => (await theCapture())?.isFinished, { timeout: 5_000 }).toBe(true)
+})
+
+test('@REC-30 the end of a capture on the server finishes it with the stored taps', async () => {
+  // Arrange
+  await commands.answerRequests([
+    { method: 'GET', path: '/api/v1/recordings/rec_1', contentType: 'application/json', body: asJson(recording('Receiving')) },
+    { method: 'POST', path: '/api/v1/recordings/rec_1/finish', contentType: 'application/json', body: asJson(recording('Received')) },
+  ])
+  const capture = await aStoredCapture({ sessionId: 'ses_1', recordingId: 'rec_1', paragraphTapsMs: [800, 4_100] })
+
+  // Act
+  await endOnServer([capture])
+
+  // Assert
+  const sent = await commands.takeSentRequests()
+  const finish = sent.find(({ method, path }) => method === 'POST' && path === '/api/v1/recordings/rec_1/finish')
+  expect(finish?.body).toEqual({ sliceCount: 2, byteLength: 7, paragraphTapsMs: [800, 4_100] })
 })

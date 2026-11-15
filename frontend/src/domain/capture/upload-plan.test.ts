@@ -30,7 +30,18 @@ describe('the next upload step', () => {
     expect(nextUploadStep(aCapture())).toEqual({ kind: 'createEntry' })
     expect(nextUploadStep(aCapture({ sessionId: 'ses_1' }))).toEqual({ kind: 'createRecording' })
     expect(nextUploadStep(aCapture({ sessionId: 'ses_1', recordingId: 'rec_1', sentSlices: 1 }))).toEqual({ kind: 'sendSlice', index: 1 })
-    expect(nextUploadStep(aCapture({ sessionId: 'ses_1', recordingId: 'rec_1', sentSlices: 3, isEnded: true }))).toEqual({ kind: 'finish', sliceCount: 3, byteLength: 3_000 })
+    expect(nextUploadStep(aCapture({ sessionId: 'ses_1', recordingId: 'rec_1', sentSlices: 3, isEnded: true }))).toEqual({ kind: 'finish', sliceCount: 3, byteLength: 3_000, paragraphTapsMs: [] })
+  })
+
+  it('@REC-30 finishes with the stored taps, so each retry sends the same ones', () => {
+    const ended = aCapture({ sessionId: 'ses_1', recordingId: 'rec_1', sentSlices: 3, isEnded: true, paragraphTapsMs: [1_200, 2_450] })
+    expect(nextUploadStep(ended)).toEqual({ kind: 'finish', sliceCount: 3, byteLength: 3_000, paragraphTapsMs: [1_200, 2_450] })
+  })
+
+  it('@REC-30 finishes a row of an older version, which has no taps, with none', () => {
+    const older = aCapture({ sessionId: 'ses_1', recordingId: 'rec_1', sentSlices: 3, isEnded: true })
+    expect('paragraphTapsMs' in older).toBe(false)
+    expect(nextUploadStep(older)).toEqual({ kind: 'finish', sliceCount: 3, byteLength: 3_000, paragraphTapsMs: [] })
   })
 
   it('sends slices while the recorder runs, and finishes only after the recorder stops', () => {
@@ -69,7 +80,7 @@ describe('a failed step', () => {
 
   it('lets the audio go when the person deleted the entry, and its recording, during the upload', () => {
     expect(verdictOf(send, failure(404))).toEqual({ kind: 'gone' })
-    expect(verdictOf({ kind: 'finish', sliceCount: 3, byteLength: 3 }, failure(404))).toEqual({ kind: 'gone' })
+    expect(verdictOf({ kind: 'finish', sliceCount: 3, byteLength: 3, paragraphTapsMs: [] }, failure(404))).toEqual({ kind: 'gone' })
   })
 
   it('keeps the audio and shows the words of any other refusal', () => {

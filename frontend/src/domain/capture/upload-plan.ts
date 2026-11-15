@@ -8,7 +8,8 @@ export type UploadStep =
   | { kind: 'createEntry' }
   | { kind: 'createRecording' }
   | { kind: 'sendSlice'; index: number }
-  | { kind: 'finish'; sliceCount: number; byteLength: number }
+  /** Built from the row at each try, so a retry sends the same taps, and the Server keeps those of the first finish. */
+  | { kind: 'finish'; sliceCount: number; byteLength: number; paragraphTapsMs: number[] }
   /** The recorder still runs, and each stored slice is sent. */
   | { kind: 'waitForSlices' }
   /** The recorder stopped before its first slice, so there is no audio to keep. */
@@ -23,7 +24,7 @@ export function nextUploadStep(capture: StoredCapture): UploadStep {
   if (capture.recordingId === null) return { kind: 'createRecording' }
   if (capture.sentSlices < capture.storedSlices) return { kind: 'sendSlice', index: capture.sentSlices }
   if (!capture.isEnded) return { kind: 'waitForSlices' }
-  return { kind: 'finish', sliceCount: capture.storedSlices, byteLength: capture.storedBytes }
+  return { kind: 'finish', sliceCount: capture.storedSlices, byteLength: capture.storedBytes, paragraphTapsMs: capture.paragraphTapsMs ?? [] }
 }
 
 /** What the queue does after a step fails. */
