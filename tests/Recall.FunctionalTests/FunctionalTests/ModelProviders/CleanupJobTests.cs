@@ -6,6 +6,7 @@ using BackWave.Monitor;
 using BackWave.Storage;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
 using Recall.FakeModelProvider;
 using Recall.FunctionalTests.FunctionalTests.Sessions;
@@ -250,10 +251,19 @@ public class CleanupJobTests : TestBase
         scenario.Fake.Behavior.Mode = FakeMode.Hold;
         scenario.Fake.Behavior.DelayMs = 120_000;
         var started = await scenario.SessionWithRunningCleanupAsync(Words);
-        var store = StoreWithFirstClaimAt(DateTimeOffset.UtcNow - new ProviderLimits().Call + TimeSpan.FromSeconds(3));
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var timeLeft = TimeSpan.FromSeconds(3);
+        var store = StoreWithFirstClaimAt(clock.GetUtcNow() - new ProviderLimits().Call + timeLeft);
 
         // Act
-        await scenario.RunJobAsync(started.Id, attempt: 2, store: store).WaitAsync(TimeSpan.FromSeconds(30));
+        var call = scenario.RunJobAsync(started.Id, attempt: 2, store: store, clock: clock);
+        await Task.Run(async () =>
+        {
+            while (scenario.Fake.CompletionCalls == 0 && !call.IsCompleted)
+                await Task.Delay(TimeSpan.FromMilliseconds(20));
+        }).WaitAsync(TimeSpan.FromSeconds(30));
+        clock.Advance(timeLeft);
+        await call.WaitAsync(TimeSpan.FromSeconds(30));
         var session = await scenario.ReadAsync(started.Id);
 
         // Assert

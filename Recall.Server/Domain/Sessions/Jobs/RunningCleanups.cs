@@ -11,9 +11,9 @@ public sealed class RunningCleanups
     private readonly ConcurrentDictionary<string, Run> _runs = new();
 
     /// <summary>A job calls this before it reads the state, so a stop between the read and the call still reaches the call.</summary>
-    public Run Watch(string runId, CancellationToken hostStop)
+    public Run Watch(string runId, TimeProvider timeProvider, CancellationToken hostStop)
     {
-        var run = new Run(this, runId, hostStop);
+        var run = new Run(this, runId, timeProvider, hostStop);
         _runs[runId] = run;
         return run;
     }
@@ -29,12 +29,14 @@ public sealed class RunningCleanups
         private readonly RunningCleanups _owner;
         private readonly string _runId;
         private readonly CancellationTokenSource _call;
+        private readonly CancellationTokenRegistration _hostStop;
 
-        internal Run(RunningCleanups owner, string runId, CancellationToken hostStop)
+        internal Run(RunningCleanups owner, string runId, TimeProvider timeProvider, CancellationToken hostStop)
         {
             _owner = owner;
             _runId = runId;
-            _call = CancellationTokenSource.CreateLinkedTokenSource(hostStop);
+            _call = new CancellationTokenSource(Timeout.InfiniteTimeSpan, timeProvider);
+            _hostStop = hostStop.Register(Cancel);
         }
 
         public CancellationToken Token => _call.Token;
@@ -56,6 +58,7 @@ public sealed class RunningCleanups
         public void Dispose()
         {
             _owner._runs.TryRemove(new KeyValuePair<string, Run>(_runId, this));
+            _hostStop.Dispose();
             _call.Dispose();
         }
     }
