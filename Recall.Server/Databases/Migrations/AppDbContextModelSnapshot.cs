@@ -109,15 +109,29 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("expires_at");
 
+                    b.Property<string>("Grant")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("grant");
+
                     b.Property<string>("LastSlidAt")
                         .HasColumnType("TEXT")
                         .HasColumnName("last_slid_at");
+
+                    b.Property<string>("LastUsedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_used_at");
 
                     b.Property<string>("LoginMode")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("TEXT")
                         .HasColumnName("login_mode");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
 
                     b.Property<string>("RefreshFamilyHash")
                         .HasMaxLength(64)
@@ -132,6 +146,7 @@ namespace Recall.Server.Databases.Migrations
                         .UseCollation("BINARY");
 
                     b.Property<string>("RevokedAt")
+                        .IsConcurrencyToken()
                         .HasColumnType("TEXT")
                         .HasColumnName("revoked_at");
 
@@ -167,9 +182,15 @@ namespace Recall.Server.Databases.Migrations
 
                     b.ToTable("auth_sessions", null, t =>
                         {
-                            t.HasCheckConstraint("ck_auth_sessions_client_kind", "client_kind IN ('web', 'native')");
+                            t.HasCheckConstraint("ck_auth_sessions_client_kind", "client_kind IN ('web', 'native', 'pat')");
 
-                            t.HasCheckConstraint("ck_auth_sessions_refresh_state", "(client_kind = 'web' AND refresh_family_hash IS NULL AND refresh_hash IS NULL) OR (client_kind = 'native' AND refresh_family_hash IS NOT NULL AND refresh_hash IS NOT NULL)");
+                            t.HasCheckConstraint("ck_auth_sessions_grant", "(client_kind = 'pat') = (\"grant\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_auth_sessions_last_used_at", "client_kind = 'pat' OR last_used_at IS NULL");
+
+                            t.HasCheckConstraint("ck_auth_sessions_name", "(client_kind = 'pat') = (name IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_auth_sessions_refresh_state", "(client_kind IN ('web', 'pat') AND refresh_family_hash IS NULL AND refresh_hash IS NULL) OR (client_kind = 'native' AND refresh_family_hash IS NOT NULL AND refresh_hash IS NOT NULL)");
                         });
                 });
 
