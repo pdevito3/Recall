@@ -137,6 +137,25 @@ function micGivesATone() {
   return vi.spyOn(navigator.mediaDevices, 'getUserMedia').mockImplementation(async () => aTone())
 }
 
+// The mic of a page outlives a test, and its stop does nothing while it starts. So the afterEach lets a held start go before it stops the mic,
+// or a test that fails while it holds the start leaves the mic at Starting for each later test. onTestFinished runs after the afterEach, too late.
+let heldStart: (() => Promise<void>) | null = null
+
+/** The mic starts only when the test calls the function that this gives. */
+function micStartsWhenTheTestSays() {
+  vi.spyOn(navigator.mediaDevices, 'getUserMedia').mockImplementation(
+    () =>
+      new Promise<MediaStream>((resolve) => {
+        heldStart = async () => {
+          heldStart = null
+          resolve(aTone())
+          await expect.element(page.getByRole('button', { name: 'Stop recording' }), { timeout: 5_000 }).toBeInTheDocument()
+        }
+      }),
+  )
+  return () => heldStart?.()
+}
+
 async function aFinishedCapture(change: Partial<StoredCapture> = {}) {
   await addCapture({
     clientRecordingId: 'cap_1',
@@ -160,7 +179,9 @@ async function aFinishedCapture(change: Partial<StoredCapture> = {}) {
 
 // The audio store outlives a test, as it outlives a page. The page goes first, or it reads the empty store and calls again.
 afterEach(async () => {
+  await heldStart?.()
   await cleanup()
+  await stopRecordingOfThisTab()
   vi.restoreAllMocks()
   for (const capture of await capturesOf(member.identifier)) await removeCapture(capture.clientRecordingId)
 })
@@ -168,8 +189,7 @@ afterEach(async () => {
 test.each([390, 1280])('at %i px the card keeps its height while the mic starts and records, so nothing moves under the finger', async (width) => {
   // Arrange
   await page.viewport(width, 800)
-  let micStarts: (stream: MediaStream) => void = () => {}
-  vi.spyOn(navigator.mediaDevices, 'getUserMedia').mockImplementation(() => new Promise<MediaStream>((resolve) => (micStarts = resolve)))
+  const micStarts = micStartsWhenTheTestSays()
   const screen = await openHome([])
   await expect.element(screen.getByRole('link', { name: 'Change' })).toBeVisible()
   const card = screen.getByRole('region', { name: 'Record an entry' })
@@ -184,7 +204,7 @@ test.each([390, 1280])('at %i px the card keeps its height while the mic starts 
   // The mic of this page outlives the test, so it starts and stops before the check, and the next test finds it idle. With no network nothing goes out.
   onlineManager.setOnline(false)
   onTestFinished(() => onlineManager.setOnline(true))
-  micStarts(aTone())
+  await micStarts()
   await cardSays(screen, 'Each second saves in this browser')
   const recordingHeight = card.element().getBoundingClientRect().height
   await userEvent.click(screen.getByRole('button', { name: 'Stop recording' }))
@@ -602,6 +622,7 @@ test('in dark mode the stop icon stands out from the red of the button', async (
 
   // Act
   await userEvent.click(screen.getByRole('button', { name: 'Record' }))
+  await cardSays(screen, 'Recording')
 
   // Assert
   const stop = screen.getByRole('button', { name: 'Stop recording' })
