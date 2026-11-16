@@ -152,7 +152,7 @@ No User, an Admin included, can read the journal data of another User.
 ### Authentication
 
 **Auth session**:
-The record at the Server of one signed-in device, a browser or a native app. A person can have several. It keeps working when the identity provider is down.
+The record at the Server of one signed-in device, a browser or a native app, or of one personal access token that a person made for a script or an MCP client. A person can have several. It keeps working when the identity provider is down.
 _Avoid_: Cookie session, user session, login, BFF session
 
 **IdP session**:

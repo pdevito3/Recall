@@ -35,7 +35,7 @@ Expired is not a stored state. It comes from the expiry and the current time.
 | PAT-5 | The journal access of a grant is None, Read, or ReadWrite. A request for write without read gives 422, because an update loads its row through the read filter. | `JournalAccess.Of` | |
 | PAT-6 | A PAT with no journal access sees no journal row. A route with an ID gives 404, and a route with no ID gives 403. It also loses the user settings, because they are journal rows. | `CallerIdentity.JournalOwnerId`, the `JournalOwner` filter | `JournalRulesTests` |
 | PAT-7 | A PAT with no journal write saves no tracked add, change, or delete of a journal row, and leaves no effect of a refused change, such as a file, a job, or a schedule. A user delete by a PAT with `manage_users` still removes the journal of that user, because the database removes it and the save does not track it. | `JournalWriteRule` in `AppDbContext.PrepareWrite`, `RequireJournalWriter` in `StoreRecordingSlice`, `FinishRecording`, `ChangeRecordings`, and `GenerateSummary` | |
-| PAT-8 | A create sends exactly one of `expiresAt`, which is in the future, and `neverExpires: true`. Any other body gives 422. The SPA offers 90 days from the browser day as the default. | `AddPersonalAccessToken`, the SPA form schema | |
+| PAT-8 | A create sends exactly one of `expiresAt`, which is in the future and before 9999-12-31, and `neverExpires: true`. Any other body gives 422. | `PersonalAccessTokenExpiry` | |
 | PAT-9 | A revoked or expired PAT gets 401 on its next request. | `SessionStore.FindPersonalAccessTokenAsync` | |
 | PAT-10 | `revoke-others` from a session revokes each PAT of the user, and a PAT that calls it gets 403. A delete of the user or of its tenant removes each PAT of the user. | `SessionStore.RevokeOthersAsync`, `InteractiveSessionOnly`, `RemoveLoginsWhenUserDeleted` | |
 | PAT-11 | A PAT works only as a bearer, and needs no `X-CSRF` header. A PAT value in the cookie authenticates nothing. | `AppSessionHandler` | |
@@ -47,6 +47,7 @@ Expired is not a stored state. It comes from the expiry and the current time.
 | PAT-16 | The Server marks the last use at most once an hour per PAT, off the request. No request waits for the mark. | `AppSessionHandler`, `SessionStore.NotePersonalAccessTokenUseAsync` | |
 | PAT-17 | No PAT value and no hash of it reaches a log, a span, baggage, or an audit value. | Each record's `ToString`, `AuditModel` | Test with a marker value |
 | PAT-18 | A PAT reaches `/api/*` and `/mcp` on an install with a provider and on one with none. `tools/list` shows only the tools that the PAT's permissions allow. | `AuthRegistration.SelectScheme`, `McpToolAccess` | |
+| PAT-20 (later) | The SPA offers 90 days from the browser day as the default expiry. | The SPA form schema | |
 
 ## 4. Permissions
 
@@ -81,7 +82,4 @@ None. A PAT uses the existing permissions: `read_users` to list the PATs of anot
 
 ## 8. Open decisions
 
-| Question | Who decides | Rules that wait |
-|---|---|---|
-| A no-provider install cannot sign in, so it cannot make a PAT until local login exists. Does use of a PAT made earlier meet the acceptance box? | Operator | PAT-18 |
-| May a grant hold `manage_model_providers`, which agents may not hold? | Operator | PAT-3 |
+None. The operator decided both earlier questions. A no-provider install uses a PAT made earlier, because it cannot sign in to make one until local login exists (PAT-18). A grant may hold `manage_model_providers`, which agents may not hold (PAT-3).

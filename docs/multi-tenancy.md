@@ -92,6 +92,7 @@ A `TenantScope` has one of three values. The filter makes the decision for each 
 | A user of a first-party client with a user record | `TenantScope.ForTenant(id)` | The rows of this user's tenant |
 | A delegated agent (see [Agents](authentication.md#agents)) | `TenantScope.ForTenant(id)` | The rows of the tenant of its user |
 | A machine agent | `TenantScope.ForTenant(id)` | The rows of the tenant of its agent record |
+| A personal access token (see [Personal access tokens](authentication.md#personal-access-tokens)) | `TenantScope.ForTenant(id)` | The rows of the tenant of its user. Journal rows only with journal access in its grant (see [The journal of a person](#the-journal-of-a-person)) |
 | A user of a first-party client with no user record | `TenantScope.NoTenant` | No rows |
 | No HTTP request and no system scope | `TenantScope.NoTenant` | No rows |
 | Any other caller (an unknown client, an anonymous request) | `TenantScope.NoTenant` | No rows |
