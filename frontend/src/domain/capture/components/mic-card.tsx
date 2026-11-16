@@ -190,9 +190,9 @@ function LevelMeter({ level }: { level: () => number }) {
     return () => clearInterval(timer)
   }, [level])
   return (
-    <div aria-hidden className="flex h-8 items-center gap-[3px] text-destructive">
+    <div aria-hidden className="flex h-8 items-center gap-[0.1875rem] text-destructive">
       {levels.map((value, index) => (
-        <span key={index} className="w-[3px] rounded-full bg-current" style={{ height: `${Math.max(12, value * 100)}%` }} />
+        <span key={index} className="w-[0.1875rem] rounded-full bg-current" style={{ height: `${Math.max(12, value * 100)}%` }} />
       ))}
     </div>
   )
@@ -365,7 +365,7 @@ const clockClass = '-mb-2 flex flex-col items-center gap-2 @2xl:col-start-2'
 const statusClass = 'flex max-w-md flex-col items-center gap-1.5 @2xl:col-span-full'
 // On a wide card New paragraph sits beside the clock, so the recording card is no taller than the idle card and the
 // journal home fits a laptop screen. The marks of the clock reach into the gap.
-const recordingClass = '@2xl:grid @2xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] @2xl:items-center @2xl:justify-items-center @2xl:gap-x-16'
+const recordingClass = '@2xl:grid @2xl:grid-cols-[minmax(0,1fr)_9rem_minmax(0,1fr)] @2xl:items-center @2xl:justify-items-center @2xl:gap-x-16'
 const titleClass = 'text-lg font-semibold text-balance'
 const lineClass = 'text-sm text-balance text-muted-foreground'
 
