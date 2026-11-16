@@ -95,5 +95,11 @@ export function settingsPage(page: Page) {
       await at.fillerWords.click({ force: true })
       await saved
     },
+
+    async turnOffNumbersAsDigits() {
+      const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && new URL(r.url()).pathname === settingsPaths.mine)
+      await at.numbersAsDigits.click({ force: true })
+      await saved
+    },
   }
 }

@@ -77,6 +77,23 @@ test.describe('the settings of a person', () => {
     await expect(settings.at.saved).toBeVisible()
   })
 
+  test('turns off the number format, and sends the other values as they are', { tag: '@SES-52' }, async ({ page, api }) => {
+    api.mock(settingsApi.are(aSetting()), settingsApi.saves(aSetting({ writeNumbersAsDigits: false })))
+    const settings = settingsPage(page)
+    await settings.open()
+    await expect(settings.at.numbersAsDigits).toBeChecked()
+
+    await settings.turnOffNumbersAsDigits()
+
+    const body = api.last('put', settingsPaths.mine)?.body as { writeNumbersAsDigits: boolean; removeFillerWords: boolean; requirePeopleProposalApproval: boolean; locationCaptureEnabled: boolean }
+    expect(body.writeNumbersAsDigits).toBe(false)
+    expect(body.removeFillerWords).toBe(aSetting().removeFillerWords)
+    expect(body.requirePeopleProposalApproval).toBe(aSetting().requirePeopleProposalApproval)
+    expect(body.locationCaptureEnabled).toBe(aSetting().locationCaptureEnabled)
+    await expect(settings.at.numbersAsDigits).not.toBeChecked()
+    await expect(settings.at.saved).toBeVisible()
+  })
+
   for (const [saved, shown] of [['UTC', /^UTC \(/], ['Asia/Kolkata', /^Asia \/ Kolkata \(/]] as const) {
     test(`shows the saved zone ${saved}, which the list of the browser can leave out`, async ({ page, api }) => {
       api.mock(settingsApi.are(aSetting({ timeZone: saved })))

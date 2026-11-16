@@ -49,6 +49,7 @@ const settingLabels: Record<keyof SettingChange, string> = {
   locationCaptureEnabled: 'Save my location with each new entry',
   requirePeopleProposalApproval: 'Ask me before AI adds a person to an entry',
   removeFillerWords: 'Remove filler words, such as “um” and “uh”, from Cleaned',
+  writeNumbersAsDigits: 'Write spoken numbers as digits, such as “3:30 PM” and “$20”, in Cleaned',
 }
 
 export function SettingsForm() {
@@ -133,6 +134,13 @@ export function SettingsForm() {
           onChange={(removeFillerWords) => change({ removeFillerWords })}
         >
           Remove filler words, such as “um” and “uh”, from Cleaned
+        </Checkbox>
+        <Checkbox
+          className="max-md:min-h-11"
+          isSelected={values.writeNumbersAsDigits}
+          onChange={(writeNumbersAsDigits) => change({ writeNumbersAsDigits })}
+        >
+          Write spoken numbers as digits, such as “3:30 PM” and “$20”, in Cleaned
         </Checkbox>
       </section>
       <section className="flex flex-col gap-2" aria-labelledby="settings-account">
