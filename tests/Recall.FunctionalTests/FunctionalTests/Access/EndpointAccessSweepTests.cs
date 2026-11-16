@@ -6,6 +6,8 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Recall.FunctionalTests.FunctionalTests.Recordings;
+using Recall.Server.Auth;
+using Recall.Server.Auth.Entities;
 using Recall.Server.Domain;
 using Recall.Server.Domain.Corrections;
 using Recall.Server.Domain.ModelProviders;
@@ -93,6 +95,9 @@ public class EndpointAccessSweepTests : TestBase
         ["RetryRecording"] = new(JournalOfEachMember, OwnerOnly: true),
         ["DeleteRecording"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetTranscriptionStatus"] = new(JournalOfEachMember, OwnerOnly: false),
+        ["AddPersonalAccessToken"] = new("Each member makes tokens for the own record, inside the permissions that the member holds. PersonalAccessTokenTests covers a grant above them."),
+        ["GetPersonalAccessTokens"] = new("Each member lists the own tokens. It takes no ID."),
+        ["RevokePersonalAccessToken"] = new("Each member revokes the own tokens. A token of another person is 404 unless the caller can list that person's tokens.", OwnerOnly: true),
         // new-feature:open-to-each-member
     };
 
@@ -239,7 +244,7 @@ public class EndpointAccessSweepTests : TestBase
                     if (caller is null)
                         FactoryClient.DefaultRequestHeaders.Authorization = null;
                     else
-                        FactoryClient.SignInAsAppUser(caller.Identifier);
+                        FactoryClient.SignInAsAppSession(caller.Identifier);
                     outcomes[call] = await send(entrypoint, ids);
                 }
             }
@@ -378,6 +383,20 @@ public class EndpointAccessSweepTests : TestBase
             await TestingWebApplicationFactory.Instance.Services.GetRequiredService<FileStore>().WriteAsync(RecordingFiles.Audio(recording), audio, CancellationToken.None);
         var summary = Summary.WithFirstRun(tenant.Id, admin.Id, PeriodKey.Holding(SummaryPeriod.Day, new DateOnly(1970, 1, 1)), jobId: null);
         await InsertAsync(summary);
+        var token = new AuthSession
+        {
+            Id = EntityId.New(PatClaims.IdPrefix),
+            UserId = otherUser.Id,
+            ClientKind = SessionKind.Pat,
+            LoginMode = SessionKindText.Pat,
+            AccessHash = TokenHash.Of(Secrets.New()).Hex,
+            AccessExpiresAt = SessionPolicy.PersonalAccessTokenNever,
+            ExpiresAt = SessionPolicy.PersonalAccessTokenNever,
+            CreatedAt = DateTimeOffset.UnixEpoch,
+            Name = "Sweep token",
+            Grant = new TokenGrant([], JournalAccess.None).Encode(),
+        };
+        await InsertAsync(token);
         // new-feature:sweep-inserts
 
         var idsByKind = new Dictionary<string, string>
@@ -391,6 +410,7 @@ public class EndpointAccessSweepTests : TestBase
             ["model-providers"] = provider.Id,
             ["recordings"] = recording.Id,
             ["summaries"] = summary.Id,
+            ["personal-access-tokens"] = token.Id,
             // new-feature:sweep-ids
         };
         return new TenantRecords(member, admin, new RecordIds(idsByKind, otherUser.Identifier));

@@ -21,14 +21,33 @@ public interface IPermissionGuard
 
     /// <exception cref="ForbiddenAccessException">The caller does not hold the permission.</exception>
     Task RequireAsync(Permission permission, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Loads the caller and requires a person signed in to Recall, in a web or native session. Use it for an action
+    /// that must come from the person, such as the create of a personal access token, so that a token cannot make a
+    /// token.
+    /// </summary>
+    /// <exception cref="ForbiddenAccessException">
+    /// The caller is a provider token, a personal access token, an agent, or another client.
+    /// </exception>
+    Task<Caller.Member> RequireSignedInPersonAsync(CancellationToken cancellationToken);
 }
 
 public sealed class PermissionGuard(
     AppDbContext dbContext,
-    ICallerIdentityResolver callerIdentityResolver) : IPermissionGuard
+    ICallerIdentityResolver callerIdentityResolver,
+    ICurrentUserService currentUserService) : IPermissionGuard
 {
     public async Task RequireAsync(Permission permission, CancellationToken cancellationToken)
         => (await GetCallerAsync(cancellationToken)).Require(permission);
+
+    // Only the AppSession scheme gives the client recall to a web or native session. A provider token that names it
+    // gets 401, and a personal access token has its token ID as its client.
+    public async Task<Caller.Member> RequireSignedInPersonAsync(CancellationToken cancellationToken)
+        => await GetCallerAsync(cancellationToken) is Caller.Member member
+            && currentUserService.ClientId == FirstPartyClientOptions.AppClientId
+                ? member
+                : throw new ForbiddenAccessException("Only a person signed in to Recall can do this.");
 
     public async Task<Caller> GetCallerAsync(CancellationToken cancellationToken)
         => await callerIdentityResolver.GetAsync(cancellationToken) switch

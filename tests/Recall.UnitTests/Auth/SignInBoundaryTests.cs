@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Recall.Server.Auth;
 using Recall.Server.Auth.Entities;
+using Recall.Server.Domain.PersonalAccessTokens.Dtos;
 using Recall.Server.Domain.Users;
 using Recall.Server.Resources.Entrypoints.Auth;
 using Serilog.Events;
@@ -402,9 +403,10 @@ public class SignInBoundaryTests
         var token = new NewPersonalAccessToken(
             new PersonalAccessTokenRow("pat_1", "usr_1", "Laptop", new TokenGrant([], JournalAccess.None), TimeProvider.System.GetUtcNow(), null, null, null),
             NewPersonalAccessToken.Prefix + secret);
+        var created = new PersonalAccessTokenCreatedDto { Token = new PersonalAccessTokenDto { Id = "pat_1" }, Value = NewPersonalAccessToken.Prefix + secret };
 
         // Act
-        string[] printed = [$"{native}", $"{answer}", $"{web}", $"{attempt}", $"{code}", $"{provider}", $"{callback}", $"{token}"];
+        string[] printed = [$"{native}", $"{answer}", $"{web}", $"{attempt}", $"{code}", $"{provider}", $"{callback}", $"{token}", $"{created}"];
 
         // Assert
         printed.ShouldAllBe(text => !text.Contains(secret, StringComparison.Ordinal));

@@ -11,9 +11,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Recall.FunctionalTests.TestUtilities;
 using Recall.Server.Auth.Entities;
+using Recall.Server.Auth;
 using Recall.Server.Databases;
 using Recall.Server.Databases.Sqlite;
 using Recall.Server.Domain.Users;
+using Recall.Server.Domain.Users.Models;
 using Recall.Server.Resources.Entrypoints.Auth;
 using Recall.Server.Resources.Entrypoints.Jobs;
 using Shouldly;
@@ -24,7 +26,245 @@ public class PersonalAccessTokenTests
     private static readonly string Tenants = $"/{ApiRoutes.Tenants.GetList}";
     private static readonly TokenGrant NoPermissions = new([], JournalAccess.None);
 
+    private const string Tokens = "/api/v1/personal-access-tokens";
+    private const string NotAPerson = "Only a person signed in to Recall can do this.";
+
     private static AuthFlowFactory Host => AuthHosts.Open;
+
+    private static string TokensOf(string userId) => $"/api/v1/users/{userId}/personal-access-tokens";
+
+    private static string RevokeOf(string tokenId) => $"{Tokens}/{tokenId}/revoke";
+
+    private static object Body(DateTimeOffset? expiresAt = null, bool? neverExpires = null, string[]? permissions = null, bool read = false, bool write = false)
+        => new { name = "Laptop", permissions = permissions ?? [], readJournal = read, writeJournal = write, expiresAt, neverExpires };
+
+    [Test]
+    [Property("Rule", "PAT-1")]
+    [Property("Rule", "PAT-9")]
+    [Property("Rule", "PAT-18")]
+    public async Task a_person_makes_a_token_uses_it_on_the_api_and_mcp_revokes_it_and_it_then_gets_401()
+    {
+        // Arrange
+        var (_, member) = await PatPeople.AddTenantAsync(Host);
+        using var browser = new AuthBrowser(Host);
+        await browser.LoginWebAsync(member.Subject);
+
+        // Act
+        var created = await ApiAsync(browser, HttpMethod.Post, Tokens, Body(neverExpires: true));
+        var body = await created.Content.ReadFromJsonAsync<JsonElement>();
+        var value = body.GetProperty("value").GetString()!;
+        var tokenId = body.GetProperty("token").GetProperty("id").GetString()!;
+        using var client = PatPeople.ClientWith(Host, value);
+        var api = await client.GetAsync(Tenants);
+        await using (var mcp = await PatPeople.McpAsync(client))
+            (await mcp.ListToolsAsync()).Select(tool => tool.Name).ShouldContain("get_tenant");
+        var list = await ApiAsync(browser, HttpMethod.Get, Tokens);
+        var listText = await list.Content.ReadAsStringAsync();
+        var revoked = await ApiAsync(browser, HttpMethod.Post, RevokeOf(tokenId));
+        var again = await ApiAsync(browser, HttpMethod.Post, RevokeOf(tokenId));
+        var after = await client.GetAsync(Tenants);
+
+        // Assert
+        created.StatusCode.ShouldBe(HttpStatusCode.Created);
+        value.ShouldStartWith("rcl_pat_");
+        tokenId.ShouldStartWith("pat_");
+        body.GetProperty("token").GetProperty("expiresAt").ValueKind.ShouldBe(JsonValueKind.Null);
+        body.GetProperty("token").GetProperty("allowedActions").EnumerateArray().Select(a => a.GetString()).ShouldBe(["Revoke"]);
+        api.StatusCode.ShouldBe(HttpStatusCode.OK);
+        list.StatusCode.ShouldBe(HttpStatusCode.OK);
+        listText.ShouldContain(tokenId);
+        listText.ShouldNotContain(value);
+        listText.ShouldNotContain(value["rcl_pat_".Length..]);
+        listText.ShouldNotContain(TokenHash.Of(value).Hex);
+        revoked.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        again.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        after.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        var listAfter = await (await ApiAsync(browser, HttpMethod.Get, Tokens)).Content.ReadFromJsonAsync<JsonElement>();
+        var row = listAfter.EnumerateArray().Single(t => t.GetProperty("id").GetString() == tokenId);
+        row.GetProperty("revokedAt").ValueKind.ShouldBe(JsonValueKind.String);
+        row.GetProperty("allowedActions").GetArrayLength().ShouldBe(0);
+    }
+
+    [Test]
+    [Property("Rule", "PAT-3")]
+    public async Task a_grant_with_a_permission_that_the_person_does_not_hold_gives_403_and_makes_no_token()
+    {
+        // Arrange
+        var (_, member) = await PatPeople.AddTenantAsync(Host);
+        using var browser = new AuthBrowser(Host);
+        await browser.LoginWebAsync(member.Subject);
+
+        // Act
+        var response = await ApiAsync(browser, HttpMethod.Post, Tokens, Body(neverExpires: true, permissions: ["read_users"]));
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await DetailOf(response)).ShouldBe($"You cannot {Permission.ReadUsers().Words}. Ask an admin for access.");
+        (await Host.WithDatabaseAsync(db => db.Set<AuthSession>().CountAsync(s => s.UserId == member.UserId))).ShouldBe(1);
+    }
+
+    [Test]
+    [Property("Rule", "PAT-5")]
+    [Property("Rule", "PAT-8")]
+    [Arguments("neither", 422, "expiresAt")]
+    [Arguments("both", 422, "expiresAt")]
+    [Arguments("past", 422, "expiresAt")]
+    [Arguments("at-never", 422, "expiresAt")]
+    [Arguments("never-false", 422, "expiresAt")]
+    [Arguments("write-without-read", 422, "journal")]
+    [Arguments("future", 201, null)]
+    [Arguments("never", 201, null)]
+    public async Task a_create_needs_exactly_one_expiry_in_the_future_and_journal_write_needs_read(string body, int status, string? field)
+    {
+        // Arrange
+        var (_, member) = await PatPeople.AddTenantAsync(Host);
+        using var browser = new AuthBrowser(Host);
+        await browser.LoginWebAsync(member.Subject);
+        var future = DateTimeOffset.UtcNow.AddDays(90);
+        var sent = body switch
+        {
+            "neither" => Body(),
+            "both" => Body(future, neverExpires: true),
+            "past" => Body(DateTimeOffset.UtcNow.AddMinutes(-1)),
+            "at-never" => Body(SessionPolicy.PersonalAccessTokenNever),
+            "never-false" => Body(neverExpires: false),
+            "write-without-read" => Body(future, write: true),
+            "future" => Body(future, read: true, write: true),
+            _ => Body(neverExpires: true, read: true),
+        };
+
+        // Act
+        var response = await ApiAsync(browser, HttpMethod.Post, Tokens, sent);
+
+        // Assert
+        ((int)response.StatusCode).ShouldBe(status);
+        if (field is not null)
+        {
+            var errors = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("errors");
+            errors.GetProperty(field)[0].GetString().ShouldBe(field == "journal"
+                ? "A token that changes your journal must also read it."
+                : "Pick an expiry date in the future, or pick Never.");
+        }
+    }
+
+    [Test]
+    [Property("Rule", "PAT-2")]
+    [Property("Rule", "PAT-10")]
+    public async Task a_token_gets_403_on_each_route_that_makes_lists_or_revokes_tokens_and_on_revoke_others()
+    {
+        // Arrange
+        var (admin, _) = await PatPeople.AddTenantAsync(Host);
+        var token = await PatPeople.StartTokenAsync(Host, admin, new TokenGrant(Permission.GetAll(), JournalAccess.ReadWrite));
+        using var client = PatPeople.ClientWith(Host, token.Value);
+
+        // Act
+        var create = await client.PostAsJsonAsync(Tokens, Body(neverExpires: true));
+        var list = await client.GetAsync(Tokens);
+        var userList = await client.GetAsync(TokensOf(admin.UserId));
+        var revoke = await client.PostAsync(RevokeOf(token.Token.Id), null);
+        var revokeOthers = await client.PostAsync(AuthRoutes.RevokeOthers, null);
+
+        // Assert
+        foreach (var response in new[] { create, list, userList, revoke })
+        {
+            response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+            (await DetailOf(response)).ShouldBe(NotAPerson);
+        }
+        revokeOthers.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await Host.WithDatabaseAsync(db => db.Set<AuthSession>().CountAsync(s => s.UserId == admin.UserId))).ShouldBe(1);
+        (await PatPeople.RowAsync(Host, token.Token.Id)).RevokedAt.ShouldBeNull();
+    }
+
+    [Test]
+    [Property("Rule", "PAT-2")]
+    public async Task a_provider_token_of_a_first_party_client_gets_403_on_each_route_that_makes_lists_or_revokes_tokens()
+    {
+        // Arrange
+        var host = AuthHosts.FirstPartyClient;
+        var (admin, _) = await PatPeople.AddTenantAsync(host);
+        var subject = $"swg-{Guid.NewGuid():N}";
+        var userId = await host.WithDatabaseAsync(async db =>
+        {
+            var user = User.Create(new UserForCreation
+            {
+                TenantId = admin.TenantId, FirstName = "Swagger", Identifier = subject, Username = subject[..20], Role = UserRole.Admin().Value,
+            });
+            db.Users.Add(user);
+            await db.SaveChangesAsync();
+            return user.Id;
+        });
+        var token = await PatPeople.StartTokenAsync(host, new PatPerson(subject, userId, admin.TenantId), NoPermissions);
+        using var client = host.NewClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer", host.Provider.SignJwt(new Dictionary<string, object> { ["sub"] = subject, ["client_id"] = AuthHosts.FirstPartyClientId }));
+
+        // Act
+        var ownRecord = await client.GetAsync($"/{ApiRoutes.Users.GetRecord(userId)}");
+        var create = await client.PostAsJsonAsync(Tokens, Body(neverExpires: true, read: true, write: true));
+        var list = await client.GetAsync(Tokens);
+        var userList = await client.GetAsync(TokensOf(userId));
+        var revoke = await client.PostAsync(RevokeOf(token.Token.Id), null);
+
+        // Assert
+        ownRecord.StatusCode.ShouldBe(HttpStatusCode.OK);
+        foreach (var response in new[] { create, list, userList, revoke })
+        {
+            response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+            (await DetailOf(response)).ShouldBe(NotAPerson);
+        }
+        (await host.WithDatabaseAsync(db => db.Set<AuthSession>().CountAsync(s => s.UserId == userId))).ShouldBe(1);
+        (await PatPeople.RowAsync(host, token.Token.Id)).RevokedAt.ShouldBeNull();
+    }
+
+    [Test]
+    [Property("Rule", "PAT-13")]
+    public async Task an_admin_lists_and_revokes_the_tokens_of_the_tenant_and_a_person_of_another_tenant_is_404()
+    {
+        // Arrange
+        var (admin, member) = await PatPeople.AddTenantAsync(Host);
+        var (_, otherMember) = await PatPeople.AddTenantAsync(Host);
+        var reader = await PatPeople.AddPersonAsync(Host, admin.TenantId, UserRole.User(), Permission.ReadUsers());
+        var memberToken = await PatPeople.StartTokenAsync(Host, member, NoPermissions);
+        var otherToken = await PatPeople.StartTokenAsync(Host, otherMember, NoPermissions);
+        using var adminBrowser = new AuthBrowser(Host);
+        await adminBrowser.LoginWebAsync(admin.Subject);
+        using var memberBrowser = new AuthBrowser(Host);
+        await memberBrowser.LoginWebAsync(member.Subject);
+        using var readerBrowser = new AuthBrowser(Host);
+        await readerBrowser.LoginWebAsync(reader.Subject);
+
+        // Act
+        var adminList = await ApiAsync(adminBrowser, HttpMethod.Get, TokensOf(member.UserId));
+        var adminOtherTenantList = await ApiAsync(adminBrowser, HttpMethod.Get, TokensOf(otherMember.UserId));
+        var adminOtherTenantRevoke = await ApiAsync(adminBrowser, HttpMethod.Post, RevokeOf(otherToken.Token.Id));
+        var memberListOfAdmin = await ApiAsync(memberBrowser, HttpMethod.Get, TokensOf(admin.UserId));
+        var memberOwnList = await ApiAsync(memberBrowser, HttpMethod.Get, TokensOf(member.UserId));
+        var readerList = await ApiAsync(readerBrowser, HttpMethod.Get, TokensOf(member.UserId));
+        var readerRevoke = await ApiAsync(readerBrowser, HttpMethod.Post, RevokeOf(memberToken.Token.Id));
+        var otherMemberRevoke = await ApiAsync(memberBrowser, HttpMethod.Post, RevokeOf(otherToken.Token.Id));
+        var liveBeforeAdminRevoke = (await PatPeople.RowAsync(Host, memberToken.Token.Id)).RevokedAt;
+        var adminRevoke = await ApiAsync(adminBrowser, HttpMethod.Post, RevokeOf(memberToken.Token.Id));
+
+        // Assert
+        adminList.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var listed = (await adminList.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray().ToList();
+        listed.Select(t => t.GetProperty("id").GetString()).ShouldBe([memberToken.Token.Id]);
+        listed[0].GetProperty("allowedActions").EnumerateArray().Select(a => a.GetString()).ShouldBe(["Revoke"]);
+        listed[0].EnumerateObject().Select(p => p.Name).ShouldNotContain("value");
+        (await adminList.Content.ReadAsStringAsync()).ShouldNotContain(memberToken.Value);
+        adminOtherTenantList.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        adminOtherTenantRevoke.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        memberListOfAdmin.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        memberOwnList.StatusCode.ShouldBe(HttpStatusCode.OK);
+        readerList.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await readerList.Content.ReadFromJsonAsync<JsonElement>())[0].GetProperty("allowedActions").GetArrayLength().ShouldBe(0);
+        readerRevoke.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        otherMemberRevoke.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        liveBeforeAdminRevoke.ShouldBeNull();
+        adminRevoke.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await PatPeople.RowAsync(Host, memberToken.Token.Id)).RevokedReason.ShouldBe(RevokeReason.TokenRevoked);
+        (await PatPeople.RowAsync(Host, otherToken.Token.Id)).RevokedAt.ShouldBeNull();
+    }
 
     [Test]
     [Property("Rule", "PAT-18")]
@@ -169,6 +409,38 @@ public class PersonalAccessTokenTests
     }
 
     [Test]
+    [Property("Rule", "PAT-10")]
+    public async Task a_delete_of_the_person_or_of_its_tenant_removes_each_token_of_the_person()
+    {
+        // Arrange
+        var (admin, member) = await PatPeople.AddTenantAsync(Host);
+        var memberToken = await PatPeople.StartTokenAsync(Host, member, NoPermissions);
+        var adminToken = await PatPeople.StartTokenAsync(Host, admin, NoPermissions, expiresAt: DateTimeOffset.UtcNow.AddYears(1));
+        using var browser = new AuthBrowser(Host);
+        await browser.LoginWebAsync(admin.Subject);
+        using var memberClient = PatPeople.ClientWith(Host, memberToken.Value);
+        using var adminClient = PatPeople.ClientWith(Host, adminToken.Value);
+        Task<int> RowsOf(string userId) => Host.WithDatabaseAsync(db => db.Set<AuthSession>().CountAsync(s => s.UserId == userId));
+
+        // Act
+        var userDelete = await ApiAsync(browser, HttpMethod.Delete, $"/{ApiRoutes.Users.Delete(member.UserId)}");
+        var memberAfter = await memberClient.GetAsync(Tenants);
+        var memberRows = await RowsOf(member.UserId);
+        var adminBefore = await adminClient.GetAsync(Tenants);
+        var tenantDelete = await ApiAsync(browser, HttpMethod.Delete, $"/{ApiRoutes.Tenants.Delete(admin.TenantId)}");
+        var adminAfter = await adminClient.GetAsync(Tenants);
+
+        // Assert
+        userDelete.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        memberAfter.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        memberRows.ShouldBe(0);
+        adminBefore.StatusCode.ShouldBe(HttpStatusCode.OK);
+        tenantDelete.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        adminAfter.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await RowsOf(admin.UserId)).ShouldBe(0);
+    }
+
+    [Test]
     [Property("Rule", "PAT-4")]
     public async Task a_permission_that_the_person_loses_refuses_the_next_call_of_the_token()
     {
@@ -257,6 +529,16 @@ public class PersonalAccessTokenTests
         second.ShouldBeLessThan(AppSessionHandler.UseMarkWait * 0.75);
         markedWhileHeld.ShouldBeNull();
         await EventuallyAsync(async () => (await PatPeople.RowAsync(host, token.Token.Id)).LastUsedAt is not null);
+    }
+
+    private static async Task<HttpResponseMessage> ApiAsync(AuthBrowser browser, HttpMethod method, string url, object? body = null)
+    {
+        var request = new HttpRequestMessage(method, url);
+        request.Headers.Add("X-CSRF", "1");
+        request.Headers.Add(PageUserCheck.Header, await browser.UserOfSessionAsync());
+        if (body is not null)
+            request.Content = JsonContent.Create(body);
+        return await browser.SendAsync(request);
     }
 
     private static async Task<HttpStatusCode> SendAsync(HttpClient client, string value)

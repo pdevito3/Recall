@@ -8,6 +8,9 @@ public static class SchemaSample
 {
     private static readonly Dictionary<string, string> StringsThatARuleChecksAgainstAList = new() { ["timeZone"] = "UTC" };
 
+    // A rule needs one of two optional values, so the sample sends this one. The dates of the sample are in the past.
+    private static readonly Dictionary<string, bool> OptionalFlagsThatARuleNeeds = new() { ["neverExpires"] = true };
+
     public static JsonNode? Of(JsonNode schema, JsonNode root)
     {
         if (schema["$ref"]?.GetValue<string>() is { } reference)
@@ -47,6 +50,11 @@ public static class SchemaSample
             var property = properties?[name]
                 ?? throw new SweepSetupException($"The schema requires {name}, but it has no such property.");
             sample[name] = StringsThatARuleChecksAgainstAList.TryGetValue(name, out var value) ? JsonValue.Create(value) : Of(property, root);
+        }
+        foreach (var (name, flag) in OptionalFlagsThatARuleNeeds)
+        {
+            if (properties?[name] is not null && !sample.ContainsKey(name))
+                sample[name] = JsonValue.Create(flag);
         }
         return sample;
     }

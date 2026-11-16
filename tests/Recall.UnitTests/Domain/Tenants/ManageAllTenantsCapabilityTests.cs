@@ -45,7 +45,7 @@ public sealed class ManageAllTenantsCapabilityTests : IDisposable
     public async Task caller_that_sees_all_tenants_without_the_capability_cannot_add_a_tenant()
     {
         // Arrange
-        var handler = new AddTenant.Handler(_dbContext, new PermissionGuard(_dbContext, _callerIdentityResolver));
+        var handler = new AddTenant.Handler(_dbContext, new PermissionGuard(_dbContext, _callerIdentityResolver, Substitute.For<ICurrentUserService>()));
 
         // Act
         var act = () => handler.Handle(new AddTenant.Command(new FakeTenantForCreationDto().Generate()),
@@ -74,7 +74,7 @@ public sealed class ManageAllTenantsCapabilityTests : IDisposable
     public async Task caller_that_sees_all_tenants_without_the_capability_cannot_add_a_user()
     {
         // Arrange
-        var permissionGuard = new PermissionGuard(_dbContext, _callerIdentityResolver);
+        var permissionGuard = new PermissionGuard(_dbContext, _callerIdentityResolver, Substitute.For<ICurrentUserService>());
         var handler = new AddUser.Handler(_dbContext, permissionGuard);
 
         // Act
