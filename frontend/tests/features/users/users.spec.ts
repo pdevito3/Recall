@@ -1,4 +1,5 @@
 import { membershipApi } from '@tests/support/api/membership-api'
+import { personalAccessTokensApi } from '@tests/support/api/personal-access-tokens-api'
 import { usersApi, usersPaths } from '@tests/support/api/users-api'
 import { as } from '@tests/support/auth/actors'
 import { aProblem } from '@tests/support/builders/problem-details-builder'
@@ -8,6 +9,8 @@ import { usersPage } from './users.tasks'
 
 test.describe('the users of a tenant', () => {
   test.use({ actor: as.user('Ana Admin') })
+
+  test.beforeEach(({ api }) => api.mock(personalAccessTokensApi.noneForAnyUser()))
 
   test('lists the users of the tenant with their roles, and opens a user from the list', { tag: '@UM-1' }, async ({ page, api }) => {
     const grace = aUser().named('Grace Hopper').seenByAdmin()
@@ -218,6 +221,8 @@ test.describe('the users of a tenant, for a member who cannot see them', () => {
 test.describe('the users pages on a 390 px phone', () => {
   test.use({ actor: as.user('Ana Admin'), viewport: { width: 390, height: 844 } })
 
+  test.beforeEach(({ api }) => api.mock(personalAccessTokensApi.noneForAnyUser()))
+
   test('each user link, each pager button, and the way back to the list is a touch target of 44 px', async ({ page, api }) => {
     const grace = aUser().named('Grace Hopper').seenByAdmin()
     api.mock(usersApi.listReturns([grace, aUser().named('Alan Turing')], { total: 25 }), usersApi.oneIs(grace))
@@ -242,6 +247,8 @@ const longName = 'Maximilianbartholomewalexandervanderwesthuizenmontgomerysmythe
 
 test.describe('the users pages on a 320 px phone', () => {
   test.use({ actor: as.user('Ana Admin'), viewport: { width: 320, height: 640 } })
+
+  test.beforeEach(({ api }) => api.mock(personalAccessTokensApi.noneForAnyUser()))
 
   test('the list shows the name, the email, and the role of each row with no sideways scroll', { tag: '@UM-1' }, async ({ page, api }) => {
     api.mock(usersApi.listReturns([aUser().named('Grace Hopper'), aUser().named(`${longName} Smith`)]))

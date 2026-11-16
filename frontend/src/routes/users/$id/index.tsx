@@ -7,6 +7,8 @@ import { useBreadcrumbName } from '@/components/breadcrumb-name'
 import { Page } from '@/components/page'
 import { PageHeading } from '@/components/page-heading'
 import { QueryError } from '@/components/query-error'
+import { useUserPersonalAccessTokens } from '@/domain/personal-access-tokens/apis/personal-access-tokens'
+import { TokenList } from '@/domain/personal-access-tokens/components/token-list'
 import { useDeleteUser } from '@/domain/users/apis/delete-user'
 import { useUser } from '@/domain/users/apis/get-user'
 import { useUpdateUserRole } from '@/domain/users/apis/update-user-role'
@@ -23,6 +25,7 @@ export const Route = createFileRoute('/users/$id/')({
 function UserPage() {
   const { id } = Route.useParams()
   const user = useUser(id)
+  const tokens = useUserPersonalAccessTokens(id)
   const changeRole = useUpdateUserRole(id)
   const remove = useDeleteUser()
   const queryClient = useQueryClient()
@@ -82,6 +85,15 @@ function UserPage() {
         onChangeRole={(newRole) => changeRole.mutate(newRole, { onSettled: () => headingRef.current?.focus() })}
         onDelete={handleDelete}
       />
+      <section className="flex flex-col gap-3" aria-labelledby="user-tokens">
+        <h2 id="user-tokens" className="text-lg font-semibold">Personal access tokens</h2>
+        <TokenList
+          tokens={tokens}
+          label={`Personal access tokens of ${fullName}`}
+          emptyText={`${fullName} has no personal access tokens.`}
+          headingRef={headingRef}
+        />
+      </section>
     </Page>
   )
 }
