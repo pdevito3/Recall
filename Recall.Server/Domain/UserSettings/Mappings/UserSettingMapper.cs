@@ -12,6 +12,7 @@ public static class UserSettingMapper
         LocationCaptureEnabled = setting.LocationCaptureEnabled,
         RequirePeopleProposalApproval = setting.RequirePeopleProposalApproval,
         RemoveFillerWords = setting.RemoveFillerWords,
+        WriteNumbersAsDigits = setting.WriteNumbersAsDigits,
         Version = setting.Version,
     };
 }

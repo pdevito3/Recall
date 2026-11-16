@@ -10,6 +10,7 @@ export const aSetting = (patch: Partial<UserSettingDto> = {}): UserSettingDto =>
   locationCaptureEnabled: false,
   requirePeopleProposalApproval: false,
   removeFillerWords: true,
+  writeNumbersAsDigits: true,
   version: 1,
   ...patch,
 })

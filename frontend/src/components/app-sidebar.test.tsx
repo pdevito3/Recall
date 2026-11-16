@@ -19,6 +19,7 @@ const setting: UserSettingDto = {
   locationCaptureEnabled: false,
   requirePeopleProposalApproval: false,
   removeFillerWords: true,
+  writeNumbersAsDigits: true,
   version: 1,
 }
 

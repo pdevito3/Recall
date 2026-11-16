@@ -22,6 +22,9 @@ public sealed record UserSettingChangeDto
     /// <summary>True to have the Cleanup prompt ask the model to remove filler words, stutters, and false starts from Cleaned. Null keeps the stored value, so a client that does not know this field does not change it.</summary>
     public bool? RemoveFillerWords { get; init; }
 
+    /// <summary>True to have the Cleanup prompt ask the model to write a spoken number, date, time, or amount of money in its usual written form in Cleaned, such as "3:30 PM" and "$20". Null keeps the stored value, so a client that does not know this field does not change it.</summary>
+    public bool? WriteNumbersAsDigits { get; init; }
+
     /// <summary>The <c>version</c> of the settings that the client read. A save from another version gets 409, unless the row already holds these values.</summary>
     public required uint Version { get; init; }
 }

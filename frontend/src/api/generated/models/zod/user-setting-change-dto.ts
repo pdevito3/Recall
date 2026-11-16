@@ -11,5 +11,6 @@ export const userSettingChangeDtoSchema = z.object({
   locationCaptureEnabled: z.boolean(),
   requirePeopleProposalApproval: z.boolean(),
   removeFillerWords: z.boolean().nullish().describe('True to have the Cleanup prompt ask the model to remove filler words, stutters, and false starts from Cleaned. Null keeps the stored value, so a client that does not know this field does not change it.'),
+  writeNumbersAsDigits: z.boolean().nullish().describe('True to have the Cleanup prompt ask the model to write a spoken number, date, time, or amount of money in its usual written form in Cleaned, such as "3:30 PM" and "$20". Null keeps the stored value, so a client that does not know this field does not change it.'),
   version: z.int().min(0).max(4294967295).describe('The `version` of the settings that the client read. A save from another version gets 409, unless the row already holds these values.'),
 })
