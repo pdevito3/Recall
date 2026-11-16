@@ -124,8 +124,10 @@ const cardSays = (screen: Awaited<ReturnType<typeof openHome>>, words: string, t
   expect.element(screen.getByRole('status').getByText(words, { exact: false }), { timeout }).toBeInTheDocument()
 
 // Speech is a tone here: the test fakes the source of the mic, and the recorder, the store, and the queue are real.
+const tones: AudioContext[] = []
 function aTone() {
   const context = new AudioContext()
+  tones.push(context)
   const tone = context.createOscillator()
   const out = context.createMediaStreamDestination()
   tone.connect(out)
@@ -179,11 +181,15 @@ async function aFinishedCapture(change: Partial<StoredCapture> = {}) {
 
 // The audio store outlives a test, as it outlives a page. The page goes first, or it reads the empty store and calls again.
 afterEach(async () => {
-  await heldStart?.()
-  await cleanup()
-  await stopRecordingOfThisTab()
-  vi.restoreAllMocks()
-  for (const capture of await capturesOf(member.identifier)) await removeCapture(capture.clientRecordingId)
+  try {
+    await heldStart?.()
+  } finally {
+    await cleanup()
+    await stopRecordingOfThisTab()
+    await Promise.all(tones.splice(0).map((tone) => tone.close()))
+    vi.restoreAllMocks()
+    for (const capture of await capturesOf(member.identifier)) await removeCapture(capture.clientRecordingId)
+  }
 })
 
 test.each([390, 1280])('at %i px the card keeps its height while the mic starts and records, so nothing moves under the finger', async (width) => {
