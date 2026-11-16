@@ -1,8 +1,10 @@
 import { expect, type Locator, type Page } from '@playwright/test'
+import { theCodeOfAPageLoads } from '@tests/support/page-code'
 import { appShell } from './app-shell.locators'
 
 export const sheetChunk = /(ui|assets)\/sheet/
 const peopleChunk = /routes\/people\/index\.tsx\?tsr-split|assets\/index-.*people/
+const settingsChunk = /routes\/settings\/index\.tsx\?tsr-split|assets\/index-.*settings/
 
 export function appShellPage(page: Page) {
   const at = appShell(page)
@@ -21,19 +23,17 @@ export function appShellPage(page: Page) {
     },
 
     async openAboutAndWaitForSheetChunk() {
-      const sheetLoaded = page.waitForResponse(sheetChunk)
+      const sheetLoaded = theCodeOfAPageLoads(page, sheetChunk)
       await page.goto('/about')
       await expect(at.aboutText).toBeVisible()
       await sheetLoaded
     },
 
-    /** The app loads the code of each page after its first idle moment, and the network is quiet when it has all of them. */
-    async openAboutAndWaitForTheCodeOfEachPage() {
-      const peopleLoaded = page.waitForResponse(peopleChunk)
+    async openAboutAndWaitForTheCodeOfThePeopleAndSettingsPages() {
+      const codeLoaded = Promise.all([theCodeOfAPageLoads(page, peopleChunk), theCodeOfAPageLoads(page, settingsChunk)])
       await page.goto('/about')
       await expect(at.aboutText).toBeVisible()
-      await peopleLoaded
-      await page.waitForLoadState('networkidle')
+      await codeLoaded
     },
 
     async openMobileSidebar() {

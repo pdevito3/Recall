@@ -499,8 +499,7 @@ test.describe('a return to an entry whose read is slow', () => {
     await journal.goToSettings()
     const saved = { ...aSession().atRevision(1).saying('Words from before').build(), id: session.id, clientSessionId: session.clientSessionId }
     api.mock(sessionsApi.oneIs(saved), sessionsApi.draftSaveWins(session, 2))
-    await page.reload()
-    await journal.settingsIsOpen()
+    await journal.reloadOnSettingsAndWaitForTheCodeOfTheJournal()
     await page.context().setOffline(true)
     await journal.goToTheJournalFromTheSidebar()
     await expect(journal.at.loadingEntry).toBeVisible()

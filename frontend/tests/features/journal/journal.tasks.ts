@@ -2,9 +2,11 @@ import { expect, type Page, type Request } from '@playwright/test'
 import { sessionsPaths } from '@tests/support/api/sessions-api'
 import { settingsPaths } from '@tests/support/api/settings-api'
 import { actorSubject } from '@tests/support/auth/actors'
+import { theCodeOfAPageLoads } from '@tests/support/page-code'
 import { entry, journal, unsent } from './journal.locators'
 
 const draftPathPattern = /^\/api\/v1\/sessions\/[^/]+\/draft$/
+const journalChunk = /routes\/index\.tsx\?tsr-split/
 
 // A page open loads about 350 modules from the Vite dev server. On a busy machine that took up to 20 s, more than the 5 s of an assertion.
 const firstPaintMs = 30_000
@@ -66,8 +68,6 @@ export function journalPage(page: Page) {
       await page.keyboard.type(words)
     },
 
-    settingsIsOpen: () => expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible(),
-
     async goToSettings() {
       await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Settings', exact: true }).click()
       await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible()
@@ -80,6 +80,12 @@ export function journalPage(page: Page) {
     async reloadOnSettings() {
       await page.reload()
       await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible()
+    },
+
+    async reloadOnSettingsAndWaitForTheCodeOfTheJournal() {
+      const codeLoaded = theCodeOfAPageLoads(page, journalChunk)
+      await this.reloadOnSettings()
+      await codeLoaded
     },
 
     async letAnAnswerHeldForHalfASecondLand() {
