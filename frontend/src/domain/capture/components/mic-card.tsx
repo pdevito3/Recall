@@ -154,7 +154,7 @@ function ParagraphMarks({ count }: { count: number }) {
 }
 
 // The label wraps in a narrow card with a large font, and the room of the idle card wraps with it.
-const newParagraphClass = 'h-auto min-h-12 w-full max-w-xs px-6 py-2 text-base whitespace-normal'
+const newParagraphClass = 'h-auto min-h-12 w-full max-w-xs px-6 py-2 text-base whitespace-normal @2xl:col-start-3 @2xl:row-start-1 @2xl:w-auto @2xl:justify-self-start'
 
 /** The time of a tap is the finger down, not the lift, which comes later in the audio. A press that slides off marks nothing. */
 function NewParagraphButton({ capture, focusWhenGone }: { capture: Capture; focusWhenGone: RefObject<HTMLButtonElement | null> }) {
@@ -190,9 +190,9 @@ function LevelMeter({ level }: { level: () => number }) {
     return () => clearInterval(timer)
   }, [level])
   return (
-    <div aria-hidden className="flex h-8 items-center gap-[3px] text-destructive">
+    <div aria-hidden className="flex h-8 items-center gap-[0.1875rem] text-destructive">
       {levels.map((value, index) => (
-        <span key={index} className="w-[3px] rounded-full bg-current" style={{ height: `${Math.max(12, value * 100)}%` }} />
+        <span key={index} className="w-[0.1875rem] rounded-full bg-current" style={{ height: `${Math.max(12, value * 100)}%` }} />
       ))}
     </div>
   )
@@ -361,15 +361,18 @@ function Actions({ view, capture }: { view: CaptureView; capture: Capture }) {
   }
 }
 
-const clockClass = '-mb-2 flex flex-col items-center gap-2'
-const statusClass = 'flex max-w-md flex-col items-center gap-1.5'
+const clockClass = '-mb-2 flex flex-col items-center gap-2 @2xl:col-start-2'
+const statusClass = 'flex max-w-md flex-col items-center gap-1.5 @2xl:col-span-full'
+// On a wide card New paragraph sits beside the clock, so the recording card is no taller than the idle card and the
+// journal home fits a laptop screen. The marks of the clock reach into the gap.
+const recordingClass = '@2xl:grid @2xl:grid-cols-[minmax(0,1fr)_9rem_minmax(0,1fr)] @2xl:items-center @2xl:justify-items-center @2xl:gap-x-16'
 const titleClass = 'text-lg font-semibold text-balance'
 const lineClass = 'text-sm text-balance text-muted-foreground'
 
 /** An unseen copy of the idle words and the engine line while the mic records, or of the clock and the recording words while it does not. */
 function RoomOfTheOtherMicState({ isRecording }: { isRecording: boolean }) {
   return (
-    <div aria-hidden className="invisible flex w-full flex-col items-center gap-4 [grid-area:1/1]">
+    <div aria-hidden className={cn('invisible flex w-full flex-col items-center gap-4 [grid-area:1/1]', !isRecording && recordingClass)}>
       {isRecording ? (
         <>
           <div className={statusClass}>
@@ -436,8 +439,8 @@ export function MicCard() {
 
       {/* The idle card and the recording card share one room, the larger of the two, so the card does not change size under the finger.
           The idle card keeps the room of the clock and of New paragraph. */}
-      <div className="grid w-full justify-items-center">
-        <div className="flex w-full flex-col items-center gap-4 [grid-area:1/1]">
+      <div className="@container grid w-full justify-items-center">
+        <div className={cn('flex w-full flex-col items-center gap-4 [grid-area:1/1]', isRecording && recordingClass)}>
           {isRecording && (
             <div aria-hidden className={clockClass}>
               <div className="relative">
