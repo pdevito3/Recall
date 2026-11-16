@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Recall.Server.Auth;
 using Recall.Server.Auth.Entities;
+using Recall.Server.Domain.Users;
 using Recall.Server.Resources.Entrypoints.Auth;
 using Serilog.Events;
 using Serilog.Parsing;
@@ -155,6 +156,9 @@ public class SignInBoundaryTests
     [Test]
     [Arguments("Bearer rcl_at_x", null, true, AppSessionHandler.SchemeName)]
     [Arguments("bearer rcl_at_x", null, true, AppSessionHandler.SchemeName)]
+    [Arguments("Bearer rcl_pat_x", null, true, AppSessionHandler.SchemeName)]
+    [Arguments("Bearer rcl_pat_x", "recall=rcl_ck_x", true, AppSessionHandler.SchemeName)]
+    [Arguments("Bearer rcl_pat_x", null, false, AppSessionHandler.SchemeName)]
     [Arguments("Bearer eyJ.x.y", null, true, JwtBearerDefaults.AuthenticationScheme)]
     [Arguments("Bearer eyJ.x.y", "recall=rcl_ck_x", true, JwtBearerDefaults.AuthenticationScheme)]
     [Arguments("Basic abc", "recall=rcl_ck_x", true, AppSessionHandler.SchemeName)]
@@ -395,9 +399,12 @@ public class SignInBoundaryTests
         };
         var provider = new OidcProviderOptions { Id = "mode", ClientSecret = secret };
         var callback = new OidcCallback(secret, secret, secret);
+        var token = new NewPersonalAccessToken(
+            new PersonalAccessTokenRow("pat_1", "usr_1", "Laptop", new TokenGrant([], JournalAccess.None), TimeProvider.System.GetUtcNow(), null, null, null),
+            NewPersonalAccessToken.Prefix + secret);
 
         // Act
-        string[] printed = [$"{native}", $"{answer}", $"{web}", $"{attempt}", $"{code}", $"{provider}", $"{callback}"];
+        string[] printed = [$"{native}", $"{answer}", $"{web}", $"{attempt}", $"{code}", $"{provider}", $"{callback}", $"{token}"];
 
         // Assert
         printed.ShouldAllBe(text => !text.Contains(secret, StringComparison.Ordinal));

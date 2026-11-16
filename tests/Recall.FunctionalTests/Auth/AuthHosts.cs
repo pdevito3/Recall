@@ -57,6 +57,9 @@ public static class AuthHosts
 
     public static FakeTimeProvider WriterLineClock { get; } = new(DateTimeOffset.UtcNow);
 
+    /// <summary>A host on Kestrel, so a test can send two requests on one keep-alive connection. Only <see cref="PersonalAccessTokenTests"/> holds its writer line.</summary>
+    public static AuthFlowFactory KeepAlive { get; private set; } = null!;
+
     public static void Start()
     {
         var main = Log.Logger;
@@ -118,6 +121,10 @@ public static class AuthHosts
         {
             Clock = WriterLineClock,
         });
+        KeepAlive = new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts });
+        KeepAlive.UseKestrel(0);
+        KeepAlive.StartServer();
+        Log.Logger = main;
         TwoProviders = Start(new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts })
         {
             OtherProvider = new StubOidcProvider(AuthFlowFactory.OtherIssuer),
@@ -151,7 +158,7 @@ public static class AuthHosts
 
     public static async Task StopAsync()
     {
-        foreach (var host in new[] { LostJobTable, FrozenClock, WriterLine, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, Bundle, OwnerDemotion, Sweep, Jobs, Cleanups, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
+        foreach (var host in new[] { LostJobTable, FrozenClock, WriterLine, KeepAlive, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, Bundle, OwnerDemotion, Sweep, Jobs, Cleanups, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
         {
             if (host is not null)
                 await host.DisposeAsync();

@@ -36,6 +36,8 @@ public sealed class JournalAccess : SmartEnum<JournalAccess>
 /// </summary>
 public sealed record TokenGrant
 {
+    private static readonly FrozenSet<string> KnownPermissions = Permission.ListNames().ToFrozenSet(StringComparer.Ordinal);
+
     public TokenGrant(IEnumerable<Permission> permissions, JournalAccess journal)
     {
         Permissions = permissions.ToFrozenSet();
@@ -59,9 +61,8 @@ public sealed record TokenGrant
         var (journal, permissions) = text.IndexOf(':') is var colon and >= 0
             ? (text[..colon], text[(colon + 1)..])
             : (text, "");
-        var known = Permission.ListNames().ToHashSet(StringComparer.Ordinal);
         return new TokenGrant(
-            permissions.Split(',', StringSplitOptions.RemoveEmptyEntries).Where(known.Contains).Select(Permission.Of),
+            permissions.Split(',', StringSplitOptions.RemoveEmptyEntries).Where(KnownPermissions.Contains).Select(Permission.Of),
             JournalAccess.TryFromName(journal, out var access) ? access : JournalAccess.None);
     }
 
