@@ -150,6 +150,7 @@ if (sweep) {
 }
 if (noWebFont) await blockWebFonts(context)
 await context.addInitScript(hideRouterDevtoolsOfDevBuild)
+await context.addInitScript(countFrameRequests)
 const page = await context.newPage()
 const cdp = sweep ? await context.newCDPSession(page) : null
 const sweepFaults = []
@@ -190,6 +191,18 @@ function hideRouterDevtoolsOfDevBuild() {
   })
 }
 
+// Motion runs an animation of a motion value, such as the draw of a checkbox tick, on JavaScript frames, and
+// document.getAnimations() does not list it.
+function countFrameRequests() {
+  const request = window.requestAnimationFrame.bind(window)
+  window.__verifyFrame = request
+  window.__verifyFrameRequests = 0
+  window.requestAnimationFrame = (callback) => {
+    window.__verifyFrameRequests++
+    return request(callback)
+  }
+}
+
 async function step(name, fn) {
   const t0 = Date.now()
   try {
@@ -213,14 +226,24 @@ async function step(name, fn) {
 // The two frames let a scroll event arrive before the next action.
 function settle() {
   return page.evaluate(async () => {
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    const frame = window.__verifyFrame ?? requestAnimationFrame
+    const twoFrames = () => new Promise((resolve) => frame(() => frame(resolve)))
+    await twoFrames()
     // Skip infinite animations, such as the Skeleton pulse. Their finished promise never resolves.
     // Skip paused animations too, and cap the wait, so that a stuck animation cannot hang the run.
     const finite = document
       .getAnimations()
       .filter((animation) => animation.playState === 'running' && animation.effect?.getComputedTiming().endTime !== Infinity)
+    const giveUpAt = performance.now() + 2000
+    const quietFrames = async () => {
+      let requests
+      do {
+        requests = window.__verifyFrameRequests
+        await twoFrames()
+      } while (window.__verifyFrameRequests !== requests && performance.now() < giveUpAt)
+    }
     await Promise.race([
-      Promise.all(finite.map((animation) => animation.finished.catch(() => {}))),
+      Promise.all([...finite.map((animation) => animation.finished.catch(() => {})), quietFrames()]),
       new Promise((resolve) => setTimeout(resolve, 2000)),
     ])
   })
