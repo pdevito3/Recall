@@ -8,6 +8,7 @@ using Recall.Server.Domain.AuditEntries;
 using Recall.Server.Domain.Corrections;
 using Recall.Server.Domain.ModelProviders;
 using Recall.Server.Domain.People;
+using Recall.Server.Domain.PersonalAccessTokens;
 using Recall.Server.Domain.Recordings;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Metadata;
@@ -71,6 +72,7 @@ public class StringColumnLengthTests
             provider.Update("Mine", ProviderAddress, null, v, provider.Version);
         }),
         ["recordings.client_recording_id"] = new("clientRecordingId", Text, v => Recording.Create("ten_1", "usr_1", "ses_1", v, RecordingFormat.Webm)),
+        ["auth_sessions.name"] = new("name", Text, v => PersonalAccessTokenName.Of(v)),
         // new-feature:caller-columns
     };
 
@@ -131,6 +133,7 @@ public class StringColumnLengthTests
         "auth_login_attempts.redirect_uri",
         "auth_login_attempts.return_path",
         "auth_sessions.access_hash",
+        "auth_sessions.grant",
         "auth_sessions.login_mode",
         "auth_sessions.refresh_family_hash",
         "auth_sessions.refresh_hash",

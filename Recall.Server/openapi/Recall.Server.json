@@ -1927,6 +1927,257 @@
         }
       }
     },
+    "/api/v1/personal-access-tokens": {
+      "post": {
+        "tags": [
+          "PersonalAccessTokens"
+        ],
+        "summary": "Makes a personal access token of the caller with a grant that the caller holds. The answer holds the value of the\ntoken, and no later read gives it again. Only a person signed in to the app can make a token.",
+        "operationId": "AddPersonalAccessToken",
+        "parameters": [
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonalAccessTokenForCreationDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalAccessTokenCreatedDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "PersonalAccessTokens"
+        ],
+        "summary": "Gets the personal access tokens of the caller, newest first. A revoked or expired token stays in the list until\nthe sweep removes it.",
+        "operationId": "GetPersonalAccessTokens",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PersonalAccessTokenDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/users/{id}/personal-access-tokens": {
+      "get": {
+        "tags": [
+          "PersonalAccessTokens"
+        ],
+        "summary": "Gets the personal access tokens of a user of the tenant of the caller. Another user needs read_users.",
+        "operationId": "GetUserPersonalAccessTokens",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PersonalAccessTokenDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/personal-access-tokens/{id}/revoke": {
+      "post": {
+        "tags": [
+          "PersonalAccessTokens"
+        ],
+        "summary": "Revokes a personal access token. Its next request gets 401. A token that has ended stays as it is, so a second\nrevoke also gives 204. Its person, or a caller with manage_user_access in the tenant, can revoke it.",
+        "operationId": "RevokePersonalAccessToken",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/sessions/{id}/recordings": {
       "post": {
         "tags": [
@@ -7049,6 +7300,167 @@
         },
         "description": "The pagination data that a list endpoint sends in the X-Pagination response header."
       },
+      "PersonalAccessTokenCreatedDto": {
+        "required": [
+          "token",
+          "value"
+        ],
+        "type": "object",
+        "properties": {
+          "token": {
+            "$ref": "#/components/schemas/PersonalAccessTokenDto"
+          },
+          "value": {
+            "type": "string",
+            "description": "The value to send as `Authorization: Bearer`. Copy it now."
+          }
+        },
+        "description": "The one answer that holds the value of a token. The Server keeps only its hash, so no later read gives it."
+      },
+      "PersonalAccessTokenDto": {
+        "required": [
+          "id",
+          "userId",
+          "name",
+          "permissions",
+          "readJournal",
+          "writeJournal",
+          "createdAt",
+          "allowedActions"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "manage_agents",
+                "manage_model_providers",
+                "manage_tenant",
+                "manage_user_access",
+                "manage_users",
+                "read_agents",
+                "read_audit_log",
+                "read_audit_log_sensitive",
+                "read_users"
+              ],
+              "type": "string"
+            },
+            "description": "The permissions of the grant. The token holds only those that its person holds too."
+          },
+          "readJournal": {
+            "type": "boolean"
+          },
+          "writeJournal": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Null for a token that never expires.",
+            "format": "date-time"
+          },
+          "lastUsedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Null for a token with no use yet. It can be up to an hour stale.",
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "allowedActions": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "Revoke"
+              ],
+              "type": "string"
+            },
+            "description": "The actions that the caller can send for this token now. A button in the SPA reads this list."
+          }
+        },
+        "description": "A personal access token as a list shows it. It holds no value and no hash."
+      },
+      "PersonalAccessTokenForCreationDto": {
+        "required": [
+          "name",
+          "readJournal",
+          "writeJournal"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "type": "string"
+          },
+          "permissions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "enum": [
+                "manage_agents",
+                "manage_model_providers",
+                "manage_tenant",
+                "manage_user_access",
+                "manage_users",
+                "read_agents",
+                "read_audit_log",
+                "read_audit_log_sensitive",
+                "read_users"
+              ],
+              "type": "string"
+            },
+            "description": "The permissions of the grant. The caller must hold each one. No permission when it is not sent."
+          },
+          "readJournal": {
+            "type": "boolean",
+            "description": "The token reads the journal of the person."
+          },
+          "writeJournal": {
+            "type": "boolean",
+            "description": "The token changes the journal of the person. It needs readJournal."
+          },
+          "expiresAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The end of the token, in the future. Send it or neverExpires, not both.",
+            "format": "date-time"
+          },
+          "neverExpires": {
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "description": "True for a token that works until a revoke. Send it or expiresAt, not both."
+          }
+        }
+      },
       "PersonDto": {
         "required": [
           "id",
@@ -8644,6 +9056,9 @@
     },
     {
       "name": "People"
+    },
+    {
+      "name": "PersonalAccessTokens"
     },
     {
       "name": "Recordings"

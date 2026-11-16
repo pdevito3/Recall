@@ -162,4 +162,12 @@ public static class SessionPolicy
     public static readonly TimeSpan AppCodeLifetime = TimeSpan.FromMinutes(2);
 
     public static readonly TimeSpan KeepEndedSession = TimeSpan.FromDays(30);
+
+    public static readonly TimeSpan PersonalAccessTokenUseMarkEvery = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// The stored expiry of a personal access token that never expires, so the lookup keeps <c>AccessExpiresAt &gt; now</c>
+    /// with no null branch. <see cref="DateTimeOffset.MaxValue"/> does not round-trip through the column.
+    /// </summary>
+    public static readonly DateTimeOffset PersonalAccessTokenNever = new(9999, 12, 31, 0, 0, 0, TimeSpan.Zero);
 }

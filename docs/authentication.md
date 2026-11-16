@@ -19,7 +19,7 @@ These routes are not in the OpenAPI document. This section is their contract.
 | `/auth/oidc/confirm` | POST | none | The form of the native confirm page |
 | `/auth/token` | POST | none | Gives the tokens of a native session |
 | `/auth/logout` | POST | optional | Ends the session that the request names. See [Logout](#logout) for each answer. A cookie with no `X-CSRF: 1` gets 401, and nothing ends. |
-| `/auth/sessions/revoke-others` | POST | app session | Ends each other session of the user. It answers 204. |
+| `/auth/sessions/revoke-others` | POST | web or native session | Ends each other session and each personal access token of the user. It answers 204. A personal access token gets 403. |
 | `/auth/me` | GET | optional | The user of the session. See [The user of a session](#the-user-of-a-session). |
 
 Each other Server path, also `/api/*`, reads the credential in the same way. Send the cookie with `X-CSRF: 1`, or send `Authorization: Bearer <token>`. The one exception is the job dashboard at `/backwave`. See [CSRF](#csrf).
@@ -126,7 +126,7 @@ Over plain http, a person on the same network can read the tokens and the key. T
 
 ## Sessions
 
-One row of `auth_sessions` is one signed-in device. The row holds only hashes. A database reader gets no usable credential.
+One row of `auth_sessions` is one signed-in device or one [personal access token](#personal-access-tokens). The row holds only hashes. A database reader gets no usable credential.
 
 | Credential | Lifetime |
 |---|---|
@@ -135,6 +135,7 @@ One row of `auth_sessions` is one signed-in device. The row holds only hashes. A
 | Native refresh token | 90 days from its last use |
 | Login attempt | 10 minutes |
 | App code | 2 minutes |
+| Personal access token | The expiry that the person picked, or until a revoke |
 
 A session makes no call to the provider. So a web or native session keeps working when the provider is down, and it keeps working when the provider disables the person. To end the access of a person, end the session with `revoke-others` or delete the user. Recall has no back-channel logout.
 
@@ -274,7 +275,7 @@ These results come from a run with Recall.
 { "sub": "<identifier>", "name": "Ada Lovelace", "sid": "<session ID>", "client_kind": "web" }
 ```
 
-`name` is the full name of the user. `client_kind` is `web` or `native`.
+`name` is the full name of the user. `client_kind` is `web`, `native`, or `pat`. For a personal access token, `sid` is the ID of the token.
 
 | Request | Answer |
 |---|---|
@@ -399,7 +400,7 @@ With no entry under `Auth:Providers`, and no `Auth:Authority`, the Server boots 
 
 > No sign-in method is configured. Set Auth__Providers__0__Issuer, Auth__Providers__0__ClientId, and Auth__Providers__0__ClientSecret, then restart. See docs/authentication.md.
 
-The page also gives the callback URL to register. An API call gets 401.
+The page also gives the callback URL to register. An API call gets 401, except with a [personal access token](#personal-access-tokens) made earlier, which keeps working.
 
 ### A provider that is down
 
@@ -421,7 +422,7 @@ The umask covers the whole process. A backup job that reads through a group lose
 
 The default scheme chooses by the credential. A `Bearer` value with the prefix `rcl_` goes to the session handler. Another value goes to the JWT handler. With no such header, a session cookie goes to the session handler. Other Authorization schemes, such as Basic from a proxy, do not hide the cookie.
 
-The JWT handler refuses a token whose client is `recall`, or whose `sub` has the prefix of a user ID. So a provider token cannot name itself a session.
+The JWT handler refuses a token whose client is `recall` or starts with `pat_`, or whose `sub` has the prefix of a user ID. It checks each of `client_id`, `azp`, and `applicationId`, and refuses the token when any of them names such a client. So a provider token cannot name itself a session or a personal access token.
 
 The JWT handler also refuses a token with a `cnf` claim, with 401. Such a token is bound to a key of its client, and the Server does not check a proof of possession.
 
@@ -489,13 +490,14 @@ The server reads the client ID of the token from `client_id`, then `azp`, then `
 
 | Token | Caller | Permissions | Rows |
 |---|---|---|---|
+| A `Bearer rcl_pat_` value of a live token whose user is live | A personal access token | Each permission that both the user and the grant of the token have | The tenant of the user. The journal of the user only with journal access in the grant |
 | A first-party client and a `sub` | The user | The `user_permissions` rows of the user | The tenant of the user |
 | A client on a `Tenancy` allow-list | An all-tenants client | Each permission for `ManageAllTenantsClientIds`, none for `ReadAllTenantsClientIds` | All tenants |
 | A client with a machine agent | A machine agent | The grant of the agent | The tenant of the agent |
 | Another client, and the `sub` of a user of the app, with a delegated agent for the client in the tenant of the user | A delegated agent | Each permission that both the user and the grant of the agent have | The tenant of the user |
 | Any other token, also a token with no client ID | An unknown client | None | None |
 
-The server applies the rows in this order, and the first match wins. The first-party clients are `recall`, the client of each app session, `Auth:ClientId`, which Swagger UI uses, and `Swagger:ClientId` when it is set. An app session has the client `recall` and the user ID as its `sub`. A provider token has a provider `sub`, so it matches no user. See [Provider tokens](#provider-tokens) for what that does to Swagger UI and to a delegated agent.
+The server applies the rows in this order, and the first match wins. The first-party clients are `recall`, the client of each web or native session, `Auth:ClientId`, which Swagger UI uses, and `Swagger:ClientId` when it is set. A web or native session has the client `recall` and the user ID as its `sub`. A personal access token has its `pat_…` ID as its client. A provider token has a provider `sub`, so it matches no user. See [Provider tokens](#provider-tokens) for what that does to Swagger UI and to a delegated agent.
 
 An allow-list and a machine agent are facts about the client that the operator sets, so they match each token of the client, whatever its `sub`. Thus a client credentials token with a service-account `sub` matches them, and a tenant cannot take such a client over with a user record that has the same `sub`.
 
@@ -509,7 +511,7 @@ An unknown client sees no MCP tool, and each of its calls gets a `permission_den
 4. To grant a permission, send `POST /api/v1/agents/{id}/permissions` with `{ "permission": "manage_tenant" }`. The caller must have the permission. To take it away, send `DELETE /api/v1/agents/{id}/permissions/{permission}`. That needs only `manage_agents`, so an admin can always stop an agent. A machine agent gets its first grant from the operator in step 3 or from an admin of its tenant.
 5. To remove the agent, send `DELETE /api/v1/agents/{id}`. That needs only `manage_agents`.
 
-A delegated client ID can have one agent in each tenant, so many tenants can register one MCP client. A client ID can have one machine agent in all tenants, because the token of a machine names no tenant. A duplicate gets 409, and so does a delegated agent for a client that is bound as a machine agent. An agent for a first-party client or for a client on an allow-list gets 422, because the server would never use it.
+A delegated client ID can have one agent in each tenant, so many tenants can register one MCP client. A client ID can have one machine agent in all tenants, because the token of a machine names no tenant. A duplicate gets 409, and so does a delegated agent for a client that is bound as a machine agent. An agent for a first-party client, for a client on an allow-list, or for a client ID that starts with `pat_` gets 422, because the server would never use it. The prefix `pat_` names a personal access token.
 
 The permission guard reads the agent and its grant from the database in each check. A removed permission, a deleted agent, or a deleted tenant applies on the next request. A delegated agent does not get the exception of `Caller.RequireSelfOr`, so it cannot update its own user without `manage_users`.
 
@@ -524,7 +526,7 @@ When you add an MCP tool:
 
 ### Audit
 
-Each audit entry of a save records the `sub` of the token, its client ID, and the IDs of the user and the agent of the caller (see [audit-log.md](backend/audit-log.md)). A change from an app session records the client ID `recall`. A change by an agent records the client ID of the agent. A change with no token, for example a background job, records null.
+Each audit entry of a save records the `sub` of the token, its client ID, and the IDs of the user and the agent of the caller (see [audit-log.md](backend/audit-log.md)). A change from a web or native session records the client ID `recall`. A change by a personal access token records its `pat_…` ID. A change by an agent records the client ID of the agent. A change with no token, for example a background job, records null.
 
 ### Providers
 
@@ -547,6 +549,84 @@ The server publishes OAuth protected resource metadata (RFC 9728) for `/mcp`. Th
 `authorization_servers` has `Auth:Authority`, the same value that the JWT bearer handler uses. `scopes_supported` has the scopes that Swagger UI asks for: `Auth:Scopes` if it is set, else `openid`, `profile`, and `Auth:Audience` when `Auth:UseAudienceAsScope` is `true`.
 
 Other paths of the server do not get `resource_metadata`. The server does not support dynamic client registration, so a tenant must register each agent first (see [Register an agent](#register-an-agent)).
+
+## Personal access tokens
+
+A personal access token (PAT) lets a script or an MCP client call `/api/*` and `/mcp` as one person, inside a grant that the person picks when they make it. The reasons are in [ADR 0023](adr/0023-personal-access-tokens-are-auth-sessions.md), and the rules are in [the spec](specs/personal-access-tokens.md).
+
+### Make, list, and revoke
+
+| Route | Who | Answer |
+|---|---|---|
+| `POST /api/v1/personal-access-tokens` | A person in a web or native session | 201 with the token and its `value`. This answer is the only place the value appears. |
+| `GET /api/v1/personal-access-tokens` | A person in a web or native session | The tokens of the caller, newest first |
+| `GET /api/v1/users/{id}/personal-access-tokens` | The user, or a caller with `read_users` | The tokens of that user of the tenant. A user of another tenant gives 404. |
+| `POST /api/v1/personal-access-tokens/{id}/revoke` | The user, or a caller with `manage_user_access` | 204, also for a token that has already ended |
+
+The body of a create names the grant and the expiry:
+
+```json
+{ "name": "Laptop", "permissions": ["read_users"], "readJournal": true, "writeJournal": false, "expiresAt": "2027-02-14T23:59:59Z" }
+```
+
+- Each permission must be one that the caller holds, or the create gets 403 and makes no token. A grant may hold `manage_model_providers`.
+- `writeJournal` needs `readJournal`, or the create gets 422.
+- Send exactly one of `expiresAt`, a time in the future, and `"neverExpires": true`. Any other body gets 422 with "Pick an expiry date in the future, or pick Never." So a client that forgets the field does not get a token that never expires.
+
+A grant cannot change. To get another grant, make a new token. A list holds no value and no hash. Each row has `allowedActions`, which holds `Revoke` while the token is live and the caller can revoke it. A revoked or expired token stays in the list until the sweep removes it, 30 days after it ended.
+
+Only a person in a web or native session can make, list, or revoke tokens. Each of these routes gives any other caller 403 with "Only a person signed in to Recall can do this.": a token, an agent, and a provider token, also one of a first-party client such as Swagger UI. So a stolen token cannot make a token that lives longer. A no-provider install has no sign-in, so it cannot make a token. It can use a token that was made while a provider was set.
+
+### Use a token
+
+Send the value as a bearer. A token needs no `X-CSRF` header. A token value in the session cookie authenticates nothing.
+
+```bash
+curl -H "Authorization: Bearer $RECALL_PAT" https://recall.example.com/api/v1/sessions
+```
+
+An MCP client sends the same header to `/mcp`. For Claude Code:
+
+```bash
+claude mcp add --transport http recall https://recall.example.com/mcp --header "Authorization: Bearer $RECALL_PAT"
+```
+
+Or in a `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "recall": {
+      "type": "http",
+      "url": "https://recall.example.com/mcp",
+      "headers": { "Authorization": "Bearer ${RECALL_PAT}" }
+    }
+  }
+}
+```
+
+`tools/list` shows only the tools that both the person and the grant allow. A token works with a provider and with none, because `SelectScheme` sends each `Bearer rcl_` value to the session handler.
+
+The token holds each permission that both its person and its grant hold, and the guard reads the permissions of the person on each check. So a revoke, an expiry, or a permission that the person loses applies on the next request. A token is not the person: it gets no exception of `RequireSelfOr` and never passes the Owner gate. With journal access `none`, it sees no journal row and no user setting. With `read`, a change of a journal row gets 403.
+
+### What `/auth` does with a token
+
+| Route | A token |
+|---|---|
+| `/auth/me` | 200 with `client_kind: "pat"` and the token ID as `sid` |
+| `/auth/sessions/revoke-others` | 403. The route needs a web or native session. |
+| `/auth/logout` | 204, and nothing ends. Logout ends only an `rcl_at_` bearer, a refresh token, or a cookie. |
+| `/auth/token`, `/auth/login`, `/auth/oidc/*` | They read no bearer, so a token changes nothing there. |
+
+A `revoke-others` from a session revokes each token of the user. A delete of the user or of its tenant removes each token row of the user.
+
+### Last use
+
+The lookup of a token is one indexed read and no write. When the last use of the token is over an hour old, the handler marks it on its own thread, with a limit of 2 seconds, and no request waits for the mark. A busy writer line or a crash loses at most one mark, so the last use can be up to an hour stale.
+
+### Audit
+
+A create and a revoke from the API record the audit actions `access_token_created` and `access_token_revoked` on the user, with the token ID, its name, its grant, and its expiry. So a reader can map a `pat_…` actor to a name after the row is gone. A revoke by `revoke-others` or by a user delete records no action. A write by a token records the token ID as `actor_client` and the person as `actor_user_id`.
 
 ## E2E tests
 

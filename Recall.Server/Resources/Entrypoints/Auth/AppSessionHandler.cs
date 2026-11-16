@@ -7,7 +7,9 @@ using Microsoft.Extensions.Options;
 using Recall.Server.Auth;
 using Recall.Server.Auth.Entities;
 using Recall.Server.Domain.Users;
+using Recall.Server.Exceptions;
 using Recall.Server.Resources.Entrypoints.Jobs;
+using Serilog;
 
 /// <summary>
 /// A cookie needs <c>X-CSRF: 1</c>, and a cross-site page cannot send that header. A browser that opens
@@ -25,6 +27,8 @@ public sealed class AppSessionHandler(
     public const string CsrfHeader = "X-CSRF";
     public const string SessionIdClaim = "sid";
     public const string ClientKindClaim = "client_kind";
+
+    internal static readonly TimeSpan UseMarkWait = TimeSpan.FromSeconds(2);
 
     public static bool HasCsrfHeader(HttpRequest request) => request.Headers[CsrfHeader] == "1";
 
@@ -54,6 +58,9 @@ public sealed class AppSessionHandler(
         var credential = CredentialOf(Request.Headers.Authorization.ToString());
         if (credential is not null)
         {
+            if (credential.StartsWith(NewPersonalAccessToken.Prefix, StringComparison.Ordinal))
+                return await ResultOfPersonalAccessTokenAsync(credential);
+
             return credential.StartsWith(AppTokenPrefix, StringComparison.Ordinal)
                 ? await ResultOfAsync(credential, SessionKind.Native)
                 : AuthenticateResult.NoResult();
@@ -84,4 +91,78 @@ public sealed class AppSessionHandler(
             PrincipalOf(session), new AuthenticationProperties { ExpiresUtc = session.AccessExpiresAt }, SchemeName);
         return AuthenticateResult.Success(ticket);
     }
+
+    private async Task<AuthenticateResult> ResultOfPersonalAccessTokenAsync(string value)
+    {
+        var token = await store.FindPersonalAccessTokenAsync(TokenHash.Of(value), Context.RequestAborted);
+        if (token is null)
+            return AuthenticateResult.Fail("The credential is not a live personal access token.");
+
+        if (token.UseMarkDue)
+        {
+            var scopes = Context.RequestServices.GetRequiredService<IServiceScopeFactory>();
+            _ = Task.Run(() => NoteUseAsync(scopes, token.TokenId), CancellationToken.None);
+        }
+
+        var ticket = new AuthenticationTicket(
+            new PatClaims(token.TokenId, token.Grant).PrincipalOf(token.UserId),
+            new AuthenticationProperties { ExpiresUtc = token.AccessExpiresAt },
+            SchemeName);
+        return AuthenticateResult.Success(ticket);
+    }
+
+    // No request waits for the mark. A mark in OnCompleted held the next request on a keep-alive connection for the full
+    // wait in the writer line. A mark that the line holds past UseMarkWait is skipped, and a later request marks the use.
+    private static async Task NoteUseAsync(IServiceScopeFactory scopes, string tokenId)
+    {
+        var mark = MarkInItsOwnScopeAsync(scopes, tokenId);
+        try
+        {
+            await mark.WaitAsync(UseMarkWait);
+        }
+        catch (Exception exception) when (exception is TimeoutException or OperationCanceledException
+                                          || DomainError.From(exception).Kind == DomainErrorKind.DatabaseBusy)
+        {
+            Telemetry.AddEvent([("exception.type", exception.GetType().Name)], "personal_access_token.use_mark_skipped");
+            if (exception is TimeoutException)
+                _ = WarnOfALateFailureAsync(mark, tokenId);
+        }
+        catch (Exception exception)
+        {
+            Warn(exception, tokenId);
+        }
+    }
+
+    private static async Task MarkInItsOwnScopeAsync(IServiceScopeFactory scopes, string tokenId)
+    {
+        using var activity = Telemetry.Trace([("app.personal_access_token_id", tokenId)], "personal_access_token.note_use");
+        using var limit = new CancellationTokenSource(UseMarkWait);
+        try
+        {
+            await using var scope = scopes.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<SessionStore>().NotePersonalAccessTokenUseAsync(tokenId, limit.Token);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Telemetry.MarkFailed(activity, exception);
+            throw;
+        }
+    }
+
+    private static async Task WarnOfALateFailureAsync(Task mark, string tokenId)
+    {
+        try
+        {
+            await mark;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Warn(exception, tokenId);
+        }
+    }
+
+    private static void Warn(Exception exception, string tokenId)
+        => Log.ForContext<AppSessionHandler>().Here().Warning(exception,
+            "The mark of the last use of personal access token {TokenId} failed. A write that does not end can mean a disk that hangs",
+            tokenId);
 }

@@ -1,9 +1,14 @@
 namespace Recall.UnitTests.Auth;
 
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Recall.Server.Auth;
 using Recall.Server.Auth.Entities;
+using Recall.Server.Domain.PersonalAccessTokens.Dtos;
+using Recall.Server.Domain.Users;
 using Recall.Server.Resources.Entrypoints.Auth;
 using Serilog.Events;
 using Serilog.Parsing;
@@ -152,6 +157,9 @@ public class SignInBoundaryTests
     [Test]
     [Arguments("Bearer rcl_at_x", null, true, AppSessionHandler.SchemeName)]
     [Arguments("bearer rcl_at_x", null, true, AppSessionHandler.SchemeName)]
+    [Arguments("Bearer rcl_pat_x", null, true, AppSessionHandler.SchemeName)]
+    [Arguments("Bearer rcl_pat_x", "recall=rcl_ck_x", true, AppSessionHandler.SchemeName)]
+    [Arguments("Bearer rcl_pat_x", null, false, AppSessionHandler.SchemeName)]
     [Arguments("Bearer eyJ.x.y", null, true, JwtBearerDefaults.AuthenticationScheme)]
     [Arguments("Bearer eyJ.x.y", "recall=rcl_ck_x", true, JwtBearerDefaults.AuthenticationScheme)]
     [Arguments("Basic abc", "recall=rcl_ck_x", true, AppSessionHandler.SchemeName)]
@@ -172,6 +180,29 @@ public class SignInBoundaryTests
 
         // Assert
         scheme.ShouldBe(expected);
+    }
+
+    [Test]
+    [Property("Rule", "PAT-10")]
+    [Arguments("web", true)]
+    [Arguments("native", true)]
+    [Arguments("pat", false)]
+    [Arguments(null, false)]
+    public async Task only_a_web_or_native_session_passes_the_interactive_session_policy(string? clientKind, bool passes)
+    {
+        // Arrange
+        await using var services = new ServiceCollection().AddLogging().AddAuthorization().BuildServiceProvider();
+        var authorization = services.GetRequiredService<IAuthorizationService>();
+        List<Claim> claims = [new("sub", "usr_1"), new(AppSessionHandler.SessionIdClaim, "ses_1")];
+        if (clientKind is not null)
+            claims.Add(new Claim(AppSessionHandler.ClientKindClaim, clientKind));
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, AppSessionHandler.SchemeName));
+
+        // Act
+        var result = await authorization.AuthorizeAsync(principal, AuthEndpoints.InteractiveSessionOnly);
+
+        // Assert
+        result.Succeeded.ShouldBe(passes);
     }
 
     [Test]
@@ -369,9 +400,13 @@ public class SignInBoundaryTests
         };
         var provider = new OidcProviderOptions { Id = "mode", ClientSecret = secret };
         var callback = new OidcCallback(secret, secret, secret);
+        var token = new NewPersonalAccessToken(
+            new PersonalAccessTokenRow("pat_1", "usr_1", "Laptop", new TokenGrant([], JournalAccess.None), TimeProvider.System.GetUtcNow(), null, null, null),
+            NewPersonalAccessToken.Prefix + secret);
+        var created = new PersonalAccessTokenCreatedDto { Token = new PersonalAccessTokenDto { Id = "pat_1" }, Value = NewPersonalAccessToken.Prefix + secret };
 
         // Act
-        string[] printed = [$"{native}", $"{answer}", $"{web}", $"{attempt}", $"{code}", $"{provider}", $"{callback}"];
+        string[] printed = [$"{native}", $"{answer}", $"{web}", $"{attempt}", $"{code}", $"{provider}", $"{callback}", $"{token}", $"{created}"];
 
         // Assert
         printed.ShouldAllBe(text => !text.Contains(secret, StringComparison.Ordinal));

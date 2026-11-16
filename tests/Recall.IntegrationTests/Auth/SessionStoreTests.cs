@@ -8,6 +8,8 @@ using Microsoft.Extensions.Time.Testing;
 using Recall.Server.Auth;
 using Recall.Server.Auth.Entities;
 using Recall.Server.Databases;
+using Recall.Server.Domain.AuditEntries;
+using Recall.Server.Domain.PersonalAccessTokens;
 using Recall.Server.Domain.Tenants;
 using Recall.Server.Domain.Users;
 using Recall.SharedTestHelpers.Utilities;
@@ -19,7 +21,9 @@ public sealed class SessionStoreTests : TestBase
 
     private const string Mode = "oidc";
 
-    private string UserId { get; set; } = null!;
+    private User Person { get; set; } = null!;
+
+    private string UserId => Person.Id;
 
     [Before(Test)]
     public async Task AddUserOfThisTest()
@@ -29,7 +33,7 @@ public sealed class SessionStoreTests : TestBase
         var user = User.CreateFromLogin(new NewPerson("Ada", null, null, "ada"), TestFixture.DefaultTenant.Id, UserRole.User());
         dbContext.Users.Add(user);
         await dbContext.SaveChangesAsync();
-        UserId = user.Id;
+        Person = user;
     }
 
     private sealed class Host : IAsyncDisposable
@@ -63,8 +67,28 @@ public sealed class SessionStoreTests : TestBase
                 .SingleOrDefaultAsync(s => s.RefreshFamilyHash == family);
         }
 
+        public async Task<AuthSession> SessionRowAsync(string id)
+        {
+            await using var scope = Services.GetRequiredService<IServiceScopeFactory>().CreateAsyncScope();
+            return await scope.ServiceProvider.GetRequiredService<AppDbContext>().Set<AuthSession>().AsNoTracking().SingleAsync(s => s.Id == id);
+        }
+
+        public async Task<int> SessionCountAsync(string id)
+        {
+            await using var scope = Services.GetRequiredService<IServiceScopeFactory>().CreateAsyncScope();
+            return await scope.ServiceProvider.GetRequiredService<AppDbContext>().Set<AuthSession>().CountAsync(s => s.Id == id);
+        }
+
         public ValueTask DisposeAsync() => Services.DisposeAsync();
     }
+
+    private static readonly TokenGrant ReadGrant = new([Permission.ReadUsers()], JournalAccess.Read);
+
+    private static Task<NewPersonalAccessToken> StartTokenAsync(Host host, User user, DateTimeOffset? expiresAt, string name = "Laptop")
+        => host.WithStoreAsync(store => store.StartPersonalAccessTokenAsync(user, PersonalAccessTokenName.Of(name), ReadGrant, expiresAt, CancellationToken.None));
+
+    private static Task<PersonalAccessTokenPrincipal?> FindTokenAsync(Host host, NewPersonalAccessToken token)
+        => host.WithStoreAsync(store => store.FindPersonalAccessTokenAsync(TokenHash.Of(token.Value), CancellationToken.None));
 
     private sealed class CommandLog : DbCommandInterceptor
     {
@@ -115,6 +139,193 @@ public sealed class SessionStoreTests : TestBase
         command.ShouldContain("auth.sessions.find_by_access");
         command.ShouldContain("SELECT");
         command.ShouldNotContain("UPDATE");
+    }
+
+    [Test]
+    [Property("Rule", "PAT-16")]
+    public async Task the_hot_path_of_a_personal_access_token_is_one_read_and_no_write_also_when_its_mark_is_due()
+    {
+        // Arrange
+        var log = new CommandLog();
+        await using var host = new Host(log);
+        var token = await StartTokenAsync(host, Person, Start.AddDays(30));
+        log.Commands.Clear();
+
+        // Act
+        var principal = await FindTokenAsync(host, token);
+
+        // Assert
+        principal.ShouldNotBeNull();
+        (principal.TokenId, principal.UserId, principal.Grant, principal.UseMarkDue).ShouldBe((token.Token.Id, UserId, ReadGrant, true));
+        var command = log.Commands.Where(c => !c.Contains("PRAGMA", StringComparison.OrdinalIgnoreCase)).ShouldHaveSingleItem();
+        command.ShouldContain("auth.sessions.find_personal_access_token");
+        command.ShouldContain("SELECT");
+        command.ShouldNotContain("UPDATE");
+    }
+
+    [Test]
+    [Property("Rule", "PAT-1")]
+    public async Task a_personal_access_token_keeps_only_the_hash_of_its_value()
+    {
+        // Arrange
+        await using var host = new Host();
+
+        // Act
+        var token = await StartTokenAsync(host, Person, Start.AddDays(30));
+
+        // Assert
+        token.Value.ShouldStartWith(NewPersonalAccessToken.Prefix);
+        token.Value.Length.ShouldBe(NewPersonalAccessToken.Prefix.Length + Secrets.EncodedLength);
+        token.Token.Id.ShouldStartWith("pat_");
+        token.ToString().ShouldNotContain(token.Value);
+        var row = await host.SessionRowAsync(token.Token.Id);
+        (row.ClientKind, row.AccessHash, row.RefreshHash, row.RefreshFamilyHash).ShouldBe((SessionKind.Pat, TokenHash.Of(token.Value).Hex, null, null));
+        (row.Name, row.Grant, row.LastUsedAt).ShouldBe(("Laptop", ReadGrant.Encode(), null));
+        (row.AccessExpiresAt, row.ExpiresAt).ShouldBe((Start.AddDays(30), Start.AddDays(30)));
+    }
+
+    [Test]
+    [Property("Rule", "PAT-9")]
+    public async Task a_revoked_or_expired_personal_access_token_finds_nothing()
+    {
+        // Arrange
+        await using var host = new Host();
+        var expiring = await StartTokenAsync(host, Person, Start.AddHours(1));
+        var revoked = await StartTokenAsync(host, Person, Start.AddDays(30));
+        var live = await StartTokenAsync(host, Person, Start.AddDays(30));
+
+        // Act
+        var expiringBefore = await FindTokenAsync(host, expiring);
+        var revokedOnce = await host.WithStoreAsync(store => store.RevokePersonalAccessTokenAsync(Person, revoked.Token.Id));
+        host.Clock.Advance(TimeSpan.FromHours(1));
+        var expiringAfter = await FindTokenAsync(host, expiring);
+        var revokedAfter = await FindTokenAsync(host, revoked);
+        var liveAfter = await FindTokenAsync(host, live);
+
+        // Assert
+        expiringBefore.ShouldNotBeNull();
+        revokedOnce.ShouldBeTrue();
+        expiringAfter.ShouldBeNull();
+        revokedAfter.ShouldBeNull();
+        liveAfter.ShouldNotBeNull();
+        (await host.SessionRowAsync(revoked.Token.Id)).RevokedReason.ShouldBe(RevokeReason.TokenRevoked);
+    }
+
+    [Test]
+    [Property("Rule", "PAT-11")]
+    public async Task a_personal_access_token_value_finds_no_web_or_native_session()
+    {
+        // Arrange
+        await using var host = new Host();
+        var token = await StartTokenAsync(host, Person, Start.AddDays(30));
+
+        // Act
+        var asWeb = await host.WithStoreAsync(store => store.FindByAccessAsync(TokenHash.Of(token.Value), SessionKind.Web, CancellationToken.None));
+        var asNative = await host.WithStoreAsync(store => store.FindByAccessAsync(TokenHash.Of(token.Value), SessionKind.Native, CancellationToken.None));
+
+        // Assert
+        asWeb.ShouldBeNull();
+        asNative.ShouldBeNull();
+    }
+
+    [Test]
+    [Property("Rule", "PAT-9")]
+    public async Task a_token_that_never_expires_stays_live_and_the_sweep_removes_it_only_after_its_revoke()
+    {
+        // Arrange
+        await using var database = await AuthTestDatabase.CreateAsync();
+        await using var host = new Host(database);
+        var login = await host.Services.GetRequiredService<Provisioner>().ResolveAsync(
+            new ExternalIdentity("https://a.example", "never", new Profile("Ada", null, "Ada", null, "ada")), CancellationToken.None);
+        var userId = login.ShouldBeOfType<ProvisionOutcome.Provisioned>().UserId;
+        var person = await database.ReadAsync(db => db.Users.AsNoTracking().SingleAsync(u => u.Id == userId));
+        var token = await StartTokenAsync(host, person, expiresAt: null);
+        Task Sweep() => host.WithStoreAsync(async store =>
+        {
+            await store.SweepAsync(CancellationToken.None);
+            return true;
+        });
+
+        // Act
+        host.Clock.Advance(TimeSpan.FromDays(3650));
+        await Sweep();
+        var liveYearsLater = await FindTokenAsync(host, token);
+        var listed = (await host.WithStoreAsync(store => store.ListPersonalAccessTokensAsync(person, CancellationToken.None))).ShouldHaveSingleItem();
+        await host.WithStoreAsync(store => store.RevokePersonalAccessTokenAsync(person, token.Token.Id));
+        await Sweep();
+        var keptAfterRevoke = await host.SessionCountAsync(token.Token.Id);
+        host.Clock.Advance(SessionPolicy.KeepEndedSession + TimeSpan.FromDays(1));
+        await Sweep();
+        var keptLater = await host.SessionCountAsync(token.Token.Id);
+
+        // Assert
+        token.Token.ExpiresAt.ShouldBeNull();
+        liveYearsLater.ShouldNotBeNull();
+        listed.ExpiresAt.ShouldBeNull();
+        keptAfterRevoke.ShouldBe(1);
+        keptLater.ShouldBe(0);
+    }
+
+    [Test]
+    [Property("Rule", "PAT-16")]
+    public async Task the_use_mark_writes_at_most_once_an_hour()
+    {
+        // Arrange
+        await using var host = new Host();
+        var token = await StartTokenAsync(host, Person, Start.AddDays(30));
+        Task<bool> Note() => host.WithStoreAsync(store => store.NotePersonalAccessTokenUseAsync(token.Token.Id, CancellationToken.None));
+
+        // Act
+        var first = await Note();
+        var dueAfterFirst = (await FindTokenAsync(host, token))!.UseMarkDue;
+        host.Clock.Advance(TimeSpan.FromMinutes(59));
+        var withinTheHour = await Note();
+        host.Clock.Advance(TimeSpan.FromMinutes(2));
+        var dueLater = (await FindTokenAsync(host, token))!.UseMarkDue;
+        var afterTheHour = await Note();
+
+        // Assert
+        first.ShouldBeTrue();
+        dueAfterFirst.ShouldBeFalse();
+        withinTheHour.ShouldBeFalse();
+        dueLater.ShouldBeTrue();
+        afterTheHour.ShouldBeTrue();
+        (await host.SessionRowAsync(token.Token.Id)).LastUsedAt.ShouldBe(host.Clock.GetUtcNow());
+    }
+
+    [Test]
+    [Property("Rule", "PAT-19")]
+    public async Task a_create_and_a_revoke_record_one_audit_action_each_on_the_user_and_a_second_revoke_records_none()
+    {
+        // Arrange
+        await using var host = new Host();
+        var expiresAt = Start.AddDays(30);
+
+        // Act
+        var token = await StartTokenAsync(host, Person, expiresAt, name: "Build server");
+        host.Clock.Advance(TimeSpan.FromMinutes(1));
+        await host.WithStoreAsync(store => store.RevokePersonalAccessTokenAsync(Person, token.Token.Id));
+        var again = await host.WithStoreAsync(store => store.RevokePersonalAccessTokenAsync(Person, token.Token.Id));
+
+        // Assert
+        again.ShouldBeTrue();
+        await using var scope = host.Services.GetRequiredService<IServiceScopeFactory>().CreateSystemScope();
+        var entries = await scope.ServiceProvider.GetRequiredService<AppDbContext>().AuditEntries.AsNoTracking()
+            .Where(e => e.RootId == UserId && e.Kind == AuditEntryKind.Action)
+            .OrderBy(e => e.OccurredAt).ThenBy(e => e.Ordinal)
+            .ToListAsync();
+        entries.Select(e => e.Action).ShouldBe(["access_token_created", "access_token_revoked"]);
+        foreach (var entry in entries)
+        {
+            (entry.EntityType, entry.EntityId, entry.TenantId).ShouldBe(("User", UserId, TestFixture.DefaultTenant.Id));
+            var data = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, System.Text.Json.JsonElement>>(entry.Data)!;
+            data["TokenId"].GetString().ShouldBe(token.Token.Id);
+            data["Name"].GetString().ShouldBe("Build server");
+            data["Grant"].GetString().ShouldBe(ReadGrant.Encode());
+            data["ExpiresAt"].GetDateTimeOffset().ShouldBe(expiresAt);
+            entry.Data.ShouldNotContain(token.Value);
+            entry.Data.ShouldNotContain(TokenHash.Of(token.Value).Hex);
+        }
     }
 
     [Test]
@@ -353,6 +564,34 @@ public sealed class SessionStoreTests : TestBase
         (await host.WithStoreAsync(store => store.FindByAccessAsync(TokenHash.Of(kept.CookieValue), SessionKind.Web, CancellationToken.None))).ShouldNotBeNull();
         (await host.WithStoreAsync(store => store.FindByAccessAsync(TokenHash.Of(otherWeb.CookieValue), SessionKind.Web, CancellationToken.None))).ShouldBeNull();
         (await host.RowAsync(otherNative))!.RevokedReason.ShouldBe(RevokeReason.RevokeOthers);
+    }
+
+    [Test]
+    [Property("Rule", "PAT-10")]
+    public async Task revoke_others_revokes_each_personal_access_token_of_the_user_and_records_no_action()
+    {
+        // Arrange
+        await using var host = new Host();
+        var kept = await host.WithStoreAsync(store => store.StartWebAsync(UserId, Mode, CancellationToken.None));
+        var laptop = await StartTokenAsync(host, Person, Start.AddDays(30));
+        var server = await StartTokenAsync(host, Person, expiresAt: null);
+
+        // Act
+        await host.WithStoreAsync(async store =>
+        {
+            await store.RevokeOthersAsync(UserId, kept.SessionId);
+            return true;
+        });
+
+        // Assert
+        (await FindTokenAsync(host, laptop)).ShouldBeNull();
+        (await FindTokenAsync(host, server)).ShouldBeNull();
+        (await host.SessionRowAsync(laptop.Token.Id)).RevokedReason.ShouldBe(RevokeReason.RevokeOthers);
+        (await host.SessionRowAsync(server.Token.Id)).RevokedReason.ShouldBe(RevokeReason.RevokeOthers);
+        (await host.WithStoreAsync(store => store.FindByAccessAsync(TokenHash.Of(kept.CookieValue), SessionKind.Web, CancellationToken.None))).ShouldNotBeNull();
+        await using var scope = host.Services.GetRequiredService<IServiceScopeFactory>().CreateSystemScope();
+        (await scope.ServiceProvider.GetRequiredService<AppDbContext>().AuditEntries.AsNoTracking()
+            .CountAsync(e => e.RootId == UserId && e.Action == "access_token_revoked")).ShouldBe(0);
     }
 
     [Test]

@@ -3,6 +3,9 @@ namespace Recall.Server.Auth;
 using System.Diagnostics.CodeAnalysis;
 using Databases;
 using Domain;
+using Domain.AuditEntries;
+using Domain.PersonalAccessTokens;
+using Domain.Users;
 using Entities;
 using Microsoft.EntityFrameworkCore;
 using Resources;
@@ -18,6 +21,28 @@ public sealed record WebSession(string SessionId, string CookieValue, DateTimeOf
 }
 
 public sealed record RefreshResult(TokenPair? Pair, RefreshDecision? Decision);
+
+/// <summary>A live personal access token that a request presents. <paramref name="UseMarkDue"/> is true when its last use is over an hour old.</summary>
+public sealed record PersonalAccessTokenPrincipal(string TokenId, string UserId, TokenGrant Grant, DateTimeOffset AccessExpiresAt, bool UseMarkDue);
+
+/// <summary>A personal access token as a list shows it. It holds no value and no hash.</summary>
+public sealed record PersonalAccessTokenRow(
+    string Id,
+    string UserId,
+    string Name,
+    TokenGrant Grant,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? ExpiresAt,
+    DateTimeOffset? LastUsedAt,
+    DateTimeOffset? RevokedAt);
+
+/// <summary>The one answer that holds the value of a token. The Server keeps only its hash.</summary>
+public sealed record NewPersonalAccessToken(PersonalAccessTokenRow Token, string Value)
+{
+    public const string Prefix = "rcl_pat_";
+
+    public override string ToString() => $"[personal access token {Token.Id}]";
+}
 
 [SuppressMessage("ApiDesign", "RS0030:Do not use banned APIs",
     Justification = "auth_sessions, auth_login_attempts, and auth_app_codes are [NotAudited], so these writes need no audit entry.")]
@@ -95,6 +120,128 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
         _logger.Here().Information("Started native session {SessionId} for user {UserId}", session.Id, userId);
         return pair;
     }
+
+    public async Task<PersonalAccessTokenPrincipal?> FindPersonalAccessTokenAsync(TokenHash hash, CancellationToken cancellationToken)
+    {
+        var now = timeProvider.GetUtcNow();
+        var row = await dbContext.Set<AuthSession>()
+            .AsNoTracking()
+            .TagWithOperationCallSite("auth.sessions.find_personal_access_token")
+            .Where(s => s.AccessHash == hash.Hex && s.ClientKind == SessionKind.Pat && s.RevokedAt == null && s.AccessExpiresAt > now)
+            .Select(s => new { s.Id, s.UserId, s.Grant, s.AccessExpiresAt, s.LastUsedAt })
+            .FirstOrDefaultAsync(cancellationToken);
+        return row is null
+            ? null
+            : new PersonalAccessTokenPrincipal(row.Id, row.UserId, TokenGrant.Decode(row.Grant!), row.AccessExpiresAt,
+                row.LastUsedAt is not { } lastUsed || now - lastUsed > SessionPolicy.PersonalAccessTokenUseMarkEvery);
+    }
+
+    /// <summary>
+    /// Adds the token row and the audit action of its create in one save. <paramref name="expiresAt"/> is null for a
+    /// token that never expires.
+    /// </summary>
+    public async Task<NewPersonalAccessToken> StartPersonalAccessTokenAsync(
+        User user, PersonalAccessTokenName name, TokenGrant grant, DateTimeOffset? expiresAt, CancellationToken cancellationToken)
+    {
+        var now = timeProvider.GetUtcNow();
+        var value = NewPersonalAccessToken.Prefix + Secrets.New();
+        var storedExpiry = expiresAt ?? SessionPolicy.PersonalAccessTokenNever;
+        var session = new AuthSession
+        {
+            Id = EntityId.New(PatClaims.IdPrefix),
+            UserId = user.Id,
+            ClientKind = SessionKind.Pat,
+            LoginMode = SessionKindText.Pat,
+            AccessHash = TokenHash.Of(value).Hex,
+            AccessExpiresAt = storedExpiry,
+            ExpiresAt = storedExpiry,
+            CreatedAt = now,
+            Name = name.Value,
+            Grant = grant.Encode(),
+        };
+        dbContext.Set<AuthSession>().Add(session);
+        dbContext.RecordAction(new AccessTokenCreated(AuditSubject.Of(user), session.Id, name.Value, session.Grant, expiresAt));
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.Here().Information("Started personal access token {TokenId} for user {UserId}", session.Id, user.Id);
+        return new NewPersonalAccessToken(RowOf(session), value);
+    }
+
+    public async Task<IReadOnlyList<PersonalAccessTokenRow>> ListPersonalAccessTokensAsync(User user, CancellationToken cancellationToken)
+    {
+        var rows = await dbContext.Set<AuthSession>()
+            .AsNoTracking()
+            .TagWithOperationCallSite("auth.sessions.list_personal_access_tokens")
+            .Where(s => s.UserId == user.Id && s.ClientKind == SessionKind.Pat)
+            .OrderByDescending(s => s.CreatedAt)
+            .ThenBy(s => s.Id)
+            .ToListAsync(cancellationToken);
+        return rows.Select(RowOf).ToList();
+    }
+
+    /// <summary>The user ID of the personal access token, or null when no such token exists.</summary>
+    public Task<string?> OwnerOfPersonalAccessTokenAsync(string tokenId, CancellationToken cancellationToken)
+        => dbContext.Set<AuthSession>()
+            .AsNoTracking()
+            .TagWithOperationCallSite("auth.sessions.owner_of_personal_access_token")
+            .Where(s => s.Id == tokenId && s.ClientKind == SessionKind.Pat)
+            .Select(s => s.UserId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    /// <summary>
+    /// Revokes a live token of <paramref name="user"/> and records the audit action in one save. A token that has ended
+    /// stays as it is, so a second revoke changes nothing. False when the user has no such token.
+    /// </summary>
+    /// <exception cref="Exceptions.StaleVersionException">Another write ended the token after the read, and the save changed nothing.</exception>
+    // A revoke takes no cancellation token, as RevokeAsync does.
+    public async Task<bool> RevokePersonalAccessTokenAsync(User user, string tokenId)
+    {
+        var session = await dbContext.Set<AuthSession>()
+            .TagWithOperationCallSite("auth.sessions.revoke_personal_access_token_read")
+            .FirstOrDefaultAsync(s => s.Id == tokenId && s.UserId == user.Id && s.ClientKind == SessionKind.Pat, CancellationToken.None);
+        if (session is null)
+            return false;
+
+        var now = timeProvider.GetUtcNow();
+        if (session.RevokedAt is not null || session.AccessExpiresAt <= now)
+            return true;
+
+        var entry = dbContext.Entry(session);
+        entry.Property(s => s.RevokedAt).CurrentValue = now;
+        entry.Property(s => s.RevokedReason).CurrentValue = RevokeReason.TokenRevoked;
+        var row = RowOf(session);
+        dbContext.RecordAction(new AccessTokenRevoked(AuditSubject.Of(user), session.Id, row.Name, session.Grant!, row.ExpiresAt));
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+
+        _logger.Here().Information("Revoked personal access token {TokenId} of user {UserId}", session.Id, user.Id);
+        return true;
+    }
+
+    /// <summary>
+    /// Marks the last use of a token. The condition makes a second mark within the hour a no-op, so two requests that
+    /// both find the mark due write it once.
+    /// </summary>
+    public async Task<bool> NotePersonalAccessTokenUseAsync(string tokenId, CancellationToken cancellationToken)
+    {
+        var now = timeProvider.GetUtcNow();
+        var dueBefore = now - SessionPolicy.PersonalAccessTokenUseMarkEvery;
+        var updated = await dbContext.Set<AuthSession>()
+            .TagWithOperationCallSite("auth.sessions.note_personal_access_token_use")
+            .Where(s => s.Id == tokenId && s.ClientKind == SessionKind.Pat && (s.LastUsedAt == null || s.LastUsedAt < dueBefore))
+            .ExecuteUpdateAsync(set => set.SetProperty(s => s.LastUsedAt, now), cancellationToken);
+        return updated == 1;
+    }
+
+    private static PersonalAccessTokenRow RowOf(AuthSession session)
+        => new(
+            session.Id,
+            session.UserId,
+            session.Name!,
+            TokenGrant.Decode(session.Grant!),
+            session.CreatedAt,
+            session.ExpiresAt == SessionPolicy.PersonalAccessTokenNever ? null : session.ExpiresAt,
+            session.LastUsedAt,
+            session.RevokedAt);
 
     public async Task<RefreshResult> RefreshAsync(RefreshToken token, RetryKey? retryKey, CancellationToken cancellationToken)
     {

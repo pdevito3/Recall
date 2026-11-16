@@ -4,7 +4,7 @@ A person wants a script or an MCP client to call `/api/*` and `/mcp` as that per
 
 So a personal access token (PAT) is a third kind of row in `auth_sessions`, next to the web and native sessions of [ADR 0014](0014-app-owned-identity.md):
 
-1. The row has `client_kind = 'pat'` and an ID with the prefix `pat`. Like every session, the table is `[NotAudited]`, and `SessionStore` is its only writer. So the lookup, `revoke-others`, the removal of the logins of a deleted user, and the sweep reach a PAT with no new code.
+1. The row has `client_kind = 'pat'` and an ID with the prefix `pat`. Like every session, the table is `[NotAudited]`, and `SessionStore` is its only writer. So `revoke-others`, the removal of the logins of a deleted user, and the sweep reach a PAT with no new code, and the lookup is one more indexed read of the same table.
 2. The value is `rcl_pat_` and 32 random bytes. `AuthRegistration.SelectScheme` already sends each `Bearer rcl_*` to `AppSession`, with a provider and with none. The Server stores only the SHA-256 hash.
 3. The grant is fixed at creation: a set of permissions and a journal access of None, Read, or ReadWrite. A different grant needs a new token, so no edit races a request and the grant needs no history. Write without read is not a value, because an update or a delete loads its row through the read filter.
 4. `AppSessionHandler` emits `sub`, `client_id` = `sid` = the PAT ID, `client_kind = pat`, and `pat_grant`. `PatClaims` is the one codec of these claims. It reads a PAT only from an identity of the `AppSession` scheme, so a provider token cannot pose as one.
@@ -23,7 +23,7 @@ So a personal access token (PAT) is a third kind of row in `auth_sessions`, next
 
 ## Consequences
 
-- The row of `auth_sessions` is wider, and three columns depend on its kind: the name, the grant, and the last use. CHECK constraints tie each one to the `pat` kind. In exchange, `revoke-others`, the user delete, the sweep, and the lookup work with no new code.
+- The row of `auth_sessions` is wider, and three columns depend on its kind: the name, the grant, and the last use. CHECK constraints tie each one to the `pat` kind. In exchange, `revoke-others`, the user delete, and the sweep work with no new code, and the lookup reads the same table.
 - "Never expires" is stored as the instant 9999-12-31 and reads as null. The lookup keeps `AccessExpiresAt > now` with no null branch, and web and native rows keep a required `ExpiresAt`. `DateTimeOffset.MaxValue` does not round-trip, so the sentinel is that midnight.
 - The last use is up to an hour stale. The Server marks it off the request with a 2 s limit, so no request writes and none waits for the writer line. A mark in `OnCompleted` stalled the next request on a keep-alive connection by the full wait for the writer line.
 - A grant cannot change. A person who wants another grant makes a new token.

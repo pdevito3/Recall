@@ -2,9 +2,12 @@ namespace Recall.FunctionalTests.FunctionalTests.Users;
 
 using System.Net;
 using System.Net.Http.Json;
+using Recall.Server.Auth.Entities;
 using Recall.Server.Domain.Agents;
 using Recall.Server.Domain.Agents.Dtos;
 using Recall.Server.Domain.Agents.Features;
+using Recall.Server.Domain.PersonalAccessTokens.Dtos;
+using Recall.Server.Domain.PersonalAccessTokens.Features;
 using Recall.Server.Domain.Users;
 using Recall.Server.Domain.Users.Dtos;
 using Recall.Server.Domain.Users.Features;
@@ -24,6 +27,8 @@ using TestUtilities;
 /// </summary>
 public class PermissionsInResponseTests : TestBase
 {
+    private const string PersonalAccessTokens = $"{ApiRoutes.Base}/personal-access-tokens";
+
     private static readonly Dictionary<string, Func<Arranged, Task<Returned>>> Cases = new()
     {
         [Name(typeof(AddUser.Command))] = async a =>
@@ -84,6 +89,26 @@ public class PermissionsInResponseTests : TestBase
             var initiated = await ReadAsync<InitiateUserAndTenantResponseDto>(
                 await a.Client.PostJsonRequestAsync(ApiRoutes.Users.Initiate, dto), HttpStatusCode.Created);
             return Returned.OfUser(initiated.User);
+        },
+        [Name(typeof(AddPersonalAccessToken.Command))] = async a =>
+        {
+            a.Client.SignInAsAppSession(a.Seed.User.Identifier);
+            return Returned.OfToken((await a.AddTokenAsync()).Token);
+        },
+        [Name(typeof(GetPersonalAccessTokens.Query))] = async a =>
+        {
+            a.Client.SignInAsAppSession(a.Seed.User.Identifier);
+            var created = await a.AddTokenAsync();
+            var tokens = await ReadAsync<List<PersonalAccessTokenDto>>(await a.Client.GetRequestAsync(PersonalAccessTokens));
+            return Returned.OfToken(tokens.Single(t => t.Id == created.Token.Id));
+        },
+        [Name(typeof(GetUserPersonalAccessTokens.Query))] = async a =>
+        {
+            a.Client.SignInAsAppSession(a.Seed.User.Identifier);
+            var created = await a.AddTokenAsync();
+            var tokens = await ReadAsync<List<PersonalAccessTokenDto>>(
+                await a.Client.GetRequestAsync($"{ApiRoutes.Base}/users/{a.Seed.User.Id}/personal-access-tokens"));
+            return Returned.OfToken(tokens.Single(t => t.Id == created.Token.Id));
         },
         [Name(typeof(AddAgent.Command))] = async a =>
         {
@@ -220,6 +245,16 @@ public class PermissionsInResponseTests : TestBase
             return user;
         }
 
+        public async Task<PersonalAccessTokenCreatedDto> AddTokenAsync()
+            => await ReadAsync<PersonalAccessTokenCreatedDto>(await Client.PostJsonRequestAsync(PersonalAccessTokens, new PersonalAccessTokenForCreationDto
+            {
+                Name = "Laptop",
+                Permissions = [Permission.Names.ReadUsers, Permission.Names.ReadAgents],
+                ReadJournal = false,
+                WriteJournal = false,
+                NeverExpires = true,
+            }), HttpStatusCode.Created);
+
         public async Task<Agent> AddAgentAsync(params string[] grant)
         {
             TestGraph.Start(Seed, NullStore.Instance).AddAgent(out var agent, x => x.Permissions = grant);
@@ -235,6 +270,12 @@ public class PermissionsInResponseTests : TestBase
                 .Where(p => p.UserId == user.Id)
                 .Select(p => p.Permission.Value)
                 .ToListAsync()));
+
+        public static Returned OfToken(PersonalAccessTokenDto token)
+            => new(token.Permissions, async () => [.. TokenGrant.Decode(await ExecuteDbContextAsync(db => db.Set<AuthSession>()
+                .Where(s => s.Id == token.Id)
+                .Select(s => s.Grant!)
+                .SingleAsync())).Permissions.Select(p => p.Value)]);
 
         public static Returned OfAgent(AgentDto agent)
             => new(agent.Permissions, () => ExecuteDbContextAsync(db => db.AgentPermissions
