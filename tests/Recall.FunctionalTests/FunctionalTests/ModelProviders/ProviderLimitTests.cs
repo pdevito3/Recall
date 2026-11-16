@@ -18,7 +18,6 @@ public class ProviderLimitTests
 
     private static readonly ProviderLimits Short = new()
     {
-        Idle = TimeSpan.FromSeconds(1),
         Call = TimeSpan.FromSeconds(30),
         Listing = TimeSpan.FromSeconds(30),
         BodyBytes = 256 * 1024,
@@ -69,10 +68,11 @@ public class ProviderLimitTests
         // Arrange
         var (fake, endpoint) = await StartAsync(kind, FakeMode.StallMidStream);
         await using var _ = fake;
+        var limits = Short with { Idle = TimeSpan.FromSeconds(1) };
 
         // Act
         var started = DateTimeOffset.UtcNow;
-        var reply = await CompleteAsync(ClientWith(Short), endpoint);
+        var reply = await CompleteAsync(ClientWith(limits), endpoint);
 
         // Assert: the call limit of these limits is 30 s, so an end before it is the idle limit.
         FailureOf(reply).Kind.ShouldBe(ProviderFailureKind.Unavailable);
@@ -106,14 +106,15 @@ public class ProviderLimitTests
         // Arrange: each word comes within the idle limit, and the whole stream takes three times the limit.
         var (fake, endpoint) = await StartAsync(kind, FakeMode.SlowWords, delayMs: 500);
         await using var _ = fake;
+        var limits = Short with { Idle = TimeSpan.FromSeconds(1) };
 
         // Act
         var started = DateTimeOffset.UtcNow;
-        var reply = await CompleteAsync(ClientWith(Short), endpoint);
+        var reply = await CompleteAsync(ClientWith(limits), endpoint);
 
         // Assert
         reply.ShouldBeOfType<ProviderReply<string>.Answered>().Value.ShouldContain("cleanedMarkdown");
-        (DateTimeOffset.UtcNow - started).ShouldBeGreaterThan(Short.Idle);
+        (DateTimeOffset.UtcNow - started).ShouldBeGreaterThan(limits.Idle);
     }
 
     [Test]
