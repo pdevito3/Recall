@@ -110,7 +110,7 @@ public class EndpointAccessSweepTests : TestBase
         [AuthRoutes.Token] = "The code and PKCE verifier, or the refresh token, prove this request. AuthRefusalTests covers each refusal.",
         [AuthRoutes.Logout] = "Tolerant. It ends only a session that the request proves, and it shows no tenant data.",
         [AuthRoutes.SignedOut] = "Public. It redirects to the signed-out page, and shows no tenant data. It only compares its one value with the cookie of the browser.",
-        [AuthRoutes.RevokeOthers] = "Each session ends only the other sessions of its own user. AppSessionTests covers it.",
+        [AuthRoutes.RevokeOthers] = "Each web or native session ends only the other sessions of its own user, and a personal access token gets 403. AppSessionTests covers it.",
         [AuthRoutes.Me] = "Each session reads its own identity, and a visitor with no session gets 204. It takes no ID. AppSessionTests covers it.",
     };
 

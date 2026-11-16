@@ -36,7 +36,11 @@ public static class AuthEndpoints
 
     private const string NoProviderDetail = "The provider did not answer.";
 
-    public static readonly AuthorizeAttribute AppSessionOnly = new() { AuthenticationSchemes = AppSessionHandler.SchemeName };
+    /// <summary>A web or native session of a person. A personal access token is an app session too, and it does not pass.</summary>
+    public static readonly AuthorizationPolicy InteractiveSessionOnly = new AuthorizationPolicyBuilder(AppSessionHandler.SchemeName)
+        .RequireAuthenticatedUser()
+        .RequireClaim(AppSessionHandler.ClientKindClaim, SessionKindText.Web, SessionKindText.Native)
+        .Build();
 
     internal static readonly TimeSpan SlideWait = TimeSpan.FromSeconds(2);
 
@@ -47,7 +51,7 @@ public static class AuthEndpoints
         endpoints.MapPost(AuthRoutes.Token, TokenAsync).AllowAnonymous().ExcludeFromDescription();
         endpoints.MapPost(AuthRoutes.Logout, LogoutAsync).AllowAnonymous().ExcludeFromDescription();
         endpoints.MapGet(AuthRoutes.SignedOut, SignedOutReturn).AllowAnonymous().ExcludeFromDescription();
-        endpoints.MapPost(AuthRoutes.RevokeOthers, RevokeOthersAsync).RequireAuthorization(AppSessionOnly).ExcludeFromDescription();
+        endpoints.MapPost(AuthRoutes.RevokeOthers, RevokeOthersAsync).RequireAuthorization(InteractiveSessionOnly).ExcludeFromDescription();
         endpoints.MapGet(AuthRoutes.Me, MeAsync).AllowAnonymous().ExcludeFromDescription();
     }
 
