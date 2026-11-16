@@ -94,6 +94,21 @@ test.describe('the settings of a person', () => {
     await expect(settings.at.saved).toBeVisible()
   })
 
+  test('on a phone, the entry toggles keep an even gap between their labels, and each takes a 44 px tap', async ({ page, api }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    api.mock(settingsApi.are(aSetting()))
+    const settings = settingsPage(page)
+    await settings.open()
+
+    const rows = await settings.entryToggleLayout()
+
+    expect(rows.some((row) => row.lines === 1)).toBe(true)
+    expect(rows.some((row) => row.lines === 2)).toBe(true)
+    const gaps = rows.slice(1).map((row, i) => row.textTop - rows[i].textBottom)
+    for (const gap of gaps) expect(gap).toBeCloseTo(gaps[0], 0)
+    for (const row of rows) expect(row.tapHeight).toBeGreaterThanOrEqual(44)
+  })
+
   for (const [saved, shown] of [['UTC', /^UTC \(/], ['Asia/Kolkata', /^Asia \/ Kolkata \(/]] as const) {
     test(`shows the saved zone ${saved}, which the list of the browser can leave out`, async ({ page, api }) => {
       api.mock(settingsApi.are(aSetting({ timeZone: saved })))

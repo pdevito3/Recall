@@ -114,34 +114,36 @@ export function SettingsForm() {
           <h2 id="settings-entries" className="text-lg font-semibold">Entries</h2>
           {(asks.length === 0 || status.kind !== 'saved') && <SaveStatusLine status={status} zone={zone} />}
         </div>
-        <Checkbox
-          className="max-md:min-h-11"
-          isSelected={values.locationCaptureEnabled}
-          onChange={(locationCaptureEnabled) => change({ locationCaptureEnabled })}
-        >
-          Save my location with each new entry
-        </Checkbox>
-        <Checkbox
-          className="max-md:min-h-11"
-          isSelected={values.requirePeopleProposalApproval}
-          onChange={(requirePeopleProposalApproval) => change({ requirePeopleProposalApproval })}
-        >
-          Ask me before AI adds a person to an entry
-        </Checkbox>
-        <Checkbox
-          className="max-md:min-h-11"
-          isSelected={values.removeFillerWords}
-          onChange={(removeFillerWords) => change({ removeFillerWords })}
-        >
-          Remove filler words, such as “um” and “uh”, from Cleaned
-        </Checkbox>
-        <Checkbox
-          className="max-md:min-h-11"
-          isSelected={values.writeNumbersAsDigits}
-          onChange={(writeNumbersAsDigits) => change({ writeNumbersAsDigits })}
-        >
-          Write spoken numbers as digits, such as “3:30 PM” and “$20”, in Cleaned
-        </Checkbox>
+        <div className="flex flex-col gap-3 max-md:gap-0">
+          <Checkbox
+            className="max-md:py-3.5"
+            isSelected={values.locationCaptureEnabled}
+            onChange={(locationCaptureEnabled) => change({ locationCaptureEnabled })}
+          >
+            Save my location with each new entry
+          </Checkbox>
+          <Checkbox
+            className="max-md:py-3.5"
+            isSelected={values.requirePeopleProposalApproval}
+            onChange={(requirePeopleProposalApproval) => change({ requirePeopleProposalApproval })}
+          >
+            Ask me before AI adds a person to an entry
+          </Checkbox>
+          <Checkbox
+            className="max-md:py-3.5"
+            isSelected={values.removeFillerWords}
+            onChange={(removeFillerWords) => change({ removeFillerWords })}
+          >
+            Remove filler words, such as “um” and “uh”, from Cleaned
+          </Checkbox>
+          <Checkbox
+            className="max-md:py-3.5"
+            isSelected={values.writeNumbersAsDigits}
+            onChange={(writeNumbersAsDigits) => change({ writeNumbersAsDigits })}
+          >
+            Write spoken numbers as digits, such as “3:30 PM” and “$20”, in Cleaned
+          </Checkbox>
+        </div>
       </section>
       <section className="flex flex-col gap-2" aria-labelledby="settings-account">
         <h2 id="settings-account" className="text-lg font-semibold">Account</h2>

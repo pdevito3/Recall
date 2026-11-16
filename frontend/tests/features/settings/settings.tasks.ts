@@ -56,6 +56,20 @@ export function settingsPage(page: Page) {
       }, zone)
     },
 
+    entryToggleLayout: () =>
+      Promise.all(
+        [at.location, at.proposals, at.fillerWords, at.numbersAsDigits].map((toggle) =>
+          toggle.evaluate((input) => {
+            const label = input.closest('label')!
+            const text = document.createRange()
+            text.selectNodeContents(label.lastElementChild!.lastChild!)
+            const box = text.getBoundingClientRect()
+            const tap = label.getBoundingClientRect()
+            return { textTop: box.top, textBottom: box.bottom, lines: text.getClientRects().length, tapHeight: tap.height }
+          }),
+        ),
+      ),
+
     sideScrollRange: () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
 
     async open() {
