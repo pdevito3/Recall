@@ -1,3 +1,4 @@
+import type { UserDtoPermissionsEnumKey } from '@/api/generated/models/types/user-dto'
 import type { Identity } from '../auth/actors'
 import { actorSubject } from '../auth/actors'
 import { aProblem } from '../builders/problem-details-builder'
@@ -18,6 +19,12 @@ export const membershipApi = {
   /** A person whose role lets them read the list of users. */
   userMayReadUsers(): MockRoute {
     const body = { ...aUser().identifiedBy(actorSubject).inRole('Admin').build(), permissions: ['read_users' as const] }
+    return { method: 'get', path: membershipPaths.userOf(actorSubject), status: 200, body }
+  },
+
+  /** A person who holds these permissions, and no other. */
+  userHolds(...permissions: UserDtoPermissionsEnumKey[]): MockRoute {
+    const body = { ...aUser().identifiedBy(actorSubject).build(), permissions }
     return { method: 'get', path: membershipPaths.userOf(actorSubject), status: 200, body }
   },
 

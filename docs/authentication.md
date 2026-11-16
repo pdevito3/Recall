@@ -661,6 +661,8 @@ Extra arguments go to Playwright, for example `pnpm test:e2e:stack --repeat-each
 
 `frontend/e2e/two-people.spec.ts` signs in two people on one browser, as in [One browser, two people](#one-browser-two-people). It needs an IdP file with `secondPersonEmail`, which only ZeroFactor has now, and a stack with `Auth__OpenSignup=true`. On another IdP it does not run, and the report says so.
 
+`frontend/e2e/personal-access-tokens.spec.ts` makes a token in the SPA, calls the API with it from outside the browser, and revokes it in the SPA. It signs in with a one-step form, so it does not run on an IdP with a two-step login, such as Authentik.
+
 ## Conformance
 
 Recall dropped the OpenID Foundation conformance run. The results of the template were for its BFF, which Recall deleted, so they say nothing about the login of the Server. No run in this repository tests the Server against that suite.
