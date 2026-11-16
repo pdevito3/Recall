@@ -554,6 +554,8 @@ Other paths of the server do not get `resource_metadata`. The server does not su
 
 A personal access token (PAT) lets a script or an MCP client call `/api/*` and `/mcp` as one person, inside a grant that the person picks when they make it. The reasons are in [ADR 0023](adr/0023-personal-access-tokens-are-auth-sessions.md), and the rules are in [the spec](specs/personal-access-tokens.md).
 
+In the SPA, a person makes, lists, and revokes their own tokens in Settings > Personal access tokens. The page of a user also lists the tokens of that user, with Revoke where the caller may revoke one.
+
 ### Make, list, and revoke
 
 | Route | Who | Answer |

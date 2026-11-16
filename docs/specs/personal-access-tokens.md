@@ -47,7 +47,7 @@ Expired is not a stored state. It comes from the expiry and the current time.
 | PAT-16 | The Server marks the last use at most once an hour per PAT, off the request. No request waits for the mark. | `AppSessionHandler`, `SessionStore.NotePersonalAccessTokenUseAsync` | |
 | PAT-17 | No PAT value and no hash of it reaches a log, a span, baggage, or an audit value. | Each record's `ToString`, `AuditModel` | Test with a marker value |
 | PAT-18 | A PAT reaches `/api/*` and `/mcp` on an install with a provider and on one with none. `tools/list` shows only the tools that the PAT's permissions allow. | `AuthRegistration.SelectScheme`, `McpToolAccess` | |
-| PAT-20 (later) | The SPA offers 90 days from the browser day as the default expiry. | The SPA form schema | |
+| PAT-20 | The SPA offers 90 days from the browser day as the default expiry. | `bodyOf` in `token-form-schema.ts` | |
 
 ## 4. Permissions
 
