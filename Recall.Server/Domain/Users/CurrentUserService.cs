@@ -111,10 +111,13 @@ public sealed class CurrentUserService(
     public string? Username => User?.FindFirstValue("preferred_username")
         ?? User?.FindFirstValue("username");
 
-    // "client_id" is the RFC 9068 claim. Keycloak uses "azp" (authorized party). FusionAuth uses "applicationId".
-    public string? ClientId => User?.FindFirstValue("client_id")
-        ?? User?.FindFirstValue("azp")
-        ?? User?.FindFirstValue("applicationId");
+    /// <summary>
+    /// The claims that can name the client, in the order that <see cref="ClientId"/> reads them. "client_id" is the
+    /// RFC 9068 claim. Keycloak uses "azp" (authorized party). FusionAuth uses "applicationId".
+    /// </summary>
+    public static readonly IReadOnlyList<string> ClientIdClaimTypes = ["client_id", "azp", "applicationId"];
+
+    public string? ClientId => ClientIdClaimTypes.Select(type => User?.FindFirstValue(type)).FirstOrDefault(value => value is not null);
 
     public bool IsAuthenticated => User?.Identity?.IsAuthenticated ?? false;
 

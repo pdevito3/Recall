@@ -125,6 +125,8 @@ public class Agent : BaseEntity, ITenantable
             "A client ID has a character that is not allowed.");
         ValidationException.Must(agent.ClientId == agent.ClientId.Trim(), "clientId",
             "A client ID cannot start or end with a space.");
+        ValidationException.MustNot(PatClaims.IsTokenId(agent.ClientId), "clientId",
+            "A client ID cannot start with pat_, because a personal access token has that ID.");
     }
 
     protected Agent() : base(IdPrefix) { } // For EF Core

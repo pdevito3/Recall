@@ -6,6 +6,7 @@ using Recall.Server.Databases;
 using Recall.Server.Domain;
 using Recall.Server.Domain.Tenants.DomainEvents;
 using Recall.SharedTestHelpers.Utilities;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -102,6 +103,7 @@ public sealed class TestingWebApplicationFactory : WebApplicationFactory<Program
                 options.DefaultAuthenticateScheme = FakeJwtBearerDefaults.AuthenticationScheme;
                 options.DefaultChallengeScheme = FakeJwtBearerDefaults.AuthenticationScheme;
             }).AddFakeJwtBearer();
+            services.AddSingleton<IClaimsTransformation, AppSessionTestPrincipal>();
 
             // Add migration hosted service
             services.AddHostedService<MigrationHostedService<AppDbContext>>();

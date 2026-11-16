@@ -26,6 +26,7 @@ public static class GenerateSummary
 
         public async Task<SummaryDto> Handle(Command request, CancellationToken cancellationToken)
         {
+            dbContext.RequireJournalWriter();
             var owner = dbContext.RequireJournalOwner();
             var key = PeriodKey.Holding(request.Period, request.Date);
             Activity.Current?.SetTag("app.summary.period", key.Period.ToString());

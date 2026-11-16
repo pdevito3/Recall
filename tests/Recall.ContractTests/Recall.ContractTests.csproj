@@ -25,6 +25,7 @@
         <Compile Include="..\Recall.FunctionalTests\TestUtilities\CapturedLogs.cs" Link="Linked\CapturedLogs.cs" />
         <Compile Include="..\Recall.FunctionalTests\TestUtilities\ExportedTelemetry.cs" Link="Linked\ExportedTelemetry.cs" />
         <Compile Include="..\Recall.FunctionalTests\TestUtilities\HttpClientExtensions.cs" Link="Linked\HttpClientExtensions.cs" />
+        <Compile Include="..\Recall.FunctionalTests\TestUtilities\AppSessionTestPrincipal.cs" Link="Linked\AppSessionTestPrincipal.cs" />
         <Compile Include="..\Recall.FunctionalTests\TestUtilities\ApiRoutes.cs" Link="Linked\ApiRoutes.cs" />
         <Compile Include="..\Recall.FunctionalTests\TestUtilities\FailingSaves.cs" Link="Linked\FailingSaves.cs" />
         <Compile Include="..\Recall.FunctionalTests\TestUtilities\StallingHealthCheck.cs" Link="Linked\StallingHealthCheck.cs" />

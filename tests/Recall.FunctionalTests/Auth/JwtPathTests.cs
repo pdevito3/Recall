@@ -47,6 +47,7 @@ public class JwtPathTests
     [Test]
     [Arguments("client_id", "recall")]
     [Arguments("azp", "recall")]
+    [Arguments("applicationId", "recall")]
     [Arguments("sub", "usr_0123456789")]
     public async Task a_token_that_names_an_app_session_is_refused(string claim, string value)
     {
@@ -58,6 +59,38 @@ public class JwtPathTests
 
         // Assert
         status.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Test]
+    [Property("Rule", "PAT-15")]
+    [Arguments("client_id")]
+    [Arguments("azp")]
+    [Arguments("applicationId")]
+    public async Task a_token_whose_client_is_a_personal_access_token_is_refused(string claim)
+    {
+        // Arrange
+        var token = GoodToken(new Dictionary<string, object> { ["sub"] = "provider-person", [claim] = "pat_0199f0c1a2b37c4d8e9f0a1b2c3d4e5f" });
+
+        // Act
+        var status = await StatusWithBearerAsync(token);
+
+        // Assert
+        status.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Test]
+    [Property("Rule", "PAT-15")]
+    public async Task a_token_with_the_app_client_in_applicationId_is_refused_at_the_current_user()
+    {
+        // Arrange
+        var token = GoodToken(new Dictionary<string, object> { ["sub"] = "provider-person", ["applicationId"] = "recall" });
+        using var browser = new AuthBrowser(AuthHosts.Open);
+
+        // Act
+        var response = await browser.GetAsync("/api/v1/users/me", authorization: $"Bearer {token}");
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     [Test]

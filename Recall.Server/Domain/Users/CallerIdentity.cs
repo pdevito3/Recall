@@ -33,6 +33,12 @@ public abstract record CallerIdentity
     public sealed record MachineAgent(string AgentId, string ClientId, string TenantId) : CallerIdentity;
 
     /// <summary>
+    /// A personal access token of a live app user. It acts as the user, inside the grant fixed when the token was made.
+    /// </summary>
+    public sealed record PersonalAccessToken(string TokenId, string Subject, LiveUser LiveUser, TokenGrant Grant)
+        : CallerIdentity;
+
+    /// <summary>
     /// A client that is not first-party, not on an allow-list, and not registered for this token. Also a token with
     /// no client claim. <paramref name="ClientId"/> is null for such a token.
     /// </summary>
@@ -49,6 +55,7 @@ public abstract record CallerIdentity
         JournalWork work => TenantScope.ForTenant(work.TenantId),
         DelegatedAgent agent => TenantScope.ForTenant(agent.LiveUser.TenantId),
         MachineAgent agent => TenantScope.ForTenant(agent.TenantId),
+        PersonalAccessToken token => TenantScope.ForTenant(token.LiveUser.TenantId),
         _ => TenantScope.NoTenant,
     };
 
@@ -56,8 +63,16 @@ public abstract record CallerIdentity
     {
         User { LiveUser: { } liveUser } => liveUser.UserId,
         JournalWork work => work.UserId,
+        PersonalAccessToken { Grant.Journal.CanRead: true } token => token.LiveUser.UserId,
         _ => null,
     };
+
+    /// <summary>
+    /// True for a caller that may add, change, or delete rows of its journal. A personal access token needs
+    /// <see cref="JournalAccess.ReadWrite"/>.
+    /// </summary>
+    public bool CanWriteJournal => this is User { LiveUser: not null } or JournalWork
+        or PersonalAccessToken { Grant.Journal.CanWrite: true };
 
     /// <summary>
     /// True for system work and for a client on the manage allow-list. It is a capability, not a permission

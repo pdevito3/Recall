@@ -3,6 +3,8 @@ namespace Recall.FunctionalTests.TestUtilities;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Recall.Server.Domain;
+using Recall.Server.Domain.Users;
 
 public static class HttpClientExtensions
 {
@@ -24,6 +26,16 @@ public static class HttpClientExtensions
 
     public static void SignInAsDelegatedClient(this HttpClient client, string subject, string clientId)
         => client.SetFakeBearerToken(new Dictionary<string, object> { ["sub"] = subject, ["azp"] = clientId });
+
+    /// <summary>Signs in as a new personal access token of the user with this identifier. Returns the token ID.</summary>
+    public static string SignInAsPersonalAccessToken(this HttpClient client, string subject, TokenGrant grant)
+    {
+        var token = new PatClaims(EntityId.New(PatClaims.IdPrefix), grant);
+        var claims = token.PrincipalOf(subject).Claims.ToDictionary(c => c.Type, c => (object)c.Value);
+        claims[AppSessionTestPrincipal.Marker] = "1";
+        client.SetFakeBearerToken(claims);
+        return token.TokenId;
+    }
 
     public static async Task<HttpResponseMessage> GetRequestAsync(this HttpClient client, string url)
         => await client.GetAsync(url);

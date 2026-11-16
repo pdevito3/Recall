@@ -166,6 +166,8 @@ public class AgentTests
         yield return () => (ForCreation() with { ClientId = "" }, "clientId", "Please provide a client ID.");
         yield return () => (ForCreation() with { ClientId = "clinic-assistant " }, "clientId",
             "A client ID cannot start or end with a space.");
+        yield return () => (ForCreation() with { ClientId = "pat_0199f0c1a2b37c4d8e9f0a1b2c3d4e5f" }, "clientId",
+            "A client ID cannot start with pat_, because a personal access token has that ID.");
         yield return () => (ForCreation() with { Mode = "robot" }, "mode", "Invalid mode: robot. Use delegated or machine.");
         yield return () => (ForCreation() with { Mode = "" }, "mode", "Please provide a mode.");
         yield return () => (ForCreation() with { Permissions = ["manage_everything"] }, "permissions[0]",

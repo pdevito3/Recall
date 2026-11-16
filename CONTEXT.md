@@ -159,6 +159,10 @@ _Avoid_: Cookie session, user session, login, BFF session
 The user's signed-in state at the identity provider. It proves who a person is at login. Then it has no link to an auth session, so one can end and the other stays.
 _Avoid_: SSO session, provider session
 
+**Personal access token**:
+A value that starts with `rcl_pat_`, which a person makes in the app and pastes once into a script or an MCP client. The client then calls the API and `/mcp` as that person, with only the permissions that both the person and the grant of the token hold. The grant and the journal access (none, read, or read and change) are fixed when the token is made. It is not the access token `rcl_at_` of a native auth session.
+_Avoid_: API key, access token
+
 **Identity provider**:
 The external OpenID Connect server that proves who a person is at login, for example Keycloak.
 An install has any number of them, or none yet.

@@ -23,6 +23,7 @@ public static class RetryRecording
 
         public async Task<RecordingDto> Handle(Command request, CancellationToken cancellationToken)
         {
+            dbContext.RequireJournalWriter();
             Activity.Current?.SetTag("app.recording_id", request.Id);
 
             var recording = await dbContext.Recordings

@@ -136,6 +136,8 @@ A tenant is not the privacy boundary of a journal. A journal table also has the 
 
 A machine agent, an all-tenants client, a delegated agent, and a system scope have no journal owner. They get 403 where a route has no ID, and 404 where it has one. A journal domain has no MCP tool and no gRPC service. See the [journal spec](specs/sessions.md).
 
+A personal access token has the journal of its person only with journal access Read or ReadWrite. With None it has no journal owner, as above. With Read, `JournalWriteRule` in the save refuses each tracked add, change, or delete of a journal row with 403, also a change that a domain event handler makes. A user delete removes the journal of that user in the database, outside the tracker, so a token with `manage_users` can still delete a user. The save sees only the tracker, so a handler with an effect outside its save, such as a file, a job, or a schedule, calls `dbContext.RequireJournalWriter()` before that effect. `StoreRecordingSlice`, `FinishRecording`, `RetryRecording`, and `GenerateSummary` do. A new handler of the journal with such an effect must call it too. See the [personal access tokens spec](specs/personal-access-tokens.md).
+
 ## Add a user to a tenant
 
 These rules stop a caller from joining a tenant that is not theirs:

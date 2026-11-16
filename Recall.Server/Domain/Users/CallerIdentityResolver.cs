@@ -28,6 +28,9 @@ public interface ICallerIdentityResolver
 /// <item>A system scope is <see cref="CallerIdentity.System"/>.</item>
 /// <item>A journal scope is <see cref="CallerIdentity.JournalWork"/>.</item>
 /// <item>A request with no authenticated principal is <see cref="CallerIdentity.Anonymous"/>.</item>
+/// <item>A principal of the <c>AppSession</c> scheme with the claims of a personal access token is a
+/// <see cref="CallerIdentity.PersonalAccessToken"/> when its <c>sub</c> names a live app user, and an
+/// <see cref="CallerIdentity.UnknownClient"/> when it does not.</item>
 /// <item>A token with no client claim is an <see cref="CallerIdentity.UnknownClient"/> with no client ID.</item>
 /// <item>A token from a first-party client with a <c>sub</c> is <see cref="CallerIdentity.User"/>.</item>
 /// <item>A client on <see cref="TenancyOptions.ManageAllTenantsClientIds"/> or
@@ -65,7 +68,8 @@ public sealed class CallerIdentityResolver(
             systemTenantAccess.JournalOwner,
             currentUserService.IsAuthenticated,
             currentUserService.UserIdentifier,
-            currentUserService.ClientId);
+            currentUserService.ClientId,
+            PatClaims.Read(currentUserService.User));
 
         if (_kept is not { } kept || kept.Token != token || kept.Resolution.IsCanceled)
         {
@@ -86,6 +90,12 @@ public sealed class CallerIdentityResolver(
 
         if (!token.IsAuthenticated)
             return new CallerIdentity.Anonymous();
+
+        if (token.Pat is { } pat)
+            return token.Subject is { } tokenSubject
+                && await tenantIdProvider.FindLiveUserAsync(tokenSubject, cancellationToken) is { } tokenUser
+                ? new CallerIdentity.PersonalAccessToken(pat.TokenId, tokenSubject, tokenUser, pat.Grant)
+                : new CallerIdentity.UnknownClient(pat.TokenId);
 
         if (token.ClientId is not { } clientId)
             return new CallerIdentity.UnknownClient(null);
@@ -111,5 +121,5 @@ public sealed class CallerIdentityResolver(
         return new CallerIdentity.UnknownClient(clientId);
     }
 
-    private sealed record Token(bool IsSystem, Databases.JournalOwner? JournalOwner, bool IsAuthenticated, string? Subject, string? ClientId);
+    private sealed record Token(bool IsSystem, Databases.JournalOwner? JournalOwner, bool IsAuthenticated, string? Subject, string? ClientId, PatClaims? Pat);
 }
