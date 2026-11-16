@@ -14,6 +14,7 @@ using Recall.Server.Resources.Jobs;
 using Resources;
 using Serilog;
 using Tenants;
+using UserSettings;
 
 public sealed class CleanupJob(
     IServiceScopeFactory scopeFactory,
@@ -135,16 +136,15 @@ public sealed class CleanupJob(
         var corrections = await dbContext.Corrections.AsNoTracking()
             .TagWithOperationCallSite("sessions.cleanup_job.corrections")
             .ToListAsync(cancellationToken);
-        var removesFillerWords = await dbContext.UserSettings.AsNoTracking()
+        var setting = await dbContext.UserSettings.AsNoTracking()
             .TagWithOperationCallSite("sessions.cleanup_job.settings")
-            .Select(s => (bool?)s.RemoveFillerWords)
-            .FirstOrDefaultAsync(cancellationToken) ?? true;
+            .FirstOrDefaultAsync(cancellationToken) ?? UserSetting.DefaultsFor(tenantId, userId);
 
         return new Work(
             step,
             new ModelEndpoint(provider.Kind, provider.BaseUrl, (read as ProtectedKeyRead.Readable)?.ApiKey),
             provider.Model,
-            CleanupPrompt.InstructionsWith(corrections, removesFillerWords),
+            CleanupPrompt.InstructionsWith(corrections, setting.RemoveFillerWords, setting.WriteNumbersAsDigits),
             CleanupPrompt.TextOf(ProseMirrorToPlainText.Render(session.Raw.Text)),
             session.Raw.DraftRevision);
     }
