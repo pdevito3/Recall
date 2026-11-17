@@ -137,9 +137,13 @@ function RecordingClock({ startedAt }: { startedAt: number }) {
   return <p className="text-4xl font-semibold tabular-nums">{clock(Math.max(0, now - startedAt))}</p>
 }
 
+// A narrow card has no room beside the clock, so there the marks cover the oldest bars of the level meter.
 function ParagraphMarks({ count }: { count: number }) {
   return (
-    <span data-testid="paragraph-marks" className="absolute start-full top-1/2 ms-3 inline-flex -translate-y-1/2 items-center gap-0.5 rounded-full bg-destructive/10 px-2 py-0.5 text-sm font-semibold text-destructive tabular-nums">
+    <span
+      data-testid="paragraph-marks"
+      className="absolute start-full top-1/2 ms-3 inline-flex -translate-y-1/2 items-center gap-0.5 rounded-full bg-[color-mix(in_oklab,var(--destructive)_10%,var(--card))] px-2 py-0.5 text-sm font-semibold text-destructive tabular-nums @max-[14rem]:start-0 @max-[14rem]:top-auto @max-[14rem]:bottom-1 @max-[14rem]:ms-0 @max-[14rem]:translate-y-0"
+    >
       <span className="absolute inset-0 overflow-hidden rounded-full">
         <span
           key={count}
@@ -153,8 +157,10 @@ function ParagraphMarks({ count }: { count: number }) {
   )
 }
 
-// The label wraps in a narrow card with a large font, and the room of the idle card wraps with it.
-const newParagraphClass = 'h-auto min-h-12 w-full max-w-xs px-6 py-2 text-base whitespace-normal @2xl:col-start-3 @2xl:row-start-1 @2xl:w-auto @2xl:justify-self-start'
+// The label wraps in a narrow card with a large font, and the room of the idle card wraps with it. In the narrowest card
+// only the label fits.
+const newParagraphClass =
+  'h-auto min-h-12 w-full max-w-xs px-6 py-2 text-base whitespace-normal @max-[10rem]:px-2 @max-[10rem]:[&>svg]:hidden @2xl:col-start-3 @2xl:row-start-1 @2xl:w-auto @2xl:justify-self-start'
 
 /** The time of a tap is the finger down, not the lift, which comes later in the audio. A press that slides off marks nothing. */
 function NewParagraphButton({ capture, focusWhenGone }: { capture: Capture; focusWhenGone: RefObject<HTMLButtonElement | null> }) {
@@ -190,9 +196,9 @@ function LevelMeter({ level }: { level: () => number }) {
     return () => clearInterval(timer)
   }, [level])
   return (
-    <div aria-hidden className="flex h-8 items-center gap-[0.1875rem] text-destructive">
+    <div aria-hidden className="flex h-8 max-w-full items-center justify-end gap-[0.1875rem] overflow-hidden text-destructive">
       {levels.map((value, index) => (
-        <span key={index} className="w-[0.1875rem] rounded-full bg-current" style={{ height: `${Math.max(12, value * 100)}%` }} />
+        <span key={index} className="w-[0.1875rem] shrink-0 rounded-full bg-current" style={{ height: `${Math.max(12, value * 100)}%` }} />
       ))}
     </div>
   )
@@ -361,7 +367,7 @@ function Actions({ view, capture }: { view: CaptureView; capture: Capture }) {
   }
 }
 
-const clockClass = '-mb-2 flex flex-col items-center gap-2 @2xl:col-start-2'
+const clockClass = 'relative -mb-2 flex max-w-full flex-col items-center gap-2 @2xl:col-start-2'
 const statusClass = 'flex max-w-md flex-col items-center gap-1.5 @2xl:col-span-full'
 // On a wide card New paragraph sits beside the clock, so the recording card is no taller than the idle card and the
 // journal home fits a laptop screen. The marks of the clock reach into the gap.
@@ -439,11 +445,11 @@ export function MicCard() {
 
       {/* The idle card and the recording card share one room, the larger of the two, so the card does not change size under the finger.
           The idle card keeps the room of the clock and of New paragraph. */}
-      <div className="@container grid w-full justify-items-center">
+      <div className="@container grid w-full grid-cols-1 justify-items-center">
         <div className={cn('flex w-full flex-col items-center gap-4 [grid-area:1/1]', isRecording && recordingClass)}>
           {isRecording && (
             <div aria-hidden className={clockClass}>
-              <div className="relative">
+              <div className="relative @max-[14rem]:static">
                 <RecordingClock startedAt={view.startedAt} />
                 {taps.length > 0 && <ParagraphMarks count={taps.length} />}
               </div>

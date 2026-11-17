@@ -40,7 +40,8 @@ export default defineConfig({
     reducedMotion: 'reduce',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    // A test that grants the mic permission records from a fake mic. A launch option forces a new worker, so it is here, not in a test.
+    // A test that clicks Record records from a fake mic, and no test sees a mic prompt. A test of a denied mic must stub getUserMedia.
+    // A launch option forces a new worker, so it is here, not in a test.
     launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] },
   },
   // Each test runs in UTC and in the two zones that are farthest from UTC. A page that shows a time in the zone of the
