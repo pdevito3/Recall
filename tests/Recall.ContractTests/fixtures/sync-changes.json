@@ -99,6 +99,7 @@
     "locationCaptureEnabled": true,
     "requirePeopleProposalApproval": true,
     "removeFillerWords": true,
+    "writeNumbersAsDigits": true,
     "version": 1
   },
   "tombstones": []

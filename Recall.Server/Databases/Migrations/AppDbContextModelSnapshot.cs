@@ -1484,6 +1484,10 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("version");
 
+                    b.Property<bool>("WriteNumbersAsDigits")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("write_numbers_as_digits");
+
                     b.HasKey("Id")
                         .HasName("pk_user_settings");
 

@@ -34,6 +34,11 @@ export type UserSettingDto = {
     */
     removeFillerWords: boolean;
     /**
+     * @description True when the Cleanup prompt asks the model to write a spoken number, date, time, or amount of money in its usual written form in Cleaned, such as \"3:30 PM\" and \"$20\". Raw keeps each word.
+     * @type boolean
+    */
+    writeNumbersAsDigits: boolean;
+    /**
      * @minLength 0
      * @maxLength 4294967295
      * @type integer

@@ -21,7 +21,7 @@ export const member: UserDto = {
 
 export const memberSession: AuthUser = { sub: member.identifier, name: member.fullName, sid: 'test-session', client_kind: 'web' }
 
-export const memberSetting: UserSettingDto = { timeZoneMode: 'Fixed', timeZone: 'UTC', timeZoneIsKnown: true, locationCaptureEnabled: false, requirePeopleProposalApproval: false, removeFillerWords: true, version: 1 }
+export const memberSetting: UserSettingDto = { timeZoneMode: 'Fixed', timeZone: 'UTC', timeZoneIsKnown: true, locationCaptureEnabled: false, requirePeopleProposalApproval: false, removeFillerWords: true, writeNumbersAsDigits: true, version: 1 }
 
 export const signedInMember: Answer[] = [
   { method: 'GET', path: '/auth/me', body: memberSession },

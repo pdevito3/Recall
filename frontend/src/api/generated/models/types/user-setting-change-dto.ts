@@ -30,6 +30,11 @@ export type UserSettingChangeDto = {
     */
     removeFillerWords?: boolean | null;
     /**
+     * @description True to have the Cleanup prompt ask the model to write a spoken number, date, time, or amount of money in its usual written form in Cleaned, such as \"3:30 PM\" and \"$20\". Null keeps the stored value, so a client that does not know this field does not change it.
+     * @type boolean | undefined
+    */
+    writeNumbersAsDigits?: boolean | null;
+    /**
      * @description The `version` of the settings that the client read. A save from another version gets 409, unless the row already holds these values.
      * @minLength 0
      * @maxLength 4294967295

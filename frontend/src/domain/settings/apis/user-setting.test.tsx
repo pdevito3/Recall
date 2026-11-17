@@ -94,7 +94,7 @@ test('no location is saved while any answer about location waits, in either dire
   await vi.waitFor(() => expect(rowReads()).toBe(readsBefore + 1))
 })
 
-const aRow = (patch: Partial<UserSettingDto>): UserSettingDto => ({ timeZoneMode: 'Fixed', timeZone: 'UTC', timeZoneIsKnown: true, locationCaptureEnabled: false, requirePeopleProposalApproval: false, removeFillerWords: true, version: 1, ...patch })
+const aRow = (patch: Partial<UserSettingDto>): UserSettingDto => ({ timeZoneMode: 'Fixed', timeZone: 'UTC', timeZoneIsKnown: true, locationCaptureEnabled: false, requirePeopleProposalApproval: false, removeFillerWords: true, writeNumbersAsDigits: true, version: 1, ...patch })
 
 const captureZoneWith = (row: UserSettingDto) => {
   const queryClient = new QueryClient()

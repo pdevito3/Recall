@@ -11,7 +11,7 @@ public class CleanupPromptTests
     public void with_the_removal_on_the_prompt_removes_speech_noise_but_keeps_a_correct_repeat_and_each_idea()
     {
         // Act
-        var prompt = CleanupPrompt.InstructionsWith([], removeFillerWords: true);
+        var prompt = CleanupPrompt.InstructionsWith([], removeFillerWords: true, writeNumbersAsDigits: true);
 
         // Assert
         prompt.ShouldContain("Speech noise is not an idea, so remove it");
@@ -29,7 +29,7 @@ public class CleanupPromptTests
     public void with_the_removal_off_the_prompt_keeps_each_filler_stutter_and_false_start()
     {
         // Act
-        var prompt = CleanupPrompt.InstructionsWith([], removeFillerWords: false);
+        var prompt = CleanupPrompt.InstructionsWith([], removeFillerWords: false, writeNumbersAsDigits: true);
 
         // Assert
         prompt.ShouldContain("Keep each filler word, hesitation sound, stutter, repeated word, and false start where the person said it");
@@ -38,19 +38,72 @@ public class CleanupPromptTests
     }
 
     [Test]
+    [Property("Rule", "SES-53")]
+    public void with_the_number_format_on_the_prompt_writes_a_spoken_number_in_its_written_form_but_keeps_words_where_they_read_better()
+    {
+        // Act
+        var prompt = CleanupPrompt.InstructionsWith([], removeFillerWords: true, writeNumbersAsDigits: true);
+
+        // Assert
+        prompt.ShouldContain("write a number, a date, a time, or an amount of money that the person said in words in its usual written form");
+        prompt.ShouldContain("A time, a date, an amount of money, and a measurement with a unit symbol take digits: \"three thirty pm\" becomes \"3:30 PM\", \"March third\" becomes \"March 3\", \"twenty dollars\" becomes \"$20\", and \"six percent\" becomes \"6%\".");
+        prompt.ShouldContain("A whole count from one to nine stays in words, as in \"two kids\", and a count of 10 or more takes digits, as \"twelve miles\" becomes \"12 miles\".");
+        prompt.ShouldContain("The form of a number is not its wording or its content, so this keeps each idea and the voice of the person.");
+        prompt.ShouldContain("an approximate or idiomatic number, as in \"one of my friends\", \"a couple of days\", or \"a hundred times better\"");
+        prompt.ShouldContain("and a number at the start of a sentence. These exceptions hold over the rules above.");
+        prompt.ShouldContain("Do not add, remove, summarize, or reword ideas.");
+        prompt.ShouldNotContain("keep each number as they said it");
+    }
+
+    [Test]
+    [Property("Rule", "SES-53")]
+    public void with_the_number_format_off_the_prompt_keeps_each_number_as_the_person_said_it()
+    {
+        // Act
+        var prompt = CleanupPrompt.InstructionsWith([], removeFillerWords: true, writeNumbersAsDigits: false);
+
+        // Assert
+        prompt.ShouldContain("The person wants \"cleanedMarkdown\" to keep each number as they said it.");
+        prompt.ShouldContain("in words where the Raw text has it in words, as in \"three thirty pm\" and \"twenty dollars\", and in digits where the Raw text has digits");
+        prompt.ShouldNotContain("usual written form");
+        prompt.ShouldNotContain("\"3:30 PM\"");
+    }
+
+    [Test]
     [Property("Rule", "SES-51")]
-    [Arguments(true)]
-    [Arguments(false)]
-    public void either_speech_rule_keeps_the_answer_shape_and_the_hints(bool removeFillerWords)
+    [Property("Rule", "SES-53")]
+    [Arguments(true, true)]
+    [Arguments(true, false)]
+    [Arguments(false, true)]
+    [Arguments(false, false)]
+    public void each_speech_and_number_rule_keeps_the_answer_shape_and_the_hints(bool removeFillerWords, bool writeNumbersAsDigits)
     {
         // Arrange
         Correction[] corrections = [Correction.Create("ten_1", "usr_1", "Kubernetes", ["cooper netties"], hardReplace: false)];
 
         // Act
-        var prompt = CleanupPrompt.InstructionsWith(corrections, removeFillerWords);
+        var prompt = CleanupPrompt.InstructionsWith(corrections, removeFillerWords, writeNumbersAsDigits);
 
         // Assert
         prompt.ShouldContain("Answer with ONLY one JSON object");
         prompt.ShouldContain("\"Kubernetes\", often misheard as: cooper netties");
+    }
+
+    [Test]
+    [Property("Rule", "SES-51")]
+    [Property("Rule", "SES-53")]
+    public void with_hints_the_rule_to_change_no_other_words_holds_only_for_the_list_and_the_number_and_speech_rules_still_hold()
+    {
+        // Arrange
+        Correction[] corrections = [Correction.Create("ten_1", "usr_1", "Kubernetes", ["cooper netties"], hardReplace: false)];
+
+        // Act
+        var prompt = CleanupPrompt.InstructionsWith(corrections, removeFillerWords: true, writeNumbersAsDigits: true);
+
+        // Assert
+        prompt.ShouldContain("write the term. For this list, change no other words.");
+        prompt.ShouldNotContain("write the term. Change no other words.");
+        prompt.ShouldContain("in its usual written form");
+        prompt.ShouldContain("Remove filler words and hesitation sounds");
     }
 }
