@@ -19,6 +19,8 @@ export type MicEvent =
   | { type: 'tap' }
   | { type: 'started'; startedAt: number }
   | { type: 'startFailed'; failure: MicFailure }
+  /** A sign-out called off the start, and the mic stays off. */
+  | { type: 'startCalledOff' }
   | { type: 'ended' }
   | { type: 'storeFailed' }
   | { type: 'entryDeleted' }
@@ -35,6 +37,8 @@ export function micReducer(state: MicState, event: MicEvent): MicState {
       return state.kind === 'starting' ? { kind: 'recording', startedAt: event.startedAt } : state
     case 'startFailed':
       return state.kind === 'starting' ? { kind: 'failed', failure: event.failure } : state
+    case 'startCalledOff':
+      return state.kind === 'starting' ? { kind: 'idle' } : state
     case 'ended':
       return state.kind === 'recording' ? { kind: 'idle' } : state
     case 'storeFailed':

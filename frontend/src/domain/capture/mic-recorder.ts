@@ -41,6 +41,29 @@ function failureOf(error: unknown): MicFailure {
   return 'micFailed'
 }
 
+/**
+ * Asks for the mic. A call-off answers at once, also while the person still reads the prompt of the browser, and a mic
+ * that comes after it goes off at once.
+ */
+function micOf(callOff: AbortSignal | undefined): Promise<MediaStream> {
+  return new Promise((resolve, reject) => {
+    const calledOff = () => reject(callOff?.reason)
+    if (callOff?.aborted) return calledOff()
+    callOff?.addEventListener('abort', calledOff, { once: true })
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(
+      (stream) => {
+        callOff?.removeEventListener('abort', calledOff)
+        if (callOff?.aborted) stream.getTracks().forEach((track) => track.stop())
+        else resolve(stream)
+      },
+      (error: unknown) => {
+        callOff?.removeEventListener('abort', calledOff)
+        reject(new MicStartError(failureOf(error)))
+      },
+    )
+  })
+}
+
 /** Holds the Web Lock of a capture until `release`, so another tab knows that this tab still records it. */
 async function holdRecordingLock(clientRecordingId: string): Promise<() => void> {
   if (!navigator.locks) return () => undefined
@@ -108,18 +131,13 @@ function levelMeterOf(stream: MediaStream) {
 /**
  * Starts the mic and stores each slice in this browser as it comes. It answers when the recorder runs. Each slice is
  * written before the next one, so the store never holds a gap, and a failed write stops the recording with the slices
- * that are safe.
+ * that are safe. A call-off before the recorder runs rejects with its reason, and the mic is off and no audio is kept.
  */
-export async function startRecording(owner: string, timeZone: StoredCapture['timeZone'], onSliceFailed: (error: unknown) => void): Promise<ActiveRecording> {
+export async function startRecording(owner: string, timeZone: StoredCapture['timeZone'], onSliceFailed: (error: unknown) => void, callOff?: AbortSignal): Promise<ActiveRecording> {
   const chosen = recordingFormat()
   if (!chosen) throw new MicStartError('unsupported')
 
-  let stream: MediaStream
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-  } catch (error) {
-    throw new MicStartError(failureOf(error))
-  }
+  const stream = await micOf(callOff)
 
   const clientRecordingId = newUuid()
   const startedAt = Date.now()
@@ -207,6 +225,13 @@ export async function startRecording(owner: string, timeZone: StoredCapture['tim
     stream.getTracks().forEach((track) => track.stop())
     recorder.onstop?.(new Event('stop'))
     throw error instanceof MicStartError ? error : new MicStartError('micFailed')
+  }
+  if (callOff?.aborted) {
+    // The capture ends with no slice, and the upload queue removes it.
+    recorder.ondataavailable = null
+    recorder.stop()
+    await ended
+    throw callOff.reason
   }
   recorder.onerror = () => {
     if (recorder.state !== 'inactive') recorder.stop()

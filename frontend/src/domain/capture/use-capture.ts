@@ -14,6 +14,8 @@ import { discardStoredAudio, tryAgainToSend } from './upload-queue'
 // The mic of this tab outlives the card, so a recording goes on when the person opens another page and shows again on return.
 let mic: MicState = { kind: 'idle' }
 let active: ActiveRecording | null = null
+/** Set while the mic starts. It settles when the start can no longer record. */
+let callOffTheStart: (() => Promise<void>) | null = null
 const micListeners = new Set<() => void>()
 /** The captures that this page load recorded, so that its card follows them and not those of another tab. */
 const recordedHere = new Set<string>()
@@ -32,21 +34,35 @@ const subscribeToMic = (listener: () => void) => {
 
 async function record(owner: string, timeZone: StoredCapture['timeZone']) {
   dispatch({ type: 'tap' })
-  try {
-    const recording = await startRecording(owner, timeZone, (error) => dispatch({ type: error instanceof CaptureGoneError ? 'entryDeleted' : 'storeFailed' }))
-    active = recording
-    recordedHere.add(recording.clientRecordingId)
-    dispatch({ type: 'started', startedAt: recording.startedAt })
-    await recording.ended
-    if (active === recording) active = null
-    dispatch({ type: 'ended' })
-  } catch (error) {
-    dispatch({ type: 'startFailed', failure: error instanceof MicStartError ? error.failure : 'micFailed' })
+  const callOff = new AbortController()
+  const start = startRecording(owner, timeZone, (error) => dispatch({ type: error instanceof CaptureGoneError ? 'entryDeleted' : 'storeFailed' }), callOff.signal)
+  callOffTheStart = async () => {
+    callOff.abort()
+    await start.catch(() => undefined)
   }
+  let recording: ActiveRecording
+  try {
+    recording = await start
+  } catch (error) {
+    dispatch(callOff.signal.aborted ? { type: 'startCalledOff' } : { type: 'startFailed', failure: error instanceof MicStartError ? error.failure : 'micFailed' })
+    return
+  } finally {
+    callOffTheStart = null
+  }
+  active = recording
+  recordedHere.add(recording.clientRecordingId)
+  dispatch({ type: 'started', startedAt: recording.startedAt })
+  await recording.ended
+  if (active === recording) active = null
+  dispatch({ type: 'ended' })
 }
 
-/** A sign-out stops the recording of this tab, so its last slice is stored and its end is known before the send. */
+/**
+ * A sign-out stops the recording of this tab, so its last slice is stored and its end is known before the send. A mic
+ * that still starts stays off, so nothing records after the sign-out.
+ */
 export async function stopRecordingOfThisTab(): Promise<void> {
+  await callOffTheStart?.()
   await active?.stop()
 }
 
