@@ -122,9 +122,14 @@ internal sealed class CleanupScenario : IAsyncDisposable
         .FirstAsync());
 
     /// <summary>Runs the job the way that a worker does, with one claim.</summary>
-    public async Task RunJobAsync(string sessionId, int attempt = 1, string? runId = null, IJobStore? store = null, CancellationToken cancellationToken = default)
+    public async Task RunJobAsync(string sessionId, int attempt = 1, string? runId = null, IJobStore? store = null, TimeProvider? clock = null, CancellationToken cancellationToken = default)
     {
-        var job = store is null ? ActivatorUtilities.CreateInstance<CleanupJob>(Services) : ActivatorUtilities.CreateInstance<CleanupJob>(Services, store);
+        var parts = new List<object>();
+        if (store is not null)
+            parts.Add(store);
+        if (clock is not null)
+            parts.Add(clock);
+        var job = ActivatorUtilities.CreateInstance<CleanupJob>(Services, [.. parts]);
         await job.CleanupSessionAsync(
             sessionId,
             Member.Id,

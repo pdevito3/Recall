@@ -297,12 +297,12 @@ public class CloudTranscriptionTests : TestBase
             ? new ProviderLimits { AudioIdle = TimeSpan.FromSeconds(1) }
             : new ProviderLimits { AudioCall = TimeSpan.FromSeconds(1) };
         var recording = await RecordingWithAudioAsync(scenario, Speech(Recording.SamplesPerSecond));
-        var job = JobWith(CloudEngine(limits: limits));
+        var firstTry = JobWith(CloudEngine(limits: limits));
 
         // Act
-        await Should.ThrowAsync<JobSafeTextException>(() => RunCloudAsync(job, scenario, recording));
+        await Should.ThrowAsync<JobSafeTextException>(() => RunCloudAsync(firstTry, scenario, recording));
         var waiting = await scenario.Client.GetRecordingAsync(recording.Id);
-        await RunCloudAsync(job, scenario, recording);
+        await RunCloudAsync(JobWith(CloudEngine()), scenario, recording);
 
         // Assert
         waiting.Status.ShouldBe(nameof(RecordingStatus.Received));

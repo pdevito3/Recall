@@ -37,7 +37,7 @@ public sealed class CleanupJob(
     [Job(WireName, Queue = CleanupQueues.First)]
     public async Task CleanupSessionAsync(string sessionId, string userId, string tenantId, string runId, JobContext context, CancellationToken cancellationToken)
     {
-        using var run = running.Watch(runId, cancellationToken);
+        using var run = running.Watch(runId, timeProvider, cancellationToken);
         var work = await ReadWorkAsync(sessionId, userId, tenantId, runId, context.Attempt, cancellationToken);
         var step = work.Step;
         if (step is CleanupStep.CallProvider)
