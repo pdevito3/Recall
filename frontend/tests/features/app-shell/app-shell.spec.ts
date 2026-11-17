@@ -336,7 +336,7 @@ test('a window that becomes narrow with no network still opens the sidebar', asy
 test('a page that the person did not open yet still opens with no network', async ({ page }) => {
   const shell = appShellPage(page)
 
-  await shell.openAboutAndWaitForTheCodeOfEachPage()
+  await shell.openAboutAndWaitForTheCodeOfThePeopleAndSettingsPages()
   await page.context().setOffline(true)
 
   await shell.at.peopleNavigationLink.click()

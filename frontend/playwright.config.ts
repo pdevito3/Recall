@@ -24,6 +24,7 @@ const baseURL = `http://localhost:${port}`
 
 export default defineConfig({
   testDir: './tests/features',
+  globalSetup: './tests/support/warm-dev-server.ts',
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   // A flaky test is a fault to correct, not a fault to hide.

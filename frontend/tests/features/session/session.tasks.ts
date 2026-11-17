@@ -4,7 +4,7 @@ import { session } from './session.locators'
 
 export const blankPage = 'data:text/html,blank'
 
-// The first page of a run makes a cold Vite compile each module of the app, and that takes more than the 5 s of an assertion.
+// A page open loads about 350 modules from the Vite dev server. On a busy machine that took up to 20 s, more than the 5 s of an assertion.
 const firstPaintMs = 30_000
 
 export function sessionPage(page: Page) {
