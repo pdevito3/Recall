@@ -18,6 +18,43 @@ export function homePage(page: Page) {
       await this.open()
     },
 
+    async record() {
+      await at.record.click()
+      await expect(at.newParagraph).toBeVisible()
+    },
+
+    async markAParagraph() {
+      await at.newParagraph.click()
+      await expect(at.paragraphMarks).toBeVisible()
+    },
+
+    /** Each element of the mic card that shows out of the card on the left or the right, by how many px. */
+    partsOutOfTheMicCard() {
+      return at.micCard.evaluate((card) => {
+        const frame = card.getBoundingClientRect()
+        const shownSpan = (element: Element) => {
+          let { left, right } = element.getBoundingClientRect()
+          for (let ancestor = element.parentElement; ancestor && ancestor !== card; ancestor = ancestor.parentElement) {
+            if (getComputedStyle(ancestor).overflowX === 'visible') continue
+            const clip = ancestor.getBoundingClientRect()
+            left = Math.max(left, clip.left)
+            right = Math.min(right, clip.right)
+          }
+          return { left, right }
+        }
+        return [...card.querySelectorAll('*')].flatMap((element) => {
+          const { left, right } = shownSpan(element)
+          const out = Math.round(Math.max(frame.left - left, right - frame.right))
+          return right > left && out > 0 ? [`${element.tagName.toLowerCase()} "${element.textContent?.slice(0, 20)}" by ${out} px`] : []
+        })
+      })
+    },
+
+    async offCenter(element: Locator) {
+      const [card, box] = await Promise.all([at.micCard.boundingBox(), element.boundingBox()])
+      return Math.round(box!.x + box!.width / 2 - (card!.x + card!.width / 2))
+    },
+
     async isAbove(upper: Locator, lower: Locator) {
       const [first, second] = await Promise.all([upper.boundingBox(), lower.boundingBox()])
       return first !== null && second !== null && first.y + first.height <= second.y
