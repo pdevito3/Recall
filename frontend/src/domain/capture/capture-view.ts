@@ -19,7 +19,6 @@ export type MicEvent =
   | { type: 'tap' }
   | { type: 'started'; startedAt: number }
   | { type: 'startFailed'; failure: MicFailure }
-  /** A sign-out called off the start, and the mic stays off. */
   | { type: 'startCalledOff' }
   | { type: 'ended' }
   | { type: 'storeFailed' }

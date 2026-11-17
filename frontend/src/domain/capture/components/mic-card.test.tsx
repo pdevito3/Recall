@@ -17,6 +17,7 @@ import type { Answer } from '@/test/answer'
 import { member, signedInMember } from '@/test/session'
 
 import { addCapture, capturesOf, removeCapture, storeSlice, updateCapture, type StoredCapture, type UploadProblem } from '../audio-store'
+import { sliceMs } from '../mic-recorder'
 import { stopRecordingOfThisTab } from '../use-capture'
 import { useSendStoredAudio } from '../use-send-stored-audio'
 import { MicCard } from './mic-card'
@@ -718,8 +719,7 @@ test('a sign-out while the mic starts keeps the mic off when it comes, and recor
   micComes()
 
   // Assert
-  // A recording that started would store its first slice within this time.
-  await new Promise((resolve) => setTimeout(resolve, 1_500))
+  await new Promise((resolve) => setTimeout(resolve, 1.5 * sliceMs))
   expect(tracks.map(({ readyState }) => readyState)).toEqual(['ended'])
   expect(await capturesOf(member.identifier)).toEqual([])
   expect((await commands.takeSentRequests()).filter(({ method }) => method !== 'GET')).toEqual([])
