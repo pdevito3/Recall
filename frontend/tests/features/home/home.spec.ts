@@ -2,6 +2,7 @@ import { authApi, authPaths } from '@tests/support/api/auth-api'
 import { usersApi } from '@tests/support/api/users-api'
 import { as } from '@tests/support/auth/actors'
 import { expect, test } from '@tests/support/fixtures'
+import { useDefaultFontSize } from '@tests/support/screen'
 import { appShellPage } from '../app-shell/app-shell.tasks'
 import { homePage } from './home.tasks'
 
@@ -45,6 +46,23 @@ test.describe('the mic card on a phone', () => {
     await expect(home.at.journalComposer).toBeVisible()
     await expect(home.at.journalComposer).not.toBeFocused()
     expect(await home.isAbove(home.at.micCard, home.at.journalComposer)).toBe(true)
+    expect(await home.sideScroll()).toBe(0)
+  })
+})
+
+test.describe('the mic card with a default font of 32 px on a 320 px screen', () => {
+  test.use({ viewport: { width: 320, height: 800 }, permissions: ['microphone'] })
+
+  test('while it records, stays centered with nothing out of the card, and the page does not scroll sideways', async ({ page }) => {
+    const home = homePage(page)
+    await useDefaultFontSize(page, 32)
+    await home.open()
+
+    await home.record()
+    await home.markAParagraph()
+
+    expect(await home.partsOutOfTheMicCard()).toEqual([])
+    expect(await home.offCenter(home.at.newParagraph)).toBe(0)
     expect(await home.sideScroll()).toBe(0)
   })
 })

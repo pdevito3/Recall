@@ -8,6 +8,8 @@ import { appShellPage, sheetChunk } from './app-shell.tasks'
 
 for (const viewport of [
   { width: 1280, height: 800 },
+  { width: 1366, height: 768 },
+  { width: 1024, height: 768 },
   { width: 390, height: 844 },
 ]) {
   test.describe(`a short page at ${viewport.width}x${viewport.height}`, () => {
