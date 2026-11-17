@@ -133,3 +133,23 @@ test('@REC-30 a tap just before the stop is in the capture when it ends, and a t
   expect(afterTheStop).toBe(false)
   expect((await capturesOf(owner))[0]).toMatchObject({ isEnded: true, paragraphTapsMs: [150] })
 })
+
+test('a call-off while the recorder starts turns the mic off and keeps no audio', async () => {
+  // Arrange
+  micGivesATone()
+  const callOff = new AbortController()
+  const start = MediaRecorder.prototype.start
+  vi.spyOn(MediaRecorder.prototype, 'start').mockImplementation(function (this: MediaRecorder, ...args: Parameters<MediaRecorder['start']>) {
+    start.apply(this, args)
+    callOff.abort()
+  })
+
+  // Act
+  const started = startRecording(owner, undefined, () => undefined, callOff.signal)
+
+  // Assert
+  await expect(started).rejects.toHaveProperty('name', 'AbortError')
+  const stream = await vi.mocked(navigator.mediaDevices.getUserMedia).mock.results[0].value
+  expect(stream.getTracks().map(({ readyState }: MediaStreamTrack) => readyState)).toEqual(['ended'])
+  expect((await capturesOf(owner))[0]).toMatchObject({ isEnded: true, storedSlices: 0 })
+})

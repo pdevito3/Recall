@@ -706,6 +706,40 @@ test('a sign-out sends at once the audio that waits for a retry, so it asks noth
   await cardSays(screen, 'Writing the words')
 })
 
+test('a sign-out while the mic starts keeps the mic off when it comes, and records nothing', { timeout: 30_000 }, async () => {
+  // Arrange
+  notePageUser(member.identifier)
+  let micComes: () => void = () => undefined
+  const tracks: MediaStreamTrack[] = []
+  vi.spyOn(navigator.mediaDevices, 'getUserMedia').mockImplementation(
+    () =>
+      new Promise<MediaStream>((resolve) => {
+        micComes = () => {
+          const stream = aTone()
+          tracks.push(...stream.getTracks())
+          resolve(stream)
+        }
+      }),
+  )
+  const screen = await openHome(recordAndSend)
+  await userEvent.click(screen.getByRole('button', { name: 'Record' }))
+  await cardSays(screen, 'Starting the mic')
+  const beforeAQuestion = vi.fn()
+
+  // Act
+  await settleUnsentWords(beforeAQuestion)
+  micComes()
+
+  // Assert
+  // A recording that started would store its first slice within this time.
+  await new Promise((resolve) => setTimeout(resolve, 1_500))
+  expect(tracks.map(({ readyState }) => readyState)).toEqual(['ended'])
+  expect(await capturesOf(member.identifier)).toEqual([])
+  expect((await commands.takeSentRequests()).filter(({ method }) => method !== 'GET')).toEqual([])
+  expect(beforeAQuestion).not.toHaveBeenCalled()
+  await expect.element(screen.getByRole('button', { name: 'Record', exact: true })).toBeInTheDocument()
+})
+
 // After the tests that record, because the mic state of the tab keeps this stop until the next tap.
 test('a deleted entry stops its recording, and the card says why', { timeout: 20_000 }, async () => {
   // Arrange
