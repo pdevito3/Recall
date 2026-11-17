@@ -17,6 +17,7 @@ import type { Answer } from '@/test/answer'
 import { member, signedInMember } from '@/test/session'
 
 import { addCapture, capturesOf, removeCapture, storeSlice, updateCapture, type StoredCapture, type UploadProblem } from '../audio-store'
+import { sliceMs } from '../mic-recorder'
 import { stopRecordingOfThisTab } from '../use-capture'
 import { useSendStoredAudio } from '../use-send-stored-audio'
 import { MicCard } from './mic-card'
@@ -139,23 +140,14 @@ function micGivesATone() {
   return vi.spyOn(navigator.mediaDevices, 'getUserMedia').mockImplementation(async () => aTone())
 }
 
-// The mic of a page outlives a test, and its stop does nothing while it starts. So the afterEach lets a held start go before it stops the mic,
-// or a test that fails while it holds the start leaves the mic at Starting for each later test. onTestFinished runs after the afterEach, too late.
-let heldStart: (() => Promise<void>) | null = null
-
 /** The mic starts only when the test calls the function that this gives. */
 function micStartsWhenTheTestSays() {
-  vi.spyOn(navigator.mediaDevices, 'getUserMedia').mockImplementation(
-    () =>
-      new Promise<MediaStream>((resolve) => {
-        heldStart = async () => {
-          heldStart = null
-          resolve(aTone())
-          await expect.element(page.getByRole('button', { name: 'Stop recording' }), { timeout: 5_000 }).toBeInTheDocument()
-        }
-      }),
-  )
-  return () => heldStart?.()
+  let micComes = () => undefined as void
+  vi.spyOn(navigator.mediaDevices, 'getUserMedia').mockImplementation(() => new Promise<MediaStream>((resolve) => (micComes = () => resolve(aTone()))))
+  return async () => {
+    micComes()
+    await expect.element(page.getByRole('button', { name: 'Stop recording' }), { timeout: 5_000 }).toBeInTheDocument()
+  }
 }
 
 async function aFinishedCapture(change: Partial<StoredCapture> = {}) {
@@ -181,15 +173,11 @@ async function aFinishedCapture(change: Partial<StoredCapture> = {}) {
 
 // The audio store outlives a test, as it outlives a page. The page goes first, or it reads the empty store and calls again.
 afterEach(async () => {
-  try {
-    await heldStart?.()
-  } finally {
-    await cleanup()
-    await stopRecordingOfThisTab()
-    await Promise.all(tones.splice(0).map((tone) => tone.close()))
-    vi.restoreAllMocks()
-    for (const capture of await capturesOf(member.identifier)) await removeCapture(capture.clientRecordingId)
-  }
+  await cleanup()
+  await stopRecordingOfThisTab()
+  await Promise.all(tones.splice(0).map((tone) => tone.close()))
+  vi.restoreAllMocks()
+  for (const capture of await capturesOf(member.identifier)) await removeCapture(capture.clientRecordingId)
 })
 
 test.each([390, 1280])('at %i px the card keeps its height while the mic starts and records, so nothing moves under the finger', async (width) => {
@@ -704,6 +692,39 @@ test('a sign-out sends at once the audio that waits for a retry, so it asks noth
   expect(beforeAQuestion).not.toHaveBeenCalled()
   expect(await capturesOf(member.identifier)).toMatchObject([{ isFinished: true }])
   await cardSays(screen, 'Writing the words')
+})
+
+test('a sign-out while the mic starts keeps the mic off when it comes, and records nothing', { timeout: 30_000 }, async () => {
+  // Arrange
+  notePageUser(member.identifier)
+  let micComes: () => void = () => undefined
+  const tracks: MediaStreamTrack[] = []
+  vi.spyOn(navigator.mediaDevices, 'getUserMedia').mockImplementation(
+    () =>
+      new Promise<MediaStream>((resolve) => {
+        micComes = () => {
+          const stream = aTone()
+          tracks.push(...stream.getTracks())
+          resolve(stream)
+        }
+      }),
+  )
+  const screen = await openHome(recordAndSend)
+  await userEvent.click(screen.getByRole('button', { name: 'Record' }))
+  await cardSays(screen, 'Starting the mic')
+  const beforeAQuestion = vi.fn()
+
+  // Act
+  await settleUnsentWords(beforeAQuestion)
+  micComes()
+
+  // Assert
+  await new Promise((resolve) => setTimeout(resolve, 1.5 * sliceMs))
+  expect(tracks.map(({ readyState }) => readyState)).toEqual(['ended'])
+  expect(await capturesOf(member.identifier)).toEqual([])
+  expect((await commands.takeSentRequests()).filter(({ method }) => method !== 'GET')).toEqual([])
+  expect(beforeAQuestion).not.toHaveBeenCalled()
+  await expect.element(screen.getByRole('button', { name: 'Record', exact: true })).toBeInTheDocument()
 })
 
 // After the tests that record, because the mic state of the tab keeps this stop until the next tap.
