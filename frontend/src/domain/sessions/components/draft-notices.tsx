@@ -4,6 +4,7 @@ import { Notification } from '@/components/notification'
 import { Button } from '@/components/ui/button'
 import { buttonVariants } from '@/components/ui/button-variants'
 import { Link } from '@/components/ui/link'
+import { copyToClipboard } from '@/lib/copy-to-clipboard'
 
 import { draftNotices, subscribeToDraftNotices, type DraftNotice } from '../autosave/draft-saver'
 import { plainPreviewOf, plainWordsOf } from '../editor/content'
@@ -16,21 +17,6 @@ const noticeClass = 'mx-4 mb-4 flex flex-wrap items-center justify-between gap-x
 
 // With a large font on a phone, the answers go to a next line and do not push past the edge.
 const actionsClass = 'flex min-w-0 max-w-full flex-wrap items-center gap-2'
-
-async function copyToClipboard(text: string) {
-  try {
-    await navigator.clipboard.writeText(text)
-  } catch {
-    // The clipboard API needs a secure context, and Recall can run on plain HTTP on a home network.
-    const field = document.createElement('textarea')
-    field.value = text
-    document.body.append(field)
-    field.select()
-    const isCopied = document.execCommand('copy')
-    field.remove()
-    if (!isCopied) throw new Error('The browser refused the copy.')
-  }
-}
 
 function MovedNotice({ notice }: { notice: Extract<DraftNotice, { kind: 'moved' }> }) {
   return (

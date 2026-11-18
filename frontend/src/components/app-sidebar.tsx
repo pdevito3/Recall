@@ -2,6 +2,7 @@ import {
   AiBrain01Icon,
   Book02Icon,
   InformationCircleIcon,
+  Key01Icon,
   Mic01Icon,
   Note01Icon,
   Settings01Icon,
@@ -63,6 +64,11 @@ const navItems = [
     title: "Settings",
     url: "/settings",
     icon: Settings01Icon,
+  },
+  {
+    title: "Personal access tokens",
+    url: "/settings/personal-access-tokens",
+    icon: Key01Icon,
   },
   {
     title: "Users",

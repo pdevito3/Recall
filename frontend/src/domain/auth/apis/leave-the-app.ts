@@ -66,6 +66,16 @@ export function showPage() {
 
 const warnOfTheLoss = (event: BeforeUnloadEvent) => event.preventDefault()
 
+let isDepartingNow = false
+
+/** True once this tab goes to a page outside the app. A guard of a page asks nothing then, so no prompt stops the way out. */
+export const isDeparting = () => isDepartingNow
+
+function depart(to: string) {
+  isDepartingNow = true
+  window.location.replace(to)
+}
+
 /**
  * The audio of the person of this page that waits in this browser for the Server, except what the person answered about
  * in this sign-out. The recording of this tab stops first, so the mic is off and its last part is in the list. A store
@@ -98,7 +108,7 @@ export function leaveTheApp(departure: Departure) {
   window.removeEventListener('beforeunload', warnOfTheLoss)
   if (departure.why === 'anotherPerson') {
     show({ why: 'anotherPerson', hasLostWords: words.length > 0 })
-    window.location.replace(words.length > 0 ? `${signInForAnotherPersonPage}&wordsLost=1` : signInForAnotherPersonPage)
+    depart(words.length > 0 ? `${signInForAnotherPersonPage}&wordsLost=1` : signInForAnotherPersonPage)
     return
   }
   // The audio store answers later, and the app must take no word and no tap meanwhile.
@@ -111,12 +121,12 @@ export function leaveTheApp(departure: Departure) {
     if (words.length === 0 && audio.length === 0) {
       // A navigation that the person or the browser stops leaves this page, and a later way out goes again.
       leaving = null
-      window.location.replace(to)
+      depart(to)
       return
     }
     show({ why, words, audio, leave: () => {
       window.removeEventListener('beforeunload', warnOfTheLoss)
-      window.location.replace(to)
+      depart(to)
     } })
     showPage()
   }

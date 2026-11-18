@@ -18,6 +18,7 @@ import { Route as UsersIndexRouteImport } from './routes/users/index'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as PeopleIndexRouteImport } from './routes/people/index'
 import { Route as CorrectionsIndexRouteImport } from './routes/corrections/index'
+import { Route as SettingsPersonalAccessTokensRouteImport } from './routes/settings/personal-access-tokens'
 import { Route as UsersIdIndexRouteImport } from './routes/users/$id/index'
 import { Route as SessionsIdIndexRouteImport } from './routes/sessions/$id/index'
 
@@ -66,6 +67,12 @@ const CorrectionsIndexRoute = CorrectionsIndexRouteImport.update({
   path: '/corrections/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsPersonalAccessTokensRoute =
+  SettingsPersonalAccessTokensRouteImport.update({
+    id: '/settings/personal-access-tokens',
+    path: '/settings/personal-access-tokens',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const UsersIdIndexRoute = UsersIdIndexRouteImport.update({
   id: '/users/$id/',
   path: '/users/$id/',
@@ -83,6 +90,7 @@ export interface FileRoutesByFullPath {
   '/model-providers': typeof ModelProvidersRoute
   '/summaries': typeof SummariesRoute
   '/transcription-engine': typeof TranscriptionEngineRoute
+  '/settings/personal-access-tokens': typeof SettingsPersonalAccessTokensRoute
   '/corrections': typeof CorrectionsIndexRoute
   '/people': typeof PeopleIndexRoute
   '/settings': typeof SettingsIndexRoute
@@ -96,6 +104,7 @@ export interface FileRoutesByTo {
   '/model-providers': typeof ModelProvidersRoute
   '/summaries': typeof SummariesRoute
   '/transcription-engine': typeof TranscriptionEngineRoute
+  '/settings/personal-access-tokens': typeof SettingsPersonalAccessTokensRoute
   '/corrections': typeof CorrectionsIndexRoute
   '/people': typeof PeopleIndexRoute
   '/settings': typeof SettingsIndexRoute
@@ -110,6 +119,7 @@ export interface FileRoutesById {
   '/model-providers': typeof ModelProvidersRoute
   '/summaries': typeof SummariesRoute
   '/transcription-engine': typeof TranscriptionEngineRoute
+  '/settings/personal-access-tokens': typeof SettingsPersonalAccessTokensRoute
   '/corrections/': typeof CorrectionsIndexRoute
   '/people/': typeof PeopleIndexRoute
   '/settings/': typeof SettingsIndexRoute
@@ -125,6 +135,7 @@ export interface FileRouteTypes {
     | '/model-providers'
     | '/summaries'
     | '/transcription-engine'
+    | '/settings/personal-access-tokens'
     | '/corrections'
     | '/people'
     | '/settings'
@@ -138,6 +149,7 @@ export interface FileRouteTypes {
     | '/model-providers'
     | '/summaries'
     | '/transcription-engine'
+    | '/settings/personal-access-tokens'
     | '/corrections'
     | '/people'
     | '/settings'
@@ -151,6 +163,7 @@ export interface FileRouteTypes {
     | '/model-providers'
     | '/summaries'
     | '/transcription-engine'
+    | '/settings/personal-access-tokens'
     | '/corrections/'
     | '/people/'
     | '/settings/'
@@ -165,6 +178,7 @@ export interface RootRouteChildren {
   ModelProvidersRoute: typeof ModelProvidersRoute
   SummariesRoute: typeof SummariesRoute
   TranscriptionEngineRoute: typeof TranscriptionEngineRoute
+  SettingsPersonalAccessTokensRoute: typeof SettingsPersonalAccessTokensRoute
   CorrectionsIndexRoute: typeof CorrectionsIndexRoute
   PeopleIndexRoute: typeof PeopleIndexRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
@@ -238,6 +252,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CorrectionsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/personal-access-tokens': {
+      id: '/settings/personal-access-tokens'
+      path: '/settings/personal-access-tokens'
+      fullPath: '/settings/personal-access-tokens'
+      preLoaderRoute: typeof SettingsPersonalAccessTokensRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/users/$id/': {
       id: '/users/$id/'
       path: '/users/$id'
@@ -261,6 +282,7 @@ const rootRouteChildren: RootRouteChildren = {
   ModelProvidersRoute: ModelProvidersRoute,
   SummariesRoute: SummariesRoute,
   TranscriptionEngineRoute: TranscriptionEngineRoute,
+  SettingsPersonalAccessTokensRoute: SettingsPersonalAccessTokensRoute,
   CorrectionsIndexRoute: CorrectionsIndexRoute,
   PeopleIndexRoute: PeopleIndexRoute,
   SettingsIndexRoute: SettingsIndexRoute,

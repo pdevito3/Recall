@@ -554,6 +554,8 @@ Other paths of the server do not get `resource_metadata`. The server does not su
 
 A personal access token (PAT) lets a script or an MCP client call `/api/*` and `/mcp` as one person, inside a grant that the person picks when they make it. The reasons are in [ADR 0023](adr/0023-personal-access-tokens-are-auth-sessions.md), and the rules are in [the spec](specs/personal-access-tokens.md).
 
+In the SPA, a person makes, lists, and revokes their own tokens in Settings > Personal access tokens. The page of a user also lists the tokens of that user, with Revoke where the caller may revoke one.
+
 ### Make, list, and revoke
 
 | Route | Who | Answer |
@@ -658,6 +660,8 @@ The script `frontend/e2e/run-against-stack.ts` reads the stack from `dotnet aspi
 Extra arguments go to Playwright, for example `pnpm test:e2e:stack --repeat-each=5`.
 
 `frontend/e2e/two-people.spec.ts` signs in two people on one browser, as in [One browser, two people](#one-browser-two-people). It needs an IdP file with `secondPersonEmail`, which only ZeroFactor has now, and a stack with `Auth__OpenSignup=true`. On another IdP it does not run, and the report says so.
+
+`frontend/e2e/personal-access-tokens.spec.ts` makes a token in the SPA, calls the API with it from outside the browser, and revokes it in the SPA. It signs in with a one-step form, so it does not run on an IdP with a two-step login, such as Authentik.
 
 ## Conformance
 
