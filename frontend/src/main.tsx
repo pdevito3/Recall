@@ -45,10 +45,12 @@ function preloadEachPageForNoNetwork() {
   for (const route of Object.values(router.routesById)) void router.loadRouteChunk(route).catch(() => undefined)
 }
 
-window.addEventListener('load', () => {
+// After the first page is on the screen, so that the code of the other pages does not hold up the code of this one.
+const stopWaitingForTheFirstPage = router.subscribe('onResolved', () => {
+  stopWaitingForTheFirstPage()
   const whenIdle = 'requestIdleCallback' in window ? window.requestIdleCallback : (load: () => void) => setTimeout(load, 1000)
   whenIdle(preloadEachPageForNoNetwork)
-}, { once: true })
+})
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
