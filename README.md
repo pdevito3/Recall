@@ -3,7 +3,7 @@
 > [!WARNING]
 > **Recall is in alpha development. Do not use it in production.** The data model, the API, and the install steps change from one commit to the next, and no release exists yet. An upgrade can need a manual step, and it can lose data. Keep a backup of anything that you write in Recall.
 
-Recall is a self-hosted journal for the voice. You open Recall on your phone, talk, and your words become a journal entry. You run Recall on your own machine, so the audio and the text stay on your own disk.
+Recall is a self-hosted journal for the voice. You open Recall on your phone, talk, and your words become a journal entry. You run Recall on your own machine. The audio and the text stay on your own disk, unless an Admin connects a cloud model provider.
 
 ## What Recall does
 
@@ -21,7 +21,8 @@ Recall also writes **Summaries** of a day, a week, a month, a quarter, and a yea
 
 - A machine that is on all the time, for example a home server, a NAS, or a small VPS.
 - Docker Engine 25 or later, with Docker Compose.
-- 5 GB of free disk for the build, and 2.5 GB of memory for the container.
+- 6 GB of free disk for the build and the speech model, and more for your audio.
+- 3 GB of memory for the container.
 - An OpenID Connect login provider, for example Keycloak or Authentik. Recall has no passwords of its own.
 - HTTPS, for the mic on your phone. A browser turns on the mic only on HTTPS or on `localhost`. [Tailscale serve](docs/install.md#tailscale-serve) gives you HTTPS with no domain and no open port.
 
@@ -33,32 +34,52 @@ A coding agent, such as Claude Code or Codex, can do the install for you. Open t
 Install Recall, a self-hosted voice journal, on this machine. The repository is
 https://github.com/pdevito3/Recall. Recall is alpha software.
 
-1. Read docs/install.md of the repository in full before you run a command. Obey it.
-   It is the source of truth, and it wins over this prompt.
-2. Make sure that Docker Engine 25 or later and Docker Compose are installed.
-   Use `docker compose` with a space. If one of them is missing, stop and tell me.
-3. Clone the repository into a folder that I choose. Ask me for the folder.
-4. Ask me where to keep the data: the Docker volume (the default) or a folder of
-   this machine. The data must be on a local disk. It cannot be on a network share,
-   and on Unraid it cannot be under /mnt/user.
-5. Ask me which OpenID Connect login provider I use, and for its issuer URL,
-   client ID, and client secret. Do not print the secret back to me.
-6. Ask me how I will reach Recall over HTTPS: Tailscale serve, Caddy with my own
-   domain, or another proxy. Do the HTTPS steps of docs/install.md for my choice.
-7. Make .env from .env.example. Fill in only the values that I gave you.
-8. Tell me each callback URL to register at my login provider. Wait until I say
-   that I registered it.
-9. Warn me that the first person who signs in becomes the Owner. Make sure that
-   open registration at my provider is off before I sign in.
-10. Run `docker compose up -d`. The first start builds the image, and the build
-    takes some minutes.
-11. Run `docker compose exec recall /app/healthcheck.sh` until it prints Healthy.
-    If it does not, read `docker compose logs recall` and the Troubleshoot table
-    of docs/install.md, and correct the cause.
-12. Give me the URL to open, and the backup commands of docs/install.md.
+Safety rules for the whole install:
+- Never run `docker compose down -v` or `docker volume rm`, and never delete or
+  chown a data folder, unless I say yes to that exact command.
+- Do not edit compose.yaml. If a setting needs it, use compose.override.yaml.
+- Never ask me for a secret, and never print one.
+- Ask me each question when you get to its step. Do not guess a value.
 
-Ask me each question when you get to its step. Do not guess a value that I did
-not give you.
+1. Make sure that Docker Engine 25 or later and Docker Compose are installed.
+   Use `docker compose` with a space. If one of them is missing, stop and tell me.
+2. If `docker compose ls` shows a `recall` project, or `docker volume ls` shows
+   `recall_recall-data`, stop and tell me. Recall already runs on this machine.
+3. Ask me for a folder, and clone the repository into it. If the clone fails
+   for access, tell me to run `gh auth login` and stop.
+4. Read docs/install.md of the checkout in full. Obey it. It is the source of
+   truth, and it wins over this prompt.
+5. Run `cp -n .env.example .env` in the checkout.
+6. Ask me where to keep the data: the Docker volume (the default) or a folder of
+   this machine. The data must be on a local disk, not on a network share. On
+   Unraid, it cannot be under /mnt/user. On a Mac, use the Docker volume.
+7. Ask me which OpenID Connect login provider I use, its issuer URL, and its
+   client ID. Do not ask for the client secret.
+8. Ask me how I will reach Recall over HTTPS: Tailscale serve, Caddy with my own
+   domain, or another proxy. Do the HTTPS steps of docs/install.md for my choice.
+   With a public domain, also set AllowedHosts (docs/install.md#set-allowedhosts).
+9. Write to .env each value that docs/install.md names for my answers to steps 6
+   to 8. Remove the `#` of each `Auth__Providers__0__` line, except `AllowHttp`.
+   Remove the `#` of `AllowHttp` only for an issuer on http.
+10. Leave `Auth__Providers__0__ClientSecret=` empty. Tell me to open .env in an
+    editor and type the secret there, in single quotes if it has a `$` or a `#`.
+    Wait until I say that I did it. Then make sure that the line is not empty,
+    with no output of its value, and run `chmod 600 .env`.
+11. Tell me each URI to register at my provider, for each address that I will
+    use: the redirect URI `/auth/oidc/callback`, and the post-logout redirect URI
+    `/auth/signed-out` unless my provider is Authentik. No wildcards. See
+    docs/authentication.md#register-the-callback-urls. Wait until I say that I
+    registered them.
+12. Tell me that the first person who signs in becomes the Owner. Ask me to turn
+    off open registration at my provider, or to limit the client to my account.
+    Do not continue until I say that I did it.
+13. Run `docker compose up -d`. The first start builds the image, and the build
+    takes some minutes.
+14. Run `docker compose exec recall /app/healthcheck.sh` until it prints Healthy,
+    for up to 10 minutes. If it does not, read `docker compose logs recall` and
+    the Troubleshoot table of docs/install.md. Tell me the cause and your fix
+    before you change anything.
+15. Give me the URL to open, and the backup commands of docs/install.md.
 ```
 
 ## Install Recall by hand
@@ -88,6 +109,8 @@ Then [connect a login provider](docs/install.md#connect-a-login-provider) and [t
 |-----|-------------------|
 | [docs/install.md](docs/install.md) | The container, `/data`, HTTPS, the health probe, backup, and upgrade |
 | [docs/authentication.md](docs/authentication.md) | The login, the Owner, sessions, and the login providers |
+| [docs/backend.md](docs/backend.md) | The structure of the Server, and how to add a feature |
+| [docs/frontend.md](docs/frontend.md) | The structure of the SPA, the API client, and the routes |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | The logs of an install, and how to send a support bundle |
 | [CONTEXT.md](CONTEXT.md) | The words that Recall uses, such as Session, Raw, and Cleanup |
 | [docs/adr/](docs/adr/) | The decisions behind the design |
@@ -104,7 +127,7 @@ Recall is a .NET Aspire application. The parts are:
 
 Recall started from [FullstackTemplate](https://github.com/pdevito3/FullstackTemplate) at commit `e1cffd29052419331957407033c38ec71f62800d`. [ADRs 0013 to 0016](docs/adr/) give the target shape of the code.
 
-Read [AGENTS.md](AGENTS.md) before you change code. It gives the rules of the repository and an index of the docs for each area. The `.claude/skills/` folder holds the skills for coding agents.
+Read [AGENTS.md](AGENTS.md) before you change code. It gives the rules of the repository and an index of the docs for each area. The `.agents/skills/` folder holds the skills for coding agents.
 
 ### Run the stack
 
