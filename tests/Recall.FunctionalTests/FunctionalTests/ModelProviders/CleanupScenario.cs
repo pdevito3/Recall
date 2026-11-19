@@ -71,14 +71,14 @@ internal sealed class CleanupScenario : IAsyncDisposable
         return (await added.Content.ReadFromJsonAsync<ModelProviderDto>()).ShouldNotBeNull();
     }
 
-    public static async Task<ModelProviderDto> PickModelAsync(HttpClient client, ModelProviderDto provider, string model)
+    public static async Task<ModelProviderDto> PickModelAsync(HttpClient client, ModelProviderDto provider, string model, bool makeActive = true)
     {
         var updated = await client.PutAsJsonAsync(ApiRoutes.ModelProviders.GetRecord(provider.Id), new
         {
             name = provider.Name,
             baseUrl = provider.BaseUrl,
             model,
-            makeActive = true,
+            makeActive,
             version = provider.Version,
         });
         updated.StatusCode.ShouldBe(HttpStatusCode.OK, await updated.Content.ReadAsStringAsync());

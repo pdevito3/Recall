@@ -50,7 +50,8 @@ public class ModelProviderApiTests : TestBase
         FactoryClient.SignInAsAppUser(scenario.Admin.Identifier);
 
         // Act
-        var second = await CleanupScenario.ConnectAsync(FactoryClient, ModelProviderKind.OpenAiCompatible, scenario.Fake.CompatibleBaseUrl, scenario.ApiKey, "second");
+        var connected = await CleanupScenario.ConnectAsync(FactoryClient, ModelProviderKind.OpenAiCompatible, scenario.Fake.CompatibleBaseUrl, scenario.ApiKey, "second");
+        var second = await CleanupScenario.PickModelAsync(FactoryClient, connected, FakeModelProvider.ModelId, makeActive: false);
         var list = await ListAsync();
         FactoryClient.SignInAsAppUser(scenario.Member.Identifier);
         var active = await FactoryClient.GetFromJsonAsync<ActiveModelProviderDto>(ApiRoutes.ModelProviders.Active);

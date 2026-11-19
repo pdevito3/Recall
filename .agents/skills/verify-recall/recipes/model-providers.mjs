@@ -32,59 +32,92 @@ export default async ({ page, step, capture, expect, login }) => {
   const key = `fake-key-${randomUUID()}`
   const fake = await startFake(key)
   const name = `Fake ${Date.now().toString(36)}`
-  const cardOf = (title) => page.locator('[data-slot="card"]').filter({ has: page.getByRole('heading', { level: 3, name: title, exact: true }) })
+  const noModelHint = 'A Cleanup does not use this model provider. Pick a model, then make it active.'
+  const withModelHint = 'A Cleanup does not use this model provider until you make it active.'
+  // A sweep gives each name in an answer a long value, so a card is found by the id of its provider.
+  const cardOf = ({ id }) => page.locator('[data-slot="card"]').filter({ has: page.locator(`[id="new-key-${id}"]`) })
+  const activeBadge = (provider) => cardOf(provider).getByText('Active', { exact: true })
 
-  // A sweep gives each name in an answer a long value, so the page shows the name of the answer, not the typed name.
   const connect = async (title, apiKey) => {
     await page.getByLabel('Name').fill(title)
     await page.getByLabel('Base URL').fill(fake.url)
     await page.getByLabel('API key', { exact: true }).fill(apiKey)
     const added = page.waitForResponse((r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/v1/model-providers')
     await page.getByRole('button', { name: 'Connect', exact: true }).click()
-    const shown = (await (await added).json()).name
+    const { id, name: shown } = await (await added).json()
     await expect(page.getByRole('heading', { level: 3, name: shown })).toBeVisible()
     await expect(page.getByLabel('API key', { exact: true })).toHaveValue('')
-    return shown
+    return { id, name: shown }
   }
+
+  const testAndPickModel = async (provider) => {
+    const card = cardOf(provider)
+    await card.getByRole('button', { name: 'Test connection' }).click()
+    await expect(card.getByRole('status').filter({ hasText: 'Connected.' })).toBeVisible()
+    await card.getByRole('button', { name: /Model of / }).click()
+    const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && new URL(r.url()).pathname === `/api/v1/model-providers/${provider.id}`)
+    await page.getByRole('option').first().click()
+    expect((await saved).status()).toBe(200)
+    await expect(card.getByText('Test the connection, then pick a model.', { exact: true })).toHaveCount(0)
+  }
+
+  // A sweep gives the name a new value in each answer, so only the list tells which provider is active.
+  const readActive = () =>
+    page.evaluate(async () => {
+      const headers = { 'X-CSRF': '1' }
+      const list = await (await fetch('/api/v1/model-providers', { headers })).json()
+      const active = await (await fetch('/api/v1/model-providers/active', { headers })).json()
+      return { ids: list.items.filter((p) => p.isActive).map((p) => p.id), named: active.name !== null }
+    })
 
   try {
     await step('log in as the Owner, an Admin of the tenant of a new database', async () => {
       await login()
     })
 
-    const shownName = await step('Model providers in the sidebar: connect a provider with a key', async () => {
+    const first = await step('Model providers in the sidebar: connect the first provider of the tenant, and it is not active', async () => {
       await page.goto('/')
       await page.getByRole('link', { name: 'Model providers', exact: true }).click()
       await expect(page.getByRole('heading', { level: 1, name: 'Model providers' })).toBeVisible()
-      return connect(name, key)
+      const provider = await connect(name, key)
+      await expect(cardOf(provider).getByText(noModelHint, { exact: true })).toBeVisible()
+      await expect(activeBadge(provider)).toHaveCount(0)
+      return provider
     })
     await capture('connected')
 
-    await step('Test connection: the status names the models, and a pick saves a model', async () => {
-      const card = cardOf(shownName)
-      await card.getByRole('button', { name: 'Test connection' }).click()
-      await expect(card.getByRole('status').filter({ hasText: 'Connected.' })).toBeVisible()
-      await card.getByRole('button', { name: new RegExp(`Model of ${shownName}`) }).click()
-      const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().includes('/api/v1/model-providers/'))
-      await page.getByRole('option').first().click()
-      expect((await saved).status()).toBe(200)
-      await expect(card.getByText('Test the connection, then pick a model.')).toHaveCount(0)
+    await step('Test connection and a pick of a model: the provider has a model and is still not active', async () => {
+      await testAndPickModel(first)
+      await expect(cardOf(first).getByText(withModelHint, { exact: true })).toBeVisible()
+      await expect(activeBadge(first)).toHaveCount(0)
+      expect(await readActive()).toEqual({ ids: [], named: false })
     })
     await capture('tested')
 
+    await step('Make active: the badge Active shows, and the button goes away', async () => {
+      await cardOf(first).getByRole('button', { name: 'Make active' }).click()
+      await expect(activeBadge(first)).toBeVisible()
+      await expect(cardOf(first).getByRole('button', { name: 'Make active' })).toHaveCount(0)
+      expect(await readActive()).toEqual({ ids: [first.id], named: true })
+    })
+
+    await step('a second provider with a model: a connect does not take the place of the active provider', async () => {
+      const second = await connect(`${name} second`, key)
+      await testAndPickModel(second)
+      await expect(cardOf(second).getByText(withModelHint, { exact: true })).toBeVisible()
+      await expect(activeBadge(second)).toHaveCount(0)
+      await expect(activeBadge(first)).toBeVisible()
+      expect(await readActive()).toEqual({ ids: [first.id], named: true })
+    })
+    await capture('second-provider')
+
     await step('a wrong key: the alert holds the words of the provider', async () => {
-      const card = cardOf(await connect(`${name} wrong`, `wrong-${randomUUID()}`))
-      await card.getByRole('button', { name: 'Test connection' }).click()
-      await expect(card.getByRole('alert')).toContainText('The connection failed.')
+      const wrong = await connect(`${name} wrong`, `wrong-${randomUUID()}`)
+      await cardOf(wrong).getByRole('button', { name: 'Test connection' }).click()
+      await expect(cardOf(wrong).getByRole('alert')).toContainText('The connection failed.')
+      await expect(cardOf(wrong).getByText(noModelHint, { exact: true })).toBeVisible()
     })
     await capture('bad-key')
-
-    await step('the newest provider is active, so make the good one active again', async () => {
-      // A sweep gives a name a new long value in each answer, so after a read of the list the good provider is the one with a model.
-      const card = page.locator('[data-slot="card"]').filter({ has: page.getByRole('button', { name: /Model of / }) })
-      await card.getByRole('button', { name: 'Make active' }).click()
-      await expect(card.getByText('Active', { exact: true })).toBeVisible()
-    })
 
     const session = await step('add a Session with a draft through the API', async () => {
       const made = await page.evaluate(async (clientSessionId) => {
