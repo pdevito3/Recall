@@ -9,7 +9,7 @@ import { recordingsApi } from './api/recordings-api'
 import { aSetting, settingsApi } from './api/settings-api'
 import { transcriptionEngineApi } from './api/summaries-api'
 import { usersApi } from './api/users-api'
-import { answers, isMockedPath, requestRecorder, type HttpMethod, type MockRoute, type ServedRequest } from './api/mock-route'
+import { answers, mockedPaths, requestRecorder, type HttpMethod, type MockRoute, type ServedRequest } from './api/mock-route'
 import { as, type Identity } from './auth/actors'
 
 export interface Api {
@@ -62,7 +62,7 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
 
       // On the context, so that a second tab of the test gets the same answers.
       await context.route(
-        (url) => url.origin === origin && isMockedPath(url.pathname),
+        mockedPaths(origin),
         async (route, request) => {
           const url = new URL(request.url())
           const method = request.method().toLowerCase()
