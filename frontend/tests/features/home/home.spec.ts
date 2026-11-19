@@ -1,6 +1,8 @@
 import { authApi, authPaths } from '@tests/support/api/auth-api'
+import { sessionsApi } from '@tests/support/api/sessions-api'
 import { usersApi } from '@tests/support/api/users-api'
 import { as } from '@tests/support/auth/actors'
+import { aSession } from '@tests/support/builders/session-builder'
 import { expect, test } from '@tests/support/fixtures'
 import { useDefaultFontSize } from '@tests/support/screen'
 import { appShellPage } from '../app-shell/app-shell.tasks'
@@ -53,10 +55,12 @@ test.describe('the mic card on a phone', () => {
 test.describe('the mic card with a default font of 32 px on a 320 px screen', () => {
   test.use({ viewport: { width: 320, height: 800 }, permissions: ['microphone'] })
 
-  test('while it records, stays centered with nothing out of the card, and the page does not scroll sideways', async ({ page }) => {
+  test('while it records, stays centered with nothing out of the card, and the page does not scroll sideways', async ({ page, api }) => {
+    // The recorder sends a slice of audio each second, and the first slice makes an entry. The upload is not in this test.
+    api.mock({ ...sessionsApi.creates(aSession().build()), neverAnswers: true })
     const home = homePage(page)
     await useDefaultFontSize(page, 32)
-    await home.open()
+    await home.openWithNoEntries()
 
     await home.record()
     await home.markAParagraph()

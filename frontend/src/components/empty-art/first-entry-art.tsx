@@ -11,7 +11,7 @@ export function FirstEntryArt() {
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden
-      className="h-auto w-44 stroke-muted-foreground/60"
+      className="h-auto w-44 max-w-full stroke-muted-foreground/60"
     >
       <circle cx="88" cy="68" r="54" className="fill-muted-foreground/10 stroke-none" />
       <path d="M95 98v14l3.5-3 3.5 3V96" className="fill-muted-foreground/20" />

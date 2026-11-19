@@ -3,6 +3,9 @@ import type { Page } from '@playwright/test'
 export const home = (page: Page) => ({
   heading: page.getByRole('main').getByRole('heading', { level: 1 }),
   journalComposer: page.getByRole('textbox', { name: 'New entry' }),
+  composerSection: page.getByRole('region', { name: 'Write a new entry' }),
+  emptyTimeline: page.getByText('Your entries show here. Write your first one above.', { exact: true }),
+  timelineLoading: page.getByRole('status', { name: 'Loading your entries' }),
   userMenu: (name: string) => page.getByRole('button', { name: `User menu for ${name}`, exact: true }),
   userMenuName: (name: string) => page.getByRole('menu', { name: 'User menu' }).getByText(name, { exact: true }),
   userMenuLogout: page.getByRole('menuitem', { name: 'Logout', exact: true }),
