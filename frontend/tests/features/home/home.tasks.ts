@@ -12,6 +12,16 @@ export function homePage(page: Page) {
       await expect(at.heading).toBeVisible()
     },
 
+    async openWithNoEntries() {
+      await this.open()
+      await expect(at.emptyTimeline).toBeVisible()
+    },
+
+    async openWhileTheEntriesLoad() {
+      await this.open()
+      await expect(at.timelineLoading).toBeVisible()
+    },
+
     /** The functional suite runs on localhost, which is a secure context, so a test sets the value of a LAN address. */
     async openOnPlainHttp() {
       await page.addInitScript(() => Object.defineProperty(window, 'isSecureContext', { value: false }))

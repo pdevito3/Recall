@@ -1,4 +1,5 @@
 import { fileStoreApi } from '@tests/support/api/file-store-api'
+import { sessionsApi } from '@tests/support/api/sessions-api'
 import { summariesApi, transcriptionEngineApi } from '@tests/support/api/summaries-api'
 import { usersApi } from '@tests/support/api/users-api'
 import { expect, test } from '@tests/support/fixtures'
@@ -22,9 +23,29 @@ for (const viewport of [
 
       expect(await shell.pageScrollRange()).toBe(0)
     })
+  })
 
-    test('the home page does not scroll', async ({ page }) => {
-      await homePage(page).open()
+  test.describe(`the home page with no entries at ${viewport.width}x${viewport.height}`, () => {
+    test.use({ viewport })
+
+    test('shows the whole mic card and the whole composer on open', async ({ page, api }) => {
+      api.mock(sessionsApi.timelineIs([]))
+      const home = homePage(page)
+
+      await home.openWithNoEntries()
+
+      await expect(home.at.micCard).toBeInViewport({ ratio: 1 })
+      await expect(home.at.composerSection).toBeInViewport({ ratio: 1 })
+    })
+  })
+
+  test.describe(`the home page while the entries load at ${viewport.width}x${viewport.height}`, () => {
+    test.use({ viewport })
+
+    test('does not scroll', async ({ page, api }) => {
+      api.mock({ ...sessionsApi.timelineIs([]), neverAnswers: true })
+
+      await homePage(page).openWhileTheEntriesLoad()
 
       expect(await appShellPage(page).pageScrollRange()).toBe(0)
     })
