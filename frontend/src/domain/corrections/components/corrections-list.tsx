@@ -1,4 +1,4 @@
-import { useState, type RefObject } from 'react'
+import { useEffect, useState, type RefObject } from 'react'
 
 import type { CorrectionDto } from '@/api/generated/models/types/correction-dto'
 import { Notification } from '@/components/notification'
@@ -18,7 +18,7 @@ import { isProblemDetailsError } from '@/lib/problem-details'
 
 import { useCorrectionDirectory, useDeleteCorrection } from '../apis/corrections'
 import { CorrectionForm } from './correction-form'
-import { matching, termMaxLength } from './correction-form-schema'
+import { isKnownWord, matching, termMaxLength } from './correction-form-schema'
 
 interface CorrectionsListProps {
   search: string
@@ -28,14 +28,17 @@ interface CorrectionsListProps {
 
 export function CorrectionsList({ search, onSearch, headingRef }: CorrectionsListProps) {
   return (
-    <div className="flex flex-col gap-6">
-      <p className="max-w-prose text-muted-foreground">
-        These are the words that dictation gets wrong, and the ways it mishears them. Cleanup writes your word in their
-        place.
-      </p>
+    <section aria-labelledby="misheard-words-heading" className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
+        <h2 id="misheard-words-heading" className="text-lg font-semibold">Misheard words</h2>
+        <p className="text-sm text-muted-foreground">
+          These are the words that dictation gets wrong, and the ways it mishears them. Cleanup writes your word in their
+          place.
+        </p>
+      </div>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <SearchBox
-          label="Search corrections"
+          label="Search misheard words"
           placeholder="Term or mishearing"
           search={search}
           maxLength={termMaxLength}
@@ -44,12 +47,24 @@ export function CorrectionsList({ search, onSearch, headingRef }: CorrectionsLis
         <AddCorrection />
       </div>
       <CorrectionRows search={search} headingRef={headingRef} />
-    </div>
+    </section>
   )
 }
 
 function CorrectionRows({ search, headingRef }: { search: string; headingRef: RefObject<HTMLHeadingElement | null> }) {
   const directory = useCorrectionDirectory()
+  // An edit that clears the mishearings takes away the row, its Edit button, and the open dialog. The dialog keeps the
+  // focus while it is open, so the heading takes the focus only after the row is gone. If the refetch failed and the
+  // person moved on, a later refetch must not take the focus from them.
+  const [madeKnownId, setMadeKnownId] = useState<string | null>(null)
+  const isMadeKnownRowGone =
+    madeKnownId !== null && !directory.data?.some((correction) => correction.id === madeKnownId && !isKnownWord(correction))
+  useEffect(() => {
+    if (!isMadeKnownRowGone) return
+    const focused = document.activeElement
+    if (!focused || focused === document.body || !focused.isConnected) headingRef.current?.focus()
+    setMadeKnownId(null)
+  }, [isMadeKnownRowGone, headingRef])
 
   if (directory.isPending) {
     return <p role="status" aria-label="Loading your corrections" className="text-muted-foreground">Loading your corrections</p>
@@ -57,12 +72,13 @@ function CorrectionRows({ search, headingRef }: { search: string; headingRef: Re
   if (directory.isError) {
     return <QueryError title="Your corrections did not load." error={directory.error} onRetry={() => directory.refetch()} />
   }
-  if (directory.data.length === 0) {
-    return <p className="text-muted-foreground">You have no corrections yet. Add a word that dictation gets wrong.</p>
+  const corrections = directory.data.filter((correction) => !isKnownWord(correction))
+  if (corrections.length === 0) {
+    return <p className="text-muted-foreground">You have no misheard words yet. Add a word that dictation gets wrong.</p>
   }
-  const rows = matching(directory.data, search)
+  const rows = matching(corrections, search)
   if (rows.length === 0) {
-    return <p className="text-muted-foreground wrap-anywhere">No correction has “{search.trim()}” in its term or its mishearings.</p>
+    return <p className="text-muted-foreground wrap-anywhere">No misheard word has “{search.trim()}” in its term or its mishearings.</p>
   }
 
   return (
@@ -79,7 +95,7 @@ function CorrectionRows({ search, headingRef }: { search: string; headingRef: Re
             {correction.hardReplace && <span className="text-sm text-muted-foreground">Always replaced</span>}
           </div>
           <div className="flex shrink-0 gap-1">
-            <EditCorrection correction={correction} />
+            <EditCorrection correction={correction} onMadeKnown={setMadeKnownId} />
             <DeleteCorrection correction={correction} headingRef={headingRef} />
           </div>
         </li>
@@ -101,14 +117,19 @@ function AddCorrection() {
   )
 }
 
-function EditCorrection({ correction }: { correction: CorrectionDto }) {
+function EditCorrection({ correction, onMadeKnown }: { correction: CorrectionDto; onMadeKnown: (id: string) => void }) {
   const [isOpen, setIsOpen] = useState(false)
+
+  const handleSaved = (saved: CorrectionDto) => {
+    setIsOpen(false)
+    if (isKnownWord(saved)) onMadeKnown(saved.id)
+  }
 
   return (
     <ResponsiveDialogTrigger isOpen={isOpen} onOpenChange={setIsOpen}>
       <Button variant="ghost" aria-label={`Edit ${correction.canonicalTerm}`}>Edit</Button>
       <ResponsiveDialog>
-        <CorrectionForm correction={correction} onSaved={() => setIsOpen(false)} />
+        <CorrectionForm correction={correction} onSaved={handleSaved} />
       </ResponsiveDialog>
     </ResponsiveDialogTrigger>
   )

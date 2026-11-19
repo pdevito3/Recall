@@ -3,7 +3,7 @@ import { expect, test } from '@tests/support/fixtures'
 import { correctionsPage } from './corrections.tasks'
 
 test.describe('the corrections of a journal', () => {
-  test('lists each correction with its mishearings', async ({ page, api }) => {
+  test('lists each correction with its mishearings, and a known word as a pill', async ({ page, api }) => {
     api.mock(correctionsApi.listIs([aCorrection('cor_1', 'GRDB', ['grid b', 'great db'], true), aCorrection('cor_2', 'Kubernetes')]))
     const corrections = correctionsPage(page)
 
@@ -12,12 +12,13 @@ test.describe('the corrections of a journal', () => {
     await expect(corrections.at.term('GRDB')).toBeVisible()
     await expect(corrections.at.heardAs('grid b, great db')).toBeVisible()
     await expect(corrections.at.alwaysReplaced).toHaveCount(1)
-    await expect(corrections.at.term('Kubernetes')).toBeVisible()
+    await expect(corrections.at.knownWords).toHaveText(['Kubernetes'])
+    await expect(corrections.at.term('Kubernetes')).toHaveCount(0)
     expect(api.last('get', correctionsPaths.list)?.query.get('pageSize')).toBe('100')
   })
 
   test('lists the terms in alphabetical order with no regard to case', async ({ page, api }) => {
-    api.mock(correctionsApi.listIs([aCorrection('cor_1', 'Zoë'), aCorrection('cor_2', 'pnpm'), aCorrection('cor_3', 'GRDB')]))
+    api.mock(correctionsApi.listIs([aCorrection('cor_1', 'Zoë', ['zoey']), aCorrection('cor_2', 'pnpm', ['p npm']), aCorrection('cor_3', 'GRDB', ['grid b'])]))
     const corrections = correctionsPage(page)
 
     await corrections.open()
@@ -35,7 +36,7 @@ test.describe('the corrections of a journal', () => {
   })
 
   test('a search with a quote finds a mishearing and says when none matches', async ({ page, api }) => {
-    api.mock(correctionsApi.listIs([aCorrection('cor_1', 'GRDB', ['"grid" b']), aCorrection('cor_2', 'Kubernetes')]))
+    api.mock(correctionsApi.listIs([aCorrection('cor_1', 'GRDB', ['"grid" b']), aCorrection('cor_2', 'Kubernetes', ['cooper netties'])]))
     const corrections = correctionsPage(page)
 
     await corrections.open('"GRID"')
@@ -78,6 +79,23 @@ test.describe('the corrections of a journal', () => {
     await expect(corrections.at.alwaysReplace).not.toBeChecked()
   })
 
+  test('on a phone, the × of a known word takes a 44 px tap that does not reach the next pill', async ({ page, api }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    const words = [aCorrection('cor_1', 'GRDB'), aCorrection('cor_2', 'Radancy'), aCorrection('cor_3', 'Tallinn'), aCorrection('cor_4', 'Zoë')]
+    api.mock(correctionsApi.listIs(words))
+    const corrections = correctionsPage(page)
+    await corrections.open()
+
+    expect(await corrections.closeReachIntoNextPill()).toBeLessThan(0)
+    for (const [index, [dx, dy]] of [[-21, 0], [21, 0], [0, -21], [0, 21]].entries()) {
+      const word = words[index]
+      const close = await corrections.centerOf(corrections.at.removeKnownWord(word.canonicalTerm))
+      api.mock(correctionsApi.deletes(word.id), correctionsApi.listIs(words.slice(index + 1)))
+      await page.mouse.click(close.x + dx, close.y + dy)
+      await expect(corrections.at.removeKnownWord(word.canonicalTerm)).toHaveCount(0)
+    }
+  })
+
   test('adds a correction with its mishearings', async ({ page, api }) => {
     const added = aCorrection('cor_3', 'GRDB', ['grid b', 'great db'], true)
     api.mock(correctionsApi.listIs([]))
@@ -103,7 +121,7 @@ test.describe('the corrections of a journal', () => {
     const corrections = correctionsPage(page)
     await corrections.open()
 
-    await corrections.add('GRDB', [])
+    await corrections.add('GRDB', ['grid b'])
 
     await expect(corrections.at.termError('The term has a character that is not allowed.')).toBeVisible()
     await expect(corrections.at.termField).toBeFocused()
@@ -131,11 +149,11 @@ test.describe('the corrections of a journal', () => {
   })
 
   test('deletes a correction after a confirm, and puts the focus on the heading', async ({ page, api }) => {
-    api.mock(correctionsApi.listIs([aCorrection('cor_1', 'GRDB'), aCorrection('cor_2', 'Kubernetes')]))
+    api.mock(correctionsApi.listIs([aCorrection('cor_1', 'GRDB', ['grid b']), aCorrection('cor_2', 'Kubernetes', ['cooper netties'])]))
     const corrections = correctionsPage(page)
     await corrections.open()
 
-    api.mock(correctionsApi.deletes('cor_1'), correctionsApi.listIs([aCorrection('cor_2', 'Kubernetes')]))
+    api.mock(correctionsApi.deletes('cor_1'), correctionsApi.listIs([aCorrection('cor_2', 'Kubernetes', ['cooper netties'])]))
     await corrections.remove('cor_1', 'GRDB')
 
     await expect(corrections.at.term('GRDB')).toHaveCount(0)
@@ -146,7 +164,7 @@ test.describe('the corrections of a journal', () => {
   })
 
   test('keeps a correction that changed on another device after the page loaded it, and shows the change', async ({ page, api }) => {
-    api.mock(correctionsApi.listIs([aCorrection('cor_1', 'GRDB')]))
+    api.mock(correctionsApi.listIs([aCorrection('cor_1', 'GRDB', ['grid b'])]))
     const corrections = correctionsPage(page)
     await corrections.open()
 
@@ -157,5 +175,29 @@ test.describe('the corrections of a journal', () => {
     await expect(corrections.at.term('GRDB')).toBeVisible()
     await expect(corrections.at.heardAs('girdb')).toBeVisible()
     expect(api.last('delete', correctionsPaths.one('cor_1'))?.query.get('ifVersion')).toBe('1')
+  })
+
+  test('Enter adds a known word, and its × removes it with no confirm', async ({ page, api }) => {
+    const radancy = aCorrection('cor_4', 'Radancy')
+    api.mock(correctionsApi.listIs([]))
+    const corrections = correctionsPage(page)
+    await corrections.open()
+
+    api.mock(correctionsApi.adds(radancy), correctionsApi.listIs([radancy]))
+    await corrections.addKnownWord(' Radancy ')
+
+    expect(api.last('post', correctionsPaths.list)?.body).toEqual({ canonicalTerm: 'Radancy', mishearings: [], hardReplace: false })
+    await expect(corrections.at.knownWords).toHaveText(['Radancy'])
+    await expect(corrections.at.knownWordInput).toHaveValue('')
+    await expect(corrections.at.knownWordInput).toBeFocused()
+    await expect(corrections.at.empty).toBeVisible()
+
+    api.mock(correctionsApi.deletes('cor_4'), correctionsApi.listIs([]))
+    await corrections.removeKnownWord('cor_4', 'Radancy')
+
+    await expect(corrections.at.knownWords).toHaveCount(0)
+    await expect(corrections.at.knownWordInput).toBeFocused()
+    expect(api.last('delete', correctionsPaths.one('cor_4'))?.query.get('ifVersion')).toBe('1')
+    expect(await corrections.at.toasts.count()).toBe(0)
   })
 })

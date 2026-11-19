@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 import { correctionsPaths } from '@tests/support/api/corrections-api'
 import { corrections } from './corrections.locators'
 
@@ -29,6 +29,24 @@ export function correctionsPage(page: Page) {
         return { x: box.left + box.width / 2, y: row.top + row.height / 2, gapAboveHint: hint.top - box.bottom }
       }),
 
+    async centerOf(element: Locator) {
+      const box = (await element.boundingBox())!
+      return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+    },
+
+    /** How far the 44 px tap of the × of each pill reaches into the pill after it on its row. Negative is a gap. */
+    closeReachIntoNextPill: () =>
+      at.knownWords.evaluateAll((pills) =>
+        Math.max(
+          ...pills.slice(0, -1).map((pill, index) => {
+            const close = pill.querySelector('button')!.getBoundingClientRect()
+            const next = pills[index + 1].getBoundingClientRect()
+            const reach = close.left + close.width / 2 + 22
+            return next.top < close.bottom ? reach - next.left : -Infinity
+          }),
+        ),
+      ),
+
     async add(term: string, mishearings: string[], alwaysReplace = false) {
       await at.add.click()
       await at.termField.fill(term)
@@ -49,6 +67,19 @@ export function correctionsPage(page: Page) {
       const saved = answered(page, 'PUT', correctionsPaths.one(id))
       await at.save.click()
       await saved
+    },
+
+    async addKnownWord(term: string) {
+      await at.knownWordInput.fill(term)
+      const added = answered(page, 'POST', correctionsPaths.list)
+      await at.knownWordInput.press('Enter')
+      await added
+    },
+
+    async removeKnownWord(id: string, term: string) {
+      const deleted = answered(page, 'DELETE', correctionsPaths.one(id))
+      await at.removeKnownWord(term).click()
+      await deleted
     },
 
     async remove(id: string, term: string) {

@@ -106,4 +106,85 @@ public class CleanupPromptTests
         prompt.ShouldContain("in its usual written form");
         prompt.ShouldContain("Remove filler words and hesitation sounds");
     }
+
+    [Test]
+    [Property("Rule", "SES-54")]
+    public void a_term_with_mishearings_keeps_its_list_and_a_known_word_goes_to_the_model_alone_with_the_rule_to_keep_a_correct_word()
+    {
+        // Arrange
+        Correction[] corrections =
+        [
+            Correction.Create("ten_1", "usr_1", "Radancy", [], hardReplace: false),
+            Correction.Create("ten_1", "usr_1", "Kubernetes", ["cooper netties"], hardReplace: false),
+        ];
+
+        // Act
+        var prompt = CleanupPrompt.InstructionsWith(corrections, removeFillerWords: true, writeNumbersAsDigits: true);
+
+        // Assert
+        LinesOf(prompt).TakeLast(5).ShouldBe(
+        [
+            "The person keeps a list of terms that are often misheard. When the text holds a mishearing in the sense of the term, write the term. For this list, change no other words.",
+            "- \"Kubernetes\", often misheard as: cooper netties",
+            "",
+            "The person uses these known words. Where the text holds a word or a phrase that sounds like a known word and does not fit the context as written, write the known word as it is spelled here. Do not change a correct word that fits the context.",
+            "- \"Radancy\"",
+        ]);
+    }
+
+    [Test]
+    [Property("Rule", "SES-54")]
+    public void a_term_with_mishearings_and_no_known_word_gets_no_known_word_block()
+    {
+        // Arrange
+        Correction[] corrections = [Correction.Create("ten_1", "usr_1", "Kubernetes", ["cooper netties"], hardReplace: false)];
+
+        // Act
+        var prompt = CleanupPrompt.InstructionsWith(corrections, removeFillerWords: true, writeNumbersAsDigits: true);
+
+        // Assert
+        LinesOf(prompt).TakeLast(2).ShouldBe(
+        [
+            "The person keeps a list of terms that are often misheard. When the text holds a mishearing in the sense of the term, write the term. For this list, change no other words.",
+            "- \"Kubernetes\", often misheard as: cooper netties",
+        ]);
+        prompt.ShouldNotContain("known word");
+    }
+
+    [Test]
+    [Property("Rule", "SES-54")]
+    public void a_known_word_with_always_replace_on_still_goes_to_the_model()
+    {
+        // Arrange
+        Correction[] corrections = [Correction.Create("ten_1", "usr_1", "Radancy", [], hardReplace: true)];
+
+        // Act
+        var prompt = CleanupPrompt.InstructionsWith(corrections, removeFillerWords: true, writeNumbersAsDigits: true);
+
+        // Assert
+        LinesOf(prompt).TakeLast(2).ShouldBe(
+        [
+            "The person uses these known words. Where the text holds a word or a phrase that sounds like a known word and does not fit the context as written, write the known word as it is spelled here. Do not change a correct word that fits the context.",
+            "- \"Radancy\"",
+        ]);
+        prompt.ShouldNotContain("often misheard");
+    }
+
+    [Test]
+    [Property("Rule", "SES-54")]
+    public void an_always_replace_term_with_mishearings_does_not_go_to_the_model()
+    {
+        // Arrange
+        Correction[] corrections = [Correction.Create("ten_1", "usr_1", "Kubernetes", ["cooper netties"], hardReplace: true)];
+
+        // Act
+        var prompt = CleanupPrompt.InstructionsWith(corrections, removeFillerWords: true, writeNumbersAsDigits: true);
+
+        // Assert
+        prompt.ShouldNotContain("Kubernetes");
+        prompt.ShouldNotContain("often misheard");
+        prompt.ShouldNotContain("known word");
+    }
+
+    private static string[] LinesOf(string prompt) => prompt.ReplaceLineEndings("\n").Split('\n');
 }

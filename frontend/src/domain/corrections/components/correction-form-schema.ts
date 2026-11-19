@@ -18,7 +18,9 @@ function mishearingsOf(text: string): string[] {
     .filter((line) => line.length > 0)
 }
 
-export const correctionFormSchema = z.object({
+const sameIgnoringCase = (a: string, b: string) => a.toUpperCase() === b.toUpperCase()
+
+const correctionFields = z.object({
   canonicalTerm: z
     .string()
     .refine((term) => term.trim().length > 0, 'Please provide a term.')
@@ -33,7 +35,40 @@ export const correctionFormSchema = z.object({
   version: correctionForUpdateDtoSchema.shape.version,
 })
 
-export type CorrectionFormValues = z.infer<typeof correctionFormSchema>
+/** The Server drops a mishearing that is the term, with no regard to case. */
+const isOnlyTheTerm = (lines: string[], term: string) =>
+  lines.length > 0 && lines.every((line) => sameIgnoringCase(line, term.trim()))
+
+/** An edit can clear the mishearings: the Correction then is a known word. */
+export const editCorrectionSchema = correctionFields.superRefine((values, context) => {
+  if (isOnlyTheTerm(mishearingsOf(values.mishearings), values.canonicalTerm)) {
+    context.addIssue({
+      code: 'custom',
+      path: ['mishearings'],
+      message: 'A mishearing must differ from the term. Clear them to keep the term as a known word.',
+    })
+  }
+})
+
+/** A new Correction needs a mishearing that the Server keeps. */
+export const addCorrectionSchema = correctionFields.superRefine((values, context) => {
+  const lines = mishearingsOf(values.mishearings)
+  if (lines.length === 0) {
+    context.addIssue({
+      code: 'custom',
+      path: ['mishearings'],
+      message: 'Please provide at least one mishearing. To keep a word with no mishearings, add it under Known words.',
+    })
+  } else if (isOnlyTheTerm(lines, values.canonicalTerm)) {
+    context.addIssue({
+      code: 'custom',
+      path: ['mishearings'],
+      message: 'A mishearing must differ from the term. To keep a word with no mishearings, add it under Known words.',
+    })
+  }
+})
+
+export type CorrectionFormValues = z.infer<typeof correctionFields>
 
 export const EMPTY_CORRECTION: CorrectionFormValues = { canonicalTerm: '', mishearings: '', hardReplace: false, version: 0 }
 
@@ -48,6 +83,14 @@ export function valuesOf(correction: CorrectionDto): CorrectionFormValues {
 
 export function bodyOf(values: CorrectionFormValues): CorrectionForCreationDto {
   return { canonicalTerm: values.canonicalTerm.trim(), mishearings: mishearingsOf(values.mishearings), hardReplace: values.hardReplace }
+}
+
+/** A Correction with no mishearings. Cleanup gets its term alone, and the page shows it as a known word. */
+export const isKnownWord = (correction: CorrectionDto): boolean => correction.mishearings.length === 0
+
+/** The Correction whose term is the same as the term, with no regard to case. */
+export function withTerm(corrections: CorrectionDto[], term: string): CorrectionDto | undefined {
+  return corrections.find((correction) => correction.canonicalTerm.localeCompare(term, undefined, { sensitivity: 'accent' }) === 0)
 }
 
 const folded = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase()
