@@ -6,6 +6,7 @@ import { Page } from '@/components/page'
 import { PageHeading } from '@/components/page-heading'
 import { termMaxLength } from '@/domain/corrections/components/correction-form-schema'
 import { CorrectionsList } from '@/domain/corrections/components/corrections-list'
+import { KnownWords } from '@/domain/corrections/components/known-words'
 
 const correctionsSearchSchema = z.object({
   search: z.string().max(termMaxLength).optional().catch(undefined),
@@ -27,6 +28,7 @@ function CorrectionsRoute() {
   return (
     <Page>
       <PageHeading ref={headingRef}>Corrections</PageHeading>
+      <KnownWords />
       <CorrectionsList search={search} onSearch={handleSearch} headingRef={headingRef} />
     </Page>
   )

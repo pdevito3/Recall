@@ -25,10 +25,12 @@ import { focusFirstError } from '@/lib/focus-first-error'
 
 import { correctionOptions, useAddCorrection, useUpdateCorrection } from '../apis/corrections'
 import {
+  addCorrectionSchema,
   bodyOf,
   CORRECTION_FIELDS,
-  correctionFormSchema,
   EMPTY_CORRECTION,
+  editCorrectionSchema,
+  isKnownWord,
   valuesOf,
   type CorrectionFormValues,
 } from './correction-form-schema'
@@ -50,7 +52,7 @@ function FieldMessage({ id, message }: { id: string; message?: string }) {
 
 interface CorrectionFormProps {
   correction?: CorrectionDto
-  onSaved: () => void
+  onSaved: (saved: CorrectionDto) => void
 }
 
 export function CorrectionForm({ correction, onSaved }: CorrectionFormProps) {
@@ -58,7 +60,7 @@ export function CorrectionForm({ correction, onSaved }: CorrectionFormProps) {
   const add = useAddCorrection()
   const update = useUpdateCorrection()
   const form = useForm<CorrectionFormValues>({
-    resolver: zodResolver(correctionFormSchema),
+    resolver: zodResolver(correction ? editCorrectionSchema : addCorrectionSchema),
     defaultValues: correction ? valuesOf(correction) : EMPTY_CORRECTION,
     shouldFocusError: false,
   })
@@ -68,28 +70,30 @@ export function CorrectionForm({ correction, onSaved }: CorrectionFormProps) {
   const save = correction ? update : add
   const isSending = useRef(false)
 
-  const handleSaved = () => {
-    Notification.success('Correction saved')
-    onSaved()
+  const handleSaved = (saved: CorrectionDto) => {
+    Notification.success(isKnownWord(saved) ? `“${saved.canonicalTerm}” is now a known word.` : 'Correction saved')
+    onSaved(saved)
   }
 
-  const handleSubmit = form.handleSubmit((values) => {
+  // The awaited save, not the callbacks of mutate: an edit that clears the mishearings moves the row to Known words,
+  // and the refetch unmounts this form before the save resolves.
+  const handleSubmit = form.handleSubmit(async (values) => {
     if (isSending.current) return
     isSending.current = true
     serverErrors.clear()
     latest.clear()
-    const callbacks = {
-      onSuccess: handleSaved,
-      onError: serverErrors.show,
-      onSettled: () => {
-        isSending.current = false
-      },
+    let saved: CorrectionDto
+    try {
+      saved = correction
+        ? await update.mutateAsync({ id: correction.id, body: { ...bodyOf(values), version: values.version } })
+        : await add.mutateAsync(bodyOf(values))
+    } catch (error) {
+      serverErrors.show(error)
+      return
+    } finally {
+      isSending.current = false
     }
-    if (correction) {
-      update.mutate({ id: correction.id, body: { ...bodyOf(values), version: values.version } }, callbacks)
-    } else {
-      add.mutate(bodyOf(values), callbacks)
-    }
+    handleSaved(saved)
   }, focusFirstError(form, CORRECTION_FIELDS))
 
   const handleLoadLatest = async () => {
@@ -108,7 +112,7 @@ export function CorrectionForm({ correction, onSaved }: CorrectionFormProps) {
       <ResponsiveDialogHeader>
         <ResponsiveDialogTitle>{correction ? `Edit ${correction.canonicalTerm}` : 'Add a correction'}</ResponsiveDialogTitle>
         <ResponsiveDialogDescription>
-          Cleanup fixes the term in the cleaned text where dictation got it wrong. Your words as you said them do not change.
+          Cleanup fixes each mishearing of the term in the cleaned text. Your words as you said them do not change.
         </ResponsiveDialogDescription>
       </ResponsiveDialogHeader>
 
@@ -137,8 +141,8 @@ export function CorrectionForm({ correction, onSaved }: CorrectionFormProps) {
           {...form.register('mishearings')}
         />
         <p id="correction-mishearings-hint" className="text-sm text-muted-foreground">
-          Optional. How dictation writes the term by mistake. Put each one on its own line. Leave it empty for a known
-          word, and Cleanup gets the word as a hint.
+          How dictation writes the term by mistake. Put each one on its own line.
+          {correction && ' Clear them to keep the term as a known word.'}
         </p>
         <FieldMessage id="correction-mishearings-error" message={errors.mishearings?.message} />
       </div>
@@ -158,8 +162,8 @@ export function CorrectionForm({ correction, onSaved }: CorrectionFormProps) {
               Always replace
             </Checkbox>
             <p id="correction-hard-replace-hint" className="text-sm text-muted-foreground">
-              When this is on, Cleanup writes the term in place of each mishearing every time. This needs at least one
-              mishearing. When it is off, Cleanup gets the term as a hint.
+              When this is on, Cleanup writes the term in place of each mishearing every time. When it is off, Cleanup
+              gets the term as a hint.
             </p>
           </div>
         )}
