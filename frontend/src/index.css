@@ -224,6 +224,10 @@
     @apply bg-background text-foreground;
     letter-spacing: var(--tracking-normal);
   }
+  /* An overscroll bounce shows the canvas past the page, so the canvas takes the color of the frame around the inset content. */
+  body:has([data-slot="sidebar"][data-variant="inset"]) {
+    @apply bg-sidebar;
+  }
   [data-page-focus]:focus {
     @apply outline-none;
   }

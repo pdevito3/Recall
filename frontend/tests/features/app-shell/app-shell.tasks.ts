@@ -111,6 +111,10 @@ export function appShellPage(page: Page) {
       return locator.evaluate((element) => element.scrollWidth - element.clientWidth)
     },
 
+    async backgroundColor(locator: Locator) {
+      return locator.evaluate((element) => getComputedStyle(element).backgroundColor)
+    },
+
     async verticalCenter(locator: Locator) {
       const box = await locator.boundingBox()
       if (!box) throw new Error('The element has no box')
