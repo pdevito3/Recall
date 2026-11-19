@@ -42,8 +42,8 @@ const page: SessionPageDto = {
   ],
 }
 
-async function renderJournal() {
-  await commands.answerRequests([{ method: 'GET', path: '/api/v1/sessions', body: page }])
+async function renderJournal(answer: SessionPageDto = page) {
+  await commands.answerRequests([{ method: 'GET', path: '/api/v1/sessions', body: answer }])
   const rootRoute = createRootRoute({
     component: () => (
       <>
@@ -125,4 +125,13 @@ test('a slow load says that the entries load', async () => {
   await expect.element(screen.getByRole('status', { name: 'Loading your entries' })).toBeVisible()
   await commands.releaseRequests(firstPage)
   await expect.element(screen.getByText('Walked to the lake after work and met Sam for coffee.')).toBeVisible()
+})
+
+test('a person with no entries sees that none exist yet, and where to write the first one', async () => {
+  // Act
+  const { screen } = await renderJournal({ items: [] })
+
+  // Assert
+  await expect.element(screen.getByText('No entries yet', { exact: true })).toBeVisible()
+  await expect.element(screen.getByText('Your entries show here. Write your first one above.', { exact: true })).toBeVisible()
 })

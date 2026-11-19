@@ -2,6 +2,8 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { parseDate } from '@internationalized/date'
 
 import type { SessionSummaryDto } from '@/api/generated/models/types/session-summary-dto'
+import { FirstEntryArt } from '@/components/empty-art/first-entry-art'
+import { EmptyState } from '@/components/empty-state'
 import { QueryError } from '@/components/query-error'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button-variants'
@@ -65,7 +67,7 @@ export function Timeline({ zone, hiddenSessionId }: TimelineProps) {
     return <QueryError title="Your entries did not load." error={timeline.error} onRetry={() => timeline.refetch()} />
   }
   if (groups.length === 0) {
-    return <p className="text-muted-foreground">Your entries show here. Write your first one above.</p>
+    return <EmptyState art={<FirstEntryArt />} title="No entries yet" description="Your entries show here. Write your first one above." />
   }
 
   const today = todayAt(zone, new Date())
