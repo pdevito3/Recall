@@ -19,9 +19,9 @@ export interface MockRoute {
 
 // The SPA sends these paths to the Server. The Vite dev server serves the source files of the app under /src,
 // so a source file such as /src/api/generated/... does not match.
-const mockedPrefixes = ['/api/', '/auth/']
-
-export const isMockedPath = (pathname: string) => mockedPrefixes.some((prefix) => pathname.startsWith(prefix))
+// A glob, not a function. Playwright matches a glob in its own layer, but it sends each request of the page to a function in
+// the test, each module of the dev server too. On a busy machine a page then took about a quarter more time to show.
+export const mockedPaths = (origin: string) => `${origin}/{api,auth}/**`
 
 export const answers = (route: MockRoute, method: string, pathname: string) =>
   route.method === method && (typeof route.path === 'string' ? route.path === pathname : route.path.test(pathname))
