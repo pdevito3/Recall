@@ -1,11 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { expect, test } from 'vitest'
+import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from '@tanstack/react-router'
+import { expect, onTestFinished, test } from 'vitest'
 import { commands, page, userEvent } from 'vitest/browser'
 import { render } from 'vitest-browser-react'
 
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
 // The app sends each request through this client, and it gives the words of a failure.
 import '@/lib/api-client'
+import { member, signedInMember } from '@/test/session'
 
 import { useSession } from '../apis/get-session'
 import { CleanupCard } from './cleanup-card'
@@ -45,9 +47,11 @@ const revision = (number: number, text: string) => ({ number, savedAt: '2026-11-
 async function renderCard(answers: Parameters<typeof commands.answerRequests>[0]) {
   await commands.answerRequests([{ method: 'GET', path: '/api/v1/model-providers/active', body: { name: 'Mine' } }, ...answers])
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  // The card can show a link, and a link needs a router.
+  const router = createRouter({ routeTree: createRootRoute({ component: CleanupOfTheEntry }), history: createMemoryHistory() })
   return render(
     <QueryClientProvider client={client}>
-      <CleanupOfTheEntry />
+      <RouterProvider router={router} />
     </QueryClientProvider>,
   )
 }
@@ -120,6 +124,56 @@ for (const { name, change, status } of [
     await expect.element(screen.getByText('The last Cleanup ended, and Cleaned kept your words.')).not.toBeInTheDocument()
   })
 }
+
+const failedOnAnUnusableAnswer = { method: 'GET', path: '/api/v1/sessions/ses_1', body: session({ cleanupStatus: 'Failed', cleanupFailure: 'BadModelOutput' }) } as const
+const unusableAnswer = 'The model provider sent an answer that the app cannot use. Most often the model is too small for this work. Try again.'
+const forAMember = `${unusableAnswer} If it happens often, an Admin can pick a stronger model or test the connection.`
+
+test('an answer that the app cannot use names the model as the likely cause, and the person can run Cleanup again', async () => {
+  // Arrange
+  const screen = await renderCard([...signedInMember, failedOnAnUnusableAnswer])
+
+  // Assert
+  await expect.element(screen.getByRole('status')).toHaveTextContent('The last Cleanup did not finish. Your words did not change.')
+  await expect.element(screen.getByRole('alert')).toHaveTextContent(forAMember)
+  await expect.element(screen.getByRole('alert').getByRole('link')).not.toBeInTheDocument()
+  await expect.element(screen.getByRole('button', { name: 'Run Cleanup again' })).toBeEnabled()
+})
+
+test('an Admin who sees an answer that the app cannot use gets a link to the Model providers page', async () => {
+  // Arrange
+  const admin = { ...member, role: 'Admin', permissions: ['manage_model_providers'] }
+  const screen = await renderCard([...signedInMember, { method: 'GET', path: `/api/v1/users/by-identifier/${member.identifier}`, body: admin }, failedOnAnUnusableAnswer])
+
+  // Assert
+  const alert = screen.getByRole('alert')
+  await expect.element(alert).toHaveTextContent(`${unusableAnswer} If it happens often, pick a stronger model or test the connection on the Model providers page.`)
+  await expect.element(alert.getByRole('link', { name: 'Model providers' })).toHaveAttribute('href', '/model-providers')
+})
+
+test('while the account check runs, the alert leaves out the last sentence and shows no link', async () => {
+  // Arrange
+  const membershipPath = `/api/v1/users/by-identifier/${member.identifier}`
+  await commands.holdRequests(membershipPath)
+  onTestFinished(() => commands.releaseRequests(membershipPath))
+  const screen = await renderCard([...signedInMember, failedOnAnUnusableAnswer])
+
+  // Assert
+  const alert = screen.getByRole('alert')
+  await expect.element(alert.getByText(unusableAnswer, { exact: true })).toBeVisible()
+  await expect.element(alert.getByRole('link')).not.toBeInTheDocument()
+})
+
+test('when the account check fails, the alert gives the words for a member and shows no link', async () => {
+  // Arrange
+  const refused = { method: 'GET', path: `/api/v1/users/by-identifier/${member.identifier}`, status: 403, body: { type: 'about:blank', title: 'Forbidden', status: 403, detail: 'You cannot use this tenant.' } } as const
+  const screen = await renderCard([...signedInMember, refused, failedOnAnUnusableAnswer])
+
+  // Assert
+  const alert = screen.getByRole('alert')
+  await expect.element(alert).toHaveTextContent(forAMember)
+  await expect.element(alert.getByRole('link')).not.toBeInTheDocument()
+})
 
 const tagged = (before: string, label: string) =>
   JSON.stringify({

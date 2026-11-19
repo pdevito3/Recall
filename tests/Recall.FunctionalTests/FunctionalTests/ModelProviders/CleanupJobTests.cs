@@ -627,6 +627,30 @@ public class CleanupJobTests : TestBase
         last.ShouldNotContain(marker);
     }
 
+    [Test]
+    public async Task a_stream_names_the_model_as_the_likely_cause_of_an_answer_that_the_app_cannot_use()
+    {
+        // Arrange
+        await using var scenario = await CleanupScenario.StartAsync(FactoryClient);
+        scenario.Fake.Behavior.Mode = FakeMode.BadJson;
+        var session = await scenario.SessionWithWordsAsync(Words);
+
+        // Act
+        using var request = new HttpRequestMessage(HttpMethod.Post, ApiRoutes.Sessions.CleanupStream(session.Id));
+        using var opened = await FactoryClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        using var reader = new StreamReader(await opened.Content.ReadAsStreamAsync());
+        await ReadEventAsync(reader);
+        await scenario.RunJobAsync(session.Id);
+        var last = await ReadEventAsync(reader);
+
+        // Assert
+        last.ShouldContain("\"type\":\"failed\"");
+        last.ShouldContain(nameof(CleanupFailure.BadModelOutput));
+        last.ShouldContain("The model provider sent an answer that the app cannot use, so your Cleaned text did not change.");
+        last.ShouldContain("Most often the model is too small for this work.");
+        last.ShouldContain("an Admin can pick a stronger model or test the connection on the Model providers page");
+    }
+
     private static async Task<string> ReadEventAsync(StreamReader reader)
     {
         using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30));

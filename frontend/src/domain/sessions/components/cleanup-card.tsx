@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useEffect, useRef } from 'react'
 
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
@@ -6,6 +7,7 @@ import { RefusedSaveAlert } from '@/components/refused-save-alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useActiveModelProvider } from '@/domain/model-providers/apis/model-providers'
+import { UnusableAnswerText } from '@/domain/model-providers/components/unusable-answer-text'
 import { refusalOf } from '@/hooks/use-server-errors'
 
 import {
@@ -37,13 +39,13 @@ const names = new Intl.ListFormat('en', { type: 'conjunction' })
 
 const NO_PROVIDER_TEXT = 'An Admin must connect a model provider, pick a model, and make it active first.'
 
-const FAILURE_TEXT: Record<SessionDto['cleanupFailure'], string | null> = {
+const FAILURE_TEXT: Record<SessionDto['cleanupFailure'], ReactNode> = {
   None: null,
   NoModelProvider: NO_PROVIDER_TEXT,
   KeyUnreadable: 'The server cannot read the API key of the model provider. An Admin must enter the key again.',
   ProviderRefused: 'The model provider refused the request. An Admin can test the connection on the Model providers page.',
   ProviderUnavailable: 'The model provider did not answer. Try again later.',
-  BadModelOutput: 'The answer of the model is not one that the app can use. Try again.',
+  BadModelOutput: <UnusableAnswerText />,
   Interrupted: 'The Cleanup stopped before it got a result. Try again.',
   Stopped: 'You stopped the Cleanup. You can run it again.',
 }

@@ -1,6 +1,7 @@
 import { Alert02Icon, ArrowLeft01Icon, ArrowRight01Icon, CancelCircleIcon, CheckmarkCircle02Icon, Loading03Icon } from '@hugeicons/core-free-icons'
 import type { IconSvgElement } from '@hugeicons/react'
 import { HugeiconsIcon } from '@hugeicons/react'
+import type { ReactNode } from 'react'
 import { useRef } from 'react'
 
 import type { SummaryDto } from '@/api/generated/models/types/summary-dto'
@@ -8,6 +9,7 @@ import { QueryError } from '@/components/query-error'
 import { Button } from '@/components/ui/button'
 import { buttonVariants } from '@/components/ui/button-variants'
 import { Link } from '@/components/ui/link'
+import { UnusableAnswerText } from '@/domain/model-providers/components/unusable-answer-text'
 import { browserTimeZone } from '@/lib/zoned-time'
 import { cn } from '@/lib/utils'
 
@@ -39,13 +41,13 @@ const STATUS_LINES: Record<ShownStatus, StatusLine> = {
 
 const NO_PROVIDER_TEXT = 'An Admin must connect a model provider, pick a model, and make it active first.'
 
-const FAILURE_TEXT: Record<SummaryDto['failure'], string> = {
+const FAILURE_TEXT: Record<SummaryDto['failure'], ReactNode> = {
   None: 'The run stopped with no result. Try again.',
   NoModelProvider: NO_PROVIDER_TEXT,
   KeyUnreadable: 'The server cannot read the API key of the model provider. An Admin must enter the key again.',
   ProviderRefused: 'The model provider refused the request. An Admin can test the connection on the Model providers page.',
   ProviderUnavailable: 'The model provider did not answer. Try again later.',
-  BadModelOutput: 'The answer of the model is not one that the app can use. Try again.',
+  BadModelOutput: <UnusableAnswerText />,
   Interrupted: 'The run stopped before it got a result. Try again.',
   SourceFailed: 'A shorter period in this one has no Summary, because its run failed. Try again, or open that period to see why.',
 }
