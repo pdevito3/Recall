@@ -5,6 +5,7 @@ import { as } from '@tests/support/auth/actors'
 import { aProblem } from '@tests/support/builders/problem-details-builder'
 import { aUser } from '@tests/support/builders/user-builder'
 import { expect, test } from '@tests/support/fixtures'
+import { theWebFontsLoad } from '@tests/support/screen'
 import { usersPage } from './users.tasks'
 
 test.describe('the users of a tenant', () => {
@@ -225,10 +226,11 @@ test.describe('the users pages on a 390 px phone', () => {
 
   test('each user link, each pager button, and the way back to the list is a touch target of 44 px', async ({ page, api }) => {
     const grace = aUser().named('Grace Hopper').seenByAdmin()
-    api.mock(usersApi.listReturns([grace, aUser().named('Alan Turing')], { total: 25 }), usersApi.oneIs(grace))
+    api.mock(usersApi.listReturns([grace, aUser().named('Al')], { total: 25 }), usersApi.oneIs(grace))
     const users = usersPage(page)
 
     await users.openList()
+    await theWebFontsLoad(page)
 
     const targets = [...(await users.at.nameLinks.all()), ...(await users.at.pagerButtons.all())]
     expect(targets).toHaveLength(4)

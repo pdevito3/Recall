@@ -327,6 +327,32 @@ for (const viewport of [
   })
 }
 
+for (const scheme of ['light', 'dark'] as const) {
+  test.describe(`the canvas past the page at 1280 px in the ${scheme} theme`, () => {
+    test.use({ viewport: { width: 1280, height: 800 }, colorScheme: scheme })
+
+    test('is the color of the frame around the content, so an overscroll bounce shows no band', async ({ page }) => {
+      const shell = appShellPage(page)
+
+      await shell.openAbout()
+
+      expect(await shell.backgroundColor(shell.at.canvas)).toBe(await shell.backgroundColor(shell.at.frame))
+    })
+  })
+
+  test.describe(`the canvas past the page at 390 px in the ${scheme} theme`, () => {
+    test.use({ viewport: { width: 390, height: 844 }, colorScheme: scheme })
+
+    test('is the color of the content, which fills the screen', async ({ page }) => {
+      const shell = appShellPage(page)
+
+      await shell.openAbout()
+
+      expect(await shell.backgroundColor(shell.at.canvas)).toBe(await shell.backgroundColor(shell.at.content))
+    })
+  })
+}
+
 test.describe('the accessibility tree of the layout', () => {
   test('names one sidebar toggle', async ({ page }) => {
     const shell = appShellPage(page)

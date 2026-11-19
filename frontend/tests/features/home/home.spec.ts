@@ -4,7 +4,7 @@ import { usersApi } from '@tests/support/api/users-api'
 import { as } from '@tests/support/auth/actors'
 import { aSession } from '@tests/support/builders/session-builder'
 import { expect, test } from '@tests/support/fixtures'
-import { useDefaultFontSize } from '@tests/support/screen'
+import { theWebFontsLoad, useDefaultFontSize } from '@tests/support/screen'
 import { appShellPage } from '../app-shell/app-shell.tasks'
 import { homePage } from './home.tasks'
 
@@ -49,6 +49,18 @@ test.describe('the mic card on a phone', () => {
     await expect(home.at.journalComposer).not.toBeFocused()
     expect(await home.isAbove(home.at.micCard, home.at.journalComposer)).toBe(true)
     expect(await home.sideScroll()).toBe(0)
+  })
+
+  test('takes a tap of 44 px on the link that changes the engine', async ({ page, api }) => {
+    api.mock(usersApi.currentIs({ identifier: '1', name: 'Robert Smith' }))
+    const home = homePage(page)
+
+    await home.open()
+
+    await expect(home.at.changeEngine).toBeVisible()
+    await theWebFontsLoad(page)
+    const box = await home.at.changeEngine.boundingBox()
+    expect(Math.min(box!.width, box!.height)).toBeGreaterThanOrEqual(44)
   })
 })
 

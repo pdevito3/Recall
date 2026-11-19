@@ -226,7 +226,7 @@ function EnginePlace() {
   return (
     <p className="text-xs text-muted-foreground">
       Transcribe on: <span className="wrap-anywhere">{place}</span>.{' '}
-      <Link to="/transcription-engine" className="inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-4 sm:min-h-0">
+      <Link to="/transcription-engine" className="inline-flex min-h-11 min-w-11 items-center justify-center font-medium text-primary underline underline-offset-4 sm:min-h-0 sm:min-w-0">
         Change
       </Link>
     </p>
