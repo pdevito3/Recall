@@ -26,15 +26,33 @@ public class CleanupPromptTests
 
     [Test]
     [Property("Rule", "SES-51")]
-    public void with_the_removal_off_the_prompt_keeps_each_filler_stutter_and_false_start()
+    public void with_the_removal_on_the_prompt_removes_the_ellipsis_of_a_pause_and_fixes_the_punctuation()
+    {
+        // Act
+        var prompt = CleanupPrompt.InstructionsWith([], removeFillerWords: true, writeNumbersAsDigits: true);
+
+        // Assert
+        prompt.ShouldContain("Dictation can write a pause or a hesitation as an ellipsis (\"...\" or \"\u2026\"). Remove such an ellipsis");
+        prompt.ShouldContain("give the sentence the punctuation that it needs: join the words, or end the sentence.");
+        prompt.ShouldContain("\"I went, uh... to the store\" becomes \"I went to the store\"");
+        prompt.ShouldContain("\"It was late... we went home\" becomes \"It was late. We went home\"");
+        prompt.ShouldContain("Keep an ellipsis that marks words left out of a quote.");
+        prompt.ShouldNotContain("Keep each ellipsis");
+    }
+
+    [Test]
+    [Property("Rule", "SES-51")]
+    public void with_the_removal_off_the_prompt_keeps_each_filler_stutter_false_start_and_ellipsis()
     {
         // Act
         var prompt = CleanupPrompt.InstructionsWith([], removeFillerWords: false, writeNumbersAsDigits: true);
 
         // Assert
         prompt.ShouldContain("Keep each filler word, hesitation sound, stutter, repeated word, and false start where the person said it");
+        prompt.ShouldContain("Keep each ellipsis (\"...\" or \"\u2026\") that marks a pause or a hesitation.");
         prompt.ShouldNotContain("Remove filler words");
         prompt.ShouldNotContain("Remove a false start");
+        prompt.ShouldNotContain("Remove such an ellipsis");
     }
 
     [Test]

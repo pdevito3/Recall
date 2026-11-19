@@ -16,11 +16,11 @@ public static class CleanupPrompt
         """;
 
     private const string RemovesFillerWords = """
-        Speech noise is not an idea, so remove it from "cleanedMarkdown". Remove filler words and hesitation sounds, such as "um", "uh", "er", and "hmm". Remove "like", "you know", "I mean", and "sort of" only where they carry no meaning, and keep them where they do, as in "I like tea" or "a sort of box". Remove a stutter or a repeated word, as in "I I went" or "the the store", but keep a repeat that is correct, as in "she had had enough" or "I knew that that was wrong". Remove a false start, the words that the person stopped and said again in another way: "We went to the, we drove to the lake" becomes "We drove to the lake".
+        Speech noise is not an idea, so remove it from "cleanedMarkdown". Remove filler words and hesitation sounds, such as "um", "uh", "er", and "hmm". Remove "like", "you know", "I mean", and "sort of" only where they carry no meaning, and keep them where they do, as in "I like tea" or "a sort of box". Remove a stutter or a repeated word, as in "I I went" or "the the store", but keep a repeat that is correct, as in "she had had enough" or "I knew that that was wrong". Remove a false start, the words that the person stopped and said again in another way: "We went to the, we drove to the lake" becomes "We drove to the lake". Dictation can write a pause or a hesitation as an ellipsis ("..." or "…"). Remove such an ellipsis, and give the sentence the punctuation that it needs: join the words, or end the sentence. "I went, uh... to the store" becomes "I went to the store", and "It was late... we went home" becomes "It was late. We went home". Keep an ellipsis that marks words left out of a quote.
         """;
 
     private const string KeepsFillerWords = """
-        The person wants "cleanedMarkdown" to keep the way they spoke. Keep each filler word, hesitation sound, stutter, repeated word, and false start where the person said it, such as "um", "uh", "like", "you know", "I I went", and a sentence that the person stopped and started again.
+        The person wants "cleanedMarkdown" to keep the way they spoke. Keep each filler word, hesitation sound, stutter, repeated word, and false start where the person said it, such as "um", "uh", "like", "you know", "I I went", and a sentence that the person stopped and started again. Keep each ellipsis ("..." or "…") that marks a pause or a hesitation.
         """;
 
     private const string WritesNumbersAsDigits = """
