@@ -254,11 +254,33 @@ function settle() {
 async function capture(name, { fullPage = true } = {}) {
   await settle()
   const base = `${String(++captureCount).padStart(2, '0')}-${name}`
-  await page.screenshot({ path: path.join(outDir, `${base}.png`), fullPage })
+  const file = path.join(outDir, `${base}.png`)
+  if (fullPage) await screenshotWholePage(file)
+  else await page.screenshot({ path: file })
   const aria = await page.locator('body').ariaSnapshot()
   writeFileSync(path.join(outDir, `${base}.aria.txt`), `# ${page.url()}\n${aria}\n`)
   log('steps.log', `cap   ${base} ${page.url()}`)
   if (sweep && name !== 'failure') await sweepCapture({ page, cdp, settle, outDir, capture: base, faults: sweepFaults, holdsOverlay: !fullPage })
+}
+
+// Playwright's { fullPage: true } paints past the window but keeps the layout of the window, so the
+// fixed sidebar, one window tall, shows at the scroll offset in the middle of the image. A window as
+// tall as the page lays the sidebar out as a person sees it: the brand at the top, the user menu at the bottom.
+// A box sized from the window height (max-h-[60svh]) grows in the tall window, so the shot stays fullPage to
+// paint the part of the page that grew past it.
+async function screenshotWholePage(file) {
+  const viewport = page.viewportSize()
+  const { height, scrollX, scrollY } = await page.evaluate(() => ({ height: document.documentElement.scrollHeight, scrollX: window.scrollX, scrollY: window.scrollY }))
+  if (height <= viewport.height) return page.screenshot({ path: file, fullPage: true })
+  try {
+    await page.setViewportSize({ width: viewport.width, height })
+    await settle()
+    await page.screenshot({ path: file, fullPage: true })
+  } finally {
+    await page.setViewportSize(viewport)
+    await page.evaluate(([x, y]) => window.scrollTo(x, y), [scrollX, scrollY])
+    await settle()
+  }
 }
 
 // `user` is a user of that IdP. Without it, the IdP's first user signs in.
