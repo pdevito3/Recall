@@ -102,6 +102,9 @@ public sealed class FakeBehavior
     /// </summary>
     public int? AudioOutputTokens { get; set; }
 
+    /// <summary>The route of transcriptions refuses each form with a <c>prompt</c> with a 400, as it does for <c>gpt-4o-transcribe-diarize</c>.</summary>
+    public bool RefusePrompt { get; set; }
+
     /// <summary>OpenAI refuses a file under 0.1 s with a 400.</summary>
     public double MinAudioSeconds { get; set; } = 0.1;
 
@@ -156,6 +159,9 @@ public sealed partial class FakeModelProvider : IAsyncDisposable
 
     /// <summary>The <c>model</c> field of each audio file that the route took, in the same order.</summary>
     public ConcurrentQueue<string> AudioModels { get; } = new();
+
+    /// <summary>The <c>prompt</c> field of each audio file that the route took, null when the form had none, in the same order.</summary>
+    public ConcurrentQueue<string?> AudioPrompts { get; } = new();
 
     /// <summary>Fast speech: about 250 words a minute at about 1.4 tokens a word.</summary>
     public const double TokensPerSecond = 6;
@@ -529,6 +535,14 @@ public sealed partial class FakeModelProvider : IAsyncDisposable
             return;
         }
 
+        // The OpenAI reference: "This field is not supported when using gpt-4o-transcribe-diarize."
+        var prompt = form.TryGetValue("prompt", out var prompts) ? prompts.ToString() : null;
+        if (prompt is not null && (Behavior.RefusePrompt || form["model"].ToString().Contains("transcribe-diarize", StringComparison.OrdinalIgnoreCase)))
+        {
+            await WriteCompatibleErrorAsync(context, 400, "prompt is not supported with this model.");
+            return;
+        }
+
         var format = form["response_format"].ToString();
         if (format.Length > 0 && !AudioFormats.Contains(format))
         {
@@ -540,6 +554,7 @@ public sealed partial class FakeModelProvider : IAsyncDisposable
         await file.CopyToAsync(bytes, context.RequestAborted);
         AudioFiles.Enqueue(bytes.ToArray());
         AudioModels.Enqueue(form["model"].ToString());
+        AudioPrompts.Enqueue(prompt);
         if (Math.Max(0, bytes.Length - 44) / 2 / 16_000.0 < Behavior.MinAudioSeconds)
         {
             await WriteCompatibleErrorAsync(context, 400, $"Audio file is too short. Minimum audio length is {Behavior.MinAudioSeconds} seconds.");

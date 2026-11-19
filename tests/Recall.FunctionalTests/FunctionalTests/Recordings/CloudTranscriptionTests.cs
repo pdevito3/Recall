@@ -17,6 +17,7 @@ using Recall.Server.Domain.Recordings.Jobs;
 using Recall.Server.Domain.Recordings.Transcription;
 using Recall.Server.Domain.Sessions.Content;
 using Recall.Server.Domain.Sessions.Dtos;
+using Recall.Server.Domain.Users;
 using Recall.Server.Resources.Jobs;
 using Recall.Server.Resources.Storage;
 using Sessions;
@@ -93,18 +94,40 @@ public class CloudTranscriptionTests : TestBase
     private static async Task<TranscriptionEngineDto> EngineAsync(HttpClient client)
         => (await client.GetFromJsonAsync<TranscriptionEngineDto>(ApiRoutes.ModelProviders.TranscriptionEngine)).ShouldNotBeNull();
 
-    private static async Task<RecordingDto> RecordingWithAudioAsync(CleanupScenario scenario, short[] samples)
+    /// <summary>The client must be signed in as <paramref name="owner"/>, the Member when it is null.</summary>
+    private static async Task<RecordingDto> RecordingWithAudioAsync(CleanupScenario scenario, short[] samples, User? owner = null)
     {
         var session = await scenario.Client.AddSessionAsync();
         var recording = await scenario.Client.AddFinishedRecordingAsync(session.Id);
         var work = new MemoryStream(AudioParts.WavOf(PcmOf(samples)));
         await Services.GetRequiredService<FileStore>().WriteAsync(
-            RecordingFiles.WorkAudio(RecordingScenario.RowOf(recording.Id, scenario.Member)), work, CancellationToken.None);
+            RecordingFiles.WorkAudio(RecordingScenario.RowOf(recording.Id, owner ?? scenario.Member)), work, CancellationToken.None);
         return recording;
     }
 
-    private static Task RunCloudAsync(TranscribeRecordingJob job, CleanupScenario scenario, RecordingDto recording, CancellationToken cancellationToken = default)
-        => job.TranscribeRecordingInCloudAsync(recording.Id, scenario.Member.Id, scenario.Member.TenantId, cancellationToken).WaitAsync(TestLimit, CancellationToken.None);
+    private static Task RunCloudAsync(TranscribeRecordingJob job, CleanupScenario scenario, RecordingDto recording, User? owner = null, CancellationToken cancellationToken = default)
+    {
+        var user = owner ?? scenario.Member;
+        return job.TranscribeRecordingInCloudAsync(recording.Id, user.Id, user.TenantId, cancellationToken).WaitAsync(TestLimit, CancellationToken.None);
+    }
+
+    /// <summary>The Admin gives the provider a key that the fake does not take, so each call of the fake answers 401.</summary>
+    private static async Task GiveTheProviderAWrongKeyAsync(CleanupScenario scenario)
+    {
+        scenario.Client.SignInAsAppUser(scenario.Admin.Identifier);
+        var list = (await scenario.Client.GetFromJsonAsync<ModelProviderListDto>(ApiRoutes.ModelProviders.Root)).ShouldNotBeNull();
+        var provider = list.Items.Single(p => p.Id == scenario.Provider.Id);
+        var updated = await scenario.Client.PutAsJsonAsync(ApiRoutes.ModelProviders.GetRecord(provider.Id), new
+        {
+            name = provider.Name,
+            baseUrl = provider.BaseUrl,
+            apiKey = CleanupScenario.NewKey(),
+            model = provider.Model,
+            version = provider.Version,
+        });
+        updated.StatusCode.ShouldBe(HttpStatusCode.OK, await updated.Content.ReadAsStringAsync());
+        scenario.Client.SignInAsAppUser(scenario.Member.Identifier);
+    }
 
     private static async Task<string> PlainRawAsync(HttpClient client, string sessionId)
     {
@@ -139,6 +162,169 @@ public class CloudTranscriptionTests : TestBase
         read.Status.ShouldBe(nameof(RecordingStatus.Transcribed));
         (await PlainRawAsync(scenario.Client, recording.SessionId)).ShouldBe("Part 1 heard 1.00 seconds.");
         scenario.Fake.AudioCalls.ShouldBe(1);
+        await AudioStaysAsync(scenario.Client, recording);
+    }
+
+    private static async Task AddCorrectionAsync(HttpClient client, string term, params string[] mishearings)
+    {
+        var added = await client.PostAsJsonAsync(ApiRoutes.Corrections.Root, new { canonicalTerm = term, mishearings, hardReplace = false });
+        added.StatusCode.ShouldBe(HttpStatusCode.Created, await added.Content.ReadAsStringAsync());
+    }
+
+    [Test]
+    [Property("Rule", "REC-32")]
+    public async Task each_part_takes_the_known_words_of_the_owner_as_its_prompt_and_raw_keeps_what_the_engine_heard()
+    {
+        // Arrange
+        await using var scenario = await ChosenAsync();
+        await AddCorrectionAsync(scenario.Client, "Radancy");
+        await AddCorrectionAsync(scenario.Client, "Kubernetes", "cube a net is");
+        scenario.Fake.Behavior.Reply = "I started at Radiancy today";
+        const int partSamples = 2 * Recording.SamplesPerSecond;
+        var recording = await RecordingWithAudioAsync(scenario, Speech(3 * Recording.SamplesPerSecond, (24_000, 24_800)));
+
+        // Act
+        await RunCloudAsync(JobWith(CloudEngine(PartBytesFor(partSamples))), scenario, recording);
+
+        // Assert
+        var prompts = scenario.Fake.AudioPrompts.ToArray();
+        prompts.Length.ShouldBe(2);
+        prompts.ShouldAllBe(prompt => prompt == "Kubernetes, Radancy");
+        (await PlainRawAsync(scenario.Client, recording.SessionId)).ShouldBe("I started at Radiancy today\nI started at Radiancy today");
+    }
+
+    [Test]
+    [Property("Rule", "REC-32")]
+    public async Task a_part_of_an_owner_with_no_corrections_goes_with_no_prompt()
+    {
+        // Arrange
+        await using var scenario = await ChosenAsync();
+        var recording = await RecordingWithAudioAsync(scenario, Speech(Recording.SamplesPerSecond));
+
+        // Act
+        await RunCloudAsync(ActivatorUtilities.CreateInstance<TranscribeRecordingJob>(Services), scenario, recording);
+
+        // Assert
+        scenario.Fake.AudioPrompts.ShouldHaveSingleItem().ShouldBeNull();
+        (await scenario.Client.GetRecordingAsync(recording.Id)).Status.ShouldBe(nameof(RecordingStatus.Transcribed));
+    }
+
+    [Test]
+    [Property("Rule", "REC-32")]
+    public async Task a_model_that_refuses_a_prompt_gets_none_and_still_makes_the_text()
+    {
+        // Arrange
+        await using var scenario = await ChosenAsync();
+        scenario.Client.SignInAsAppUser(scenario.Admin.Identifier);
+        (await ChooseAsync(scenario.Client, scenario.Provider.Id, "gpt-4o-transcribe-diarize")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        scenario.Client.SignInAsAppUser(scenario.Member.Identifier);
+        await AddCorrectionAsync(scenario.Client, "Radancy");
+        var recording = await RecordingWithAudioAsync(scenario, Speech(Recording.SamplesPerSecond));
+
+        // Act
+        await RunCloudAsync(ActivatorUtilities.CreateInstance<TranscribeRecordingJob>(Services), scenario, recording);
+
+        // Assert
+        scenario.Fake.AudioPrompts.ShouldHaveSingleItem().ShouldBeNull();
+        scenario.Fake.AudioCalls.ShouldBe(1);
+        (await scenario.Client.GetRecordingAsync(recording.Id)).Status.ShouldBe(nameof(RecordingStatus.Transcribed));
+    }
+
+    [Test]
+    [Property("Rule", "REC-32")]
+    public async Task the_prompt_holds_only_the_known_words_of_the_owner_and_none_of_another_person_of_the_tenant()
+    {
+        // Arrange
+        await using var scenario = await ChosenAsync();
+        scenario.Client.SignInAsAppUser(scenario.Admin.Identifier);
+        await AddCorrectionAsync(scenario.Client, "Zyntriqix");
+        scenario.Client.SignInAsAppUser(scenario.Member.Identifier);
+        await AddCorrectionAsync(scenario.Client, "Radancy");
+        var recording = await RecordingWithAudioAsync(scenario, Speech(Recording.SamplesPerSecond));
+
+        // Act
+        await RunCloudAsync(ActivatorUtilities.CreateInstance<TranscribeRecordingJob>(Services), scenario, recording);
+
+        // Assert
+        scenario.Fake.AudioPrompts.ShouldHaveSingleItem().ShouldBe("Radancy");
+    }
+
+    [Test]
+    [Property("Rule", "REC-32")]
+    public async Task the_prompt_of_each_owner_holds_only_their_own_known_words()
+    {
+        // Arrange
+        await using var scenario = await ChosenAsync();
+        await AddCorrectionAsync(scenario.Client, "Radancy");
+        scenario.Client.SignInAsAppUser(scenario.Admin.Identifier);
+        await AddCorrectionAsync(scenario.Client, "Zyntriqix");
+        var recording = await RecordingWithAudioAsync(scenario, Speech(Recording.SamplesPerSecond), scenario.Admin);
+
+        // Act
+        await RunCloudAsync(ActivatorUtilities.CreateInstance<TranscribeRecordingJob>(Services), scenario, recording, owner: scenario.Admin);
+
+        // Assert
+        scenario.Fake.AudioPrompts.ShouldHaveSingleItem().ShouldBe("Zyntriqix");
+        (await scenario.Client.GetRecordingAsync(recording.Id)).Status.ShouldBe(nameof(RecordingStatus.Transcribed));
+    }
+
+    [Test]
+    [Property("Rule", "REC-32")]
+    public async Task the_known_words_of_another_person_of_the_tenant_give_the_owner_no_prompt()
+    {
+        // Arrange
+        await using var scenario = await ChosenAsync();
+        scenario.Client.SignInAsAppUser(scenario.Admin.Identifier);
+        await AddCorrectionAsync(scenario.Client, "Zyntriqix");
+        scenario.Client.SignInAsAppUser(scenario.Member.Identifier);
+        var recording = await RecordingWithAudioAsync(scenario, Speech(Recording.SamplesPerSecond));
+
+        // Act
+        await RunCloudAsync(ActivatorUtilities.CreateInstance<TranscribeRecordingJob>(Services), scenario, recording);
+
+        // Assert
+        scenario.Fake.AudioPrompts.ShouldHaveSingleItem().ShouldBeNull();
+    }
+
+    [Test]
+    [Property("Rule", "REC-32")]
+    public async Task a_provider_that_refuses_the_prompt_gets_the_part_again_with_none_and_the_rest_of_the_run_goes_with_none()
+    {
+        // Arrange
+        await using var scenario = await ChosenAsync();
+        await AddCorrectionAsync(scenario.Client, "Radancy");
+        scenario.Fake.Behavior.RefusePrompt = true;
+        const int partSamples = 2 * Recording.SamplesPerSecond;
+        var recording = await RecordingWithAudioAsync(scenario, Speech(3 * Recording.SamplesPerSecond, (24_000, 24_800)));
+
+        // Act
+        await RunCloudAsync(JobWith(CloudEngine(PartBytesFor(partSamples))), scenario, recording);
+
+        // Assert
+        scenario.Fake.AudioCalls.ShouldBe(3);
+        scenario.Fake.AudioPrompts.ToArray().ShouldBe([null, null]);
+        (await scenario.Client.GetRecordingAsync(recording.Id)).Status.ShouldBe(nameof(RecordingStatus.Transcribed));
+        (await PlainRawAsync(scenario.Client, recording.SessionId)).Split('\n').Length.ShouldBe(2);
+    }
+
+    [Test]
+    [Property("Rule", "REC-32")]
+    public async Task a_wrong_key_with_known_words_sends_the_part_once_and_fails_the_recording_as_before()
+    {
+        // Arrange
+        await using var scenario = await ChosenAsync();
+        await AddCorrectionAsync(scenario.Client, "Radancy");
+        await GiveTheProviderAWrongKeyAsync(scenario);
+        var recording = await RecordingWithAudioAsync(scenario, Speech(Recording.SamplesPerSecond));
+
+        // Act
+        await RunCloudAsync(ActivatorUtilities.CreateInstance<TranscribeRecordingJob>(Services), scenario, recording);
+
+        // Assert
+        scenario.Fake.AudioCalls.ShouldBe(1);
+        var read = await scenario.Client.GetRecordingAsync(recording.Id);
+        read.Status.ShouldBe(nameof(RecordingStatus.Failed));
+        read.Problem.ShouldBe(nameof(RecordingProblem.ProviderRefused));
         await AudioStaysAsync(scenario.Client, recording);
     }
 
@@ -452,7 +638,7 @@ public class CloudTranscriptionTests : TestBase
         var recording = await RecordingWithAudioAsync(scenario, samples);
         using var stop = new CancellationTokenSource();
         await Should.ThrowAsync<OperationCanceledException>(
-            () => RunCloudAsync(JobWith(new StopAfterFirstPart(CloudEngine(PartBytesFor(partSamples)), stop)), scenario, recording, stop.Token));
+            () => RunCloudAsync(JobWith(new StopAfterFirstPart(CloudEngine(PartBytesFor(partSamples)), stop)), scenario, recording, cancellationToken: stop.Token));
         (await scenario.Client.GetRecordingAsync(recording.Id)).Status.ShouldBe(nameof(RecordingStatus.Transcribing));
 
         // Act
@@ -758,22 +944,7 @@ public class CloudTranscriptionTests : TestBase
         await using var scenario = await ChosenAsync();
         const int partSamples = Recording.SamplesPerSecond;
         var recording = await RecordingWithAudioAsync(scenario, Speech(3 * partSamples, (12_000, 12_800), (28_000, 28_800)));
-        var engine = new ActBeforeFirstPartIsSaved(CloudEngine(PartBytesFor(partSamples)), async () =>
-        {
-            scenario.Client.SignInAsAppUser(scenario.Admin.Identifier);
-            var list = (await scenario.Client.GetFromJsonAsync<ModelProviderListDto>(ApiRoutes.ModelProviders.Root)).ShouldNotBeNull();
-            var provider = list.Items.Single(p => p.Id == scenario.Provider.Id);
-            var updated = await scenario.Client.PutAsJsonAsync(ApiRoutes.ModelProviders.GetRecord(provider.Id), new
-            {
-                name = provider.Name,
-                baseUrl = provider.BaseUrl,
-                apiKey = CleanupScenario.NewKey(),
-                model = provider.Model,
-                version = provider.Version,
-            });
-            updated.StatusCode.ShouldBe(HttpStatusCode.OK, await updated.Content.ReadAsStringAsync());
-            scenario.Client.SignInAsAppUser(scenario.Member.Identifier);
-        });
+        var engine = new ActBeforeFirstPartIsSaved(CloudEngine(PartBytesFor(partSamples)), () => GiveTheProviderAWrongKeyAsync(scenario));
 
         // Act
         await RunCloudAsync(JobWith(engine), scenario, recording);
@@ -824,7 +995,7 @@ public class CloudTranscriptionTests : TestBase
         {
             using var stop = new CancellationTokenSource();
             var second = JobWith(new StopAfterFirstPart(CloudEngine(PartBytesFor(2 * Recording.SamplesPerSecond)), stop));
-            await Should.ThrowAsync<OperationCanceledException>(() => RunCloudAsync(second, scenario, recording, stop.Token));
+            await Should.ThrowAsync<OperationCanceledException>(() => RunCloudAsync(second, scenario, recording, cancellationToken: stop.Token));
         });
 
         // Act

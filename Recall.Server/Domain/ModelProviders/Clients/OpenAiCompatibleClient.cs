@@ -61,8 +61,9 @@ public sealed class OpenAiCompatibleClient(IHttpClientFactory httpClientFactory,
     /// <summary>
     /// One part of the audio as a WAV file, in the multipart form of the OpenAI reference. Only <c>json</c> is a format that each
     /// transcription model of OpenAI takes, and its <c>text</c> holds the words. A <c>text</c> that is empty is a part with no speech.
+    /// A <paramref name="prompt"/> goes out only to a model that takes one.
     /// </summary>
-    public async Task<ProviderReply<HeardAudio>> TranscribeAsync(ModelEndpoint endpoint, string model, byte[] wav, CancellationToken cancellationToken)
+    public async Task<ProviderReply<HeardAudio>> TranscribeAsync(ModelEndpoint endpoint, string model, byte[] wav, string? prompt, CancellationToken cancellationToken)
         => await ProviderCall.RunAsync<HeardAudio>(limits.AudioCall, async limit =>
         {
             using var request = RequestTo(endpoint, HttpMethod.Post, "audio/transcriptions");
@@ -72,6 +73,8 @@ public sealed class OpenAiCompatibleClient(IHttpClientFactory httpClientFactory,
             form.Add(file, "file", "audio.wav");
             form.Add(new StringContent(model), "model");
             form.Add(new StringContent("json"), "response_format");
+            if (!string.IsNullOrEmpty(prompt) && TakesPrompt(model))
+                form.Add(new StringContent(prompt), "prompt");
             request.Content = form;
 
             using var response = await httpClientFactory.CreateClient(ModelProviderHttp.AudioClientName).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, limit);
@@ -83,6 +86,10 @@ public sealed class OpenAiCompatibleClient(IHttpClientFactory httpClientFactory,
                 ? new ProviderReply<HeardAudio>.Answered(new HeardAudio(text, transcription.Usage is { Type: "tokens", OutputTokens: { } tokens } && tokens >= limits.AudioOutputTokens))
                 : new ProviderReply<HeardAudio>.Failed(ProviderFailureText.Unusable());
         }, cancellationToken);
+
+    // The reference of Create transcription says that gpt-4o-transcribe-diarize does not support the field. A dated or a
+    // later name of it holds the same words.
+    private static bool TakesPrompt(string model) => !model.Contains("transcribe-diarize", StringComparison.OrdinalIgnoreCase);
 
     private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         => await httpClientFactory.CreateClient(ModelProviderHttp.ClientName).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
