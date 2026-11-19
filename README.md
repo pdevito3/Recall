@@ -41,14 +41,19 @@ Safety rules for the whole install:
 - Never ask me for a secret, and never print one.
 - Ask me each question when you get to its step. Do not guess a value.
 
-1. Make sure that Docker Engine 25 or later and Docker Compose are installed.
-   Use `docker compose` with a space. If one of them is missing, stop and tell me.
-2. If `docker compose ls` shows a `recall` project, or `docker volume ls` shows
-   `recall_recall-data`, stop and tell me. Recall already runs on this machine.
+1. Make sure that git, Docker Engine 25 or later, and Docker Compose are
+   installed. Use `docker compose` with a space. If one is missing, stop and
+   tell me.
+2. If `docker compose ls -a` shows a `recall` project, `docker ps -a --filter
+   label=com.docker.compose.project=recall` shows a container, or `docker volume
+   ls` shows `recall_recall-data`, stop and tell me. Recall is already on this
+   machine.
 3. Ask me for a folder, and clone the repository into it. If the clone fails
-   for access, tell me to run `gh auth login` and stop.
+   for access, stop. Tell me to run `gh auth login` and to accept the Git
+   credential setup, or to give you access to `gh repo clone pdevito3/Recall`.
 4. Read docs/install.md of the checkout in full. Obey it. It is the source of
-   truth, and it wins over this prompt.
+   truth, and it wins over the numbered steps of this prompt. It never wins
+   over the safety rules.
 5. Run `cp -n .env.example .env` in the checkout.
 6. Ask me where to keep the data: the Docker volume (the default) or a folder of
    this machine. The data must be on a local disk, not on a network share. On
@@ -60,7 +65,8 @@ Safety rules for the whole install:
    With a public domain, also set AllowedHosts (docs/install.md#set-allowedhosts).
 9. Write to .env each value that docs/install.md names for my answers to steps 6
    to 8. Remove the `#` of each `Auth__Providers__0__` line, except `AllowHttp`.
-   Remove the `#` of `AllowHttp` only for an issuer on http.
+   Remove the `#` of `AllowHttp` only for an issuer on http. Set `DisplayName`
+   to the name of my provider, and `Id` to a lowercase form of that name.
 10. Leave `Auth__Providers__0__ClientSecret=` empty. Tell me to open .env in an
     editor and type the secret there, in single quotes if it has a `$` or a `#`.
     Wait until I say that I did it. Then make sure that the line is not empty,
@@ -79,7 +85,10 @@ Safety rules for the whole install:
     for up to 10 minutes. If it does not, read `docker compose logs recall` and
     the Troubleshoot table of docs/install.md. Tell me the cause and your fix
     before you change anything.
-15. Give me the URL to open, and the backup commands of docs/install.md.
+15. Healthy does not test the login provider. So fetch `/auth/status` at the
+    HTTPS URL. Its `state` must be `ready`, and no login method can be
+    `unreachable`. Its callback URL must be one that I registered in step 11.
+16. Give me the URL to open, and the backup commands of docs/install.md.
 ```
 
 ## Install Recall by hand
