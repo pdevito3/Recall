@@ -15,5 +15,6 @@ export const home = (page: Page) => ({
   paragraphMarks: page.getByTestId('paragraph-marks'),
   micMessage: page.getByRole('region', { name: 'Record an entry' }).getByRole('status').getByText('The mic needs HTTPS', { exact: true }),
   httpsGuide: page.getByRole('link', { name: 'Turn on HTTPS', exact: true }),
+  changeEngine: page.getByRole('region', { name: 'Record an entry' }).getByRole('link', { name: 'Change', exact: true }),
   logoutFailed: page.getByText(/^You are still signed in, because .+ did not finish\. Try again\.$/),
 })

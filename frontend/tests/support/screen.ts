@@ -14,3 +14,10 @@ export async function useDefaultFontSize(page: Page, px: number) {
   const cdp = await page.context().newCDPSession(page)
   await cdp.send('Page.setFontSizes', { fontSizes: { standard: px, fixed: Math.round((px * 13) / 16) } })
 }
+
+// A box measured before the web font loads has the size of the fallback font.
+export async function theWebFontsLoad(page: Page) {
+  await page.evaluate(async () => {
+    await document.fonts.ready
+  })
+}
