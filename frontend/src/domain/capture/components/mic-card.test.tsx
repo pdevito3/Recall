@@ -18,6 +18,7 @@ import { member, signedInMember } from '@/test/session'
 
 import { addCapture, capturesOf, removeCapture, storeSlice, updateCapture, type StoredCapture, type UploadProblem } from '../audio-store'
 import { sliceMs } from '../mic-recorder'
+import { settleStoppedUploadQueues } from '../upload-queue'
 import { stopRecordingOfThisTab } from '../use-capture'
 import { useSendStoredAudio } from '../use-send-stored-audio'
 import { MicCard } from './mic-card'
@@ -177,6 +178,9 @@ afterEach(async () => {
   await stopRecordingOfThisTab()
   await Promise.all(tones.splice(0).map((tone) => tone.close()))
   vi.restoreAllMocks()
+  // A stopped queue ends the step that it sends, and notes its outcome on the capture. The next test adds a capture
+  // with the same ID, so the note must come first.
+  await settleStoppedUploadQueues()
   for (const capture of await capturesOf(member.identifier)) await removeCapture(capture.clientRecordingId)
 })
 

@@ -96,6 +96,7 @@ class UploadQueue {
   private isWaitingAfterFailure = false
   private isStopped = false
   private stopWatching: (() => void)[] = []
+  private running: Promise<void> = Promise.resolve()
 
   private readonly owner: string
   private readonly queryClient: QueryClient
@@ -116,13 +117,15 @@ class UploadQueue {
         this.wake()
       }),
     )
-    void this.run()
+    this.running = this.run()
   }
 
+  /** Answers when the queue has ended the step that it sends and has written its outcome to the store. */
   stop() {
     this.isStopped = true
     this.stopWatching.forEach((stop) => stop())
     this.wake()
+    return this.running
   }
 
   /** Clears a refusal, so the queue sends the capture again. */
@@ -246,14 +249,28 @@ const otherTabSendsMs = 5_000
 
 let current: UploadQueue | null = null
 
+/** The queues that a stop has not ended yet. */
+const stopping = new Set<Promise<void>>()
+
+function stop(queue: UploadQueue) {
+  const ended = queue.stop()
+  stopping.add(ended)
+  void ended.finally(() => stopping.delete(ended))
+}
+
+/** Answers when each stopped queue has ended, so that nothing more of a queue comes to the store. */
+export const settleStoppedUploadQueues = async () => {
+  await Promise.all(stopping)
+}
+
 /** Starts the queue of the person of this page, and stops the queue of an earlier person. */
 export function sendStoredAudioOf(owner: string, queryClient: QueryClient): () => void {
-  current?.stop()
+  if (current) stop(current)
   const queue = new UploadQueue(owner, queryClient)
   current = queue
   queue.start()
   return () => {
-    queue.stop()
+    stop(queue)
     if (current === queue) current = null
   }
 }

@@ -1,6 +1,6 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { defaultScheduler, notifyManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryHistory, createRootRoute, createRoute, createRouter, Outlet, RouterProvider } from '@tanstack/react-router'
-import { expect, test } from 'vitest'
+import { expect, onTestFinished, test, vi } from 'vitest'
 import { commands, userEvent } from 'vitest/browser'
 import { render } from 'vitest-browser-react'
 
@@ -98,18 +98,39 @@ test('each day of the Journal links to the Summary of its own day', async () => 
 
 test('a fast load shows the entries with no flash of the loading words', async () => {
   // Arrange
-  let didTheWordsShow = false
-  const watch = new MutationObserver(() => {
-    didTheWordsShow ||= document.body.textContent?.includes('Loading your entries') ?? false
+  // The test moves the clock of the page, so the load takes 300 ms on a busy machine too.
+  // Query tells of the answer in a timer, so it tells in a microtask here. A wait such as expect.element moves
+  // a fake clock, so the observer tells when the entries show.
+  const firstPage = '/api/v1/sessions?pageSize=50'
+  const fastLoadMs = 300
+  await commands.holdRequests(firstPage)
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  notifyManager.setScheduler(queueMicrotask)
+  onTestFinished(() => {
+    notifyManager.setScheduler(defaultScheduler)
+    vi.useRealTimers()
   })
-  watch.observe(document.body, { childList: true, subtree: true, characterData: true })
+  let didTheWordsShow = false
+  const entriesShow = new Promise<void>((resolve) => {
+    const watch = new MutationObserver(() => {
+      const text = document.body.textContent ?? ''
+      didTheWordsShow ||= text.includes('Loading your entries')
+      if (text.includes('Walked to the lake after work and met Sam for coffee.')) {
+        watch.disconnect()
+        resolve()
+      }
+    })
+    watch.observe(document.body, { childList: true, subtree: true, characterData: true })
+  })
 
   // Act
   const { screen } = await renderJournal()
+  vi.advanceTimersByTime(fastLoadMs)
+  await commands.releaseRequests(firstPage)
+  await entriesShow
 
   // Assert
   await expect.element(screen.getByText('Walked to the lake after work and met Sam for coffee.')).toBeVisible()
-  watch.disconnect()
   expect(didTheWordsShow).toBe(false)
 })
 

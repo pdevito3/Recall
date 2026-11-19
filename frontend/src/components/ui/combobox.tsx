@@ -46,11 +46,13 @@ interface ComboboxSettings {
   ariaLabelOnly?: string
   allowsCustomValue: boolean
   isReadOnly: boolean
+  isTextAndValueControlled: boolean
 }
 
 const ComboboxSettingsContext = React.createContext<ComboboxSettings>({
   allowsCustomValue: false,
   isReadOnly: false,
+  isTextAndValueControlled: false,
 })
 
 function Combobox<T extends object, M extends "single" | "multiple" = "single">(
@@ -60,6 +62,9 @@ function Combobox<T extends object, M extends "single" | "multiple" = "single">(
     ariaLabelOnly: props["aria-labelledby"] ? undefined : props["aria-label"],
     allowsCustomValue: props.allowsCustomValue ?? false,
     isReadOnly: props.isReadOnly ?? false,
+    // The test of React Aria before it puts the text of a picked option in the input.
+    isTextAndValueControlled:
+      props.inputValue !== undefined && (props.value !== undefined || props.selectedKey !== undefined),
   }
   return (
     // The same guard as in Select: in an overlay, the hidden copy that the
@@ -141,7 +146,7 @@ function onlyOptionWithText(
  */
 function usePickTypedOption() {
   const state = React.useContext(ComboBoxStateContext)
-  const { allowsCustomValue, isReadOnly } = React.useContext(ComboboxSettingsContext)
+  const { allowsCustomValue, isReadOnly, isTextAndValueControlled } = React.useContext(ComboboxSettingsContext)
   const { locale } = useLocale()
 
   return (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -173,6 +178,13 @@ function usePickTypedOption() {
     }
     const key = onlyOptionWithText(state.selectionManager, state.inputValue, collator)
     if (key != null) {
+      // A caller that controls the value and the text must set both in
+      // onChange. React Aria opens a closed list when that new text comes to
+      // a focused input, and a pick closes only an open list. So a closed
+      // list opens in the same render as the pick, and the pick closes it.
+      if (isTextAndValueControlled && !state.isOpen) {
+        state.open()
+      }
       state.setValue(key)
     }
     // Tab goes on to React Aria, which closes the list, and to a focus scope,

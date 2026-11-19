@@ -141,7 +141,7 @@ test('the list of a long Combobox is at most 18rem tall on a tall page', async (
 })
 
 function FrameworkCombobox(
-  props: Pick<ComboBoxProps<object>, 'allowsCustomValue' | 'defaultSelectedKey' | 'menuTrigger' | 'onChange'>,
+  props: Pick<ComboBoxProps<object>, 'allowsCustomValue' | 'defaultSelectedKey' | 'menuTrigger' | 'onChange' | 'onOpenChange'>,
 ) {
   return (
     <Combobox {...props}>
@@ -321,7 +321,7 @@ test('Enter with the text of a selected option that has a twin submits the form'
   expect(onSubmit).toHaveBeenCalledOnce()
 })
 
-function FrameworkComboboxOnTallPage(props: Pick<ComboBoxProps<object>, 'onChange'>) {
+function FrameworkComboboxOnTallPage(props: Pick<ComboBoxProps<object>, 'onChange' | 'onOpenChange'>) {
   return (
     <div style={{ height: '300vh' }}>
       <FrameworkCombobox {...props} />
@@ -343,6 +343,28 @@ test('a scroll of the page closes the list and keeps the typed text, and Enter t
   await expect.element(input).toHaveFocus()
   await userEvent.keyboard('{Enter}')
   await expect.element(input).toHaveValue('Vue')
+})
+
+/** The words in the live region, which a screen reader reads out. */
+const announcements = () => [...document.querySelectorAll('[data-live-announcer] [role=log]')].map((log) => log.textContent).join(' ')
+
+test('Enter in a list that a scroll of the page closed picks the option and does not open the list again', async () => {
+  const onOpenChange = vi.fn()
+  const screen = await render(<FrameworkComboboxOnTallPage onOpenChange={onOpenChange} />)
+  const input = screen.getByRole('combobox', { name: 'Framework' })
+  await input.click()
+  await userEvent.keyboard('vue')
+  await expect.poll(announcements).toContain('2 options available.')
+  window.scrollBy(0, 200)
+  await expect.element(page.getByRole('listbox')).not.toBeInTheDocument()
+  onOpenChange.mockClear()
+  document.querySelectorAll('[data-live-announcer] [role=log]').forEach((log) => log.replaceChildren())
+
+  await userEvent.keyboard('{Enter}')
+
+  await expect.element(input).toHaveValue('Vue')
+  expect(onOpenChange).not.toHaveBeenCalled()
+  expect(announcements()).not.toContain('available')
 })
 
 test('a blur after a scroll of the page still resets text with no match', async () => {
@@ -446,22 +468,29 @@ function ControlledFrameworkCombobox({ onChange }: { onChange: (key: unknown) =>
   )
 }
 
+const scrollOfThePageClosesTheList = async () => {
+  window.scrollBy(0, 200)
+  await expect.element(page.getByRole('listbox')).not.toBeInTheDocument()
+}
+
 test.each([
-  ['an open list', () => {}],
-  ['a list that a scroll of the page closed', () => window.scrollBy(0, 200)],
-])('Tab in %s picks the option with the typed text when the value and the text are controlled', async (_, act) => {
+  ['{Tab}', 'an open list', async () => {}, 'textbox', 'Next field'],
+  ['{Tab}', 'a list that a scroll of the page closed', scrollOfThePageClosesTheList, 'textbox', 'Next field'],
+  ['{Enter}', 'a list that a scroll of the page closed', scrollOfThePageClosesTheList, 'combobox', 'Framework'],
+] as const)('%s in %s picks the option with the typed text when the value and the text are controlled', async (key, _, act, role, focused) => {
   const onChange = vi.fn()
   const screen = await render(<ControlledFrameworkCombobox onChange={onChange} />)
   const input = screen.getByRole('combobox', { name: 'Framework' })
   await input.click()
   await userEvent.keyboard('vue')
   await expect.element(page.getByRole('listbox')).toBeVisible()
-  act()
+  await act()
 
-  await userEvent.keyboard('{Tab}')
+  await userEvent.keyboard(key)
 
-  await expect.element(screen.getByRole('textbox', { name: 'Next field' })).toHaveFocus()
+  await expect.element(screen.getByRole(role, { name: focused })).toHaveFocus()
   await expect.element(input).toHaveValue('Vue')
+  await expect.element(page.getByRole('listbox')).not.toBeInTheDocument()
   expect(onChange.mock.calls).toEqual([['vue']])
 })
 
@@ -506,9 +535,13 @@ test('the list of a Combobox as wide as the page fits in the page, and ArrowDown
 /**
  * The names of the options whose row has a fill on the screen. A moving highlight paints the active option,
  * so the test reads the pixels: the left edge of each row against the padding of the list.
+ * The highlight can start to move after `data-focused`, so the caller polls. A screenshot can take more than
+ * the 1 s of a default `expect.poll` on a busy machine, so the caller polls for longer.
  */
 async function optionsWithFill() {
   const list = page.getByRole('listbox')
+  const content = list.element().closest('[data-slot="combobox-content"]')!
+  await Promise.all(content.getAnimations({ subtree: true }).map((animation) => animation.finished))
   const image = await createImageBitmap(
     await (await fetch(`data:image/png;base64,${await list.screenshot({ save: false })}`)).blob(),
   )
@@ -534,10 +567,12 @@ test('the option under the pointer has no fill while the arrow keys make another
   await input.click()
   await input.fill('Vu')
   await commands.movePointerOnto('option', 'Vue Router')
-  await expect.poll(optionsWithFill).toEqual(['Vue Router'])
+  await expect.element(page.getByRole('option', { name: 'Vue Router' })).toHaveAttribute('data-hovered', 'true')
+  await expect.poll(optionsWithFill, { timeout: 10_000 }).toEqual(['Vue Router'])
 
   await userEvent.keyboard('{ArrowDown}')
 
   await expect.element(page.getByRole('option', { name: 'Vue Router' })).toHaveAttribute('data-hovered', 'true')
-  await expect.poll(optionsWithFill).toEqual(['Vue'])
+  await expect.element(page.getByRole('option', { name: 'Vue', exact: true })).toHaveAttribute('data-focused', 'true')
+  await expect.poll(optionsWithFill, { timeout: 10_000 }).toEqual(['Vue'])
 })
