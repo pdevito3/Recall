@@ -3,6 +3,7 @@ namespace Recall.Server.Domain.Recordings.Transcription;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Options;
 using ModelProviders.Clients;
+using Resources;
 
 /// <summary>
 /// Sends the audio to the model provider that an Admin chose, one part at a time, in the wire format of
@@ -28,11 +29,23 @@ public sealed class CloudTranscriptionEngine(WorkAudio workAudio, OpenAiCompatib
         using var audio = PcmAudio.Open(wav);
         var start = input.StartSample;
         var limit = maxSamples;
+        var prompt = input.Vocabulary;
         while (start < audio.Samples)
         {
             var end = audio.EndOfPart(start, limit);
             var part = AudioParts.WavOf(audio.ReadBytes(start, end));
-            var heard = await client.TranscribeAsync(provider.Endpoint, provider.Model, part, cancellationToken) switch
+            var reply = await client.TranscribeAsync(provider.Endpoint, provider.Model, part, prompt, cancellationToken);
+            if (reply is ProviderReply<HeardAudio>.Failed { Failure.StatusCode: 400 or 422 } refused && prompt is not null)
+            {
+                // A provider or a model can refuse the field with a 400 or a 422. The words matter more than the hint, so the
+                // part goes again with no prompt, and so does the rest of the run. A wrong key or a file that is too big is
+                // no fault of the prompt, so it fails as before and the part is not sent twice.
+                prompt = null;
+                Telemetry.AddEvent([("http.response.status_code", refused.Failure.StatusCode)], "recordings.transcribe.prompt_dropped");
+                continue;
+            }
+
+            var heard = reply switch
             {
                 ProviderReply<HeardAudio>.Answered answered => answered.Value,
                 ProviderReply<HeardAudio>.Failed failed => throw FailureOf(failed.Failure),

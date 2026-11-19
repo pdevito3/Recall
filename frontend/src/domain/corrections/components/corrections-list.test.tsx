@@ -162,7 +162,7 @@ test('a known word that the Server refuses shows its message under the input and
   await expect.element(screen.getByRole('alert')).toHaveTextContent('The term must not have more than 200 characters.')
   await expect.element(input).toHaveValue(long)
   await expect.element(input).toHaveAccessibleDescription(
-    'Cleanup uses these words to spell names and terms. The term must not have more than 200 characters.',
+    'Cleanup and cloud dictation use these words to spell names and terms. The term must not have more than 200 characters.',
   )
 })
 

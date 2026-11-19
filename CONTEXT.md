@@ -80,7 +80,7 @@ The short AI recap of one Session. A Summary covers a period, and a Synopsis doe
 _Avoid_: Recap, abstract
 
 **Correction**:
-A term of one User, with its common mishearings, that fixes dictation mistakes in Cleaned. By default it is a hint to the model, and a User can flag it to replace the words each time. A term with no mishearings is a known word. The model gets the term alone, and spells it right where the text holds a word that sounds like it and does not fit the context. It never changes Raw.
+A term of one User, with its common mishearings, that fixes dictation mistakes in Cleaned. The cloud engine also gets each term, with no mishearing, as a hint when it hears the audio. By default it is a hint to the model, and a User can flag it to replace the words each time. A term with no mishearings is a known word. The model gets the term alone, and spells it right where the text holds a word that sounds like it and does not fit the context. It never changes Raw.
 _Avoid_: Lexicon, vocabulary, dictionary
 
 ### Metadata

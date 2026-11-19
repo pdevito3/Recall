@@ -15,7 +15,11 @@ using Transcription;
 
 public static class BeginTranscription
 {
-    public sealed record Start(string AudioPath, string WorkAudioPath, long StartSample, AudioProvider? Provider, TranscriptionChoice? Choice, int? HighestSlice);
+    public sealed record Start(string AudioPath, string WorkAudioPath, long StartSample, AudioProvider? Provider, TranscriptionChoice? Choice, int? HighestSlice, string? Vocabulary)
+    {
+        /// <summary><see cref="Vocabulary"/> holds the terms of a person, so it prints nothing.</summary>
+        public override string ToString() => nameof(Start);
+    }
 
     /// <summary>A job of another engine does nothing, so two engines never work on one Recording at a time.</summary>
     public sealed record Command(string Id, TranscriptionEngineKind Engine, bool EngineIsReady) : IRequest<Start?>, IRunsAgainWhenRaced;
@@ -76,12 +80,26 @@ public static class BeginTranscription
                     recording.TranscribedSamples,
                     provider,
                     choice,
-                    recording.HighestStoredSlice);
+                    recording.HighestStoredSlice,
+                    provider is null ? null : await VocabularyAsync(cancellationToken));
             }
 
             await dbContext.SaveChangesAsync(cancellationToken);
             _logger.Here().Information("Recording {RecordingId} is {Status}, {Problem}", recording.Id, recording.Status, recording.Problem);
             return start;
+        }
+
+        private async Task<string?> VocabularyAsync(CancellationToken cancellationToken)
+        {
+            var words = await dbContext.Corrections.AsNoTracking()
+                .TagWithOperationCallSite("recordings.transcribe.corrections")
+                .Select(c => new TranscriptionVocabulary.KnownWord(c.CanonicalTerm, c.LastModifiedOn ?? DateTimeOffset.MinValue))
+                .ToListAsync(cancellationToken);
+            var prompt = TranscriptionVocabulary.PromptOf(words);
+            Activity.Current?.SetTag("app.recording.known_word_count", prompt.Terms);
+            Activity.Current?.SetTag("app.recording.prompt_word_count", prompt.Sent);
+            Activity.Current?.SetTag("app.recording.prompt_bytes", prompt.Bytes);
+            return prompt.Text;
         }
 
         // The Admin took the choice of a provider back after this Recording was queued. The audio does not leave the server

@@ -81,7 +81,7 @@ export function KnownWords() {
     <section aria-labelledby="known-words-heading" className="flex flex-col gap-2">
       <h2 id="known-words-heading" className="text-lg font-semibold">Known words</h2>
       <p id="known-words-hint" className="text-sm text-muted-foreground">
-        Cleanup uses these words to spell names and terms.
+        Cleanup and cloud dictation use these words to spell names and terms.
       </p>
       <div
         data-slot="known-words-field"

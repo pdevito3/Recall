@@ -11,8 +11,15 @@ public interface ITranscriptionEngine
     IAsyncEnumerable<TranscriptChunk> RunAsync(TranscriptionInput input, CancellationToken cancellationToken);
 }
 
-/// <summary><paramref name="Provider"/> is set only for <see cref="TranscriptionEngineKind.Cloud"/>.</summary>
-public sealed record TranscriptionInput(string AudioPath, string WorkAudioPath, long StartSample, AudioProvider? Provider = null);
+/// <summary>
+/// <paramref name="Provider"/> and <paramref name="Vocabulary"/> are set only for <see cref="TranscriptionEngineKind.Cloud"/>.
+/// <paramref name="Vocabulary"/> is the <see cref="TranscriptionVocabulary"/> of the owner, null when the owner keeps no term.
+/// </summary>
+public sealed record TranscriptionInput(string AudioPath, string WorkAudioPath, long StartSample, AudioProvider? Provider = null, string? Vocabulary = null)
+{
+    /// <summary><see cref="Vocabulary"/> holds the terms of a person, so it prints nothing.</summary>
+    public override string ToString() => nameof(TranscriptionInput);
+}
 
 /// <summary>The provider that takes the audio. The endpoint holds the key, so it prints nothing.</summary>
 public sealed record AudioProvider(ModelEndpoint Endpoint, string Model)

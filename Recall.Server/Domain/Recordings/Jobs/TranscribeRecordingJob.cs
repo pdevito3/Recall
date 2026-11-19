@@ -98,7 +98,7 @@ public sealed class TranscribeRecordingJob(
     {
         try
         {
-            var input = new TranscriptionInput(start.AudioPath, start.WorkAudioPath, start.StartSample, start.Provider);
+            var input = new TranscriptionInput(start.AudioPath, start.WorkAudioPath, start.StartSample, start.Provider, start.Vocabulary);
             var from = start.StartSample;
             await foreach (var chunk in engine.RunAsync(input, cancellationToken))
             {
