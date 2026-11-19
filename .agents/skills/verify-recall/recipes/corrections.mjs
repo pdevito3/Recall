@@ -87,4 +87,21 @@ export default async ({ page, step, capture, expect, login }) => {
     await expect(page.getByRole('heading', { level: 1, name: 'Corrections' })).toBeFocused()
   })
   await capture('deleted')
+
+  await step('add a known word with no mishearings: its row has no Heard as line and no Always replaced', async () => {
+    await page.getByRole('button', { name: 'Add correction', exact: true }).click()
+    await dialog.getByRole('textbox', { name: 'Term' }).fill('Radancy')
+    await dialog.getByText('Always replace', { exact: true }).click()
+    const answer = page.waitForResponse(isCall('POST', '/api/v1/corrections'))
+    await dialog.getByRole('button', { name: 'Save correction', exact: true }).click()
+    const response = await answer
+    expect(response.status()).toBe(201)
+    const row = await response.json()
+    expect(row.mishearings).toEqual([])
+    await expect(dialog).toHaveCount(0)
+    await expect(list.getByText(row.canonicalTerm, { exact: true })).toBeVisible()
+    await expect(list.getByText(/^Heard as /)).toHaveCount(0)
+    await expect(list.getByText('Always replaced', { exact: true })).toHaveCount(0)
+  })
+  await capture('known-word')
 }

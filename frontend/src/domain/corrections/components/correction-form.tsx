@@ -108,7 +108,7 @@ export function CorrectionForm({ correction, onSaved }: CorrectionFormProps) {
       <ResponsiveDialogHeader>
         <ResponsiveDialogTitle>{correction ? `Edit ${correction.canonicalTerm}` : 'Add a correction'}</ResponsiveDialogTitle>
         <ResponsiveDialogDescription>
-          Cleanup fixes each mishearing of the term in the cleaned text. Your words as you said them do not change.
+          Cleanup fixes the term in the cleaned text where dictation got it wrong. Your words as you said them do not change.
         </ResponsiveDialogDescription>
       </ResponsiveDialogHeader>
 
@@ -137,7 +137,8 @@ export function CorrectionForm({ correction, onSaved }: CorrectionFormProps) {
           {...form.register('mishearings')}
         />
         <p id="correction-mishearings-hint" className="text-sm text-muted-foreground">
-          How dictation writes the term by mistake. Put each one on its own line.
+          Optional. How dictation writes the term by mistake. Put each one on its own line. Leave it empty for a known
+          word, and Cleanup gets the word as a hint.
         </p>
         <FieldMessage id="correction-mishearings-error" message={errors.mishearings?.message} />
       </div>
@@ -157,8 +158,8 @@ export function CorrectionForm({ correction, onSaved }: CorrectionFormProps) {
               Always replace
             </Checkbox>
             <p id="correction-hard-replace-hint" className="text-sm text-muted-foreground">
-              When this is on, Cleanup writes the term in place of each mishearing every time. When it is off, Cleanup
-              gets the term as a hint.
+              When this is on, Cleanup writes the term in place of each mishearing every time. This needs at least one
+              mishearing. When it is off, Cleanup gets the term as a hint.
             </p>
           </div>
         )}

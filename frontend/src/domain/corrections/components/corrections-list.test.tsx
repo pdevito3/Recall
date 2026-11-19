@@ -71,6 +71,18 @@ test('puts the search in the URL', async () => {
   expect(router.state.location.search).toEqual({ search: 'lumiere' })
 })
 
+test('shows Always replaced only on a term with mishearings', async () => {
+  // Arrange and Act
+  const { screen } = await renderPageAt('/corrections', [
+    { ...listAnswer, body: [{ ...cafe, hardReplace: true }, { ...grdb, hardReplace: true }] },
+  ])
+
+  // Assert
+  const rows = screen.getByRole('list', { name: 'Your corrections' }).getByRole('listitem')
+  await expect.element(rows.filter({ hasText: 'GRDB' }).getByText('Always replaced')).toBeVisible()
+  await expect.element(rows.filter({ hasText: 'Café Lumière' }).getByText('Always replaced')).not.toBeInTheDocument()
+})
+
 test('a stale save keeps the edits, and the latest takes the field that another save changed', async () => {
   // Arrange
   const latest: CorrectionDto = { ...grdb, hardReplace: true, version: 2 }

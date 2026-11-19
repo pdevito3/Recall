@@ -44,15 +44,25 @@ public static class CleanupPrompt
             removeFillerWords ? RemovesFillerWords : KeepsFillerWords,
             writeNumbersAsDigits ? WritesNumbersAsDigits : KeepsNumbersAsSaid,
             Answer);
-        var hints = corrections.Where(c => !c.HardReplace && c.Mishearings.Count > 0).ToList();
-        if (hints.Count == 0)
-            return instructions;
+        var all = corrections.ToList();
+        // The code replaces each mishearing of a HardReplace term in the answer of the model, so only the other terms go to the model.
+        var misheard = all.Where(c => !c.HardReplace && c.Mishearings.Count > 0).ToList();
+        var known = all.Where(c => c.Mishearings.Count == 0).ToList();
 
-        var text = new StringBuilder(instructions).AppendLine().AppendLine();
-        text.AppendLine("The person keeps a list of terms that are often misheard. When the text holds a mishearing in the sense of the term, write the term. For this list, change no other words.");
-        foreach (var hint in hints)
-            text.Append("- \"").Append(hint.CanonicalTerm).Append("\", often misheard as: ").AppendJoin(", ", hint.Mishearings).AppendLine();
-        return text.ToString().TrimEnd();
+        var text = new StringBuilder(instructions);
+        if (misheard.Count > 0)
+        {
+            text.AppendLine().AppendLine().Append("The person keeps a list of terms that are often misheard. When the text holds a mishearing in the sense of the term, write the term. For this list, change no other words.");
+            foreach (var hint in misheard)
+                text.AppendLine().Append("- \"").Append(hint.CanonicalTerm).Append("\", often misheard as: ").AppendJoin(", ", hint.Mishearings);
+        }
+        if (known.Count > 0)
+        {
+            text.AppendLine().AppendLine().Append("The person uses these known words. Where the text holds a word or a phrase that sounds like a known word and does not fit the context as written, write the known word as it is spelled here. Do not change a correct word that fits the context.");
+            foreach (var word in known)
+                text.AppendLine().Append("- \"").Append(word.CanonicalTerm).Append('"');
+        }
+        return text.ToString();
     }
 
     /// <summary>

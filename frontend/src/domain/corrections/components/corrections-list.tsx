@@ -30,8 +30,8 @@ export function CorrectionsList({ search, onSearch, headingRef }: CorrectionsLis
   return (
     <div className="flex flex-col gap-6">
       <p className="max-w-prose text-muted-foreground">
-        These are the words that dictation gets wrong, and the ways it mishears them. Cleanup writes your word in their
-        place.
+        These are the words that dictation gets wrong. Add a word with the ways that dictation mishears it, or add a known
+        word alone.
       </p>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <SearchBox
@@ -76,7 +76,9 @@ function CorrectionRows({ search, headingRef }: { search: string; headingRef: Re
                 Heard as {correction.mishearings.join(', ')}
               </span>
             )}
-            {correction.hardReplace && <span className="text-sm text-muted-foreground">Always replaced</span>}
+            {correction.hardReplace && correction.mishearings.length > 0 && (
+              <span className="text-sm text-muted-foreground">Always replaced</span>
+            )}
           </div>
           <div className="flex shrink-0 gap-1">
             <EditCorrection correction={correction} />
