@@ -90,9 +90,11 @@ public class StringColumnLengthTests
         ["auth_login_attempts.client_kind"] = SessionKindText.All,
         ["sessions.cleanup_run"] = Enum.GetNames<CleanupRunState>(),
         ["sync_changes.entity_type"] = Enum.GetNames<SyncEntityType>(),
-        ["user_settings.time_zone"] = TimeZoneInfo.GetSystemTimeZones().Where(zone => zone.HasIanaId).Select(zone => zone.Id).ToList(),
+        ["user_settings.time_zone"] = TimeZoneInfo.GetSystemTimeZones().Where(zone => zone.HasIanaId).Select(zone => zone.Id)
+            .Concat(TimeZoneLinks.All.Select(link => link.Name)).ToList(),
         ["user_settings.time_zone_mode"] = Enum.GetNames<TimeZoneMode>(),
-        ["sessions.time_zone"] = TimeZoneInfo.GetSystemTimeZones().Where(zone => zone.HasIanaId).Select(zone => zone.Id).ToList(),
+        ["sessions.time_zone"] = TimeZoneInfo.GetSystemTimeZones().Where(zone => zone.HasIanaId).Select(zone => zone.Id)
+            .Concat(TimeZoneLinks.All.Select(link => link.Name)).ToList(),
         ["recordings.format"] = Enum.GetNames<RecordingFormat>(),
         ["recordings.engine"] = Enum.GetNames<TranscriptionEngineKind>(),
         ["recordings.status"] = Enum.GetNames<RecordingStatus>(),

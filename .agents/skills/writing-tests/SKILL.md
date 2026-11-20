@@ -51,8 +51,8 @@ The sweep checks the permission of each endpoint, not of each DTO field. For a f
 
 `pnpm test:e2e` (functional):
 
-- Run it after each change in `frontend/src`. It needs no stack. It runs each test in three zones, and it takes two to three minutes.
-- CI runs it on each pull request, in the `api-contract` job.
+- Run it after each change in `frontend/src`. It needs no stack. It runs each test in three zones. The full suite takes about 15 minutes on a dev machine, so run the spec files of the change first, for example `pnpm test:e2e tests/features/journal`.
+- CI runs it on each pull request, in the four shards of the `functional` job. To run one shard locally, add `--shard=1/4`.
 - It mocks the Server. Thus it cannot find a fault in the Server or the IdP.
 
 `pnpm test:e2e:stack` (stack):

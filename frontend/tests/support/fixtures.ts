@@ -55,6 +55,7 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
       const missed: string[] = []
       const openCalls: Route[] = []
       // A test that fails before it settles a `heldUntil` would leave its call open, and the wait of `unrouteAll` would never end.
+      // A `delayMs` that runs past the end of the test would hold the teardown for the rest of the delay.
       let endHeldCalls!: () => void
       const testEnded = new Promise<void>((resolve) => {
         endHeldCalls = resolve
@@ -82,7 +83,7 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
             openCalls.push(route)
             return
           }
-          if (newestMock.delayMs) await new Promise((resolve) => setTimeout(resolve, newestMock.delayMs))
+          if (newestMock.delayMs) await Promise.race([new Promise((resolve) => setTimeout(resolve, newestMock.delayMs)), testEnded])
           if (newestMock.heldUntil) await Promise.race([newestMock.heldUntil, testEnded])
           await route.fulfill({
             status: newestMock.status,

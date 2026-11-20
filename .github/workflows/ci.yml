@@ -2,7 +2,8 @@ name: CI
 
 # The api-contract job fails when the committed OpenAPI document or the generated frontend contract is not current.
 # To correct a failure, build the Server, run `pnpm generate:api` in frontend/, and commit the result.
-# The job also builds, lints, and tests the frontend against the contract, and runs the functional suite of the frontend. The test job runs the .NET tests.
+# The job also builds, lints, and tests the frontend against the contract. The test job runs the .NET tests.
+# The functional job runs the functional suite of the frontend in shards. The suite mocks the Server, so it needs no .NET build.
 # The line-endings job fails when a tracked text file has a CR. .gitattributes stores each text file with LF.
 # The template-name job fails when code or config has the template name. See docs/adr/0017-template-fixes-by-cherry-pick.md.
 # The new-feature job runs scripts/ci/new-feature.cs, which runs scripts/new-feature.cs for two sample entities, then lints, builds, and tests the result.
@@ -87,18 +88,57 @@ jobs:
         working-directory: frontend
         run: pnpm test
 
-      - name: Run the functional tests
-        working-directory: frontend
-        run: pnpm test:e2e
-
       # .vitest/attachments/ has the failure screenshot and the Playwright trace of each failed component test
       - name: Upload the test reports
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: frontend-tests
+          path: frontend/.vitest/attachments/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # The suite runs each test in three zones. In one job of 4 cores, it ran out of 20 minutes with 667 of 1128 tests done.
+  # Playwright splits the tests over the shards, so each shard runs about a quarter of them.
+  functional:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    name: functional (${{ matrix.shard }}/4)
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          package_json_file: frontend/package.json
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install the frontend packages
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - uses: ./.github/actions/install-chromium
+
+      - name: Run the functional tests
+        working-directory: frontend
+        run: pnpm test:e2e --shard=${{ matrix.shard }}/4
+
+      - name: Upload the test reports
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: functional-tests-${{ matrix.shard }}
           path: |
-            frontend/.vitest/attachments/
             frontend/playwright-report/
             frontend/test-results/
           retention-days: 7

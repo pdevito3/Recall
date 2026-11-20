@@ -1,5 +1,6 @@
 namespace Recall.UnitTests.Domain.Recordings;
 
+using System.Diagnostics;
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Options;
 using Recall.Server.Domain.Recordings;
@@ -17,11 +18,18 @@ public class LocalParakeetEngineTests
 
         public void Dispose() => Directory.Delete(Folder, recursive: true);
 
+        // Linux refuses to start a file that a process holds open for write ("Text file busy"), and a child that a parallel
+        // test forks holds a copy of each open handle of this process until its exec. A shell writes the script, so this
+        // process never holds a handle on it to copy.
         public string Script(string name, string body)
         {
             var path = Path.Combine(Folder, name);
-            File.WriteAllText(path, $"#!/bin/sh\n{body}\n");
-            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            using var shell = Process.Start(new ProcessStartInfo("/bin/sh")
+            {
+                ArgumentList = { "-c", """printf '%s' "$1" > "$2" && chmod 700 "$2" """, "sh", $"#!/bin/sh\n{body}\n", path },
+            })!;
+            shell.WaitForExit();
+            shell.ExitCode.ShouldBe(0);
             return path;
         }
 
