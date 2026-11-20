@@ -187,4 +187,4 @@ An isolated run gives each endpoint a random port and uses a copy of the user se
 
 ## License
 
-MIT
+[AGPL-3.0](LICENSE)
