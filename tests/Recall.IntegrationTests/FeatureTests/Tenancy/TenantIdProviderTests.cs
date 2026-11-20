@@ -16,8 +16,11 @@ public class TenantIdProviderTests : TestBase
     public async Task missing_user_is_cached()
     {
         // Arrange
+        // Each user that a parallel test saves invalidates a generation bucket of the shared provider. If that
+        // bucket also holds this identifier, the cached miss is dropped. So this test has its own cache.
+        using var cache = new FusionCache(new FusionCacheOptions());
+        var provider = new TenantIdProvider(cache, TestFixture.BaseScopeFactory);
         var testingServiceScope = new TestingServiceScope();
-        var provider = testingServiceScope.GetService<ITenantIdProvider>();
         var identifier = $"later-{Guid.NewGuid()}";
         await testingServiceScope.StartGraph(out _)
             .AddUser(out var user)
