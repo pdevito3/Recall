@@ -11,10 +11,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Recall.FunctionalTests.TestUtilities;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Options;
 using Recall.Server.Auth;
-using Recall.Server.Auth.Entities;
 using Recall.Server.Databases;
 using Recall.Server.Domain.Recordings.Transcription;
 using Recall.Server.Domain.Tenants;
@@ -35,6 +32,9 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
     public StubOidcProvider Provider { get; } = provider ?? new();
 
     public CapturedLogs Logs { get; } = new();
+
+    /// <summary>The hasher of the passwords of this host, which counts each check and can hold one.</summary>
+    public WatchedHasher Hasher { get; } = new();
 
     public ITranscriptionEngine? TranscriptionEngine { get; init; }
 
@@ -116,7 +116,7 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
         {
             services.AddSingleton<OidcHandlerFactory>(options => options.Id == OtherModeId ? OtherProvider! : Provider);
             // The tests of each host share its two hash slots, so a test waits longer for one than a person does.
-            services.AddSingleton(new PasswordHashing(new PasswordHasher<PasswordCredential>(Options.Create(new PasswordHasherOptions { IterationCount = PasswordHashing.IterationCount })), TimeSpan.FromMinutes(2)));
+            services.AddSingleton(new PasswordHashing(Hasher, TimeSpan.FromMinutes(2)));
             if (ClaimFilePath is { } claimFile)
                 services.AddSingleton(provider => new OwnerClaim(claimFile, provider.GetRequiredService<TimeProvider>()));
             if (Clock is { } clock)

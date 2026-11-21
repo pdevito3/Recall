@@ -16,7 +16,11 @@ public static class IssueTemporaryPassword
 {
     public const string LoginNameNeededMessage = "Give the person a login name. They type it to sign in.";
 
-    public sealed record Command(string Id, string? LoginName) : IRequest<TemporaryPasswordDto>;
+    /// <summary>
+    /// A sign-in or a choice can save the credential between the load and the save of an issue, so the issue runs again
+    /// on the new row. It sends no version, because the Admin decided nothing on the state of the credential.
+    /// </summary>
+    public sealed record Command(string Id, string? LoginName) : IRequest<TemporaryPasswordDto>, IRunsAgainWhenRaced;
 
     public sealed class Handler(AppDbContext dbContext, IPermissionGuard permissionGuard, SessionStore store, PasswordHashing hashing, TimeProvider timeProvider)
         : IRequestHandler<Command, TemporaryPasswordDto>

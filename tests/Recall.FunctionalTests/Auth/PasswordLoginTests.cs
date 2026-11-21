@@ -14,6 +14,8 @@ using Shouldly;
 
 public class PasswordLoginTests
 {
+    private const string HeldHashSlot = "held hash slot";
+
     private static AuthFlowFactory Host => AuthHosts.Password;
 
     /// <summary>An address in a /64 of its own, so the wait of one test does not reach another.</summary>
@@ -430,6 +432,109 @@ public class PasswordLoginTests
         var audit = await Host.WithDatabaseAsync(db => db.AuditEntries.IgnoreQueryFilters().Where(e => e.RootId == person.UserId).Select(e => e.Data).ToListAsync());
         audit.ShouldNotBeEmpty();
         audit.ShouldAllBe(data => !data.Contains(marker) && !data.Contains(hash));
+    }
+
+    // A held check keeps one of the two hash slots, so only one such test runs at a time and the issue gets the other.
+    [NotInParallel(HeldHashSlot)]
+    [Test]
+    [Property("Rule", "PWD-14")]
+    public async Task a_login_that_loaded_the_credential_before_an_issue_mints_no_session_after_it()
+    {
+        // Arrange
+        var admin = await PasswordPeople.AddAsync(Host);
+        var person = await PasswordPeople.AddAsync(Host, sameTenantAs: admin);
+        using var adminBrowser = await SignedInAsync(admin);
+        using var browser = new AuthBrowser(Host);
+        var hold = Host.Hasher.HoldNextCheckOf(person.Password);
+
+        // Act
+        var login = browser.SignInAsync(person.LoginName, person.Password, NewAddress());
+        await hold.ReachedAsync();
+        var issue = await adminBrowser.IssueTemporaryAsync(admin, person.UserId);
+        hold.Release();
+        var response = await login;
+
+        // Assert
+        issue.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await TextOf(response)).ShouldContain(PasswordLogin.WrongMessage);
+        browser.SessionCookie.ShouldBeNull();
+        var sessions = await Host.WithDatabaseAsync(db => db.Set<AuthSession>().CountAsync(s => s.UserId == person.UserId));
+        sessions.ShouldBe(0);
+        (await PasswordPeople.CredentialOfAsync(Host, person.UserId)).State.ShouldBe(PasswordState.Temporary);
+    }
+
+    // A held check keeps one of the two hash slots, so only one such test runs at a time and the issue gets the other.
+    [NotInParallel(HeldHashSlot)]
+    [Test]
+    [Property("Rule", "PWD-16")]
+    public async Task a_choice_that_loaded_the_credential_before_an_issue_keeps_the_new_temporary_password()
+    {
+        // Arrange
+        var admin = await PasswordPeople.AddAsync(Host);
+        var person = await PasswordPeople.AddAsync(Host, issueTemporary: DateTimeOffset.UtcNow, sameTenantAs: admin);
+        using var adminBrowser = await SignedInAsync(admin);
+        using var browser = new AuthBrowser(Host);
+        var choosePage = await browser.SignInAsync(person.LoginName, person.Password, NewAddress());
+        var chosen = $"a chosen password that lost its race {Guid.NewGuid():N}";
+        var hold = Host.Hasher.HoldNextCheckOf(chosen);
+
+        // Act
+        var choice = browser.PostAsync("/auth/password/choose", [("state", PasswordPeople.StateIn(await TextOf(choosePage))), ("password", chosen)]);
+        await hold.ReachedAsync();
+        var issue = await adminBrowser.IssueTemporaryAsync(admin, person.UserId);
+        hold.Release();
+        var response = await choice;
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await TextOf(response)).ShouldContain("This sign-in is not valid");
+        browser.SessionCookie.ShouldBeNull();
+        var credential = await PasswordPeople.CredentialOfAsync(Host, person.UserId);
+        credential.State.ShouldBe(PasswordState.Temporary);
+        var issued = await issue.Content.ReadFromJsonAsync<JsonElement>();
+        using var later = new AuthBrowser(Host);
+        (await later.SignInAsync(person.LoginName, issued.GetProperty("password").GetString()!, NewAddress())).StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var old = new AuthBrowser(Host);
+        (await old.SignInAsync(person.LoginName, chosen, NewAddress())).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    // A held check keeps one of the two hash slots, so only one such test runs at a time and the issue gets the other.
+    [NotInParallel(HeldHashSlot)]
+    [Test]
+    [Property("Rule", "PWD-13")]
+    public async Task a_wrong_try_that_loaded_the_credential_before_an_issue_does_not_stop_the_new_temporary_password()
+    {
+        // Arrange
+        var admin = await PasswordPeople.AddAsync(Host);
+        var person = await PasswordPeople.AddAsync(Host, wrongTries: PasswordCredential.StopAt - 1, sameTenantAs: admin);
+        using var adminBrowser = await SignedInAsync(admin);
+        using var browser = new AuthBrowser(Host);
+        var wrong = $"the 100th wrong try {Guid.NewGuid():N}";
+        var hold = Host.Hasher.HoldNextCheckOf(wrong);
+
+        // Act
+        var login = browser.SignInAsync(person.LoginName, wrong, NewAddress());
+        await hold.ReachedAsync();
+        var issue = await adminBrowser.IssueTemporaryAsync(admin, person.UserId);
+        hold.Release();
+        var response = await login;
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await TextOf(response)).ShouldContain(PasswordLogin.WrongMessage);
+        var credential = await PasswordPeople.CredentialOfAsync(Host, person.UserId);
+        (credential.State, credential.FailedCount).ShouldBe((PasswordState.Temporary, 1));
+        var issued = await issue.Content.ReadFromJsonAsync<JsonElement>();
+        using var later = new AuthBrowser(Host);
+        (await later.SignInAsync(person.LoginName, issued.GetProperty("password").GetString()!, NewAddress())).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private static async Task<AuthBrowser> SignedInAsync(PasswordPerson person)
+    {
+        var browser = new AuthBrowser(Host);
+        (await browser.SignInAsync(person.LoginName, person.Password, NewAddress())).StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        return browser;
     }
 
     [Test]

@@ -356,6 +356,11 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("temporary_until");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
                     b.HasKey("UserId")
                         .HasName("pk_auth_password_credentials");
 

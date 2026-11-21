@@ -1,6 +1,7 @@
 namespace Recall.FunctionalTests.Auth;
 
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +11,7 @@ using Recall.Server.Auth.Entities;
 using Recall.Server.Domain.Tenants;
 using Recall.Server.Domain.Tenants.Models;
 using Recall.Server.Domain.Users;
+using Recall.Server.Resources.Entrypoints.Auth;
 using Shouldly;
 
 public sealed record PasswordPerson(string UserId, string LoginName, string Password);
@@ -26,23 +28,29 @@ public static partial class PasswordPeople
     /// <param name="issueTemporary">Gives a Temporary credential issued at this time in place of a Chosen one.</param>
     /// <param name="hash">A stored hash in place of the hash of the password.</param>
     /// <param name="wrongTries">Wrong passwords in a row that the credential has already noted.</param>
+    /// <param name="sameTenantAs">A person whose tenant the new person joins, in place of a tenant of its own.</param>
     public static async Task<PasswordPerson> AddAsync(
-        AuthFlowFactory host, DateTimeOffset? issueTemporary = null, string? hash = null, int wrongTries = 0, string? password = null)
+        AuthFlowFactory host, DateTimeOffset? issueTemporary = null, string? hash = null, int wrongTries = 0, string? password = null,
+        PasswordPerson? sameTenantAs = null)
     {
         var loginName = $"ada-{Guid.NewGuid():N}";
         password ??= $"a long journal passphrase {Guid.NewGuid():N}";
         var stored = hash ?? Hasher.HashPassword(null!, password);
         var userId = await host.WithDatabaseAsync(async db =>
         {
-            var tenant = Tenant.Create(new TenantForCreation { Name = $"Tenant {Guid.NewGuid():N}" });
-            var user = User.CreateFromLogin(new NewPerson("Ada", "Lovelace", null, "ada"), tenant.Id, UserRole.Admin());
+            var tenantId = sameTenantAs is null
+                ? null
+                : await db.Users.IgnoreQueryFilters().Where(u => u.Id == sameTenantAs.UserId).Select(u => u.TenantId).SingleAsync();
+            var tenant = tenantId is null ? Tenant.Create(new TenantForCreation { Name = $"Tenant {Guid.NewGuid():N}" }) : null;
+            var user = User.CreateFromLogin(new NewPerson("Ada", "Lovelace", null, "ada"), tenantId ?? tenant!.Id, UserRole.Admin());
             LoginName.TryOf(loginName, out var name).ShouldBeTrue();
             var credential = issueTemporary is { } issuedAt
                 ? PasswordCredential.IssueTemporary(user.Id, name!, stored, issuedAt)
                 : PasswordCredential.Choose(user.Id, name!, stored, DateTimeOffset.UtcNow);
             for (var i = 0; i < wrongTries; i++)
                 credential.NoteFailure();
-            db.Tenants.Add(tenant);
+            if (tenant is not null)
+                db.Tenants.Add(tenant);
             db.Users.Add(user);
             db.Set<PasswordCredential>().Add(credential);
             await db.SaveChangesAsync();
@@ -86,6 +94,18 @@ public static partial class PasswordPeople
         };
         if (address is not null)
             request.Headers.Add(AuthFlowFactory.ConnectionAddressHeader, address);
+        return browser.SendAsync(request);
+    }
+
+    /// <summary>Issues a temporary password through the API, as an Admin in the browser of a web session does.</summary>
+    public static Task<HttpResponseMessage> IssueTemporaryAsync(this AuthBrowser browser, PasswordPerson admin, string userId, string? loginName = null)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/users/{userId}/temporary-password")
+        {
+            Content = JsonContent.Create(new { loginName }),
+        };
+        request.Headers.Add("X-CSRF", "1");
+        request.Headers.Add(PageUserCheck.Header, admin.UserId);
         return browser.SendAsync(request);
     }
 

@@ -8,6 +8,7 @@ using Domain.Tenants;
 using Domain.Tenants.Models;
 using Domain.Users;
 using Entities;
+using Exceptions;
 using Microsoft.EntityFrameworkCore;
 using Resources;
 using Serilog;
@@ -53,6 +54,7 @@ public sealed class PasswordLogin(
     public const string NameMissingMessage = "Please give your name.";
 
     private const string FirstTenantName = "Recall";
+    private const int MaxSignInRuns = 3;
 
     private static readonly string[] SetupRaceConstraints = ["ix_tenants_name", "ix_auth_password_credentials_login_name"];
 
@@ -70,6 +72,36 @@ public sealed class PasswordLogin(
         if (backoff.WaitLeft(typedName, address) is { } left)
             return new PasswordOutcome.Wait(left, TooManyTriesMessage(left));
 
+        var password = PasswordPolicy.Normalize(typedPassword) ?? "";
+        for (var run = 1; ; run++)
+        {
+            try
+            {
+                var (outcome, wrong) = await SignInOnceAsync(typedName, password, cancellationToken);
+                if (wrong)
+                    backoff.NoteWrong(typedName, address);
+                else if (outcome is not PasswordOutcome.Wait)
+                    backoff.NoteRight(typedName, address);
+                return outcome;
+            }
+            // An issue, a choice, or another try changed the credential after the load, and the save wrote nothing. The
+            // next run checks the password against the row as it is now, so a password that an issue replaced is wrong.
+            catch (StaleVersionException) when (run < MaxSignInRuns)
+            {
+                Telemetry.AddEvent([("app.race.run", run)], "race.lost");
+            }
+            catch (StaleVersionException)
+            {
+                Telemetry.AddEvent([("app.race.run", run)], "race.exhausted");
+                return Busy();
+            }
+        }
+    }
+
+    /// <summary>One load, check, and save of a sign-in. The flag tells whether the try counts as wrong for PWD-12.</summary>
+    /// <exception cref="StaleVersionException">Another write changed the credential after the load.</exception>
+    private async Task<(PasswordOutcome Outcome, bool Wrong)> SignInOnceAsync(string? typedName, string password, CancellationToken cancellationToken)
+    {
         await using var scope = scopeFactory.CreateSystemScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var credential = LoginName.TryOf(typedName, out var name)
@@ -78,26 +110,17 @@ public sealed class PasswordLogin(
                 .FirstOrDefaultAsync(p => p.LoginName == name, cancellationToken)
             : null;
 
-        var password = PasswordPolicy.Normalize(typedPassword) ?? "";
         // A name that no credential holds and a Stopped credential each run one hash of a fixed value (PWD-6).
         var storedHash = credential is { State: not PasswordState.Stopped } ? credential.PasswordHash : null;
         if (await hashing.CheckAsync(storedHash, password, cancellationToken) is not { } check)
-            return Busy();
+            return (Busy(), false);
 
         if (credential is null)
-        {
-            backoff.NoteWrong(typedName, address);
-            return new PasswordOutcome.Refused(StatusCodes.Status401Unauthorized, WrongMessage);
-        }
+            return (new PasswordOutcome.Refused(StatusCodes.Status401Unauthorized, WrongMessage), true);
 
         Activity.Current?.SetTag("app.user_id", credential.UserId);
         var wasStopped = credential.State == PasswordState.Stopped;
         var verdict = credential.Answer(check, timeProvider.GetUtcNow());
-        if (verdict is PasswordVerdict.Wrong or PasswordVerdict.Stopped)
-            backoff.NoteWrong(typedName, address);
-        else
-            backoff.NoteRight(typedName, address);
-
         var outcome = verdict switch
         {
             PasswordVerdict.Wrong => new PasswordOutcome.Refused(StatusCodes.Status401Unauthorized, WrongMessage),
@@ -106,6 +129,7 @@ public sealed class PasswordLogin(
             PasswordVerdict.MustChoose => new PasswordOutcome.MustChoose(credential.UserId),
             _ => await SignedInAsync(dbContext, credential, check, password, cancellationToken),
         };
+        // The save checks the version of the row, so no outcome leaves here for a credential that changed after the load.
         await dbContext.SaveChangesAsync(cancellationToken);
 
         if (!wasStopped && credential.State == PasswordState.Stopped)
@@ -114,7 +138,7 @@ public sealed class PasswordLogin(
             _logger.Here().Information("User {UserId} signed in with a password", credential.UserId);
         else
             _logger.Here().Information("A password sign-in of user {UserId} ended as {Verdict}", credential.UserId, verdict);
-        return outcome;
+        return (outcome, verdict is PasswordVerdict.Wrong or PasswordVerdict.Stopped);
     }
 
     private async Task<PasswordOutcome> SignedInAsync(
@@ -162,7 +186,17 @@ public sealed class PasswordLogin(
 
         credential.Choose(hash, now);
         dbContext.RecordAction(new PasswordChosen(AuditSubject.Of(user)));
-        await dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        // An Admin issued a new temporary password, or the person chose one in another tab, after the load.
+        catch (StaleVersionException)
+        {
+            _logger.Here().Information("A choice of a password of user {UserId} lost to a change of its credential", user.Id);
+            return new PasswordOutcome.Gone();
+        }
+
         _logger.Here().Information("User {UserId} chose a password", user.Id);
         return new PasswordOutcome.SignedIn(new ProvisionOutcome.Provisioned(user.Id, user.FullName));
     }
