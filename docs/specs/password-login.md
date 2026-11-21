@@ -24,7 +24,7 @@ The row holds `user_id`, `login_name`, `password_hash`, `changed_at`, `failed_co
 
 A row is Temporary when `temporary_until` is set, Stopped when `failed_count` is 100 or more, and Chosen otherwise. Expired is not a stored state. A Temporary row whose `temporary_until` has passed is expired.
 
-`version` moves on each change of the row. A login, a choice, a wrong try, and an issue each save only while the row is at the version that they loaded. A login that loses runs again on the new row, so a password that an issue replaced is wrong. A choice that loses gets the `Refused` page, and an issue that loses runs again.
+`version` moves on each change of the row. A login, a choice, a wrong try, and an issue each save only while the row is at the version that they loaded. A login that loses runs again on the new row, so a password that an issue replaced is wrong. The save that starts the session or the app code of a password sign-in also moves `version`, and only from the value that the sign-in saved. So an issue that commits between the sign-in and that save makes it stale, and the post gets the `Refused` page with no session and no code. A choice that loses gets the `Refused` page, and an issue that loses runs again.
 
 | From | To | Method | Who |
 |---|---|---|---|

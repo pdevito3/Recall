@@ -3,6 +3,7 @@ namespace Recall.Server.Resources.Entrypoints.Auth;
 using System.Globalization;
 using Recall.Server.Auth;
 using Recall.Server.Auth.Entities;
+using Recall.Server.Exceptions;
 
 /// <summary>
 /// The forms of password login. Each form post needs the live attempt that the page of the form wrote and the binding
@@ -74,7 +75,7 @@ public static class PasswordEndpoints
         switch (outcome)
         {
             case PasswordOutcome.SignedIn signedIn:
-                return await completion.CompleteAsync(client, signedIn.User, PasswordLoginMode.ModeId, http, cancellationToken);
+                return await CompleteAsync(completion, passwords, client, signedIn, http, cancellationToken);
             case PasswordOutcome.MustChoose choose:
                 return AuthPages.ChoosePassword(await StartFormAsync(http, store, timeProvider, client, choose, cancellationToken), client, null);
             case PasswordOutcome.Wait wait:
@@ -117,7 +118,7 @@ public static class PasswordEndpoints
         switch (outcome)
         {
             case PasswordOutcome.SignedIn signedIn:
-                return await completion.CompleteAsync(LoginClient.FromAttempt(attempt), signedIn.User, PasswordLoginMode.ModeId, http, cancellationToken);
+                return await CompleteAsync(completion, passwords, LoginClient.FromAttempt(attempt), signedIn, http, cancellationToken);
             case PasswordOutcome.AlreadySetUp:
                 return AuthPages.AlreadySetUp();
             case PasswordOutcome.Wait wait:
@@ -151,7 +152,7 @@ public static class PasswordEndpoints
         switch (outcome)
         {
             case PasswordOutcome.SignedIn signedIn:
-                return await completion.CompleteAsync(client, signedIn.User, PasswordLoginMode.ModeId, http, cancellationToken);
+                return await CompleteAsync(completion, passwords, client, signedIn, http, cancellationToken);
             case PasswordOutcome.Wait wait:
                 SetRetryAfter(http, wait.Left);
                 return AuthPages.ChoosePassword(await StartFormAsync(http, store, timeProvider, client, choose, cancellationToken), client, wait.Message,
@@ -164,6 +165,27 @@ public static class PasswordEndpoints
                     refused.Status);
             default:
                 return AuthPages.Refused();
+        }
+    }
+
+    /// <summary>
+    /// Starts the session or the app code of a right password, in a save that checks the credential is as the sign-in saved
+    /// it. An issue of a temporary password in between makes that save stale, so nothing starts and the post gets the
+    /// Refused page. The failed save ends the context of the request, so no new form can be written.
+    /// </summary>
+    private static async Task<IResult> CompleteAsync(
+        LoginCompletion completion, PasswordLogin passwords, LoginClient client, PasswordOutcome.SignedIn signedIn, HttpContext http,
+        CancellationToken cancellationToken)
+    {
+        if (passwords.BeforeSessionWrite is { } beforeSessionWrite)
+            await beforeSessionWrite(signedIn.User.UserId);
+        try
+        {
+            return await completion.CompleteAsync(client, signedIn.User, PasswordLoginMode.ModeId, http, cancellationToken, signedIn.Guard);
+        }
+        catch (StaleVersionException)
+        {
+            return AuthPages.Refused();
         }
     }
 

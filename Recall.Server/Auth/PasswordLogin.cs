@@ -16,7 +16,8 @@ using Serilog;
 /// <summary>What a password form post ends in. The endpoints turn each case into a page or the session.</summary>
 public abstract record PasswordOutcome
 {
-    public sealed record SignedIn(ProvisionOutcome.Provisioned User) : PasswordOutcome;
+    /// <summary>A right password. <see cref="Guard"/> is the credential as this sign-in saved it, which the save of the session checks.</summary>
+    public sealed record SignedIn(ProvisionOutcome.Provisioned User, CredentialGuard Guard) : PasswordOutcome;
 
     /// <summary>A right temporary password. The person picks a password next (PWD-16), while the credential stays at this version.</summary>
     public sealed record MustChoose(string UserId, int CredentialVersion) : PasswordOutcome;
@@ -59,6 +60,9 @@ public sealed class PasswordLogin(
     private static readonly string[] SetupRaceConstraints = ["ix_tenants_name", "ix_auth_password_credentials_login_name"];
 
     private readonly ILogger _logger = Log.ForContext<PasswordLogin>();
+
+    /// <summary>A test seam: runs after a right password saved its credential and before its session or app code is written.</summary>
+    internal Func<string, Task>? BeforeSessionWrite { get; set; }
 
     public static string TooManyTriesMessage(TimeSpan left)
     {
@@ -154,7 +158,7 @@ public sealed class PasswordLogin(
         if (check == PasswordCheck.RightAndRehash && await hashing.HashAsync(password, cancellationToken) is { } rehashed)
             credential.Rehash(rehashed);
 
-        return new PasswordOutcome.SignedIn(new ProvisionOutcome.Provisioned(user.Id, user.FullName));
+        return new PasswordOutcome.SignedIn(new ProvisionOutcome.Provisioned(user.Id, user.FullName), credential.Guard);
     }
 
     /// <summary>
@@ -202,7 +206,7 @@ public sealed class PasswordLogin(
         }
 
         _logger.Here().Information("User {UserId} chose a password", user.Id);
-        return new PasswordOutcome.SignedIn(new ProvisionOutcome.Provisioned(user.Id, user.FullName));
+        return new PasswordOutcome.SignedIn(new ProvisionOutcome.Provisioned(user.Id, user.FullName), credential.Guard);
     }
 
     public async Task<PasswordOutcome> SetupAsync(string? code, string? typedName, string? typedLoginName, string? typedPassword, CancellationToken cancellationToken)
@@ -238,7 +242,8 @@ public sealed class PasswordLogin(
         var user = User.CreateFromLogin(person, tenant.Id, UserRole.Admin());
         dbContext.Tenants.Add(tenant);
         dbContext.Users.Add(user);
-        dbContext.Set<PasswordCredential>().Add(PasswordCredential.Choose(user.Id, loginName, hash, timeProvider.GetUtcNow()));
+        var credential = PasswordCredential.Choose(user.Id, loginName, hash, timeProvider.GetUtcNow());
+        dbContext.Set<PasswordCredential>().Add(credential);
         dbContext.RecordAction(new PasswordChosen(AuditSubject.Of(user)));
         try
         {
@@ -252,7 +257,7 @@ public sealed class PasswordLogin(
         setupCode.Void();
         Activity.Current?.SetTag("app.user_id", user.Id);
         _logger.Here().Information("The setup made tenant {TenantId} and its Owner {UserId}, and voided the setup code", tenant.Id, user.Id);
-        return new PasswordOutcome.SignedIn(new ProvisionOutcome.Provisioned(user.Id, user.FullName));
+        return new PasswordOutcome.SignedIn(new ProvisionOutcome.Provisioned(user.Id, user.FullName), credential.Guard);
     }
 
     private static PasswordOutcome.Refused Refuse(string message) => new(StatusCodes.Status422UnprocessableEntity, message);

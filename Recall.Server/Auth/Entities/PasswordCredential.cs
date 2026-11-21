@@ -13,6 +13,12 @@ public enum PasswordState
     Stopped,
 }
 
+/// <summary>
+/// The version of a credential that a password sign-in saw. The save that starts its session or app code moves the version
+/// only while the row is still at it, so a new temporary password in between makes that save stale (PWD-14).
+/// </summary>
+public sealed record CredentialGuard(string UserId, int Version);
+
 /// <summary>What one typed password does to a credential.</summary>
 public enum PasswordVerdict
 {
@@ -133,6 +139,11 @@ public sealed class PasswordCredential
             : IsExpired(now) ? PasswordVerdict.Expired
             : PasswordVerdict.MustChoose;
     }
+
+    /// <summary>A session or an app code starts from this credential, in the same save, so a change after the sign-in makes that save stale.</summary>
+    public void NoteSessionStart() => Version++;
+
+    public CredentialGuard Guard => new(UserId, Version);
 
     /// <summary>The same password at the current cost of the hash (PWD-10). The time of the change stays.</summary>
     public void Rehash(string passwordHash)

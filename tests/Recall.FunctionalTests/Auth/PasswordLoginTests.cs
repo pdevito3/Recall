@@ -15,6 +15,7 @@ using Shouldly;
 public class PasswordLoginTests
 {
     private const string HeldHashSlot = "held hash slot";
+    private const string SessionWriteSeam = "session write seam";
 
     private static AuthFlowFactory Host => AuthHosts.Password;
 
@@ -534,6 +535,60 @@ public class PasswordLoginTests
         host.Logs.Holding(marker).ShouldBeEmpty();
         var hash = (await PasswordPeople.CredentialOfAsync(host, owner.Id)).PasswordHash;
         host.Logs.Holding(hash).ShouldBeEmpty();
+    }
+
+    // The host has one seam before a session write, so only one such test runs at a time.
+    [NotInParallel(SessionWriteSeam)]
+    [Test]
+    [Property("Rule", "PWD-14")]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task a_login_whose_credential_an_issue_changed_before_its_session_save_starts_no_session_or_code(bool native)
+    {
+        // Arrange
+        var admin = await PasswordPeople.AddAsync(Host);
+        var person = await PasswordPeople.AddAsync(Host, sameTenantAs: admin);
+        using var adminBrowser = await SignedInAsync(admin);
+        using var browser = new AuthBrowser(Host);
+        var app = NativeApp.New();
+        var loginUrl = native
+            ? $"/auth/login?client=app&redirect_uri={Uri.EscapeDataString(app.Redirect)}&code_challenge={app.Challenge}&code_challenge_method=S256&state={app.ClientState}"
+            : "/auth/login";
+        var state = await browser.FormStateAsync(loginUrl);
+        var reached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var released = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var passwords = Host.Services.GetRequiredService<PasswordLogin>();
+        passwords.BeforeSessionWrite = async userId =>
+        {
+            if (userId != person.UserId)
+                return;
+            reached.TrySetResult();
+            await released.Task;
+        };
+
+        // Act
+        HttpResponseMessage response;
+        try
+        {
+            var login = browser.PostLoginAsync(state, person.LoginName, person.Password, NewAddress());
+            await reached.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            (await adminBrowser.IssueTemporaryAsync(admin, person.UserId)).StatusCode.ShouldBe(HttpStatusCode.OK);
+            released.TrySetResult();
+            response = await login;
+        }
+        finally
+        {
+            released.TrySetResult();
+            passwords.BeforeSessionWrite = null;
+        }
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await TextOf(response)).ShouldContain("This sign-in is not valid");
+        browser.SessionCookie.ShouldBeNull();
+        (await Host.WithDatabaseAsync(db => db.Set<AuthSession>().CountAsync(s => s.UserId == person.UserId && s.RevokedAt == null))).ShouldBe(0);
+        (await Host.WithDatabaseAsync(db => db.Set<AppCode>().CountAsync(c => c.UserId == person.UserId))).ShouldBe(0);
+        (await PasswordPeople.CredentialOfAsync(Host, person.UserId)).State.ShouldBe(PasswordState.Temporary);
     }
 
     // A held check keeps one of the two hash slots, so only one such test runs at a time and the issue gets the other.
