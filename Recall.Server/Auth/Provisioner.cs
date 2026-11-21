@@ -138,11 +138,7 @@ public sealed class Provisioner(
     {
         var linked = await RootLock.Tenant.RunSharedAsync<ProvisionOutcome?>(dbContext, tenantId, async ct =>
         {
-            var admin = await dbContext.Users
-                .TagWithOperationCallSite("auth.provision.oldest_admin")
-                .Include(u => u.UserPermissions)
-                .OwnerFirstIn(tenantId)
-                .FirstOrDefaultAsync(ct);
+            var admin = await ClaimedAdminAsync(dbContext, tenantId, ct);
             if (admin is null)
                 return null;
 
@@ -183,7 +179,26 @@ public sealed class Provisioner(
         }, cancellationToken);
     }
 
-    private static bool GiveBackEachPermission(AppDbContext dbContext, User admin)
+    /// <summary>The tenant of an owner claim: the oldest live tenant, as <see cref="ResolveOnceAsync"/> reads it.</summary>
+    internal static Task<string?> ClaimedTenantIdAsync(AppDbContext dbContext, CancellationToken cancellationToken)
+        => dbContext.Tenants
+            .TagWithOperationCallSite("auth.provision.oldest_tenant")
+            .IgnoreQueryFilters()
+            .Where(t => !t.IsDeleted)
+            .OrderBy(t => t.Id)
+            .Select(t => t.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    /// <summary>The Admin that an owner claim picks in its tenant: the oldest live Admin whose identifier is its own ID.</summary>
+    internal static Task<User?> ClaimedAdminAsync(AppDbContext dbContext, string tenantId, CancellationToken cancellationToken)
+        => dbContext.Users
+            .TagWithOperationCallSite("auth.provision.oldest_admin")
+            .Include(u => u.UserPermissions)
+            .OwnerFirstIn(tenantId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    /// <summary>Gives the Admin each Admin permission that it lacks, as the owner claim does, and says if it gave one.</summary>
+    internal static bool GiveBackEachPermission(AppDbContext dbContext, User admin)
     {
         var held = admin.UserPermissions.ToList();
         admin.AddPermissions(admin.Role.GetDefaultPermissions());

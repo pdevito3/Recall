@@ -46,7 +46,7 @@ public static class AuthPages
 
     public static IResult Chooser(
         IReadOnlyList<ChooserMode> modes, LoginClient client, bool signedOut, string? message, OpenProviderSession? providerSession,
-        bool asksTheProviderAgain = false, PasswordForm? passwordForm = null, int status = StatusCodes.Status200OK)
+        bool asksTheProviderAgain = false, PasswordForm? passwordForm = null, int status = StatusCodes.Status200OK, bool offersOwnerClaim = false)
     {
         // The session at the provider belongs to the person who signed in last, and a plain start would sign that person in again.
         var promptQuery = asksTheProviderAgain ? "&prompt=" + PromptLogin : "";
@@ -57,15 +57,30 @@ public static class AuthPages
         var note = message is null ? "" : $"<p>{E(message)}</p>";
         var form = passwordForm is null ? "" : LoginForm(passwordForm);
         var sessionNote = providerSession is null ? "" : OpenSessionNote(providerSession);
+        // The claim signs in on this browser, so a page of an app start does not offer it (PWD-19).
+        var claimOffer = offersOwnerClaim && client is LoginClient.Web ? Action(OwnerClaimLabel, AuthRoutes.PasswordClaimOwner) : "";
         var noneReady = modes.All(mode => mode.State != LoginModeState.Ready);
         var heading = signedOut ? "You are signed out" : noneReady ? "Sign-in is not available" : "Sign in to Recall";
         return noneReady
             ? Page(
                 StatusCodes.Status503ServiceUnavailable,
                 heading,
-                $"{note}{list}{sessionNote}<p>Wait a few minutes, then try again.</p>" + Action("Try again", LoginUrl(client)))
-            : Page(status, heading, $"{note}{form}{list}{sessionNote}", PolicyFor(client));
+                $"{note}{list}{sessionNote}<p>Wait a few minutes, then try again.</p>" + Action("Try again", LoginUrl(client)) + claimOffer)
+            : Page(status, heading, $"{note}{form}{list}{sessionNote}{claimOffer}", PolicyFor(client));
     }
+
+    public const string OwnerClaimLabel = "Set a new Owner password";
+
+    /// <summary>The form of the owner claim (PWD-19). It sets the login name and the password of the Owner, then signs the person in.</summary>
+    public static IResult ClaimOwner(string state, string? loginName, string? error, int status = StatusCodes.Status200OK) => Page(
+        status,
+        OwnerClaimLabel,
+        "<p>The claim-owner file lets you set the login name and the password of the Owner. This ends each session of the Owner, signs you in, and removes the file.</p>"
+            + Alert(error)
+            + $"<form method=\"post\" action=\"{AuthRoutes.PasswordClaimOwner}\">{Hidden(state)}"
+            + $"<label for=\"loginName\">Login name</label><input id=\"loginName\" name=\"loginName\" autocomplete=\"username\" autocapitalize=\"none\" spellcheck=\"false\" value=\"{E(loginName ?? "")}\" required>"
+            + NewPasswordField()
+            + "<button type=\"submit\">Set the password and sign in</button></form>");
 
     public static IResult Setup(string state, string? name, string? loginName, string? error, int status = StatusCodes.Status200OK) => Page(
         status,

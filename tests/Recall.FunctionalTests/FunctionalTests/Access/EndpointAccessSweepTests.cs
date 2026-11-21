@@ -120,6 +120,8 @@ public class EndpointAccessSweepTests : TestBase
         [AuthRoutes.PasswordLogin] = "Public and rate limited. The attempt and binding cookie of its page, then the password, prove this request. PasswordLoginTests covers each refusal.",
         [AuthRoutes.PasswordSetup] = "Public and rate limited. The setup code proves the post, and it answers 409 once a tenant exists. PasswordLoginTests covers it.",
         [AuthRoutes.PasswordChoose] = "A choose attempt, which only a right temporary password writes, proves this request. PasswordLoginTests covers it.",
+        [AuthRoutes.PasswordChange] = "Each web or native session changes only the password of its own user, with the current password, and a personal access token gets 403. PasswordChangeTests covers it.",
+        [AuthRoutes.PasswordClaimOwner] = "Public and rate limited. A fresh claim-owner file, which only the operator can write, and the attempt of its page prove this request. OwnerPasswordClaimTests covers it.",
     };
 
     // The sample body of an update sends version 0, so the control call of an update gets the stale-version code

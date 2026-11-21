@@ -21,7 +21,8 @@ public static class AuthEndpoints
         [property: JsonPropertyName("sub")] string Sub,
         [property: JsonPropertyName("name")] string? Name,
         [property: JsonPropertyName("sid")] string Sid,
-        [property: JsonPropertyName("client_kind")] string ClientKind);
+        [property: JsonPropertyName("client_kind")] string ClientKind,
+        [property: JsonPropertyName("login_name")] string? LoginName);
 
     public sealed record TokenAnswer(
         [property: JsonPropertyName("access_token")] string AccessToken,
@@ -139,7 +140,8 @@ public static class AuthEndpoints
     }
 
     private static async Task<IResult> LoginAsync(
-        HttpContext http, LoginModes modes, SessionStore store, TimeProvider timeProvider, CancellationToken cancellationToken)
+        HttpContext http, LoginModes modes, SessionStore store, OwnerClaim ownerClaim, IServiceScopeFactory scopes, TimeProvider timeProvider,
+        CancellationToken cancellationToken)
     {
         var query = http.Request.Query;
         LoginClient? client = new LoginClient.Web(LocalReturnPath.Of(query["returnUrl"].Count == 1 ? query["returnUrl"][0] : null));
@@ -163,7 +165,10 @@ public static class AuthEndpoints
         var openSession = pending is null ? null : modes.FindOidc(pending.ModeId);
         var openSessionLogoutUrl = pending is null || openSession is null ? null : await openSession.ProviderLogoutUrlAsync(SignedOutUrlOf(http.Request), pending.State, cancellationToken);
 
-        var mayStartWithNoClick = listed is [OidcLoginMode] && states[0] == LoginModeState.Ready && !signedOut && !hasError && !isForPageOfAnotherPerson && openSessionLogoutUrl is null;
+        // A web page with a fresh claim file shows its offer, so it does not start the provider with no click (PWD-19).
+        var offersOwnerClaim = client is LoginClient.Web && await PasswordEndpoints.OffersOwnerClaimAsync(ownerClaim, scopes, cancellationToken);
+        var mayStartWithNoClick = listed is [OidcLoginMode] && states[0] == LoginModeState.Ready && !signedOut && !hasError && !isForPageOfAnotherPerson && openSessionLogoutUrl is null
+            && !offersOwnerClaim;
         if (mayStartWithNoClick)
             return new AuthRedirect(AuthPages.StartUrl(listed[0].Id, client));
 
@@ -176,7 +181,8 @@ public static class AuthEndpoints
             ? new AuthPages.PasswordForm(await PasswordEndpoints.StartFormAsync(http, store, timeProvider, client, null, cancellationToken), null, null)
             : null;
         var message = isForPageOfAnotherPerson ? (query.ContainsKey("wordsLost") ? AuthPages.AnotherPersonLostWordsMessage : AuthPages.AnotherPersonMessage) : hasError ? "The last sign-in did not finish." : null;
-        return AuthPages.Chooser(chooser, client, isSignedOut, message, providerSession, asksTheProviderAgain: isForPageOfAnotherPerson, passwordForm);
+        return AuthPages.Chooser(chooser, client, isSignedOut, message, providerSession, asksTheProviderAgain: isForPageOfAnotherPerson, passwordForm,
+            offersOwnerClaim: offersOwnerClaim);
     }
 
     private static AuthRedirect SignedOutReturn(HttpContext http, string? state)
@@ -301,7 +307,7 @@ public static class AuthEndpoints
         => AppSessionHandler.CredentialOf(request.Headers.Authorization.ToString()) is null
             && (SessionCookie.Read(request) is null || AppSessionHandler.HasCsrfHeader(request));
 
-    private static async Task<IResult> MeAsync(HttpContext http, ISender sender, CancellationToken cancellationToken)
+    private static async Task<IResult> MeAsync(HttpContext http, ISender sender, PasswordLogin passwords, CancellationToken cancellationToken)
     {
         var session = await http.AuthenticateAsync(AppSessionHandler.SchemeName);
         if (!session.Succeeded)
@@ -316,7 +322,11 @@ public static class AuthEndpoints
         if (kind == SessionKindText.Web)
             await SlideAsync(http, sessionId);
 
-        return Results.Json(new MeAnswer(current.Identifier, current.Name, sessionId, kind));
+        // The SPA shows the change of a password only to a person whose password it can change (PWD-17). A token cannot change it.
+        var loginName = kind is SessionKindText.Web or SessionKindText.Native
+            ? await passwords.ChangeableLoginNameOfAsync(http.User.FindFirst("sub")!.Value, cancellationToken)
+            : null;
+        return Results.Json(new MeAnswer(current.Identifier, current.Name, sessionId, kind, loginName));
     }
 
     private static IResult TokenError(string error)

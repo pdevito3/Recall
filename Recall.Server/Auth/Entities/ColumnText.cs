@@ -30,19 +30,22 @@ public static class RevokeReasonText
     public const string RevokeOthers = "revoke_others";
     public const string TokenRevoked = "token_revoked";
     public const string TemporaryPassword = "temporary_password";
+    public const string OwnerClaim = "owner_claim";
     public const int MaxLength = 20;
 
-    public static IReadOnlyList<string> All { get; } = [Logout, RefreshReplay, RevokeOthers, TokenRevoked, TemporaryPassword];
+    public static IReadOnlyList<string> All { get; } = [Logout, RefreshReplay, RevokeOthers, TokenRevoked, TemporaryPassword, OwnerClaim];
 
     public static ValueConverter<RevokeReason, string> Converter { get; } = new(
         reason => reason == RevokeReason.Logout ? Logout
             : reason == RevokeReason.RefreshReplay ? RefreshReplay
             : reason == RevokeReason.TokenRevoked ? TokenRevoked
             : reason == RevokeReason.TemporaryPassword ? TemporaryPassword
+            : reason == RevokeReason.OwnerClaim ? OwnerClaim
             : RevokeOthers,
         text => text == Logout ? RevokeReason.Logout
             : text == RefreshReplay ? RevokeReason.RefreshReplay
             : text == TokenRevoked ? RevokeReason.TokenRevoked
             : text == TemporaryPassword ? RevokeReason.TemporaryPassword
+            : text == OwnerClaim ? RevokeReason.OwnerClaim
             : RevokeReason.RevokeOthers);
 }

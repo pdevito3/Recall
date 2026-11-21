@@ -22,6 +22,25 @@ public sealed class OwnerClaim(string claimFilePath, TimeProvider timeProvider)
     }
 
     /// <summary>
+    /// True while a regular file of this name is within <see cref="MaxAge"/> of the current time. It reads and changes nothing
+    /// else, so the login page can offer the claim (PWD-19) and leave the file to <see cref="TryConsume"/>.
+    /// </summary>
+    public bool IsFresh()
+    {
+        try
+        {
+            var entry = new FileInfo(claimFilePath);
+            return entry.Exists
+                && (entry.Attributes & FileAttributes.ReparsePoint) == 0
+                && (timeProvider.GetUtcNow().UtcDateTime - entry.LastWriteTimeUtc).Duration() <= MaxAge;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     /// A rename to a unique name is atomic, so one caller wins and the file is gone for each other caller. A rename keeps the
     /// write time. A file that is too old goes too, because a restore that does not keep times would make a file that stays new again.
     /// A file that cannot go refuses the claim and does not stop the login, because the claim must be good for one login only.
