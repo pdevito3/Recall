@@ -87,8 +87,12 @@ public static class PasswordEndpoints
         }
     }
 
-    private static async Task<IResult> SetupPageAsync(HttpContext http, SessionStore store, IServiceScopeFactory scopes, TimeProvider timeProvider, CancellationToken cancellationToken)
+    private static async Task<IResult> SetupPageAsync(
+        HttpContext http, LoginModes modes, SessionStore store, IServiceScopeFactory scopes, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
+        // With a provider, the first OIDC login makes the Owner (PWD-4), so the install has no setup.
+        if (modes.Oidc.Count > 0)
+            return Results.NotFound();
         if (await SetupCodeAtBoot.AnyLiveTenantAsync(scopes, cancellationToken))
             return AuthPages.AlreadySetUp();
 
@@ -96,8 +100,11 @@ public static class PasswordEndpoints
     }
 
     private static async Task<IResult> SetupAsync(
-        HttpContext http, SessionStore store, PasswordLogin passwords, LoginCompletion completion, TimeProvider timeProvider, CancellationToken cancellationToken)
+        HttpContext http, LoginModes modes, SessionStore store, PasswordLogin passwords, LoginCompletion completion, TimeProvider timeProvider,
+        CancellationToken cancellationToken)
     {
+        if (modes.Oidc.Count > 0)
+            return Results.NotFound();
         if (await ConsumeAsync(http, store, isChoose: false, cancellationToken) is not { } consumed)
             return AuthPages.Refused();
 

@@ -24,6 +24,9 @@ public static class AuthHosts
     /// <summary>A fresh host with no provider, which only the setup test uses.</summary>
     public static AuthFlowFactory Setup { get; private set; } = null!;
 
+    /// <summary>A fresh host with a provider, which only the test of its first login uses, so it has no tenant before that test.</summary>
+    public static AuthFlowFactory SetupWithProvider { get; private set; } = null!;
+
     /// <summary>A host with a provider and a person with a password, <see cref="MixedPerson"/>, so its login page offers both.</summary>
     public static AuthFlowFactory Mixed { get; private set; } = null!;
 
@@ -91,6 +94,7 @@ public static class AuthHosts
         FirstPartyClient = Start(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts, ["Auth:ClientId"] = FirstPartyClientId });
         BundleExport = OtlpCollector.Start();
         Setup = Start(new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts }) { NoProvider = true });
+        SetupWithProvider = Start(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts });
         Mixed = Start(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts });
         MixedPerson = PasswordPeople.AddAsync(Mixed).GetAwaiter().GetResult();
         Bundle = new AuthFlowFactory(new Dictionary<string, string?>
@@ -187,7 +191,7 @@ public static class AuthHosts
 
     public static async Task StopAsync()
     {
-        foreach (var host in new[] { Password, Setup, Mixed, LostJobTable, FrozenClock, WriterLine, KeepAlive, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, FirstPartyClient, Bundle, OwnerDemotion, Sweep, Jobs, Cleanups, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
+        foreach (var host in new[] { Password, Setup, SetupWithProvider, Mixed, LostJobTable, FrozenClock, WriterLine, KeepAlive, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, FirstPartyClient, Bundle, OwnerDemotion, Sweep, Jobs, Cleanups, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
         {
             if (host is not null)
                 await host.DisposeAsync();

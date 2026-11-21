@@ -5,6 +5,7 @@ using System.Text;
 using Databases;
 using Domain.Tenants;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Resources;
 using Serilog;
 
@@ -79,16 +80,17 @@ public sealed class SetupCode
 }
 
 /// <summary>
-/// Makes the setup code at boot while no live tenant exists. It runs after the migrations, because each hosted service
-/// starts in the order of its registration and the migrations register first.
+/// Makes the setup code at boot while the install has no OIDC provider and no live tenant. With a provider, the first OIDC
+/// login makes the Owner (PWD-4), so no code is made. It runs after the migrations, because each hosted service starts in
+/// the order of its registration and the migrations register first.
 /// </summary>
-public sealed class SetupCodeAtBoot(IServiceScopeFactory scopeFactory, SetupCode setupCode) : IHostedService
+public sealed class SetupCodeAtBoot(IServiceScopeFactory scopeFactory, SetupCode setupCode, IOptions<AuthOptions> options) : IHostedService
 {
     private readonly ILogger _logger = Log.ForContext<SetupCodeAtBoot>();
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        if (await AnyLiveTenantAsync(scopeFactory, cancellationToken))
+        if (options.Value.Providers.Count > 0 || await AnyLiveTenantAsync(scopeFactory, cancellationToken))
             return;
 
         // The one line that holds the code. The operator reads it with docker compose logs, or in /data/logs.

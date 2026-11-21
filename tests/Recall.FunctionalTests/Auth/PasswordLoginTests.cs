@@ -587,6 +587,7 @@ public class PasswordLoginTests
         var code = setup.Services.GetRequiredService<SetupCode>().Current!;
         using var browser = new AuthBrowser(setup);
         using var rival = new AuthBrowser(setup);
+        var statusBefore = await (await browser.GetAsync("/auth/status")).Content.ReadFromJsonAsync<JsonElement>();
         List<(string, string)> Fields(string state, string typedCode, string loginName) =>
             [("state", state), ("code", typedCode), ("name", "Ada Lovelace"), ("loginName", loginName), ("password", "a long first password of the owner")];
         var wrong = await browser.PostAsync("/auth/password/setup", Fields(await browser.FormStateAsync("/auth/password/setup"), "WRONGWRONGWRONGWRONG", "ada"));
@@ -602,6 +603,7 @@ public class PasswordLoginTests
         var status = await (await browser.GetAsync("/auth/status")).Content.ReadFromJsonAsync<JsonElement>();
 
         // Assert
+        statusBefore.GetProperty("setupRequired").GetBoolean().ShouldBeTrue();
         wrong.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await TextOf(wrong)).ShouldContain(PasswordLogin.WrongCodeMessage);
         tenantsAfterWrong.ShouldBe(0);
@@ -613,5 +615,30 @@ public class PasswordLoginTests
         owner.Role.Value.ShouldBe("Admin");
         owner.UserPermissions.Count.ShouldBe(Recall.Server.Domain.Users.UserRole.Admin().GetDefaultPermissions().Length);
         (await setup.WithDatabaseAsync(db => db.Set<PasswordCredential>().SingleAsync())).State.ShouldBe(PasswordState.Chosen);
+    }
+
+    [Test]
+    [Property("Rule", "PWD-2")]
+    [Property("Rule", "PWD-4")]
+    public async Task an_install_with_a_provider_makes_no_setup_code_and_its_first_oidc_login_makes_the_owner()
+    {
+        // Arrange
+        var host = AuthHosts.SetupWithProvider;
+        using var browser = new AuthBrowser(host);
+        var status = await (await browser.GetAsync("/auth/status")).Content.ReadFromJsonAsync<JsonElement>();
+        var page = await browser.GetAsync("/auth/password/setup");
+        var post = await browser.PostAsync("/auth/password/setup", [("state", "any"), ("code", "ANY"), ("name", "Ada"), ("loginName", "ada"), ("password", "a long first password of the owner")]);
+
+        // Act
+        await browser.LoginWebAsync($"owner-{Guid.NewGuid():N}");
+
+        // Assert
+        status.GetProperty("setupRequired").GetBoolean().ShouldBeFalse();
+        host.Services.GetRequiredService<SetupCode>().IsLive.ShouldBeFalse();
+        page.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        post.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var owner = await host.WithDatabaseAsync(db => db.Users.IgnoreQueryFilters().SingleAsync());
+        owner.Role.Value.ShouldBe("Admin");
+        (await host.WithDatabaseAsync(db => db.Tenants.IgnoreQueryFilters().CountAsync())).ShouldBe(1);
     }
 }

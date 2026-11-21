@@ -22,7 +22,7 @@ These routes are not in the OpenAPI document. This section is their contract.
 | `/auth/sessions/revoke-others` | POST | web or native session | Ends each other session and each personal access token of the user. It answers 204. A personal access token gets 403. |
 | `/auth/me` | GET | optional | The user of the session. See [The user of a session](#the-user-of-a-session). |
 | `/auth/password/login` | POST | none | The password form of the login page. See [Password login](#password-login). |
-| `/auth/password/setup` | GET, POST | the setup code | The first setup of an install with no tenant |
+| `/auth/password/setup` | GET, POST | the setup code | The first setup of an install with no provider and no tenant. With a provider, it answers 404. |
 | `/auth/password/choose` | POST | a choose attempt | The choice of a password after a temporary password |
 
 Each other Server path, also `/api/*`, reads the credential in the same way. Send the cookie with `X-CSRF: 1`, or send `Authorization: Bearer <token>`. The one exception is the job dashboard at `/backwave`. See [CSRF](#csrf).
@@ -405,7 +405,7 @@ With no entry under `Auth:Providers`, and no `Auth:Authority`, the Server boots,
 
 The rules are in [the spec](specs/password-login.md), and [ADR 0024](adr/0024-recall-signs-people-in-with-its-own-passwords.md) gives the reasons. The login page shows the password form when the install has no provider, or when a live user holds a password. Then it also shows a button for each provider, and a single provider does not start with no click.
 
-1. While no live tenant exists, the Server writes one line at boot with a setup code of 20 characters, to the console and to `/data/logs`. Read it with `docker compose logs`. A restart makes a new code.
+1. While the install has no provider and no live tenant, the Server writes one line at boot with a setup code of 20 characters, to the console and to `/data/logs`, and `/auth/status` gives `setupRequired: true`. Read the line with `docker compose logs`. A restart makes a new code. An install with a provider makes no code, `setupRequired` stays `false`, and the first OIDC login makes the Owner, as [First login and the Owner](#first-login-and-the-owner) says.
 2. Open `/auth/password/setup`, and give the code, your name, a login name, and a password of at least 15 characters. The setup makes the tenant `Recall` and you its Owner, signs you in, and voids the code.
 3. Each later sign-in is at `/auth/login`. A native app opens `/auth/login?client=app` with the values of [Sign in](#sign-in), and the page redirects to the app with a code after a right password, with no confirm page. `/auth/token` has no `password` grant.
 
