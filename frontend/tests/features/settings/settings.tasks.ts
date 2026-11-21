@@ -98,6 +98,13 @@ export function settingsPage(page: Page) {
       return { arrived: () => arrived, reply }
     },
 
+    async changePassword(currentPassword: string, newPassword: string) {
+      await at.currentPassword.fill(currentPassword)
+      await at.newPassword.fill(newPassword)
+      await at.repeatPassword.fill(newPassword)
+      await page.getByRole('button', { name: 'Change password' }).click()
+    },
+
     async turnOnLocation() {
       const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && new URL(r.url()).pathname === settingsPaths.mine)
       await at.location.click({ force: true })

@@ -15,4 +15,10 @@ export const settings = (page: Page) => ({
   userFailed: page.getByText('The Server could not load your user.', { exact: true }),
   unknownZone: page.getByRole('alert').filter({ hasText: 'This server does not know your saved time zone' }),
   saved: page.getByRole('status').filter({ hasText: 'Saved at' }),
+  passwordHeading: page.getByRole('heading', { level: 2, name: 'Password' }),
+  currentPassword: page.getByLabel('Current password', { exact: true }),
+  newPassword: page.getByLabel('New password', { exact: true }),
+  repeatPassword: page.getByLabel('New password again', { exact: true }),
+  passwordChanged: page.getByText('Password changed. Each other session and personal access token ended.', { exact: true }),
+  message: (text: string) => page.getByText(text, { exact: true }),
 })
