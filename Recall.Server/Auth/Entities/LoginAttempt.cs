@@ -30,8 +30,8 @@ public sealed record LoginAttempt
     /// <summary>Set only on an attempt that waits for its person to choose a password (PWD-16).</summary>
     public string? UserId { get; init; }
 
-    /// <summary>The version of the credential that the right temporary password left, on a choose attempt. A change of the credential after it voids the attempt.</summary>
-    public int? CredentialVersion { get; init; }
+    /// <summary>The time that the temporary password of a choose attempt was issued. A new password after it voids the attempt.</summary>
+    public DateTimeOffset? CredentialChangedAt { get; init; }
     public required DateTimeOffset ExpiresAt { get; init; }
 
     public override string ToString() => "[login attempt]";

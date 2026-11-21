@@ -364,7 +364,7 @@ public class IssueTemporaryPasswordCommandTests : TestBase
         RedirectUri = "",
         ClientKind = SessionKind.Web,
         UserId = userId,
-        CredentialVersion = 1,
+        CredentialChangedAt = DateTimeOffset.UtcNow,
         ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10),
     };
 

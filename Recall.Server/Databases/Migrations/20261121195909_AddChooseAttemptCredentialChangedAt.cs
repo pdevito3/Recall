@@ -5,15 +5,15 @@
 namespace Recall.Server.Databases.Migrations
 {
     /// <inheritdoc />
-    public partial class AddChooseAttemptCredentialVersion : Migration
+    public partial class AddChooseAttemptCredentialChangedAt : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<int>(
-                name: "credential_version",
+            migrationBuilder.AddColumn<string>(
+                name: "credential_changed_at",
                 table: "auth_login_attempts",
-                type: "INTEGER",
+                type: "TEXT",
                 nullable: true);
         }
 
@@ -21,7 +21,7 @@ namespace Recall.Server.Databases.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             // SQLite drops the column in place. DropColumn rebuilds the table, and the rebuild orders its columns by name.
-            migrationBuilder.Sql("ALTER TABLE auth_login_attempts DROP COLUMN credential_version;");
+            migrationBuilder.Sql("ALTER TABLE auth_login_attempts DROP COLUMN credential_changed_at;");
         }
     }
 }

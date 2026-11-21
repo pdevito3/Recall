@@ -29,7 +29,7 @@ public static class PasswordEndpoints
 
     /// <summary>
     /// Writes the attempt of one form and its binding cookie, and gives the state that the form posts back. A choose attempt
-    /// holds the user ID and the version of the credential (PWD-16). The login and the setup give null.
+    /// holds the user ID and the time of the temporary password (PWD-16). The login and the setup give null.
     /// </summary>
     public static async Task<string> StartFormAsync(
         HttpContext http, SessionStore store, TimeProvider timeProvider, LoginClient client, PasswordOutcome.MustChoose? choose, CancellationToken cancellationToken)
@@ -53,7 +53,7 @@ public static class PasswordEndpoints
             NativeChallenge = native?.Challenge,
             NativeState = native?.ClientState,
             UserId = choose?.UserId,
-            CredentialVersion = choose?.CredentialVersion,
+            CredentialChangedAt = choose?.ChangedAt,
             ExpiresAt = expiresAt,
         }, cancellationToken);
         BindingCookie.Write(http.Response, http.Request, stateHash, binding, expiresAt);
@@ -143,12 +143,12 @@ public static class PasswordEndpoints
         var (attempt, form) = consumed;
 
         var client = LoginClient.FromAttempt(attempt);
-        // An attempt from before the version column has none, so it cannot prove that the credential is as it was.
-        if (attempt.CredentialVersion is not { } version)
+        // An attempt from before the column has none, so it cannot prove that the temporary password is the same.
+        if (attempt.CredentialChangedAt is not { } changedAt)
             return AuthPages.Refused();
 
-        var choose = new PasswordOutcome.MustChoose(attempt.UserId!, version);
-        var outcome = await passwords.ChooseAsync(choose.UserId, choose.CredentialVersion, AuthForm.OneValue(form, "password"), cancellationToken);
+        var choose = new PasswordOutcome.MustChoose(attempt.UserId!, changedAt);
+        var outcome = await passwords.ChooseAsync(choose.UserId, choose.ChangedAt, AuthForm.OneValue(form, "password"), cancellationToken);
         switch (outcome)
         {
             case PasswordOutcome.SignedIn signedIn:

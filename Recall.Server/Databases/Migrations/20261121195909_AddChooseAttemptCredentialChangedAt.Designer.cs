@@ -12,8 +12,8 @@ using Recall.Server.Databases;
 namespace Recall.Server.Databases.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261121191604_AddChooseAttemptCredentialVersion")]
-    partial class AddChooseAttemptCredentialVersion
+    [Migration("20261121195909_AddChooseAttemptCredentialChangedAt")]
+    partial class AddChooseAttemptCredentialChangedAt
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -258,9 +258,9 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("client_kind");
 
-                    b.Property<int?>("CredentialVersion")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("credential_version");
+                    b.Property<string>("CredentialChangedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("credential_changed_at");
 
                     b.Property<string>("ExpiresAt")
                         .IsRequired()

@@ -711,7 +711,7 @@ public class PasswordLoginTests
 
     [Test]
     [Property("Rule", "PWD-16")]
-    public async Task a_choose_attempt_from_before_any_change_of_the_credential_gets_the_refused_page()
+    public async Task a_wrong_try_of_a_stranger_between_the_temporary_sign_in_and_the_choice_leaves_the_choice_working()
     {
         // Arrange
         var person = await PasswordPeople.AddAsync(Host, issueTemporary: DateTimeOffset.UtcNow);
@@ -721,11 +721,40 @@ public class PasswordLoginTests
         (await stranger.SignInAsync(person.LoginName, "a wrong try of a stranger", NewAddress())).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 
         // Act
-        var choice = await browser.PostAsync("/auth/password/choose", [("state", PasswordPeople.StateIn(await TextOf(choosePage))), ("password", "a password picked after the change")]);
+        var choice = await browser.PostAsync("/auth/password/choose", [("state", PasswordPeople.StateIn(await TextOf(choosePage))), ("password", "a password picked after the wrong try")]);
 
         // Assert
-        choice.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await PasswordPeople.CredentialOfAsync(Host, person.UserId)).State.ShouldBe(PasswordState.Temporary);
+        choice.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        (await browser.UserOfSessionAsync()).ShouldBe(person.UserId);
+        (await PasswordPeople.CredentialOfAsync(Host, person.UserId)).State.ShouldBe(PasswordState.Chosen);
+    }
+
+    // A held check keeps one of the two hash slots, so only one such test runs at a time and the wrong try gets the other.
+    [NotInParallel(HeldHashSlot)]
+    [Test]
+    [Property("Rule", "PWD-16")]
+    public async Task a_choice_whose_save_lost_to_a_wrong_try_runs_again_and_signs_in()
+    {
+        // Arrange
+        var person = await PasswordPeople.AddAsync(Host, issueTemporary: DateTimeOffset.UtcNow);
+        using var browser = new AuthBrowser(Host);
+        var choosePage = await browser.SignInAsync(person.LoginName, person.Password, NewAddress());
+        var chosen = $"a chosen password that ran again {Guid.NewGuid():N}";
+        var hold = Host.Hasher.HoldNextCheckOf(chosen);
+
+        // Act
+        var choice = browser.PostAsync("/auth/password/choose", [("state", PasswordPeople.StateIn(await TextOf(choosePage))), ("password", chosen)]);
+        await hold.ReachedAsync();
+        using var stranger = new AuthBrowser(Host);
+        (await stranger.SignInAsync(person.LoginName, "a wrong try of a stranger", NewAddress())).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        hold.Release();
+        var response = await choice;
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        (await browser.UserOfSessionAsync()).ShouldBe(person.UserId);
+        Host.Hasher.ChecksOf(chosen).ShouldBe(2);
+        (await PasswordPeople.CredentialOfAsync(Host, person.UserId)).State.ShouldBe(PasswordState.Chosen);
     }
 
     private static async Task<AuthBrowser> SignedInAsync(PasswordPerson person)

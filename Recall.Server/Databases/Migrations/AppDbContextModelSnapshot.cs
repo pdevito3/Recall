@@ -255,9 +255,9 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("client_kind");
 
-                    b.Property<int?>("CredentialVersion")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("credential_version");
+                    b.Property<string>("CredentialChangedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("credential_changed_at");
 
                     b.Property<string>("ExpiresAt")
                         .IsRequired()

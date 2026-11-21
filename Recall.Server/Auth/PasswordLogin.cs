@@ -19,8 +19,11 @@ public abstract record PasswordOutcome
     /// <summary>A right password. <see cref="Guard"/> is the credential as this sign-in saved it, which the save of the session checks.</summary>
     public sealed record SignedIn(ProvisionOutcome.Provisioned User, CredentialGuard Guard) : PasswordOutcome;
 
-    /// <summary>A right temporary password. The person picks a password next (PWD-16), while the credential stays at this version.</summary>
-    public sealed record MustChoose(string UserId, int CredentialVersion) : PasswordOutcome;
+    /// <summary>
+    /// A right temporary password. The person picks a password next (PWD-16), while the temporary password stays the one
+    /// issued at <see cref="ChangedAt"/>. A wrong try does not move it, so a stranger cannot void the choice.
+    /// </summary>
+    public sealed record MustChoose(string UserId, DateTimeOffset ChangedAt) : PasswordOutcome;
 
     public sealed record Refused(int Status, string Message) : PasswordOutcome;
 
@@ -130,7 +133,7 @@ public sealed class PasswordLogin(
             PasswordVerdict.Wrong => new PasswordOutcome.Refused(StatusCodes.Status401Unauthorized, WrongMessage),
             PasswordVerdict.Stopped => new PasswordOutcome.Refused(StatusCodes.Status401Unauthorized, StoppedMessage),
             PasswordVerdict.Expired => new PasswordOutcome.Refused(StatusCodes.Status401Unauthorized, ExpiredMessage),
-            PasswordVerdict.MustChoose => new PasswordOutcome.MustChoose(credential.UserId, credential.Version),
+            PasswordVerdict.MustChoose => new PasswordOutcome.MustChoose(credential.UserId, credential.ChangedAt),
             _ => await SignedInAsync(dbContext, credential, check, password, cancellationToken),
         };
         // The save checks the version of the row, so no outcome leaves here for a credential that changed after the load.
@@ -162,10 +165,34 @@ public sealed class PasswordLogin(
     }
 
     /// <summary>
-    /// The choice of a password after a right temporary password (PWD-16). A credential that changed after the choose
-    /// attempt, for example through a new temporary password, gives <see cref="PasswordOutcome.Gone"/>.
+    /// The choice of a password after a right temporary password (PWD-16). A credential whose password changed after the
+    /// choose attempt, through a new temporary password or another choice, gives <see cref="PasswordOutcome.Gone"/>. A save
+    /// that lost to another write, such as a wrong try, runs once more on the new row.
     /// </summary>
-    public async Task<PasswordOutcome> ChooseAsync(string userId, int credentialVersion, string? typedPassword, CancellationToken cancellationToken)
+    public async Task<PasswordOutcome> ChooseAsync(string userId, DateTimeOffset changedAt, string? typedPassword, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await ChooseOnceAsync(userId, changedAt, typedPassword, cancellationToken);
+        }
+        catch (StaleVersionException)
+        {
+            Telemetry.AddEvent([("app.race.run", 1)], "race.lost");
+        }
+
+        try
+        {
+            return await ChooseOnceAsync(userId, changedAt, typedPassword, cancellationToken);
+        }
+        catch (StaleVersionException)
+        {
+            _logger.Here().Information("A choice of a password of user {UserId} lost to a change of its credential twice", userId);
+            return new PasswordOutcome.Gone();
+        }
+    }
+
+    /// <exception cref="StaleVersionException">Another write changed the credential after the load.</exception>
+    private async Task<PasswordOutcome> ChooseOnceAsync(string userId, DateTimeOffset changedAt, string? typedPassword, CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateSystemScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -176,7 +203,7 @@ public sealed class PasswordLogin(
             .TagWithOperationCallSite("auth.password.choose_user")
             .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
         var now = timeProvider.GetUtcNow();
-        if (credential is not { State: PasswordState.Temporary } || credential.Version != credentialVersion || user is null)
+        if (credential is not { State: PasswordState.Temporary } || credential.ChangedAt != changedAt || user is null)
             return new PasswordOutcome.Gone();
         if (credential.IsExpired(now))
             return new PasswordOutcome.Refused(StatusCodes.Status401Unauthorized, ExpiredMessage);
@@ -194,17 +221,7 @@ public sealed class PasswordLogin(
 
         credential.Choose(hash, now);
         dbContext.RecordAction(new PasswordChosen(AuditSubject.Of(user)));
-        try
-        {
-            await dbContext.SaveChangesAsync(cancellationToken);
-        }
-        // An Admin issued a new temporary password, or the person chose one in another tab, after the load.
-        catch (StaleVersionException)
-        {
-            _logger.Here().Information("A choice of a password of user {UserId} lost to a change of its credential", user.Id);
-            return new PasswordOutcome.Gone();
-        }
-
+        await dbContext.SaveChangesAsync(cancellationToken);
         _logger.Here().Information("User {UserId} chose a password", user.Id);
         return new PasswordOutcome.SignedIn(new ProvisionOutcome.Provisioned(user.Id, user.FullName), credential.Guard);
     }
