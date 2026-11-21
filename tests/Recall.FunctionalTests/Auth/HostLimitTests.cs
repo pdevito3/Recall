@@ -123,6 +123,30 @@ public class HostLimitTests
         starts.Select(start => start.StatusCode).ShouldAllBe(code => code == HttpStatusCode.Redirect);
     }
 
+    [Test]
+    [Property("Rule", "PWD-12")]
+    public async Task a_flood_of_password_posts_meets_the_limit_and_links_back_to_the_login_page()
+    {
+        // Arrange
+        using var client = AuthHosts.Limited.NewClient();
+
+        // Act
+        var answers = await Task.WhenAll(Enumerable.Range(0, 45).Select(_ =>
+        {
+            var post = From(HttpMethod.Post, "/auth/password/login", "203.0.113.50");
+            post.Content = new FormUrlEncodedContent([KeyValuePair.Create("state", "none"), KeyValuePair.Create("loginName", "ada"), KeyValuePair.Create("password", "a wrong password")]);
+            return client.SendAsync(post);
+        }));
+
+        // Assert
+        var refused = answers.First(answer => answer.StatusCode == HttpStatusCode.TooManyRequests);
+        refused.Headers.RetryAfter!.Delta!.Value.TotalSeconds.ShouldBeInRange(1, 10);
+        var page = await refused.Content.ReadAsStringAsync();
+        page.ShouldContain("<h1>Too many sign-in attempts</h1>");
+        page.ShouldContain("href=\"/auth/login\"");
+        answers.Count(answer => answer.StatusCode != HttpStatusCode.TooManyRequests).ShouldBeLessThanOrEqualTo(MostStartsInTwoWindows);
+    }
+
     private static HttpRequestMessage From(HttpMethod method, string url, string address)
     {
         var request = new HttpRequestMessage(method, url);

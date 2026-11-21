@@ -24,6 +24,9 @@ public static class AuthHosts
     /// <summary>A fresh host with no provider, which only the setup test uses.</summary>
     public static AuthFlowFactory Setup { get; private set; } = null!;
 
+    /// <summary>A fresh host with no provider, which only the privacy test of the setup uses. Its <see cref="AuthFlowFactory.Logs"/> hold the lines of its requests.</summary>
+    public static AuthFlowFactory SetupLogs { get; private set; } = null!;
+
     /// <summary>A fresh host with a provider, which only the test of its first login uses, so it has no tenant before that test.</summary>
     public static AuthFlowFactory SetupWithProvider { get; private set; } = null!;
 
@@ -179,6 +182,14 @@ public static class AuthHosts
             .Filter.ByIncludingOnly(_ => Password.IsInRequest)
             .WriteTo.Logger(passwordLogger)
             .CreateLogger();
+        SetupLogs = new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts }) { NoProvider = true };
+        _ = SetupLogs.Services;
+        var setupLogger = Log.Logger;
+        var setupRequests = new LoggerConfiguration()
+            .MinimumLevel.Verbose()
+            .Filter.ByIncludingOnly(_ => SetupLogs.IsInRequest)
+            .WriteTo.Logger(setupLogger)
+            .CreateLogger();
         // A handler and a framework category write through the static logger, and one process has one. Without this, the files and
         // the OTLP export of the Bundle host hold only the lines of its start. The filter keeps out the lines of the other hosts.
         var bundleRequests = new LoggerConfiguration()
@@ -186,12 +197,12 @@ public static class AuthHosts
             .Filter.ByIncludingOnly(_ => Bundle.IsInRequest)
             .WriteTo.Logger(bundleLogger)
             .CreateLogger();
-        Log.Logger = new TeeLogger(new TeeLogger(new TeeLogger(main, bundleRequests), passwordRequests), sweepLogger);
+        Log.Logger = new TeeLogger(new TeeLogger(new TeeLogger(new TeeLogger(main, bundleRequests), passwordRequests), setupRequests), sweepLogger);
     }
 
     public static async Task StopAsync()
     {
-        foreach (var host in new[] { Password, Setup, SetupWithProvider, Mixed, LostJobTable, FrozenClock, WriterLine, KeepAlive, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, FirstPartyClient, Bundle, OwnerDemotion, Sweep, Jobs, Cleanups, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
+        foreach (var host in new[] { Password, SetupLogs, Setup, SetupWithProvider, Mixed, LostJobTable, FrozenClock, WriterLine, KeepAlive, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, FirstPartyClient, Bundle, OwnerDemotion, Sweep, Jobs, Cleanups, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
         {
             if (host is not null)
                 await host.DisposeAsync();

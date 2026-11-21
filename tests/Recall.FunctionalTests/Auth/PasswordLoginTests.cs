@@ -143,23 +143,33 @@ public class PasswordLoginTests
 
     [Test]
     [Property("Rule", "PWD-6")]
-    public async Task an_unknown_name_and_a_stopped_account_get_the_answer_of_a_wrong_password()
+    public async Task a_wrong_password_an_unknown_name_and_a_stopped_account_each_run_one_hash_and_an_unknown_name_answers_as_a_wrong_password()
     {
         // Arrange
         var person = await PasswordPeople.AddAsync(Host);
+        var stopped = await PasswordPeople.AddAsync(Host, wrongTries: PasswordCredential.StopAt);
+        var unknownName = $"nobody-{Guid.NewGuid():N}";
+        var (wrongPassword, unknownPassword, stoppedPassword) = ($"wrong {Guid.NewGuid():N}", $"unknown {Guid.NewGuid():N}", $"stopped {Guid.NewGuid():N}");
         using var browser = new AuthBrowser(Host);
 
         // Act
-        var wrong = await browser.SignInAsync(person.LoginName, "not the password of this person");
-        var unknown = await browser.SignInAsync($"nobody-{Guid.NewGuid():N}", "not the password of this person");
+        var wrong = await browser.SignInAsync(person.LoginName, wrongPassword, NewAddress());
+        var unknown = await browser.SignInAsync(unknownName, unknownPassword, NewAddress());
+        var stoppedAnswer = await browser.SignInAsync(stopped.LoginName, stoppedPassword, NewAddress());
 
         // Assert
-        wrong.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-        unknown.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-        (await TextOf(wrong)).ShouldContain(PasswordLogin.WrongMessage);
-        (await TextOf(unknown)).ShouldContain(PasswordLogin.WrongMessage);
+        (wrong.StatusCode, unknown.StatusCode, stoppedAnswer.StatusCode).ShouldBe((HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized));
+        (Host.Hasher.ChecksOf(wrongPassword), Host.Hasher.ChecksOf(unknownPassword), Host.Hasher.ChecksOf(stoppedPassword)).ShouldBe((1, 1, 1));
+        var wrongPage = await TextOf(wrong);
+        wrongPage.ShouldContain(PasswordLogin.WrongMessage);
+        PageWithout(await TextOf(unknown), unknownName).ShouldBe(PageWithout(wrongPage, person.LoginName));
+        (await TextOf(stoppedAnswer)).ShouldContain(PasswordLogin.StoppedMessage);
         browser.SessionCookie.ShouldBeNull();
     }
+
+    /// <summary>The page with its state and its typed login name taken out, the only values that differ from one answer to the next.</summary>
+    private static string PageWithout(string page, string typedName)
+        => page.Replace(PasswordPeople.StateIn(page), "STATE", StringComparison.Ordinal).Replace(typedName, "NAME", StringComparison.Ordinal);
 
     [Test]
     [Property("Rule", "PWD-5")]
@@ -247,6 +257,64 @@ public class PasswordLoginTests
         waits.Headers.RetryAfter!.Delta!.Value.TotalSeconds.ShouldBeInRange(1, 30);
         (await TextOf(waits)).ShouldContain("Too many wrong tries. Wait 1 minute, then try again.");
         otherAddress.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+    }
+
+    [Test]
+    [Property("Rule", "PWD-12")]
+    public async Task a_wait_of_one_name_leaves_another_name_from_the_same_address_free()
+    {
+        // Arrange
+        var person = await PasswordPeople.AddAsync(Host);
+        var address = NewAddress();
+        var other = $"nobody-{Guid.NewGuid():N}";
+        for (var i = 0; i < PasswordBackoff.FreeTries; i++)
+            (await new AuthBrowser(Host).SignInAsync(other, "a wrong password for nobody here", address)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await new AuthBrowser(Host).SignInAsync(other, "a wrong password for nobody here", address)).StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
+
+        // Act
+        var response = await new AuthBrowser(Host).SignInAsync(person.LoginName, person.Password, address);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+    }
+
+    [Test]
+    [Property("Rule", "PWD-12")]
+    public async Task a_right_password_resets_the_pair_so_the_count_starts_again()
+    {
+        // Arrange
+        var person = await PasswordPeople.AddAsync(Host);
+        var address = NewAddress();
+        for (var i = 0; i < PasswordBackoff.FreeTries - 1; i++)
+            (await new AuthBrowser(Host).SignInAsync(person.LoginName, "a wrong password for this person", address)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await new AuthBrowser(Host).SignInAsync(person.LoginName, person.Password, address)).StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        (await new AuthBrowser(Host).SignInAsync(person.LoginName, "a wrong password for this person", address)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
+        // Act
+        // With no reset, this pair has 5 wrong tries in a row now, and this try waits.
+        var response = await new AuthBrowser(Host).SignInAsync(person.LoginName, person.Password, address);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+    }
+
+    [Test]
+    [Property("Rule", "PWD-12")]
+    public async Task a_try_that_waits_runs_no_hash()
+    {
+        // Arrange
+        var person = await PasswordPeople.AddAsync(Host);
+        var address = NewAddress();
+        for (var i = 0; i < PasswordBackoff.FreeTries; i++)
+            (await new AuthBrowser(Host).SignInAsync(person.LoginName, "a wrong password for this person", address)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        var waited = $"a try that waits {Guid.NewGuid():N}";
+
+        // Act
+        var response = await new AuthBrowser(Host).SignInAsync(person.LoginName, waited, address);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
+        Host.Hasher.ChecksOf(waited).ShouldBe(0);
     }
 
     [Test]
@@ -415,27 +483,59 @@ public class PasswordLoginTests
     {
         // Arrange
         var marker = $"marker{Guid.NewGuid():N}";
-        var person = await PasswordPeople.AddAsync(Host, issueTemporary: DateTimeOffset.UtcNow, password: $"temporary {marker} words");
+        var admin = await PasswordPeople.AddAsync(Host);
+        var person = await PasswordPeople.AddAsync(Host, sameTenantAs: admin);
+        using var adminBrowser = await SignedInAsync(admin);
+        var issue = await adminBrowser.IssueTemporaryAsync(admin, person.UserId);
+        issue.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var temporary = (await issue.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("password").GetString()!;
         using var browser = new AuthBrowser(Host);
         var chosen = $"chosen {marker} words for later";
 
         // Act
         await browser.SignInAsync(person.LoginName, $"wrong {marker} words here", NewAddress());
-        var choosePage = await browser.SignInAsync(person.LoginName, person.Password, NewAddress());
+        var choosePage = await browser.SignInAsync(person.LoginName, temporary, NewAddress());
         var choice = await browser.PostAsync("/auth/password/choose", [("state", PasswordPeople.StateIn(await TextOf(choosePage))), ("password", chosen)]);
         var hash = (await PasswordPeople.CredentialOfAsync(Host, person.UserId)).PasswordHash;
 
         // Assert
         choice.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        Host.Logs.Holding(person.UserId).ShouldContain(line => line.MessageTemplate.Text == "User {UserId} chose a password");
+        Host.Logs.Holding(person.UserId).ShouldContain(line => line.MessageTemplate.Text.StartsWith("Issued a temporary password", StringComparison.Ordinal));
         Host.Logs.Holding(marker).ShouldBeEmpty();
+        Host.Logs.Holding(temporary).ShouldBeEmpty();
         Host.Logs.Holding(hash).ShouldBeEmpty();
         var audit = await Host.WithDatabaseAsync(db => db.AuditEntries.IgnoreQueryFilters().Where(e => e.RootId == person.UserId).Select(e => e.Data).ToListAsync());
         audit.ShouldNotBeEmpty();
-        audit.ShouldAllBe(data => !data.Contains(marker) && !data.Contains(hash));
+        audit.ShouldAllBe(data => !data.Contains(marker) && !data.Contains(temporary) && !data.Contains(hash));
     }
 
-    // A held check keeps one of the two hash slots, so only one such test runs at a time and the issue gets the other.
-    [NotInParallel(HeldHashSlot)]
+    [Test]
+    [Property("Rule", "PWD-20")]
+    public async Task the_setup_code_reaches_only_its_boot_line_and_the_setup_password_no_log()
+    {
+        // Arrange
+        var host = AuthHosts.SetupLogs;
+        var code = host.Services.GetRequiredService<SetupCode>().Current!;
+        var marker = $"marker{Guid.NewGuid():N}";
+        using var browser = new AuthBrowser(host);
+        List<(string, string)> Fields(string state, string typedCode) =>
+            [("state", state), ("code", typedCode), ("name", "Ada Lovelace"), ("loginName", "ada"), ("password", $"setup {marker} password words")];
+
+        // Act
+        var wrong = await browser.PostAsync("/auth/password/setup", Fields(await browser.FormStateAsync("/auth/password/setup"), $"WRONG{marker}"));
+        var setup = await browser.PostAsync("/auth/password/setup", Fields(await browser.FormStateAsync("/auth/password/setup"), code));
+
+        // Assert
+        (wrong.StatusCode, setup.StatusCode).ShouldBe((HttpStatusCode.Forbidden, HttpStatusCode.Redirect));
+        var owner = await host.WithDatabaseAsync(db => db.Users.IgnoreQueryFilters().SingleAsync());
+        host.Logs.Holding(owner.Id).ShouldContain(line => line.MessageTemplate.Text.StartsWith("The setup made tenant", StringComparison.Ordinal));
+        host.Logs.Holding(code).ShouldHaveSingleItem().MessageTemplate.Text.ShouldStartWith("This Recall server is not set up");
+        host.Logs.Holding(marker).ShouldBeEmpty();
+        var hash = (await PasswordPeople.CredentialOfAsync(host, owner.Id)).PasswordHash;
+        host.Logs.Holding(hash).ShouldBeEmpty();
+    }
+
     [Test]
     [Property("Rule", "PWD-14")]
     public async Task a_login_that_loaded_the_credential_before_an_issue_mints_no_session_after_it()
