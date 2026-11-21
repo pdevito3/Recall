@@ -1,5 +1,6 @@
 namespace Recall.Server.Resources.Entrypoints;
 
+using System.Globalization;
 using Exceptions;
 using Http;
 
@@ -64,6 +65,10 @@ public static class DomainProblemDetails
         var error = DomainError.From(context.Exception);
         if (error.Kind == DomainErrorKind.Unexpected)
             return;
+
+        // Each 429 says when to try again (PWD-11).
+        if (context.Exception is ServerBusyException busy)
+            context.HttpContext.Response.Headers.RetryAfter = ((int)Math.Ceiling(busy.RetryAfter.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
 
         var problem = context.ProblemDetails;
         problem.Title = error.Title;

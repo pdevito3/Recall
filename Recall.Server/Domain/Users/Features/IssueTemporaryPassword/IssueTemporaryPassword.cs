@@ -39,7 +39,7 @@ public static class IssueTemporaryPassword
             // The hash runs before the lock, so the exclusive tenant lock is not held for the cost of a hash.
             var password = TemporaryPassword.New();
             var hash = await hashing.HashAsync(password, cancellationToken)
-                ?? throw new ServerBusyException(PasswordLogin.BusyMessage);
+                ?? throw new ServerBusyException(PasswordLogin.BusyMessage, PasswordHashing.SlotWait);
 
             // The exclusive lock keeps a delete of the user from saving between the load and the save, which would
             // leave a credential of a deleted user, and it keeps two first issues from adding two rows.

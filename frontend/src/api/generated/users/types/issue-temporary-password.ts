@@ -38,6 +38,8 @@ export type IssueTemporaryPasswordStatus409 = ValidationProblemDetails;
 
 export type IssueTemporaryPasswordStatus422 = ValidationProblemDetails;
 
+export type IssueTemporaryPasswordStatus429 = ProblemDetails;
+
 export type IssueTemporaryPasswordStatus507 = ProblemDetails;
 
 export type IssueTemporaryPasswordBody = TemporaryPasswordForIssueDto;
@@ -57,6 +59,7 @@ export type IssueTemporaryPasswordResponses = {
     "404": IssueTemporaryPasswordStatus404;
     "409": IssueTemporaryPasswordStatus409;
     "422": IssueTemporaryPasswordStatus422;
+    "429": IssueTemporaryPasswordStatus429;
     "507": IssueTemporaryPasswordStatus507;
 };
 

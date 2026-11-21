@@ -17,7 +17,8 @@ public sealed class IssueTemporaryPasswordEndpoint : IEndpoint
         .ProducesProblem(StatusCodes.Status403Forbidden)
         .ProducesProblem(StatusCodes.Status404NotFound)
         .ProducesValidationProblem(StatusCodes.Status422UnprocessableEntity)
-        .ProducesValidationProblem(StatusCodes.Status409Conflict);
+        .ProducesValidationProblem(StatusCodes.Status409Conflict)
+        .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
     /// <summary>
     /// Issues a temporary password to a user and ends each session and personal access token of that user. The first
