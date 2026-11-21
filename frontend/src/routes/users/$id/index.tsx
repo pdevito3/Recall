@@ -86,7 +86,7 @@ function UserPage() {
       <UserActions
         user={user.data}
         pendingAction={pendingAction}
-        isSelf={currentUser.data?.identifier === user.data.identifier}
+        isSelf={currentUser.data ? currentUser.data.identifier === user.data.identifier : undefined}
         onChangeRole={(newRole) => changeRole.mutate(newRole, { onSettled: () => headingRef.current?.focus() })}
         onDelete={handleDelete}
       />

@@ -10,6 +10,7 @@ using Exceptions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Resources;
+using Resources.Entrypoints.Auth;
 using Serilog;
 
 public static class IssueTemporaryPassword
@@ -22,7 +23,8 @@ public static class IssueTemporaryPassword
     /// </summary>
     public sealed record Command(string Id, string? LoginName) : IRequest<TemporaryPasswordDto>, IRunsAgainWhenRaced;
 
-    public sealed class Handler(AppDbContext dbContext, IPermissionGuard permissionGuard, SessionStore store, PasswordHashing hashing, TimeProvider timeProvider)
+    public sealed class Handler(
+        AppDbContext dbContext, IPermissionGuard permissionGuard, ICurrentUserService currentUser, PasswordHashing hashing, TimeProvider timeProvider)
         : IRequestHandler<Command, TemporaryPasswordDto>
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
@@ -63,15 +65,37 @@ public static class IssueTemporaryPassword
                     credential.IssueTemporary(hash, now);
                 }
 
+                // A caller who issues to themselves keeps the session of this request, as a change of a password does (PWD-17).
+                var keep = caller.UserId == user.Id ? currentUser.GetClaimValue(AppSessionHandler.SessionIdClaim) : null;
+                await EndSignInsAsync(user.Id, keep, now, ct);
+
                 var expiresAt = credential.TemporaryUntil!.Value;
                 dbContext.RecordAction(new TemporaryPasswordIssued(AuditSubject.Of(user), credential.LoginName.Value, expiresAt));
+                // One save writes the credential and the end of each session, so no session outlives a committed issue.
                 await dbContext.SaveChangesAsync(ct);
-                await store.RevokeAllAsync(user.Id, RevokeReason.TemporaryPassword);
                 return new TemporaryPasswordDto { LoginName = credential.LoginName.Value, Password = password, ExpiresAt = expiresAt };
             }, cancellationToken);
 
-            _logger.Here().Information("Issued a temporary password to user {UserId} and ended each of its sessions", request.Id);
+            _logger.Here().Information("Issued a temporary password to user {UserId} and ended each of its other sessions", request.Id);
             return issued;
+        }
+
+        /// <summary>
+        /// Ends each session and each PAT of the user but <paramref name="keepSessionId"/>, in the save of the issue. A logout
+        /// that ends a session after the load makes the save stale, and the command runs again.
+        /// </summary>
+        private async Task EndSignInsAsync(string userId, string? keepSessionId, DateTimeOffset now, CancellationToken ct)
+        {
+            var sessions = await dbContext.Set<AuthSession>()
+                .TagWithOperationCallSite("users.issue_temporary_password.sessions")
+                .Where(s => s.UserId == userId && s.RevokedAt == null && s.Id != keepSessionId)
+                .ToListAsync(ct);
+            foreach (var session in sessions)
+            {
+                var entry = dbContext.Entry(session);
+                entry.Property(s => s.RevokedAt).CurrentValue = now;
+                entry.Property(s => s.RevokedReason).CurrentValue = RevokeReason.TemporaryPassword;
+            }
         }
 
         private static LoginName LoginNameOf(string? typed)

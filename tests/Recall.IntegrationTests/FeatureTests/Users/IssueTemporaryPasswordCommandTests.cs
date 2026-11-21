@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
 using Recall.Server.Auth;
 using Recall.Server.Auth.Entities;
 using Recall.Server.Databases;
@@ -14,6 +15,7 @@ using Recall.Server.Domain.Tenants;
 using Recall.Server.Domain.Users;
 using Recall.Server.Domain.Users.Features;
 using Recall.Server.Exceptions;
+using Recall.Server.Resources.Entrypoints.Auth;
 using Recall.SharedTestHelpers.EntityGraphs;
 using Shouldly;
 
@@ -78,6 +80,31 @@ public class IssueTemporaryPasswordCommandTests : TestBase
         ofPerson.ShouldAllBe(s => s.RevokedAt != null && s.RevokedReason == RevokeReason.TemporaryPassword);
         ofPerson.Select(s => s.ClientKind).ShouldBe([SessionKind.Web, SessionKind.Native, SessionKind.Pat], ignoreOrder: true);
         sessions.Single(s => s.Id == adminSession.SessionId).RevokedAt.ShouldBeNull();
+    }
+
+    [Test]
+    [Property("Rule", "PWD-14")]
+    public async Task an_issue_to_the_caller_keeps_the_session_of_the_request_and_ends_the_others()
+    {
+        // Arrange
+        var scope = new TestingServiceScope();
+        await scope.StartGraph(out _)
+            .AddUser(out var admin, u => u.Role = "Admin")
+            .BuildAsync();
+        var current = await StartAsync(scope, store => store.StartWebAsync(admin.Id, "oidc", CancellationToken.None));
+        var otherWeb = await StartAsync(scope, store => store.StartWebAsync(admin.Id, "oidc", CancellationToken.None));
+        await StartAsync(scope, store => store.StartNativeAsync(admin.Id, "oidc", CancellationToken.None));
+        SignInAsPerson(scope, admin, current.SessionId);
+
+        // Act
+        await scope.SendAsync(new IssueTemporaryPassword.Command(admin.Id, $"me-{admin.Id}"));
+
+        // Assert
+        var sessions = await scope.ExecuteDbContextAsync(db => db.Set<AuthSession>().AsNoTracking().Where(s => s.UserId == admin.Id).ToListAsync());
+        sessions.Count.ShouldBe(3);
+        sessions.Single(s => s.Id == current.SessionId).RevokedAt.ShouldBeNull();
+        sessions.Where(s => s.Id != current.SessionId).ShouldAllBe(s => s.RevokedAt != null && s.RevokedReason == RevokeReason.TemporaryPassword);
+        sessions.Single(s => s.Id == otherWeb.SessionId).RevokedAt.ShouldNotBeNull();
     }
 
     [Test]
@@ -290,8 +317,11 @@ public class IssueTemporaryPasswordCommandTests : TestBase
         after.AllowedActions.ShouldContain(UserAction.IssueTemporaryPassword().Value);
     }
 
-    private static void SignInAsPerson(TestingServiceScope scope, User user)
-        => scope.SetDelegatedClient(user.Identifier, FirstPartyClientOptions.AppClientId);
+    private static void SignInAsPerson(TestingServiceScope scope, User user, string? sessionId = null)
+    {
+        scope.SetDelegatedClient(user.Identifier, FirstPartyClientOptions.AppClientId);
+        scope.GetService<ICurrentUserService>().GetClaimValue(AppSessionHandler.SessionIdClaim).Returns(sessionId);
+    }
 
     private static Task<T> StartAsync<T>(TestingServiceScope scope, Func<SessionStore, Task<T>> start)
         => scope.ExecuteScopeAsync(sp => start(sp.GetRequiredService<SessionStore>()));

@@ -93,10 +93,14 @@ test('@PWD-14 a login name in use shows the refusal on the field and keeps the d
   await expect.element(page.getByLabelText('Login name')).toHaveValue('taken')
 })
 
-test('@PWD-14 a caller who sets their own password is told that this session ends', async () => {
+test('@PWD-14 a caller who sets their own password is told that this session stays', async () => {
+  await commands.answerRequests([{ method: 'POST', path, body: issued }])
   await renderDialog({ ...bob, loginName: 'bob' }, true)
 
   await page.getByRole('button', { name: 'Set temporary password' }).click()
+  const ask = page.getByRole('dialog', { name: 'Set a temporary password for Bob Smith?' })
+  await expect.element(ask.getByText(/ends each of your other sessions and personal access tokens\. You stay signed in here\./)).toBeVisible()
+  await ask.getByRole('button', { name: 'Set temporary password' }).click()
 
-  await expect.element(page.getByText(/also this one, so Recall signs you out/)).toBeVisible()
+  await expect.element(page.getByRole('dialog', { name: 'Give yourself this password' }).getByText(issued.password)).toBeVisible()
 })

@@ -26,13 +26,13 @@ export type UserAction = UserDtoAllowedActionsEnumKey
 interface UserActionsProps {
   user: UserDto
   pendingAction?: UserAction
-  /** The user is the caller, so a temporary password also ends the session of this page. */
+  /** The user is the caller, so a temporary password keeps the session of this page. Undefined until the current user loads. */
   isSelf?: boolean
   onChangeRole: (role: UserRole) => void
   onDelete: () => void
 }
 
-type ActionControl = (props: UserActionsProps) => ReactElement
+type ActionControl = (props: UserActionsProps) => ReactElement | null
 
 const CONTROLS: Record<UserAction, ActionControl | null> = {
   Update: null,
@@ -40,7 +40,8 @@ const CONTROLS: Record<UserAction, ActionControl | null> = {
   AddPermission: null,
   RemovePermission: null,
   Delete: ConfirmDelete,
-  IssueTemporaryPassword: ({ user, isSelf = false }) => <TemporaryPasswordDialog user={user} isSelf={isSelf} />,
+  // Until the current user loads, the dialog cannot tell the caller what happens to their own sessions, so it waits.
+  IssueTemporaryPassword: ({ user, isSelf }) => (isSelf === undefined ? null : <TemporaryPasswordDialog user={user} isSelf={isSelf} />),
 }
 
 export function UserActions({ user, pendingAction, isSelf, onChangeRole, onDelete }: UserActionsProps) {

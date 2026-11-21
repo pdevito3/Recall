@@ -82,7 +82,7 @@ function AskForIssue({ user, isSelf, issue }: TemporaryPasswordDialogProps & { i
   }, focusFirstError(form, FIELDS))
 
   const ends = isSelf
-    ? 'This ends each of your sessions and personal access tokens, also this one, so Recall signs you out when you close this dialog.'
+    ? 'This ends each of your other sessions and personal access tokens. You stay signed in here.'
     : `This ends each session and personal access token of ${user.fullName}, so they sign in again with the new password.`
 
   return (

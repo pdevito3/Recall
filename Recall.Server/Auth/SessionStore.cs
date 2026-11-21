@@ -361,18 +361,6 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
                 .SetProperty(s => s.RevokedReason, RevokeReason.RevokeOthers), CancellationToken.None);
     }
 
-    /// <summary>Ends each web session, native session, and personal access token of the user, as a new temporary password does (PWD-14).</summary>
-    public async Task RevokeAllAsync(string userId, RevokeReason reason)
-    {
-        var now = timeProvider.GetUtcNow();
-        await dbContext.Set<AuthSession>()
-            .TagWithOperationCallSite("auth.sessions.revoke_all")
-            .Where(s => s.UserId == userId && s.RevokedAt == null)
-            .ExecuteUpdateAsync(set => set
-                .SetProperty(s => s.RevokedAt, now)
-                .SetProperty(s => s.RevokedReason, reason), CancellationToken.None);
-    }
-
     public async Task AddAttemptAsync(LoginAttempt attempt, CancellationToken cancellationToken)
     {
         dbContext.Set<LoginAttempt>().Add(attempt);

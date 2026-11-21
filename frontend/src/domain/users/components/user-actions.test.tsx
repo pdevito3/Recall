@@ -38,11 +38,22 @@ test('shows a button for each action that the Server allows and that the page ca
 test('@PWD-14 shows Set temporary password only when the Server allows it', async () => {
   await render(
     <QueryClientProvider client={new QueryClient()}>
-      <UserActions user={aUser(['IssueTemporaryPassword'])} onChangeRole={() => {}} onDelete={() => {}} />
+      <UserActions user={aUser(['IssueTemporaryPassword'])} isSelf={false} onChangeRole={() => {}} onDelete={() => {}} />
     </QueryClientProvider>,
   )
 
   await expect.element(page.getByRole('button', { name: 'Set temporary password' })).toBeVisible()
+})
+
+test('@PWD-14 hides Set temporary password until the page knows whether the user is the caller', async () => {
+  await render(
+    <QueryClientProvider client={new QueryClient()}>
+      <UserActions user={aUser(['IssueTemporaryPassword', 'Delete'])} onChangeRole={() => {}} onDelete={() => {}} />
+    </QueryClientProvider>,
+  )
+
+  await expect.element(page.getByRole('button', { name: 'Delete' })).toBeVisible()
+  await expect.element(page.getByRole('button', { name: 'Set temporary password' })).not.toBeInTheDocument()
 })
 
 test('shows no actions when the Server allows none that the page can send', async () => {
