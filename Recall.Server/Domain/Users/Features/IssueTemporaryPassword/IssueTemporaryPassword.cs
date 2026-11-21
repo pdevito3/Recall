@@ -8,9 +8,7 @@ using Databases;
 using Dtos;
 using Exceptions;
 using MediatR;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using Resources;
 using Serilog;
 
@@ -20,12 +18,9 @@ public static class IssueTemporaryPassword
 
     public sealed record Command(string Id, string? LoginName) : IRequest<TemporaryPasswordDto>;
 
-    public sealed class Handler(AppDbContext dbContext, IPermissionGuard permissionGuard, SessionStore store, TimeProvider timeProvider)
+    public sealed class Handler(AppDbContext dbContext, IPermissionGuard permissionGuard, SessionStore store, PasswordHashing hashing, TimeProvider timeProvider)
         : IRequestHandler<Command, TemporaryPasswordDto>
     {
-        private static readonly PasswordHasher<PasswordCredential> Hasher =
-            new(Options.Create(new PasswordHasherOptions { IterationCount = 220_000 }));
-
         private readonly ILogger _logger = Log.ForContext<Handler>();
 
         public async Task<TemporaryPasswordDto> Handle(Command request, CancellationToken cancellationToken)
@@ -34,6 +29,11 @@ public static class IssueTemporaryPassword
 
             var caller = await permissionGuard.RequireSignedInPersonAsync(cancellationToken);
             UserAction.IssueTemporaryPassword().GuardBeforeLoad(caller, request.Id);
+
+            // The hash runs before the lock, so the exclusive tenant lock is not held for the cost of a hash.
+            var password = TemporaryPassword.New();
+            var hash = await hashing.HashAsync(password, cancellationToken)
+                ?? throw new ServerBusyException(PasswordLogin.BusyMessage);
 
             // The exclusive lock keeps a delete of the user from saving between the load and the save, which would
             // leave a credential of a deleted user, and it keeps two first issues from adding two rows.
@@ -48,16 +48,15 @@ public static class IssueTemporaryPassword
                 var credential = await dbContext.Set<PasswordCredential>()
                     .TagWithOperationCallSite("users.issue_temporary_password.credential")
                     .FirstOrDefaultAsync(c => c.UserId == user.Id, ct);
-                var password = TemporaryPassword.New();
                 var now = timeProvider.GetUtcNow();
                 if (credential is null)
                 {
-                    credential = PasswordCredential.IssueTemporary(user.Id, LoginNameOf(request.LoginName), Hash(password), now);
+                    credential = PasswordCredential.IssueTemporary(user.Id, LoginNameOf(request.LoginName), hash, now);
                     dbContext.Set<PasswordCredential>().Add(credential);
                 }
                 else
                 {
-                    credential.IssueTemporary(Hash(password), now);
+                    credential.IssueTemporary(hash, now);
                 }
 
                 var expiresAt = credential.TemporaryUntil!.Value;
@@ -77,7 +76,5 @@ public static class IssueTemporaryPassword
             return LoginName.TryOf(typed, out var name) ? name : throw new ValidationException("loginName", LoginName.NotValidMessage);
         }
 
-        // The user argument is not part of the hash of PasswordHasher, and the first issue hashes before the row exists.
-        private static string Hash(string password) => Hasher.HashPassword(null!, password);
     }
 }

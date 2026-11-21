@@ -40,6 +40,7 @@ public static class DomainProblemDetails
                 => StatusCodes.Status409Conflict,
             DomainErrorKind.DiskFull => StatusCodes.Status507InsufficientStorage,
             DomainErrorKind.DatabaseBusy => StatusCodes.Status503ServiceUnavailable,
+            DomainErrorKind.ServerBusy => StatusCodes.Status429TooManyRequests,
             DomainErrorKind.Unexpected => StatusCodes.Status500InternalServerError,
         };
     }
