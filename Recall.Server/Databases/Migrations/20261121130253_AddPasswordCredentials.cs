@@ -53,9 +53,8 @@ namespace Recall.Server.Databases.Migrations
             migrationBuilder.DropTable(
                 name: "auth_password_credentials");
 
-            migrationBuilder.DropColumn(
-                name: "user_id",
-                table: "auth_login_attempts");
+            // SQLite drops the column in place. DropColumn rebuilds the table, and the rebuild orders its columns by name.
+            migrationBuilder.Sql("ALTER TABLE auth_login_attempts DROP COLUMN user_id;");
         }
     }
 }
