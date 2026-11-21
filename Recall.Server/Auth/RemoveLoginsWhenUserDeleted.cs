@@ -15,6 +15,10 @@ public sealed class RemoveLoginsWhenUserDeleted : IDomainEventHandler<UserDelete
             .TagWithOperationCallSite("auth.user_deleted.logins")
             .Where(l => l.UserId == userId)
             .ToListAsync(cancellationToken));
+        dbContext.Set<PasswordCredential>().RemoveRange(await dbContext.Set<PasswordCredential>()
+            .TagWithOperationCallSite("auth.user_deleted.password")
+            .Where(p => p.UserId == userId)
+            .ToListAsync(cancellationToken));
         dbContext.Set<AuthSession>().RemoveRange(await dbContext.Set<AuthSession>()
             .TagWithOperationCallSite("auth.user_deleted.sessions")
             .Where(s => s.UserId == userId)

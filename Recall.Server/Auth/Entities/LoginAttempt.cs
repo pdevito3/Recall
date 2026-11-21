@@ -26,6 +26,9 @@ public sealed record LoginAttempt
     public string? NativeRedirect { get; init; }
     public string? NativeChallenge { get; init; }
     public string? NativeState { get; init; }
+
+    /// <summary>Set only on an attempt that waits for its person to choose a password (PWD-16).</summary>
+    public string? UserId { get; init; }
     public required DateTimeOffset ExpiresAt { get; init; }
 
     public override string ToString() => "[login attempt]";
@@ -50,6 +53,8 @@ public sealed class LoginAttemptConfiguration : IEntityTypeConfiguration<LoginAt
         builder.Property(e => e.NativeRedirect).HasMaxLength(LoginAttempt.NativeRedirectMaxLength);
         builder.Property(e => e.NativeChallenge).HasMaxLength(LoginAttempt.NativeChallengeMaxLength);
         builder.Property(e => e.NativeState).HasMaxLength(LoginAttempt.NativeStateMaxLength);
+
+        builder.Property(e => e.UserId).HasMaxLength(EntityId.MaxLength).UseCollation(EntityId.Collation);
 
         builder.HasIndex(e => e.ExpiresAt);
     }

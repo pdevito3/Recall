@@ -1,0 +1,126 @@
+namespace Recall.Server.Auth.Entities;
+
+using Databases;
+using Domain;
+using Domain.Users;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+public enum PasswordState
+{
+    Temporary,
+    Chosen,
+    Stopped,
+}
+
+/// <summary>
+/// The password of one user (spec <c>password-login.md</c>, section 2). The state comes from the columns: Stopped at
+/// <see cref="StopAt"/> wrong passwords in a row, else Temporary while <see cref="TemporaryUntil"/> is set, else Chosen.
+/// </summary>
+[NotAudited("A login secret of a user. The audit log records each change as an action on the user, and the row must hold no value that an audit entry copies.")]
+public sealed class PasswordCredential
+{
+    public const int HashMaxLength = 256;
+    public const int StopAt = 100;
+
+    public static readonly TimeSpan TemporaryLifetime = TimeSpan.FromDays(7);
+
+    private PasswordCredential()
+    {
+    }
+
+    public string UserId { get; private set; } = default!;
+    public LoginName LoginName { get; private set; } = default!;
+    public string PasswordHash { get; private set; } = default!;
+    public DateTimeOffset ChangedAt { get; private set; }
+    public int FailedCount { get; private set; }
+    public DateTimeOffset? TemporaryUntil { get; private set; }
+
+    public PasswordState State => FailedCount >= StopAt ? PasswordState.Stopped
+        : TemporaryUntil is not null ? PasswordState.Temporary
+        : PasswordState.Chosen;
+
+    /// <summary>A Temporary credential whose 7 days have passed (PWD-15). Expired is not a stored state.</summary>
+    public bool IsExpired(DateTimeOffset now) => State == PasswordState.Temporary && TemporaryUntil <= now;
+
+    /// <summary>The first temporary password of a user. It also sets the login name.</summary>
+    public static PasswordCredential IssueTemporary(string userId, LoginName loginName, string passwordHash, DateTimeOffset now)
+    {
+        var credential = new PasswordCredential { UserId = userId, LoginName = loginName };
+        credential.IssueTemporary(passwordHash, now);
+        return credential;
+    }
+
+    /// <summary>A new temporary password from any state. It ends a stop, and the login name stays.</summary>
+    public void IssueTemporary(string passwordHash, DateTimeOffset now)
+    {
+        PasswordHash = passwordHash;
+        ChangedAt = now;
+        TemporaryUntil = now + TemporaryLifetime;
+        FailedCount = 0;
+    }
+
+    /// <summary>The credential of a person who chooses the first password, as at the setup of the install.</summary>
+    public static PasswordCredential Choose(string userId, LoginName loginName, string passwordHash, DateTimeOffset now)
+        => new() { UserId = userId, LoginName = loginName, PasswordHash = passwordHash, ChangedAt = now };
+
+    /// <summary>The person signed in with the temporary password and chose a password (PWD-16).</summary>
+    /// <exception cref="InvalidOperationException">The credential is not Temporary, or it expired.</exception>
+    public void Choose(string passwordHash, DateTimeOffset now)
+    {
+        if (State != PasswordState.Temporary || IsExpired(now))
+            throw new InvalidOperationException("Only a Temporary credential that has not expired can take a chosen password.");
+
+        PasswordHash = passwordHash;
+        ChangedAt = now;
+        TemporaryUntil = null;
+        FailedCount = 0;
+    }
+
+    /// <summary>A wrong password (PWD-13). The count stops at <see cref="StopAt"/>, where the credential is Stopped.</summary>
+    public void NoteFailure()
+    {
+        if (FailedCount < StopAt)
+            FailedCount++;
+    }
+
+    /// <summary>A right password. It resets the count of wrong passwords in a row.</summary>
+    /// <exception cref="InvalidOperationException">The credential is Stopped, so no password can be right.</exception>
+    public void NoteSuccess()
+    {
+        if (State == PasswordState.Stopped)
+            throw new InvalidOperationException("A Stopped credential takes no password.");
+
+        FailedCount = 0;
+    }
+
+    /// <summary>The same password at the current cost of the hash (PWD-10). The time of the change stays.</summary>
+    public void Rehash(string passwordHash) => PasswordHash = passwordHash;
+
+    public override string ToString() => $"[password credential of {UserId}]";
+}
+
+public sealed class PasswordCredentialConfiguration : IEntityTypeConfiguration<PasswordCredential>
+{
+    public void Configure(EntityTypeBuilder<PasswordCredential> builder)
+    {
+        // The text form of an instant sorts as the instant, and strftime keeps three digits of a second, which only widens the limit by less than a millisecond.
+        builder.ToTable("auth_password_credentials", table => table.HasCheckConstraint(
+            "ck_auth_password_credentials_temporary_until",
+            "temporary_until IS NULL OR temporary_until <= strftime('%Y-%m-%dT%H:%M:%fZ', changed_at, '+7 days')"));
+
+        builder.HasKey(e => e.UserId);
+        builder.Property(e => e.UserId).HasMaxLength(EntityId.MaxLength).UseCollation(EntityId.Collation);
+        builder.Property(e => e.LoginName)
+            .HasConversion(name => name.Value, value => LoginName.FromStored(value))
+            .HasMaxLength(LoginName.MaxStoredLength)
+            .UseCollation(EntityId.Collation);
+        builder.Property(e => e.PasswordHash).HasMaxLength(PasswordCredential.HashMaxLength);
+        builder.HasIndex(e => e.LoginName).IsUnique().ForRequestField("loginName", LoginName.InUseMessage);
+
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(e => e.UserId)
+            .OnDelete(DeleteBehavior.ClientNoAction);
+    }
+}

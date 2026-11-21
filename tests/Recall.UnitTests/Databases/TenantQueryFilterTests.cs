@@ -16,7 +16,7 @@ using Shouldly;
 public class TenantQueryFilterTests
 {
     private static readonly Type[] AuthEntitiesReadBeforeACallerExists =
-        [typeof(ExternalLogin), typeof(AuthSession), typeof(AppCode)];
+        [typeof(ExternalLogin), typeof(PasswordCredential), typeof(AuthSession), typeof(AppCode)];
 
     private static readonly Type[] EntitiesWithNoTenantData =
         [typeof(LoginAttempt), typeof(SyncChange), typeof(KeyRingMarker), .. AuthEntitiesReadBeforeACallerExists];
