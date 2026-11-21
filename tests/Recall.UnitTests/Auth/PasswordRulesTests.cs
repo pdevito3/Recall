@@ -49,7 +49,8 @@ public sealed class PasswordRulesTests
     [Test]
     [Property("Rule", "PWD-18")]
     [Arguments("a")]
-    [Arguments("\U0001D400")]
+    // DESERET SMALL LETTER LONG I stays itself under NFKC and the case fold, so each code point is two UTF-16 units.
+    [Arguments("\U00010428")]
     public void a_login_name_takes_64_code_points_and_refuses_65(string character)
     {
         // Arrange
@@ -62,7 +63,9 @@ public sealed class PasswordRulesTests
 
         // Assert
         takes.ShouldBeTrue();
-        name!.Value.Length.ShouldBeLessThanOrEqualTo(LoginName.MaxStoredLength);
+        name!.Value.ShouldBe(fits);
+        name.Value.Length.ShouldBe(LoginName.MaxLength * character.Length);
+        name.Value.Length.ShouldBeLessThanOrEqualTo(LoginName.MaxStoredLength);
         refuses.ShouldBeTrue();
     }
 

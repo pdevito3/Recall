@@ -135,7 +135,7 @@ public class StringColumnLengthTests
         "auth_login_attempts.redirect_uri",
         "auth_login_attempts.return_path",
         "auth_login_attempts.user_id",
-        // LoginName.TryOf holds a name to 64 code points, and the column has room for 64 outside the BMP. LoginNameTests checks it.
+        // LoginName.TryOf holds a name to 64 code points, and the column has room for 64 outside the BMP. PasswordRulesTests checks it.
         "auth_password_credentials.login_name",
         "auth_password_credentials.password_hash",
         "auth_sessions.access_hash",
