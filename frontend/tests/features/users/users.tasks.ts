@@ -74,6 +74,15 @@ export function usersPage(page: Page) {
       await settled
     },
 
+    async setTemporaryPassword(name: string, id: string, loginName?: string) {
+      await at.actionButton(name, 'Set temporary password').click()
+      await expect(at.temporaryPasswordAsk).toBeVisible()
+      if (loginName !== undefined) await at.loginNameField.fill(loginName)
+      const settled = answered('POST', usersPaths.temporaryPassword(id))
+      await at.confirmTemporaryPassword.click()
+      await settled
+    },
+
     async keepRole() {
       await at.keepRole.click()
       await expect(at.roleDialog).toBeHidden()
