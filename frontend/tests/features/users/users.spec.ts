@@ -203,6 +203,50 @@ test.describe('the users of a tenant', () => {
     await expect(users.at.detailHeading('Grace Hopper')).toBeVisible()
     await expect(users.at.actions('Grace Hopper')).toHaveCount(0)
   })
+
+  test('sets a temporary password with a login name, and shows it once', { tag: '@PWD-14' }, async ({ page, api }) => {
+    const grace = aUser().named('Grace Hopper').allowing('IssueTemporaryPassword')
+    const { id } = grace.build()
+    const issued = { loginName: 'grace.h', password: 'acorn-ladder-velvet-tundra', expiresAt: '2026-11-28T10:00:00Z' }
+    api.mock(usersApi.oneIs(grace), usersApi.issuesTemporaryPassword(id, issued))
+    const users = usersPage(page)
+    await users.openDetail(id)
+
+    await users.setTemporaryPassword('Grace Hopper', id, 'Grace.H')
+
+    expect(api.last('post', usersPaths.temporaryPassword(id))?.body).toEqual({ loginName: 'Grace.H' })
+    await expect(users.at.temporaryPasswordResult).toContainText(issued.password)
+    await expect(users.at.temporaryPasswordResult).toContainText('7 days')
+    await users.at.donePassword.click()
+    await expect(users.at.temporaryPasswordResult).toBeHidden()
+    await expect(users.at.detail('grace.h')).toBeVisible()
+    expect(api.all('get', usersPaths.one(id))).toHaveLength(1)
+  })
+
+  test('a login name in use keeps the dialog open with the refusal', { tag: '@PWD-14' }, async ({ page, api }) => {
+    const grace = aUser().named('Grace Hopper').allowing('IssueTemporaryPassword')
+    const { id } = grace.build()
+    api.mock(usersApi.oneIs(grace), usersApi.temporaryPasswordFails(id, aProblem().conflict('This login name is in use. Pick another.')))
+    const users = usersPage(page)
+    await users.openDetail(id)
+
+    await users.setTemporaryPassword('Grace Hopper', id, 'taken')
+
+    await expect(users.at.temporaryPasswordRefusal).toHaveText('This login name is in use. Pick another.')
+    await expect(users.at.loginNameField).toHaveValue('taken')
+    await expect(users.at.toasts).toHaveCount(0)
+  })
+
+  test('shows no Set temporary password to a caller whom the Server does not allow', { tag: '@PWD-14' }, async ({ page, api }) => {
+    const grace = aUser().named('Grace Hopper').seenByAdmin()
+    const { id } = grace.build()
+    api.mock(usersApi.oneIs(grace))
+    const users = usersPage(page)
+    await users.openDetail(id)
+
+    await expect(users.at.actionButton('Grace Hopper', 'Change role')).toBeVisible()
+    await expect(users.at.actionButton('Grace Hopper', 'Set temporary password')).toHaveCount(0)
+  })
 })
 
 test.describe('the users of a tenant, for a member who cannot see them', () => {

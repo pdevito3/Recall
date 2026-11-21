@@ -26,6 +26,7 @@ public partial class UserAction : ValueObject, IFixedNames
     public static UserAction AddPermission() => new(UserActionEnum.AddPermission);
     public static UserAction RemovePermission() => new(UserActionEnum.RemovePermission);
     public static UserAction Delete() => new(UserActionEnum.Delete);
+    public static UserAction IssueTemporaryPassword() => new(UserActionEnum.IssueTemporaryPassword);
 
     /// <summary>
     /// Checks the permissions that need only the ID of the user. Call it before the load, so a caller without them
@@ -67,6 +68,11 @@ public partial class UserAction : ValueObject, IFixedNames
 
         public static readonly UserActionEnum Delete = new(nameof(Delete), 4,
             always: [Permission.ManageUsers()], unlessOwnRecord: [], revokesUserPermissions: true);
+
+        // The caller can then sign in as the user, so the caller must hold each permission of the user (PWD-14). The
+        // answer holds no record of the user, so it needs no read_users.
+        public static readonly UserActionEnum IssueTemporaryPassword = new(nameof(IssueTemporaryPassword), 5,
+            always: [Permission.ManageUserAccess()], unlessOwnRecord: [], revokesUserPermissions: true);
 
         private readonly Permission[] _always;
         private readonly Permission[] _unlessOwnRecord;

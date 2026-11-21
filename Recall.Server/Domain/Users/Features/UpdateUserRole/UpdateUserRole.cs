@@ -75,7 +75,7 @@ public static class UpdateUserRole
                 UserMetrics.RoleChanged.Add(1, new KeyValuePair<string, object?>("app.user.role", newRole.Value));
             }
 
-            return user.ToUserDto(caller);
+            return user.ToUserDto(caller, await UserLoginNames.OfAsync(dbContext, user.Id, cancellationToken));
         }
     }
 }

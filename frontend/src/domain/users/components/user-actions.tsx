@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/responsive-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
+import { TemporaryPasswordDialog } from './temporary-password-dialog'
 import { isUserRole, ROLE_LABELS, USER_ROLES, type UserRole } from './user-role'
 
 export type UserAction = UserDtoAllowedActionsEnumKey
@@ -25,6 +26,8 @@ export type UserAction = UserDtoAllowedActionsEnumKey
 interface UserActionsProps {
   user: UserDto
   pendingAction?: UserAction
+  /** The user is the caller, so a temporary password also ends the session of this page. */
+  isSelf?: boolean
   onChangeRole: (role: UserRole) => void
   onDelete: () => void
 }
@@ -37,9 +40,10 @@ const CONTROLS: Record<UserAction, ActionControl | null> = {
   AddPermission: null,
   RemovePermission: null,
   Delete: ConfirmDelete,
+  IssueTemporaryPassword: ({ user, isSelf = false }) => <TemporaryPasswordDialog user={user} isSelf={isSelf} />,
 }
 
-export function UserActions({ user, pendingAction, onChangeRole, onDelete }: UserActionsProps) {
+export function UserActions({ user, pendingAction, isSelf, onChangeRole, onDelete }: UserActionsProps) {
   const controls = user.allowedActions.flatMap((action) => {
     const control = CONTROLS[action]
     return control ? [{ action, Control: control }] : []
@@ -52,7 +56,7 @@ export function UserActions({ user, pendingAction, onChangeRole, onDelete }: Use
   return (
     <div role="group" aria-label={`Actions for ${user.fullName}`} className="flex flex-wrap gap-2">
       {controls.map(({ action, Control }) => (
-        <Control key={action} user={user} pendingAction={pendingAction} onChangeRole={onChangeRole} onDelete={onDelete} />
+        <Control key={action} user={user} pendingAction={pendingAction} isSelf={isSelf} onChangeRole={onChangeRole} onDelete={onDelete} />
       ))}
     </div>
   )

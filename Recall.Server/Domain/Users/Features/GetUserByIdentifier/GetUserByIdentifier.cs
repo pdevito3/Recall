@@ -42,7 +42,7 @@ public static class GetUserByIdentifier
             }
 
             caller.RequireSelfOr(user.Id, Permission.ReadUsers());
-            return user.ToUserDto(caller);
+            return user.ToUserDto(caller, await UserLoginNames.OfAsync(dbContext, user.Id, cancellationToken));
         }
     }
 }

@@ -40,7 +40,7 @@ public static class UpdateUser
 
             _logger.Here().Information("Updated user {UserId}", user.Id);
 
-            return user.ToUserDto(caller);
+            return user.ToUserDto(caller, await UserLoginNames.OfAsync(dbContext, user.Id, cancellationToken));
         }
     }
 }
