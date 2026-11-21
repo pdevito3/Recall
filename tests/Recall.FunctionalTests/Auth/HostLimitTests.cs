@@ -1,7 +1,7 @@
 namespace Recall.FunctionalTests.Auth;
 
 using System.Net;
-using Recall.Server.Resources.Entrypoints.Auth;
+using Recall.Server.Auth;
 using Shouldly;
 
 public class HostLimitTests
@@ -82,7 +82,7 @@ public class HostLimitTests
     public void a_bucket_is_one_ipv4_address_or_one_ipv6_network(string address, string bucket)
     {
         // Act
-        var actual = LoginStartLimit.BucketOf(IPAddress.Parse(address));
+        var actual = ConnectionAddress.BucketOf(IPAddress.Parse(address));
 
         // Assert
         actual.ShouldBe(bucket);
