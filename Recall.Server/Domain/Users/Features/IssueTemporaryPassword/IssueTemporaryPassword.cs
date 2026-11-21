@@ -71,7 +71,8 @@ public static class IssueTemporaryPassword
 
                 var expiresAt = credential.TemporaryUntil!.Value;
                 dbContext.RecordAction(new TemporaryPasswordIssued(AuditSubject.Of(user), credential.LoginName.Value, expiresAt));
-                // One save writes the credential and the end of each session, so no session outlives a committed issue.
+                // One save writes the credential, the end of each session, and the delete of each login in flight, so no
+                // session or choice can start from the old password after the issue commits.
                 await dbContext.SaveChangesAsync(ct);
                 return new TemporaryPasswordDto { LoginName = credential.LoginName.Value, Password = password, ExpiresAt = expiresAt };
             }, cancellationToken);
@@ -81,8 +82,9 @@ public static class IssueTemporaryPassword
         }
 
         /// <summary>
-        /// Ends each session and each PAT of the user but <paramref name="keepSessionId"/>, in the save of the issue. A logout
-        /// that ends a session after the load makes the save stale, and the command runs again.
+        /// Ends each session and each PAT of the user but <paramref name="keepSessionId"/>, and removes each login attempt and
+        /// app code of the user, in the save of the issue. A logout or a use of a code after the load makes the save stale,
+        /// and the command runs again.
         /// </summary>
         private async Task EndSignInsAsync(string userId, string? keepSessionId, DateTimeOffset now, CancellationToken ct)
         {
@@ -96,6 +98,16 @@ public static class IssueTemporaryPassword
                 entry.Property(s => s.RevokedAt).CurrentValue = now;
                 entry.Property(s => s.RevokedReason).CurrentValue = RevokeReason.TemporaryPassword;
             }
+
+            // A choose attempt or a native code that the old password started must not finish after the issue.
+            dbContext.Set<LoginAttempt>().RemoveRange(await dbContext.Set<LoginAttempt>()
+                .TagWithOperationCallSite("users.issue_temporary_password.attempts")
+                .Where(a => a.UserId == userId)
+                .ToListAsync(ct));
+            dbContext.Set<AppCode>().RemoveRange(await dbContext.Set<AppCode>()
+                .TagWithOperationCallSite("users.issue_temporary_password.app_codes")
+                .Where(c => c.UserId == userId)
+                .ToListAsync(ct));
         }
 
         private static LoginName LoginNameOf(string? typed)

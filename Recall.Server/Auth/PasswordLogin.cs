@@ -18,8 +18,8 @@ public abstract record PasswordOutcome
 {
     public sealed record SignedIn(ProvisionOutcome.Provisioned User) : PasswordOutcome;
 
-    /// <summary>A right temporary password. The person picks a password next (PWD-16).</summary>
-    public sealed record MustChoose(string UserId) : PasswordOutcome;
+    /// <summary>A right temporary password. The person picks a password next (PWD-16), while the credential stays at this version.</summary>
+    public sealed record MustChoose(string UserId, int CredentialVersion) : PasswordOutcome;
 
     public sealed record Refused(int Status, string Message) : PasswordOutcome;
 
@@ -126,7 +126,7 @@ public sealed class PasswordLogin(
             PasswordVerdict.Wrong => new PasswordOutcome.Refused(StatusCodes.Status401Unauthorized, WrongMessage),
             PasswordVerdict.Stopped => new PasswordOutcome.Refused(StatusCodes.Status401Unauthorized, StoppedMessage),
             PasswordVerdict.Expired => new PasswordOutcome.Refused(StatusCodes.Status401Unauthorized, ExpiredMessage),
-            PasswordVerdict.MustChoose => new PasswordOutcome.MustChoose(credential.UserId),
+            PasswordVerdict.MustChoose => new PasswordOutcome.MustChoose(credential.UserId, credential.Version),
             _ => await SignedInAsync(dbContext, credential, check, password, cancellationToken),
         };
         // The save checks the version of the row, so no outcome leaves here for a credential that changed after the load.
@@ -157,7 +157,11 @@ public sealed class PasswordLogin(
         return new PasswordOutcome.SignedIn(new ProvisionOutcome.Provisioned(user.Id, user.FullName));
     }
 
-    public async Task<PasswordOutcome> ChooseAsync(string userId, string? typedPassword, CancellationToken cancellationToken)
+    /// <summary>
+    /// The choice of a password after a right temporary password (PWD-16). A credential that changed after the choose
+    /// attempt, for example through a new temporary password, gives <see cref="PasswordOutcome.Gone"/>.
+    /// </summary>
+    public async Task<PasswordOutcome> ChooseAsync(string userId, int credentialVersion, string? typedPassword, CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateSystemScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -168,7 +172,7 @@ public sealed class PasswordLogin(
             .TagWithOperationCallSite("auth.password.choose_user")
             .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
         var now = timeProvider.GetUtcNow();
-        if (credential is not { State: PasswordState.Temporary } || user is null)
+        if (credential is not { State: PasswordState.Temporary } || credential.Version != credentialVersion || user is null)
             return new PasswordOutcome.Gone();
         if (credential.IsExpired(now))
             return new PasswordOutcome.Refused(StatusCodes.Status401Unauthorized, ExpiredMessage);

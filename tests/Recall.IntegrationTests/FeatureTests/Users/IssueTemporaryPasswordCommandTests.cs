@@ -109,6 +109,37 @@ public class IssueTemporaryPasswordCommandTests : TestBase
 
     [Test]
     [Property("Rule", "PWD-14")]
+    public async Task an_issue_deletes_each_login_attempt_and_app_code_of_the_user_and_none_of_another()
+    {
+        // Arrange
+        var scope = new TestingServiceScope();
+        await scope.StartGraph(out _)
+            .AddUsers(out var users, u => u.Role = "Admin", u => u.Role = "User")
+            .BuildAsync();
+        var (admin, person) = (users[0], users[1]);
+        await StartAsync(scope, async store =>
+        {
+            await store.AddAttemptAsync(ChooseAttempt(person.Id), CancellationToken.None);
+            await store.AddAttemptAsync(ChooseAttempt(admin.Id), CancellationToken.None);
+            return await store.AddAppCodeAsync(person.Id, "password", "recall://auth/callback", "challenge", null, CancellationToken.None);
+        });
+        await StartAsync(scope, store => store.AddAppCodeAsync(admin.Id, "password", "recall://auth/callback", "challenge", null, CancellationToken.None));
+        SignInAsPerson(scope, admin);
+
+        // Act
+        await scope.SendAsync(new IssueTemporaryPassword.Command(person.Id, $"ada-{person.Id}"));
+
+        // Assert
+        var attempts = await scope.ExecuteDbContextAsync(db => db.Set<LoginAttempt>().AsNoTracking()
+            .Where(a => a.UserId == person.Id || a.UserId == admin.Id).Select(a => a.UserId).ToListAsync());
+        attempts.ShouldBe([admin.Id]);
+        var codes = await scope.ExecuteDbContextAsync(db => db.Set<AppCode>().AsNoTracking()
+            .Where(c => c.UserId == person.Id || c.UserId == admin.Id).Select(c => c.UserId).ToListAsync());
+        codes.ShouldBe([admin.Id]);
+    }
+
+    [Test]
+    [Property("Rule", "PWD-14")]
     public async Task an_issue_records_the_audit_action_with_no_password()
     {
         // Arrange
@@ -322,6 +353,20 @@ public class IssueTemporaryPasswordCommandTests : TestBase
         scope.SetDelegatedClient(user.Identifier, FirstPartyClientOptions.AppClientId);
         scope.GetService<ICurrentUserService>().GetClaimValue(AppSessionHandler.SessionIdClaim).Returns(sessionId);
     }
+
+    private static LoginAttempt ChooseAttempt(string userId) => new()
+    {
+        StateHash = TokenHash.Of(Secrets.New()).Hex,
+        BindingHash = TokenHash.Of(Secrets.New()).Hex,
+        ModeId = PasswordLoginMode.ModeId,
+        Nonce = "",
+        PkceVerifier = "",
+        RedirectUri = "",
+        ClientKind = SessionKind.Web,
+        UserId = userId,
+        CredentialVersion = 1,
+        ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10),
+    };
 
     private static Task<T> StartAsync<T>(TestingServiceScope scope, Func<SessionStore, Task<T>> start)
         => scope.ExecuteScopeAsync(sp => start(sp.GetRequiredService<SessionStore>()));

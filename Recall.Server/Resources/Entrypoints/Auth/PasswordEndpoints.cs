@@ -28,10 +28,10 @@ public static class PasswordEndpoints
 
     /// <summary>
     /// Writes the attempt of one form and its binding cookie, and gives the state that the form posts back. A choose attempt
-    /// holds the user ID (PWD-16). The login and the setup give null.
+    /// holds the user ID and the version of the credential (PWD-16). The login and the setup give null.
     /// </summary>
     public static async Task<string> StartFormAsync(
-        HttpContext http, SessionStore store, TimeProvider timeProvider, LoginClient client, string? userId, CancellationToken cancellationToken)
+        HttpContext http, SessionStore store, TimeProvider timeProvider, LoginClient client, PasswordOutcome.MustChoose? choose, CancellationToken cancellationToken)
     {
         var state = Secrets.New();
         var binding = Secrets.New();
@@ -51,7 +51,8 @@ public static class PasswordEndpoints
             NativeRedirect = native?.Redirect.Value,
             NativeChallenge = native?.Challenge,
             NativeState = native?.ClientState,
-            UserId = userId,
+            UserId = choose?.UserId,
+            CredentialVersion = choose?.CredentialVersion,
             ExpiresAt = expiresAt,
         }, cancellationToken);
         BindingCookie.Write(http.Response, http.Request, stateHash, binding, expiresAt);
@@ -75,7 +76,7 @@ public static class PasswordEndpoints
             case PasswordOutcome.SignedIn signedIn:
                 return await completion.CompleteAsync(client, signedIn.User, PasswordLoginMode.ModeId, http, cancellationToken);
             case PasswordOutcome.MustChoose choose:
-                return AuthPages.ChoosePassword(await StartFormAsync(http, store, timeProvider, client, choose.UserId, cancellationToken), client, null);
+                return AuthPages.ChoosePassword(await StartFormAsync(http, store, timeProvider, client, choose, cancellationToken), client, null);
             case PasswordOutcome.Wait wait:
                 SetRetryAfter(http, wait.Left);
                 return await LoginPageAsync(http, modes, store, timeProvider, client, typedName, wait.Message, StatusCodes.Status429TooManyRequests, cancellationToken);
@@ -134,20 +135,25 @@ public static class PasswordEndpoints
         var (attempt, form) = consumed;
 
         var client = LoginClient.FromAttempt(attempt);
-        var outcome = await passwords.ChooseAsync(attempt.UserId!, AuthForm.OneValue(form, "password"), cancellationToken);
+        // An attempt from before the version column has none, so it cannot prove that the credential is as it was.
+        if (attempt.CredentialVersion is not { } version)
+            return AuthPages.Refused();
+
+        var choose = new PasswordOutcome.MustChoose(attempt.UserId!, version);
+        var outcome = await passwords.ChooseAsync(choose.UserId, choose.CredentialVersion, AuthForm.OneValue(form, "password"), cancellationToken);
         switch (outcome)
         {
             case PasswordOutcome.SignedIn signedIn:
                 return await completion.CompleteAsync(client, signedIn.User, PasswordLoginMode.ModeId, http, cancellationToken);
             case PasswordOutcome.Wait wait:
                 SetRetryAfter(http, wait.Left);
-                return AuthPages.ChoosePassword(await StartFormAsync(http, store, timeProvider, client, attempt.UserId, cancellationToken), client, wait.Message,
+                return AuthPages.ChoosePassword(await StartFormAsync(http, store, timeProvider, client, choose, cancellationToken), client, wait.Message,
                     StatusCodes.Status429TooManyRequests);
             // An expired temporary password goes back to the login page, which says so.
             case PasswordOutcome.Refused { Status: StatusCodes.Status401Unauthorized } expired:
                 return await LoginPageAsync(http, modes, store, timeProvider, client, null, expired.Message, expired.Status, cancellationToken);
             case PasswordOutcome.Refused refused:
-                return AuthPages.ChoosePassword(await StartFormAsync(http, store, timeProvider, client, attempt.UserId, cancellationToken), client, refused.Message,
+                return AuthPages.ChoosePassword(await StartFormAsync(http, store, timeProvider, client, choose, cancellationToken), client, refused.Message,
                     refused.Status);
             default:
                 return AuthPages.Refused();

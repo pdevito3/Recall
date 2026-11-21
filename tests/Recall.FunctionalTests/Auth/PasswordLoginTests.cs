@@ -417,11 +417,11 @@ public class PasswordLoginTests
         var marker = $"marker{Guid.NewGuid():N}";
         var person = await PasswordPeople.AddAsync(Host, issueTemporary: DateTimeOffset.UtcNow, password: $"temporary {marker} words");
         using var browser = new AuthBrowser(Host);
-        var choosePage = await browser.SignInAsync(person.LoginName, person.Password, NewAddress());
         var chosen = $"chosen {marker} words for later";
 
         // Act
         await browser.SignInAsync(person.LoginName, $"wrong {marker} words here", NewAddress());
+        var choosePage = await browser.SignInAsync(person.LoginName, person.Password, NewAddress());
         var choice = await browser.PostAsync("/auth/password/choose", [("state", PasswordPeople.StateIn(await TextOf(choosePage))), ("password", chosen)]);
         var hash = (await PasswordPeople.CredentialOfAsync(Host, person.UserId)).PasswordHash;
 
@@ -528,6 +528,47 @@ public class PasswordLoginTests
         var issued = await issue.Content.ReadFromJsonAsync<JsonElement>();
         using var later = new AuthBrowser(Host);
         (await later.SignInAsync(person.LoginName, issued.GetProperty("password").GetString()!, NewAddress())).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Test]
+    [Property("Rule", "PWD-16")]
+    public async Task a_choose_attempt_from_before_an_issue_gets_the_refused_page()
+    {
+        // Arrange
+        var admin = await PasswordPeople.AddAsync(Host);
+        var person = await PasswordPeople.AddAsync(Host, issueTemporary: DateTimeOffset.UtcNow, sameTenantAs: admin);
+        using var adminBrowser = await SignedInAsync(admin);
+        using var browser = new AuthBrowser(Host);
+        var choosePage = await browser.SignInAsync(person.LoginName, person.Password, NewAddress());
+        (await adminBrowser.IssueTemporaryAsync(admin, person.UserId)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Act
+        var choice = await browser.PostAsync("/auth/password/choose", [("state", PasswordPeople.StateIn(await TextOf(choosePage))), ("password", "a password picked after the issue")]);
+
+        // Assert
+        choice.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await TextOf(choice)).ShouldContain("This sign-in is not valid");
+        browser.SessionCookie.ShouldBeNull();
+        (await PasswordPeople.CredentialOfAsync(Host, person.UserId)).State.ShouldBe(PasswordState.Temporary);
+    }
+
+    [Test]
+    [Property("Rule", "PWD-16")]
+    public async Task a_choose_attempt_from_before_any_change_of_the_credential_gets_the_refused_page()
+    {
+        // Arrange
+        var person = await PasswordPeople.AddAsync(Host, issueTemporary: DateTimeOffset.UtcNow);
+        using var browser = new AuthBrowser(Host);
+        var choosePage = await browser.SignInAsync(person.LoginName, person.Password, NewAddress());
+        using var stranger = new AuthBrowser(Host);
+        (await stranger.SignInAsync(person.LoginName, "a wrong try of a stranger", NewAddress())).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
+        // Act
+        var choice = await browser.PostAsync("/auth/password/choose", [("state", PasswordPeople.StateIn(await TextOf(choosePage))), ("password", "a password picked after the change")]);
+
+        // Assert
+        choice.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await PasswordPeople.CredentialOfAsync(Host, person.UserId)).State.ShouldBe(PasswordState.Temporary);
     }
 
     private static async Task<AuthBrowser> SignedInAsync(PasswordPerson person)
