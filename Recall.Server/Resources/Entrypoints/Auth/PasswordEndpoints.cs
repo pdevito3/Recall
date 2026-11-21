@@ -19,7 +19,7 @@ public static class PasswordEndpoints
         endpoints.MapPost(AuthRoutes.PasswordLogin, LoginAsync)
             .RequireRateLimiting(AuthRegistration.StartLimiter).AllowAnonymous().ExcludeFromDescription();
         endpoints.MapGet(AuthRoutes.PasswordSetup, SetupPageAsync)
-            .RequireRateLimiting(AuthRegistration.StartLimiter).AllowAnonymous().ExcludeFromDescription();
+            .RequireRateLimiting(AuthRegistration.PageLimiter).AllowAnonymous().ExcludeFromDescription();
         endpoints.MapPost(AuthRoutes.PasswordSetup, SetupAsync)
             .RequireRateLimiting(AuthRegistration.StartLimiter).AllowAnonymous().ExcludeFromDescription();
         endpoints.MapPost(AuthRoutes.PasswordChoose, ChooseAsync)

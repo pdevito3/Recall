@@ -47,8 +47,9 @@ public static class AuthEndpoints
     public static void MapAuthEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapGet(AuthRoutes.Status, StatusAsync).AllowAnonymous().ExcludeFromDescription();
-        // The page of a password writes a login attempt, so it has the limit of a start.
-        endpoints.MapGet(AuthRoutes.Login, LoginAsync).RequireRateLimiting(AuthRegistration.StartLimiter).AllowAnonymous().ExcludeFromDescription();
+        // The page of a password writes a login attempt, so it has a limit. It has its own, so a shared address that opens
+        // the page does not halve the logins that the start limit admits.
+        endpoints.MapGet(AuthRoutes.Login, LoginAsync).RequireRateLimiting(AuthRegistration.PageLimiter).AllowAnonymous().ExcludeFromDescription();
         endpoints.MapPost(AuthRoutes.Token, TokenAsync).AllowAnonymous().ExcludeFromDescription();
         endpoints.MapPost(AuthRoutes.Logout, LogoutAsync).AllowAnonymous().ExcludeFromDescription();
         endpoints.MapGet(AuthRoutes.SignedOut, SignedOutReturn).AllowAnonymous().ExcludeFromDescription();

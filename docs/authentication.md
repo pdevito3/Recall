@@ -389,7 +389,7 @@ Other settings:
 
 ### Limit on login starts
 
-`/auth/oidc/{id}/start`, the login page, and each `/auth/password/*` route keep one bucket for each connection address, and one for each IPv6 `/64`. So a stranger who floods the route blocks only that stranger. Another start gets 429 with a `Retry-After` header and the page `Too many sign-in attempts`.
+`/auth/oidc/{id}/start` and each `/auth/password/*` post keep one bucket for each connection address, and one for each IPv6 `/64`. The login page and the setup page keep buckets of their own with the same limit, so opening a page takes no start from the address. So a stranger who floods the route blocks only that stranger. Another start gets 429 with a `Retry-After` header and the page `Too many sign-in attempts`.
 
 The Server reads only the address of the connection, and never `X-Forwarded-For`, because a client can write any value in that header. Behind a proxy, each connection comes from the proxy, so all clients share one bucket and one flood blocks each new login. Some Docker networks do the same to a published port. To limit each client behind a proxy, set the limit at the proxy. A session that exists keeps working in each case.
 
@@ -409,7 +409,7 @@ The rules are in [the spec](specs/password-login.md), and [ADR 0024](adr/0024-re
 2. Open `/auth/password/setup`, and give the code, your name, a login name, and a password of at least 15 characters. The setup makes the tenant `Recall` and you its Owner, signs you in, and voids the code.
 3. Each later sign-in is at `/auth/login`. A native app opens `/auth/login?client=app` with the values of [Sign in](#sign-in), and the page redirects to the app with a code after a right password, with no confirm page. `/auth/token` has no `password` grant.
 
-Each form post needs the login attempt that its page wrote, and the binding cookie of that attempt. A post uses its attempt, so a page that shows the form again writes a new one. The form body has a limit of 8 KiB. The limit of login starts covers the login page and each form post. After 5 wrong passwords in a row for one typed login name from one address, that pair waits 30 seconds, doubling to 15 minutes. The 100th wrong password in a row stops password sign-in for the account. A logout of a password session goes to the signed-out page with no step at a provider.
+Each form post needs the login attempt that its page wrote, and the binding cookie of that attempt. A post uses its attempt, so a page that shows the form again writes a new one. The form body has a limit of 8 KiB. The limit of login starts covers each form post. The login page and the setup page have a limit of their own, with the same buckets and permits, so a page draws nothing from the starts. After 5 wrong passwords in a row for one typed login name from one address, that pair waits 30 seconds, doubling to 15 minutes. The 100th wrong password in a row stops password sign-in for the account. A logout of a password session goes to the signed-out page with no step at a provider.
 
 ### A provider that is down
 

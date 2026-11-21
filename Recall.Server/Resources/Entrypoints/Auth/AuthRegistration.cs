@@ -12,6 +12,9 @@ public static class AuthRegistration
     public const string PolicyScheme = "Recall";
     public const string StartLimiter = "auth-start";
 
+    /// <summary>The limit of a page that writes a login attempt. It has the buckets of the start limit, and its own permits, so a page draws none from a start.</summary>
+    public const string PageLimiter = "auth-page";
+
     private static readonly TimeSpan StartWindow = TimeSpan.FromSeconds(10);
 
     public static bool JwtIsOn(IConfiguration configuration) => !string.IsNullOrWhiteSpace(configuration["Auth:Authority"]);
@@ -31,12 +34,8 @@ public static class AuthRegistration
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             options.OnRejected = (context, _) => LoginStartLimit.RefuseAsync(context, StartWindow);
-            options.AddPolicy(StartLimiter, http => RateLimitPartition.GetFixedWindowLimiter(ConnectionAddress.BucketOf(http.Connection.RemoteIpAddress), _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = http.RequestServices.GetRequiredService<IOptions<AuthOptions>>().Value.StartPermitsPerWindow,
-                Window = StartWindow,
-                QueueLimit = 0,
-            }));
+            options.AddPolicy(StartLimiter, PerAddress);
+            options.AddPolicy(PageLimiter, PerAddress);
         });
 
         services.AddScoped<LoginCompletion>();
@@ -44,6 +43,14 @@ public static class AuthRegistration
         services.AddSingleton<ILogEventFilter, AuthQueryLogFilter>();
         return services;
     }
+
+    private static RateLimitPartition<string> PerAddress(HttpContext http)
+        => RateLimitPartition.GetFixedWindowLimiter(ConnectionAddress.BucketOf(http.Connection.RemoteIpAddress), _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = http.RequestServices.GetRequiredService<IOptions<AuthOptions>>().Value.StartPermitsPerWindow,
+            Window = StartWindow,
+            QueueLimit = 0,
+        });
 
     public static string SelectScheme(HttpRequest request, bool jwtOn)
     {
