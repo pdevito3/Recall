@@ -10,6 +10,8 @@ public sealed record UserDto
     public string Identifier { get; init; } = default!;
     public string? Email { get; init; }
     public string Username { get; init; } = default!;
+    /// <summary>The name that the user types to sign in with a password. Null until a first temporary password sets it.</summary>
+    public string? LoginName { get; init; }
     [NamesOf<UserRole>]
     public string Role { get; init; } = default!;
     [NamesOf<Permission>]

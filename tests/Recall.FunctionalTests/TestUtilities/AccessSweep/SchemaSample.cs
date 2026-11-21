@@ -11,6 +11,9 @@ public static class SchemaSample
     // A rule needs one of two optional values, so the sample sends this one. The dates of the sample are in the past.
     private static readonly Dictionary<string, bool> OptionalFlagsThatARuleNeeds = new() { ["neverExpires"] = true };
 
+    // The first temporary password of a user needs a login name, and a later one ignores it.
+    private static readonly Dictionary<string, string> OptionalStringsThatARuleNeeds = new() { ["loginName"] = "sweep" };
+
     public static JsonNode? Of(JsonNode schema, JsonNode root)
     {
         if (schema["$ref"]?.GetValue<string>() is { } reference)
@@ -55,6 +58,11 @@ public static class SchemaSample
         {
             if (properties?[name] is not null && !sample.ContainsKey(name))
                 sample[name] = JsonValue.Create(flag);
+        }
+        foreach (var (name, text) in OptionalStringsThatARuleNeeds)
+        {
+            if (properties?[name] is not null && !sample.ContainsKey(name))
+                sample[name] = JsonValue.Create(text);
         }
         return sample;
     }

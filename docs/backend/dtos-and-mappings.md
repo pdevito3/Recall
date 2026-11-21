@@ -113,11 +113,16 @@ Mapperly makes the map at build time. Do not write a reflection mapper. See [sou
 [Mapper]
 public static partial class UserMapper
 {
-    /// <summary>The DTO with the actions that <paramref name="caller"/> can send for the user.</summary>
-    public static UserDto ToUserDto(this User user, Caller caller)
+    /// <summary>The DTO with the actions that <paramref name="caller"/> can send for the user, and the login name of its password credential.</summary>
+    public static UserDto ToUserDto(this User user, Caller caller, LoginName? loginName)
     {
         var dto = user.ToUserDtoWithoutActions();
-        return dto with { Permissions = InOneOrder(dto.Permissions), AllowedActions = NamesOf(user.AllowedActions(caller)) };
+        return dto with
+        {
+            Permissions = InOneOrder(dto.Permissions),
+            AllowedActions = NamesOf(user.AllowedActions(caller)),
+            LoginName = loginName?.Value,
+        };
     }
 
     // ...
@@ -133,6 +138,7 @@ public static partial class UserMapper
     [MapperIgnoreSource(nameof(User.IsDeleted))]
     [MapperIgnoreSource(nameof(User.DomainEvents))]
     [MapperIgnoreTarget(nameof(UserDto.AllowedActions))]
+    [MapperIgnoreTarget(nameof(UserDto.LoginName))]
     [MapProperty(nameof(User.UserPermissions), nameof(UserDto.Permissions))]
     [MapPropertyFromSource(nameof(UserDto.FullName), Use = nameof(MapFullName))]
     private static partial UserDto ToUserDtoWithoutActions(this User user);

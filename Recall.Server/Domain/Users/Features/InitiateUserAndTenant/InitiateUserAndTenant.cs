@@ -96,7 +96,7 @@ public static class InitiateUserAndTenant
             return new InitiateUserAndTenantResponseDto
             {
                 Tenant = tenant.ToTenantDto(),
-                User = user.ToUserDto(Caller.AllTenantsManager.Instance)
+                User = user.ToUserDto(Caller.AllTenantsManager.Instance, null)
             };
         }
 

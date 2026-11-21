@@ -57,7 +57,7 @@ public static class RemoveUserPermission
             if (removed)
                 _logger.Here().Information("Removed permission {Permission} from user {UserId}", permission.Value, user.Id);
 
-            return user.ToUserDto(caller);
+            return user.ToUserDto(caller, await UserLoginNames.OfAsync(dbContext, user.Id, cancellationToken));
         }
     }
 }

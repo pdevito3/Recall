@@ -33,6 +33,8 @@ public static class QueryKitInputExtensions
         "A field that holds a list cannot compare with null. To find an empty list, use #== 0, then try again.";
     // The convention name of the allowed actions on the read DTO of each entity, so this check covers each list.
     private const string AllowedActionsMember = "AllowedActions";
+    // The user list adds the login name of each row after the page loads, as it adds the allowed actions.
+    private const string LoginNameMember = "LoginName";
 
     public static IQueryable<T> ApplyFilters<T>(this IQueryable<T> query, string filters, IQueryKitConfiguration config)
         where T : class
@@ -61,7 +63,7 @@ public static class QueryKitInputExtensions
             return query.ApplyQueryKitSort(sortOrder, config);
         });
 
-    // The handler adds AllowedActions after the page loads, so EF cannot translate a clause on it, and the query gives 500.
+    // The handler adds AllowedActions and LoginName after the page loads, so EF cannot translate a clause on them, and the query gives 500.
     // PreventFilter and PreventSort of QueryKit drop the clause and give 200 with the wrong rows, so this check gives 400.
     private static void RefuseFieldsOutsideTheQuery(string parameter, Expression? expression)
     {
@@ -72,6 +74,8 @@ public static class QueryKitInputExtensions
         if (MemberReader.Reads(expression, AllowedActionsMember))
             throw new QueryInputException(parameter,
                 $"The {Words(parameter)} cannot use the allowed actions, because they depend on the user. Choose another field.");
+        if (MemberReader.Reads(expression, LoginNameMember))
+            throw new QueryInputException(parameter, $"The {Words(parameter)} cannot use the login name. Choose another field.");
     }
 
     // QueryKit reads a member of a field, such as startsAt.ticks, also a private one. EF cannot translate most of them, and
@@ -167,7 +171,7 @@ public static class QueryKitInputExtensions
 
     private static string FieldsOf<T>() => string.Join(", ", RequestRules.For(typeof(T))
         .Where(rule => rule.Holds == PropertyHolds.Value
-            && rule.Property.Name is not (nameof(BaseEntity.Version) or AllowedActionsMember))
+            && rule.Property.Name is not (nameof(BaseEntity.Version) or AllowedActionsMember or LoginNameMember))
         .Select(rule => rule.JsonName));
 
     private static string NotReadMessage(string parameter) =>

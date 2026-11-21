@@ -29,17 +29,20 @@ public static class RevokeReasonText
     public const string RefreshReplay = "refresh_replay";
     public const string RevokeOthers = "revoke_others";
     public const string TokenRevoked = "token_revoked";
+    public const string TemporaryPassword = "temporary_password";
     public const int MaxLength = 20;
 
-    public static IReadOnlyList<string> All { get; } = [Logout, RefreshReplay, RevokeOthers, TokenRevoked];
+    public static IReadOnlyList<string> All { get; } = [Logout, RefreshReplay, RevokeOthers, TokenRevoked, TemporaryPassword];
 
     public static ValueConverter<RevokeReason, string> Converter { get; } = new(
         reason => reason == RevokeReason.Logout ? Logout
             : reason == RevokeReason.RefreshReplay ? RefreshReplay
             : reason == RevokeReason.TokenRevoked ? TokenRevoked
+            : reason == RevokeReason.TemporaryPassword ? TemporaryPassword
             : RevokeOthers,
         text => text == Logout ? RevokeReason.Logout
             : text == RefreshReplay ? RevokeReason.RefreshReplay
             : text == TokenRevoked ? RevokeReason.TokenRevoked
+            : text == TemporaryPassword ? RevokeReason.TemporaryPassword
             : RevokeReason.RevokeOthers);
 }
