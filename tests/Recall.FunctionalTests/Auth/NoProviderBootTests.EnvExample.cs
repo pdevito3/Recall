@@ -16,7 +16,7 @@ public partial class NoProviderBootTests
         File.ReadAllLines(Path.Combine(TestBuild.RepositoryRoot(), ".env.example"));
 
     [Test]
-    public async Task the_example_settings_with_no_edit_give_the_page_that_says_what_to_set()
+    public async Task the_example_settings_with_no_edit_give_the_password_login()
     {
         // Arrange
         var settings = Settings(ExampleLines().Where(line => line.Length > 0 && !line.StartsWith('#')));
@@ -27,7 +27,8 @@ public partial class NoProviderBootTests
         var status = await server.Client.GetFromJsonAsync<JsonElement>(AuthRoutes.Status);
 
         // Assert
-        status.GetProperty("state").GetString().ShouldBe("no_login_method");
+        status.GetProperty("state").GetString().ShouldBe("ready");
+        status.GetProperty("modes").EnumerateArray().ShouldHaveSingleItem().GetProperty("kind").GetString().ShouldBe("password");
     }
 
     [Test]

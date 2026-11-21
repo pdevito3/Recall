@@ -47,7 +47,8 @@ public static class AuthEndpoints
     public static void MapAuthEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapGet(AuthRoutes.Status, StatusAsync).AllowAnonymous().ExcludeFromDescription();
-        endpoints.MapGet(AuthRoutes.Login, LoginAsync).AllowAnonymous().ExcludeFromDescription();
+        // The page of a password writes a login attempt, so it has the limit of a start.
+        endpoints.MapGet(AuthRoutes.Login, LoginAsync).RequireRateLimiting(AuthRegistration.StartLimiter).AllowAnonymous().ExcludeFromDescription();
         endpoints.MapPost(AuthRoutes.Token, TokenAsync).AllowAnonymous().ExcludeFromDescription();
         endpoints.MapPost(AuthRoutes.Logout, LogoutAsync).AllowAnonymous().ExcludeFromDescription();
         endpoints.MapGet(AuthRoutes.SignedOut, SignedOutReturn).AllowAnonymous().ExcludeFromDescription();
@@ -115,59 +116,66 @@ public static class AuthEndpoints
         }
     }
 
-    private static async Task<IResult> StatusAsync(HttpContext http, LoginModes modes, CancellationToken cancellationToken)
+    private static async Task<IResult> StatusAsync(
+        HttpContext http, LoginModes modes, SetupCode setupCode, IServiceScopeFactory scopes, CancellationToken cancellationToken)
     {
         var callbackUrl = AuthRoutes.OriginOf(http.Request) + AuthRoutes.Callback;
-        if (modes.All.Count == 0)
-            return Results.Json(new StatusAnswer("recall", "no_login_method", callbackUrl, AuthPages.NoMethodMessage, true, []));
-
-        var states = await Task.WhenAll(modes.All.Select(mode => mode.ProbeAsync(cancellationToken)));
-        var answers = modes.All.Zip(states, (mode, state) => new StatusMode(
+        var listed = await modes.ListAsync(cancellationToken);
+        var states = await Task.WhenAll(listed.Select(mode => mode.ProbeAsync(cancellationToken)));
+        var answers = listed.Zip(states, (mode, state) => new StatusMode(
             mode.Kind,
             mode.Id,
             mode.DisplayName,
             state == LoginModeState.Ready ? "ready" : "unreachable",
             state == LoginModeState.Ready ? null : NoProviderDetail,
-            $"/auth/oidc/{Uri.EscapeDataString(mode.Id)}/start?client=app")).ToList();
+            mode is PasswordLoginMode ? $"{AuthRoutes.Login}?client=app" : $"/auth/oidc/{Uri.EscapeDataString(mode.Id)}/start?client=app")).ToList();
         var allDown = states.All(state => state == LoginModeState.Unreachable);
         var message = allDown
-            ? (modes.All.Count == 1 ? AuthPages.ProviderDown(modes.All[0].DisplayName) : "Sign-in is not available. Existing sessions keep working.")
+            ? (listed.Count == 1 ? AuthPages.ProviderDown(listed[0].DisplayName) : "Sign-in is not available. Existing sessions keep working.")
             : null;
-        return Results.Json(new StatusAnswer("recall", allDown ? "degraded" : "ready", callbackUrl, message, false, answers));
+        var setupRequired = setupCode.IsLive && !await SetupCodeAtBoot.AnyLiveTenantAsync(scopes, cancellationToken);
+        return Results.Json(new StatusAnswer("recall", allDown ? "degraded" : "ready", callbackUrl, message, setupRequired, answers));
     }
 
-    private static async Task<IResult> LoginAsync(HttpContext http, LoginModes modes, SessionStore store, CancellationToken cancellationToken)
+    private static async Task<IResult> LoginAsync(
+        HttpContext http, LoginModes modes, SessionStore store, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
         var query = http.Request.Query;
-        var returnPath = LocalReturnPath.Of(query["returnUrl"].Count == 1 ? query["returnUrl"][0] : null);
+        LoginClient? client = new LoginClient.Web(LocalReturnPath.Of(query["returnUrl"].Count == 1 ? query["returnUrl"][0] : null));
+        // An app opens this page in the system browser with the values of its start (PWD-7).
+        if (query.ContainsKey("client") && !LoginClient.TryParseStart(query, out client))
+            return AuthPages.BadRequest();
+
         var signedOut = query.ContainsKey("signedOut");
         var hasError = query.ContainsKey("error");
         var isForPageOfAnotherPerson = query.ContainsKey("anotherPerson");
 
-        if (!isForPageOfAnotherPerson
+        if (client is LoginClient.Web web
+            && !isForPageOfAnotherPerson
             && SessionCookie.Read(http.Request) is { } cookie
             && await store.FindByAccessAsync(TokenHash.Of(cookie), SessionKind.Web, cancellationToken) is not null)
-            return new AuthRedirect(returnPath);
+            return new AuthRedirect(web.ReturnPath);
 
-        if (modes.All.Count == 0)
-            return AuthPages.NoMethod(AuthRoutes.OriginOf(http.Request) + AuthRoutes.Callback, returnPath);
-
-        var states = await Task.WhenAll(modes.All.Select(mode => mode.ProbeAsync(cancellationToken)));
+        var listed = await modes.ListAsync(cancellationToken);
+        var states = await Task.WhenAll(listed.Select(mode => mode.ProbeAsync(cancellationToken)));
         var pending = SessionCookie.PendingProviderLogoutOf(http.Request);
         var openSession = pending is null ? null : modes.FindOidc(pending.ModeId);
         var openSessionLogoutUrl = pending is null || openSession is null ? null : await openSession.ProviderLogoutUrlAsync(SignedOutUrlOf(http.Request), pending.State, cancellationToken);
 
-        var mayStartWithNoClick = modes.All.Count == 1 && states[0] == LoginModeState.Ready && !signedOut && !hasError && !isForPageOfAnotherPerson && openSessionLogoutUrl is null;
+        var mayStartWithNoClick = listed is [OidcLoginMode] && states[0] == LoginModeState.Ready && !signedOut && !hasError && !isForPageOfAnotherPerson && openSessionLogoutUrl is null;
         if (mayStartWithNoClick)
-            return new AuthRedirect($"/auth/oidc/{Uri.EscapeDataString(modes.All[0].Id)}/start?client=web&returnUrl={Uri.EscapeDataString(returnPath)}");
+            return new AuthRedirect(AuthPages.StartUrl(listed[0].Id, client));
 
         var isSignedOut = (signedOut || openSession is not null) && SessionCookie.IsMarkedSignedOut(http.Request);
         var providerSession = isSignedOut && openSession is not null
             ? new AuthPages.OpenProviderSession(openSession.DisplayName, await openSession.ProbeAsync(cancellationToken), openSessionLogoutUrl)
             : null;
-        var chooser = modes.All.Zip(states, (mode, state) => new AuthPages.ChooserMode(mode.Id, mode.DisplayName, state)).ToList();
+        var chooser = listed.Zip(states, (mode, state) => new AuthPages.ChooserMode(mode.Id, mode.DisplayName, state)).ToList();
+        var passwordForm = listed.Contains(PasswordLoginMode.Instance)
+            ? new AuthPages.PasswordForm(await PasswordEndpoints.StartFormAsync(http, store, timeProvider, client, null, cancellationToken), null, null)
+            : null;
         var message = isForPageOfAnotherPerson ? (query.ContainsKey("wordsLost") ? AuthPages.AnotherPersonLostWordsMessage : AuthPages.AnotherPersonMessage) : hasError ? "The last sign-in did not finish." : null;
-        return AuthPages.Chooser(chooser, returnPath, isSignedOut, message, providerSession, asksTheProviderAgain: isForPageOfAnotherPerson);
+        return AuthPages.Chooser(chooser, client, isSignedOut, message, providerSession, asksTheProviderAgain: isForPageOfAnotherPerson, passwordForm);
     }
 
     private static AuthRedirect SignedOutReturn(HttpContext http, string? state)

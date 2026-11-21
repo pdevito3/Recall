@@ -38,6 +38,15 @@ public abstract record LoginClient
         }
     }
 
+    /// <summary>The query that names this client at a start, so a link from the login page keeps a native flow.</summary>
+    public static string QueryOf(LoginClient client) => client switch
+    {
+        Native native => $"client=app&redirect_uri={Uri.EscapeDataString(native.Redirect.Value)}&code_challenge={Uri.EscapeDataString(native.Challenge)}"
+            + $"&code_challenge_method=S256&state={Uri.EscapeDataString(native.ClientState)}",
+        Web web => $"client=web&returnUrl={Uri.EscapeDataString(web.ReturnPath)}",
+        _ => throw new InvalidOperationException("A login client has no query."),
+    };
+
     public static LoginClient FromAttempt(LoginAttempt attempt)
     {
         if (attempt.ClientKind == SessionKind.Web)

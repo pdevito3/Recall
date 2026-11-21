@@ -18,6 +18,17 @@ public static class AuthHosts
 
     public static AuthFlowFactory Sweep { get; private set; } = null!;
 
+    /// <summary>A host with no OIDC provider, so it has only the password login. Its <see cref="AuthFlowFactory.Logs"/> hold the lines of its requests.</summary>
+    public static AuthFlowFactory Password { get; private set; } = null!;
+
+    /// <summary>A fresh host with no provider, which only the setup test uses.</summary>
+    public static AuthFlowFactory Setup { get; private set; } = null!;
+
+    /// <summary>A host with a provider and a person with a password, <see cref="MixedPerson"/>, so its login page offers both.</summary>
+    public static AuthFlowFactory Mixed { get; private set; } = null!;
+
+    public static PasswordPerson MixedPerson { get; private set; } = null!;
+
     public static AuthFlowFactory SecretInFormProvider { get; private set; } = null!;
 
     public static AuthFlowFactory RollingKeyProvider { get; private set; } = null!;
@@ -79,6 +90,9 @@ public static class AuthHosts
         TwoTenants = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
         FirstPartyClient = Start(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts, ["Auth:ClientId"] = FirstPartyClientId });
         BundleExport = OtlpCollector.Start();
+        Setup = Start(new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts }) { NoProvider = true });
+        Mixed = Start(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts });
+        MixedPerson = PasswordPeople.AddAsync(Mixed).GetAwaiter().GetResult();
         Bundle = new AuthFlowFactory(new Dictionary<string, string?>
         {
             ["Auth:OpenSignup"] = "true",
@@ -152,6 +166,15 @@ public static class AuthHosts
             ClaimFilePath = Path.Combine(Directory.CreateTempSubdirectory("recall-claim-").FullName, OwnerClaim.FileName),
         };
         _ = Sweep.Services;
+        var sweepLogger = Log.Logger;
+        Password = new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts }) { NoProvider = true };
+        _ = Password.Services;
+        var passwordLogger = Log.Logger;
+        var passwordRequests = new LoggerConfiguration()
+            .MinimumLevel.Verbose()
+            .Filter.ByIncludingOnly(_ => Password.IsInRequest)
+            .WriteTo.Logger(passwordLogger)
+            .CreateLogger();
         // A handler and a framework category write through the static logger, and one process has one. Without this, the files and
         // the OTLP export of the Bundle host hold only the lines of its start. The filter keeps out the lines of the other hosts.
         var bundleRequests = new LoggerConfiguration()
@@ -159,12 +182,12 @@ public static class AuthHosts
             .Filter.ByIncludingOnly(_ => Bundle.IsInRequest)
             .WriteTo.Logger(bundleLogger)
             .CreateLogger();
-        Log.Logger = new TeeLogger(new TeeLogger(main, bundleRequests), Log.Logger);
+        Log.Logger = new TeeLogger(new TeeLogger(new TeeLogger(main, bundleRequests), passwordRequests), sweepLogger);
     }
 
     public static async Task StopAsync()
     {
-        foreach (var host in new[] { LostJobTable, FrozenClock, WriterLine, KeepAlive, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, FirstPartyClient, Bundle, OwnerDemotion, Sweep, Jobs, Cleanups, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
+        foreach (var host in new[] { Password, Setup, Mixed, LostJobTable, FrozenClock, WriterLine, KeepAlive, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, FirstPartyClient, Bundle, OwnerDemotion, Sweep, Jobs, Cleanups, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
         {
             if (host is not null)
                 await host.DisposeAsync();

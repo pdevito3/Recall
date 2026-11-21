@@ -31,7 +31,7 @@ public static class AuthRegistration
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             options.OnRejected = (context, _) => LoginStartLimit.RefuseAsync(context, StartWindow);
-            options.AddPolicy(StartLimiter, http => RateLimitPartition.GetFixedWindowLimiter(LoginStartLimit.BucketOf(http.Connection.RemoteIpAddress), _ => new FixedWindowRateLimiterOptions
+            options.AddPolicy(StartLimiter, http => RateLimitPartition.GetFixedWindowLimiter(ConnectionAddress.BucketOf(http.Connection.RemoteIpAddress), _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = http.RequestServices.GetRequiredService<IOptions<AuthOptions>>().Value.StartPermitsPerWindow,
                 Window = StartWindow,
@@ -40,6 +40,7 @@ public static class AuthRegistration
         });
 
         services.AddScoped<LoginCompletion>();
+        services.AddSingleton<PasswordLogin>();
         services.AddSingleton<ILogEventFilter, AuthQueryLogFilter>();
         return services;
     }
@@ -58,5 +59,6 @@ public static class AuthRegistration
     {
         endpoints.MapAuthEndpoints();
         endpoints.MapOidcEndpoints();
+        endpoints.MapPasswordEndpoints();
     }
 }

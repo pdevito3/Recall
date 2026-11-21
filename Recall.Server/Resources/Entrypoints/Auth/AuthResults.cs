@@ -21,16 +21,16 @@ public static class AuthForm
 {
     private const long MaxBytes = 16 * 1024;
 
-    public static async Task<IFormCollection?> ReadAsync(HttpRequest request, CancellationToken cancellationToken)
+    public static async Task<IFormCollection?> ReadAsync(HttpRequest request, CancellationToken cancellationToken, long maxBytes = MaxBytes)
     {
         if (!MediaTypeHeaderValue.TryParse(request.ContentType, out var contentType)
             || !contentType.MediaType.Equals("application/x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase)
-            || request.ContentLength > MaxBytes)
+            || request.ContentLength > maxBytes)
             return null;
 
         var limit = request.HttpContext.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
         if (limit is { IsReadOnly: false })
-            limit.MaxRequestBodySize = MaxBytes;
+            limit.MaxRequestBodySize = maxBytes;
 
         try
         {

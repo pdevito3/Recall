@@ -12,6 +12,9 @@ public static class AuthRoutes
     public const string SignedOut = "/auth/signed-out";
     public const string RevokeOthers = "/auth/sessions/revoke-others";
     public const string Me = "/auth/me";
+    public const string PasswordLogin = "/auth/password/login";
+    public const string PasswordSetup = "/auth/password/setup";
+    public const string PasswordChoose = "/auth/password/choose";
 
     public static string OriginOf(HttpRequest request) => $"{request.Scheme}://{request.Host}";
 }

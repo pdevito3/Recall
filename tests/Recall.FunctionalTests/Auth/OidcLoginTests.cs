@@ -30,7 +30,7 @@ public class OidcLoginTests
 
         // Assert
         var binding = browser.SetCookieLines.First(line => line.StartsWith("recall_login_", StringComparison.Ordinal)).ToLowerInvariant();
-        binding.ShouldContain("path=/auth/oidc");
+        binding.ShouldContain("path=/auth;");
         binding.ShouldContain("samesite=lax");
         binding.ShouldContain("httponly");
         binding.ShouldNotContain("secure");
@@ -361,8 +361,9 @@ public class OidcLoginTests
     [Test]
     public async Task the_status_says_how_to_sign_in_with_no_session()
     {
-        // Arrange
+        // Arrange - a tenant exists, so the install needs no setup
         using var browser = NewBrowser();
+        await browser.LoginWebAsync(NewSubject());
 
         // Act
         var response = await browser.GetAsync("/auth/status");

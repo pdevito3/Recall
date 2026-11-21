@@ -11,7 +11,7 @@ public sealed class LoginCompletion(SessionStore store, LoginModes modes)
             (LoginClient.Native native, ProvisionOutcome.Provisioned user) => OfferNativeAsync(native, user, modeId, cancellationToken),
             (LoginClient.Native native, ProvisionOutcome.SignupClosed) => Task.FromResult<IResult>(NativeError(native, "signup_closed")),
             (LoginClient.Native native, ProvisionOutcome.Failed failed) => Task.FromResult<IResult>(NativeError(native, ErrorCodeOf(failed.Failure))),
-            (LoginClient.Web web, ProvisionOutcome.SignupClosed) => Task.FromResult(AuthPages.SignupClosed(modes.All, web.ReturnPath)),
+            (LoginClient.Web web, ProvisionOutcome.SignupClosed) => Task.FromResult(AuthPages.SignupClosed(modes.Oidc, web.ReturnPath)),
             (_, ProvisionOutcome.Failed failed) => Task.FromResult(WebFailure(failed.Failure, modeId)),
             _ => throw new InvalidOperationException("A login outcome has no answer."),
         };
@@ -27,7 +27,10 @@ public sealed class LoginCompletion(SessionStore store, LoginModes modes)
     private async Task<IResult> OfferNativeAsync(LoginClient.Native native, ProvisionOutcome.Provisioned user, string modeId, CancellationToken cancellationToken)
     {
         var code = await store.AddAppCodeAsync(user.UserId, modeId, native.Redirect.Value, native.Challenge, native.ClientState, cancellationToken);
-        return AuthPages.ConfirmNative(user.DisplayName, code);
+        // A typed password is the click that RFC 8252 section 8.6 asks for, so it needs no confirm page (PWD-7).
+        return modeId == PasswordLoginMode.ModeId
+            ? new AuthRedirect(native.Redirect.WithQuery(("code", code), ("state", native.ClientState)))
+            : AuthPages.ConfirmNative(user.DisplayName, code);
     }
 
     private static AuthRedirect NativeError(LoginClient.Native native, string error)

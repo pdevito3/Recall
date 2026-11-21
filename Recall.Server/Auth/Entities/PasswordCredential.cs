@@ -13,6 +13,16 @@ public enum PasswordState
     Stopped,
 }
 
+/// <summary>What one typed password does to a credential.</summary>
+public enum PasswordVerdict
+{
+    Wrong,
+    Stopped,
+    Expired,
+    MustChoose,
+    SignedIn,
+}
+
 /// <summary>
 /// The password of one user (spec <c>password-login.md</c>, section 2). The state comes from the columns: Stopped at
 /// <see cref="StopAt"/> wrong passwords in a row, else Temporary while <see cref="TemporaryUntil"/> is set, else Chosen.
@@ -92,6 +102,27 @@ public sealed class PasswordCredential
             throw new InvalidOperationException("A Stopped credential takes no password.");
 
         FailedCount = 0;
+    }
+
+    /// <summary>
+    /// Takes the check of one typed password and notes it. A Stopped credential refuses each password, also the right one
+    /// (PWD-13). A right temporary password signs in to nothing but the choice of a password, and only for 7 days (PWD-15).
+    /// </summary>
+    public PasswordVerdict Answer(PasswordCheck check, DateTimeOffset now)
+    {
+        if (State == PasswordState.Stopped)
+            return PasswordVerdict.Stopped;
+
+        if (check == PasswordCheck.Wrong)
+        {
+            NoteFailure();
+            return State == PasswordState.Stopped ? PasswordVerdict.Stopped : PasswordVerdict.Wrong;
+        }
+
+        NoteSuccess();
+        return State == PasswordState.Chosen ? PasswordVerdict.SignedIn
+            : IsExpired(now) ? PasswordVerdict.Expired
+            : PasswordVerdict.MustChoose;
     }
 
     /// <summary>The same password at the current cost of the hash (PWD-10). The time of the change stays.</summary>
