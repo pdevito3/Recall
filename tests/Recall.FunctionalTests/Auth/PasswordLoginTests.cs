@@ -536,6 +536,8 @@ public class PasswordLoginTests
         host.Logs.Holding(hash).ShouldBeEmpty();
     }
 
+    // A held check keeps one of the two hash slots, so only one such test runs at a time and the issue gets the other.
+    [NotInParallel(HeldHashSlot)]
     [Test]
     [Property("Rule", "PWD-14")]
     public async Task a_login_that_loaded_the_credential_before_an_issue_mints_no_session_after_it()
