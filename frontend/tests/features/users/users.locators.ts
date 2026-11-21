@@ -5,6 +5,8 @@ export const users = (page: Page) => {
   const roleDialog = page.getByRole('dialog', { name: /^Change the role of / })
   const deleteDialog = page.getByRole('dialog', { name: /^Delete .+\?$/ })
   const details = page.getByRole('region', { name: 'Details' })
+  const temporaryPasswordAsk = page.getByRole('dialog', { name: /^Set a temporary password for .+\?$/ })
+  const temporaryPasswordResult = page.getByRole('dialog', { name: /^Give .+ this password$/ })
 
   return {
     listHeading: page.getByRole('heading', { name: 'Users', exact: true }),
@@ -36,6 +38,13 @@ export const users = (page: Page) => {
     deleteDialog,
     keepUser: deleteDialog.getByRole('button', { name: 'Keep user', exact: true }),
     confirmDelete: deleteDialog.getByRole('button', { name: 'Delete user', exact: true }),
+    temporaryPasswordAsk,
+    loginNameField: temporaryPasswordAsk.getByRole('textbox', { name: 'Login name' }),
+    temporaryPasswordRefusal: temporaryPasswordAsk.getByRole('alert'),
+    confirmTemporaryPassword: temporaryPasswordAsk.getByRole('button', { name: 'Set temporary password', exact: true }),
+    temporaryPasswordResult,
+    copyPassword: temporaryPasswordResult.getByRole('button', { name: 'Copy password', exact: true }),
+    donePassword: temporaryPasswordResult.getByRole('button', { name: 'Done', exact: true }),
     toast: (text: string) => page.getByRole('alertdialog').filter({ hasText: text }),
     toasts: page.getByRole('alertdialog'),
   }

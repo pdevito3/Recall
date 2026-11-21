@@ -40,7 +40,7 @@ public static class GetUserList
                 request.Parameters.PageNumber,
                 request.Parameters.PageSize,
                 cancellationToken);
-            users.AddAllowedActions(caller);
+            users.AddAllowedActions(caller, await UserLoginNames.OfAsync(dbContext, users.Select(u => u.Id).ToList(), cancellationToken));
             return users;
         }
     }

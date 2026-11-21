@@ -1,6 +1,7 @@
 namespace Recall.Server.Domain.Users.Mappings;
 
 using System.Diagnostics.CodeAnalysis;
+using Auth;
 using Dtos;
 using EmailAddresses;
 using Models;
@@ -9,18 +10,23 @@ using Riok.Mapperly.Abstractions;
 [Mapper]
 public static partial class UserMapper
 {
-    /// <summary>The DTO with the actions that <paramref name="caller"/> can send for the user.</summary>
-    public static UserDto ToUserDto(this User user, Caller caller)
+    /// <summary>The DTO with the actions that <paramref name="caller"/> can send for the user, and the login name of its password credential.</summary>
+    public static UserDto ToUserDto(this User user, Caller caller, LoginName? loginName)
     {
         var dto = user.ToUserDtoWithoutActions();
-        return dto with { Permissions = InOneOrder(dto.Permissions), AllowedActions = NamesOf(user.AllowedActions(caller)) };
+        return dto with
+        {
+            Permissions = InOneOrder(dto.Permissions),
+            AllowedActions = NamesOf(user.AllowedActions(caller)),
+            LoginName = loginName?.Value,
+        };
     }
 
     /// <summary>
-    /// Gives each row of a list the actions that <paramref name="caller"/> can send for it. The list query projects
-    /// to the DTO, so the rule reads the ID and the permissions of the DTO.
+    /// Gives each row of a list the actions that <paramref name="caller"/> can send for it, and its login name. The list
+    /// query projects to the DTO, so the rule reads the ID and the permissions of the DTO.
     /// </summary>
-    public static void AddAllowedActions(this List<UserDto> users, Caller caller)
+    public static void AddAllowedActions(this List<UserDto> users, Caller caller, IReadOnlyDictionary<string, LoginName> loginNames)
     {
         for (var i = 0; i < users.Count; i++)
         {
@@ -29,6 +35,7 @@ public static partial class UserMapper
             {
                 Permissions = InOneOrder(users[i].Permissions),
                 AllowedActions = NamesOf(UserAction.AllowedFor(caller, users[i].Id, permissions)),
+                LoginName = loginNames.GetValueOrDefault(users[i].Id)?.Value,
             };
         }
     }
@@ -47,6 +54,7 @@ public static partial class UserMapper
     [MapperIgnoreSource(nameof(User.IsDeleted))]
     [MapperIgnoreSource(nameof(User.DomainEvents))]
     [MapperIgnoreTarget(nameof(UserDto.AllowedActions))]
+    [MapperIgnoreTarget(nameof(UserDto.LoginName))]
     [MapProperty(nameof(User.UserPermissions), nameof(UserDto.Permissions))]
     [MapPropertyFromSource(nameof(UserDto.FullName), Use = nameof(MapFullName))]
     private static partial UserDto ToUserDtoWithoutActions(this User user);

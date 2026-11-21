@@ -6090,6 +6090,128 @@
         }
       }
     },
+    "/api/v1/users/{id}/temporary-password": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Issues a temporary password to a user and ends each session and personal access token of that user. The first\nissue also sets the login name. The answer holds the password, and no later read gives it again. The password\nworks for 7 days, and only to pick a new password. Only a person signed in to Recall can issue one.",
+        "operationId": "IssueTemporaryPassword",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemporaryPasswordForIssueDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemporaryPasswordDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/users/{id}/permissions/{permission}": {
       "delete": {
         "tags": [
@@ -8503,6 +8625,41 @@
         },
         "description": "A row that is gone. A device removes its copy, and any local Session with this client session ID."
       },
+      "TemporaryPasswordDto": {
+        "required": [
+          "loginName",
+          "password",
+          "expiresAt"
+        ],
+        "type": "object",
+        "properties": {
+          "loginName": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "description": "The password to give the person. It signs in only to the page where the person picks a password."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "The one answer that holds a temporary password. The Server keeps only its hash, so no later read gives it."
+      },
+      "TemporaryPasswordForIssueDto": {
+        "type": "object",
+        "properties": {
+          "loginName": {
+            "maxLength": 128,
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The name that the person types to sign in. The first issue needs it, and a later issue keeps the name that the first set."
+          }
+        }
+      },
       "TenantDto": {
         "required": [
           "id",
@@ -8719,6 +8876,13 @@
           "username": {
             "type": "string"
           },
+          "loginName": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The name that the user types to sign in with a password. Null until a first temporary password sets it."
+          },
           "role": {
             "enum": [
               "Admin",
@@ -8749,6 +8913,7 @@
               "enum": [
                 "AddPermission",
                 "Delete",
+                "IssueTemporaryPassword",
                 "RemovePermission",
                 "Update",
                 "UpdateRole"

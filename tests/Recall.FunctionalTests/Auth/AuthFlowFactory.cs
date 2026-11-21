@@ -33,6 +33,9 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
 
     public CapturedLogs Logs { get; } = new();
 
+    /// <summary>The hasher of the passwords of this host, which counts each check and can hold one.</summary>
+    public WatchedHasher Hasher { get; } = new();
+
     public ITranscriptionEngine? TranscriptionEngine { get; init; }
 
     /// <summary>A second provider with the mode ID <see cref="OtherModeId"/>, for a test of one provider that fails next to one that works.</summary>
@@ -40,6 +43,9 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
 
     /// <summary>A place for the claim file outside the folder of the database, so a test can refuse a rename there and the database still works.</summary>
     public string? ClaimFilePath { get; init; }
+
+    /// <summary>True for a host with no OIDC provider, as a fresh install with no setting has.</summary>
+    public bool NoProvider { get; init; }
 
     /// <summary>The clock of the server, for a test of a value that the server takes from the clock.</summary>
     public TimeProvider? Clock { get; init; }
@@ -83,11 +89,15 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
     {
         builder.UseEnvironment(TestingConsts.FunctionalTestingEnvName);
         builder.UseSetting($"ConnectionStrings:{DatabaseConsts.DatabaseName}", _database.ConnectionString);
-        builder.UseSetting("Auth:Providers:0:Id", ModeId);
-        builder.UseSetting("Auth:Providers:0:DisplayName", "Stub");
-        builder.UseSetting("Auth:Providers:0:Issuer", StubOidcProvider.Issuer);
-        builder.UseSetting("Auth:Providers:0:ClientId", StubOidcProvider.ClientId);
-        builder.UseSetting("Auth:Providers:0:ClientSecret", Provider.ClientSecret);
+        if (!NoProvider)
+        {
+            builder.UseSetting("Auth:Providers:0:Id", ModeId);
+            builder.UseSetting("Auth:Providers:0:DisplayName", "Stub");
+            builder.UseSetting("Auth:Providers:0:Issuer", StubOidcProvider.Issuer);
+            builder.UseSetting("Auth:Providers:0:ClientId", StubOidcProvider.ClientId);
+            builder.UseSetting("Auth:Providers:0:ClientSecret", Provider.ClientSecret);
+        }
+
         if (OtherProvider is not null)
         {
             builder.UseSetting("Auth:Providers:1:Id", OtherModeId);
@@ -105,6 +115,8 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
         builder.ConfigureServices(services =>
         {
             services.AddSingleton<OidcHandlerFactory>(options => options.Id == OtherModeId ? OtherProvider! : Provider);
+            // The tests of each host share its two hash slots, so a test waits longer for one than a person does.
+            services.AddSingleton(new PasswordHashing(Hasher, TimeSpan.FromMinutes(2)));
             if (ClaimFilePath is { } claimFile)
                 services.AddSingleton(provider => new OwnerClaim(claimFile, provider.GetRequiredService<TimeProvider>()));
             if (Clock is { } clock)

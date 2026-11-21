@@ -255,6 +255,10 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("client_kind");
 
+                    b.Property<string>("CredentialChangedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("credential_changed_at");
+
                     b.Property<string>("ExpiresAt")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -304,6 +308,12 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("return_path");
 
+                    b.Property<string>("UserId")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id")
+                        .UseCollation("BINARY");
+
                     b.HasKey("StateHash")
                         .HasName("pk_auth_login_attempts");
 
@@ -313,6 +323,58 @@ namespace Recall.Server.Databases.Migrations
                     b.ToTable("auth_login_attempts", null, t =>
                         {
                             t.HasCheckConstraint("ck_auth_login_attempts_client_kind", "client_kind IN ('web', 'native')");
+                        });
+                });
+
+            modelBuilder.Entity("Recall.Server.Auth.Entities.PasswordCredential", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id")
+                        .UseCollation("BINARY");
+
+                    b.Property<string>("ChangedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("changed_at");
+
+                    b.Property<int>("FailedCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("failed_count");
+
+                    b.Property<string>("LoginName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("login_name")
+                        .UseCollation("BINARY");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("password_hash");
+
+                    b.Property<string>("TemporaryUntil")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("temporary_until");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("UserId")
+                        .HasName("pk_auth_password_credentials");
+
+                    b.HasIndex("LoginName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_auth_password_credentials_login_name");
+
+                    b.ToTable("auth_password_credentials", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_auth_password_credentials_temporary_until", "temporary_until IS NULL OR temporary_until <= strftime('%Y-%m-%dT%H:%M:%fZ', changed_at, '+7 days')");
                         });
                 });
 
@@ -1665,6 +1727,16 @@ namespace Recall.Server.Databases.Migrations
                         .OnDelete(DeleteBehavior.ClientNoAction)
                         .IsRequired()
                         .HasConstraintName("fk_auth_external_logins_users_user_id");
+                });
+
+            modelBuilder.Entity("Recall.Server.Auth.Entities.PasswordCredential", b =>
+                {
+                    b.HasOne("Recall.Server.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.ClientNoAction)
+                        .IsRequired()
+                        .HasConstraintName("fk_auth_password_credentials_users_user_id");
                 });
 
             modelBuilder.Entity("Recall.Server.Domain.Agents.Agent", b =>

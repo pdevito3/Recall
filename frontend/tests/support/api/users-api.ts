@@ -1,4 +1,5 @@
 import type { CurrentUserDto } from '@/api/generated/models/types/current-user-dto'
+import type { TemporaryPasswordDto } from '@/api/generated/models/types/temporary-password-dto'
 import type { UserDto } from '@/api/generated/models/types/user-dto'
 import type { ProblemDetails } from '@/lib/problem-details'
 import { actorSubject, type Identity } from '../auth/actors'
@@ -14,6 +15,7 @@ export const usersPaths = {
   list: '/api/v1/users',
   one: (id: string) => `/api/v1/users/${id}`,
   role: (id: string) => `/api/v1/users/${id}/role`,
+  temporaryPassword: (id: string) => `/api/v1/users/${id}/temporary-password`,
 }
 
 const problemAt = (method: MockRoute['method'], path: string, problem: Buildable<ProblemDetails>): MockRoute => {
@@ -69,5 +71,13 @@ export const usersApi = {
 
   deleteFails(id: string, problem: Buildable<ProblemDetails>): MockRoute {
     return problemAt('delete', usersPaths.one(id), problem)
+  },
+
+  issuesTemporaryPassword(id: string, issued: TemporaryPasswordDto): MockRoute {
+    return { method: 'post', path: usersPaths.temporaryPassword(id), status: 200, body: issued }
+  },
+
+  temporaryPasswordFails(id: string, problem: Buildable<ProblemDetails>): MockRoute {
+    return problemAt('post', usersPaths.temporaryPassword(id), problem)
   },
 }

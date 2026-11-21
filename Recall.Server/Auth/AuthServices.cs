@@ -21,6 +21,10 @@ public static class AuthServices
         services.AddSingleton<LoginModes>();
         services.AddSingleton(provider => new OwnerClaim(OwnerClaim.PathFor(provider.GetRequiredService<IConfiguration>()), provider.GetRequiredService<TimeProvider>()));
         services.AddSingleton<Provisioner>();
+        services.AddSingleton<PasswordHashing>();
+        services.AddSingleton<PasswordBackoff>();
+        services.AddSingleton<SetupCode>();
+        services.AddHostedService<SetupCodeAtBoot>();
         services.AddScoped<SessionStore>();
         services.AddHostedService<AuthSweepService>();
     }

@@ -55,7 +55,7 @@ public static class UpdateUser
 
             _logger.Here().Information("Updated user {UserId}", user.Id);
 
-            return user.ToUserDto(caller);
+            return user.ToUserDto(caller, await UserLoginNames.OfAsync(dbContext, user.Id, cancellationToken));
         }
     }
 }
@@ -264,7 +264,7 @@ public static class GetUserList
                 request.Parameters.PageNumber,
                 request.Parameters.PageSize,
                 cancellationToken);
-            users.AddAllowedActions(caller);
+            users.AddAllowedActions(caller, await UserLoginNames.OfAsync(dbContext, users.Select(u => u.Id).ToList(), cancellationToken));
             return users;
         }
     }

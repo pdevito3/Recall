@@ -52,6 +52,8 @@ public sealed class AuthOptionsValidator : IValidateOptions<AuthOptions>
             var provider = options.Providers[position];
             var key = $"Auth:Providers:{position}";
             var id = AuthOptions.ModeIdOf(provider, position);
+            if (id == PasswordLoginMode.ModeId)
+                failures.Add($"{key}:Id is '{id}', which names the password login. Give the provider another ID.");
             if (!seen.Add(id))
                 failures.Add($"{key}:Id repeats the ID '{id}'. Give each provider its own ID.");
             if (id.Length > AuthSession.LoginModeMaxLength || !id.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_'))

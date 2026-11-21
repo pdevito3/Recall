@@ -27,7 +27,7 @@ public class UserAllowedActionsTests : TestBase
         var allowedActions = await GetAllowedActionsAsync(other.Id);
 
         // Assert
-        allowedActions.ShouldBe(["Update", "UpdateRole", "AddPermission", "RemovePermission", "Delete"]);
+        allowedActions.ShouldBe(["Update", "UpdateRole", "AddPermission", "RemovePermission", "Delete", "IssueTemporaryPassword"]);
     }
 
     [Test]

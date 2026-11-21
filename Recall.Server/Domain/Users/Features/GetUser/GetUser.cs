@@ -25,7 +25,7 @@ public static class GetUser
                 .TagWithOperationCallSite("users.get_by_id")
                 .Include(u => u.UserPermissions)
                 .GetById(request.Id, cancellationToken);
-            return user.ToUserDto(caller);
+            return user.ToUserDto(caller, await UserLoginNames.OfAsync(dbContext, user.Id, cancellationToken));
         }
     }
 }

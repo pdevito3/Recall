@@ -41,6 +41,29 @@ public class DomainProblemDetailsTests
     }
 
     [Test]
+    [Property("Rule", "PWD-11")]
+    public void a_busy_server_answers_429_with_retry_after()
+    {
+        // Arrange
+        var exception = new ServerBusyException("The Server is busy. Try again in a few seconds.", TimeSpan.FromSeconds(4.2));
+        var context = new ProblemDetailsContext
+        {
+            HttpContext = new DefaultHttpContext(),
+            Exception = exception,
+            ProblemDetails = new() { Status = StatusCodes.Status429TooManyRequests },
+        };
+
+        // Act
+        var status = DomainProblemDetails.StatusCodeFor(exception);
+        DomainProblemDetails.Customize(context);
+
+        // Assert
+        status.ShouldBe(StatusCodes.Status429TooManyRequests);
+        context.HttpContext.Response.Headers.RetryAfter.ToString().ShouldBe("5");
+        context.ProblemDetails.Detail.ShouldBe(exception.Message);
+    }
+
+    [Test]
     public void request_validation_problem_has_the_messages_under_each_field()
     {
         // Arrange

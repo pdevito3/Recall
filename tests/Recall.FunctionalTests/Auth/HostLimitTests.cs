@@ -1,7 +1,7 @@
 namespace Recall.FunctionalTests.Auth;
 
 using System.Net;
-using Recall.Server.Resources.Entrypoints.Auth;
+using Recall.Server.Auth;
 using Shouldly;
 
 public class HostLimitTests
@@ -82,7 +82,7 @@ public class HostLimitTests
     public void a_bucket_is_one_ipv4_address_or_one_ipv6_network(string address, string bucket)
     {
         // Act
-        var actual = LoginStartLimit.BucketOf(IPAddress.Parse(address));
+        var actual = ConnectionAddress.BucketOf(IPAddress.Parse(address));
 
         // Assert
         actual.ShouldBe(bucket);
@@ -106,6 +106,52 @@ public class HostLimitTests
         page.ShouldContain("<h1>Too many sign-in attempts</h1>");
         page.ShouldContain(">Try again</a>");
         page.ShouldContain("/auth/oidc/stub/start?client=web&amp;returnUrl=%2Fentries");
+    }
+
+    [Test]
+    public async Task the_login_page_takes_no_permit_of_a_login_start()
+    {
+        // Arrange
+        using var client = AuthHosts.Limited.NewClient();
+        var pages = await Task.WhenAll(Enumerable.Range(0, 15).Select(_ => client.SendAsync(From(HttpMethod.Get, "/auth/login", "203.0.113.40"))));
+
+        // Act
+        var starts = await Task.WhenAll(Enumerable.Range(0, 20).Select(_ => client.SendAsync(StartFrom("203.0.113.40"))));
+
+        // Assert
+        pages.Select(page => page.StatusCode).ShouldAllBe(code => code != HttpStatusCode.TooManyRequests);
+        starts.Select(start => start.StatusCode).ShouldAllBe(code => code == HttpStatusCode.Redirect);
+    }
+
+    [Test]
+    [Property("Rule", "PWD-12")]
+    public async Task a_flood_of_password_posts_meets_the_limit_and_links_back_to_the_login_page()
+    {
+        // Arrange
+        using var client = AuthHosts.Limited.NewClient();
+
+        // Act
+        var answers = await Task.WhenAll(Enumerable.Range(0, 45).Select(_ =>
+        {
+            var post = From(HttpMethod.Post, "/auth/password/login", "203.0.113.50");
+            post.Content = new FormUrlEncodedContent([KeyValuePair.Create("state", "none"), KeyValuePair.Create("loginName", "ada"), KeyValuePair.Create("password", "a wrong password")]);
+            return client.SendAsync(post);
+        }));
+
+        // Assert
+        var refused = answers.First(answer => answer.StatusCode == HttpStatusCode.TooManyRequests);
+        refused.Headers.RetryAfter!.Delta!.Value.TotalSeconds.ShouldBeInRange(1, 10);
+        var page = await refused.Content.ReadAsStringAsync();
+        page.ShouldContain("<h1>Too many sign-in attempts</h1>");
+        page.ShouldContain("href=\"/auth/login\"");
+        answers.Count(answer => answer.StatusCode != HttpStatusCode.TooManyRequests).ShouldBeLessThanOrEqualTo(MostStartsInTwoWindows);
+    }
+
+    private static HttpRequestMessage From(HttpMethod method, string url, string address)
+    {
+        var request = new HttpRequestMessage(method, url);
+        request.Headers.Add(AuthFlowFactory.ConnectionAddressHeader, address);
+        return request;
     }
 
     private static HttpRequestMessage StartFrom(string address)

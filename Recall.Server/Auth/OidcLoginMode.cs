@@ -7,7 +7,9 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using Databases;
+using Domain.Tenants;
 using Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
@@ -37,18 +39,35 @@ public sealed record RedeemResult(ExternalIdentity? Identity, LoginFailure? Fail
     public static RedeemResult Failed(LoginFailure failure) => new(null, failure);
 }
 
-public sealed class LoginModes(IOptions<AuthOptions> options, OidcHandlerFactory handlers, TimeProvider timeProvider) : IDisposable
+public sealed class LoginModes(IOptions<AuthOptions> options, OidcHandlerFactory handlers, TimeProvider timeProvider, IServiceScopeFactory scopeFactory) : IDisposable
 {
     private readonly List<OidcLoginMode> _modes = options.Value.Providers
         .Select((provider, position) => new OidcLoginMode(
             AuthOptions.ModeIdOf(provider, position), provider, handlers(provider), timeProvider))
         .ToList();
 
-    public IReadOnlyList<ILoginMode> All => _modes;
+    public IReadOnlyList<OidcLoginMode> Oidc => _modes;
+
+    /// <summary>
+    /// Each mode of the login page and of <c>/auth/status</c>. The password mode comes first when the install has no OIDC
+    /// provider, or when a live user holds a password credential (PWD-1). So an install with providers and no password
+    /// keeps the start with no click of a single provider.
+    /// </summary>
+    public async Task<IReadOnlyList<ILoginMode>> ListAsync(CancellationToken cancellationToken)
+        => _modes.Count == 0 || await AnyLivePasswordAsync(cancellationToken) ? [PasswordLoginMode.Instance, .. _modes] : _modes;
 
     public OidcLoginMode? FindOidc(string? id) => _modes.FirstOrDefault(mode => mode.Id == id);
 
     public OidcLoginMode? OnlyOidc => _modes.Count == 1 ? _modes[0] : null;
+
+    private async Task<bool> AnyLivePasswordAsync(CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateSystemScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await dbContext.Set<PasswordCredential>()
+            .TagWithOperationCallSite("auth.modes.any_password")
+            .AnyAsync(p => dbContext.Users.Any(u => u.Id == p.UserId), cancellationToken);
+    }
 
     public void Dispose()
     {

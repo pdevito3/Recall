@@ -271,7 +271,8 @@ public partial class NoProviderBootTests
     }
 
     [Test]
-    public async Task with_no_provider_the_server_stays_up_and_reports_no_login_method()
+    [Property("Rule", "PWD-1")]
+    public async Task with_no_provider_the_server_stays_up_and_offers_the_password_login()
     {
         // Arrange
         await using var server = await ServerProcess.StartAsync();
@@ -287,21 +288,19 @@ public partial class NoProviderBootTests
         using var missingAuth = await server.Client.GetAsync("/auth/nope");
 
         // Assert
-        status.GetProperty("state").GetString().ShouldBe("no_login_method");
+        status.GetProperty("state").GetString().ShouldBe("ready");
         status.GetProperty("setupRequired").GetBoolean().ShouldBeTrue();
-        status.GetProperty("message").GetString().ShouldBe(AuthPages.NoMethodMessage);
-        status.GetProperty("modes").GetArrayLength().ShouldBe(0);
+        status.GetProperty("message").ValueKind.ShouldBe(JsonValueKind.Null);
+        var mode = status.GetProperty("modes").EnumerateArray().ShouldHaveSingleItem();
+        mode.GetProperty("kind").GetString().ShouldBe("password");
+        mode.GetProperty("state").GetString().ShouldBe("ready");
+        mode.GetProperty("startUrl").GetString().ShouldBe("/auth/login?client=app");
         status.GetProperty("callbackUrl").GetString().ShouldEndWith(AuthRoutes.Callback);
 
-        login.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
-        var setupPage = await login.Content.ReadAsStringAsync();
-        Regex.Replace(setupPage, "</?code>", "").ShouldContain(AuthPages.NoMethodMessage);
-        setupPage.ShouldContain("<code>Auth__Providers__0__Issuer</code>");
-        setupPage.ShouldContain("<code>Auth__Providers__0__ClientId</code>");
-        setupPage.ShouldContain("<code>Auth__Providers__0__ClientSecret</code>");
-        setupPage.ShouldContain("<code>docs/authentication.md</code>");
-        setupPage.ShouldContain("<wbr>/auth<wbr>/oidc<wbr>/callback</code>");
-        setupPage.ShouldContain("href=\"/auth/login?returnUrl=%2F\">Try again</a>");
+        login.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var loginPage = await login.Content.ReadAsStringAsync();
+        loginPage.ShouldContain("action=\"/auth/password/login\"");
+        loginPage.ShouldContain("autocomplete=\"current-password\"");
 
         api.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         api.Headers.WwwAuthenticate.Select(challenge => challenge.Scheme).ShouldBe(["Bearer"]);
@@ -314,6 +313,63 @@ public partial class NoProviderBootTests
         missingAsset.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         missingAuth.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
+
+    [Test]
+    [Property("Rule", "PWD-2")]
+    public async Task a_fresh_install_logs_one_setup_code_to_the_console_and_the_file_log_and_a_restart_makes_a_new_one()
+    {
+        // Arrange
+        await using var first = await ServerProcess.StartAsync();
+        var firstCode = SetupCodeIn(first.Output);
+        var logs = Path.Combine(first.DataDirectory, "logs");
+        var fileLine = await FirstLineInAsync(logs, firstCode);
+        await first.StopAsync();
+
+        // Act
+        await using var second = await ServerProcess.StartAsync(first.Root);
+        var secondCode = SetupCodeIn(second.Output);
+
+        // Assert
+        firstCode.Length.ShouldBe(20);
+        firstCode.ShouldMatch("^[A-Z2-7]{20}$");
+        fileLine.ShouldContain(firstCode);
+        first.Output.Split('\n').Count(line => line.Contains(firstCode, StringComparison.Ordinal)).ShouldBe(1);
+        secondCode.ShouldNotBe(firstCode);
+    }
+
+    private static string SetupCodeIn(string output)
+    {
+        var match = SetupCodeLine().Match(output);
+        match.Success.ShouldBeTrue($"The output has no setup code: {output}");
+        return match.Groups["code"].Value;
+    }
+
+    private static async Task<string> FirstLineInAsync(string folder, string text)
+    {
+        for (var attempt = 0; attempt < 150; attempt++)
+        {
+            if (Directory.Exists(folder))
+            {
+                foreach (var file in Directory.GetFiles(folder, "recall-*.jsonl"))
+                {
+                    using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                    using var reader = new StreamReader(stream);
+                    while (await reader.ReadLineAsync() is { } line)
+                    {
+                        if (line.Contains(text, StringComparison.Ordinal))
+                            return line;
+                    }
+                }
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(200));
+        }
+
+        throw new InvalidOperationException($"No line in {folder} holds the text in 30 seconds.");
+    }
+
+    [GeneratedRegex("\"SetupCode\":\"(?<code>[A-Z2-7]{20})\"")]
+    private static partial Regex SetupCodeLine();
 
     [Test]
     public async Task a_person_who_opens_a_path_with_a_dot_gets_the_spa_and_a_missing_file_stays_a_404()

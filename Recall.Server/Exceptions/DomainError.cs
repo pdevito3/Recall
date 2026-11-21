@@ -37,6 +37,9 @@ public enum DomainErrorKind
     /// </summary>
     ConcurrentChange,
 
+    /// <summary>A costly step had no free slot in time. Nothing changed, and the same request works a few seconds later.</summary>
+    ServerBusy,
+
     /// <summary>The disk of the database or of the file store has no room. Nothing changed, and the same request works when the disk has room.</summary>
     DiskFull,
 
@@ -124,6 +127,7 @@ public sealed record DomainError(
             ConflictTitle,
             ex.Message,
             string.IsNullOrEmpty(ex.Property) ? [] : new() { [ex.Property] = [ex.Message] }),
+        ServerBusyException ex => new(DomainErrorKind.ServerBusy, DatabaseBusyTitle, ex.Message, null),
         _ when IsDiskFull(exception) => new(DomainErrorKind.DiskFull, DiskFullTitle, DiskFullDetail, null),
         _ when IsDatabaseBusy(exception) => new(DomainErrorKind.DatabaseBusy, DatabaseBusyTitle, DatabaseBusyException.BusyMessage, null),
         _ => new(DomainErrorKind.Unexpected, "An error occurred while processing your request.", null, null),

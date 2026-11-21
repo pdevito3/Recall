@@ -72,8 +72,10 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
             .Select(s => s.LoginMode)
             .FirstOrDefaultAsync(cancellationToken);
 
-    public async Task<WebSession> StartWebAsync(string userId, string loginMode, CancellationToken cancellationToken)
+    /// <summary>With a guard of a password sign-in, the save throws a <see cref="Exceptions.StaleVersionException"/> when the credential changed after the sign-in.</summary>
+    public async Task<WebSession> StartWebAsync(string userId, string loginMode, CancellationToken cancellationToken, CredentialGuard? guard = null)
     {
+        await TouchCredentialAsync(guard, cancellationToken);
         var now = timeProvider.GetUtcNow();
         var cookieValue = WebSession.CookiePrefix + Secrets.New();
         var expiresAt = now + SessionPolicy.WebIdle;
@@ -385,9 +387,12 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
         return deleted == 1;
     }
 
+    /// <summary>With a guard of a password sign-in, the save throws a <see cref="Exceptions.StaleVersionException"/> when the credential changed after the sign-in.</summary>
     public async Task<string> AddAppCodeAsync(
-        string userId, string loginMode, string redirectUri, string challenge, string? clientState, CancellationToken cancellationToken)
+        string userId, string loginMode, string redirectUri, string challenge, string? clientState, CancellationToken cancellationToken,
+        CredentialGuard? guard = null)
     {
+        await TouchCredentialAsync(guard, cancellationToken);
         var code = Secrets.New();
         dbContext.Set<AppCode>().Add(new AppCode
         {
@@ -401,6 +406,20 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
         });
         await dbContext.SaveChangesAsync(cancellationToken);
         return code;
+    }
+
+    // The touch moves the version in the save of the session or the code. An issue that commits after this read makes the save
+    // stale, and an issue that committed before it leaves no row at the version of the guard.
+    private async Task TouchCredentialAsync(CredentialGuard? guard, CancellationToken cancellationToken)
+    {
+        if (guard is null)
+            return;
+
+        var credential = await dbContext.Set<PasswordCredential>()
+            .TagWithOperationCallSite("auth.sessions.credential_guard")
+            .FirstOrDefaultAsync(p => p.UserId == guard.UserId && p.Version == guard.Version, cancellationToken)
+            ?? throw new Exceptions.StaleVersionException();
+        credential.NoteSessionStart();
     }
 
     public async Task<AppCode?> FindAppCodeAsync(TokenHash code, CancellationToken cancellationToken)
