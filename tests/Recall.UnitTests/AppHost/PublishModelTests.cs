@@ -77,7 +77,7 @@ public class PublishModelTests
     }
 
     [Test]
-    public async Task the_none_provider_with_no_settings_gives_the_server_no_login_method()
+    public async Task the_none_provider_gives_the_server_no_auth_setting()
     {
         // Arrange
         await using var builder = await DistributedApplicationTestingBuilder.CreateAsync(
