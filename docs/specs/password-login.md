@@ -38,7 +38,7 @@ A `LoginAttempt` gains a nullable `user_id`. It is set only on an attempt that w
 
 | ID | Rule | Enforced by | Backstop |
 |---|---|---|---|
-| PWD-1 (later) | `/auth/status` lists one mode of kind `password` with the state `ready` on each install, with providers and with none. So `no_login_method` no longer occurs, and the login page shows the password form and a button for each OIDC mode. | `PasswordLoginMode`, `LoginModes` | |
+| PWD-1 (later) | `/auth/status` lists one mode of kind `password` with the state `ready` when the install has no OIDC provider, or when a live user holds a password credential. Then the login page shows the password form and a button for each OIDC mode. An install with providers and no password credential shows no password mode, so a single provider still starts with no click. An install with no provider always has the password mode, so `no_login_method` no longer occurs. | `PasswordLoginMode`, `LoginModes` | |
 | PWD-2 (later) | While no live tenant exists, the Server makes a setup code at boot from 20 random base32 characters, holds it in memory, and writes it once to the console and to `/data/logs`. A restart makes a new code, and the old one stops working. `/auth/status` gives `setupRequired: true`. | `SetupCode` | |
 | PWD-3 (later) | A setup sends the code, a name, a login name, and a password. It adds the tenant `Recall`, an Admin who holds each Admin permission, and a Chosen credential in one save. A wrong code gets 403 and changes nothing. A setup after the first gets 409, and so does the loser of two setups at once. A successful setup voids the code. | `SetupInstall` | The database admits one first tenant |
 | PWD-4 (later) | The first OIDC login of a new install still makes the Owner with no setup code, as [First login and the Owner](../authentication.md#first-login-and-the-owner) says, because the provider decides who reaches it. | `Provisioner` | The database admits one first tenant |
@@ -59,6 +59,8 @@ A `LoginAttempt` gains a nullable `user_id`. It is set only on an attempt that w
 | PWD-19 (later) | While a fresh `claim-owner` file exists, the login page offers `Set a new Owner password`. The post takes a login name and a password that follow PWD-8, PWD-9, and PWD-18. It gives the Admin that the claim picks a Chosen credential with these values and each Admin permission, ends each session and each PAT of that Admin, and removes the file, under the rules of [Recover a lost Owner](../authentication.md#recover-a-lost-owner). | `OwnerClaim`, `ClaimOwnerPassword` | |
 | PWD-20 (later) | No password, temporary password, or hash reaches a log, a span, baggage, or an audit value. The setup code reaches only its one log line at boot. | Each record's `ToString`, `AuthQueryLogFilter`, `AuditModel` | Test with a marker value through each password route |
 | PWD-21 (later) | A delete of a user, also through a delete of its tenant, removes its credential. | `RemoveLoginsWhenUserDeleted` | Foreign key on `user_id` |
+| PWD-22 (later) | The last-Admin rule counts a password credential that is not Stopped as a way to sign in, the same as an OIDC link. So a delete, a demotion, or a permission removal gets 409 when it would remove the last Admin who holds each Admin permission and can sign in with a link or a password. | `LastAdmin.GuardAsync` | Exclusive tenant lock |
+| PWD-23 (later) | A logout of a session that a password started ends it and goes to the signed-out page with no step at a provider. | `AuthEndpoints.LogoutAsync` | |
 
 ## 4. Permissions
 
