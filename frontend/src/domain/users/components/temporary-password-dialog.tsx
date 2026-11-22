@@ -20,6 +20,7 @@ import {
   ResponsiveDialogTitle,
   ResponsiveDialogTrigger,
 } from '@/components/ui/responsive-dialog'
+import { useLoginSettings } from '@/domain/login-providers/apis/login-settings'
 import { useServerErrors } from '@/hooks/use-server-errors'
 import { maxLengthOf } from '@/lib/api-contract'
 import { copyToClipboard } from '@/lib/copy-to-clipboard'
@@ -47,19 +48,37 @@ interface TemporaryPasswordDialogProps {
 
 export function TemporaryPasswordDialog({ user, isSelf }: TemporaryPasswordDialogProps) {
   const issue = useIssueTemporaryPassword(user.id)
+  // What the password does depends on password login (IDP-20), so the dialog reads it before it says anything, and again each time
+  // it opens, because another Admin can turn it while this page is open. The caller holds manage_user_access, so it can read it.
+  const settings = useLoginSettings()
+  const passwordsOff = settings.data && settings.data.passwordLogin === 'Off'
   const isLocked = issue.isPending || issue.data !== undefined
 
   return (
-    <ResponsiveDialogTrigger onOpenChange={(isOpen) => { if (!isOpen) issue.reset() }}>
+    <ResponsiveDialogTrigger
+      onOpenChange={(isOpen) => {
+        if (isOpen) void settings.refetch()
+        else issue.reset()
+      }}
+    >
       <Button variant="outline">Set temporary password</Button>
       <ResponsiveDialog isDismissable={!isLocked} isKeyboardDismissDisabled={isLocked} showCloseButton={!isLocked}>
-        {issue.data ? <IssuedPassword user={user} issued={issue.data} isSelf={isSelf} /> : <AskForIssue user={user} isSelf={isSelf} issue={issue} />}
+        {issue.data ? (
+          <IssuedPassword user={user} issued={issue.data} isSelf={isSelf} passwordsOff={passwordsOff ?? false} />
+        ) : (
+          <AskForIssue user={user} isSelf={isSelf} issue={issue} settings={settings} />
+        )}
       </ResponsiveDialog>
     </ResponsiveDialogTrigger>
   )
 }
 
-function AskForIssue({ user, isSelf, issue }: TemporaryPasswordDialogProps & { issue: ReturnType<typeof useIssueTemporaryPassword> }) {
+interface AskForIssueProps extends TemporaryPasswordDialogProps {
+  issue: ReturnType<typeof useIssueTemporaryPassword>
+  settings: ReturnType<typeof useLoginSettings>
+}
+
+function AskForIssue({ user, isSelf, issue, settings }: AskForIssueProps) {
   const needsLoginName = !user.loginName
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema(needsLoginName)),
@@ -70,9 +89,11 @@ function AskForIssue({ user, isSelf, issue }: TemporaryPasswordDialogProps & { i
   // A second submit in the same task still reads isPending as false, so only a ref stops a second issue.
   const isSending = useRef(false)
   const { errors } = form.formState
+  // While password login is Off, a temporary password only links a provider (IDP-20). Until the read of the open ends, the dialog says nothing of it.
+  const passwordsOff = settings.isFetching || !settings.data ? undefined : settings.data.passwordLogin === 'Off'
 
   const handleSubmit = form.handleSubmit(({ loginName }) => {
-    if (isSending.current) return
+    if (isSending.current || passwordsOff === undefined) return
     isSending.current = true
     serverErrors.clear()
     issue.mutate(needsLoginName ? loginName.trim() : undefined, {
@@ -83,15 +104,33 @@ function AskForIssue({ user, isSelf, issue }: TemporaryPasswordDialogProps & { i
 
   const ends = isSelf
     ? 'This ends each of your other sessions and personal access tokens. You stay signed in here.'
-    : `This ends each session and personal access token of ${user.fullName}, so they sign in again with the new password.`
+    : `This ends each session and personal access token of ${user.fullName}, so they sign in again${passwordsOff ? '' : ' with the new password'}.`
 
   return (
     <form onSubmit={(event) => void handleSubmit(event)} noValidate className="flex flex-col gap-4">
       <ResponsiveDialogHeader>
         <ResponsiveDialogTitle>Set a temporary password for {user.fullName}?</ResponsiveDialogTitle>
-        <ResponsiveDialogDescription>
-          Recall makes a password that works for 7 days, and only to pick a new password. {ends}
-        </ResponsiveDialogDescription>
+        {passwordsOff === undefined ? (
+          settings.isError && !settings.isFetching ? (
+            <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+              <p>The password login setting did not load, so Recall cannot say what this password does.</p>
+              <Button variant="outline" size="sm" onPress={() => void settings.refetch()}>
+                Try again
+              </Button>
+            </div>
+          ) : (
+            <p role="status" className="text-sm text-muted-foreground">
+              Loading the password login setting
+            </p>
+          )
+        ) : (
+          <ResponsiveDialogDescription>
+            {passwordsOff
+              ? 'Password login is off, so Recall makes a password that works for 7 days, and only to link a provider at the first sign-in.'
+              : 'Recall makes a password that works for 7 days, and only to pick a new password.'}{' '}
+            {ends}
+          </ResponsiveDialogDescription>
+        )}
       </ResponsiveDialogHeader>
 
       {needsLoginName ? (
@@ -125,7 +164,7 @@ function AskForIssue({ user, isSelf, issue }: TemporaryPasswordDialogProps & { i
 
       <ResponsiveDialogFooter>
         <ResponsiveDialogClose isDisabled={issue.isPending}>Cancel</ResponsiveDialogClose>
-        <Button type="submit" variant="destructive" isPending={issue.isPending}>
+        <Button type="submit" variant="destructive" isPending={issue.isPending} isDisabled={passwordsOff === undefined}>
           Set temporary password
         </Button>
       </ResponsiveDialogFooter>
@@ -133,7 +172,7 @@ function AskForIssue({ user, isSelf, issue }: TemporaryPasswordDialogProps & { i
   )
 }
 
-function IssuedPassword({ user, issued, isSelf }: { user: UserDto; issued: TemporaryPasswordDto; isSelf: boolean }) {
+function IssuedPassword({ user, issued, isSelf, passwordsOff }: { user: UserDto; issued: TemporaryPasswordDto; isSelf: boolean; passwordsOff: boolean }) {
   const until = formatInstant(new Date(issued.expiresAt), browserTimeZone(), {
     year: 'numeric',
     month: 'short',
@@ -153,7 +192,10 @@ function IssuedPassword({ user, issued, isSelf }: { user: UserDto; issued: Tempo
       <ResponsiveDialogHeader>
         <ResponsiveDialogTitle>Give {isSelf ? 'yourself' : user.fullName} this password</ResponsiveDialogTitle>
         <ResponsiveDialogDescription>
-          This is the only time that Recall shows it. It works for 7 days, until {until}, and only to pick a new password at the first sign-in.
+          This is the only time that Recall shows it. It works for 7 days, until {until},{' '}
+          {passwordsOff
+            ? 'and only to link a provider at the first sign-in, because password login is off. After the link, the provider signs in.'
+            : 'and only to pick a new password at the first sign-in.'}
         </ResponsiveDialogDescription>
       </ResponsiveDialogHeader>
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">

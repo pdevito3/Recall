@@ -1,3 +1,4 @@
+import { loginProvidersApi } from '@tests/support/api/login-providers-api'
 import { membershipApi } from '@tests/support/api/membership-api'
 import { personalAccessTokensApi } from '@tests/support/api/personal-access-tokens-api'
 import { usersApi, usersPaths } from '@tests/support/api/users-api'
@@ -208,7 +209,7 @@ test.describe('the users of a tenant', () => {
     const grace = aUser().named('Grace Hopper').allowing('IssueTemporaryPassword')
     const { id } = grace.build()
     const issued = { loginName: 'grace.h', password: 'acorn-ladder-velvet-tundra', expiresAt: '2026-11-28T10:00:00Z' }
-    api.mock(usersApi.oneIs(grace), usersApi.issuesTemporaryPassword(id, issued))
+    api.mock(usersApi.oneIs(grace), loginProvidersApi.settingsHold(), usersApi.issuesTemporaryPassword(id, issued))
     const users = usersPage(page)
     await users.openDetail(id)
 
@@ -223,10 +224,24 @@ test.describe('the users of a tenant', () => {
     expect(api.all('get', usersPaths.one(id))).toHaveLength(1)
   })
 
+  test('while password login is off, the temporary password says that it only links a provider', { tag: '@IDP-20' }, async ({ page, api }) => {
+    const grace = aUser().named('Grace Hopper').allowing('IssueTemporaryPassword')
+    const { id } = grace.build()
+    const issued = { loginName: 'grace.h', password: '[REDACTED:password]', expiresAt: '2026-11-28T10:00:00Z' }
+    api.mock(usersApi.oneIs(grace), loginProvidersApi.settingsHold('Off', 2), usersApi.issuesTemporaryPassword(id, issued))
+    const users = usersPage(page)
+    await users.openDetail(id)
+
+    await users.setTemporaryPassword('Grace Hopper', id, 'grace.h')
+
+    await expect(users.at.temporaryPasswordResult).toContainText('only to link a provider at the first sign-in, because password login is off')
+    await expect(users.at.temporaryPasswordResult).not.toContainText('pick a new password')
+  })
+
   test('a login name in use keeps the dialog open with the refusal', { tag: '@PWD-14' }, async ({ page, api }) => {
     const grace = aUser().named('Grace Hopper').allowing('IssueTemporaryPassword')
     const { id } = grace.build()
-    api.mock(usersApi.oneIs(grace), usersApi.temporaryPasswordFails(id, aProblem().conflict('This login name is in use. Pick another.')))
+    api.mock(usersApi.oneIs(grace), loginProvidersApi.settingsHold(), usersApi.temporaryPasswordFails(id, aProblem().conflict('This login name is in use. Pick another.')))
     const users = usersPage(page)
     await users.openDetail(id)
 
