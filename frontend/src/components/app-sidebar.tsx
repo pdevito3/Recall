@@ -3,6 +3,7 @@ import {
   Book02Icon,
   InformationCircleIcon,
   Key01Icon,
+  Login01Icon,
   Mic01Icon,
   Note01Icon,
   Settings01Icon,
@@ -29,7 +30,7 @@ import { useSidebar } from "@/components/ui/use-sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { useCurrentNavItem } from "@/components/current-nav-item"
 import { UserMenu } from "@/domain/auth/components/user-menu"
-import { useCanManageModelProviders, useMembership } from "@/domain/membership/apis/get-membership"
+import { useCanManageModelProviders, useCanManageUserAccess, useMembership } from "@/domain/membership/apis/get-membership"
 
 const appName = "Recall"
 
@@ -70,6 +71,11 @@ const navItems = [
     icon: UserGroupIcon,
   },
   {
+    title: "Login providers",
+    url: "/login-providers",
+    icon: Login01Icon,
+  },
+  {
     title: "Model providers",
     url: "/model-providers",
     icon: AiBrain01Icon,
@@ -96,6 +102,7 @@ export function AppSidebar() {
   const membership = useMembership()
   const canReadUsers = membership.status === "member" && membership.user.permissions.includes("read_users")
   const canManageModelProviders = useCanManageModelProviders()
+  const canManageUserAccess = useCanManageUserAccess()
 
   // On mobile the sidebar is a sheet over the page. Close it when a link is
   // pressed, so the user sees the new page. On desktop the sheet is not used.
@@ -125,6 +132,7 @@ export function AppSidebar() {
                 {navItems.map((item) => {
                   if (item.url === "/users" && !canReadUsers) return null
                   if (item.url === "/model-providers" && !canManageModelProviders) return null
+                  if (item.url === "/login-providers" && !canManageUserAccess) return null
                   return (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuLink
