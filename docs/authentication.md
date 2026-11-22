@@ -301,7 +301,7 @@ Each later login finds the user through the pair of issuer and subject in `auth_
 
 A user that an Admin adds through the API has no link, so that user cannot sign in today.
 
-A tenant keeps an Admin who can sign in and manage access. Such an Admin holds each Admin permission, because a caller can give only what the caller holds. A delete, a demotion, or the removal of a permission from an Admin gets 409 when it would leave the tenant with no Admin who holds each permission, or would remove the last such Admin with a link. To remove such an Admin, first give another person who has signed in the role Admin and each Admin permission. With closed signup, set `Auth:OpenSignup` to `true` and restart the Server while that person signs in, then set it back and restart. The rule does not check the provider of a link, so a link to a provider that you removed still counts. The owner claim recovers that case: it gives the oldest Admin the new link and each Admin permission.
+A tenant keeps an Admin who can sign in and manage access. Such an Admin holds each Admin permission, because a caller can give only what the caller holds. A delete, a demotion, or the removal of a permission from an Admin gets 409 when it would leave the tenant with no Admin who holds each permission, or would remove the last such Admin with a link. To remove such an Admin, first give another person who has signed in the role Admin and each Admin permission. With closed signup, set `Auth:OpenSignup` to `true` and restart the Server while that person signs in, then set it back and restart. A link counts only while a provider with its issuer is on the login page: an entry of `Auth:Providers`, or a Usable provider from the app. So a link to a provider that you removed does not count, and the delete of a provider from the app gets 409 when it would leave a tenant with no Admin who can sign in. That delete holds the lock of each live tenant. An entry that you remove from `Auth:Providers` takes effect at the restart with no check, so the owner claim recovers that case: it gives the oldest Admin the new link and each Admin permission.
 
 A repeat login fills only a stored value that is empty. A changed value stays. A value that a person clears comes back from the provider at the next login.
 
@@ -390,7 +390,9 @@ Browsers do not isolate cookies by port (RFC 6265 section 8.5). On `http://LAN-I
 
 ## Login providers
 
-Each provider is one entry under `Auth:Providers`. As environment variables, the keys are `Auth__Providers__0__Issuer` and so on.
+A provider comes from one of two sources. An entry under `Auth:Providers` is read at boot. A provider that an Admin adds in the app is a row of `auth_oidc_providers`, and it changes the login page at the next request, with no restart. The login page lists each entry, then each Usable row in the order in which they were added. Both kinds run the same login. The rules are in [the spec](specs/login-providers.md), and [ADR 0025](adr/0025-admins-set-login-providers-in-the-app.md) gives the reasons.
+
+As environment variables, the keys of an entry are `Auth__Providers__0__Issuer` and so on.
 
 | Setting | Content |
 |---|---|
@@ -401,7 +403,27 @@ Each provider is one entry under `Auth:Providers`. As environment variables, the
 | `AllowHttp` | Must be `true` for an http issuer |
 | `CaCertificatePath` | A file with the certificates of a private CA |
 
-A typo stops the boot with a message that names the setting: a repeated ID, a missing client, a missing CA file, or an http issuer with no `AllowHttp`.
+A typo stops the boot with a message that names the setting: a repeated ID, a repeated issuer, a missing client, a missing CA file, or an http issuer with no `AllowHttp`.
+
+### Providers from the app
+
+A person with `manage_user_access`, in a web or native session, manages the providers under `/api/v1/login-providers`. A personal access token, an agent, and a provider token get 403. A provider is install-wide, so an Admin of any tenant manages each provider of the install. A row takes the same fields as an entry, and the same checks give 422 with the field. Two providers of either source cannot share an ID or an issuer, which gives 409. The issuer of a row cannot change: add another provider, and each person links again.
+
+`POST /api/v1/login-providers/test` runs discovery against the issuer of the form, with its CA and `allowHttp`, and saves nothing. The list gives the callback URL to register at the provider.
+
+An Admin chooses the issuer of a row, so its client checks each address that it connects to, also after a redirect. It refuses a loopback address, a link-local address such as `169.254.169.254`, and an unspecified address such as `0.0.0.0`, so an issuer cannot reach this server or a cloud metadata service. Discovery then fails, and the test answers that the server cannot reach the issuer. A private range, such as `192.168.0.0/16` or an IPv6 ULA, works, because an IdP on the LAN is the common case. An IdP on the same machine needs `Auth:AllowLoopbackProviders` set to `true`. An entry of `Auth:Providers` has no such check, because the operator wrote it. The issuer of a row has no query and no fragment, and the Server stores it with no trailing slash. A CA file of a row or an entry must be a regular file of at most 1 MiB.
+
+The client secret of a row is under the Data Protection key ring, with its own purpose, and no answer, log, or audit entry holds it. An update with no secret keeps the stored one. A row has one of three states, and none is stored:
+
+| State | When | Login page |
+|---|---|---|
+| Usable | Otherwise | Listed |
+| Secret unreadable | The key ring cannot read its secret, as after a restore with no `keys` folder. `KeyRingWatch` then warns at each start. | Not listed, and its start gets 404. Enter the secret again. |
+| Replaced by the environment | An entry of `Auth:Providers` has its ID or its issuer. The entry wins. | The entry is listed in its place |
+
+An add, an update, and a delete record the audit actions `LoginProviderAdded`, `LoginProviderUpdated`, and `LoginProviderDeleted` on the tenant of the Admin. The entry belongs to the tenant of the Admin who made the change. The audit log is append-only, so a delete of that tenant keeps the entry, but no reader sees it after that, because a read shows only the entries of the tenant of the caller. A Usable row counts as a provider for the setup, as an entry does: the Server makes no setup code, and the setup page gets 404.
+
+A save or a delete reads the rows again and replaces the list in one step. A row whose settings did not change keeps its mode and its discovery cache. A login in flight whose provider left the list ends at its callback with `invalid_response`. A replaced mode is never disposed, because a login in flight can still hold it. Its HTTP client closes its idle connections after the idle time of its pool. When the reload after a delete fails, the Server still takes that provider off the list and logs the failure. When the reload after an add or an update fails, the request gets 500 with the row saved, and the next save or start lists it.
 
 Other settings:
 
@@ -409,6 +431,7 @@ Other settings:
 |---|---|---|
 | `Auth:OpenSignup` | `false` | See [First login and the Owner](#first-login-and-the-owner) |
 | `Auth:StartPermitsPerWindow` | 20 | How many login starts the Server takes from one connection address in each 10 seconds. See [Limit on login starts](#limit-on-login-starts). |
+| `Auth:AllowLoopbackProviders` | `false` | `true` lets a provider from the app connect to a loopback, link-local, or unspecified address. See [Providers from the app](#providers-from-the-app). |
 | `AllowedHosts` | `*` | See [Register the callback URLs](#register-the-callback-urls) |
 
 ### Limit on login starts
