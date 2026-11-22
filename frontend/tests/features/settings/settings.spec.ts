@@ -300,6 +300,16 @@ test.describe('the settings of a person', () => {
     expect(api.last('put', settingsPaths.deviceTimeZone)?.body).toEqual({ timeZone: 'America/Chicago' })
   })
 
+  test('a Fixed System V zone shows the name of its place', async ({ page, api }) => {
+    api.mock(settingsApi.are(aSetting({ timeZoneMode: 'Fixed', timeZone: 'EST5EDT' })))
+    const settings = settingsPage(page)
+
+    await settings.open()
+
+    await expect(settings.at.zone).toHaveValue('EST5EDT (Eastern Time)')
+    await expect(settings.at.zoneInUse).toHaveText('New entries use the day in EST5EDT (Eastern Time).')
+  })
+
   test('a Fixed zone that this browser does not know shows as the picked zone, and the line names it', async ({ page, api }) => {
     const settings = settingsPage(page)
     await settings.browserLacksTheZone('America/Chicago')
