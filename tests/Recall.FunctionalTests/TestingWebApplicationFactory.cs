@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
@@ -154,6 +155,12 @@ public sealed class TestingWebApplicationFactory : WebApplicationFactory<Program
         _ = Services;
         SpansAtStartup = ExportedActivities.Count;
         Instance = this;
+    }
+
+    protected override IHost CreateHost(IHostBuilder builder)
+    {
+        HostBoots.ThrowIfClosed();
+        return base.CreateHost(builder);
     }
 
     public new HttpClient CreateClient()
