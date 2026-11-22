@@ -99,6 +99,8 @@ public class EndpointAccessSweepTests : TestBase
         ["AddPersonalAccessToken"] = new("Each member makes tokens for the own record, inside the permissions that the member holds. PersonalAccessTokenTests covers a grant above them."),
         ["GetPersonalAccessTokens"] = new("Each member lists the own tokens. It takes no ID."),
         ["RevokePersonalAccessToken"] = new("Each member revokes the own tokens. A token of another person is 404 unless the caller can list that person's tokens.", OwnerOnly: true),
+        ["GetExternalLogins"] = new("Each person lists the own links. It takes no ID."),
+        ["RemoveExternalLogin"] = new("Each person removes the own links, and the body names one of them. It takes no ID."),
         // new-feature:open-to-each-member
     };
 
@@ -118,6 +120,7 @@ public class EndpointAccessSweepTests : TestBase
         [AuthRoutes.Status] = "Public. A phone reads it before sign-in. It names the sign-in methods and shows no tenant data.",
         [AuthRoutes.Login] = "Public. The chooser page and its redirects. It shows no tenant data.",
         [AuthRoutes.Start] = "Public and rate limited. It starts a login and shows no tenant data.",
+        [AuthRoutes.Link] = "Rate limited. Only a web session with X-CSRF: 1 that began at most 15 minutes ago starts a link of its own user, and each other caller gets 401 or 403. ExternalLoginLinkTests covers it.",
         [AuthRoutes.Callback] = "The binding cookie and the state prove this request. AuthRefusalTests covers each refusal.",
         [AuthRoutes.Confirm] = "The one-time code in the form proves this request. It writes nothing and shows no tenant data.",
         [AuthRoutes.Token] = "The code and PKCE verifier, or the refresh token, prove this request. AuthRefusalTests covers each refusal.",

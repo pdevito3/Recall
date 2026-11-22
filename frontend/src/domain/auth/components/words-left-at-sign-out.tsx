@@ -14,6 +14,7 @@ const titles = {
   sessionEnded: 'Your session ended',
   sessionUnchecked: 'We could not check your session',
   pageDidNotLoad: 'This page did not load',
+  linkProvider: 'You are going to the provider',
 }
 
 export function WordsLeftAtSignOut({ why, words, audio, leave }: Exclude<LeftTheApp, { why: 'anotherPerson' }>) {

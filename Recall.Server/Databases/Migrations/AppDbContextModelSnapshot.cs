@@ -213,6 +213,11 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("DisplayLabel")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("display_label");
+
                     b.Property<string>("LastLoginAt")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -263,6 +268,12 @@ namespace Recall.Server.Databases.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("expires_at");
+
+                    b.Property<string>("LinkSessionId")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("link_session_id")
+                        .UseCollation("BINARY");
 
                     b.Property<string>("ModeId")
                         .IsRequired()

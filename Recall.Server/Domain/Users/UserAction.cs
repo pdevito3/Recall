@@ -27,6 +27,7 @@ public partial class UserAction : ValueObject, IFixedNames
     public static UserAction RemovePermission() => new(UserActionEnum.RemovePermission);
     public static UserAction Delete() => new(UserActionEnum.Delete);
     public static UserAction IssueTemporaryPassword() => new(UserActionEnum.IssueTemporaryPassword);
+    public static UserAction ManageExternalLogins() => new(UserActionEnum.ManageExternalLogins);
 
     /// <summary>
     /// Checks the permissions that need only the ID of the user. Call it before the load, so a caller without them
@@ -73,6 +74,11 @@ public partial class UserAction : ValueObject, IFixedNames
         // answer holds no record of the user, so it needs no read_users.
         public static readonly UserActionEnum IssueTemporaryPassword = new(nameof(IssueTemporaryPassword), 5,
             always: [Permission.ManageUserAccess()], unlessOwnRecord: [], revokesUserPermissions: true);
+
+        // A removal takes a way in from the user, as a role change can, so another caller must hold each permission of the user (IDP-12).
+        // The user lists and removes their own links with no permission.
+        public static readonly UserActionEnum ManageExternalLogins = new(nameof(ManageExternalLogins), 6,
+            always: [], unlessOwnRecord: [Permission.ManageUserAccess()], revokesUserPermissions: true);
 
         private readonly Permission[] _always;
         private readonly Permission[] _unlessOwnRecord;

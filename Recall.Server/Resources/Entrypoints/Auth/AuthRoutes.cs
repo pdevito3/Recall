@@ -5,6 +5,7 @@ public static class AuthRoutes
     public const string Status = "/auth/status";
     public const string Login = "/auth/login";
     public const string Start = "/auth/oidc/{id}/start";
+    public const string Link = "/auth/oidc/{id}/link";
     public const string Callback = "/auth/oidc/callback";
     public const string Confirm = "/auth/oidc/confirm";
     public const string Token = "/auth/token";

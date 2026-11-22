@@ -105,6 +105,18 @@ export function settingsPage(page: Page) {
       await page.getByRole('button', { name: 'Change password' }).click()
     },
 
+    /** A page of the provider, so a link that leaves the app lands somewhere the test can see. */
+    async providerAnswersAt(origin: string) {
+      await page.route(`${origin}/**`, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<h1>Provider</h1>' }))
+    },
+
+    arrivesAt: (url: string) => page.waitForURL(url),
+
+    async removeSignInMethod(name: string) {
+      await page.getByRole('button', { name: `Remove ${name}`, exact: true }).click()
+      await page.getByRole('dialog').getByRole('button', { name: 'Remove', exact: true }).click()
+    },
+
     async turnOnLocation() {
       const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && new URL(r.url()).pathname === settingsPaths.mine)
       await at.location.click({ force: true })

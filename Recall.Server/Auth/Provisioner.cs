@@ -254,6 +254,7 @@ public sealed class Provisioner(
             UserId = userId,
             CreatedAt = now,
             LastLoginAt = now,
+            DisplayLabel = NewPerson.LabelOf(identity.Profile),
         };
     }
 

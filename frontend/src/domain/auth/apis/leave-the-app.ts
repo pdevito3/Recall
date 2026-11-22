@@ -20,9 +20,10 @@ export const thisPageAgain = () => window.location.pathname + window.location.se
 /**
  * Each way out of the signed-in app. A session that ends with no message to this tab (a 401, a revoke, an expiry, a
  * restore of an ended page, a restore into a newer session) is `sessionEnded`. A restored page with no answer about its
- * session is `sessionUnchecked`, and a load again from the error page is `pageDidNotLoad`.
+ * session is `sessionUnchecked`, a load again from the error page is `pageDidNotLoad`, and a link of a provider that goes to
+ * the provider is `linkProvider`.
  */
-export type Departure = { why: 'anotherPerson' } | { why: 'signedOut' | 'signedOutInAnotherTab' | 'sessionEnded' | 'sessionUnchecked' | 'pageDidNotLoad'; to: string }
+export type Departure = { why: 'anotherPerson' } | { why: 'signedOut' | 'signedOutInAnotherTab' | 'sessionEnded' | 'sessionUnchecked' | 'pageDidNotLoad' | 'linkProvider'; to: string }
 
 export type LeftTheApp =
   | { why: 'anotherPerson'; hasLostWords: boolean }

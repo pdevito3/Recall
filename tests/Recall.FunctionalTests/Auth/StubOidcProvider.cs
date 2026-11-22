@@ -24,6 +24,7 @@ public enum IdTokenSigning
 public sealed record StubLogin(string Subject)
 {
     public string Name { get; init; } = "Ada Lovelace";
+    public string? Email { get; init; }
     public string? IdTokenIssuer { get; init; }
     public string? Nonce { get; init; }
     public string? UserinfoSubject { get; init; }
@@ -210,6 +211,8 @@ public sealed class StubOidcProvider : HttpMessageHandler
             claims["aud"] = audiences;
         if (login.IdTokenAzp is { } azp)
             claims["azp"] = azp;
+        if (login.Email is { } email)
+            claims["email"] = email;
 
         var now = TimeProvider.System.GetUtcNow().UtcDateTime;
         var expires = now + login.IdTokenLifetime;

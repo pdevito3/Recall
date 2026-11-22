@@ -21,4 +21,10 @@ export const settings = (page: Page) => ({
   repeatPassword: page.getByLabel('New password again', { exact: true }),
   passwordChanged: page.getByText('Password changed. Each other session and personal access token ended.', { exact: true }),
   message: (text: string) => page.getByText(text, { exact: true }),
+  signInMethod: (name: string) => page.getByRole('list', { name: 'Your sign-in methods' }).getByRole('listitem', { name, exact: true }),
+  linkButton: (provider: string) => page.getByRole('button', { name: `Link ${provider}`, exact: true }),
+  signInAgain: page.getByRole('button', { name: 'Sign out and sign in again' }),
+  alertSaying: (text: string) => page.getByRole('alert').filter({ hasText: text }),
+  signInMethodAlert: (name: string) =>
+    page.getByRole('list', { name: 'Your sign-in methods' }).getByRole('listitem', { name, exact: true }).getByRole('alert'),
 })

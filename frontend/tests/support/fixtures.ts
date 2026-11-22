@@ -5,6 +5,7 @@ import { modelProvidersApi } from './api/model-providers-api'
 import { peopleApi } from './api/people-api'
 import { sessionsApi } from './api/sessions-api'
 import { fileStoreApi } from './api/file-store-api'
+import { externalLoginsApi } from './api/external-logins-api'
 import { recordingsApi } from './api/recordings-api'
 import { aSetting, settingsApi } from './api/settings-api'
 import { transcriptionEngineApi } from './api/summaries-api'
@@ -50,6 +51,8 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
         peopleApi.listIs([]),
         modelProvidersApi.activeIs(null),
         transcriptionEngineApi.isLocal(),
+        externalLoginsApi.mineAre([]),
+        externalLoginsApi.providersAre([]),
       ]
       const served = requestRecorder()
       const missed: string[] = []

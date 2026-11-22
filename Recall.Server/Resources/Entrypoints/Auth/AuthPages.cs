@@ -173,6 +173,16 @@ public static class AuthPages
         $"<p>This server got too many sign-in attempts from your network. Wait {seconds} seconds, then try again.</p>"
             + Action("Try again", startUrl));
 
+    /// <summary>
+    /// A page that loads <paramref name="url"/> again from this origin, so the browser sends the Strict session cookie that it held back
+    /// on the redirect from the provider. The refresh needs no script, and the link is there for a browser that does not follow it.
+    /// </summary>
+    public static IResult ContinueHere(string url) => Page(
+        StatusCodes.Status200OK,
+        "Finishing the link",
+        "<p>Recall is finishing the link of your provider.</p>" + Action("Continue", url),
+        head: $"<meta http-equiv=\"refresh\" content=\"0;url={E(url)}\">");
+
     public static IResult AccessDenied() => Page(
         StatusCodes.Status403Forbidden, "Sign-in did not finish", "<p>The provider did not let this sign-in continue.</p>" + TryAgain);
 
@@ -229,9 +239,9 @@ public static class AuthPages
 
     private static string E(string text) => WebUtility.HtmlEncode(text);
 
-    private static PageResult Page(int status, string heading, string body, string? policy = null)
+    private static PageResult Page(int status, string heading, string body, string? policy = null, string head = "")
         => new(status, policy ?? StrictPolicy,
-            themeClass => $"<!doctype html><html lang=\"en\"{themeClass}><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{E(heading.Contains("Recall", StringComparison.Ordinal) ? heading : $"{heading} - Recall")}</title><style>{Style}</style></head><body><main><img class=\"logo\" src=\"{IconUri}\" alt=\"\" width=\"48\" height=\"48\"><h1>{E(heading)}</h1>{body}</main></body></html>");
+            themeClass => $"<!doctype html><html lang=\"en\"{themeClass}><head><meta charset=\"utf-8\">{head}<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{E(heading.Contains("Recall", StringComparison.Ordinal) ? heading : $"{heading} - Recall")}</title><style>{Style}</style></head><body><main><img class=\"logo\" src=\"{IconUri}\" alt=\"\" width=\"48\" height=\"48\"><h1>{E(heading)}</h1>{body}</main></body></html>");
 
     private static byte[] ReadIcon()
     {

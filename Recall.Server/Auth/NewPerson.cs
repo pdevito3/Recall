@@ -57,6 +57,10 @@ public sealed record NewPerson(string FirstName, string? LastName, string? Email
         }
     }
 
+    /// <summary>The label of a link: the email that the provider gave, else the name, so the person can tell which account is linked.</summary>
+    public static string? LabelOf(Profile profile)
+        => EmailOf(profile) ?? Clean(profile.Name, Entities.ExternalLogin.DisplayLabelMaxLength);
+
     public override string ToString() => "[new person]";
 
     private static string? Clean(string? value, int maxLength)

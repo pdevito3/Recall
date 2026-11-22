@@ -143,6 +143,9 @@ public class StringColumnLengthTests
         "auth_login_attempts.redirect_uri",
         "auth_login_attempts.return_path",
         "auth_login_attempts.user_id",
+        "auth_login_attempts.link_session_id",
+        // The email or the name of the provider, which NewPerson.LabelOf clips to the column.
+        "auth_external_logins.display_label",
         // LoginName.TryOf holds a name to 64 code points, and the column has room for 64 outside the BMP. PasswordRulesTests checks it.
         "auth_password_credentials.login_name",
         "auth_password_credentials.password_hash",

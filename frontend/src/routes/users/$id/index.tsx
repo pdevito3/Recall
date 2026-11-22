@@ -7,6 +7,8 @@ import { useBreadcrumbName } from '@/components/breadcrumb-name'
 import { Page } from '@/components/page'
 import { PageHeading } from '@/components/page-heading'
 import { QueryError } from '@/components/query-error'
+import { useUserExternalLogins } from '@/domain/external-logins/apis/external-logins'
+import { ExternalLoginList } from '@/domain/external-logins/components/external-login-list'
 import { useUserPersonalAccessTokens } from '@/domain/personal-access-tokens/apis/personal-access-tokens'
 import { TokenList } from '@/domain/personal-access-tokens/components/token-list'
 import { useDeleteUser } from '@/domain/users/apis/delete-user'
@@ -27,6 +29,8 @@ function UserPage() {
   const { id } = Route.useParams()
   const user = useUser(id)
   const tokens = useUserPersonalAccessTokens(id)
+  const managesLinks = user.data?.allowedActions.includes('ManageExternalLogins') ?? false
+  const links = useUserExternalLogins(id, managesLinks)
   const currentUser = useCurrentUser()
   const changeRole = useUpdateUserRole(id)
   const remove = useDeleteUser()
@@ -90,6 +94,18 @@ function UserPage() {
         onChangeRole={(newRole) => changeRole.mutate(newRole, { onSettled: () => headingRef.current?.focus() })}
         onDelete={handleDelete}
       />
+      {managesLinks && (
+        <section className="flex flex-col gap-3" aria-labelledby="user-sign-in-methods">
+          <h2 id="user-sign-in-methods" className="text-lg font-semibold">Sign-in methods</h2>
+          <ExternalLoginList
+            links={links}
+            label={`Sign-in methods of ${fullName}`}
+            emptyText={`${fullName} has no linked provider.`}
+            headingRef={headingRef}
+            userId={id}
+          />
+        </section>
+      )}
       <section className="flex flex-col gap-3" aria-labelledby="user-tokens">
         <h2 id="user-tokens" className="text-lg font-semibold">Personal access tokens</h2>
         <TokenList
