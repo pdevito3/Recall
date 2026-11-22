@@ -11,7 +11,7 @@ import { StaleChangePrompts } from '@/domain/sessions/components/stale-change-pr
 import { userSettingDtoTimeZoneModeEnum } from '@/api/generated/models/types/user-setting-dto'
 import { followsTheDevice, journalZoneOf, settingSaver, useUserSetting, zoneOfNewEntries, type SettingChange } from '@/domain/settings/apis/user-setting'
 import { useCurrentUser } from '@/domain/users/apis/get-current-user'
-import { deviceTimeZone, timeZoneLabel, type TimeZone } from '@/lib/zoned-time'
+import { deviceTimeZone, parseTimeZone, timeZoneLabel, type TimeZone } from '@/lib/zoned-time'
 
 interface ZoneOption {
   id: string
@@ -22,7 +22,7 @@ const placeOf = (zone: string) => zone.replaceAll('/', ' / ')
 
 function zoneOption(id: string): ZoneOption {
   try {
-    return { id, label: `${placeOf(id)} (${timeZoneLabel(id as TimeZone)})` }
+    return { id, label: `${placeOf(id)} (${timeZoneLabel(parseTimeZone(id))})` }
   } catch {
     return { id, label: placeOf(id) }
   }
