@@ -90,6 +90,13 @@ public sealed class FakeBehavior
     /// <summary>With <see cref="FakeMode.Hold"/>, only a request that holds these words waits.</summary>
     public string? HoldOnly { get; set; }
 
+    private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>Ends each wait of <see cref="FakeMode.Hold"/> now and later, so a test can let the call answer after a step of its own.</summary>
+    public void Release() => _release.TrySetResult();
+
+    internal Task Released => _release.Task;
+
     /// <summary>The largest audio file that the route of transcriptions takes. OpenAI and Groq document 25 MB.</summary>
     public long MaxAudioBytes { get; set; } = FakeModelProvider.AudioFileLimit;
 
@@ -365,7 +372,7 @@ public sealed partial class FakeModelProvider : IAsyncDisposable
                 context.Response.Headers.Location = $"{Address}/stolen";
                 return;
             case FakeMode.Hold when Behavior.HoldOnly is null || text.Contains(Behavior.HoldOnly, StringComparison.Ordinal):
-                await Task.Delay(Behavior.DelayMs, context.RequestAborted);
+                await HoldAsync(context);
                 break;
         }
 
@@ -571,7 +578,7 @@ public sealed partial class FakeModelProvider : IAsyncDisposable
                 await WriteCompatibleErrorAsync(context, Behavior.Status, $"The fake answers with this status, key {_apiKey}");
                 return;
             case FakeMode.Hold when faulted:
-                await Task.Delay(Behavior.DelayMs, context.RequestAborted);
+                await HoldAsync(context);
                 break;
             case FakeMode.BadJson when faulted:
                 context.Response.ContentType = "application/json";
@@ -622,7 +629,7 @@ public sealed partial class FakeModelProvider : IAsyncDisposable
                 context.Response.Headers.Location = $"{Address}/stolen";
                 return;
             case FakeMode.Hold when Behavior.HoldOnly is null || text.Contains(Behavior.HoldOnly, StringComparison.Ordinal):
-                await Task.Delay(Behavior.DelayMs, context.RequestAborted);
+                await HoldAsync(context);
                 break;
         }
 
@@ -756,6 +763,18 @@ public sealed partial class FakeModelProvider : IAsyncDisposable
 
     private static string UserTextOfCompatible(JsonElement root)
         => root.GetProperty("messages").EnumerateArray().First(m => m.GetProperty("role").GetString() == "user").GetProperty("content").GetString()!;
+
+    /// <summary>Waits for <see cref="FakeBehavior.DelayMs"/> or for <see cref="FakeBehavior.Release"/>. A closed connection ends the request.</summary>
+    private async Task HoldAsync(HttpContext context)
+    {
+        try
+        {
+            await Behavior.Released.WaitAsync(TimeSpan.FromMilliseconds(Behavior.DelayMs), context.RequestAborted);
+        }
+        catch (TimeoutException)
+        {
+        }
+    }
 
     private static async Task<string> ReadBodyAsync(HttpContext context)
     {
