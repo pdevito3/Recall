@@ -2,6 +2,7 @@ namespace Recall.FunctionalTests.Auth;
 
 using Microsoft.Extensions.Time.Testing;
 using Recall.Server.Auth;
+using Recall.Server.Databases;
 using Serilog;
 
 public static class AuthHosts
@@ -26,6 +27,12 @@ public static class AuthHosts
 
     /// <summary>A host with no entry of <c>Auth:Providers</c> and with <c>Auth:AllowLoopbackProviders</c>, which only <see cref="LoginProviderTests"/> uses.</summary>
     public static AuthFlowFactory LoginProvidersNoEnvironment { get; private set; } = null!;
+
+    /// <summary>A host with no provider whose database holds a Usable row before <see cref="RowAtBoot"/> boots on it.</summary>
+    public static AuthFlowFactory RowAtBootDatabase { get; private set; } = null!;
+
+    /// <summary>A fresh host with no provider that boots on the database of <see cref="RowAtBootDatabase"/>, which only <see cref="LoginProviderTests"/> uses.</summary>
+    public static AuthFlowFactory RowAtBoot { get; private set; } = null!;
 
     /// <summary>A fresh host with no provider, which only the setup test uses.</summary>
     public static AuthFlowFactory Setup { get; private set; } = null!;
@@ -115,6 +122,13 @@ public static class AuthHosts
         {
             ["Auth:StartPermitsPerWindow"] = ManyStarts,
             ["Auth:AllowLoopbackProviders"] = "true",
+        }) { NoProvider = true });
+        RowAtBootDatabase = Start(new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts }) { NoProvider = true });
+        LoginProviderTests.AddUsableRowAsync(RowAtBootDatabase).GetAwaiter().GetResult();
+        RowAtBoot = Start(new AuthFlowFactory(new Dictionary<string, string?>
+        {
+            ["Auth:StartPermitsPerWindow"] = ManyStarts,
+            [$"ConnectionStrings:{DatabaseConsts.DatabaseName}"] = RowAtBootDatabase.ConnectionString,
         }) { NoProvider = true });
         MixedPerson = PasswordPeople.AddAsync(Mixed).GetAwaiter().GetResult();
         PasswordClaim = Start(new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts })
@@ -225,15 +239,12 @@ public static class AuthHosts
 
     public static async Task StopAsync()
     {
-        foreach (var host in new[] { Password, LoginProviders, LoginProvidersNoEnvironment, SetupLogs, Setup, SetupWithProvider, Mixed, PasswordClaim, LostJobTable, FrozenClock, WriterLine, KeepAlive, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, FirstPartyClient, Bundle, OwnerDemotion, Sweep, Jobs, Cleanups, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
+        // RowAtBoot runs on the database of RowAtBootDatabase, so it stops first.
+        foreach (var host in new[] { Password, LoginProviders, LoginProvidersNoEnvironment, RowAtBoot, RowAtBootDatabase, SetupLogs, Setup, SetupWithProvider, Mixed, PasswordClaim, LostJobTable, FrozenClock, WriterLine, KeepAlive, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, FirstPartyClient, Bundle, OwnerDemotion, Sweep, Jobs, Cleanups, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
         {
             if (host is not null)
                 await host.DisposeAsync();
         }
-
-        // The last host can run on the database of an earlier one, so the stops go in the reverse order.
-        foreach (var host in Enumerable.Reverse(StartedByATest))
-            await host.DisposeAsync();
 
         if (BundleExport is not null)
             await BundleExport.DisposeAsync();
@@ -244,19 +255,11 @@ public static class AuthHosts
 
     private static AuthFlowFactory Start(Dictionary<string, string?> settings, StubOidcProvider? provider = null) => Start(new AuthFlowFactory(settings, provider));
 
-    private static readonly List<AuthFlowFactory> StartedByATest = [];
-
-    /// <summary>
-    /// Starts a host for one test and stops it with the others at the end of the run. The stop of a host closes the static logger of
-    /// the process, so a host that stops before the end takes the logs of each other host with it.
-    /// </summary>
-    public static AuthFlowFactory StartUntilTheEnd(AuthFlowFactory host)
-    {
-        lock (StartedByATest)
-            StartedByATest.Add(host);
-        return Start(host);
-    }
-
+    /// <remarks>
+    /// Only <see cref="Start()"/> calls this, before the first test. The boot of a host sets the static logger of the process to its own
+    /// logger until this puts the tee back, so a host that a test boots takes the static lines of each other host for that time. The
+    /// stop of a host closes the static logger, so each host also runs until the end of the run.
+    /// </remarks>
     private static AuthFlowFactory Start(AuthFlowFactory host)
     {
         var main = Log.Logger;

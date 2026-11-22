@@ -8,7 +8,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Recall.Server.Auth;
 using Recall.Server.Auth.Entities;
-using Recall.Server.Databases;
 using Recall.Server.Domain.LoginProviders;
 using Recall.Server.Domain.LoginProviders.Features;
 using Recall.Server.Domain.Users;
@@ -36,6 +35,15 @@ public class LoginProviderTests
         });
         await host.Services.GetRequiredService<LoginModes>().ReloadAsync(CancellationToken.None);
     }
+
+    /// <summary>Adds a Usable row to the database of <paramref name="host"/>, for the host that <see cref="AuthHosts.RowAtBoot"/> boots on it.</summary>
+    public static Task AddUsableRowAsync(AuthFlowFactory host) => host.WithDatabaseAsync(async db =>
+    {
+        var form = new LoginProviderForm("Row provider", AuthFlowFactory.RowIssuer, StubOidcProvider.ClientId, false, null);
+        var secret = host.Services.GetRequiredService<LoginProviderSecret>().Protect(host.RowProvider.ClientSecret);
+        db.LoginProviders.Add(LoginProvider.Add(form, RowId, secret, DateTimeOffset.UtcNow));
+        return await db.SaveChangesAsync();
+    });
 
     private static async Task<(AuthBrowser Browser, PatPerson Admin)> SignedInAdminAsync()
     {
@@ -507,22 +515,10 @@ public class LoginProviderTests
     [Property("Rule", "IDP-17")]
     public async Task a_fresh_server_on_a_database_with_a_usable_row_lists_it_and_closes_the_setup()
     {
-        // Arrange
-        var first = AuthHosts.StartUntilTheEnd(new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = "100000" }) { NoProvider = true });
-        await first.WithDatabaseAsync(async db =>
-        {
-            var form = new LoginProviderForm("Row provider", AuthFlowFactory.RowIssuer, StubOidcProvider.ClientId, false, null);
-            var secret = first.Services.GetRequiredService<LoginProviderSecret>().Protect(first.RowProvider.ClientSecret);
-            db.LoginProviders.Add(LoginProvider.Add(form, RowId, secret, DateTimeOffset.UtcNow));
-            return await db.SaveChangesAsync();
-        });
+        // Arrange: AuthHosts.Start adds the row with AddUsableRowAsync before it boots RowAtBoot on that database.
+        var restarted = AuthHosts.RowAtBoot;
 
         // Act
-        var restarted = AuthHosts.StartUntilTheEnd(new AuthFlowFactory(new Dictionary<string, string?>
-        {
-            ["Auth:StartPermitsPerWindow"] = "100000",
-            [$"ConnectionStrings:{DatabaseConsts.DatabaseName}"] = first.ConnectionString,
-        }) { NoProvider = true });
         var modes = await StatusModeIdsAsync(restarted);
         using var browser = new AuthBrowser(restarted);
         var setup = await browser.GetAsync(AuthRoutes.PasswordSetup);
