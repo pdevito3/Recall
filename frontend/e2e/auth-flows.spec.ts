@@ -110,6 +110,7 @@ test.describe(`Auth Flows - ${currentIdp.name}`, () => {
         await page.waitForURL((url) => url.origin !== appOrigin, { timeout: 30000, waitUntil: 'commit' })
         // A visit too soon would stop the logout that the confirm started
         if (currentIdp.logoutConfirmSelector) await expect(page.locator(currentIdp.logoutConfirmSelector)).toHaveCount(0)
+        if (currentIdp.logoutDoneSelector) await expect(page.locator(currentIdp.logoutDoneSelector)).toBeVisible({ timeout: 30000 })
         await page.goto(new URL('/auth/login?signedOut=1', appOrigin).toString())
       }
       await page.waitForURL((url) => url.pathname === '/auth/login' && url.searchParams.get('signedOut') === '1', { timeout: 30000 })

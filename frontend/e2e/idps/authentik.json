@@ -9,6 +9,7 @@
   "twoStepLogin": true,
   "secondStepSubmitSelector": "role=button[name=\"Continue\" s]",
   "logoutStaysAtProvider": true,
+  "logoutDoneSelector": "[placeholder=\"Email or Username\"]",
   "capabilities": {
     "revocation": true,
     "issuerParameter": false,
