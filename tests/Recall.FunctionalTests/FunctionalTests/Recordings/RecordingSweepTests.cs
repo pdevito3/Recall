@@ -139,6 +139,24 @@ public class RecordingSweepTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "REC-11")]
+    public async Task the_sweep_removes_a_folder_named_for_a_user_of_another_tenant()
+    {
+        // Arrange
+        var (tenant, _) = await AddTenantWithAdminAsync();
+        var (_, other) = await AddTenantWithAdminAsync();
+        using var folder = new SweptFolder();
+        var orphan = FileKey.ForTenant(tenant.Id, RecordingFiles.RootFolder, other.Id, "rec_1", "audio.webm");
+        await folder.WriteAsync(orphan);
+
+        // Act
+        await folder.Sweep.RunAsync(CancellationToken.None);
+
+        // Assert
+        folder.Holds(orphan).ShouldBeFalse();
+    }
+
+    [Test]
     [Property("Rule", "REC-7")]
     public async Task the_hourly_check_queues_a_recording_that_still_waits()
     {
@@ -291,7 +309,6 @@ public class RecordingSweepTests : TestBase
         (await CountJobsAsync("transcribe-recording", jobGone.Id)).ShouldBeGreaterThan(0);
     }
 
-    // The timer exists only after the first sweep, so one advance can come too early.
     private static async Task<long> WaitForMoreJobsAsync(string recordingId, long known)
     {
         using var limit = new CancellationTokenSource(SweepLimit);
