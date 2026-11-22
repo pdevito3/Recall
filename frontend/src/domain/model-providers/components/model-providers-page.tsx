@@ -9,12 +9,13 @@ import { useModelProviders } from '../apis/model-providers'
 import { ConnectProviderForm } from './connect-provider-form'
 import { ModelProviderCard } from './model-provider-card'
 
+// The same words as ChangedText and NotWritableText of KeyRingStatus on the Server, which logs them at start (IDP-5).
 const KEY_RING_TEXT: Record<ModelProviderListDto['keyRing'], string | null> = {
   Same: null,
   Changed:
-    'The key ring changed: the database holds values that this key ring cannot read. Restore the key folder from the same backup as the database, or enter each API key again.',
+    'The key ring changed: the database holds values that this key ring cannot read. Restore the key folder from the same backup as the database, or enter each API key of a model provider and each client secret of a login provider again.',
   NotWritable:
-    'The key folder takes no write. Each saved API key still works, but a key that the server makes for the ring after this does not stay after a restart. Make the folder writable.',
+    'The key folder takes no write. Each saved API key of a model provider and client secret of a login provider still works, but a key that the server makes for the ring after this does not stay after a restart. Make the folder writable.',
 }
 
 function Providers() {

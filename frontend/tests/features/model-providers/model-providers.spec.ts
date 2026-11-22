@@ -141,7 +141,7 @@ test.describe('the model providers page', () => {
 
     await page.goto('/model-providers')
 
-    await expect(at.keyRingWarning).toBeVisible()
+    await expect(at.keyRingWarning).toContainText('enter each API key of a model provider and each client secret of a login provider again.')
     await expect(at.text('The server cannot read this key. Enter it again.')).toBeVisible()
   })
 
@@ -151,7 +151,7 @@ test.describe('the model providers page', () => {
 
     await page.goto('/model-providers')
 
-    await expect(at.text('Each saved API key still works')).toBeVisible()
+    await expect(at.text('Each saved API key of a model provider and client secret of a login provider still works')).toBeVisible()
     await expect(at.text('a new ring')).toHaveCount(0)
   })
 
