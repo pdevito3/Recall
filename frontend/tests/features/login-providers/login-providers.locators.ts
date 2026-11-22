@@ -3,6 +3,8 @@ import type { Page } from '@playwright/test'
 export const loginProviders = (page: Page) => {
   const card = (name: string) => page.getByRole('article', { name, exact: true })
   const dialog = page.getByRole('dialog')
+  const passwordLogin = page.getByRole('region', { name: 'Password login' })
+  const turnOffAsk = page.getByRole('dialog', { name: 'Turn password login off?' })
 
   return {
     heading: page.getByRole('heading', { level: 1, name: 'Login providers' }),
@@ -35,6 +37,18 @@ export const loginProviders = (page: Page) => {
     staleAlert: dialog.getByRole('alert').filter({ hasText: 'This login provider changed after you opened it.' }),
     confirmDelete: page.getByRole('button', { name: 'Delete login provider' }),
     dialogText: (text: string) => dialog.getByText(text),
+    passwordLogin,
+    onlyClaimOwnerNote: page.getByText(/only the claim-owner file of the server lets anyone in/),
+    passwordLoginState: (state: 'On' | 'Off') => passwordLogin.getByText(state, { exact: true }),
+    passwordLoginText: (text: string | RegExp) => passwordLogin.getByText(text),
+    passwordLoginAlert: passwordLogin.getByRole('alert'),
+    passwordLoginHeading: page.getByRole('heading', { level: 2, name: 'Password login' }),
+    turnOff: passwordLogin.getByRole('button', { name: 'Turn password login off' }),
+    turnOn: passwordLogin.getByRole('button', { name: 'Turn password login on' }),
+    turnOffAsk,
+    turnOffAskText: (text: string | RegExp) => turnOffAsk.getByText(text),
+    confirmTurnOff: turnOffAsk.getByRole('button', { name: 'Turn password login off' }),
+    keepOn: turnOffAsk.getByRole('button', { name: 'Keep password login on' }),
     toast: (text: string) => page.getByRole('alertdialog').filter({ hasText: text }),
     pageOverflow: () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
     controls: page.locator('main').getByRole('button').or(page.locator('main input:not([type=hidden])')),

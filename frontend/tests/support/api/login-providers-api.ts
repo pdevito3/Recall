@@ -2,6 +2,7 @@ import type { EnvironmentLoginProviderDto } from '@/api/generated/models/types/e
 import type { LoginProviderDto } from '@/api/generated/models/types/login-provider-dto'
 import type { LoginProviderListDto } from '@/api/generated/models/types/login-provider-list-dto'
 import type { LoginProviderTestResultDto } from '@/api/generated/models/types/login-provider-test-result-dto'
+import type { LoginSettingsDto, LoginSettingsDtoPasswordLoginEnumKey } from '@/api/generated/models/types/login-settings-dto'
 
 import { aProblem } from '../builders/problem-details-builder'
 import type { MockRoute } from './mock-route'
@@ -10,6 +11,7 @@ export const loginProviderPaths = {
   list: '/api/v1/login-providers',
   test: '/api/v1/login-providers/test',
   record: (id: string) => `/api/v1/login-providers/${id}`,
+  settings: '/api/v1/login-settings',
 }
 
 export const callbackUrl = 'https://recall.example.com/auth/oidc/callback'
@@ -80,5 +82,22 @@ export const loginProvidersApi = {
 
   testAnswers(result: LoginProviderTestResultDto): MockRoute {
     return { method: 'post', path: loginProviderPaths.test, status: 200, body: result }
+  },
+
+  settingsHold(passwordLogin: LoginSettingsDtoPasswordLoginEnumKey = 'On', version = 1): MockRoute {
+    return { method: 'get', path: loginProviderPaths.settings, status: 200, body: { passwordLogin, version } satisfies LoginSettingsDto }
+  },
+
+  settingsUpdateAnswers(passwordLogin: LoginSettingsDtoPasswordLoginEnumKey, version: number): MockRoute {
+    return { method: 'put', path: loginProviderPaths.settings, status: 200, body: { passwordLogin, version } satisfies LoginSettingsDto }
+  },
+
+  /** The 409 of IDP-13, as `ConflictException` gives it with no field. */
+  settingsUpdateConflicts(detail: string): MockRoute {
+    return { method: 'put', path: loginProviderPaths.settings, status: 409, body: aProblem().conflict(detail).build() }
+  },
+
+  settingsUpdateIsStale(): MockRoute {
+    return { method: 'put', path: loginProviderPaths.settings, status: 409, body: aProblem().staleVersion().build() }
   },
 }
