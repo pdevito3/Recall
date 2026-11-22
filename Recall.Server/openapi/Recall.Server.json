@@ -1315,6 +1315,132 @@
         }
       }
     },
+    "/api/v1/login-settings": {
+      "get": {
+        "tags": [
+          "LoginProviders"
+        ],
+        "summary": "Reads whether password login is on for the install. Only a person signed in to Recall can read it.",
+        "operationId": "GetLoginSettings",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginSettingsDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "LoginProviders"
+        ],
+        "summary": "Turns password login on or off for the install. A turn off is refused until each tenant has an Admin who can sign in with a\nprovider. Only a person signed in to Recall can change it.",
+        "operationId": "UpdateLoginSettings",
+        "parameters": [
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginSettingsForUpdateDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginSettingsDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/login-providers/test": {
       "post": {
         "tags": [
@@ -8179,6 +8305,51 @@
                 "$ref": "#/components/schemas/LoginProviderTestFailureDto"
               }
             ]
+          }
+        }
+      },
+      "LoginSettingsDto": {
+        "required": [
+          "passwordLogin",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "passwordLogin": {
+            "enum": [
+              "On",
+              "Off"
+            ],
+            "type": "string",
+            "description": "`Off`: the login page has no password form, and a temporary password only links a provider (IDP-15, IDP-20)."
+          },
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "description": "The login settings of the install (IDP-13)."
+      },
+      "LoginSettingsForUpdateDto": {
+        "required": [
+          "passwordLogin",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "passwordLogin": {
+            "enum": [
+              "On",
+              "Off"
+            ],
+            "type": "string",
+            "description": "A turn to `Off` gets 409 unless each tenant has an Admin who can sign in with a provider (IDP-13)."
+          },
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
           }
         }
       },

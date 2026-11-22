@@ -35,7 +35,7 @@ public static class DeleteLoginProvider
                     .TagWithOperationCallSite("login_providers.delete.load")
                     .FirstOrDefaultAsync(p => p.Id == request.Id, ct) ?? throw new NotFoundException();
 
-                await LastAdmin.GuardEachTenantAsync(dbContext, modes.UsableIssuers, modes.UsableIssuersWithout(provider.Id), ct);
+                await LastAdmin.GuardEachTenantAsync(dbContext, modes.UsableIssuers, modes.UsableIssuersWithout(provider.Id), modes.PasswordsAreOn, ct);
                 dbContext.LoginProviders.Remove(provider);
                 dbContext.RecordAction(new LoginProviderDeleted(await LoginProviderAudit.SubjectAsync(dbContext, ct), provider.Id, provider.Issuer));
                 await dbContext.SaveChangesAsync(ct);
