@@ -48,7 +48,7 @@ function FieldMessage({ id, message }: { id: string; message?: string }) {
   )
 }
 
-interface TokenFormProps {
+export interface TokenFormProps {
   permissions: readonly string[]
   today: CalendarDate
   zone: TimeZone
