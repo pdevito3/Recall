@@ -177,6 +177,8 @@ public static class OidcEndpoints
         var callback = new OidcCallback(OneValue(query, "code"), OneValue(query, "iss"), OneValue(query, "error"));
         if (attempt.LinkSessionId is { } linkSessionId)
             return await FinishLinkAsync(http, modes, store, linker, attempt, linkSessionId, callback, cancellationToken);
+        if (attempt.UserId is { } userId)
+            return await FinishTemporaryLinkAsync(http, modes, completion, linker, attempt, userId, callback, cancellationToken);
 
         var redeemed = modes.FindOidc(attempt.ModeId) is { } mode
             ? await mode.RedeemAsync(attempt, callback, cancellationToken)
@@ -221,6 +223,46 @@ public static class OidcEndpoints
         };
         Telemetry.AddEvent([("app.link.result", result)], "auth.link.finished");
         return SettingsWith(result);
+    }
+
+    /// <summary>
+    /// The callback of a link after a temporary password (IDP-20). It adds the link under IDP-11 and deletes the temporary credential in
+    /// one save, then starts the session or the app code. An identity that is linked to another user adds nothing and starts nothing, and
+    /// the temporary password still works.
+    /// </summary>
+    private static async Task<IResult> FinishTemporaryLinkAsync(
+        HttpContext http, LoginModes modes, LoginCompletion completion, LinkExternalLogin linker, LoginAttempt attempt, string userId,
+        OidcCallback callback, CancellationToken cancellationToken)
+    {
+        var client = LoginClient.FromAttempt(attempt);
+        var redeemed = modes.FindOidc(attempt.ModeId) is { } mode
+            ? await mode.RedeemAsync(attempt, callback, cancellationToken)
+            : RedeemResult.Failed(LoginFailure.InvalidResponse);
+        if (redeemed.Identity is not { } identity)
+            return await completion.CompleteAsync(client, new ProvisionOutcome.Failed(redeemed.Failure!.Value), attempt.ModeId, http, cancellationToken);
+
+        // The callback has no caller. The right temporary password of the attempt proves the user, so this makes that user the caller,
+        // and the save names them as the actor of its audit entries, as a link from settings does.
+        var visitor = http.User;
+        http.User = AppSessionHandler.PrincipalOfLinkingUser(userId);
+        (LinkOutcome Outcome, ProvisionOutcome.Provisioned? User) linked;
+        try
+        {
+            linked = await linker.LinkAfterTemporaryPasswordAsync(userId, attempt.CredentialChangedAt, identity, cancellationToken);
+        }
+        finally
+        {
+            http.User = visitor;
+        }
+
+        var (outcome, user) = linked;
+        Telemetry.AddEvent([("app.link.result", outcome.ToString())], "auth.link_temporary.finished");
+        return outcome switch
+        {
+            LinkOutcome.Linked or LinkOutcome.AlreadyLinked => await completion.CompleteAsync(client, user!, attempt.ModeId, http, cancellationToken),
+            LinkOutcome.LinkedToAnotherUser => AuthPages.LinkedToAnotherPerson(client),
+            _ => AuthPages.Refused(),
+        };
     }
 
     private static AuthRedirect SettingsWith(string result) => new($"{SettingsPath}?{LinkResultQuery}={result}");

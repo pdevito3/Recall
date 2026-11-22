@@ -4,6 +4,7 @@ using Databases;
 using Domain.AuditEntries;
 using Domain.Users;
 using Entities;
+using Exceptions;
 using Microsoft.EntityFrameworkCore;
 using Resources;
 using Serilog;
@@ -14,6 +15,9 @@ public enum LinkOutcome
     AlreadyLinked,
     LinkedToAnotherUser,
     NoUser,
+
+    /// <summary>The temporary password of a link after it changed, expired, or went, so the link adds nothing (IDP-20).</summary>
+    CredentialGone,
 }
 
 /// <summary>
@@ -45,6 +49,95 @@ public sealed class LinkExternalLogin(IServiceScopeFactory scopeFactory, TimePro
             {
             }
         }
+    }
+
+    /// <summary>
+    /// The link after a right temporary password while password login is Off (IDP-20). The temporary password must still be the one issued
+    /// at <paramref name="changedAt"/>. One save adds the link under IDP-11 and deletes the temporary credential, and the version of the
+    /// credential makes the save stale when it changed in between. An identity that is linked to another user changes nothing, so the
+    /// temporary password still works. The caller of the request must be the user, so the save names them as its actor.
+    /// </summary>
+    public async Task<(LinkOutcome Outcome, ProvisionOutcome.Provisioned? User)> LinkAfterTemporaryPasswordAsync(
+        string userId, DateTimeOffset? changedAt, ExternalIdentity identity, CancellationToken cancellationToken)
+    {
+        for (var run = 1; ; run++)
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            try
+            {
+                return await LinkAfterTemporaryPasswordOnceAsync(dbContext, userId, changedAt, identity, cancellationToken);
+            }
+            catch (ConstraintConflictException conflict) when (conflict.Constraint == "pk_auth_external_logins" && run < MaxRuns)
+            {
+            }
+            // An issue, a sign-in, or a claim changed the credential after the load, so this temporary password is not the one of the attempt.
+            catch (StaleVersionException)
+            {
+                return (LinkOutcome.CredentialGone, null);
+            }
+        }
+    }
+
+    private async Task<(LinkOutcome Outcome, ProvisionOutcome.Provisioned? User)> LinkAfterTemporaryPasswordOnceAsync(
+        AppDbContext dbContext, string userId, DateTimeOffset? changedAt, ExternalIdentity identity, CancellationToken cancellationToken)
+    {
+        var tenantId = await dbContext.Users
+            .AsNoTracking()
+            .TagWithOperationCallSite("auth.link_temporary.tenant")
+            .Where(u => u.Id == userId)
+            .Select(u => u.TenantId)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (tenantId is null)
+            return (LinkOutcome.NoUser, null);
+
+        return await RootLock.Tenant.RunSharedAsync(dbContext, tenantId, async ct =>
+        {
+            var user = await dbContext.Users
+                .TagWithOperationCallSite("auth.link_temporary.user")
+                .FirstOrDefaultAsync(u => u.Id == userId, ct);
+            if (user is null)
+                return (LinkOutcome.NoUser, (ProvisionOutcome.Provisioned?)null);
+
+            // In the lock, so a removal of this link, which holds the exclusive lock, cannot land between this read and the delete of the
+            // temporary password and leave the user with no way in.
+            var owner = await dbContext.Set<ExternalLogin>()
+                .AsNoTracking()
+                .TagWithOperationCallSite("auth.link_temporary.find")
+                .Where(l => l.Issuer == identity.Issuer && l.Subject == identity.Subject)
+                .Select(l => l.UserId)
+                .FirstOrDefaultAsync(ct);
+            if (owner is not null && owner != userId)
+                return (LinkOutcome.LinkedToAnotherUser, null);
+
+            var now = timeProvider.GetUtcNow();
+            var credential = await dbContext.Set<PasswordCredential>()
+                .TagWithOperationCallSite("auth.link_temporary.credential")
+                .FirstOrDefaultAsync(c => c.UserId == userId, ct);
+            if (credential is not { State: PasswordState.Temporary } || credential.ChangedAt != changedAt || credential.IsExpired(now))
+                return (LinkOutcome.CredentialGone, null);
+
+            dbContext.Set<PasswordCredential>().Remove(credential);
+            dbContext.RecordAction(new TemporaryPasswordEnded(AuditSubject.Of(user)));
+            if (owner is null)
+            {
+                var link = new ExternalLogin
+                {
+                    Issuer = identity.Issuer,
+                    Subject = identity.Subject,
+                    UserId = user.Id,
+                    CreatedAt = now,
+                    LastLoginAt = now,
+                    DisplayLabel = NewPerson.LabelOf(identity.Profile),
+                };
+                dbContext.Set<ExternalLogin>().Add(link);
+                dbContext.RecordAction(new ExternalLoginLinked(AuditSubject.Of(user), link.Issuer, link.Subject, link.DisplayLabel));
+            }
+
+            await dbContext.SaveChangesAsync(ct);
+            _logger.Here().Information("Linked a login of issuer {Issuer} to user {UserId} after a temporary password, and deleted the temporary password", identity.Issuer, user.Id);
+            return (owner is null ? LinkOutcome.Linked : LinkOutcome.AlreadyLinked, new ProvisionOutcome.Provisioned(user.Id, user.FullName));
+        }, cancellationToken);
     }
 
     private async Task<LinkOutcome> LinkOnceAsync(AppDbContext dbContext, string userId, ExternalIdentity identity, CancellationToken cancellationToken)
@@ -95,3 +188,7 @@ public sealed class LinkExternalLogin(IServiceScopeFactory scopeFactory, TimePro
         }, cancellationToken);
     }
 }
+
+/// <summary>A link after a temporary password deleted that temporary password (IDP-20). It holds no password and no hash.</summary>
+[AuditActionName("temporary_password_ended")]
+public sealed record TemporaryPasswordEnded(AuditSubject Subject) : AuditAction(Subject);

@@ -53,6 +53,13 @@ public sealed class AppSessionHandler(
         return new ClaimsPrincipal(new ClaimsIdentity(claims, SchemeName, "name", "role"));
     }
 
+    /// <summary>
+    /// The person of a link after a temporary password, who has no session yet (IDP-20). It names the user and the app client, so a save
+    /// names that person as its actor. It has no session and no client kind, so no route that needs a session takes it.
+    /// </summary>
+    public static ClaimsPrincipal PrincipalOfLinkingUser(string userId)
+        => new(new ClaimsIdentity([new Claim("sub", userId), new Claim("client_id", FirstPartyClientOptions.AppClientId)], SchemeName, "name", "role"));
+
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var credential = CredentialOf(Request.Headers.Authorization.ToString());

@@ -493,4 +493,82 @@ public class PasswordsOffTests
         (await Host.WithDatabaseAsync(db => db.LoginSettings.SingleAsync())).PasswordLogin.ShouldBe(PasswordLoginState.Off);
         (await StatusModeIdsAsync(Host)).ShouldNotContain(PasswordLoginMode.ModeId);
     }
+
+    private static async Task<AuthorizeRequest> TemporarySignInAsync(AuthBrowser browser, PasswordPerson person)
+    {
+        var state = await browser.FormStateAsync($"{AuthRoutes.Login}?{AuthPages.TemporaryPasswordQuery}=1");
+        var started = await browser.PostLoginAsync(state, person.LoginName, person.Password);
+        started.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        return AuthorizeRequest.Of(started.Headers.Location!);
+    }
+
+    [Test]
+    [Property("Rule", "IDP-20")]
+    public async Task while_passwords_are_off_a_temporary_password_links_a_provider_then_starts_the_session_and_ends_the_password()
+    {
+        // Arrange
+        await ResetAsync(Host);
+        var (browser, admin) = await SignedInAdminAsync();
+        using var signedIn = browser;
+        var person = await AddPasswordUserAsync(Host, admin.TenantId, UserRole.User(), issueTemporary: DateTimeOffset.UtcNow);
+        await TurnOffAsync(browser);
+        using var personBrowser = new AuthBrowser(Host);
+        var subject = $"off-{Guid.NewGuid():N}";
+
+        // Act
+        var page = await (await personBrowser.GetAsync($"{AuthRoutes.Login}?signedOut=1")).Content.ReadAsStringAsync();
+        var authorize = await TemporarySignInAsync(personBrowser, person);
+        var sessionBeforeCallback = personBrowser.SessionCookie;
+        var callback = await personBrowser.CallbackAsync(authorize.State, Host.Provider.Approve(authorize, new StubLogin(subject) { Email = "grace@example.test" }));
+        using var again = new AuthBrowser(Host);
+        var reused = await again.PostLoginAsync(
+            await again.FormStateAsync($"{AuthRoutes.Login}?{AuthPages.TemporaryPasswordQuery}=1"), person.LoginName, person.Password);
+
+        // Assert
+        page.ShouldContain(AuthPages.TemporaryPasswordLabel);
+        authorize.Prompt.ShouldBe(AuthPages.PromptLogin);
+        sessionBeforeCallback.ShouldBeNull();
+        callback.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        personBrowser.SessionCookie.ShouldNotBeNull();
+        (await personBrowser.UserOfSessionAsync()).ShouldBe(person.UserId);
+        var link = await Host.WithDatabaseAsync(db => db.Set<ExternalLogin>().AsNoTracking().SingleAsync(l => l.UserId == person.UserId));
+        (link.Issuer, link.Subject, link.DisplayLabel).ShouldBe((StubOidcProvider.Issuer, subject, "grace@example.test"));
+        (await Host.WithDatabaseAsync(db => db.Set<PasswordCredential>().AnyAsync(c => c.UserId == person.UserId))).ShouldBeFalse();
+        var actions = await Host.WithDatabaseAsync(db => db.AuditEntries.IgnoreQueryFilters()
+            .Where(e => e.RootId == person.UserId && (e.Action == "external_login_linked" || e.Action == "temporary_password_ended"))
+            .Select(e => new { e.Action, e.ActorUserId })
+            .ToListAsync());
+        actions.Select(a => a.Action).Order().ShouldBe(["external_login_linked", "temporary_password_ended"]);
+        actions.ShouldAllBe(a => a.ActorUserId == person.UserId);
+        reused.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        using var later = new AuthBrowser(Host);
+        await later.LoginWebAsync(subject);
+        (await later.UserOfSessionAsync()).ShouldBe(person.UserId);
+    }
+
+    [Test]
+    [Property("Rule", "IDP-20")]
+    public async Task a_temporary_password_whose_provider_identity_is_linked_to_another_person_links_nothing_and_still_works()
+    {
+        // Arrange
+        await ResetAsync(Host);
+        var (browser, admin) = await SignedInAdminAsync();
+        using var signedIn = browser;
+        var person = await AddPasswordUserAsync(Host, admin.TenantId, UserRole.User(), issueTemporary: DateTimeOffset.UtcNow);
+        await TurnOffAsync(browser);
+        using var personBrowser = new AuthBrowser(Host);
+
+        // Act
+        var authorize = await TemporarySignInAsync(personBrowser, person);
+        var callback = await personBrowser.CallbackAsync(authorize.State, Host.Provider.Approve(authorize, new StubLogin(admin.Subject)));
+        var retry = await TemporarySignInAsync(personBrowser, person);
+
+        // Assert
+        callback.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await callback.Content.ReadAsStringAsync()).ShouldContain(AuthPages.LinkedToAnotherMessage);
+        personBrowser.SessionCookie.ShouldBeNull();
+        (await Host.WithDatabaseAsync(db => db.Set<ExternalLogin>().AnyAsync(l => l.UserId == person.UserId))).ShouldBeFalse();
+        (await PasswordPeople.CredentialOfAsync(Host, person.UserId)).State.ShouldBe(PasswordState.Temporary);
+        retry.Prompt.ShouldBe(AuthPages.PromptLogin);
+    }
 }

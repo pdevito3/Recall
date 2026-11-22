@@ -54,6 +54,26 @@ public static class AuthPages
 
     public const string TemporaryPasswordLabel = "I have a temporary password";
 
+    public const string LinkedToAnotherMessage = "This account at the provider is linked to another person in Recall.";
+
+    public const string NoProviderAnsweredMessage = "No provider answered. Wait a few minutes, then try again.";
+
+    /// <summary>The choice of the provider to link after a temporary password, when the install has more than one (IDP-20).</summary>
+    public static IResult ChooseProviderToLink(IReadOnlyList<(string DisplayName, string Url)> providers, LoginClient client) => Page(
+        StatusCodes.Status200OK,
+        "Pick your sign-in provider",
+        "<p>Your temporary password worked. Sign in at the provider that you use from now on, and Recall links it to your account.</p>"
+            + $"<ul>{string.Concat(providers.Select(p => $"<li><a class=\"button\" href=\"{E(p.Url)}\">Sign in with {E(p.DisplayName)}</a></li>"))}</ul>",
+        PolicyFor(client));
+
+    /// <summary>The callback of a link after a temporary password whose identity is linked to another user (IDP-11, IDP-20).</summary>
+    public static IResult LinkedToAnotherPerson(LoginClient client) => Page(
+        StatusCodes.Status409Conflict,
+        "Recall did not link the provider",
+        $"<p>{E(LinkedToAnotherMessage)}</p><p>Your temporary password still works. Sign in with it again, and use another account at the provider.</p>"
+            + Action("Try again", $"{LoginUrl(client)}&{TemporaryPasswordQuery}=1"),
+        PolicyFor(client));
+
     /// <summary>The query of the login page that opens the password form while password login is Off (IDP-20).</summary>
     public const string TemporaryPasswordQuery = "temporaryPassword";
 
