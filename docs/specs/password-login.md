@@ -113,6 +113,6 @@ The `/auth/password/*` routes are not in the OpenAPI document, as with the other
 
 | Decision | Who decides | Rules that wait |
 |---|---|---|
-| The PWD-13 message tells a person who tries 100 times that the login name exists, and the 100th try stops the account for its person. PWD-12 waits per address, and `failed_count` counts over all addresses, so about 20 addresses or IPv6 `/64`s reach 100 in seconds. The spec does not limit this. The operator must decide whether to accept it. | The operator | PWD-13 |
+| The PWD-13 message tells a person who tries 100 times that the login name exists, and the 100th try stops the account for its person. PWD-12 waits per address, and `failed_count` counts over all addresses, so about 20 addresses or IPv6 `/64`s reach 100 in seconds. The operator decided to keep the stop as NIST asks, and the owner claim file recovers a stopped Owner (PWD-19). | Decided by the operator | None |
 | Behind a proxy, each client shares the address of the proxy, so one stranger's wrong tries make the real person wait under PWD-12 for that login name. The rule follows [Limit on login starts](../authentication.md#limit-on-login-starts) and reads no `X-Forwarded-For`. | The operator | PWD-12 |
 | The 7 days of a temporary password and the 100 tries of PWD-13 are not settings. | The operator | PWD-13, PWD-15 |
