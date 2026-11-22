@@ -2119,7 +2119,7 @@ internal static class Templates
                     var delete = () => testingServiceScope.SendAsync(new Delete{{e}}.Command({{v}}.Id));
 
                     // Assert
-                    const string refusal = "You cannot {{n.PermissionWords}}. Ask a tenant admin for access.";
+                    const string refusal = "You cannot {{n.PermissionWords}}. Ask an admin for access.";
                     (await add.ShouldThrowAsync<ForbiddenAccessException>()).Message.ShouldBe(refusal);
                     (await update.ShouldThrowAsync<ForbiddenAccessException>()).Message.ShouldBe(refusal);
                     (await delete.ShouldThrowAsync<ForbiddenAccessException>()).Message.ShouldBe(refusal);
