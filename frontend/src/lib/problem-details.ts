@@ -78,6 +78,8 @@ export function isProblemDetails(obj: unknown): obj is ProblemDetails {
 export const STALE_VERSION_PROBLEM_TYPE = 'urn:recall:problem:stale-version'
 export const CONCURRENT_CHANGE_PROBLEM_TYPE = 'urn:recall:problem:concurrent-change'
 export const PAGE_USER_MISMATCH_PROBLEM_TYPE = 'urn:recall:problem:page-user-mismatch'
+/** The 403 of a link from a session that began more than 15 minutes ago (IDP-10). */
+export const SIGN_IN_AGAIN_TO_LINK_PROBLEM_TYPE = 'urn:recall:problem:sign-in-again-to-link'
 
 export function isStaleVersionError(error: unknown): boolean {
   return isProblemDetailsError(error) && error.problemDetails.type === STALE_VERSION_PROBLEM_TYPE

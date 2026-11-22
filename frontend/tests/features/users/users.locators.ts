@@ -24,6 +24,11 @@ export const users = (page: Page) => {
     emptyPage: page.getByText(/^There are no users on page \d+\./),
     firstPageLink: page.getByRole('link', { name: 'Go to page 1' }),
     loadFailure: page.getByRole('alert').filter({ hasText: 'The users did not load.' }),
+    signInMethods: (owner: string) => page.getByRole('list', { name: `Sign-in methods of ${owner}` }),
+    signInMethod: (owner: string, name: string) =>
+      page.getByRole('list', { name: `Sign-in methods of ${owner}` }).getByRole('listitem', { name, exact: true }),
+    signInMethodsHeading: page.getByRole('heading', { name: 'Sign-in methods' }),
+    signInMethodRemoved: page.getByText('Sign-in method removed'),
     detailHeading: (name: string) => page.getByRole('heading', { name, exact: true }),
     detail: (text: string) => details.getByRole('definition').and(details.getByText(text, { exact: true })),
     actions: (name: string) => page.getByRole('group', { name: `Actions for ${name}` }),

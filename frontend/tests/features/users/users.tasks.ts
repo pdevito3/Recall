@@ -48,6 +48,11 @@ export function usersPage(page: Page) {
       await settled
     },
 
+    async removeSignInMethod(name: string) {
+      await page.getByRole('button', { name: `Remove ${name}`, exact: true }).click()
+      await page.getByRole('dialog').getByRole('button', { name: 'Remove', exact: true }).click()
+    },
+
     async openDetail(id: string) {
       const settled = answered('GET', usersPaths.one(id))
       await page.goto(`/users/${id}`)

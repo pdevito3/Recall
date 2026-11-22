@@ -42,6 +42,8 @@ const CONTROLS: Record<UserAction, ActionControl | null> = {
   Delete: ConfirmDelete,
   // Until the current user loads, the dialog cannot tell the caller what happens to their own sessions, so it waits.
   IssueTemporaryPassword: ({ user, isSelf }) => (isSelf === undefined ? null : <TemporaryPasswordDialog user={user} isSelf={isSelf} />),
+  // The page shows the links of the user in a section of their own, with a Remove at each.
+  ManageExternalLogins: null,
 }
 
 export function UserActions({ user, pendingAction, isSelf, onChangeRole, onDelete }: UserActionsProps) {

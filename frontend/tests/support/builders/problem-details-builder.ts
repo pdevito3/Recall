@@ -66,6 +66,14 @@ class ProblemDetailsBuilder {
     })
   }
 
+  /** The 403 of a link from a session that began more than 15 minutes ago (IDP-10). */
+  signInAgainToLink() {
+    return new ProblemDetailsBuilder({
+      ...this.forbidden('Sign in again, then link the provider within 15 minutes.').problem,
+      type: 'urn:recall:problem:sign-in-again-to-link',
+    })
+  }
+
   invalid(errors: Record<string, string[]>) {
     return new ProblemDetailsBuilder({
       ...this.problem,
