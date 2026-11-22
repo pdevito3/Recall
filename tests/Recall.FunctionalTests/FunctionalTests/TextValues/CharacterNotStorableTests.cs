@@ -59,7 +59,6 @@ public class CharacterNotStorableTests : TestBase
         ("initiate user and tenant", "tenantName"),
         ("initiate user and tenant", "firstName"),
         ("initiate user and tenant", "lastName"),
-        ("initiate user and tenant", "identifier"),
         ("initiate user and tenant", "email"),
         ("initiate user and tenant", "username"),
         ("add tenant", "name"),

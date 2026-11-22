@@ -27,11 +27,6 @@ export type InitiateUserAndTenantDto = {
     */
     lastName: string;
     /**
-     * @maxLength 255
-     * @type string
-    */
-    identifier: string;
-    /**
      * @maxLength 320
      * @type string
     */

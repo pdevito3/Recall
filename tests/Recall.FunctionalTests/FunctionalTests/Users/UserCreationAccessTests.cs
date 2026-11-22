@@ -70,20 +70,6 @@ public class UserCreationAccessTests : TestBase
     }
 
     [Test]
-    public async Task user_cannot_start_a_tenant_for_another_identifier()
-    {
-        // Arrange
-        FactoryClient.SignInAsAppUser($"new-{Guid.NewGuid()}");
-        var dto = new FakeInitiateUserAndTenantDto().Generate();
-
-        // Act
-        var result = await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.Initiate, dto);
-
-        // Assert
-        await ShouldBeForbiddenAsync(result, InitiateForbiddenDetail);
-    }
-
-    [Test]
     public async Task machine_client_not_on_the_allow_list_cannot_start_a_tenant()
     {
         // Arrange
@@ -98,11 +84,11 @@ public class UserCreationAccessTests : TestBase
     }
 
     [Test]
-    public async Task first_party_token_cannot_start_a_tenant_for_its_own_subject()
+    public async Task first_party_token_with_no_user_record_cannot_start_a_tenant()
     {
         // Arrange
         var dto = new FakeInitiateUserAndTenantDto().Generate();
-        FactoryClient.SignInAsAppUser(dto.Identifier);
+        FactoryClient.SignInAsAppUser($"unknown-{Guid.NewGuid()}");
 
         // Act
         var result = await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.Initiate, dto);

@@ -16,9 +16,6 @@ public sealed record InitiateUserAndTenantDto
     [SchemaMaxLength(typeof(User), nameof(User.LastNameMaxLength))]
     public string LastName { get; init; } = default!;
     [RequiredField]
-    [SchemaMaxLength(typeof(User), nameof(User.IdentifierMaxLength))]
-    public string Identifier { get; init; } = default!;
-    [RequiredField]
     [SchemaMaxLength(typeof(EmailAddress), nameof(EmailAddress.MaxLength))]
     public string Email { get; init; } = default!;
     [RequiredField]

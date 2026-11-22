@@ -133,7 +133,7 @@ modelBuilder.Entity<BoxCount>().HasNoKey().ToView("box_counts");
 
 ## Unique indexes
 
-The context does soft deletes, so a deleted row still holds its unique value. A unique index on a column of a soft-deleted entity also blocks the values of deleted rows. If a deleted row must free its value, add a filter to the index. `UserConfiguration` does this for `Identifier`, so that a deleted user can sign up again:
+The context does soft deletes, so a deleted row still holds its unique value. A unique index on a column of a soft-deleted entity also blocks the values of deleted rows. If a deleted row must free its value, add a filter to the index. `UserConfiguration` does this for `Identifier`. A new user gets its ID as its identifier, so a person who returns gets a new identifier, and the filter matters only for a user made before this rule, whose identifier came from a request:
 
 <!-- code: Recall.Server/Databases/EntityConfigurations/UserConfiguration.cs -->
 ```csharp

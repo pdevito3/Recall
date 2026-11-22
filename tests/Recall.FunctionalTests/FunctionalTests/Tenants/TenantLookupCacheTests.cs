@@ -66,23 +66,17 @@ public class TenantLookupCacheTests : TestBase
     }
 
     [Test]
-    public async Task user_who_starts_a_tenant_after_a_cached_miss_can_get_the_tenant()
+    public async Task user_who_starts_a_tenant_can_get_the_tenant_with_a_session_of_their_id()
     {
         // Arrange
-        var dto = new FakeInitiateUserAndTenantDto().Generate();
-        FactoryClient.SignInAsAppUser(dto.Identifier);
-        var miss = await FactoryClient.GetRequestAsync($"{ApiRoutes.Tenants.GetList}?pageSize=500");
-        (await miss.Content.ReadFromJsonAsync<List<object>>()).ShouldNotBeNull().ShouldBeEmpty();
-
         FactoryClient.SignInAsTrustedMachineClient();
-        var initiated = await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.Initiate, dto);
+        var initiated = await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.Initiate, new FakeInitiateUserAndTenantDto().Generate());
         initiated.StatusCode.ShouldBe(HttpStatusCode.Created);
-        var tenantId = (await initiated.Content.ReadFromJsonAsync<InitiateUserAndTenantResponseDto>())
-            .ShouldNotBeNull().Tenant.Id;
+        var started = (await initiated.Content.ReadFromJsonAsync<InitiateUserAndTenantResponseDto>()).ShouldNotBeNull();
 
         // Act
-        FactoryClient.SignInAsAppUser(dto.Identifier);
-        var result = await FactoryClient.GetRequestAsync(ApiRoutes.Tenants.GetRecord(tenantId));
+        FactoryClient.SignInAsAppUser(started.User.Id);
+        var result = await FactoryClient.GetRequestAsync(ApiRoutes.Tenants.GetRecord(started.Tenant.Id));
 
         // Assert
         result.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -114,7 +108,7 @@ public class TenantLookupCacheTests : TestBase
     }
 
     [Test]
-    public async Task deleted_user_who_signs_up_again_resolves_to_the_new_user()
+    public async Task deleted_user_who_starts_a_tenant_again_resolves_only_as_the_new_user()
     {
         // Arrange
         await StartGraph()
@@ -132,19 +126,19 @@ public class TenantLookupCacheTests : TestBase
 
         // Act
         FactoryClient.SignInAsTrustedMachineClient();
-        var dto = new FakeInitiateUserAndTenantDto()
-            .RuleFor(x => x.Identifier, _ => removed.Identifier)
-            .RuleFor(x => x.Role, _ => "Admin")
-            .Generate();
+        var dto = new FakeInitiateUserAndTenantDto().Generate() with { Role = "Admin" };
         var initiated = await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.Initiate, dto);
-        SignInAs(removed);
 
         // Assert
         initiated.StatusCode.ShouldBe(HttpStatusCode.Created);
         var signedUp = (await initiated.Content.ReadFromJsonAsync<InitiateUserAndTenantResponseDto>()).ShouldNotBeNull();
         signedUp.User.Id.ShouldNotBe(removed.Id);
 
-        var own = await FactoryClient.GetRequestAsync(ApiRoutes.Users.GetByIdentifier(removed.Identifier));
+        SignInAs(removed);
+        await ShouldHaveNoUserRecordAsync(await FactoryClient.GetRequestAsync(ApiRoutes.Users.GetRecord(signedUp.User.Id)));
+
+        FactoryClient.SignInAsAppUser(signedUp.User.Id);
+        var own = await FactoryClient.GetRequestAsync(ApiRoutes.Users.GetByIdentifier(signedUp.User.Id));
         own.StatusCode.ShouldBe(HttpStatusCode.OK);
         var ownUser = (await own.Content.ReadFromJsonAsync<UserDto>()).ShouldNotBeNull();
         ownUser.Id.ShouldBe(signedUp.User.Id);
