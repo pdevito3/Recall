@@ -10,6 +10,11 @@ public sealed partial class TimeZoneId : ValueObject
     public const int MaxLength = 100;
     private const string RequestField = "timeZone";
 
+    // tzdata installs these next to the zones. None is the zone of a place, and no browser knows one. The lookup of the
+    // host ignores case, so the check ignores case too: "Posixrules" and "Right/America/Chicago" find the same files.
+    private static readonly string[] FilesThatAreNotPlaces = ["Factory", "posixrules", "localtime"];
+    private static readonly string[] FoldersThatAreNotPlaces = ["right/", "posix/"];
+
     // A browser can give an old name such as "Asia/Calcutta", which IANA keeps as a link to "Asia/Kolkata". A host can
     // have no file for a link: Ubuntu 26.04 puts them in the package tzdata-legacy. The zone of the link is then found.
     private static readonly FrozenDictionary<string, string> LinkTargets = TimeZoneLinks.All
@@ -43,11 +48,11 @@ public sealed partial class TimeZoneId : ValueObject
 
     public static TimeZoneId Of(string value) => new(value);
 
-    /// <summary>The zone of a stored value, or null when this host does not know it. A restore onto other tzdata can reach this.</summary>
+    /// <summary>The zone of a stored value, or null when this host does not know it or it is not a place. A restore onto other tzdata can reach this.</summary>
     public static TimeZoneId? TryOf(string? value)
-        => value is not null && Lookup(value) is { } zone ? new TimeZoneId(zone, value) : null;
+        => value is not null && Lookup(value) is { } zone && IsPlace(value) ? new TimeZoneId(zone, value) : null;
 
-    /// <summary>The zone of a stored value, or UTC when the value is null or this host does not know it.</summary>
+    /// <summary>The zone of a stored value, or UTC when <see cref="TryOf"/> gives null.</summary>
     public static TimeZoneId OrUtc(string? value) => TryOf(value) ?? Utc;
 
     public override string ToString() => Value;
@@ -85,9 +90,18 @@ public sealed partial class TimeZoneId : ValueObject
         var zone = Lookup(value);
         ValidationException.Must(zone is not null, RequestField,
             $"'{value}' is not a time zone that the server knows. Use an IANA ID such as America/Chicago.");
+        ValidationException.Must(IsPlace(value), RequestField,
+            $"'{value}' is not the time zone of a place. Use an IANA ID such as America/Chicago.");
 
         return zone!;
     }
+
+    // tzdata gives Factory to a machine whose local time is not known yet. Each name of a place starts with a capital
+    // letter. The lists also refuse a capital form of a file, such as Posixrules, because the lookup ignores case.
+    private static bool IsPlace(string value) =>
+        char.IsAsciiLetterUpper(value[0])
+        && !FilesThatAreNotPlaces.Contains(value, StringComparer.OrdinalIgnoreCase)
+        && !FoldersThatAreNotPlaces.Any(folder => value.StartsWith(folder, StringComparison.OrdinalIgnoreCase));
 
     private static TimeZoneInfo? Lookup(string value)
     {
