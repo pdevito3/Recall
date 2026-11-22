@@ -103,9 +103,9 @@ public class TimeZoneIdTests
     [Test]
     public void an_id_is_accepted_after_a_lookup_of_its_wrong_case()
     {
-        // Arrange: macOS keeps the case of the first lookup as the ID of the zone, and Linux refuses the wrong case.
-        // Etc/GMT+5 is in neither map of wrong cases on macOS, so this lookup reaches the host.
-        try { TimeZoneId.Of("etc/gmt+5"); } catch (ValidationException) { }
+        // Arrange: macOS keeps the case of the first lookup in the process as the ID of the zone. TimeZoneId refuses a
+        // wrong case before the lookup, but other code in the process can look up the zone first.
+        TimeZoneInfo.TryFindSystemTimeZoneById("etc/gmt+5", out _);
 
         // Act
         var zone = TimeZoneId.Of("Etc/GMT+5");
@@ -117,6 +117,9 @@ public class TimeZoneIdTests
     [Test]
     [Arguments("Central Standard Time")]
     [Arguments("america/chicago")]
+    [Arguments("Est5edt")]
+    [Arguments("Etc/gmt+5")]
+    [Arguments("ETC/GMT+5")]
     [Arguments("Mars/Olympus_Mons")]
     [Arguments("")]
     public void an_id_that_is_not_an_iana_zone_is_refused_on_the_time_zone_field(string value)
