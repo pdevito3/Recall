@@ -85,11 +85,8 @@ test.describe(`Auth Flows - ${currentIdp.name}`, () => {
       // Step 5: Wait for redirect back to app and verify logged in state
       await page.waitForURL('/', { timeout: 30000 })
 
-      // Verify logout button is visible (indicates logged in)
-      const logoutButton = page.getByRole('button', { name: /logout/i })
-      await expect(logoutButton).toBeVisible({ timeout: 10000 })
-
-      await expect(page.getByText(/^Signed in as /)).toBeVisible({ timeout: 10000 })
+      // The user menu of the sidebar shows only to a signed-in person
+      await expect(userMenu(page)).toBeVisible({ timeout: 10000 })
 
       // Step 6: Keep another tab open, and put a private page in the history for Back
       const privateNavigation = (of: Page) => of.getByRole('navigation', { name: 'Main' })
@@ -104,7 +101,9 @@ test.describe(`Auth Flows - ${currentIdp.name}`, () => {
       const appOrigin = new URL(page.url()).origin
       const sessionUser = () => page.request.get(new URL('/auth/me', appOrigin).toString(), { headers: { 'X-CSRF': '1' } })
       expect((await sessionUser()).status(), 'the session before the logout').toBe(200)
-      await logoutButton.click()
+      await userMenu(page).click()
+      await expect(page.getByRole('menu', { name: /^User menu for/ })).toBeVisible()
+      await page.getByRole('menuitem', { name: 'Logout', exact: true }).click()
 
       if (currentIdp.logoutConfirmSelector) await page.locator(currentIdp.logoutConfirmSelector).click({ timeout: 30000 })
       if (currentIdp.logoutStaysAtProvider) {
@@ -169,6 +168,9 @@ test.describe(`Auth Flows - ${currentIdp.name}`, () => {
 
 const sessionCookieName = 'recall'
 
+/** The user menu of the sidebar, which holds Logout and shows only to a signed-in person. */
+const userMenu = (page: Page) => page.getByRole('button', { name: /^User menu for/ })
+
 /**
  * Logs in through the SPA and waits for the first load after the redirect to show the signed-in user.
  */
@@ -176,7 +178,7 @@ async function signInThroughSpa(page: Page) {
   await page.goto('/')
   await loginAtIdp(page, currentIdp)
   await page.waitForURL('/', { timeout: 30000 })
-  await expect(page.getByRole('button', { name: /logout/i })).toBeVisible({ timeout: 10000 })
+  await expect(userMenu(page)).toBeVisible({ timeout: 10000 })
 }
 
 /**
@@ -215,7 +217,7 @@ test.describe(`Session cookie - ${currentIdp.name}`, () => {
     await loginAtIdp(page, currentIdp)
 
     await page.waitForURL('/', { timeout: 30000 })
-    await expect(page.getByRole('button', { name: /logout/i })).toBeVisible({ timeout: 10000 })
+    await expect(userMenu(page)).toBeVisible({ timeout: 10000 })
 
     const cookies = await context.cookies()
     expect(cookies.find((c) => c.name === sessionCookieName)).toMatchObject({ sameSite: 'Strict', secure: false, httpOnly: true, path: '/' })
@@ -237,10 +239,7 @@ test.describe(`Session cookie - ${currentIdp.name}`, () => {
     expect(await sentSessionCookie(navigation)).toBe(false)
     await expect(page.getByRole('navigation', { name: 'breadcrumb' })).toHaveText('About')
     expect((await user).status()).toBe(200)
-
-    // Only the home page shows the user
-    await page.getByRole('link', { name: 'Home' }).click()
-    await expect(page.getByRole('button', { name: /logout/i })).toBeVisible({ timeout: 10000 })
+    await expect(userMenu(page)).toBeVisible({ timeout: 10000 })
   })
 
   test('should send no session cookie on a cross-site top-level GET to /api, which gets a 401', async ({ page }) => {
