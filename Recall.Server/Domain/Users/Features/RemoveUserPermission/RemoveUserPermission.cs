@@ -1,6 +1,7 @@
 namespace Recall.Server.Domain.Users.Features;
 
 using System.Diagnostics;
+using Auth;
 using Databases;
 using Dtos;
 using Mappings;
@@ -13,7 +14,7 @@ public static class RemoveUserPermission
 {
     public sealed record Command(string Id, string Permission) : IRequest<UserDto>, IRunsAgainWhenRaced;
 
-    public sealed class Handler(AppDbContext dbContext, IPermissionGuard permissionGuard) : IRequestHandler<Command, UserDto>
+    public sealed class Handler(AppDbContext dbContext, IPermissionGuard permissionGuard, LoginModes modes) : IRequestHandler<Command, UserDto>
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
 
@@ -34,7 +35,7 @@ public static class RemoveUserPermission
                     .Include(u => u.UserPermissions)
                     .GetById(request.Id, ct);
                 user.GuardAllows(UserAction.RemovePermission(), caller);
-                await LastAdmin.GuardAsync(dbContext, user, ct);
+                await LastAdmin.GuardAsync(dbContext, modes, user, ct);
 
                 var existingPermissions = user.UserPermissions.ToList();
 

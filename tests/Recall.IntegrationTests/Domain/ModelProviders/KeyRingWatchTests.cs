@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Recall.Server.Databases;
+using Recall.Server.Domain.LoginProviders;
 using Recall.Server.Domain.ModelProviders;
 using Recall.Server.Exceptions;
 using Recall.Server.Domain.Tenants;
@@ -36,7 +37,7 @@ public class KeyRingWatchTests
     private static async Task<KeyRingStatus> StartWatchAsync(IServiceProvider services, DirectoryInfo dataFolder, IDataProtectionProvider ring)
     {
         var status = new KeyRingStatus();
-        var watch = new KeyRingWatch(services.GetRequiredService<IServiceScopeFactory>(), ring, new ApiKeyProtector(ring), status, ConfigurationOver(dataFolder));
+        var watch = new KeyRingWatch(services.GetRequiredService<IServiceScopeFactory>(), ring, new ApiKeyProtector(ring), new LoginProviderSecret(ring), status, ConfigurationOver(dataFolder));
         await watch.StartAsync(CancellationToken.None);
         return status;
     }
@@ -89,6 +90,35 @@ public class KeyRingWatchTests
         // Assert
         afterRestore.Warning.ShouldBe(KeyRingStatus.ChangedText);
         afterNextStart.Warning.ShouldBe(KeyRingStatus.ChangedText);
+    }
+
+    [Test]
+    [Property("Rule", "IDP-5")]
+    public async Task a_client_secret_of_a_login_provider_under_another_ring_warns_at_each_start()
+    {
+        // Arrange
+        await using var database = new SqliteTestDatabase();
+        var services = await DatabaseAsync(database);
+        var oldRing = NewRing();
+        var folder = Directory.CreateTempSubdirectory("recall-data");
+        await StartWatchAsync(services, folder, oldRing);
+        await using (var system = services.GetRequiredService<IServiceScopeFactory>().CreateSystemScope())
+        {
+            var dbContext = system.ServiceProvider.GetRequiredService<AppDbContext>();
+            var form = new LoginProviderForm("Mine", "https://idp.example", "recall", false, null);
+            dbContext.LoginProviders.Add(LoginProvider.Add(form, "mine", new LoginProviderSecret(oldRing).Protect("a-secret"), DateTimeOffset.UtcNow));
+            await dbContext.SaveChangesAsync();
+        }
+
+        // Act
+        var newRing = NewRing();
+        var afterRestore = await StartWatchAsync(services, folder, newRing);
+        var afterNextStart = await StartWatchAsync(services, folder, newRing);
+
+        // Assert
+        afterRestore.Warning.ShouldBe(KeyRingStatus.ChangedText);
+        afterNextStart.Warning.ShouldBe(KeyRingStatus.ChangedText);
+        KeyRingStatus.ChangedText.ShouldContain("client secret of a login provider");
     }
 
     [Test]

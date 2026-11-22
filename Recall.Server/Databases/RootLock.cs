@@ -28,13 +28,25 @@ public sealed class RootLock
         CancellationToken cancellationToken)
         => RunAsync(dbContext, rootId, Mode.Exclusive, work, cancellationToken);
 
+    /// <summary>
+    /// Takes the exclusive lock of each root, in the ordinal order of the IDs, for a rule over each root of the area, such as a delete of a
+    /// login provider over each tenant. Each other holder takes one root, so this order cannot deadlock.
+    /// </summary>
+    public Task<T> RunExclusiveAsync<T>(AppDbContext dbContext, IEnumerable<string> rootIds, Func<CancellationToken, Task<T>> work,
+        CancellationToken cancellationToken)
+        => RunAsync(dbContext, [.. rootIds.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)], Mode.Exclusive, work, cancellationToken);
+
     internal bool HasWaiter(string rootId)
     {
         lock (_gate)
             return _roots.TryGetValue(rootId, out var root) && root.Waiters.Count > 0;
     }
 
-    private async Task<T> RunAsync<T>(AppDbContext dbContext, string rootId, Mode mode,
+    private Task<T> RunAsync<T>(AppDbContext dbContext, string rootId, Mode mode,
+        Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken)
+        => RunAsync(dbContext, [rootId], mode, work, cancellationToken);
+
+    private async Task<T> RunAsync<T>(AppDbContext dbContext, IReadOnlyList<string> rootIds, Mode mode,
         Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken)
     {
         if (dbContext.ChangeTracker.HasChanges() || dbContext.HasUnsavedActions)
@@ -47,16 +59,23 @@ public sealed class RootLock
 
         var modeName = mode == Mode.Shared ? "shared" : "exclusive";
         Activity.Current?.SetTag("app.lock.mode", modeName);
-        await EnterAsync(rootId, mode, modeName, cancellationToken);
-        dbContext.HeldRootLock = this;
+        var entered = new List<string>(rootIds.Count);
         try
         {
+            foreach (var rootId in rootIds)
+            {
+                await EnterAsync(rootId, mode, modeName, cancellationToken);
+                entered.Add(rootId);
+            }
+
+            dbContext.HeldRootLock = this;
             return await work(cancellationToken);
         }
         finally
         {
             dbContext.HeldRootLock = outer;
-            Exit(rootId, mode);
+            for (var i = entered.Count - 1; i >= 0; i--)
+                Exit(entered[i], mode);
         }
     }
 

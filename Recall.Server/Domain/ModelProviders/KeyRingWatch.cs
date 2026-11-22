@@ -2,6 +2,7 @@ namespace Recall.Server.Domain.ModelProviders;
 
 using System.Security.Cryptography;
 using Databases;
+using LoginProviders;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -17,6 +18,7 @@ public sealed class KeyRingWatch(
     IServiceScopeFactory scopeFactory,
     IDataProtectionProvider dataProtection,
     ApiKeyProtector keys,
+    LoginProviderSecret secrets,
     KeyRingStatus status,
     IConfiguration configuration) : IHostedService
 {
@@ -38,10 +40,16 @@ public sealed class KeyRingWatch(
             .Where(p => p.ProtectedApiKey != null)
             .Select(p => p.ProtectedApiKey)
             .ToListAsync(cancellationToken);
+        var protectedSecrets = await dbContext.LoginProviders.AsNoTracking()
+            .TagWithOperationCallSite("key_ring.login_providers")
+            .Select(p => p.ProtectedClientSecret)
+            .ToListAsync(cancellationToken);
 
-        var keysAreUnreadable = protectedKeys.Any(key => keys.Read(key) is ProtectedKeyRead.Unreadable);
+        // The client secrets of the login providers are under the same ring as the API keys (IDP-5).
+        var keysAreUnreadable = protectedKeys.Any(key => keys.Read(key) is ProtectedKeyRead.Unreadable)
+            || protectedSecrets.Any(secret => secrets.Read(secret) is null);
         var markerIsUnreadable = marker is not null && !Reads(marker.ProtectedValue);
-        status.RingChanged = keysAreUnreadable || (markerIsUnreadable && protectedKeys.Count == 0);
+        status.RingChanged = keysAreUnreadable || (markerIsUnreadable && protectedKeys.Count + protectedSecrets.Count == 0);
 
         if ((marker is null || (markerIsUnreadable && !keysAreUnreadable)) && NewMarker() is { } newMarker)
         {

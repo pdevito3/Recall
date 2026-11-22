@@ -6,6 +6,7 @@ using Recall.Server.Databases;
 using Recall.Server.Domain.Agents;
 using Recall.Server.Domain.AuditEntries;
 using Recall.Server.Domain.Corrections;
+using Recall.Server.Domain.LoginProviders;
 using Recall.Server.Domain.ModelProviders;
 using Recall.Server.Domain.People;
 using Recall.Server.Domain.PersonalAccessTokens;
@@ -35,6 +36,10 @@ public class StringColumnLengthTests
     private const string ProviderAddress = "http://a/";
 
     private static string AddressOfLength(string character, int length) => ProviderAddress + Text(character, length - ProviderAddress.Length);
+
+    private const string IssuerStart = "https://a/";
+
+    private static string IssuerOfLength(string character, int length) => IssuerStart + Text(character, length - IssuerStart.Length);
 
     private static string Email(string character, int length) => Text(character, length - "@example.com".Length) + "@example.com";
 
@@ -73,6 +78,9 @@ public class StringColumnLengthTests
         }),
         ["recordings.client_recording_id"] = new("clientRecordingId", Text, v => Recording.Create("ten_1", "usr_1", "ses_1", v, RecordingFormat.Webm)),
         ["auth_sessions.name"] = new("name", Text, v => PersonalAccessTokenName.Of(v)),
+        ["auth_oidc_providers.display_name"] = new("displayName", Text, v => LoginProvider.Add(new LoginProviderForm(v, "https://idp.test", "client", false, null), "mine", "protected", DateTimeOffset.UnixEpoch)),
+        ["auth_oidc_providers.client_id"] = new("clientId", Text, v => LoginProvider.Add(new LoginProviderForm("Mine", "https://idp.test", v, false, null), "mine", "protected", DateTimeOffset.UnixEpoch)),
+        ["auth_oidc_providers.issuer"] = new("issuer", IssuerOfLength, v => LoginProvider.IssuerOf(v, allowHttp: false)),
         // new-feature:caller-columns
     };
 
@@ -144,6 +152,9 @@ public class StringColumnLengthTests
         "auth_sessions.refresh_family_hash",
         "auth_sessions.refresh_hash",
         "corrections.mishearings",
+        // The add reads a file at the path, so only the path of a readable file is stored. LoginProviderTests checks its length.
+        "auth_oidc_providers.ca_certificate_path",
+        "auth_oidc_providers.protected_client_secret",
         "key_ring_markers.protected_value",
         "model_providers.protected_api_key",
         "sessions.ai_topics",

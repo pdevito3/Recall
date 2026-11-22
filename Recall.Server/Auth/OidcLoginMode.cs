@@ -2,11 +2,13 @@ namespace Recall.Server.Auth;
 
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using Databases;
+using Domain.LoginProviders;
 using Domain.Tenants;
 using Entities;
 using Microsoft.EntityFrameworkCore;
@@ -39,14 +41,53 @@ public sealed record RedeemResult(ExternalIdentity? Identity, LoginFailure? Fail
     public static RedeemResult Failed(LoginFailure failure) => new(null, failure);
 }
 
-public sealed class LoginModes(IOptions<AuthOptions> options, OidcHandlerFactory handlers, TimeProvider timeProvider, IServiceScopeFactory scopeFactory) : IDisposable
+/// <summary>
+/// The OIDC modes of the install: each entry of <c>Auth:Providers</c>, then each Usable row of <c>auth_oidc_providers</c> in the order of
+/// <c>created_at</c> (IDP-1). The list is one value that a reload replaces whole, so a request reads either the old list or the new one.
+/// A reload keeps the mode of a row whose settings did not change, with its discovery cache. It never disposes a replaced mode, because a
+/// login in flight can still hold it. The client of a replaced mode closes its idle connections after the idle time of its pool, and the
+/// collector takes it.
+/// </summary>
+public sealed class LoginModes : IDisposable
 {
-    private readonly List<OidcLoginMode> _modes = options.Value.Providers
-        .Select((provider, position) => new OidcLoginMode(
-            AuthOptions.ModeIdOf(provider, position), provider, handlers(provider), timeProvider))
-        .ToList();
+    private readonly OidcHandlerFactory _handlers;
+    private readonly TimeProvider _timeProvider;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IReadOnlyList<OidcProviderOptions> _environment;
+    private readonly IReadOnlyList<OidcLoginMode> _environmentModes;
+    private readonly bool _allowLoopback;
+    private readonly SemaphoreSlim _reload = new(1, 1);
+    private readonly ILogger _logger = Log.ForContext<LoginModes>();
+    private volatile Snapshot _snapshot;
 
-    public IReadOnlyList<OidcLoginMode> Oidc => _modes;
+    public LoginModes(IOptions<AuthOptions> options, OidcHandlerFactory handlers, TimeProvider timeProvider, IServiceScopeFactory scopeFactory)
+    {
+        _handlers = handlers;
+        _timeProvider = timeProvider;
+        _scopeFactory = scopeFactory;
+        _environment = options.Value.Providers;
+        _allowLoopback = options.Value.AllowLoopbackProviders;
+        _environmentModes = _environment
+            .Select((provider, position) => new OidcLoginMode(
+                AuthOptions.ModeIdOf(provider, position), provider, handlers(provider), timeProvider))
+            .ToList();
+        _snapshot = Snapshot.Of(_environmentModes, _environment, []);
+    }
+
+    public IReadOnlyList<OidcLoginMode> Oidc => _snapshot.Modes;
+
+    /// <summary>The entries of <c>Auth:Providers</c>. An entry wins over a row with its ID or its issuer (IDP-3).</summary>
+    public IReadOnlyList<OidcProviderOptions> Environment => _environment;
+
+    /// <summary>
+    /// The issuers of each mode of <see cref="Oidc"/>, each with and with no trailing slash, because a link holds the issuer that the
+    /// discovery document gave. The last-Admin rule counts a link only while one of these has its issuer (IDP-14).
+    /// </summary>
+    public IReadOnlyList<string> UsableIssuers => _snapshot.Issuers;
+
+    /// <summary>The issuers that <see cref="UsableIssuers"/> would hold after a delete of the row with this ID.</summary>
+    public IReadOnlyList<string> UsableIssuersWithout(string rowId)
+        => Snapshot.IssuersOf(_environment, _snapshot.Rows.Where(row => row.Key.Id != rowId));
 
     /// <summary>
     /// Each mode of the login page and of <c>/auth/status</c>. The password mode comes first when the install has no OIDC
@@ -54,15 +95,99 @@ public sealed class LoginModes(IOptions<AuthOptions> options, OidcHandlerFactory
     /// keeps the start with no click of a single provider.
     /// </summary>
     public async Task<IReadOnlyList<ILoginMode>> ListAsync(CancellationToken cancellationToken)
-        => _modes.Count == 0 || await AnyLivePasswordAsync(cancellationToken) ? [PasswordLoginMode.Instance, .. _modes] : _modes;
+    {
+        var modes = _snapshot.Modes;
+        return modes.Count == 0 || await AnyLivePasswordAsync(cancellationToken) ? [PasswordLoginMode.Instance, .. modes] : modes;
+    }
 
-    public OidcLoginMode? FindOidc(string? id) => _modes.FirstOrDefault(mode => mode.Id == id);
+    public OidcLoginMode? FindOidc(string? id) => _snapshot.Modes.FirstOrDefault(mode => mode.Id == id);
 
-    public OidcLoginMode? OnlyOidc => _modes.Count == 1 ? _modes[0] : null;
+    public OidcLoginMode? OnlyOidc => _snapshot.Modes is [var only] ? only : null;
+
+    /// <summary>
+    /// Reads the rows again and replaces the list. Each save and each delete of a row calls it after its save, and the boot calls it after
+    /// the migrations. Reloads run one at a time, and each reads the rows after the save that called it, so the last one to end holds
+    /// each committed change.
+    /// </summary>
+    public async Task ReloadAsync(CancellationToken cancellationToken)
+    {
+        await _reload.WaitAsync(cancellationToken);
+        try
+        {
+            await using var scope = _scopeFactory.CreateSystemScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var secrets = scope.ServiceProvider.GetRequiredService<LoginProviderSecret>();
+            var rows = await dbContext.LoginProviders
+                .AsNoTracking()
+                .TagWithOperationCallSite("auth.modes.rows")
+                .OrderBy(p => p.CreatedAt).ThenBy(p => p.Id)
+                .ToListAsync(cancellationToken);
+
+            var current = _snapshot.Rows;
+            var rowModes = new List<RowMode>();
+            foreach (var row in rows)
+            {
+                var secret = secrets.Read(row.ProtectedClientSecret);
+                if (row.StateOf(_environment, secret is not null) != LoginProviderState.Usable)
+                    continue;
+
+                var settings = row.OptionsWith(secret!, _allowLoopback);
+                var key = RowKey.Of(settings);
+                if (current.FirstOrDefault(kept => kept.Key == key) is { } same)
+                    rowModes.Add(same);
+                else if (NewMode(settings) is { } mode)
+                    rowModes.Add(new RowMode(key, mode));
+            }
+
+            _snapshot = Snapshot.Of(_environmentModes, _environment, rowModes);
+        }
+        finally
+        {
+            _reload.Release();
+        }
+    }
+
+    private OidcLoginMode? NewMode(OidcProviderOptions settings)
+    {
+        try
+        {
+            return new OidcLoginMode(settings.Id!, settings, _handlers(settings), _timeProvider);
+        }
+        // The add checked the CA file, and the file can go later. The row then has no button until the file is back and a save reloads.
+        catch (Exception exception) when (exception is CryptographicException or IOException or UnauthorizedAccessException)
+        {
+            _logger.Here().Warning("Provider {ModeId} is not on the login page, because the server cannot read its CA file", settings.Id);
+            return null;
+        }
+    }
+
+    /// <summary>The settings that make a mode. A mode is kept while each of them stays.</summary>
+    private sealed record RowKey(string Id, string DisplayName, string Issuer, string ClientId, string ClientSecret, bool AllowHttp, string? CaCertificatePath)
+    {
+        public static RowKey Of(OidcProviderOptions settings)
+            => new(settings.Id!, settings.DisplayName!, settings.Issuer!, settings.ClientId!, settings.ClientSecret!, settings.AllowHttp, settings.CaCertificatePath);
+
+        public override string ToString() => $"[provider settings {Id}]";
+    }
+
+    private sealed record RowMode(RowKey Key, OidcLoginMode Mode);
+
+    private sealed record Snapshot(IReadOnlyList<OidcLoginMode> Modes, IReadOnlyList<RowMode> Rows, IReadOnlyList<string> Issuers)
+    {
+        public static Snapshot Of(IReadOnlyList<OidcLoginMode> environmentModes, IReadOnlyList<OidcProviderOptions> environment, IReadOnlyList<RowMode> rows)
+            => new([.. environmentModes, .. rows.Select(row => row.Mode)], rows, IssuersOf(environment, rows));
+
+        public static List<string> IssuersOf(IEnumerable<OidcProviderOptions> environment, IEnumerable<RowMode> rows)
+            => environment.Select(entry => entry.Issuer).Concat(rows.Select(row => row.Key.Issuer))
+                .OfType<string>()
+                .SelectMany(issuer => new[] { issuer.TrimEnd('/'), issuer.TrimEnd('/') + "/" })
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+    }
 
     private async Task<bool> AnyLivePasswordAsync(CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateSystemScope();
+        await using var scope = _scopeFactory.CreateSystemScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         return await dbContext.Set<PasswordCredential>()
             .TagWithOperationCallSite("auth.modes.any_password")
@@ -71,8 +196,9 @@ public sealed class LoginModes(IOptions<AuthOptions> options, OidcHandlerFactory
 
     public void Dispose()
     {
-        foreach (var mode in _modes)
+        foreach (var mode in _snapshot.Modes)
             mode.Dispose();
+        _reload.Dispose();
     }
 }
 
@@ -128,8 +254,8 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
         };
         if (!string.IsNullOrWhiteSpace(provider.CaCertificatePath))
         {
-            var roots = new X509Certificate2Collection();
-            roots.ImportFromPemFile(provider.CaCertificatePath);
+            var roots = CaCertificateFile.Read(provider.CaCertificatePath)
+                ?? throw new CryptographicException("The CA file of the provider holds no PEM certificate that this server can read.");
             handler.SslOptions.CertificateChainPolicy = new X509ChainPolicy
             {
                 TrustMode = X509ChainTrustMode.CustomRootTrust,
@@ -138,7 +264,43 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
             handler.SslOptions.CertificateChainPolicy.CustomTrustStore.AddRange(roots);
         }
 
+        // Each connect checks the addresses it resolves, so a redirect to a refused address fails as the first request would.
+        if (provider.RefusesLoopback)
+            handler.ConnectCallback = ConnectToAllowedAddressAsync;
+
         return handler;
+    }
+
+    /// <summary>A loopback, link-local, or unspecified address. A private range, such as an IdP on the LAN, is allowed.</summary>
+    public static bool IsRefusedAddress(IPAddress address)
+    {
+        if (address.IsIPv4MappedToIPv6)
+            address = address.MapToIPv4();
+        if (IPAddress.IsLoopback(address) || address.Equals(IPAddress.Any) || address.Equals(IPAddress.IPv6Any) || address.IsIPv6LinkLocal)
+            return true;
+        var bytes = address.GetAddressBytes();
+        return address.AddressFamily == AddressFamily.InterNetwork && (bytes[0] == 0 || (bytes[0] == 169 && bytes[1] == 254));
+    }
+
+    private static async ValueTask<Stream> ConnectToAllowedAddressAsync(SocketsHttpConnectionContext context, CancellationToken cancellationToken)
+    {
+        var addresses = (await Dns.GetHostAddressesAsync(context.DnsEndPoint.Host, cancellationToken))
+            .Where(address => !IsRefusedAddress(address))
+            .ToArray();
+        if (addresses.Length == 0)
+            throw new HttpRequestException(HttpRequestError.ConnectionError, "The issuer names a loopback, link-local, or unspecified address, which a provider from the app cannot use.");
+
+        var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+        try
+        {
+            await socket.ConnectAsync(addresses, context.DnsEndPoint.Port, cancellationToken);
+            return new NetworkStream(socket, ownsSocket: true);
+        }
+        catch
+        {
+            socket.Dispose();
+            throw;
+        }
     }
 
     public async Task<LoginModeState> ProbeAsync(CancellationToken cancellationToken)
