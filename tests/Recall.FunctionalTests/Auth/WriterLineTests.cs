@@ -137,9 +137,11 @@ public class WriterLineTests
         // Act
         var me = await browser.GetAsync(Me, csrf: true).WaitAsync(Limit);
         var sessionId = await SessionIdOfAsync(me);
-        // Each host writes the lines of the static logger to the sinks of Sweep. See AuthHosts.Start.
-        var warning = await EventuallyAsync(() => AuthHosts.Sweep.Logs.Holding(sessionId)
-            .SingleOrDefault(line => line.Level == LogEventLevel.Warning && line.MessageTemplate.Text.Contains("failed after /auth/me answered", StringComparison.Ordinal)));
+        // Each host writes the lines of the static logger to the sinks of Sweep. See AuthHosts.Start. Late in a run Sweep holds
+        // millions of lines, and Holding renders each line, so a look at all of them took longer than the limit (#165).
+        var warning = await EventuallyAsync(() => AuthHosts.Sweep.Logs.All
+            .Where(line => line.Level == LogEventLevel.Warning && line.MessageTemplate.Text.Contains("failed after /auth/me answered", StringComparison.Ordinal))
+            .SingleOrDefault(line => line.Properties["SessionId"] is ScalarValue { Value: string id } && id == sessionId));
 
         // Assert
         me.StatusCode.ShouldBe(HttpStatusCode.OK);
