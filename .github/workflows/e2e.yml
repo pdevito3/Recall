@@ -27,6 +27,8 @@ jobs:
             provider: Cognito
           - idp: zerofactor
             provider: ZeroFactor
+            # two-people.spec.ts signs in a second person, who needs open signup to get a user
+            openSignup: true
           # A public service, so its failure does not fail the workflow
           - idp: duendedemo
             provider: DuendeDemo
@@ -36,6 +38,7 @@ jobs:
     env:
       AuthProvider: ${{ matrix.provider }}
       IDP: ${{ matrix.idp }}
+      Auth__OpenSignup: ${{ matrix.openSignup == true }}
       # The DCP log shows the container runtime that DCP uses and each container command that it runs
       DCP_DIAGNOSTICS_LOG_FOLDER: ${{ github.workspace }}/stack-logs/dcp
       DCP_DIAGNOSTICS_LOG_LEVEL: debug

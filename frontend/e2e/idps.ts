@@ -28,6 +28,8 @@ export interface IdpConfig {
   logoutConfirmSelector?: string
   // A provider that stays on its own page after a logout with no id_token_hint
   logoutStaysAtProvider?: boolean
+  // What a provider that stays on its own page shows once its logout is done. A visit sooner stops the logout
+  logoutDoneSelector?: string
   capabilities: IdpCapabilities
 }
 
