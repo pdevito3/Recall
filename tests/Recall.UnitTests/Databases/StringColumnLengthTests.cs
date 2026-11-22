@@ -96,6 +96,7 @@ public class StringColumnLengthTests
         ["auth_sessions.client_kind"] = SessionKindText.All,
         ["auth_sessions.revoked_reason"] = RevokeReasonText.All,
         ["auth_login_attempts.client_kind"] = SessionKindText.All,
+        ["auth_login_settings.password_login"] = Enum.GetNames<PasswordLoginState>(),
         ["sessions.cleanup_run"] = Enum.GetNames<CleanupRunState>(),
         ["sync_changes.entity_type"] = Enum.GetNames<SyncEntityType>(),
         ["user_settings.time_zone"] = TimeZoneInfo.GetSystemTimeZones().Where(zone => zone.HasIanaId).Select(zone => zone.Id)
