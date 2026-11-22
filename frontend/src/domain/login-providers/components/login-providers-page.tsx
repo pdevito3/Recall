@@ -11,8 +11,10 @@ import { useCanManageUserAccess } from '@/domain/membership/apis/get-membership'
 import { copyToClipboard } from '@/lib/copy-to-clipboard'
 
 import { useLoginProviders } from '../apis/login-providers'
+import { useLoginSettings } from '../apis/login-settings'
 import { EnvironmentProviderCard, LoginProviderCard } from './login-provider-card'
 import { LoginProviderForm } from './login-provider-form'
+import { PasswordLoginCard } from './password-login-card'
 
 function CallbackUrl({ url }: { url: string }) {
   const handleCopy = () =>
@@ -63,6 +65,7 @@ function AddProvider() {
 
 function Providers() {
   const providers = useLoginProviders(true)
+  const passwordsOff = useLoginSettings().data?.passwordLogin === 'Off'
   const listHeadingRef = useRef<HTMLHeadingElement>(null)
 
   if (providers.isPending) {
@@ -90,7 +93,11 @@ function Providers() {
           <AddProvider />
         </div>
         {items.length === 0 && environmentProviders.length === 0 && (
-          <p className="text-sm text-muted-foreground">No login provider is set up, so people sign in with a password.</p>
+          <p className="text-sm text-muted-foreground">
+            {passwordsOff
+              ? 'No login provider is set up, and password login is off, so only the claim-owner file of the server lets anyone in. Add a provider, or turn password login on.'
+              : 'No login provider is set up, so people sign in with a password.'}
+          </p>
         )}
         {environmentProviders.map((provider) => (
           <EnvironmentProviderCard key={provider.id} provider={provider} />
@@ -112,6 +119,7 @@ export function LoginProvidersPage() {
       {canManage ? (
         <div className="flex flex-col gap-6">
           <Providers />
+          <PasswordLoginCard />
         </div>
       ) : (
         canManage === false && (

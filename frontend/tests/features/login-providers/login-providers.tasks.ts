@@ -77,6 +77,28 @@ export function loginProvidersPage(page: Page) {
       await sent
     },
 
+    async askToTurnPasswordsOff() {
+      await at.turnOff.click()
+      await expect(at.confirmTurnOff).toBeVisible()
+    },
+
+    async turnPasswordsOff() {
+      const sent = answered(page, 'PUT', loginProviderPaths.settings)
+      await at.confirmTurnOff.click()
+      await sent
+    },
+
+    async turnPasswordsOn() {
+      const sent = answered(page, 'PUT', loginProviderPaths.settings)
+      await at.turnOn.click()
+      await sent
+    },
+
+    async openSettings() {
+      await at.settingsLink.click()
+      await expect(at.settingsHeading).toBeVisible()
+    },
+
     async delete(name: string, id: string) {
       await at.delete(name).click()
       const sent = answered(page, 'DELETE', loginProviderPaths.record(id))

@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { expect, test, vi } from 'vitest'
-import { page } from 'vitest/browser'
+import { commands, page } from 'vitest/browser'
 import { render } from 'vitest-browser-react'
 
 import type { UserDto } from '@/api/generated/models/types/user-dto'
@@ -36,6 +36,7 @@ test('shows a button for each action that the Server allows and that the page ca
 })
 
 test('@PWD-14 shows Set temporary password only when the Server allows it', async () => {
+  await commands.answerRequests([{ method: 'GET', path: '/api/v1/login-settings', body: { passwordLogin: 'On', version: 1 } }])
   await render(
     <QueryClientProvider client={new QueryClient()}>
       <UserActions user={aUser(['IssueTemporaryPassword'])} isSelf={false} onChangeRole={() => {}} onDelete={() => {}} />
