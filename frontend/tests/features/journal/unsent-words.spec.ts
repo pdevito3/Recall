@@ -278,7 +278,9 @@ test.describe('Done', () => {
 test.describe('the status line', () => {
   test('says Saved only after the Server holds the words', async ({ page, api }) => {
     const session = aSession().build()
-    api.mock(sessionsApi.creates(session), { ...sessionsApi.draftSaveWins(session, 1), delayMs: 400 })
+    let answerTheSave!: () => void
+    const saveAnswers = new Promise<void>((resolve) => (answerTheSave = resolve))
+    api.mock(sessionsApi.creates(session), { ...sessionsApi.draftSaveWins(session, 1), heldUntil: saveAnswers })
     const journal = journalPage(page)
     await journal.open()
 
@@ -286,6 +288,7 @@ test.describe('the status line', () => {
 
     await expect(journal.at.status('Saving')).toBeVisible()
     await expect(journal.at.status('Saved at')).toHaveCount(0)
+    answerTheSave()
     await expect(journal.at.status('Saved at')).toBeVisible()
   })
 
@@ -477,11 +480,16 @@ test.describe('a return to an entry whose read is slow', () => {
     const session = aSession().build()
     const journal = journalPage(page)
     const saved = { ...aSession().atRevision(1).saying('Words from before').build(), id: session.id, clientSessionId: session.clientSessionId }
-    await aReturnDuringASlowRead(journal, page, api, session, () => ({ ...sessionsApi.oneIs(saved), delayMs: 500 }))
+    let answerTheRead!: () => void
+    const readAnswers = new Promise<void>((resolve) => (answerTheRead = resolve))
+    await aReturnDuringASlowRead(journal, page, api, session, () => ({ ...sessionsApi.oneIs(saved), heldUntil: readAnswers }))
     await journal.at.composer.click()
     await journal.markTheEditor()
 
-    await page.keyboard.type('abcdefghijklmnopqrstuvwxyz', { delay: 40 })
+    await page.keyboard.type('abcdefghijklm', { delay: 40 })
+    const typing = page.keyboard.type('nopqrstuvwxyz', { delay: 40 })
+    answerTheRead()
+    await typing
 
     await expect(journal.at.loadingEntry).toHaveCount(0)
     expect(await journal.isTheSameEditor()).toBe(true)

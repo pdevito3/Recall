@@ -107,8 +107,9 @@ test.describe('the Cleanup of an entry', () => {
     await at.open(running.id)
     await expect(at.at.stopCleanup).toBeVisible()
 
-    api.mock(sessionsApi.oneIs(stopped))
+    // The read says Stopped only after the stop. A poll of the running Cleanup before the click would end it with no click.
     await at.stopCleanup(running.id)
+    api.mock(sessionsApi.oneIs(stopped))
 
     await expect(at.at.cleanupStatus('You stopped the last Cleanup.')).toBeVisible()
     await expect(at.at.cleanupAlert('You stopped')).toHaveCount(0)
@@ -131,8 +132,8 @@ test.describe('the Cleanup of an entry', () => {
     await expect(at.at.runCleanup).toBeDisabled()
     await expect(at.at.stopCleanup).toBeFocused()
 
-    api.mock(sessionsApi.oneIs(stopped))
     await at.stopCleanup(running.id)
+    api.mock(sessionsApi.oneIs(stopped))
     await expect(at.at.stopCleanup).toHaveCount(0)
     await expect(at.at.runCleanup).toBeFocused()
   })
