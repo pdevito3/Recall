@@ -36,6 +36,8 @@ jobs:
     env:
       AuthProvider: ${{ matrix.provider }}
       IDP: ${{ matrix.idp }}
+      # two-people.spec.ts signs in a second person, who needs open signup to get a user
+      Auth__OpenSignup: true
       # The DCP log shows the container runtime that DCP uses and each container command that it runs
       DCP_DIAGNOSTICS_LOG_FOLDER: ${{ github.workspace }}/stack-logs/dcp
       DCP_DIAGNOSTICS_LOG_LEVEL: debug
