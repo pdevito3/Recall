@@ -76,35 +76,6 @@ public class UniqueCheckRaceTests : TestBase
     }
 
     [Test]
-    public async Task loser_of_a_user_add_race_gets_the_identifier_message()
-    {
-        // Arrange
-        var pause = PauseAtQuery.After("users.add.identifier_in_use");
-        await using var services = pause.BuildServices();
-        // Its own tenant, because an exclusive lock that another test asks for in the shared tenant would queue between these two.
-        await new TestingServiceScope().StartGraph(out _)
-            .AddTenant(out _)
-            .AddUser(out var admin, u => u.Role = "Admin")
-            .BuildAsync();
-        var underTest = new TestingServiceScope(services);
-        var rival = new TestingServiceScope();
-        underTest.SetUserWithDefaults(identifier: admin.Identifier);
-        rival.SetUserWithDefaults(identifier: admin.Identifier);
-        var dto = new FakeUserForCreationDto().Generate();
-
-        // Act
-        var add = underTest.SendAsync(new AddUser.Command(dto));
-        await pause.ReachedAsync();
-        var winner = await rival.SendAsync(new AddUser.Command(dto));
-        pause.Release();
-
-        // Assert
-        await ShouldBeConflictAsync(add, "identifier", "A user with this identifier already exists.");
-        winner.Identifier.ShouldBe(dto.Identifier);
-        (await UserIdsWithIdentifierAsync(dto.Identifier)).ShouldBe([winner.Id]);
-    }
-
-    [Test]
     public async Task loser_of_an_initiate_race_gets_the_identifier_message()
     {
         // Arrange

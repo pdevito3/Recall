@@ -15,9 +15,6 @@ public sealed record UserForCreationDto
     public string FirstName { get; init; } = default!;
     [SchemaMaxLength(typeof(User), nameof(User.LastNameMaxLength))]
     public string? LastName { get; init; }
-    [RequiredField]
-    [SchemaMaxLength(typeof(User), nameof(User.IdentifierMaxLength))]
-    public string Identifier { get; init; } = default!;
     [SchemaMaxLength(typeof(EmailAddress), nameof(EmailAddress.MaxLength))]
     public string? Email { get; init; }
     [RequiredField]

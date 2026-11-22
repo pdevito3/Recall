@@ -130,6 +130,7 @@ public static partial class UserMapper
     public static partial IQueryable<UserDto> ToUserDtoQueryable(this IQueryable<User> queryable);
     // ...
     [MapperIgnoreTarget(nameof(UserForCreation.Id))]
+    [MapperIgnoreTarget(nameof(UserForCreation.Identifier))]
     public static partial UserForCreation ToUserForCreation(this UserForCreationDto dto, string tenantId);
 
     public static partial UserForUpdate ToUserForUpdate(this UserForUpdateDto dto);

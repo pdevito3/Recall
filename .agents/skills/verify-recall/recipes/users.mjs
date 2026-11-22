@@ -23,7 +23,6 @@ export default async ({ page, step, capture, settle, expect, login }) => {
         body: JSON.stringify({
           firstName: 'Casey',
           lastName: `Colleague ${s}`,
-          identifier: `verify-${s}`,
           email: `casey-${s}@example.com`,
           username: `casey-${s}`,
           role: 'User',

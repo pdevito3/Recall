@@ -211,7 +211,7 @@ public class PermissionGuardTests : TestBase
         // Assert
         await act.ShouldThrowAsync<ForbiddenAccessException>();
         var added = await scope.ExecuteDbContextAsync(db => db.Users.IgnoreQueryFilters()
-            .AnyAsync(u => u.Identifier == dto.Identifier));
+            .AnyAsync(u => u.LastName == dto.LastName && u.Username == dto.Username));
         added.ShouldBeFalse();
     }
 

@@ -23,7 +23,7 @@ Preconditions:
 
 - `doctor.sh` exits with 0.
 - The database has no tenant. This is true on a new stack. The first login makes the user of `login()` the Owner, an Admin of the tenant `Recall`.
-- The SPA has no page to add a user yet. The recipe adds a second user with `fetch('/api/v1/users')` in the page, with the `X-CSRF: 1` header and an identifier that no IdP has.
+- The SPA has no page to add a user yet. The recipe adds a second user with `fetch('/api/v1/users')` in the page, with the `X-CSRF: 1` header. The Server makes the identifier of that user its ID.
 
 - **List.** Choose `Users` in the sidebar after `waitForResponse` on `GET /api/v1/users`. Each row of the table has the name, the email, and the role of its row in the response.
 - **Detail.** Choose the name of the second user. The heading is the `fullName` of the user, and the group `Actions for <fullName>` has the buttons `Change role` and `Delete`, in this order.

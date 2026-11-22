@@ -67,7 +67,6 @@ public class UserErrorResponseTests : TestBase
     [Test]
     [Arguments("firstName")]
     [Arguments("lastName")]
-    [Arguments("identifier")]
     [Arguments("username")]
     public async Task blank_field_on_create_returns_validation_problem_keyed_by_the_field(string field)
     {
@@ -83,7 +82,6 @@ public class UserErrorResponseTests : TestBase
         {
             "firstName" => valid with { FirstName = "" },
             "lastName" => valid with { LastName = "" },
-            "identifier" => valid with { Identifier = "" },
             _ => valid with { Username = "" },
         };
 
@@ -219,7 +217,7 @@ public class UserErrorResponseTests : TestBase
         // Act
         var result = await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.Create, new
         {
-            dto.LastName, dto.Identifier, dto.Email, dto.Username, dto.Role,
+            dto.LastName, dto.Email, dto.Username, dto.Role,
         });
 
         // Assert

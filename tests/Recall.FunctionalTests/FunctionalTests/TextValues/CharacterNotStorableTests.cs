@@ -42,7 +42,7 @@ public class CharacterNotStorableTests : TestBase
         problem.Detail.ShouldBe("A first name has a character that is not allowed.");
         problem.Errors.ShouldHaveSingleItem().Key.ShouldBe("firstName");
         problem.Errors["firstName"].ShouldBe(["A first name has a character that is not allowed."]);
-        var saved = await ExecuteDbContextAsync(db => db.Users.IgnoreQueryFilters().AnyAsync(u => u.Identifier == dto.Identifier));
+        var saved = await ExecuteDbContextAsync(db => db.Users.IgnoreQueryFilters().AnyAsync(u => u.LastName == dto.LastName && u.Username == dto.Username));
         saved.ShouldBeFalse();
     }
 
@@ -50,7 +50,6 @@ public class CharacterNotStorableTests : TestBase
     [
         ("add user", "firstName"),
         ("add user", "lastName"),
-        ("add user", "identifier"),
         ("add user", "email"),
         ("add user", "username"),
         ("update user", "firstName"),

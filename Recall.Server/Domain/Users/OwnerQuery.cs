@@ -2,7 +2,8 @@ namespace Recall.Server.Domain.Users;
 
 public static class OwnerQuery
 {
-    // No row marks the Owner. The oldest Admin of the oldest live tenant stands for the first login, and a user ID grows with time.
+    // No row marks the Owner. The oldest Admin whose identifier is its ID stands for the Owner: a first login, a setup, or an Admin added through the API.
+    // A user ID grows with time.
     public static IQueryable<User> OwnerFirstIn(this IQueryable<User> users, string tenantId)
     {
         var adminRole = UserRole.Admin().Value;

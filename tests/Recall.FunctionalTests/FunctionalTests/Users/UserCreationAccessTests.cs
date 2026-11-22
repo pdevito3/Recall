@@ -8,7 +8,6 @@ using Recall.Server.Domain.Users.Dtos;
 using Recall.SharedTestHelpers.EntityGraphs;
 using Recall.SharedTestHelpers.Fakes.User;
 using Microsoft.AspNetCore.Http;
-using Recall.Server.Resources.Entrypoints;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Shouldly;
@@ -26,7 +25,6 @@ public class UserCreationAccessTests : TestBase
         FactoryClient.SignInAsAppUser(identifier);
         var dto = new FakeUserForCreationDto()
             .RuleFor(x => x.TenantId, _ => tenant.Id)
-            .RuleFor(x => x.Identifier, _ => identifier)
             .Generate();
 
         // Act
@@ -127,7 +125,7 @@ public class UserCreationAccessTests : TestBase
         // Assert
         await ShouldBeForbiddenAsync(result, "You cannot manage users. Ask an admin for access.");
         var added = await ExecuteDbContextAsync(db => db.Users.IgnoreQueryFilters()
-            .AnyAsync(u => u.Identifier == dto.Identifier));
+            .AnyAsync(u => u.LastName == dto.LastName && u.Username == dto.Username));
         added.ShouldBeFalse();
     }
 
@@ -143,49 +141,6 @@ public class UserCreationAccessTests : TestBase
 
         // Assert
         await ShouldBeForbiddenAsync(result, "You cannot manage the access of users. Ask an admin for access.");
-    }
-
-    [Test]
-    public async Task duplicate_identifier_returns_conflict_problem()
-    {
-        // Arrange
-        var (_, admin) = await AddTenantWithUserAsync("Admin");
-        SignInAs(admin);
-        var dto = new FakeUserForCreationDto().RuleFor(x => x.Identifier, _ => admin.Identifier).Generate();
-
-        // Act
-        var result = await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.Create, dto);
-
-        // Assert
-        result.StatusCode.ShouldBe(HttpStatusCode.Conflict);
-        result.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
-        var problem = (await result.Content.ReadFromJsonAsync<ValidationProblemDetails>()).ShouldNotBeNull();
-        problem.Status.ShouldBe(StatusCodes.Status409Conflict);
-        problem.Type.ShouldNotBe(DomainProblemDetails.StaleVersionType);
-        problem.Title.ShouldBe("The request conflicts with a record that exists.");
-        problem.Detail.ShouldBe("A user with this identifier already exists.");
-        problem.Errors.ShouldHaveSingleItem().Key.ShouldBe("identifier");
-    }
-
-    [Test]
-    public async Task concurrent_adds_with_one_identifier_add_one_user_and_reject_the_others()
-    {
-        // Arrange
-        var (_, admin) = await AddTenantWithUserAsync("Admin");
-        SignInAs(admin);
-        var identifier = Guid.NewGuid().ToString();
-        var dtos = Enumerable.Range(0, 5)
-            .Select(_ => new FakeUserForCreationDto().RuleFor(x => x.Identifier, _ => identifier).Generate())
-            .ToList();
-
-        // Act
-        var results = await Task.WhenAll(dtos.Select(dto => FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.Create, dto)));
-
-        // Assert
-        // The duplicate check and the unique index can each stop a request, and both must give 409, never 500.
-        results.Count(r => r.StatusCode == HttpStatusCode.Created).ShouldBe(1);
-        results.Where(r => r.StatusCode != HttpStatusCode.Created)
-            .ShouldAllBe(r => r.StatusCode == HttpStatusCode.Conflict);
     }
 
     [Test]
