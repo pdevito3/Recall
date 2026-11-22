@@ -183,6 +183,10 @@ test.describe('the personal access tokens of a person', () => {
 
     await expect(tokens.at.leaveQuestion).toBeVisible()
     await tokens.at.stay.click()
+    await expect(tokens.at.cancel).toBeDisabled()
+    await page.goBack()
+    await expect(tokens.at.leaveQuestion).toBeVisible()
+    await tokens.at.stay.click()
     answer()
     await expect(tokens.at.value(value)).toBeVisible()
   })

@@ -34,7 +34,7 @@ export function NewTokenDialog({ permissions }: NewTokenDialogProps) {
   const isAsking = useRef(false)
   const leaving = useBlocker({
     shouldBlockFn: () => {
-      if (!hasSent.current || isAsking.current) return false
+      if (isAsking.current || !hasSent.current) return false
       isAsking.current = true
       return true
     },

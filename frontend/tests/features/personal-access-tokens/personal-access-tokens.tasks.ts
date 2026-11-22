@@ -65,7 +65,6 @@ export function personalAccessTokensPage(page: Page) {
       await revoked
     },
 
-    /** History /about, /settings, then this page, in one document, so that Back stays in the app. */
     /** Presses Back in the task of the click on Create, before React renders the pending create, as a quick person can on a slow phone. */
     createAndGoBackAtOnce: () =>
       at.create.evaluate((button: HTMLElement) => {
@@ -73,6 +72,7 @@ export function personalAccessTokensPage(page: Page) {
         history.back()
       }),
 
+    /** History /about, /settings, then this page, in one document, so that Back stays in the app. */
     async openAfterAboutAndSettings() {
       await page.goto('/about')
       await at.settingsNavLink.click()
