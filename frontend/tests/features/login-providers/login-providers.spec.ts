@@ -1,3 +1,4 @@
+import { authApi } from '@tests/support/api/auth-api'
 import { membershipApi } from '@tests/support/api/membership-api'
 import {
   aLoginProvider,
@@ -411,8 +412,10 @@ test.describe('password login on the login providers page', () => {
     expect(await lp.at.toast(noLinkedAdmin).count()).toBe(0)
   })
 
-  test('a stale turn shows the message and the setting that another Admin saved', { tag: '@IDP-13' }, async ({ page, api }) => {
+  test('a stale turn shows the message, the setting that another Admin saved, and settings with no change of a password', { tag: ['@IDP-13', '@IDP-15'] }, async ({ page, api, actor }) => {
+    const withPassword = actor.signedIn ? { ...actor, user: { ...actor.user, login_name: 'bob' } } : actor
     api.mock(
+      authApi.userIs(withPassword),
       membershipApi.userHolds('manage_user_access'),
       loginProvidersApi.settingsHold('On', 4),
       loginProvidersApi.listHolds([aLoginProvider()]),
@@ -422,12 +425,36 @@ test.describe('password login on the login providers page', () => {
     await lp.open()
     await lp.askToTurnPasswordsOff()
 
-    api.mock(loginProvidersApi.settingsHold('Off', 5))
+    // Another Admin turned it off, so /auth/me now gives no login name.
+    api.mock(loginProvidersApi.settingsHold('Off', 5), authApi.userIs(actor))
     await lp.turnPasswordsOff()
 
     await expect(lp.at.passwordLoginAlert).toHaveText('Password login changed after you loaded this page. The card shows the setting now.')
     await expect(lp.at.passwordLoginState('Off')).toBeVisible()
     await expect(lp.at.turnOn).toBeVisible()
+    await lp.openSettings()
+    await expect(lp.at.passwordHeading).toHaveCount(0)
+  })
+
+  test('after a turn off, settings reads the user again and offers no change of a password', { tag: '@IDP-15' }, async ({ page, api, actor }) => {
+    const withPassword = actor.signedIn ? { ...actor, user: { ...actor.user, login_name: 'bob' } } : actor
+    api.mock(
+      authApi.userIs(withPassword),
+      membershipApi.userHolds('manage_user_access'),
+      loginProvidersApi.settingsHold('On', 4),
+      loginProvidersApi.listHolds([aLoginProvider()]),
+      loginProvidersApi.settingsUpdateAnswers('Off', 5),
+    )
+    const lp = loginProvidersPage(page)
+    await lp.open()
+    await lp.askToTurnPasswordsOff()
+
+    // While password login is Off, /auth/me gives no login name, and the page with no reload keeps the user that it read.
+    api.mock(authApi.userIs(actor))
+    await lp.turnPasswordsOff()
+    await lp.openSettings()
+
+    await expect(lp.at.passwordHeading).toHaveCount(0)
   })
 
   test('with no provider and password login off, the list says that only the claim-owner file lets anyone in', { tag: '@IDP-15' }, async ({ page, api }) => {

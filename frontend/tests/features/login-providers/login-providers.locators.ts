@@ -9,6 +9,9 @@ export const loginProviders = (page: Page) => {
   return {
     heading: page.getByRole('heading', { level: 1, name: 'Login providers' }),
     listHeading: page.getByRole('heading', { level: 2, name: 'Providers' }),
+    settingsLink: page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Settings' }),
+    settingsHeading: page.getByRole('heading', { level: 1, name: 'Settings' }),
+    passwordHeading: page.getByRole('heading', { level: 2, name: 'Password' }),
     navLink: page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Login providers' }),
     noAdminNote: page.getByText('An Admin sets up the login providers of this install.'),
     callbackUrl: (url: string) => page.getByText(url, { exact: true }),

@@ -94,6 +94,11 @@ export function loginProvidersPage(page: Page) {
       await sent
     },
 
+    async openSettings() {
+      await at.settingsLink.click()
+      await expect(at.settingsHeading).toBeVisible()
+    },
+
     async delete(name: string, id: string) {
       await at.delete(name).click()
       const sent = answered(page, 'DELETE', loginProviderPaths.record(id))
