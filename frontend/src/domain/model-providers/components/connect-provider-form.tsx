@@ -106,7 +106,9 @@ export function ConnectProviderForm() {
         <Input
           id="provider-api-key"
           type="password"
-          autoComplete="off"
+          autoComplete="new-password"
+          data-1p-ignore
+          data-lpignore="true"
           aria-invalid={Boolean(errors.apiKey)}
           aria-describedby="provider-api-key-hint"
           {...form.register('apiKey')}

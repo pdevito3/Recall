@@ -59,6 +59,13 @@ export function useMembership(): Membership {
   return { status: 'member', user: user.data }
 }
 
+/** Whether the signed-in person can manage the login providers of the install. `undefined` while the membership loads. A failed check counts as no. */
+export function useCanManageUserAccess(): boolean | undefined {
+  const membership = useMembership()
+  if (membership.status === 'loading') return undefined
+  return membership.status === 'member' && membership.user.permissions.includes('manage_user_access')
+}
+
 /** Whether the signed-in person can manage the model providers. `undefined` while the membership loads. A failed check counts as no. */
 export function useCanManageModelProviders(): boolean | undefined {
   const membership = useMembership()
