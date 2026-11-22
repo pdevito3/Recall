@@ -11,7 +11,7 @@ import { StaleChangePrompts } from '@/domain/sessions/components/stale-change-pr
 import { userSettingDtoTimeZoneModeEnum } from '@/api/generated/models/types/user-setting-dto'
 import { followsTheDevice, journalZoneOf, settingSaver, useUserSetting, zoneOfNewEntries, type SettingChange } from '@/domain/settings/apis/user-setting'
 import { useCurrentUser } from '@/domain/users/apis/get-current-user'
-import { deviceTimeZone, parseTimeZone, timeZoneLabel, type TimeZone } from '@/lib/zoned-time'
+import { deviceTimeZone, parseTimeZone, SYSTEM_V_IDS, timeZoneLabel, type TimeZone } from '@/lib/zoned-time'
 
 interface ZoneOption {
   id: string
@@ -36,9 +36,10 @@ const withoutZoneSeparators = (text: string) => text.replace(/[\s/_]+/g, '')
 
 let listedZones: ZoneOption[] | undefined
 
-// The list of the browser leaves out UTC and the new name of a renamed zone, such as Asia/Kolkata. A label costs about 0.5 ms.
+// The list of the browser leaves out UTC, the System V IDs such as EST5EDT, and the new name of a renamed zone, such as
+// Asia/Kolkata. A label costs about 0.5 ms.
 function zoneOptions(savedZone: string | null | undefined): ZoneOption[] {
-  listedZones ??= [...new Set(['UTC', ...Intl.supportedValuesOf('timeZone')])].sort().map(zoneOption)
+  listedZones ??= [...new Set(['UTC', ...SYSTEM_V_IDS, ...Intl.supportedValuesOf('timeZone')])].sort().map(zoneOption)
   if (!savedZone || listedZones.some(({ id }) => id === savedZone)) return listedZones
   return [...listedZones, zoneOption(savedZone)].sort((a, b) => (a.id < b.id ? -1 : 1))
 }

@@ -41,6 +41,9 @@ const PLACE_OF_SYSTEM_V_ID: Partial<Record<string, string>> = {
   PST8PDT: 'America/Los_Angeles',
 }
 
+/** The System V IDs. The Server accepts each one on a host whose tzdata has its file. */
+export const SYSTEM_V_IDS = Object.keys(PLACE_OF_SYSTEM_V_ID)
+
 /**
  * The zone that the browser names now, or null when its tzdata does not have the zone of the system. The zone of the
  * system can change while the page is open, on a trip, and `getLocalTimeZone` keeps the first zone that it read.
