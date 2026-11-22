@@ -299,7 +299,6 @@ public class OpenApiDocumentTests
             ("InitiateUserAndTenantDto.tenantName", Tenant.NameMaxLength),
             ("InitiateUserAndTenantDto.firstName", User.FirstNameMaxLength),
             ("InitiateUserAndTenantDto.lastName", User.LastNameMaxLength),
-            ("InitiateUserAndTenantDto.identifier", User.IdentifierMaxLength),
             ("InitiateUserAndTenantDto.email", EmailAddress.MaxLength),
             ("InitiateUserAndTenantDto.username", User.UsernameMaxLength),
         ];

@@ -76,31 +76,6 @@ public class UniqueCheckRaceTests : TestBase
     }
 
     [Test]
-    public async Task loser_of_an_initiate_race_gets_the_identifier_message()
-    {
-        // Arrange
-        var pause = PauseAtQuery.After("users.initiate.identifier_in_use");
-        await using var services = pause.BuildServices();
-        var dto = new FakeInitiateUserAndTenantDto().Generate();
-        var underTest = new TestingServiceScope(services);
-        var rival = new TestingServiceScope();
-        underTest.SetMachineClient(TestFixture.TrustedMachineClientId);
-        rival.SetMachineClient(TestFixture.TrustedMachineClientId);
-
-        // Act
-        var initiate = underTest.SendAsync(new InitiateUserAndTenant.Command(dto));
-        await pause.ReachedAsync();
-        var winner = await rival.SendAsync(new InitiateUserAndTenant.Command(dto with { TenantName = $"Tenant {Guid.NewGuid():N}" }));
-        pause.Release();
-
-        // Assert
-        await ShouldBeConflictAsync(initiate, "identifier", "A user with this identifier already exists.");
-        winner.User.Identifier.ShouldBe(dto.Identifier);
-        (await UserIdsWithIdentifierAsync(dto.Identifier)).ShouldBe([winner.User.Id]);
-        (await TenantIdsNamedAsync(dto.TenantName)).ShouldBeEmpty();
-    }
-
-    [Test]
     public async Task loser_of_an_initiate_race_on_the_tenant_name_gets_the_tenant_name_message()
     {
         // Arrange
@@ -123,7 +98,7 @@ public class UniqueCheckRaceTests : TestBase
         await ShouldBeConflictAsync(initiate, "tenantName", "A tenant with this name already exists.");
         winner.Tenant.Name.ShouldBe(dto.TenantName);
         (await TenantIdsNamedAsync(dto.TenantName)).ShouldBe([winner.Tenant.Id]);
-        (await UserIdsWithIdentifierAsync(dto.Identifier)).ShouldBeEmpty();
+        (await UserIdsWithUsernameAsync(dto.Username)).ShouldBeEmpty();
     }
 
     [Test]
@@ -166,6 +141,6 @@ public class UniqueCheckRaceTests : TestBase
     private static Task<List<string>> TenantIdsNamedAsync(string name)
         => ReadAsync(read => read.Tenants.IgnoreQueryFilters().Where(t => t.Name == name).Select(t => t.Id).ToListAsync());
 
-    private static Task<List<string>> UserIdsWithIdentifierAsync(string identifier)
-        => ReadAsync(read => read.Users.IgnoreQueryFilters().Where(u => u.Identifier == identifier).Select(u => u.Id).ToListAsync());
+    private static Task<List<string>> UserIdsWithUsernameAsync(string username)
+        => ReadAsync(read => read.Users.IgnoreQueryFilters().Where(u => u.Username == username).Select(u => u.Id).ToListAsync());
 }

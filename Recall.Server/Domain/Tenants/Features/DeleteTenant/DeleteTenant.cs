@@ -31,7 +31,8 @@ public static class DeleteTenant
             await permissionGuard.RequireAsync(Permission.ManageTenant(), cancellationToken);
 
             // The exclusive lock makes each add that takes the shared lock of the tenant wait, so no such row comes after
-            // the load. A deleted user frees its identifier, so the same person can sign up again.
+            // the load. A person who returns gets a new user with a new identifier, so the filtered index on Identifier
+            // matters only for a user made before the identifier was its ID.
             var deletedCounts = await LastTenant.RunWithLocksAsync(dbContext, request.Id, async ct =>
             {
                 var tenant = await dbContext.Tenants

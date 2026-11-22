@@ -11,7 +11,6 @@ public sealed class FakeInitiateUserAndTenantDto : AutoFaker<InitiateUserAndTena
         RuleFor(x => x.TenantName, TenantRules.Name);
         RuleFor(x => x.FirstName, UserRules.FirstName);
         RuleFor(x => x.LastName, UserRules.LastName);
-        RuleFor(x => x.Identifier, UserRules.Identifier);
         RuleFor(x => x.Email, UserRules.Email);
         RuleFor(x => x.Username, UserRules.Username);
         RuleFor(x => x.Role, UserRules.Role);

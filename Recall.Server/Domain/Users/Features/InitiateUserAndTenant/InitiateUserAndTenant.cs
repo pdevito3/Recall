@@ -47,26 +47,21 @@ public static class InitiateUserAndTenant
             await dbContext.Tenants.AddAsync(tenant, cancellationToken);
 
             // Create user with tenant reference
+            // A session puts the user ID in sub, and the Server finds the caller by identifier, so the identifier is the ID.
+            var id = EntityId.New(User.IdPrefix);
             var userForCreation = new UserForCreation
             {
+                Id = id,
                 TenantId = tenant.Id,
                 FirstName = request.Dto.FirstName,
                 LastName = request.Dto.LastName,
-                Identifier = request.Dto.Identifier,
+                Identifier = id,
                 Email = request.Dto.Email,
                 Username = request.Dto.Username,
                 Role = request.Dto.Role
             };
             var user = User.Create(userForCreation);
             Activity.Current?.SetTag("app.user_id", user.Id);
-
-            // Ignore the tenant filter: the unique index on Identifier covers the live users of all tenants.
-            var identifierInUse = await dbContext.Users
-                .TagWithOperationCallSite("users.initiate.identifier_in_use")
-                .IgnoreQueryFilters([QueryFilterNames.Tenant])
-                .AnyAsync(u => u.Identifier == user.Identifier, cancellationToken);
-            if (identifierInUse)
-                throw new ConflictException("identifier", User.IdentifierInUseMessage);
 
             // Ignore all filters: the unique index on Name also covers deleted tenants.
             var tenantNameInUse = await dbContext.Tenants

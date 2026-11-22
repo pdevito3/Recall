@@ -72,7 +72,6 @@ The provider keeps a missing user for 30 seconds, with no fail-safe. This stops 
 
 - When a user is added, the context removes the cached result of its identifier. The new user sees their tenant on the next request.
 - When a user is deleted, or its identifier or its tenant changes, the context removes the cached result of the old and the new identifier. The user loses access on the next request.
-- When a deleted user signs up again, the new user has the identifier of the deleted user. The context removes the cached result of the identifier when it adds the new user, so the next request finds the new user and its tenant.
 - When a tenant is deleted, the context removes the cached result of each user of the tenant. The users lose access on the next request.
 
 When the context removes stale results, it adds a `tenant_lookup.removed` event to the current span. The `app.tenant_lookup.removed_count` tag has the number of identifiers. If the cache fails to remove a result, the context logs an error and the save still returns its result. The old result then stays until it expires.
@@ -81,7 +80,7 @@ A lookup can start before the save and finish after the removal. Each removal mo
 
 The Server writes `users` and `tenants` only through the save. A write from outside the Server, such as SQL in a migration, does not remove the cached results. If such a write adds a user, or changes the identifier, the tenant, or the deleted state of a user or a tenant, call `ITenantIdProvider.InvalidateCacheAsync` after the write, or wait until the results expire.
 
-The cache is in the memory of each server instance. There is no distributed cache and no backplane. The removals and the "next request" behavior above are true for one server instance only. If you run more than one instance, the other instances keep the old result until it expires. For example, after a user is deleted and signs up again, another instance can still give the deleted user and its tenant for the identifier. Until the result expires, the new user on that instance reads the rows of the old tenant that need no permission, each permission check gives 403, and the audit log names the deleted user. Add a backplane to FusionCache before you run more than one instance.
+The cache is in the memory of each server instance. There is no distributed cache and no backplane. The removals and the "next request" behavior above are true for one server instance only. If you run more than one instance, the other instances keep the old result until it expires. For example, after a user is deleted through one instance, another instance can still give the deleted user and its tenant for the identifier. Until the result expires, that person reads on that instance the rows of the tenant that need no permission, each permission check gives 403, and the audit log names the deleted user. Add a backplane to FusionCache before you run more than one instance.
 
 A `TenantScope` has one of three values. The filter makes the decision for each value. It does not depend on the data in the rows.
 
@@ -147,7 +146,7 @@ These rules stop a caller from joining a tenant that is not theirs:
 - A caller with `TenantScope.AllTenants` has no tenant of its own, so it must send `tenantId` in the body. If the tenant does not exist, the request gets 422.
 - If a user sends `tenantId`, it must be their own tenant. Other requests get 403.
 - `POST /api/v1/users/initiate` creates a tenant and its first user. The caller must be able to manage all tenants. Other requests get 403, including a user of a first-party client. The first login of a person creates their user and tenant, as `docs/authentication.md` says.
-- If a user that is not deleted already has the identifier, in any tenant, `initiate` returns 409. `POST /api/v1/users` takes no identifier, because the Server makes it the ID of the new user. A user belongs to one tenant only. A deleted user frees its identifier, so the same person can sign up again.
+- `POST /api/v1/users` and `initiate` take no identifier, because the Server makes it the ID of the new user. A session puts that ID in `sub`, so the user can sign in. A body that still sends `identifier` gets no error, because the Server ignores the field. The caller reads the new user from the response: `id` for `POST /api/v1/users`, and `user.id` for `initiate`. The change to `initiate` takes no v2, because its only caller is the trusted all-tenants client of the operator. A user belongs to one tenant only.
 
 ## Delete a tenant
 
@@ -170,7 +169,7 @@ The line gives the users of the tenant (with the admin), the time of the delete,
 
 During the delete, each add that takes the shared lock of the tenant waits. If a tenant of your app can own more than about 10,000 users or other aggregate roots, change the delete to save in batches.
 
-For a user of a deleted tenant, the server finds no user record on the next request. A deleted user frees its identifier, so a trusted tenant management client can send `POST /api/v1/users/initiate` to start a new tenant and a new user for the same person. The new user has a new ID. The old user and its history stay in the deleted tenant. The unique index on the tenant name also covers the deleted tenants, so the new tenant needs a new name.
+For a user of a deleted tenant, the server finds no user record on the next request. A trusted tenant management client can send `POST /api/v1/users/initiate` to start a new tenant and a new user for the same person. The new user has a new ID, and its identifier is that ID, so the person signs in as the new user. The old identifier still finds no user record. The old user and its history stay in the deleted tenant. The unique index on the tenant name also covers the deleted tenants, so the new tenant needs a new name.
 
 An agent add and a user add take the shared lock of the tenant, and a tenant delete takes the exclusive lock. Thus an add that runs during the delete cannot leave a live agent or a live user in the deleted tenant (see [concurrency.md](backend/concurrency.md#lock)). The add of a new tenant-owned aggregate root must take the shared lock too. If it does not, a row that it saves during the delete stays live in the deleted tenant. A child add, such as a permission add, takes no lock. It changes the version of its owner, and the delete loads each owner before its children, so the save of the delete fails its version check and runs again. A child has a required Cascade key to its owner. An entity with another kind of key to its owner is an aggregate root, so it needs `ITenantable`, and its add must take the shared lock.
 

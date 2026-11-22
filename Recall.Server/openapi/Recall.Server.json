@@ -7995,7 +7995,6 @@
           "tenantName",
           "firstName",
           "lastName",
-          "identifier",
           "email",
           "username",
           "role"
@@ -8012,10 +8011,6 @@
           },
           "lastName": {
             "maxLength": 200,
-            "type": "string"
-          },
-          "identifier": {
-            "maxLength": 255,
             "type": "string"
           },
           "email": {
