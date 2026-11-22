@@ -23,6 +23,7 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
     public const string ModeId = "stub";
     public const string OtherModeId = "other";
     public const string OtherIssuer = "https://other-idp.test";
+    public const string RowIssuer = "https://row-idp.test";
     public const string ConnectionAddressHeader = "X-Test-Connection-Address";
 
     private readonly SqliteTestDatabase _database = new();
@@ -33,10 +34,16 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
 
     public CapturedLogs Logs { get; } = new();
 
+    /// <summary>The database of this host. A host whose settings name it boots on the rows of this one.</summary>
+    public string ConnectionString => _database.ConnectionString;
+
     /// <summary>The hasher of the passwords of this host, which counts each check and can hold one.</summary>
     public WatchedHasher Hasher { get; } = new();
 
     public ITranscriptionEngine? TranscriptionEngine { get; init; }
+
+    /// <summary>The provider of each row of <c>auth_oidc_providers</c> whose issuer is <see cref="RowIssuer"/>.</summary>
+    public StubOidcProvider RowProvider { get; } = new(RowIssuer);
 
     /// <summary>A second provider with the mode ID <see cref="OtherModeId"/>, for a test of one provider that fails next to one that works.</summary>
     public StubOidcProvider? OtherProvider { get; init; }
@@ -114,7 +121,11 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
         builder.ConfigureLogging(logging => logging.ClearProviders());
         builder.ConfigureServices(services =>
         {
-            services.AddSingleton<OidcHandlerFactory>(options => options.Id == OtherModeId ? OtherProvider! : Provider);
+            services.AddSingleton<OidcHandlerFactory>(options => options.Id == OtherModeId ? OtherProvider!
+                : options.Issuer?.StartsWith(RowIssuer, StringComparison.Ordinal) == true ? RowProvider
+                // A real IdP on this machine, so a test sees the client that the Server gives a provider of the app.
+                : options.Issuer?.StartsWith("http://127.0.0.1:", StringComparison.Ordinal) == true ? OidcLoginMode.DefaultHandler(options)
+                : Provider);
             // The tests of each host share its two hash slots, so a test waits longer for one than a person does.
             services.AddSingleton(new PasswordHashing(Hasher, TimeSpan.FromMinutes(2)));
             if (ClaimFilePath is { } claimFile)

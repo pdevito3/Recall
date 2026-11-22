@@ -994,6 +994,411 @@
         }
       }
     },
+    "/api/v1/login-providers": {
+      "post": {
+        "tags": [
+          "LoginProviders"
+        ],
+        "summary": "Adds an OIDC provider to the login page of the install, with no restart. The client secret goes under the key ring, and no\nanswer holds it. Only a person signed in to Recall can add one.",
+        "operationId": "AddLoginProvider",
+        "parameters": [
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginProviderForCreationDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginProviderDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "LoginProviders"
+        ],
+        "summary": "Lists the login providers of the install: the ones from the app, and the ones from `Auth:Providers`, which the app cannot\nchange. It gives the callback URL to register at a provider. Only a person signed in to Recall can read it.",
+        "operationId": "GetLoginProviders",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginProviderListDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/login-providers/{id}": {
+      "delete": {
+        "tags": [
+          "LoginProviders"
+        ],
+        "summary": "Removes a login provider of the app and its secret. It is refused when a tenant would keep no Admin who can sign in and manage\naccess. Only a person signed in to Recall can remove one.",
+        "operationId": "DeleteLoginProvider",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "LoginProviders"
+        ],
+        "summary": "Changes a login provider of the app. A blank secret keeps the stored one, and the issuer cannot change. Only a person signed\nin to Recall can change one.",
+        "operationId": "UpdateLoginProvider",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginProviderForUpdateDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginProviderDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/login-providers/test": {
+      "post": {
+        "tags": [
+          "LoginProviders"
+        ],
+        "summary": "Runs discovery against the issuer of the form and saves nothing. A provider that fails is a 200 with the failure, because this\nserver worked. Only a person signed in to Recall can test one.",
+        "operationId": "TestLoginProvider",
+        "parameters": [
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginProviderForTestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginProviderTestResultDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/model-providers": {
       "post": {
         "tags": [
@@ -7080,6 +7485,26 @@
           }
         }
       },
+      "EnvironmentLoginProviderDto": {
+        "required": [
+          "id",
+          "displayName",
+          "issuer"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "issuer": {
+            "type": "string"
+          }
+        },
+        "description": "A provider from `Auth:Providers`. The app cannot change it."
+      },
       "FileStoreStatusDto": {
         "required": [
           "canWrite"
@@ -7148,6 +7573,264 @@
           },
           "user": {
             "$ref": "#/components/schemas/UserDto"
+          }
+        }
+      },
+      "LoginProviderDto": {
+        "required": [
+          "id",
+          "displayName",
+          "issuer",
+          "clientId",
+          "allowHttp",
+          "state",
+          "secretState",
+          "createdAt",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "allowHttp": {
+            "type": "boolean"
+          },
+          "caCertificatePath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "state": {
+            "enum": [
+              "Usable",
+              "SecretUnreadable",
+              "ReplacedByEnvironment"
+            ],
+            "type": "string",
+            "description": "`ReplacedByEnvironment`: an entry of `Auth:Providers` has its ID or its issuer, and that entry wins (IDP-3)."
+          },
+          "secretState": {
+            "enum": [
+              "Readable",
+              "Unreadable"
+            ],
+            "type": "string",
+            "description": "`Unreadable`: the key ring of this server cannot read the secret, so an Admin must enter it again (IDP-5)."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "description": "A login provider of the table. No answer holds the client secret (IDP-4)."
+      },
+      "LoginProviderForCreationDto": {
+        "required": [
+          "id",
+          "displayName",
+          "issuer",
+          "clientId",
+          "clientSecret",
+          "allowHttp"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "maxLength": 100,
+            "type": "string",
+            "description": "The name of the provider in the sign-in URLs: letters, digits, dashes, or underscores."
+          },
+          "displayName": {
+            "maxLength": 100,
+            "type": "string"
+          },
+          "issuer": {
+            "maxLength": 2048,
+            "type": "string"
+          },
+          "clientId": {
+            "maxLength": 255,
+            "type": "string"
+          },
+          "clientSecret": {
+            "maxLength": 1000,
+            "type": "string"
+          },
+          "allowHttp": {
+            "type": "boolean"
+          },
+          "caCertificatePath": {
+            "maxLength": 1000,
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "LoginProviderForTestDto": {
+        "required": [
+          "issuer",
+          "allowHttp"
+        ],
+        "type": "object",
+        "properties": {
+          "issuer": {
+            "maxLength": 2048,
+            "type": "string"
+          },
+          "allowHttp": {
+            "type": "boolean"
+          },
+          "caCertificatePath": {
+            "maxLength": 1000,
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "The fields of the form that discovery needs (IDP-7)."
+      },
+      "LoginProviderForUpdateDto": {
+        "required": [
+          "displayName",
+          "clientId",
+          "allowHttp",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "maxLength": 100,
+            "type": "string"
+          },
+          "issuer": {
+            "maxLength": 2048,
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The issuer cannot change (IDP-6). A value other than the stored issuer gets 422, and no value keeps it."
+          },
+          "clientId": {
+            "maxLength": 255,
+            "type": "string"
+          },
+          "clientSecret": {
+            "maxLength": 1000,
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "A blank value keeps the stored secret (IDP-4)."
+          },
+          "allowHttp": {
+            "type": "boolean"
+          },
+          "caCertificatePath": {
+            "maxLength": 1000,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      },
+      "LoginProviderListDto": {
+        "required": [
+          "items",
+          "environmentProviders",
+          "callbackUrl"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoginProviderDto"
+            }
+          },
+          "environmentProviders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnvironmentLoginProviderDto"
+            }
+          },
+          "callbackUrl": {
+            "type": "string",
+            "description": "The callback URL to register at the provider, from the origin of this request, as `/auth/status` gives it (IDP-8)."
+          }
+        }
+      },
+      "LoginProviderTestFailureDto": {
+        "required": [
+          "kind",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "Unreachable",
+              "NotDiscovery",
+              "OtherIssuer",
+              "NoS256"
+            ],
+            "type": "string"
+          },
+          "message": {
+            "type": "string",
+            "description": "The words that the settings page shows for the failure."
+          }
+        }
+      },
+      "LoginProviderTestResultDto": {
+        "required": [
+          "ok"
+        ],
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "issuer": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The issuer that the discovery document names."
+          },
+          "failure": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LoginProviderTestFailureDto"
+              }
+            ]
           }
         }
       },
@@ -9227,6 +9910,9 @@
     },
     {
       "name": "Corrections"
+    },
+    {
+      "name": "LoginProviders"
     },
     {
       "name": "ModelProviders"

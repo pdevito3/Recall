@@ -147,6 +147,23 @@ public sealed class LoginModes : IDisposable
         }
     }
 
+    /// <summary>
+    /// Takes the row with this ID off the list with no read, for a delete whose reload failed after its save, so a deleted provider
+    /// stops signing people in.
+    /// </summary>
+    public async Task ForgetRowAsync(string rowId)
+    {
+        await _reload.WaitAsync(CancellationToken.None);
+        try
+        {
+            _snapshot = Snapshot.Of(_environmentModes, _environment, _snapshot.Rows.Where(row => row.Key.Id != rowId).ToList());
+        }
+        finally
+        {
+            _reload.Release();
+        }
+    }
+
     private OidcLoginMode? NewMode(OidcProviderOptions settings)
     {
         try

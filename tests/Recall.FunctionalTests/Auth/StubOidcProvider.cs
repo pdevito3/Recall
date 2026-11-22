@@ -98,6 +98,8 @@ public sealed class StubOidcProvider : HttpMessageHandler
 
     public bool ListsIssParameter { get; init; } = true;
 
+    public string[] CodeChallengeMethods { get; set; } = ["S256"];
+
     public string? EndSessionEndpoint { get; init; }
 
     /// <summary>Changes each answer on its way out, for a fault of a real provider. It gets the path and the answer that the stub would send.</summary>
@@ -168,6 +170,7 @@ public sealed class StubOidcProvider : HttpMessageHandler
             ["userinfo_endpoint"] = $"{_issuer}/userinfo",
             ["token_endpoint_auth_methods_supported"] = AuthMethods,
             ["authorization_response_iss_parameter_supported"] = ListsIssParameter,
+            ["code_challenge_methods_supported"] = CodeChallengeMethods,
         };
         if (PromptValues is { } values)
             body["prompt_values_supported"] = values;
