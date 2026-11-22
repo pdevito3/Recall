@@ -310,6 +310,26 @@ test.describe('the settings of a person', () => {
     await expect(settings.at.zoneInUse).toHaveText('New entries use the day in EST5EDT (Eastern Time).')
   })
 
+  test('finds and picks a System V zone, which the list of the browser leaves out', async ({ page, api }) => {
+    api.mock(
+      settingsApi.are(aSetting({ timeZoneMode: 'Fixed', timeZone: 'America/Chicago' })),
+      settingsApi.saves(aSetting({ timeZoneMode: 'Fixed', timeZone: 'EST5EDT', version: 2 })),
+    )
+    const settings = settingsPage(page)
+    await settings.open()
+
+    for (const [search, shown] of [['cst6', 'CST6CDT (Central Time)'], ['mst7', 'MST7MDT (Mountain Time)'], ['pst8', 'PST8PDT (Pacific Time)']]) {
+      await settings.at.zone.fill(search)
+      await expect(settings.at.zoneOptions).toHaveText([shown])
+    }
+    await settings.at.zone.fill('eastern time')
+    await expect(settings.at.zoneOption(/^EST5EDT \(Eastern Time\)$/)).toBeVisible()
+    await settings.pickZone('est5', /^EST5EDT \(Eastern Time\)$/)
+
+    expect(api.last('put', settingsPaths.mine)?.body).toMatchObject({ timeZoneMode: 'Fixed', timeZone: 'EST5EDT' })
+    await expect(settings.at.zone).toHaveValue('EST5EDT (Eastern Time)')
+  })
+
   test('a Fixed zone that this browser does not know shows as the picked zone, and the line names it', async ({ page, api }) => {
     const settings = settingsPage(page)
     await settings.browserLacksTheZone('America/Chicago')
