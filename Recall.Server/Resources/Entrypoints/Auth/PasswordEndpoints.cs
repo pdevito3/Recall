@@ -85,9 +85,15 @@ public static class PasswordEndpoints
 
         var client = LoginClient.FromAttempt(attempt);
         var typedName = AuthForm.OneValue(form, "loginName");
-        var outcome = await passwords.SignInAsync(typedName, AuthForm.OneValue(form, "password"), http.Connection.RemoteIpAddress, cancellationToken);
+        // While password login is Off, only a temporary password signs in, and only to link a provider (IDP-15, IDP-20).
+        var outcome = await passwords.SignInAsync(
+            typedName, AuthForm.OneValue(form, "password"), http.Connection.RemoteIpAddress, temporaryOnly: !modes.PasswordsAreOn, cancellationToken);
         switch (outcome)
         {
+            // Password login turned Off during the hash, so the right password gets the answer of PWD-6 and starts nothing (IDP-15).
+            case PasswordOutcome.SignedIn when !modes.PasswordsAreOn:
+                return await LoginPageAsync(http, modes, store, ownerClaim, scopes, timeProvider, client, typedName, PasswordLogin.WrongMessage,
+                    StatusCodes.Status401Unauthorized, cancellationToken);
             case PasswordOutcome.SignedIn signedIn:
                 return await CompleteAsync(completion, passwords, client, signedIn, http, cancellationToken);
             case PasswordOutcome.MustChoose choose:
@@ -151,6 +157,9 @@ public static class PasswordEndpoints
         HttpContext http, LoginModes modes, SessionStore store, PasswordLogin passwords, LoginCompletion completion, OwnerClaim ownerClaim,
         IServiceScopeFactory scopes, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
+        // While password login is Off, no one picks a password (IDP-15).
+        if (!modes.PasswordsAreOn)
+            return Results.NotFound();
         if (await ConsumeAsync(http, store, isChoose: true, cancellationToken) is not { } consumed)
             return AuthPages.Refused();
 
@@ -165,6 +174,9 @@ public static class PasswordEndpoints
         var outcome = await passwords.ChooseAsync(choose.UserId, choose.ChangedAt, AuthForm.OneValue(form, "password"), cancellationToken);
         switch (outcome)
         {
+            // Password login turned Off during the choice, so no session starts (IDP-15). An Admin issues a new temporary password.
+            case PasswordOutcome.SignedIn when !modes.PasswordsAreOn:
+                return Results.NotFound();
             case PasswordOutcome.SignedIn signedIn:
                 return await CompleteAsync(completion, passwords, client, signedIn, http, cancellationToken);
             case PasswordOutcome.Wait wait:
@@ -246,8 +258,11 @@ public static class PasswordEndpoints
     /// The change of a password from the SPA or an app (PWD-17). A refusal is a problem whose <c>errors</c> names the field, so the
     /// form shows the message at that field.
     /// </summary>
-    private static async Task<IResult> ChangeAsync(HttpContext http, PasswordLogin passwords, CancellationToken cancellationToken)
+    private static async Task<IResult> ChangeAsync(HttpContext http, LoginModes modes, PasswordLogin passwords, CancellationToken cancellationToken)
     {
+        if (!modes.PasswordsAreOn)
+            return Results.NotFound();
+
         var form = await AuthForm.ReadAsync(http.Request, cancellationToken, FormMaxBytes);
         if (form is null)
             return Results.Problem(detail: ChangeFormMessage, statusCode: StatusCodes.Status400BadRequest);

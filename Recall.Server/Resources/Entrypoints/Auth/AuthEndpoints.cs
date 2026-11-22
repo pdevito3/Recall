@@ -131,11 +131,15 @@ public static class AuthEndpoints
             state == LoginModeState.Ready ? "ready" : "unreachable",
             state == LoginModeState.Ready ? null : NoProviderDetail,
             mode is PasswordLoginMode ? $"{AuthRoutes.Login}?client=app" : $"/auth/oidc/{Uri.EscapeDataString(mode.Id)}/start?client=app")).ToList();
+        var setupRequired = setupCode.IsLive && !await SetupCodeAtBoot.AnyLiveTenantAsync(scopes, cancellationToken);
+        // Password login is Off and no provider is Usable, so only the claim-owner file lets anyone in (IDP-15).
+        if (listed.Count == 0)
+            return Results.Json(new StatusAnswer("recall", "no_login_method", callbackUrl, AuthPages.NoLoginMethodMessage, setupRequired, answers));
+
         var allDown = states.All(state => state == LoginModeState.Unreachable);
         var message = allDown
             ? (listed.Count == 1 ? AuthPages.ProviderDown(listed[0].DisplayName) : "Sign-in is not available. Existing sessions keep working.")
             : null;
-        var setupRequired = setupCode.IsLive && !await SetupCodeAtBoot.AnyLiveTenantAsync(scopes, cancellationToken);
         return Results.Json(new StatusAnswer("recall", allDown ? "degraded" : "ready", callbackUrl, message, setupRequired, answers));
     }
 
@@ -167,8 +171,11 @@ public static class AuthEndpoints
 
         // A web page with a fresh claim file shows its offer, so it does not start the provider with no click (PWD-19).
         var offersOwnerClaim = client is LoginClient.Web && await PasswordEndpoints.OffersOwnerClaimAsync(ownerClaim, scopes, cancellationToken);
+        // While password login is Off, a temporary password still opens the password form, which only links a provider (IDP-20).
+        var showsTemporaryForm = !modes.PasswordsAreOn && query.ContainsKey(AuthPages.TemporaryPasswordQuery);
+        var offersTemporaryPassword = !showsTemporaryForm && await modes.OffersTemporaryPasswordAsync(cancellationToken);
         var mayStartWithNoClick = listed is [OidcLoginMode] && states[0] == LoginModeState.Ready && !signedOut && !hasError && !isForPageOfAnotherPerson && openSessionLogoutUrl is null
-            && !offersOwnerClaim;
+            && !offersOwnerClaim && !showsTemporaryForm && !offersTemporaryPassword;
         if (mayStartWithNoClick)
             return new AuthRedirect(AuthPages.StartUrl(listed[0].Id, client));
 
@@ -177,12 +184,12 @@ public static class AuthEndpoints
             ? new AuthPages.OpenProviderSession(openSession.DisplayName, await openSession.ProbeAsync(cancellationToken), openSessionLogoutUrl)
             : null;
         var chooser = listed.Zip(states, (mode, state) => new AuthPages.ChooserMode(mode.Id, mode.DisplayName, state)).ToList();
-        var passwordForm = listed.Contains(PasswordLoginMode.Instance)
+        var passwordForm = listed.Contains(PasswordLoginMode.Instance) || showsTemporaryForm
             ? new AuthPages.PasswordForm(await PasswordEndpoints.StartFormAsync(http, store, timeProvider, client, null, cancellationToken), null, null)
             : null;
         var message = isForPageOfAnotherPerson ? (query.ContainsKey("wordsLost") ? AuthPages.AnotherPersonLostWordsMessage : AuthPages.AnotherPersonMessage) : hasError ? "The last sign-in did not finish." : null;
         return AuthPages.Chooser(chooser, client, isSignedOut, message, providerSession, asksTheProviderAgain: isForPageOfAnotherPerson, passwordForm,
-            offersOwnerClaim: offersOwnerClaim);
+            offersOwnerClaim: offersOwnerClaim, offersTemporaryPassword: offersTemporaryPassword);
     }
 
     private static AuthRedirect SignedOutReturn(HttpContext http, string? state)
@@ -307,7 +314,7 @@ public static class AuthEndpoints
         => AppSessionHandler.CredentialOf(request.Headers.Authorization.ToString()) is null
             && (SessionCookie.Read(request) is null || AppSessionHandler.HasCsrfHeader(request));
 
-    private static async Task<IResult> MeAsync(HttpContext http, ISender sender, PasswordLogin passwords, CancellationToken cancellationToken)
+    private static async Task<IResult> MeAsync(HttpContext http, ISender sender, PasswordLogin passwords, LoginModes modes, CancellationToken cancellationToken)
     {
         var session = await http.AuthenticateAsync(AppSessionHandler.SchemeName);
         if (!session.Succeeded)
@@ -322,8 +329,9 @@ public static class AuthEndpoints
         if (kind == SessionKindText.Web)
             await SlideAsync(http, sessionId);
 
-        // The SPA shows the change of a password only to a person whose password it can change (PWD-17). A token cannot change it.
-        var loginName = kind is SessionKindText.Web or SessionKindText.Native
+        // The SPA shows the change of a password only to a person whose password it can change (PWD-17). A token cannot change it, and
+        // no one can while password login is Off (IDP-15).
+        var loginName = kind is SessionKindText.Web or SessionKindText.Native && modes.PasswordsAreOn
             ? await passwords.ChangeableLoginNameOfAsync(http.User.FindFirst("sub")!.Value, cancellationToken)
             : null;
         return Results.Json(new MeAnswer(current.Identifier, current.Name, sessionId, kind, loginName));

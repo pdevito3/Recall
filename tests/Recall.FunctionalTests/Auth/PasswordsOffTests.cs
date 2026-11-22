@@ -296,6 +296,43 @@ public class PasswordsOffTests
     }
 
     [Test]
+    [Property("Rule", "IDP-15")]
+    public async Task a_sign_in_whose_password_was_checked_before_a_turn_off_saved_starts_no_session()
+    {
+        // Arrange
+        await ResetAsync(Host);
+        var (browser, admin) = await SignedInAdminAsync();
+        using var signedIn = browser;
+        var person = await AddPasswordUserAsync(Host, admin.TenantId, UserRole.User());
+        using var personBrowser = new AuthBrowser(Host);
+        var state = await personBrowser.FormStateAsync();
+        var pause = PauseAtQuery.After("auth.password.find_credential");
+
+        // Act
+        HttpResponseMessage login;
+        Host.Pause = pause;
+        try
+        {
+            var signIn = personBrowser.PostLoginAsync(state, person.LoginName, person.Password);
+            await pause.ReachedAsync();
+            await TurnOffAsync(browser);
+            pause.Release();
+            login = await signIn;
+        }
+        finally
+        {
+            pause.Release();
+            Host.Pause = null;
+        }
+
+        // Assert
+        login.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await login.Content.ReadAsStringAsync()).ShouldContain(PasswordLogin.WrongMessage);
+        personBrowser.SessionCookie.ShouldBeNull();
+        (await Host.WithDatabaseAsync(db => db.Set<AuthSession>().CountAsync(s => s.UserId == person.UserId))).ShouldBe(0);
+    }
+
+    [Test]
     [Property("Rule", "IDP-19")]
     public async Task a_personal_access_token_and_a_provider_token_get_403_on_the_login_settings()
     {
@@ -319,5 +356,141 @@ public class PasswordsOffTests
         // Assert
         responses.ShouldAllBe(r => r.StatusCode == HttpStatusCode.Forbidden);
         (await host.WithDatabaseAsync(db => db.LoginSettings.SingleAsync())).PasswordLogin.ShouldBe(PasswordLoginState.On);
+    }
+
+    private static async Task<HttpResponseMessage> StatusAsync(AuthFlowFactory host)
+    {
+        using var client = host.NewClient();
+        return await client.GetAsync(AuthRoutes.Status);
+    }
+
+    private static async Task<IReadOnlyList<string>> StatusModeIdsAsync(AuthFlowFactory host)
+    {
+        using var status = JsonDocument.Parse(await (await StatusAsync(host)).Content.ReadAsStringAsync());
+        return status.RootElement.GetProperty("modes").EnumerateArray().Select(mode => mode.GetProperty("id").GetString()!).ToList();
+    }
+
+    [Test]
+    [Property("Rule", "IDP-15")]
+    public async Task while_passwords_are_off_no_password_signs_in_and_a_session_and_a_token_from_a_password_keep_working()
+    {
+        // Arrange
+        await ResetAsync(Host);
+        var (browser, admin) = await SignedInAdminAsync();
+        using var signedIn = browser;
+        var person = await AddPasswordUserAsync(Host, admin.TenantId, UserRole.User());
+        var stopped = await AddPasswordUserAsync(Host, admin.TenantId, UserRole.User(), wrongTries: PasswordCredential.StopAt);
+        using var personBrowser = new AuthBrowser(Host);
+        (await personBrowser.SignInAsync(person.LoginName, person.Password)).StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        var token = await PatPeople.StartTokenAsync(Host, new PatPerson(person.LoginName, person.UserId, admin.TenantId), new TokenGrant([], JournalAccess.None));
+        using var tokenClient = PatPeople.ClientWith(Host, token.Value);
+        var modesWhileOn = await StatusModeIdsAsync(Host);
+        await TurnOffAsync(browser);
+
+        // Act
+        var modesWhileOff = await StatusModeIdsAsync(Host);
+        using var visitor = new AuthBrowser(Host);
+        var page = await visitor.GetAsync($"{AuthRoutes.Login}?signedOut=1");
+        using var other = new AuthBrowser(Host);
+        var chosen = await other.PostLoginAsync(await other.FormStateAsync($"{AuthRoutes.Login}?{AuthPages.TemporaryPasswordQuery}=1"), person.LoginName, person.Password);
+        var stoppedLogin = await other.PostLoginAsync(await other.FormStateAsync($"{AuthRoutes.Login}?{AuthPages.TemporaryPasswordQuery}=1"), stopped.LoginName, stopped.Password);
+        var me = await personBrowser.GetAsync("/auth/me", csrf: true);
+        var tokenMe = await tokenClient.GetAsync("/auth/me");
+        var change = await personBrowser.PostFormAsync(AuthRoutes.PasswordChange, [("currentPassword", person.Password), ("newPassword", "another long passphrase of mine")], csrf: true);
+        var choose = await other.PostAsync(AuthRoutes.PasswordChoose, [("state", "any"), ("password", "another long passphrase of mine")]);
+
+        // Assert
+        modesWhileOn.ShouldContain(PasswordLoginMode.ModeId);
+        modesWhileOff.ShouldBe([AuthFlowFactory.ModeId]);
+        (await page.Content.ReadAsStringAsync()).ShouldNotContain($"action=\"{AuthRoutes.PasswordLogin}\"");
+        chosen.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await chosen.Content.ReadAsStringAsync()).ShouldContain(PasswordLogin.WrongMessage);
+        stoppedLogin.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        var stoppedText = await stoppedLogin.Content.ReadAsStringAsync();
+        stoppedText.ShouldContain(PasswordLogin.WrongMessage);
+        stoppedText.ShouldNotContain(PasswordLogin.StoppedMessage);
+        other.SessionCookie.ShouldBeNull();
+        me.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using (var body = JsonDocument.Parse(await me.Content.ReadAsStringAsync()))
+            body.RootElement.GetProperty("login_name").ValueKind.ShouldBe(JsonValueKind.Null);
+        tokenMe.StatusCode.ShouldBe(HttpStatusCode.OK);
+        change.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        choose.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await PasswordPeople.CredentialOfAsync(Host, person.UserId)).FailedCount.ShouldBe(0);
+    }
+
+    [Test]
+    [Property("Rule", "IDP-15")]
+    [Property("Rule", "IDP-20")]
+    public async Task with_passwords_off_and_no_usable_provider_the_status_has_no_login_method_and_the_page_points_to_the_claim_file()
+    {
+        // Arrange
+        var host = AuthHosts.NoLoginMethod;
+        await ResetAsync(host);
+        var tenantId = await AddTenantAsync(host);
+        await AddPasswordUserAsync(host, tenantId, UserRole.Admin(), issueTemporary: DateTimeOffset.UtcNow - PasswordCredential.TemporaryLifetime - TimeSpan.FromMinutes(1));
+        await host.WithDatabaseAsync(async db =>
+        {
+            var settings = await db.LoginSettings.SingleAsync();
+            settings.TurnPasswordsOff(settings.Version, eachTenantHasALinkedAdmin: true, null!);
+            return await db.SaveChangesAsync();
+        });
+        await host.Services.GetRequiredService<LoginModes>().ReloadAsync(CancellationToken.None);
+
+        // Act
+        using var browser = new AuthBrowser(host);
+        var pageWithOnlyAnExpiredPassword = await (await browser.GetAsync(AuthRoutes.Login)).Content.ReadAsStringAsync();
+        await AddPasswordUserAsync(host, tenantId, UserRole.Admin(), issueTemporary: DateTimeOffset.UtcNow);
+        var status = await StatusAsync(host);
+        var page = await browser.GetAsync(AuthRoutes.Login);
+        var form = await browser.GetAsync($"{AuthRoutes.Login}?{AuthPages.TemporaryPasswordQuery}=1");
+        var formText = await form.Content.ReadAsStringAsync();
+
+        // Assert
+        using (var body = JsonDocument.Parse(await status.Content.ReadAsStringAsync()))
+        {
+            body.RootElement.GetProperty("state").GetString().ShouldBe("no_login_method");
+            body.RootElement.GetProperty("message").GetString().ShouldBe(AuthPages.NoLoginMethodMessage);
+            body.RootElement.GetProperty("modes").GetArrayLength().ShouldBe(0);
+        }
+        pageWithOnlyAnExpiredPassword.ShouldContain(AuthPages.NoLoginMethodMessage);
+        pageWithOnlyAnExpiredPassword.ShouldNotContain(AuthPages.TemporaryPasswordLabel);
+        page.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
+        var pageText = await page.Content.ReadAsStringAsync();
+        pageText.ShouldContain(AuthPages.NoLoginMethodMessage);
+        pageText.ShouldContain(AuthPages.TemporaryPasswordLabel);
+        pageText.ShouldNotContain($"action=\"{AuthRoutes.PasswordLogin}\"");
+        formText.ShouldContain($"action=\"{AuthRoutes.PasswordLogin}\"");
+        await ResetAsync(host);
+    }
+
+    [Test]
+    [Property("Rule", "IDP-16")]
+    public async Task while_passwords_are_off_the_claim_owner_file_still_signs_the_operator_in_and_keeps_passwords_off()
+    {
+        // Arrange
+        await ResetAsync(Host);
+        var (browser, _) = await SignedInAdminAsync();
+        using var signedIn = browser;
+        await TurnOffAsync(browser);
+        var claimFile = Host.Services.GetRequiredService<OwnerClaim>().FilePath;
+        await File.WriteAllTextAsync(claimFile, "");
+        using var operatorBrowser = new AuthBrowser(Host);
+        var loginName = $"owner-{Guid.NewGuid():N}";
+
+        // Act
+        var page = await (await operatorBrowser.GetAsync(AuthRoutes.Login)).Content.ReadAsStringAsync();
+        var state = await operatorBrowser.FormStateAsync(AuthRoutes.PasswordClaimOwner);
+        var claimed = await operatorBrowser.PostAsync(AuthRoutes.PasswordClaimOwner,
+            [("state", state), ("loginName", loginName), ("password", $"the owner passphrase {Guid.NewGuid():N}")]);
+
+        // Assert
+        page.ShouldContain(AuthPages.OwnerClaimLabel);
+        claimed.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        operatorBrowser.SessionCookie.ShouldNotBeNull();
+        File.Exists(claimFile).ShouldBeFalse();
+        Modes.PasswordsAreOn.ShouldBeFalse();
+        (await Host.WithDatabaseAsync(db => db.LoginSettings.SingleAsync())).PasswordLogin.ShouldBe(PasswordLoginState.Off);
+        (await StatusModeIdsAsync(Host)).ShouldNotContain(PasswordLoginMode.ModeId);
     }
 }

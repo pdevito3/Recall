@@ -87,7 +87,12 @@ public sealed class PasswordLogin(
         return minutes == 1 ? "Too many wrong tries. Wait 1 minute, then try again." : $"Too many wrong tries. Wait {minutes} minutes, then try again.";
     }
 
-    public async Task<PasswordOutcome> SignInAsync(string? typedName, string? typedPassword, IPAddress? address, CancellationToken cancellationToken)
+    /// <summary>
+    /// A sign-in with a login name and a password. With <c>temporaryOnly</c>, password login is Off, so only a Temporary credential takes a
+    /// password (IDP-20). A Chosen or Stopped one answers as a login name that no credential holds (PWD-6), so the form tells nothing about the account.
+    /// </summary>
+    public async Task<PasswordOutcome> SignInAsync(
+        string? typedName, string? typedPassword, IPAddress? address, bool temporaryOnly, CancellationToken cancellationToken)
     {
         // A wait runs no hash, so a stranger who guesses pays nothing and gets nothing.
         if (backoff.WaitLeft(typedName, address) is { } left)
@@ -98,7 +103,7 @@ public sealed class PasswordLogin(
         {
             try
             {
-                var (outcome, wrong) = await SignInOnceAsync(typedName, password, cancellationToken);
+                var (outcome, wrong) = await SignInOnceAsync(typedName, password, temporaryOnly, cancellationToken);
                 if (wrong)
                     backoff.NoteWrong(typedName, address);
                 else if (outcome is not PasswordOutcome.Wait)
@@ -121,7 +126,8 @@ public sealed class PasswordLogin(
 
     /// <summary>One load, check, and save of a sign-in. The flag tells whether the try counts as wrong for PWD-12.</summary>
     /// <exception cref="StaleVersionException">Another write changed the credential after the load.</exception>
-    private async Task<(PasswordOutcome Outcome, bool Wrong)> SignInOnceAsync(string? typedName, string password, CancellationToken cancellationToken)
+    private async Task<(PasswordOutcome Outcome, bool Wrong)> SignInOnceAsync(
+        string? typedName, string password, bool temporaryOnly, CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateSystemScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -130,6 +136,8 @@ public sealed class PasswordLogin(
                 .TagWithOperationCallSite("auth.password.find_credential")
                 .FirstOrDefaultAsync(p => p.LoginName == name, cancellationToken)
             : null;
+        if (temporaryOnly && credential is not { State: PasswordState.Temporary })
+            credential = null;
 
         // A name that no credential holds and a Stopped credential each run one hash of a fixed value (PWD-6).
         var storedHash = credential is { State: not PasswordState.Stopped } ? credential.PasswordHash : null;

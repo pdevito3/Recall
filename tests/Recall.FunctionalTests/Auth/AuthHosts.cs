@@ -46,6 +46,9 @@ public static class AuthHosts
     /// </summary>
     public static AuthFlowFactory PasswordsOff { get; private set; } = null!;
 
+    /// <summary>A host with no provider whose password login only <see cref="PasswordsOffTests"/> turns Off, so it has no login method.</summary>
+    public static AuthFlowFactory NoLoginMethod { get; private set; } = null!;
+
     /// <summary>A fresh host with no provider, which only the setup test uses.</summary>
     public static AuthFlowFactory Setup { get; private set; } = null!;
 
@@ -135,6 +138,7 @@ public static class AuthHosts
         {
             ClaimFilePath = Path.Combine(Directory.CreateTempSubdirectory("recall-claim-").FullName, OwnerClaim.FileName),
         });
+        NoLoginMethod = Start(new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts }) { NoProvider = true });
         NoPromptLogin = Start(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts }, new StubOidcProvider { PromptValues = ["none", "consent"] });
         LoginProvidersNoEnvironment = Start(new AuthFlowFactory(new Dictionary<string, string?>
         {
@@ -258,7 +262,7 @@ public static class AuthHosts
     public static async Task StopAsync()
     {
         // RowAtBoot runs on the database of RowAtBootDatabase, so it stops first.
-        foreach (var host in new[] { Password, LoginProviders, Links, PasswordsOff, NoPromptLogin, LoginProvidersNoEnvironment, RowAtBoot, RowAtBootDatabase, SetupLogs, Setup, SetupWithProvider, Mixed, PasswordClaim, LostJobTable, FrozenClock, WriterLine, KeepAlive, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, FirstPartyClient, Bundle, OwnerDemotion, Sweep, Jobs, Cleanups, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
+        foreach (var host in new[] { Password, LoginProviders, Links, PasswordsOff, NoLoginMethod, NoPromptLogin, LoginProvidersNoEnvironment, RowAtBoot, RowAtBootDatabase, SetupLogs, Setup, SetupWithProvider, Mixed, PasswordClaim, LostJobTable, FrozenClock, WriterLine, KeepAlive, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, FirstPartyClient, Bundle, OwnerDemotion, Sweep, Jobs, Cleanups, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
         {
             if (host is not null)
                 await host.DisposeAsync();
