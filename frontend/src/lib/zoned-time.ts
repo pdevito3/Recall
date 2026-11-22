@@ -41,7 +41,7 @@ const PLACE_OF_SYSTEM_V_ID: Partial<Record<string, string>> = {
   PST8PDT: 'America/Los_Angeles',
 }
 
-/** The System V IDs that the Server accepts. */
+/** The System V IDs. The Server accepts each one on a host whose tzdata has its file. */
 export const SYSTEM_V_IDS = Object.keys(PLACE_OF_SYSTEM_V_ID)
 
 /**
