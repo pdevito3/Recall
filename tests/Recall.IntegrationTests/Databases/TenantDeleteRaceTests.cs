@@ -113,7 +113,7 @@ public class TenantDeleteRaceTests : TestBase
     public async Task tenant_delete_during_a_user_add_waits_and_then_deletes_the_new_user()
     {
         // Arrange
-        var pause = PauseAtQuery.After("users.add.identifier_in_use");
+        var pause = PauseAtQuery.After("users.add.tenant_exists");
         await using var services = pause.BuildServices();
         await new TestingServiceScope().StartGraph(out _)
             .AddTenant(out var tenant)

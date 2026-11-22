@@ -9615,7 +9615,6 @@
       "UserForCreationDto": {
         "required": [
           "firstName",
-          "identifier",
           "username",
           "role"
         ],
@@ -9638,10 +9637,6 @@
               "null",
               "string"
             ]
-          },
-          "identifier": {
-            "maxLength": 255,
-            "type": "string"
           },
           "email": {
             "maxLength": 320,

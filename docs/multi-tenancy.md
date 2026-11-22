@@ -147,7 +147,7 @@ These rules stop a caller from joining a tenant that is not theirs:
 - A caller with `TenantScope.AllTenants` has no tenant of its own, so it must send `tenantId` in the body. If the tenant does not exist, the request gets 422.
 - If a user sends `tenantId`, it must be their own tenant. Other requests get 403.
 - `POST /api/v1/users/initiate` creates a tenant and its first user. The caller must be able to manage all tenants. Other requests get 403, including a user of a first-party client. The first login of a person creates their user and tenant, as `docs/authentication.md` says.
-- If a user that is not deleted already has the identifier, in any tenant, `POST /api/v1/users` and `initiate` return 409. A user belongs to one tenant only. A deleted user frees its identifier, so the same person can sign up again.
+- If a user that is not deleted already has the identifier, in any tenant, `initiate` returns 409. `POST /api/v1/users` takes no identifier, because the Server makes it the ID of the new user. A user belongs to one tenant only. A deleted user frees its identifier, so the same person can sign up again.
 
 ## Delete a tenant
 

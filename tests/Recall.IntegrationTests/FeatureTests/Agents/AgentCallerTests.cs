@@ -147,8 +147,9 @@ public class AgentCallerTests : TestBase
             .BuildAsync();
         var serviceAccount = $"service-account-{machineAgent.ClientId}";
         var tenantBAdmin = new TestingServiceScope();
-        await tenantBAdmin.SendAsync(new AddUser.Command(
-            new FakeUserForCreationDto().Generate() with { Identifier = serviceAccount }));
+        await tenantBAdmin.StartGraph(out _)
+            .AddUser(out _, u => u.Identifier = serviceAccount)
+            .BuildAsync();
 
         // Act
         var register = () => tenantBAdmin.SendAsync(new AddAgent.Command(

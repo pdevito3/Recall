@@ -44,8 +44,10 @@ public static partial class UserMapper
     public static partial IQueryable<UserDto> ToUserDtoQueryable(this IQueryable<User> queryable);
 
     // The handler decides the tenant from the caller's scope. The tenant in the DTO is only a request.
+    // The handler also mints the ID, and the identifier is that ID, so that a session of the user finds the user.
     [MapperIgnoreSource(nameof(UserForCreationDto.TenantId))]
     [MapperIgnoreTarget(nameof(UserForCreation.Id))]
+    [MapperIgnoreTarget(nameof(UserForCreation.Identifier))]
     public static partial UserForCreation ToUserForCreation(this UserForCreationDto dto, string tenantId);
 
     public static partial UserForUpdate ToUserForUpdate(this UserForUpdateDto dto);

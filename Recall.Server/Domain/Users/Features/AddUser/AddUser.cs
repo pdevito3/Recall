@@ -45,17 +45,10 @@ public static class AddUser
                 if (!tenantExists)
                     throw new ValidationException(TenantIdField, "The tenant does not exist.");
 
-                var forCreation = request.Dto.ToUserForCreation(tenantId);
-                var user = User.Create(forCreation);
+                // A session puts the user ID in sub, and the Server finds the caller by identifier, so the identifier is the ID.
+                var id = EntityId.New(User.IdPrefix);
+                var user = User.Create(request.Dto.ToUserForCreation(tenantId) with { Id = id, Identifier = id });
                 Activity.Current?.SetTag("app.user_id", user.Id);
-
-                // Ignore the tenant filter: the unique index on Identifier covers the live users of all tenants.
-                var identifierInUse = await dbContext.Users
-                    .TagWithOperationCallSite("users.add.identifier_in_use")
-                    .IgnoreQueryFilters([QueryFilterNames.Tenant])
-                    .AnyAsync(u => u.Identifier == user.Identifier, ct);
-                if (identifierInUse)
-                    throw new ConflictException("identifier", User.IdentifierInUseMessage);
 
                 await dbContext.Users.AddAsync(user, ct);
                 await dbContext.SaveChangesAsync(ct);

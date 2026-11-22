@@ -34,7 +34,7 @@ public class AddUserCommandTests : TestBase
         userInDb.LastName.ShouldBe(fakeUserDto.LastName);
         userInDb.Email!.Value.ShouldBe(fakeUserDto.Email);
         userInDb.Username.ShouldBe(fakeUserDto.Username);
-        userInDb.Identifier.ShouldBe(fakeUserDto.Identifier);
+        userInDb.Identifier.ShouldBe(userInDb.Id);
         userInDb.TenantId.ShouldBe(TestFixture.DefaultTenant.Id);
     }
 
@@ -47,7 +47,6 @@ public class AddUserCommandTests : TestBase
         var fakeUserDto = new FakeUserForCreationDto()
             .RuleFor(x => x.FirstName, _ => Emoji(User.FirstNameMaxLength))
             .RuleFor(x => x.LastName, _ => Emoji(User.LastNameMaxLength))
-            .RuleFor(x => x.Identifier, _ => Emoji(User.IdentifierMaxLength))
             .RuleFor(x => x.Username, _ => Emoji(User.UsernameMaxLength))
             .RuleFor(x => x.Email, _ => Emoji(EmailAddress.MaxLength - "@example.com".Length) + "@example.com")
             .Generate();
@@ -62,7 +61,6 @@ public class AddUserCommandTests : TestBase
         userInDb.ShouldNotBeNull();
         userInDb.FirstName.ShouldBe(fakeUserDto.FirstName);
         userInDb.LastName.ShouldBe(fakeUserDto.LastName);
-        userInDb.Identifier.ShouldBe(fakeUserDto.Identifier);
         userInDb.Username.ShouldBe(fakeUserDto.Username);
         userInDb.Email!.Value.ShouldBe(fakeUserDto.Email);
     }
@@ -166,7 +164,7 @@ public class AddUserCommandTests : TestBase
         // Assert
         var exception = await act.ShouldThrowAsync<ValidationException>();
         exception.Message.ShouldContain("The tenant does not exist.");
-        await ShouldHaveNoUserAsync(testingServiceScope, fakeUserDto.Identifier);
+        await ShouldHaveNoUserAsync(testingServiceScope, fakeUserDto.TenantId!);
     }
 
     [Test]
@@ -189,7 +187,7 @@ public class AddUserCommandTests : TestBase
         // Assert
         var exception = await act.ShouldThrowAsync<ValidationException>();
         exception.Message.ShouldContain("The tenant does not exist.");
-        await ShouldHaveNoUserAsync(testingServiceScope, fakeUserDto.Identifier);
+        await ShouldHaveNoUserAsync(testingServiceScope, fakeUserDto.TenantId!);
     }
 
     [Test]
@@ -208,48 +206,10 @@ public class AddUserCommandTests : TestBase
         userReturned.Id.ShouldStartWith($"{User.IdPrefix}_");
     }
 
-    [Test]
-    public async Task can_add_a_user_with_the_identifier_of_a_deleted_user()
-    {
-        // Arrange
-        var testingServiceScope = new TestingServiceScope();
-        await testingServiceScope.StartGraph(out _)
-            .AddUser(out var deleted)
-            .BuildAsync();
-        await testingServiceScope.SendAsync(new DeleteUser.Command(deleted.Id));
-        var fakeUserDto = new FakeUserForCreationDto().RuleFor(x => x.Identifier, _ => deleted.Identifier).Generate();
-
-        // Act
-        var userReturned = await testingServiceScope.SendAsync(new AddUser.Command(fakeUserDto));
-
-        // Assert
-        userReturned.Id.ShouldNotBe(deleted.Id);
-        userReturned.Identifier.ShouldBe(deleted.Identifier);
-    }
-
-    [Test]
-    public async Task cannot_add_a_user_with_the_identifier_of_a_live_user_in_another_tenant()
-    {
-        // Arrange
-        var testingServiceScope = new TestingServiceScope();
-        await testingServiceScope.StartGraph(out _)
-            .AddTenant(out _)
-            .AddUser(out var otherTenantUser)
-            .BuildAsync();
-        var fakeUserDto = new FakeUserForCreationDto().RuleFor(x => x.Identifier, _ => otherTenantUser.Identifier).Generate();
-
-        // Act
-        var act = () => testingServiceScope.SendAsync(new AddUser.Command(fakeUserDto));
-
-        // Assert
-        var exception = await act.ShouldThrowAsync<ConflictException>();
-        exception.Message.ShouldBe("A user with this identifier already exists.");
-    }
-
-    private static async Task ShouldHaveNoUserAsync(TestingServiceScope testingServiceScope, string identifier)
+    private static async Task ShouldHaveNoUserAsync(TestingServiceScope testingServiceScope, string tenantId)
     {
         var userExists = await testingServiceScope.ExecuteDbContextAsync(db =>
-            db.Users.IgnoreQueryFilters().AnyAsync(u => u.Identifier == identifier));
+            db.Users.IgnoreQueryFilters().AnyAsync(u => u.TenantId == tenantId));
         userExists.ShouldBeFalse();
     }
 }

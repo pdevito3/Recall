@@ -27,11 +27,6 @@ export type UserForCreationDto = {
     */
     lastName?: string | null;
     /**
-     * @maxLength 255
-     * @type string
-    */
-    identifier: string;
-    /**
      * @maxLength 320
      * @type string | undefined
     */
