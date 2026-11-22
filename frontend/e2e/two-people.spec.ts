@@ -38,8 +38,8 @@ async function signOutHereAndAtIdp(page: Page) {
 }
 
 /**
- * Ends the session here and at the provider with no logout of a page, as when the session ends on another device. So the
- * other tabs hear nothing and keep their page, and the next person who signs in on this browser sends the cookie under
+ * Ends the session here and at the provider with no logout of a page, as when the session expires or is revoked after the
+ * provider session ends. So the other tabs hear nothing and keep their page, and the next person who signs in on this browser sends the cookie under
  * them. A logout from the user menu would tell each tab to leave.
  */
 async function endSessionWithNoTabTold(page: Page) {
