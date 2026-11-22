@@ -293,6 +293,9 @@ public class CleanupOnWorkerTests
         var started = await ReadAsync<SessionDto>(await SendAsync(owner, HttpMethod.Post, ApiRoutes.Sessions.Cleanup(session.Id)), HttpStatusCode.Accepted);
         await WaitUntilAsync(() => fake.RequestBodies.Any(body => body.Contains(marker, StringComparison.Ordinal)));
 
+        // A slow runner can take longer than the hold before the edit lands.
+        await Task.Delay(fake.Behavior.DelayMs + 1_000);
+
         // Act
         var edit = await SendAsync(owner, HttpMethod.Put, ApiRoutes.Sessions.Cleaned(session.Id), new { text = "My own words", baseRevision = started.CleanedDraftRevision, savedAt = DateTimeOffset.UtcNow });
         var finished = await SessionAfterRunAsync(owner, session.Id);
