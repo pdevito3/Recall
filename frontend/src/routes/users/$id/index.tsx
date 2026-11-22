@@ -10,6 +10,7 @@ import { QueryError } from '@/components/query-error'
 import { useUserPersonalAccessTokens } from '@/domain/personal-access-tokens/apis/personal-access-tokens'
 import { TokenList } from '@/domain/personal-access-tokens/components/token-list'
 import { useDeleteUser } from '@/domain/users/apis/delete-user'
+import { useCurrentUser } from '@/domain/users/apis/get-current-user'
 import { useUser } from '@/domain/users/apis/get-user'
 import { useUpdateUserRole } from '@/domain/users/apis/update-user-role'
 import { UserKeys } from '@/domain/users/apis/user.keys'
@@ -26,6 +27,7 @@ function UserPage() {
   const { id } = Route.useParams()
   const user = useUser(id)
   const tokens = useUserPersonalAccessTokens(id)
+  const currentUser = useCurrentUser()
   const changeRole = useUpdateUserRole(id)
   const remove = useDeleteUser()
   const queryClient = useQueryClient()
@@ -49,7 +51,7 @@ function UserPage() {
     )
   }
 
-  const { fullName, email, username, role } = user.data
+  const { fullName, email, username, loginName, role } = user.data
 
   const handleDelete = () =>
     remove.mutate(id, {
@@ -75,6 +77,8 @@ function UserPage() {
           <dd>{email ?? 'Not set'}</dd>
           <dt className="text-muted-foreground">Username</dt>
           <dd>{username}</dd>
+          <dt className="text-muted-foreground">Login name</dt>
+          <dd>{loginName ?? 'Not set'}</dd>
           <dt className="text-muted-foreground">Role</dt>
           <dd>{ROLE_LABELS[role]}</dd>
         </dl>
@@ -82,6 +86,7 @@ function UserPage() {
       <UserActions
         user={user.data}
         pendingAction={pendingAction}
+        isSelf={currentUser.data ? currentUser.data.identifier === user.data.identifier : undefined}
         onChangeRole={(newRole) => changeRole.mutate(newRole, { onSettled: () => headingRef.current?.focus() })}
         onDelete={handleDelete}
       />

@@ -117,6 +117,9 @@ public class EndpointAccessSweepTests : TestBase
         [AuthRoutes.SignedOut] = "Public. It redirects to the signed-out page, and shows no tenant data. It only compares its one value with the cookie of the browser.",
         [AuthRoutes.RevokeOthers] = "Each web or native session ends only the other sessions of its own user, and a personal access token gets 403. AppSessionTests covers it.",
         [AuthRoutes.Me] = "Each session reads its own identity, and a visitor with no session gets 204. It takes no ID. AppSessionTests covers it.",
+        [AuthRoutes.PasswordLogin] = "Public and rate limited. The attempt and binding cookie of its page, then the password, prove this request. PasswordLoginTests covers each refusal.",
+        [AuthRoutes.PasswordSetup] = "Public and rate limited. The setup code proves the post, and it answers 409 once a tenant exists. PasswordLoginTests covers it.",
+        [AuthRoutes.PasswordChoose] = "A choose attempt, which only a right temporary password writes, proves this request. PasswordLoginTests covers it.",
     };
 
     // The sample body of an update sends version 0, so the control call of an update gets the stale-version code

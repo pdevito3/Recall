@@ -49,7 +49,7 @@ try
     [
         .. buildSteps,
         new("Start one container and one volume", StartOnNamedVolume),
-        new("Serve the first page, and say what to set with no provider", CheckFirstPage),
+        new("Serve the first page, and offer setup with the code from the log", CheckFirstPage),
         new("Run as the user of the image, with dotnet as PID 1", CheckUserAndPid1),
         new("Ship no file that a published server does not read", CheckNoUnreadFiles),
         new("Keep the data in /data across a stop and a new container", CheckDataStays),
@@ -93,9 +93,12 @@ void CheckFirstPage(JobCopy copy)
     var policy = page.Headers.GetValues("Content-Security-Policy").Single();
     Require(policy.Contains("frame-ancestors 'none'", StringComparison.Ordinal), $"The policy of the first page is {policy}.");
 
-    using var login = site.GetAsync("/auth/login").GetAwaiter().GetResult();
-    var loginPage = login.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-    Require(loginPage.Contains("Auth__Providers__0__Issuer", StringComparison.Ordinal), "The login page does not say what to set.");
+    // With no provider, the first person sets up the install with the code from the log (PWD-2).
+    using var setup = site.GetAsync("/auth/password/setup").GetAwaiter().GetResult();
+    var setupPage = setup.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+    Require(setup.StatusCode == HttpStatusCode.OK && setupPage.Contains("Set up Recall", StringComparison.Ordinal), $"GET /auth/password/setup answered {setup.StatusCode} with no setup form.");
+    var logs = copy.Output("docker", "compose", "logs", "recall");
+    Require(logs.Contains("give the setup code", StringComparison.Ordinal), "The log does not hold the setup code.");
 }
 
 void CheckUserAndPid1(JobCopy copy)

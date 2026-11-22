@@ -43,7 +43,7 @@ Give the container at least 1 GiB of memory, and add the 1.5 GB of a transcripti
 
 A person can download the audio until 7 days after the text is saved. Audio that did not become text stays stored until the person deletes the Recording.
 
-The licenses of ffmpeg, sherpa-onnx, ONNX Runtime, and the Parakeet model are in `/app/ThirdPartyNotices` in the image.
+The licenses of ffmpeg, sherpa-onnx, ONNX Runtime, the Parakeet model, the SecLists list of common passwords, and the EFF long word list of the temporary passwords are in `/app/ThirdPartyNotices` in the image.
 
 `compose.yaml` keeps `/data` in the Docker volume `recall_recall-data`. `docker compose down` keeps the volume. `docker compose down -v` deletes it, and all of your data with it.
 

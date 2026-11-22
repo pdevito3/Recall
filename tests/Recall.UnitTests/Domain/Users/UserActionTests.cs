@@ -15,7 +15,7 @@ public class UserActionTests
     private static readonly UserAction[] Actions =
     [
         UserAction.Update(), UserAction.UpdateRole(), UserAction.AddPermission(), UserAction.RemovePermission(),
-        UserAction.Delete(),
+        UserAction.Delete(), UserAction.IssueTemporaryPassword(),
     ];
 
     private static Caller.Member MemberWith(params Permission[] permissions) => new("usr_caller", permissions);
@@ -85,6 +85,15 @@ public class UserActionTests
         yield return () => ("delegated agent whose grant lacks a permission of the user", "Admin", UserAction.Delete(),
             _ => new Caller.DelegatedAgent("clinic-assistant", Permission.GetAll(), [Permission.ManageUsers()]),
             "This agent has no grant to manage agents. A tenant admin can grant it.");
+
+        yield return () => ("user on their own record", "User", UserAction.IssueTemporaryPassword(), OwnRecord, manageUserAccessDenial);
+        yield return () => ("admin on their own record", "Admin", UserAction.IssueTemporaryPassword(), OwnRecord, null);
+        yield return () => ("access manager without read_users on a user", "User", UserAction.IssueTemporaryPassword(),
+            _ => MemberWith(Permission.ManageUserAccess()), null);
+        yield return () => ("access manager on an admin", "Admin", UserAction.IssueTemporaryPassword(),
+            _ => MemberWith(Permission.ManageUserAccess(), Permission.ReadUsers()), adminPermissionDenial);
+        yield return () => ("admin on an admin", "Admin", UserAction.IssueTemporaryPassword(),
+            _ => MemberWith([.. Permission.GetAll()]), null);
     }
 
     [Test]
@@ -154,7 +163,7 @@ public class UserActionTests
             var rows = new[] { user }.AsQueryable().ToUserDtoQueryable().ToList();
 
             // Act
-            rows.AddAllowedActions(caller);
+            rows.AddAllowedActions(caller, new Dictionary<string, Recall.Server.Auth.LoginName>());
 
             // Assert
             rows.Single().AllowedActions.ShouldBe(user.AllowedActions(caller).Select(a => a.Value), $"for {caller}");

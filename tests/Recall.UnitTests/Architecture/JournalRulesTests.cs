@@ -26,6 +26,8 @@ public class JournalRulesTests
         "AppCode",
         "AuthSession",
         "ExternalLogin",
+        "LoginAttempt",
+        "PasswordCredential",
     ];
 
     [Test]

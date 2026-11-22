@@ -210,7 +210,7 @@ test.describe(`Session cookie - ${currentIdp.name}`, () => {
     // The browser must send this cookie on the cross-site GET from the identity provider to /auth/oidc/callback
     const bindingCookie = (await context.cookies()).find((c) => c.name.startsWith('recall_login_'))
     expect(bindingCookie, 'the login binding cookie').toBeDefined()
-    expect(bindingCookie).toMatchObject({ sameSite: 'Lax', secure: false, httpOnly: true, path: '/auth/oidc' })
+    expect(bindingCookie).toMatchObject({ sameSite: 'Lax', secure: false, httpOnly: true, path: '/auth' })
 
     await loginAtIdp(page, currentIdp)
 

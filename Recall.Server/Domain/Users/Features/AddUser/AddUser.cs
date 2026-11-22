@@ -66,7 +66,7 @@ public static class AddUser
             
             // TODO handle IDP creation
 
-            return added.ToUserDto(caller);
+            return added.ToUserDto(caller, null);
         }
 
         // A user adds to their own tenant. A caller that sees all tenants has no tenant of its own,

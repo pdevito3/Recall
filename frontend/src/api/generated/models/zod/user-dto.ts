@@ -14,8 +14,9 @@ export const userDtoSchema = z.object({
   identifier: z.string(),
   email: z.string().nullish(),
   username: z.string(),
+  loginName: z.string().nullish().describe('The name that the user types to sign in with a password. Null until a first temporary password sets it.'),
   role: z.enum(['Admin', 'User']),
   permissions: z.array(z.enum(['manage_agents', 'manage_model_providers', 'manage_tenant', 'manage_user_access', 'manage_users', 'read_agents', 'read_audit_log', 'read_audit_log_sensitive', 'read_users'])),
-  allowedActions: z.array(z.enum(['AddPermission', 'Delete', 'RemovePermission', 'Update', 'UpdateRole'])).describe('The actions that the caller can send for this user now. A button in the SPA reads this list.'),
+  allowedActions: z.array(z.enum(['AddPermission', 'Delete', 'IssueTemporaryPassword', 'RemovePermission', 'Update', 'UpdateRole'])).describe('The actions that the caller can send for this user now. A button in the SPA reads this list.'),
   version: z.int().min(0).max(4294967295),
 })

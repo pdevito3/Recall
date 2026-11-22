@@ -24,6 +24,7 @@ public sealed class ProvisionerTests
     private static Provisioner ProvisionerOf(IServiceProvider services) => services.GetRequiredService<Provisioner>();
 
     [Test]
+    [Property("Rule", "PWD-4")]
     public async Task the_first_login_makes_the_tenant_and_the_owner_with_identifier_equal_to_id()
     {
         // Arrange

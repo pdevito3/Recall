@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { expect, test, vi } from 'vitest'
 import { page } from 'vitest/browser'
 import { render } from 'vitest-browser-react'
@@ -32,6 +33,27 @@ test('shows a button for each action that the Server allows and that the page ca
   await expect.element(actions.getByRole('button', { name: 'Change role' })).toBeVisible()
   await expect.element(actions.getByRole('button', { name: 'Delete' })).toBeVisible()
   expect(actions.getByRole('button').elements()).toHaveLength(2)
+})
+
+test('@PWD-14 shows Set temporary password only when the Server allows it', async () => {
+  await render(
+    <QueryClientProvider client={new QueryClient()}>
+      <UserActions user={aUser(['IssueTemporaryPassword'])} isSelf={false} onChangeRole={() => {}} onDelete={() => {}} />
+    </QueryClientProvider>,
+  )
+
+  await expect.element(page.getByRole('button', { name: 'Set temporary password' })).toBeVisible()
+})
+
+test('@PWD-14 hides Set temporary password until the page knows whether the user is the caller', async () => {
+  await render(
+    <QueryClientProvider client={new QueryClient()}>
+      <UserActions user={aUser(['IssueTemporaryPassword', 'Delete'])} onChangeRole={() => {}} onDelete={() => {}} />
+    </QueryClientProvider>,
+  )
+
+  await expect.element(page.getByRole('button', { name: 'Delete' })).toBeVisible()
+  await expect.element(page.getByRole('button', { name: 'Set temporary password' })).not.toBeInTheDocument()
 })
 
 test('shows no actions when the Server allows none that the page can send', async () => {

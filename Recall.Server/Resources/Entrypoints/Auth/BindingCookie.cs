@@ -10,7 +10,7 @@ public static class BindingCookie
 {
     private const string SecurePrefix = "__Host-recall_login_";
     private const string PlainPrefix = "recall_login_";
-    private const string PlainPath = "/auth/oidc";
+    private const string PlainPath = "/auth";
     private const int NameHexLength = 8;
 
     public static string NameFor(HttpRequest request, TokenHash state)

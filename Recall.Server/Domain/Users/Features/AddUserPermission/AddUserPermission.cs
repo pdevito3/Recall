@@ -52,7 +52,7 @@ public static class AddUserPermission
             if (user.UserPermissions.Count > existingPermissionIds.Count)
                 _logger.Here().Information("Added permission {Permission} to user {UserId}", permission.Value, user.Id);
 
-            return user.ToUserDto(caller);
+            return user.ToUserDto(caller, await UserLoginNames.OfAsync(dbContext, user.Id, cancellationToken));
         }
     }
 }

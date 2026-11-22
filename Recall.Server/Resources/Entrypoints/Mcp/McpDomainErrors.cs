@@ -63,6 +63,7 @@ public static partial class McpDomainErrors
         DomainErrorKind.StaleVersion or DomainErrorKind.ConcurrentChange => "aborted",
         DomainErrorKind.DiskFull => "resource_exhausted",
         DomainErrorKind.DatabaseBusy => "unavailable",
+        DomainErrorKind.ServerBusy => "resource_exhausted",
         DomainErrorKind.Unexpected => "internal",
     };
 #pragma warning restore FSTMSG001

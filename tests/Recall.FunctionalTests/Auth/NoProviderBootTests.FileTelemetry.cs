@@ -231,7 +231,9 @@ public partial class NoProviderBootTests
             line.TryGetProperty("RequestPath", out var requestPath) && requestPath.GetString() == path);
         var traceId = log.GetProperty("@tr").GetString();
         traceId.ShouldNotBeNullOrEmpty();
-        var span = await FirstLineAsync(telemetry, "traces-*.jsonl", line => line.GetProperty("traceId").GetString() == traceId);
+        // The client of the test sends one trace ID with each request, and the start of the server polls /auth/status, so the span is found by its path.
+        var span = await FirstLineAsync(telemetry, "traces-*.jsonl", line => line.GetProperty("traceId").GetString() == traceId
+            && line.GetProperty("tags").TryGetProperty("url.path", out var spanPath) && spanPath.GetString() == path);
         span.GetProperty("kind").GetString().ShouldBe("Server");
 
         await FirstLineAsync(telemetry, "metrics-*.jsonl", line => line.GetProperty("name").GetString() == "http.server.request.duration");

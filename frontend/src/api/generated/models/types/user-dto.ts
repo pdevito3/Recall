@@ -27,6 +27,7 @@ export type UserDtoPermissionsEnumKey = (typeof userDtoPermissionsEnum)[keyof ty
 export const userDtoAllowedActionsEnum = {
     AddPermission: "AddPermission",
     Delete: "Delete",
+    IssueTemporaryPassword: "IssueTemporaryPassword",
     RemovePermission: "RemovePermission",
     Update: "Update",
     UpdateRole: "UpdateRole"
@@ -43,6 +44,11 @@ export type UserDto = {
     identifier: string;
     email?: string | null;
     username: string;
+    /**
+     * @description The name that the user types to sign in with a password. Null until a first temporary password sets it.
+     * @type string | undefined
+    */
+    loginName?: string | null;
     role: UserDtoRoleEnumKey;
     permissions: UserDtoPermissionsEnumKey[];
     /**

@@ -21,6 +21,9 @@ These routes are not in the OpenAPI document. This section is their contract.
 | `/auth/logout` | POST | optional | Ends the session that the request names. See [Logout](#logout) for each answer. A cookie with no `X-CSRF: 1` gets 401, and nothing ends. |
 | `/auth/sessions/revoke-others` | POST | web or native session | Ends each other session and each personal access token of the user. It answers 204. A personal access token gets 403. |
 | `/auth/me` | GET | optional | The user of the session. See [The user of a session](#the-user-of-a-session). |
+| `/auth/password/login` | POST | none | The password form of the login page. See [Password login](#password-login). |
+| `/auth/password/setup` | GET, POST | the setup code | The first setup of an install with no provider and no tenant. With a provider, it answers 404. |
+| `/auth/password/choose` | POST | a choose attempt | The choice of a password after a temporary password |
 
 Each other Server path, also `/api/*`, reads the credential in the same way. Send the cookie with `X-CSRF: 1`, or send `Authorization: Bearer <token>`. The one exception is the job dashboard at `/backwave`. See [CSRF](#csrf).
 
@@ -63,7 +66,7 @@ An app holds one setting, the base URL of the Server. It holds no provider setti
    }
    ```
 
-   `state` is `ready`, `degraded` when each provider is down, or `no_login_method`. The state of a mode is `ready` or `unreachable`.
+   `state` is `ready`, or `degraded` when each mode is down. The state of a mode is `ready` or `unreachable`. A mode of kind `password` has the `startUrl` `/auth/login?client=app`, and the person types the password on that page. See [Password login](#password-login).
 2. Open `startUrl` in the system browser. Add these query values:
 
    | Name | Value |
@@ -146,7 +149,7 @@ A session makes no call to the provider. So a web or native session keeps workin
 | `__Host-recall`, on TLS | `HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/` | An opaque session value |
 | `recall`, on http | `HttpOnly`, `SameSite=Strict`, `Path=/` | The same |
 | `__Host-recall_login_{8 hex}`, on TLS | `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, 10 minutes | The binding of one login attempt |
-| `recall_login_{8 hex}`, on http | `HttpOnly`, `SameSite=Lax`, `Path=/auth/oidc`, 10 minutes | The same |
+| `recall_login_{8 hex}`, on http | `HttpOnly`, `SameSite=Lax`, `Path=/auth`, 10 minutes | The same |
 | `__Host-recall_signed_out`, on TLS | `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, 30 days until the provider returns, then 60 seconds. 60 seconds with a provider that has no `end_session_endpoint` | The mark of a sign-out that this browser finished |
 | `recall_signed_out`, on http | `HttpOnly`, `SameSite=Lax`, `Path=/`, 30 days until the provider returns, then 60 seconds. 60 seconds with a provider that has no `end_session_endpoint` | The same |
 
@@ -386,7 +389,7 @@ Other settings:
 
 ### Limit on login starts
 
-`/auth/oidc/{id}/start` keeps one bucket for each connection address, and one for each IPv6 `/64`. So a stranger who floods the route blocks only that stranger. Another start gets 429 with a `Retry-After` header and the page `Too many sign-in attempts`.
+`/auth/oidc/{id}/start` and each `/auth/password/*` post keep one bucket for each connection address, and one for each IPv6 `/64`. The login page and the setup page keep buckets of their own with the same limit, so opening a page takes no start from the address. So a stranger who floods the route blocks only that stranger. Another start gets 429 with a `Retry-After` header and the page `Too many sign-in attempts`.
 
 The Server reads only the address of the connection, and never `X-Forwarded-For`, because a client can write any value in that header. Behind a proxy, each connection comes from the proxy, so all clients share one bucket and one flood blocks each new login. Some Docker networks do the same to a published port. To limit each client behind a proxy, set the limit at the proxy. A session that exists keeps working in each case.
 
@@ -396,11 +399,19 @@ The Server reads only the address of the connection, and never `X-Forwarded-For`
 
 ### No provider
 
-With no entry under `Auth:Providers`, and no `Auth:Authority`, the Server boots and runs its migrations. `/auth/status` answers `no_login_method`, and the login page answers 503:
+With no entry under `Auth:Providers`, and no `Auth:Authority`, the Server boots, runs its migrations, and offers only the password login. See [Password login](#password-login). An API call with no session gets 401.
 
-> No sign-in method is configured. Set Auth__Providers__0__Issuer, Auth__Providers__0__ClientId, and Auth__Providers__0__ClientSecret, then restart. See docs/authentication.md.
+## Password login
 
-The page also gives the callback URL to register. An API call gets 401, except with a [personal access token](#personal-access-tokens) made earlier, which keeps working.
+The rules are in [the spec](specs/password-login.md), and [ADR 0024](adr/0024-recall-signs-people-in-with-its-own-passwords.md) gives the reasons. The login page shows the password form when the install has no provider, or when a live user holds a password. Then it also shows a button for each provider, and a single provider does not start with no click.
+
+1. While the install has no provider and no live tenant, the Server writes one line at boot with a setup code of 20 characters, to the console and to `/data/logs`, and `/auth/status` gives `setupRequired: true`. Read the line with `docker compose logs`. A restart makes a new code. An install with a provider makes no code, `setupRequired` stays `false`, and the first OIDC login makes the Owner, as [First login and the Owner](#first-login-and-the-owner) says.
+2. Open `/auth/password/setup`, and give the code, your name, a login name, and a password of at least 15 characters. The setup makes the tenant `Recall` and you its Owner, signs you in, and voids the code.
+3. To add a person, an Admin adds the user with `POST /api/v1/users`, opens the page of that user in Recall, and chooses `Set temporary password`. The first time, the Admin gives the login name that the person types. The Server makes a password of 4 words that works for 7 days, shows it once, and ends each session and personal access token of that user. An Admin who sets their own keeps the session of that page. The Admin gives the password to the person outside Recall. A person who forgot a password, or whose password stopped, gets a new one the same way. The route is `POST /api/v1/users/{id}/temporary-password`, and it needs `manage_user_access` in a web or native session.
+4. The person signs in at `/auth/login` with the login name and the temporary password. The Server shows only the page `Pick your password`, and the person types a new password of at least 15 characters that is not the temporary one. The Server stores it, signs the person in, and the temporary password stops working.
+5. Each later sign-in is at `/auth/login`. A native app opens `/auth/login?client=app` with the values of [Sign in](#sign-in), and the page redirects to the app with a code after a right password, with no confirm page. `/auth/token` has no `password` grant.
+
+Each form post needs the login attempt that its page wrote, and the binding cookie of that attempt. A post uses its attempt, so a page that shows the form again writes a new one. The form body has a limit of 8 KiB. The limit of login starts covers each form post. The login page and the setup page have a limit of their own, with the same buckets and permits, so a page draws nothing from the starts. After 5 wrong passwords in a row for one typed login name from one address, that pair waits 30 seconds, doubling to 15 minutes. The 100th wrong password in a row stops password sign-in for the account. A logout of a password session goes to the signed-out page with no step at a provider.
 
 ### A provider that is down
 
@@ -577,7 +588,7 @@ The body of a create names the grant and the expiry:
 
 A grant cannot change. To get another grant, make a new token. A list holds no value and no hash. Each row has `allowedActions`, which holds `Revoke` while the token is live and the caller can revoke it. A revoked or expired token stays in the list until the sweep removes it, 30 days after it ended.
 
-Only a person in a web or native session can make, list, or revoke tokens. Each of these routes gives any other caller 403 with "Only a person signed in to Recall can do this.": a token, an agent, and a provider token, also one of a first-party client such as Swagger UI. So a stolen token cannot make a token that lives longer. A no-provider install has no sign-in, so it cannot make a token. It can use a token that was made while a provider was set.
+Only a person in a web or native session can make, list, or revoke tokens. Each of these routes gives any other caller 403 with "Only a person signed in to Recall can do this.": a token, an agent, and a provider token, also one of a first-party client such as Swagger UI. So a stolen token cannot make a token that lives longer. A person who signs in with a password makes a token the same way.
 
 ### Use a token
 
