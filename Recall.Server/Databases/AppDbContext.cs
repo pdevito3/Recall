@@ -48,6 +48,7 @@ public class AppDbContext(
     public DbSet<Correction> Corrections => Set<Correction>();
     public DbSet<Domain.ModelProviders.ModelProvider> ModelProviders => Set<Domain.ModelProviders.ModelProvider>();
     public DbSet<Domain.ModelProviders.KeyRingMarker> KeyRingMarkers => Set<Domain.ModelProviders.KeyRingMarker>();
+    public DbSet<Domain.LoginProviders.LoginProvider> LoginProviders => Set<Domain.LoginProviders.LoginProvider>();
     public DbSet<UserSetting> UserSettings => Set<UserSetting>();
     public DbSet<SyncChange> SyncChanges => Set<SyncChange>();
     public DbSet<Recording> Recordings => Set<Recording>();

@@ -19,6 +19,9 @@ public static class AuthServices
         services.AddSingleton<IValidateOptions<AuthOptions>, AuthOptionsValidator>();
         services.AddSingleton<OidcHandlerFactory>(OidcLoginMode.DefaultHandler);
         services.AddSingleton<LoginModes>();
+        services.AddSingleton<Domain.LoginProviders.LoginProviderSecret>();
+        // Before SetupCodeAtBoot, which counts the rows that this load reads.
+        services.AddHostedService<LoginModesAtBoot>();
         services.AddSingleton(provider => new OwnerClaim(OwnerClaim.PathFor(provider.GetRequiredService<IConfiguration>()), provider.GetRequiredService<TimeProvider>()));
         services.AddSingleton<Provisioner>();
         services.AddSingleton<PasswordHashing>();

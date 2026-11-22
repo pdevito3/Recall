@@ -1,6 +1,7 @@
 namespace Recall.Server.Domain.Users.Features;
 
 using System.Diagnostics;
+using Auth;
 using Databases;
 using Databases.Sqlite;
 using MediatR;
@@ -15,7 +16,7 @@ public static class DeleteUser
 {
     public sealed record Command(string Id) : IRequest, IRunsAgainWhenRaced;
 
-    public sealed class Handler(AppDbContext dbContext, IPermissionGuard permissionGuard, FileStore fileStore, WalScrub walScrub) : IRequestHandler<Command>
+    public sealed class Handler(AppDbContext dbContext, IPermissionGuard permissionGuard, FileStore fileStore, WalScrub walScrub, LoginModes modes) : IRequestHandler<Command>
     {
         private readonly ILogger _logger = Log.ForContext<Handler>();
 
@@ -33,7 +34,7 @@ public static class DeleteUser
                     .Include(u => u.UserPermissions)
                     .GetById(request.Id, ct);
                 user.GuardAllows(UserAction.Delete(), caller);
-                await LastAdmin.GuardAsync(dbContext, user, ct);
+                await LastAdmin.GuardAsync(dbContext, modes, user, ct);
 
                 // Remove permissions first (due to PropertyAccessMode.Field)
                 foreach (var permission in user.UserPermissions.ToList())

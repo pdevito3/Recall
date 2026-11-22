@@ -13,6 +13,7 @@ using Recall.Server.Domain.Corrections;
 using Recall.Server.Domain.ModelProviders;
 using Recall.Server.Domain.People;
 using Recall.Server.Domain.Recordings;
+using Recall.Server.Domain.LoginProviders;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Summaries;
 using Recall.Server.Domain.TimeZones;
@@ -99,6 +100,13 @@ public class EndpointAccessSweepTests : TestBase
         ["GetPersonalAccessTokens"] = new("Each member lists the own tokens. It takes no ID."),
         ["RevokePersonalAccessToken"] = new("Each member revokes the own tokens. A token of another person is 404 unless the caller can list that person's tokens.", OwnerOnly: true),
         // new-feature:open-to-each-member
+    };
+
+    /// <summary>The endpoints whose record belongs to the install and not to a tenant, with the reason.</summary>
+    private static readonly Dictionary<string, string> InstallWide = new()
+    {
+        ["UpdateLoginProvider"] = "A login provider is install-wide, because the login page comes before a tenant. The Admin of any tenant manages it (ADR 0025).",
+        ["DeleteLoginProvider"] = "A login provider is install-wide, because the login page comes before a tenant. The Admin of any tenant manages it (ADR 0025).",
     };
 
     private static readonly Dictionary<string, string> InfrastructureRoutes = new()
@@ -260,7 +268,7 @@ public class EndpointAccessSweepTests : TestBase
             }
 
             report.Rows.Add($"{AccessRules.NameOf(target)}: " + string.Join(", ", outcomes.Select(o => $"{o.Key}={o.Value.Code}")));
-            report.Gaps.AddRange(AccessRules.Gaps(codes, target, outcomes, OpenToEachMember));
+            report.Gaps.AddRange(AccessRules.Gaps(codes, target, outcomes, OpenToEachMember, InstallWide));
         }
         return report;
     }
@@ -402,6 +410,10 @@ public class EndpointAccessSweepTests : TestBase
             Grant = new TokenGrant([], JournalAccess.None).Encode(),
         };
         await InsertAsync(token);
+        var loginProvider = LoginProvider.Add(
+            new LoginProviderForm("Sweep provider", $"https://sweep-{Guid.NewGuid():N}.example", "sweep", false, null),
+            $"lpr_{Guid.NewGuid():N}", "protected", DateTimeOffset.UnixEpoch);
+        await InsertAsync(loginProvider);
         // new-feature:sweep-inserts
 
         var idsByKind = new Dictionary<string, string>
@@ -416,6 +428,7 @@ public class EndpointAccessSweepTests : TestBase
             ["recordings"] = recording.Id,
             ["summaries"] = summary.Id,
             ["personal-access-tokens"] = token.Id,
+            ["login-providers"] = loginProvider.Id,
             // new-feature:sweep-ids
         };
         return new TenantRecords(member, admin, new RecordIds(idsByKind, otherUser.Identifier));

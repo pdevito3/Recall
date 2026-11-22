@@ -44,14 +44,17 @@ public static class AccessRules
         SurfaceCodes codes,
         SweepTarget target,
         IReadOnlyDictionary<SweepCall, Outcome> outcomes,
-        IReadOnlyDictionary<string, Open> openToEachMember)
+        IReadOnlyDictionary<string, Open> openToEachMember,
+        IReadOnlyDictionary<string, string>? installWide = null)
     {
         var entry = openToEachMember.GetValueOrDefault(target.Key);
         var gaps = new List<string>();
 
         foreach (var (call, outcome) in outcomes)
         {
-            var (accepts, expected) = ExpectationOf(codes, call, entry, target);
+            // A record of the whole install has no other tenant to hide it from, so the admin of another tenant reaches it as the own admin does.
+            var asCall = call == SweepCall.AdminWithOtherTenantIds && installWide?.ContainsKey(target.Key) == true ? SweepCall.AdminWithOwnTenantIds : call;
+            var (accepts, expected) = ExpectationOf(codes, asCall, entry, target);
             if (!accepts(outcome.Code))
                 gaps.Add(GapLine(target, call, expected, outcome));
         }

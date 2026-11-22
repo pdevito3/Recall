@@ -29,6 +29,9 @@ public sealed class TestFixture : IAsyncDisposable
 
     public const string FirstPartyClientId = "test-app";
 
+    /// <summary>The issuer of the one entry of <c>Auth:Providers</c> in these tests.</summary>
+    public const string LinkIssuer = "https://provider.test";
+
     public static IServiceScopeFactory BaseScopeFactory { get; private set; } = null!;
     private static string _connectionString = null!;
     public static TestSeed Seed { get; private set; } = null!;
@@ -103,6 +106,11 @@ public sealed class TestFixture : IAsyncDisposable
         builder.Configuration["Auth:Authority"] = "https://localhost";
         builder.Configuration["Auth:Audience"] = "test-api";
         builder.Configuration["Auth:ClientId"] = FirstPartyClientId;
+        // The provider of the links that the tests add, so that the last-Admin rule counts them (IDP-14).
+        builder.Configuration["Auth:Providers:0:Id"] = "provider";
+        builder.Configuration["Auth:Providers:0:Issuer"] = LinkIssuer;
+        builder.Configuration["Auth:Providers:0:ClientId"] = "recall-test-client";
+        builder.Configuration["Auth:Providers:0:ClientSecret"] = "recall-test-secret";
         builder.Configuration[$"{TenancyOptions.SectionName}:{nameof(TenancyOptions.ManageAllTenantsClientIds)}:0"] = TrustedMachineClientId;
         builder.Configuration[$"{TenancyOptions.SectionName}:{nameof(TenancyOptions.ReadAllTenantsClientIds)}:0"] = ReadOnlyMachineClientId;
 

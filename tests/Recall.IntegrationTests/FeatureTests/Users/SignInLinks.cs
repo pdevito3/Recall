@@ -11,7 +11,7 @@ internal static class SignInLinks
         {
             db.Set<ExternalLogin>().Add(new ExternalLogin
             {
-                Issuer = "https://provider.test",
+                Issuer = TestFixture.LinkIssuer,
                 Subject = user.Id,
                 UserId = user.Id,
                 CreatedAt = DateTimeOffset.UtcNow,

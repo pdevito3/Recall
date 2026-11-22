@@ -671,6 +671,75 @@ namespace Recall.Server.Databases.Migrations
                     b.ToTable("corrections", (string)null);
                 });
 
+            modelBuilder.Entity("Recall.Server.Domain.LoginProviders.LoginProvider", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id")
+                        .UseCollation("BINARY");
+
+                    b.Property<bool>("AllowHttp")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("allow_http");
+
+                    b.Property<string>("CaCertificatePath")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("ca_certificate_path");
+
+                    b.Property<string>("ClientId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("client_id");
+
+                    b.Property<string>("CreatedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("display_name");
+
+                    b.Property<string>("Issuer")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("issuer")
+                        .UseCollation("BINARY");
+
+                    b.Property<string>("ProtectedClientSecret")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("protected_client_secret");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_auth_oidc_providers");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("ix_auth_oidc_providers_created_at");
+
+                    b.HasIndex("Id")
+                        .IsUnique()
+                        .HasDatabaseName("ix_auth_oidc_providers_id");
+
+                    b.HasIndex("Issuer")
+                        .IsUnique()
+                        .HasDatabaseName("ix_auth_oidc_providers_issuer");
+
+                    b.ToTable("auth_oidc_providers", (string)null);
+                });
+
             modelBuilder.Entity("Recall.Server.Domain.ModelProviders.KeyRingMarker", b =>
                 {
                     b.Property<int>("Id")
