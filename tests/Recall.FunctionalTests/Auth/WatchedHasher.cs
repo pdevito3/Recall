@@ -20,14 +20,22 @@ public sealed class WatchedHasher : IPasswordHasher<PasswordCredential>
 
     private readonly ConcurrentDictionary<string, int> _checks = new();
     private readonly ConcurrentDictionary<string, Hold> _holds = new();
+    private readonly ConcurrentDictionary<string, int> _hashes = new();
 
     /// <summary>The checks of a typed password against a hash, also against the fixed hash of PWD-6.</summary>
     public int ChecksOf(string password) => _checks.GetValueOrDefault(password);
 
+    /// <summary>The hashes made of a password, as for a new password.</summary>
+    public int HashesOf(string password) => _hashes.GetValueOrDefault(password);
+
     /// <summary>Holds the next check of <paramref name="password"/> until the test releases it.</summary>
     public Hold HoldNextCheckOf(string password) => _holds[password] = new Hold();
 
-    public string HashPassword(PasswordCredential user, string password) => _hasher.HashPassword(user, password);
+    public string HashPassword(PasswordCredential user, string password)
+    {
+        _hashes.AddOrUpdate(password, 1, (_, count) => count + 1);
+        return _hasher.HashPassword(user, password);
+    }
 
     public PasswordVerificationResult VerifyHashedPassword(PasswordCredential user, string hashedPassword, string providedPassword)
     {

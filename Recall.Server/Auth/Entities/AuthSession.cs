@@ -20,6 +20,7 @@ public enum RevokeReason
     RevokeOthers,
     TokenRevoked,
     TemporaryPassword,
+    OwnerClaim,
 }
 
 [NotAudited("One row for each signed-in device and each personal access token, written at login, at each refresh, and at the create of a token. It holds hashes and no business data. The audit actions on the user record the create and the revoke of a token.")]

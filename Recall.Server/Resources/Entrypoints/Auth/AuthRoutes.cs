@@ -15,6 +15,8 @@ public static class AuthRoutes
     public const string PasswordLogin = "/auth/password/login";
     public const string PasswordSetup = "/auth/password/setup";
     public const string PasswordChoose = "/auth/password/choose";
+    public const string PasswordChange = "/auth/password/change";
+    public const string PasswordClaimOwner = "/auth/password/claim-owner";
 
     public static string OriginOf(HttpRequest request) => $"{request.Scheme}://{request.Host}";
 }

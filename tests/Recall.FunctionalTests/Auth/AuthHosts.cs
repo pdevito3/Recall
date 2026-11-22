@@ -35,6 +35,11 @@ public static class AuthHosts
 
     public static PasswordPerson MixedPerson { get; private set; } = null!;
 
+    /// <summary>A host with no provider and a claim file of its own. <see cref="ClaimOwner"/> is the Admin of its oldest tenant, so each claim picks it.</summary>
+    public static AuthFlowFactory PasswordClaim { get; private set; } = null!;
+
+    public static PasswordPerson ClaimOwner { get; private set; } = null!;
+
     public static AuthFlowFactory SecretInFormProvider { get; private set; } = null!;
 
     public static AuthFlowFactory RollingKeyProvider { get; private set; } = null!;
@@ -100,6 +105,12 @@ public static class AuthHosts
         SetupWithProvider = Start(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts });
         Mixed = Start(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts });
         MixedPerson = PasswordPeople.AddAsync(Mixed).GetAwaiter().GetResult();
+        PasswordClaim = Start(new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts })
+        {
+            NoProvider = true,
+            ClaimFilePath = Path.Combine(Directory.CreateTempSubdirectory("recall-claim-").FullName, OwnerClaim.FileName),
+        });
+        ClaimOwner = PasswordPeople.AddAsync(PasswordClaim).GetAwaiter().GetResult();
         Bundle = new AuthFlowFactory(new Dictionary<string, string?>
         {
             ["Auth:OpenSignup"] = "true",
@@ -202,7 +213,7 @@ public static class AuthHosts
 
     public static async Task StopAsync()
     {
-        foreach (var host in new[] { Password, SetupLogs, Setup, SetupWithProvider, Mixed, LostJobTable, FrozenClock, WriterLine, KeepAlive, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, FirstPartyClient, Bundle, OwnerDemotion, Sweep, Jobs, Cleanups, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
+        foreach (var host in new[] { Password, SetupLogs, Setup, SetupWithProvider, Mixed, PasswordClaim, LostJobTable, FrozenClock, WriterLine, KeepAlive, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, FirstPartyClient, Bundle, OwnerDemotion, Sweep, Jobs, Cleanups, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
         {
             if (host is not null)
                 await host.DisposeAsync();

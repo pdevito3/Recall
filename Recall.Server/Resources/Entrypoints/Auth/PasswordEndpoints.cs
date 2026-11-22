@@ -25,7 +25,21 @@ public static class PasswordEndpoints
             .RequireRateLimiting(AuthRegistration.StartLimiter).AllowAnonymous().ExcludeFromDescription();
         endpoints.MapPost(AuthRoutes.PasswordChoose, ChooseAsync)
             .RequireRateLimiting(AuthRegistration.StartLimiter).AllowAnonymous().ExcludeFromDescription();
+        endpoints.MapGet(AuthRoutes.PasswordClaimOwner, ClaimOwnerPageAsync)
+            .RequireRateLimiting(AuthRegistration.StartLimiter).AllowAnonymous().ExcludeFromDescription();
+        endpoints.MapPost(AuthRoutes.PasswordClaimOwner, ClaimOwnerAsync)
+            .RequireRateLimiting(AuthRegistration.StartLimiter).AllowAnonymous().ExcludeFromDescription();
+        // The session cookie with X-CSRF: 1, or the bearer token of a native session, as for revoke-others. A personal access token gets 403.
+        endpoints.MapPost(AuthRoutes.PasswordChange, ChangeAsync)
+            .RequireRateLimiting(AuthRegistration.StartLimiter).RequireAuthorization(AuthEndpoints.InteractiveSessionOnly).ExcludeFromDescription();
     }
+
+    /// <summary>
+    /// The login page offers <c>Set a new Owner password</c> only while a fresh <c>claim-owner</c> file and a live tenant exist (PWD-19).
+    /// With no such file, the page is the same as before the file, so it tells a visitor nothing.
+    /// </summary>
+    public static async Task<bool> OffersOwnerClaimAsync(OwnerClaim ownerClaim, IServiceScopeFactory scopes, CancellationToken cancellationToken)
+        => ownerClaim.IsFresh() && await SetupCodeAtBoot.AnyLiveTenantAsync(scopes, cancellationToken);
 
     /// <summary>
     /// Writes the attempt of one form and its binding cookie, and gives the state that the form posts back. A choose attempt
@@ -61,8 +75,8 @@ public static class PasswordEndpoints
     }
 
     private static async Task<IResult> LoginAsync(
-        HttpContext http, LoginModes modes, SessionStore store, PasswordLogin passwords, LoginCompletion completion, TimeProvider timeProvider,
-        CancellationToken cancellationToken)
+        HttpContext http, LoginModes modes, SessionStore store, PasswordLogin passwords, LoginCompletion completion, OwnerClaim ownerClaim,
+        IServiceScopeFactory scopes, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
         if (await ConsumeAsync(http, store, isChoose: false, cancellationToken) is not { } consumed)
             return AuthPages.Refused();
@@ -80,9 +94,9 @@ public static class PasswordEndpoints
                 return AuthPages.ChoosePassword(await StartFormAsync(http, store, timeProvider, client, choose, cancellationToken), client, null);
             case PasswordOutcome.Wait wait:
                 SetRetryAfter(http, wait.Left);
-                return await LoginPageAsync(http, modes, store, timeProvider, client, typedName, wait.Message, StatusCodes.Status429TooManyRequests, cancellationToken);
+                return await LoginPageAsync(http, modes, store, ownerClaim, scopes, timeProvider, client, typedName, wait.Message, StatusCodes.Status429TooManyRequests, cancellationToken);
             case PasswordOutcome.Refused refused:
-                return await LoginPageAsync(http, modes, store, timeProvider, client, typedName, refused.Message, refused.Status, cancellationToken);
+                return await LoginPageAsync(http, modes, store, ownerClaim, scopes, timeProvider, client, typedName, refused.Message, refused.Status, cancellationToken);
             default:
                 return AuthPages.Refused();
         }
@@ -134,8 +148,8 @@ public static class PasswordEndpoints
     }
 
     private static async Task<IResult> ChooseAsync(
-        HttpContext http, LoginModes modes, SessionStore store, PasswordLogin passwords, LoginCompletion completion, TimeProvider timeProvider,
-        CancellationToken cancellationToken)
+        HttpContext http, LoginModes modes, SessionStore store, PasswordLogin passwords, LoginCompletion completion, OwnerClaim ownerClaim,
+        IServiceScopeFactory scopes, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
         if (await ConsumeAsync(http, store, isChoose: true, cancellationToken) is not { } consumed)
             return AuthPages.Refused();
@@ -159,7 +173,7 @@ public static class PasswordEndpoints
                     StatusCodes.Status429TooManyRequests);
             // An expired temporary password goes back to the login page, which says so.
             case PasswordOutcome.Refused { Status: StatusCodes.Status401Unauthorized } expired:
-                return await LoginPageAsync(http, modes, store, timeProvider, client, null, expired.Message, expired.Status, cancellationToken);
+                return await LoginPageAsync(http, modes, store, ownerClaim, scopes, timeProvider, client, null, expired.Message, expired.Status, cancellationToken);
             case PasswordOutcome.Refused refused:
                 return AuthPages.ChoosePassword(await StartFormAsync(http, store, timeProvider, client, choose, cancellationToken), client, refused.Message,
                     refused.Status);
@@ -189,16 +203,99 @@ public static class PasswordEndpoints
         }
     }
 
+    private static async Task<IResult> ClaimOwnerPageAsync(
+        HttpContext http, SessionStore store, OwnerClaim ownerClaim, IServiceScopeFactory scopes, TimeProvider timeProvider, CancellationToken cancellationToken)
+    {
+        if (!await OffersOwnerClaimAsync(ownerClaim, scopes, cancellationToken))
+            return new AuthRedirect(AuthRoutes.Login);
+
+        return AuthPages.ClaimOwner(await StartFormAsync(http, store, timeProvider, new LoginClient.Web("/"), null, cancellationToken), null, null);
+    }
+
+    private static async Task<IResult> ClaimOwnerAsync(
+        HttpContext http, LoginModes modes, SessionStore store, PasswordLogin passwords, LoginCompletion completion, OwnerClaim ownerClaim,
+        IServiceScopeFactory scopes, TimeProvider timeProvider, CancellationToken cancellationToken)
+    {
+        if (await ConsumeAsync(http, store, isChoose: false, cancellationToken) is not { } consumed)
+            return AuthPages.Refused();
+
+        var client = new LoginClient.Web("/");
+        var loginName = AuthForm.OneValue(consumed.Form, "loginName");
+        var outcome = await passwords.ClaimOwnerAsync(loginName, AuthForm.OneValue(consumed.Form, "password"), cancellationToken);
+        switch (outcome)
+        {
+            // The session starts with the guard of the claimed credential, as a sign-in does, so an issue after the claim starts nothing.
+            case PasswordOutcome.SignedIn signedIn:
+                return await CompleteAsync(completion, passwords, client, signedIn, http, cancellationToken);
+            case PasswordOutcome.NoClaim:
+                return await LoginPageAsync(http, modes, store, ownerClaim, scopes, timeProvider, client, null, PasswordLogin.ClaimGoneMessage,
+                    StatusCodes.Status409Conflict, cancellationToken);
+            case PasswordOutcome.Wait wait:
+                SetRetryAfter(http, wait.Left);
+                return AuthPages.ClaimOwner(await StartFormAsync(http, store, timeProvider, client, null, cancellationToken), loginName, wait.Message,
+                    StatusCodes.Status429TooManyRequests);
+            case PasswordOutcome.Refused refused:
+                return AuthPages.ClaimOwner(await StartFormAsync(http, store, timeProvider, client, null, cancellationToken), loginName, refused.Message,
+                    refused.Status);
+            default:
+                return AuthPages.Refused();
+        }
+    }
+
+    /// <summary>
+    /// The change of a password from the SPA or an app (PWD-17). A refusal is a problem whose <c>errors</c> names the field, so the
+    /// form shows the message at that field.
+    /// </summary>
+    private static async Task<IResult> ChangeAsync(HttpContext http, PasswordLogin passwords, CancellationToken cancellationToken)
+    {
+        var form = await AuthForm.ReadAsync(http.Request, cancellationToken, FormMaxBytes);
+        if (form is null)
+            return Results.Problem(detail: ChangeFormMessage, statusCode: StatusCodes.Status400BadRequest);
+
+        var outcome = await passwords.ChangeAsync(
+            http.User.FindFirst("sub")!.Value,
+            http.User.FindFirst(AppSessionHandler.SessionIdClaim)!.Value,
+            AuthForm.OneValue(form, "currentPassword"),
+            AuthForm.OneValue(form, "newPassword"),
+            http.Connection.RemoteIpAddress,
+            cancellationToken);
+        switch (outcome)
+        {
+            case PasswordOutcome.Changed:
+                return Results.NoContent();
+            case PasswordOutcome.Wait wait:
+                SetRetryAfter(http, wait.Left);
+                return Results.Problem(detail: wait.Message, statusCode: StatusCodes.Status429TooManyRequests);
+            case PasswordOutcome.Refused { Status: StatusCodes.Status403Forbidden } wrong:
+                return FieldProblem(wrong, "currentPassword");
+            case PasswordOutcome.Refused { Status: StatusCodes.Status422UnprocessableEntity } refused:
+                return FieldProblem(refused, "newPassword");
+            case PasswordOutcome.Refused other:
+                return Results.Problem(detail: other.Message, statusCode: other.Status);
+            default:
+                throw new InvalidOperationException($"A password change cannot end as {outcome}.");
+        }
+    }
+
+    private const string ChangeFormMessage = "Send the current password and the new password as a form.";
+
+    private static IResult FieldProblem(PasswordOutcome.Refused refused, string field)
+        => Results.Problem(
+            detail: refused.Message,
+            statusCode: refused.Status,
+            extensions: new Dictionary<string, object?> { ["errors"] = new Dictionary<string, string[]> { [field] = [refused.Message] } });
+
     /// <summary>The login page again, with a new attempt, the typed login name, and the message of the failed post.</summary>
     private static async Task<IResult> LoginPageAsync(
-        HttpContext http, LoginModes modes, SessionStore store, TimeProvider timeProvider, LoginClient client, string? typedName, string error, int status,
+        HttpContext http, LoginModes modes, SessionStore store, OwnerClaim ownerClaim, IServiceScopeFactory scopes, TimeProvider timeProvider, LoginClient client, string? typedName, string error, int status,
         CancellationToken cancellationToken)
     {
         var listed = await modes.ListAsync(cancellationToken);
         var states = await Task.WhenAll(listed.Select(mode => mode.ProbeAsync(cancellationToken)));
         var chooser = listed.Zip(states, (mode, state) => new AuthPages.ChooserMode(mode.Id, mode.DisplayName, state)).ToList();
         var form = new AuthPages.PasswordForm(await StartFormAsync(http, store, timeProvider, client, null, cancellationToken), typedName, error);
-        return AuthPages.Chooser(chooser, client, signedOut: false, message: null, providerSession: null, passwordForm: form, status: status);
+        return AuthPages.Chooser(chooser, client, signedOut: false, message: null, providerSession: null, passwordForm: form, status: status,
+            offersOwnerClaim: await OffersOwnerClaimAsync(ownerClaim, scopes, cancellationToken));
     }
 
     private static async Task<(LoginAttempt Attempt, IFormCollection Form)?> ConsumeAsync(

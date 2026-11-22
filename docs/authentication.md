@@ -24,6 +24,8 @@ These routes are not in the OpenAPI document. This section is their contract.
 | `/auth/password/login` | POST | none | The password form of the login page. See [Password login](#password-login). |
 | `/auth/password/setup` | GET, POST | the setup code | The first setup of an install with no provider and no tenant. With a provider, it answers 404. |
 | `/auth/password/choose` | POST | a choose attempt | The choice of a password after a temporary password |
+| `/auth/password/change` | POST | web or native session | The change of a password. See [Change a password](#change-a-password). A personal access token gets 403. |
+| `/auth/password/claim-owner` | GET, POST | a fresh `claim-owner` file | The new password of the Owner. See [Recover a lost Owner](#recover-a-lost-owner). |
 
 Each other Server path, also `/api/*`, reads the credential in the same way. Send the cookie with `X-CSRF: 1`, or send `Authorization: Bearer <token>`. The one exception is the job dashboard at `/backwave`. See [CSRF](#csrf).
 
@@ -275,10 +277,10 @@ These results come from a run with Recall.
 `GET /auth/me` tells who is signed in. The SPA and a native app read this one route.
 
 ```json
-{ "sub": "<identifier>", "name": "Ada Lovelace", "sid": "<session ID>", "client_kind": "web" }
+{ "sub": "<identifier>", "name": "Ada Lovelace", "sid": "<session ID>", "client_kind": "web", "login_name": "ada" }
 ```
 
-`name` is the full name of the user. `client_kind` is `web`, `native`, or `pat`. For a personal access token, `sid` is the ID of the token.
+`name` is the full name of the user. `client_kind` is `web`, `native`, or `pat`. `login_name` is the login name of the password of the user, or `null` for a user with no password, so the SPA offers the change of a password only to a person who has one. For a personal access token, `sid` is the ID of the token.
 
 | Request | Answer |
 |---|---|
@@ -316,6 +318,28 @@ The Server links that identity to the oldest live Admin of the oldest live tenan
 The claim cannot bring back a deleted tenant, so `DELETE /tenants/{id}` gives 409 for the last live tenant. Only a change outside the API can leave an install with no live tenant. When a tenant row stays but is marked as deleted, a login with no link gets `signup_closed`. A login with a link still signs in when only the tenant row changed and the user is live, and it gets `signup_closed` when the user is gone too. When no tenant row stays, the Server reads a new install, and the next login with no link becomes the Owner of a new tenant. The Server removes the file in each case. Restore the data directory from a backup.
 
 The claim is also the recovery path for a missing permission. A release that adds an Admin permission gives it to each Admin who exists with a migration (see [Add a permission](backend.md#add-a-permission)). If no Admin holds each Admin permission, for example after a change to the database outside the Server, each change to an Admin gets 409. To give each Admin permission to an Admin who can sign in, create the file and sign in with that login. The Server gives that Admin each Admin permission back, logs a warning that names the file and the user ID, and removes the file.
+
+### Set a new Owner password
+
+With password login, the same file sets the login name and the password of the Owner:
+
+1. Create an empty file named `claim-owner` in the data directory.
+2. Open `/auth/login`. While the file is a regular file less than 15 minutes from the current time, the page shows `Set a new Owner password`. With no such file, the page is the same as before the file. With a single provider, the page shows the button of the provider and does not start it with no click.
+3. Give a login name and a password of at least 15 characters.
+
+The post removes the file, and only one post can use one file. The Server picks the same Admin as the claim of an OIDC login, or adds an Admin when the tenant has none. It gives that Admin each Admin permission back and a Chosen password with the login name, from any state of the old password, also Stopped. It ends each session and each personal access token of that Admin, logs a warning that names the file and the user ID, records the audit action `owner_password_set`, and signs you in on this browser. An app start of the login page does not offer the claim. When the file is gone, too old, a link, or a folder at the post, the Server reads and hashes nothing, nothing changes, the entry stays where it is, and the login page says `The claim-owner file is gone or too old, so nothing changed.` The next OIDC login removes a file that is too old, as the list below says.
+
+A refused post keeps the file, and the page shows the form again, when:
+
+- the login name is not valid, or the password is too short, too long, common, or the login name or a name of the Owner,
+- the hash line is full (429),
+- a user holds the login name. The Server checks this under the lock of the tenant, just before it removes the file.
+
+A post uses up the file and changes nothing in these cases, and when the request fails after the check, for example when the client goes away. Create the file again to try once more.
+
+- No live tenant exists.
+- A user takes the login name after the check and before the save (409). This needs a write in another tenant at the same moment.
+- The save loses a race with another write of the password 3 times in a row (429). The Server logs a warning that names the file.
 
 The first login after you create a regular file removes it when the Server can, also when the claim changes nothing:
 
@@ -412,6 +436,17 @@ The rules are in [the spec](specs/password-login.md), and [ADR 0024](adr/0024-re
 5. Each later sign-in is at `/auth/login`. A native app opens `/auth/login?client=app` with the values of [Sign in](#sign-in), and the page redirects to the app with a code after a right password, with no confirm page. `/auth/token` has no `password` grant.
 
 Each form post needs the login attempt that its page wrote, and the binding cookie of that attempt. A post uses its attempt, so a page that shows the form again writes a new one. The form body has a limit of 8 KiB. The limit of login starts covers each form post. The login page and the setup page have a limit of their own, with the same buckets and permits, so a page draws nothing from the starts. After 5 wrong passwords in a row for one typed login name from one address, that pair waits 30 seconds, doubling to 15 minutes. The 100th wrong password in a row stops password sign-in for the account. A logout of a password session goes to the signed-out page with no step at a provider.
+
+### Change a password
+
+A person with a password changes it in the settings of the SPA. The SPA posts a form body with `currentPassword` and `newPassword` to `/auth/password/change`, with the session cookie and `X-CSRF: 1`. A native app sends its bearer token. The answer is 204. In the save of the new password, the Server ends each other session and each personal access token of the person, deletes each login in flight of the person, and keeps this session. A change that loses a race to another write of the password, such as an Admin who issues a temporary password, runs again on the new row, so the temporary password stays and the change gets 409. A refusal is a problem whose `errors` names the field:
+
+| Status | Field | Cause |
+|---|---|---|
+| 403 | `currentPassword` | The current password is wrong. It counts as a wrong password for the login name and the address, and for the 100 tries in a row, the same as a wrong login. The 100th try stops the password, and the sessions keep working. |
+| 422 | `newPassword` | The new password breaks a rule of length, or is on the list of common passwords, or is the login name or a name of the person. |
+| 429 | none | The wait after wrong tries, or the hash line is full. The answer has `Retry-After`. |
+| 409 | none | The account has no Chosen password, for example a temporary one. |
 
 ### A provider that is down
 

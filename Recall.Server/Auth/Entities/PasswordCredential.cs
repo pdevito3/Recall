@@ -100,6 +100,30 @@ public sealed class PasswordCredential
         Version++;
     }
 
+    /// <summary>The person typed the current password and picked a new one (PWD-17).</summary>
+    /// <exception cref="InvalidOperationException">The credential is not Chosen.</exception>
+    public void Change(string passwordHash, DateTimeOffset now)
+    {
+        if (State != PasswordState.Chosen)
+            throw new InvalidOperationException("Only a Chosen credential can change its password.");
+
+        PasswordHash = passwordHash;
+        ChangedAt = now;
+        FailedCount = 0;
+        Version++;
+    }
+
+    /// <summary>The operator set the login name and the password of the Owner through the <c>claim-owner</c> file, from any state (PWD-19).</summary>
+    public void ClaimForOwner(LoginName loginName, string passwordHash, DateTimeOffset now)
+    {
+        LoginName = loginName;
+        PasswordHash = passwordHash;
+        ChangedAt = now;
+        TemporaryUntil = null;
+        FailedCount = 0;
+        Version++;
+    }
+
     /// <summary>A wrong password (PWD-13). The count stops at <see cref="StopAt"/>, where the credential is Stopped.</summary>
     public void NoteFailure()
     {

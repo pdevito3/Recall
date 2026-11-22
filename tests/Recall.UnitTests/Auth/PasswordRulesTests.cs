@@ -249,4 +249,59 @@ public sealed class PasswordRulesTests
         credential.FailedCount.ShouldBe(0);
         credential.LoginName.ShouldBe(Name("ada"));
     }
+
+    [Test]
+    [Property("Rule", "PWD-17")]
+    public void a_change_replaces_the_password_of_a_chosen_credential_and_refuses_each_other_state()
+    {
+        // Arrange
+        var chosen = PasswordCredential.Choose("usr_1", Name("ada"), "old", Now);
+        chosen.NoteFailure();
+        var temporary = PasswordCredential.IssueTemporary("usr_2", Name("bea"), "temporary", Now);
+        var stopped = PasswordCredential.Choose("usr_3", Name("cyd"), "old", Now);
+        for (var i = 0; i < PasswordCredential.StopAt; i++)
+            stopped.NoteFailure();
+        var later = Now + TimeSpan.FromHours(1);
+
+        // Act
+        chosen.Change("new", later);
+        var changeTemporary = () => temporary.Change("new", later);
+        var changeStopped = () => stopped.Change("new", later);
+
+        // Assert
+        chosen.State.ShouldBe(PasswordState.Chosen);
+        chosen.PasswordHash.ShouldBe("new");
+        chosen.ChangedAt.ShouldBe(later);
+        chosen.FailedCount.ShouldBe(0);
+        changeTemporary.ShouldThrow<InvalidOperationException>();
+        changeStopped.ShouldThrow<InvalidOperationException>();
+    }
+
+    [Test]
+    [Property("Rule", "PWD-19")]
+    [Arguments(PasswordState.Temporary)]
+    [Arguments(PasswordState.Chosen)]
+    [Arguments(PasswordState.Stopped)]
+    public void the_owner_claim_makes_a_credential_of_each_state_chosen_with_the_new_login_name(PasswordState from)
+    {
+        // Arrange
+        var credential = from == PasswordState.Temporary
+            ? PasswordCredential.IssueTemporary("usr_1", Name("ada"), "old", Now)
+            : PasswordCredential.Choose("usr_1", Name("ada"), "old", Now);
+        if (from == PasswordState.Stopped)
+            for (var i = 0; i < PasswordCredential.StopAt; i++)
+                credential.NoteFailure();
+        var later = Now + TimeSpan.FromHours(1);
+
+        // Act
+        credential.ClaimForOwner(Name("Owner"), "new", later);
+
+        // Assert
+        credential.State.ShouldBe(PasswordState.Chosen);
+        credential.LoginName.ShouldBe(Name("owner"));
+        credential.PasswordHash.ShouldBe("new");
+        credential.ChangedAt.ShouldBe(later);
+        credential.TemporaryUntil.ShouldBeNull();
+        credential.FailedCount.ShouldBe(0);
+    }
 }

@@ -475,11 +475,12 @@ public class AppSessionTests
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        me.EnumerateObject().Select(property => property.Name).ShouldBe(["sub", "name", "sid", "client_kind"], ignoreOrder: true);
+        me.EnumerateObject().Select(property => property.Name).ShouldBe(["sub", "name", "sid", "client_kind", "login_name"], ignoreOrder: true);
         me.GetProperty("sub").GetString().ShouldStartWith("usr_");
         me.GetProperty("name").GetString().ShouldBe("Ada Lovelace");
         me.GetProperty("sid").GetString().ShouldNotBeNullOrEmpty();
         me.GetProperty("client_kind").GetString().ShouldBe("web");
+        me.GetProperty("login_name").ValueKind.ShouldBe(JsonValueKind.Null);
     }
 
     [Test]

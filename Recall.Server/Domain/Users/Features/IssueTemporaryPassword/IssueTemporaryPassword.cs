@@ -67,7 +67,7 @@ public static class IssueTemporaryPassword
 
                 // A caller who issues to themselves keeps the session of this request, as a change of a password does (PWD-17).
                 var keep = caller.UserId == user.Id ? currentUser.GetClaimValue(AppSessionHandler.SessionIdClaim) : null;
-                await EndSignInsAsync(user.Id, keep, now, ct);
+                await SessionStore.EndSignInsInSaveAsync(dbContext, user.Id, keep, RevokeReason.TemporaryPassword, now, ct);
 
                 var expiresAt = credential.TemporaryUntil!.Value;
                 dbContext.RecordAction(new TemporaryPasswordIssued(AuditSubject.Of(user), credential.LoginName.Value, expiresAt));
@@ -79,35 +79,6 @@ public static class IssueTemporaryPassword
 
             _logger.Here().Information("Issued a temporary password to user {UserId} and ended each of its other sessions", request.Id);
             return issued;
-        }
-
-        /// <summary>
-        /// Ends each session and each PAT of the user but <paramref name="keepSessionId"/>, and removes each login attempt and
-        /// app code of the user, in the save of the issue. A logout or a use of a code after the load makes the save stale,
-        /// and the command runs again.
-        /// </summary>
-        private async Task EndSignInsAsync(string userId, string? keepSessionId, DateTimeOffset now, CancellationToken ct)
-        {
-            var sessions = await dbContext.Set<AuthSession>()
-                .TagWithOperationCallSite("users.issue_temporary_password.sessions")
-                .Where(s => s.UserId == userId && s.RevokedAt == null && s.Id != keepSessionId)
-                .ToListAsync(ct);
-            foreach (var session in sessions)
-            {
-                var entry = dbContext.Entry(session);
-                entry.Property(s => s.RevokedAt).CurrentValue = now;
-                entry.Property(s => s.RevokedReason).CurrentValue = RevokeReason.TemporaryPassword;
-            }
-
-            // A choose attempt or a native code that the old password started must not finish after the issue.
-            dbContext.Set<LoginAttempt>().RemoveRange(await dbContext.Set<LoginAttempt>()
-                .TagWithOperationCallSite("users.issue_temporary_password.attempts")
-                .Where(a => a.UserId == userId)
-                .ToListAsync(ct));
-            dbContext.Set<AppCode>().RemoveRange(await dbContext.Set<AppCode>()
-                .TagWithOperationCallSite("users.issue_temporary_password.app_codes")
-                .Where(c => c.UserId == userId)
-                .ToListAsync(ct));
         }
 
         private static LoginName LoginNameOf(string? typed)

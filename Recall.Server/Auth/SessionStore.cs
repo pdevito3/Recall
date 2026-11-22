@@ -352,6 +352,36 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
                 .SetProperty(s => s.RevokedReason, RevokeReason.Logout), CancellationToken.None);
     }
 
+    /// <summary>
+    /// Marks each session and each PAT of the user but <paramref name="keepSessionId"/> as ended, and removes each login attempt and
+    /// app code of the user, in the next save of <paramref name="dbContext"/>, so they end in the save of the credential (PWD-14,
+    /// PWD-17, PWD-19). A logout or a use of a code after the load makes that save stale.
+    /// </summary>
+    public static async Task EndSignInsInSaveAsync(
+        AppDbContext dbContext, string userId, string? keepSessionId, RevokeReason reason, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var sessions = await dbContext.Set<AuthSession>()
+            .TagWithOperationCallSite("auth.sessions.end_sign_ins")
+            .Where(s => s.UserId == userId && s.RevokedAt == null && s.Id != keepSessionId)
+            .ToListAsync(cancellationToken);
+        foreach (var session in sessions)
+        {
+            var entry = dbContext.Entry(session);
+            entry.Property(s => s.RevokedAt).CurrentValue = now;
+            entry.Property(s => s.RevokedReason).CurrentValue = reason;
+        }
+
+        // A choose attempt or a native code that the old password started must not finish after the change.
+        dbContext.Set<LoginAttempt>().RemoveRange(await dbContext.Set<LoginAttempt>()
+            .TagWithOperationCallSite("auth.sessions.end_sign_ins_attempts")
+            .Where(a => a.UserId == userId)
+            .ToListAsync(cancellationToken));
+        dbContext.Set<AppCode>().RemoveRange(await dbContext.Set<AppCode>()
+            .TagWithOperationCallSite("auth.sessions.end_sign_ins_app_codes")
+            .Where(c => c.UserId == userId)
+            .ToListAsync(cancellationToken));
+    }
+
     public async Task RevokeOthersAsync(string userId, string keepSessionId)
     {
         var now = timeProvider.GetUtcNow();
