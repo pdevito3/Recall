@@ -71,7 +71,7 @@ public sealed class LoginModes : IDisposable
             .Select((provider, position) => new OidcLoginMode(
                 AuthOptions.ModeIdOf(provider, position), provider, handlers(provider), timeProvider))
             .ToList();
-        _snapshot = Snapshot.Of(_environmentModes, _environment, []);
+        _snapshot = Snapshot.Of(_environmentModes, _environment, [], passwordsOn: true);
     }
 
     public IReadOnlyList<OidcLoginMode> Oidc => _snapshot.Modes;
@@ -90,14 +90,41 @@ public sealed class LoginModes : IDisposable
         => Snapshot.IssuersOf(_environment, _snapshot.Rows.Where(row => row.Key.Id != rowId));
 
     /// <summary>
-    /// Each mode of the login page and of <c>/auth/status</c>. The password mode comes first when the install has no OIDC
-    /// provider, or when a live user holds a password credential (PWD-1). So an install with providers and no password
-    /// keeps the start with no click of a single provider.
+    /// Password login is On in <c>auth_login_settings</c> (IDP-15). The route gates, <c>/auth/status</c>, and the last-Admin rule read it
+    /// here, so a turn that reloads the list changes them all for the next request.
+    /// </summary>
+    public bool PasswordsAreOn => _snapshot.PasswordsOn;
+
+    /// <summary>
+    /// Each mode of the login page and of <c>/auth/status</c>. While password login is On, the password mode comes first when the
+    /// install has no OIDC provider, or when a live user holds a password credential (PWD-1). So an install with providers and no
+    /// password keeps the start with no click of a single provider. While it is Off, the list has no password mode (IDP-15).
     /// </summary>
     public async Task<IReadOnlyList<ILoginMode>> ListAsync(CancellationToken cancellationToken)
     {
-        var modes = _snapshot.Modes;
+        var snapshot = _snapshot;
+        var modes = snapshot.Modes;
+        if (!snapshot.PasswordsOn)
+            return modes;
         return modes.Count == 0 || await AnyLivePasswordAsync(cancellationToken) ? [PasswordLoginMode.Instance, .. modes] : modes;
+    }
+
+    /// <summary>
+    /// While password login is Off, the login page offers <c>I have a temporary password</c> only while a live user holds a temporary
+    /// password that is not Stopped and not expired (IDP-20). So a single provider still starts with no click when no one waits to link one.
+    /// </summary>
+    public async Task<bool> OffersTemporaryPasswordAsync(CancellationToken cancellationToken)
+    {
+        if (PasswordsAreOn)
+            return false;
+
+        await using var scope = _scopeFactory.CreateSystemScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        // The clock of PasswordCredential.IsExpired, so an expired password is not an offer.
+        var now = _timeProvider.GetUtcNow();
+        return await dbContext.Set<PasswordCredential>()
+            .TagWithOperationCallSite("auth.modes.any_temporary_password")
+            .AnyAsync(p => p.TemporaryUntil != null && p.TemporaryUntil > now && p.FailedCount < PasswordCredential.StopAt && dbContext.Users.Any(u => u.Id == p.UserId), cancellationToken);
     }
 
     public OidcLoginMode? FindOidc(string? id) => _snapshot.Modes.FirstOrDefault(mode => mode.Id == id);
@@ -105,8 +132,8 @@ public sealed class LoginModes : IDisposable
     public OidcLoginMode? OnlyOidc => _snapshot.Modes is [var only] ? only : null;
 
     /// <summary>
-    /// Reads the rows again and replaces the list. Each save and each delete of a row calls it after its save, and the boot calls it after
-    /// the migrations. Reloads run one at a time, and each reads the rows after the save that called it, so the last one to end holds
+    /// Reads the rows and the login settings again and replaces the list. Each save and each delete of a row and each turn of password
+    /// login calls it after its save, and the boot calls it after the migrations. Reloads run one at a time, and each reads the rows after the save that called it, so the last one to end holds
     /// each committed change.
     /// </summary>
     public async Task ReloadAsync(CancellationToken cancellationToken)
@@ -122,6 +149,11 @@ public sealed class LoginModes : IDisposable
                 .TagWithOperationCallSite("auth.modes.rows")
                 .OrderBy(p => p.CreatedAt).ThenBy(p => p.Id)
                 .ToListAsync(cancellationToken);
+            // A migration inserts the one row, so a database with none is broken, and the boot fails.
+            var loginSettings = await dbContext.LoginSettings
+                .AsNoTracking()
+                .TagWithOperationCallSite("auth.modes.settings")
+                .SingleAsync(cancellationToken);
 
             var current = _snapshot.Rows;
             var rowModes = new List<RowMode>();
@@ -139,7 +171,7 @@ public sealed class LoginModes : IDisposable
                     rowModes.Add(new RowMode(key, mode));
             }
 
-            _snapshot = Snapshot.Of(_environmentModes, _environment, rowModes);
+            _snapshot = Snapshot.Of(_environmentModes, _environment, rowModes, loginSettings.PasswordLogin == PasswordLoginState.On);
         }
         finally
         {
@@ -156,7 +188,24 @@ public sealed class LoginModes : IDisposable
         await _reload.WaitAsync(CancellationToken.None);
         try
         {
-            _snapshot = Snapshot.Of(_environmentModes, _environment, _snapshot.Rows.Where(row => row.Key.Id != rowId).ToList());
+            _snapshot = Snapshot.Of(_environmentModes, _environment, _snapshot.Rows.Where(row => row.Key.Id != rowId).ToList(), _snapshot.PasswordsOn);
+        }
+        finally
+        {
+            _reload.Release();
+        }
+    }
+
+    /// <summary>
+    /// Sets password login with no read, for a turn whose reload failed after its save, so a turn to Off stops each password at once.
+    /// </summary>
+    public async Task UsePasswordLoginAsync(PasswordLoginState state)
+    {
+        await _reload.WaitAsync(CancellationToken.None);
+        try
+        {
+            var snapshot = _snapshot;
+            _snapshot = Snapshot.Of(_environmentModes, _environment, snapshot.Rows, state == PasswordLoginState.On);
         }
         finally
         {
@@ -189,10 +238,11 @@ public sealed class LoginModes : IDisposable
 
     private sealed record RowMode(RowKey Key, OidcLoginMode Mode);
 
-    private sealed record Snapshot(IReadOnlyList<OidcLoginMode> Modes, IReadOnlyList<RowMode> Rows, IReadOnlyList<string> Issuers)
+    private sealed record Snapshot(IReadOnlyList<OidcLoginMode> Modes, IReadOnlyList<RowMode> Rows, IReadOnlyList<string> Issuers, bool PasswordsOn)
     {
-        public static Snapshot Of(IReadOnlyList<OidcLoginMode> environmentModes, IReadOnlyList<OidcProviderOptions> environment, IReadOnlyList<RowMode> rows)
-            => new([.. environmentModes, .. rows.Select(row => row.Mode)], rows, IssuersOf(environment, rows));
+        public static Snapshot Of(
+            IReadOnlyList<OidcLoginMode> environmentModes, IReadOnlyList<OidcProviderOptions> environment, IReadOnlyList<RowMode> rows, bool passwordsOn)
+            => new([.. environmentModes, .. rows.Select(row => row.Mode)], rows, IssuersOf(environment, rows), passwordsOn);
 
         public static List<string> IssuersOf(IEnumerable<OidcProviderOptions> environment, IEnumerable<RowMode> rows)
             => environment.Select(entry => entry.Issuer).Concat(rows.Select(row => row.Key.Issuer))

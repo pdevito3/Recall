@@ -1,10 +1,12 @@
 namespace Recall.FunctionalTests.Auth;
 
+using System.Data.Common;
 using System.Net;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -56,6 +58,12 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
 
     /// <summary>The clock of the server, for a test of a value that the server takes from the clock.</summary>
     public TimeProvider? Clock { get; init; }
+
+    /// <summary>
+    /// The pause of a race test on this host, which holds the first command with its tag. A test sets it before the request under test,
+    /// and clears it after, so the tests of one host that use it run one at a time.
+    /// </summary>
+    public PauseAtQuery? Pause { get; set; }
 
     /// <summary>True on the flow of a request to this host. Each host of the process logs through one static logger, so this tells their lines apart.</summary>
     public bool IsInRequest => _inRequest.Value;
@@ -138,6 +146,7 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
                 services.AddSingleton(engine);
             }
 
+            services.ConfigureDbContext<AppDbContext>((_, options) => options.AddInterceptors(new PauseSlot(this)));
             services.AddSingleton<ILogEventSink>(Logs);
             services.AddSingleton<IStartupFilter, ConnectionAddressFilter>();
             services.AddSingleton<IStartupFilter>(new RequestFlowFilter(_inRequest));
@@ -152,6 +161,33 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
         await _database.DisposeAsync();
         if (ClaimFilePath is { } claimFile)
             Directory.Delete(Path.GetDirectoryName(claimFile)!, recursive: true);
+    }
+
+    /// <summary>Hands each command to the <see cref="Pause"/> of the host, when a test set one.</summary>
+    private sealed class PauseSlot(AuthFlowFactory host) : DbCommandInterceptor
+    {
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+            => host.Pause?.ReaderExecutingAsync(command, eventData, result, cancellationToken) ?? ValueTask.FromResult(result);
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<int> result, CancellationToken cancellationToken = default)
+            => host.Pause?.NonQueryExecutingAsync(command, eventData, result, cancellationToken) ?? ValueTask.FromResult(result);
+
+        public override ValueTask<InterceptionResult<object>> ScalarExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<object> result, CancellationToken cancellationToken = default)
+            => host.Pause?.ScalarExecutingAsync(command, eventData, result, cancellationToken) ?? ValueTask.FromResult(result);
+
+        public override ValueTask<InterceptionResult> DataReaderClosingAsync(DbCommand command, DataReaderClosingEventData eventData, InterceptionResult result)
+            => host.Pause?.DataReaderClosingAsync(command, eventData, result) ?? ValueTask.FromResult(result);
+
+        public override ValueTask<int> NonQueryExecutedAsync(DbCommand command, CommandExecutedEventData eventData, int result,
+            CancellationToken cancellationToken = default)
+            => host.Pause?.NonQueryExecutedAsync(command, eventData, result, cancellationToken) ?? ValueTask.FromResult(result);
+
+        public override ValueTask<object?> ScalarExecutedAsync(DbCommand command, CommandExecutedEventData eventData, object? result,
+            CancellationToken cancellationToken = default)
+            => host.Pause?.ScalarExecutedAsync(command, eventData, result, cancellationToken) ?? ValueTask.FromResult(result);
     }
 
     private sealed class RequestFlowFilter(AsyncLocal<bool> inRequest) : IStartupFilter

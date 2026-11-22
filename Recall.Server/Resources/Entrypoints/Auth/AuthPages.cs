@@ -50,9 +50,37 @@ public static class AuthPages
     /// <summary>The password form of the login page. <paramref name="LoginName"/> is the name that the person typed, so a wrong password keeps it.</summary>
     public sealed record PasswordForm(string State, string? LoginName, string? Error);
 
+    public const string NoLoginMethodMessage = "Sign-in is not available. The operator can use the claim-owner file to get back in.";
+
+    public const string TemporaryPasswordLabel = "I have a temporary password";
+
+    public const string LinkedToAnotherMessage = "This account at the provider is linked to another person in Recall.";
+
+    public const string NoProviderAnsweredMessage = "No provider answered. Wait a few minutes, then try again.";
+
+    /// <summary>The choice of the provider to link after a temporary password, when the install has more than one (IDP-20).</summary>
+    public static IResult ChooseProviderToLink(IReadOnlyList<(string DisplayName, string Url)> providers, LoginClient client) => Page(
+        StatusCodes.Status200OK,
+        "Pick your sign-in provider",
+        "<p>Your temporary password worked. Sign in at the provider that you use from now on, and Recall links it to your account.</p>"
+            + $"<ul>{string.Concat(providers.Select(p => $"<li><a class=\"button\" href=\"{E(p.Url)}\">Sign in with {E(p.DisplayName)}</a></li>"))}</ul>",
+        PolicyFor(client));
+
+    /// <summary>The callback of a link after a temporary password whose identity is linked to another user (IDP-11, IDP-20).</summary>
+    public static IResult LinkedToAnotherPerson(LoginClient client) => Page(
+        StatusCodes.Status409Conflict,
+        "Recall did not link the provider",
+        $"<p>{E(LinkedToAnotherMessage)}</p><p>Your temporary password still works. Sign in with it again, and use another account at the provider.</p>"
+            + Action("Try again", $"{LoginUrl(client)}&{TemporaryPasswordQuery}=1"),
+        PolicyFor(client));
+
+    /// <summary>The query of the login page that opens the password form while password login is Off (IDP-20).</summary>
+    public const string TemporaryPasswordQuery = "temporaryPassword";
+
     public static IResult Chooser(
         IReadOnlyList<ChooserMode> modes, LoginClient client, bool signedOut, string? message, OpenProviderSession? providerSession,
-        bool asksTheProviderAgain = false, PasswordForm? passwordForm = null, int status = StatusCodes.Status200OK, bool offersOwnerClaim = false)
+        bool asksTheProviderAgain = false, PasswordForm? passwordForm = null, int status = StatusCodes.Status200OK, bool offersOwnerClaim = false,
+        bool offersTemporaryPassword = false)
     {
         // The session at the provider belongs to the person who signed in last, and a plain start would sign that person in again.
         var promptQuery = asksTheProviderAgain ? "&prompt=" + PromptLogin : "";
@@ -65,6 +93,15 @@ public static class AuthPages
         var sessionNote = providerSession is null ? "" : OpenSessionNote(providerSession);
         // The claim signs in on this browser, so a page of an app start does not offer it (PWD-19).
         var claimOffer = offersOwnerClaim && client is LoginClient.Web ? Action(OwnerClaimLabel, AuthRoutes.PasswordClaimOwner) : "";
+        var temporaryOffer = offersTemporaryPassword ? Action(TemporaryPasswordLabel, $"{LoginUrl(client)}&{TemporaryPasswordQuery}=1") : "";
+        // Password login is Off and no provider is Usable (IDP-15). A temporary password still opens its form, which then says so (IDP-20).
+        if (modes.Count == 0)
+            return Page(
+                StatusCodes.Status503ServiceUnavailable,
+                "Sign-in is not available",
+                $"<p>{E(NoLoginMethodMessage)}</p>{note}{form}{temporaryOffer}{claimOffer}",
+                PolicyFor(client));
+
         var noneReady = modes.All(mode => mode.State != LoginModeState.Ready);
         var heading = signedOut ? "You are signed out" : noneReady ? "Sign-in is not available" : "Sign in to Recall";
         return noneReady
@@ -72,7 +109,7 @@ public static class AuthPages
                 StatusCodes.Status503ServiceUnavailable,
                 heading,
                 $"{note}{list}{sessionNote}<p>Wait a few minutes, then try again.</p>" + Action("Try again", LoginUrl(client)) + claimOffer)
-            : Page(status, heading, $"{note}{form}{list}{sessionNote}{claimOffer}", PolicyFor(client));
+            : Page(status, heading, $"{note}{form}{list}{temporaryOffer}{sessionNote}{claimOffer}", PolicyFor(client));
     }
 
     public const string OwnerClaimLabel = "Set a new Owner password";

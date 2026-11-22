@@ -8,12 +8,15 @@ using Recall.SharedTestHelpers.EntityGraphs;
 using Shouldly;
 using TestUtilities;
 
-/// <summary>A delegated agent acts for a person, but a link names a way in of that person, so the agent gets 403 on each link route.</summary>
+/// <summary>
+/// A delegated agent acts for a person, but a link, a provider, and the login settings name the ways in, so the agent gets 403 on each
+/// route of the login providers spec.
+/// </summary>
 public class ExternalLoginAgentTests : TestBase
 {
-    // IDP-19 also covers the login-settings routes of a later PR, so this test does not name it yet.
     [Test]
-    public async Task a_delegated_agent_with_each_permission_gets_403_on_each_link_route()
+    [Property("Rule", "IDP-19")]
+    public async Task a_delegated_agent_with_each_permission_gets_403_on_each_route_of_the_login_providers()
     {
         // Arrange
         TestGraph.Start(out _)
@@ -39,6 +42,9 @@ public class ExternalLoginAgentTests : TestBase
             await FactoryClient.SendAsync(new HttpRequestMessage(HttpMethod.Delete, $"{ApiRoutes.Base}/me/external-logins") { Content = JsonContent.Create(body) }),
             await FactoryClient.SendAsync(new HttpRequestMessage(HttpMethod.Delete, $"{ApiRoutes.Base}/users/{admin.Id}/external-logins") { Content = JsonContent.Create(body) }),
             await FactoryClient.PostAsync("/auth/oidc/any/link", null),
+            await FactoryClient.GetAsync($"{ApiRoutes.Base}/login-providers"),
+            await FactoryClient.GetAsync($"{ApiRoutes.Base}/login-settings"),
+            await FactoryClient.PutAsJsonAsync($"{ApiRoutes.Base}/login-settings", new { passwordLogin = "Off", version = 1 }),
         ];
 
         // Assert

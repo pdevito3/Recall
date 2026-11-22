@@ -9,8 +9,8 @@ using Resources;
 
 /// <summary>
 /// A tenant keeps an Admin who holds each Admin permission, because a caller can give only what the caller holds, so only such an
-/// Admin can make another Admin or give a permission back. An Admin who can sign in, with a link to a Usable provider or a password that is not Stopped, keeps
-/// another such Admin in its place, because a user with neither cannot sign in. With no such Admin, only a claim file recovers the install. The rule is over a
+/// Admin can make another Admin or give a permission back. An Admin who can sign in, with a link to a Usable provider or, while password login is On, a
+/// password that is not Stopped, keeps another such Admin in its place, because a user with neither cannot sign in (IDP-14). With no such Admin, only a claim file recovers the install. The rule is over a
 /// set of rows, so each write that can break it holds the exclusive lock of the tenant. See <c>docs/backend/concurrency.md</c>,
 /// section "Lock".
 /// </summary>
@@ -41,8 +41,9 @@ public static class LastAdmin
         // provider that ended before it is in the list.
         var issuers = modes.UsableIssuers;
         var links = dbContext.Set<ExternalLogin>().Where(link => issuers.Contains(link.Issuer));
-        // A Stopped credential takes no password, so only the other states are a way to sign in (PWD-22).
-        var passwords = dbContext.Set<PasswordCredential>().Where(p => p.FailedCount < PasswordCredential.StopAt);
+        // A Stopped credential takes no password, so only the other states are a way to sign in (PWD-22), and only while password login is On (IDP-14).
+        var passwordsOn = modes.PasswordsAreOn;
+        var passwords = dbContext.Set<PasswordCredential>().Where(p => passwordsOn && p.FailedCount < PasswordCredential.StopAt);
         var another = await dbContext.Users
             .TagWithOperationCallSite("users.last_admin.another")
             .AnyAsync(
@@ -70,9 +71,9 @@ public static class LastAdmin
         var keepsAWayIn = await dbContext.Set<ExternalLogin>()
                 .TagWithOperationCallSite("users.last_admin.other_link")
                 .AnyAsync(l => l.UserId == user.Id && issuers.Contains(l.Issuer) && !(l.Issuer == link.Issuer && l.Subject == link.Subject), cancellationToken)
-            || await dbContext.Set<PasswordCredential>()
+            || (modes.PasswordsAreOn && await dbContext.Set<PasswordCredential>()
                 .TagWithOperationCallSite("users.last_admin.password")
-                .AnyAsync(p => p.UserId == user.Id && p.FailedCount < PasswordCredential.StopAt, cancellationToken);
+                .AnyAsync(p => p.UserId == user.Id && p.FailedCount < PasswordCredential.StopAt, cancellationToken));
         if (!keepsAWayIn)
             await GuardAsync(dbContext, modes, user, cancellationToken);
     }
@@ -95,16 +96,16 @@ public static class LastAdmin
     /// <summary>
     /// Refuses a change of the Usable providers from the issuers <paramref name="before"/> to <paramref name="after"/> when a live tenant
     /// has an Admin who holds each Admin permission and can sign in now, and would have none after. A tenant with no such Admin now does
-    /// not stop it, because the change takes no way in from that tenant.
+    /// not stop it, because the change takes no way in from that tenant. A password counts only while password login is On (IDP-14).
     /// </summary>
     /// <exception cref="ConflictException">The change would leave a live tenant with no Admin who holds each Admin permission and can sign in.</exception>
     public static async Task GuardEachTenantAsync(
-        AppDbContext dbContext, IReadOnlyList<string> before, IReadOnlyList<string> after, CancellationToken cancellationToken)
+        AppDbContext dbContext, IReadOnlyList<string> before, IReadOnlyList<string> after, bool passwordsOn, CancellationToken cancellationToken)
     {
         var adminRole = UserRole.Admin().Value;
         var adminPermissions = UserRole.Admin().GetDefaultPermissions().Length;
         var links = dbContext.Set<ExternalLogin>();
-        var passwords = dbContext.Set<PasswordCredential>().Where(p => p.FailedCount < PasswordCredential.StopAt);
+        var passwords = dbContext.Set<PasswordCredential>().Where(p => passwordsOn && p.FailedCount < PasswordCredential.StopAt);
         var admins = dbContext.Users.Where(u => u.Role.Value == adminRole
             && u.UserPermissions.Select(held => held.Permission).Distinct().Count() == adminPermissions);
         var refused = await dbContext.Tenants
@@ -119,4 +120,41 @@ public static class LastAdmin
         if (refused)
             throw new ConflictException(string.Empty, RefusedMessage);
     }
+
+    /// <summary>
+    /// Loads each Admin of a live tenant who holds each Admin permission, with the issuers of their links, for
+    /// <see cref="EachTenantHasALinkedAdmin"/>. Run it in the locks of <see cref="RunWithEachTenantLockAsync{T}"/>.
+    /// </summary>
+    public static async Task<IReadOnlyList<AdminLinks>> LoadAdminLinksAsync(AppDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var adminRole = UserRole.Admin().Value;
+        var adminPermissions = UserRole.Admin().GetDefaultPermissions().Length;
+        var links = dbContext.Set<ExternalLogin>();
+        var tenantIds = await dbContext.Tenants
+            .AsNoTracking()
+            .TagWithOperationCallSite("users.last_admin.linked_tenants")
+            .IgnoreQueryFilters([QueryFilterNames.Tenant])
+            .Select(t => t.Id)
+            .ToListAsync(cancellationToken);
+        var admins = await dbContext.Users
+            .AsNoTracking()
+            .TagWithOperationCallSite("users.last_admin.linked_admins")
+            .IgnoreQueryFilters([QueryFilterNames.Tenant])
+            .Where(u => u.Role.Value == adminRole && u.UserPermissions.Select(held => held.Permission).Distinct().Count() == adminPermissions)
+            .Select(u => new { u.TenantId, Issuers = links.Where(link => link.UserId == u.Id).Select(link => link.Issuer).ToList() })
+            .ToListAsync(cancellationToken);
+        return tenantIds
+            .Select(tenantId => new AdminLinks(tenantId, admins.Where(a => a.TenantId == tenantId).Select(a => (IReadOnlyList<string>)a.Issuers).ToList()))
+            .ToList();
+    }
+
+    /// <summary>
+    /// True when each live tenant has an Admin who holds each Admin permission and has a link to a Usable provider, the rule that a turn of
+    /// password login to Off needs (IDP-13). A password does not count, because the turn takes each password away.
+    /// </summary>
+    public static bool EachTenantHasALinkedAdmin(IReadOnlyList<AdminLinks> tenants, IReadOnlyCollection<string> usableIssuers)
+        => tenants.All(tenant => tenant.AdminIssuers.Any(issuers => issuers.Any(usableIssuers.Contains)));
 }
+
+/// <summary>A live tenant and the link issuers of each of its Admins who hold each Admin permission.</summary>
+public sealed record AdminLinks(string TenantId, IReadOnlyList<IReadOnlyList<string>> AdminIssuers);

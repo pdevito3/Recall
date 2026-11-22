@@ -20,7 +20,7 @@ public class TenantQueryFilterTests
         [typeof(ExternalLogin), typeof(PasswordCredential), typeof(AuthSession), typeof(AppCode)];
 
     private static readonly Type[] EntitiesWithNoTenantData =
-        [typeof(LoginAttempt), typeof(SyncChange), typeof(KeyRingMarker), typeof(LoginProvider), .. AuthEntitiesReadBeforeACallerExists];
+        [typeof(LoginAttempt), typeof(SyncChange), typeof(KeyRingMarker), typeof(LoginProvider), typeof(LoginSettings), .. AuthEntitiesReadBeforeACallerExists];
 
     [Test]
     public void every_entity_has_the_tenant_filter_unless_it_is_named_as_an_entity_with_no_tenant_filter()

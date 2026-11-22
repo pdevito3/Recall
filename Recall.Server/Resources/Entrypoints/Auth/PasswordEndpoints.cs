@@ -85,11 +85,20 @@ public static class PasswordEndpoints
 
         var client = LoginClient.FromAttempt(attempt);
         var typedName = AuthForm.OneValue(form, "loginName");
-        var outcome = await passwords.SignInAsync(typedName, AuthForm.OneValue(form, "password"), http.Connection.RemoteIpAddress, cancellationToken);
+        // While password login is Off, only a temporary password signs in, and only to link a provider (IDP-15, IDP-20).
+        var outcome = await passwords.SignInAsync(
+            typedName, AuthForm.OneValue(form, "password"), http.Connection.RemoteIpAddress, temporaryOnly: !modes.PasswordsAreOn, cancellationToken);
         switch (outcome)
         {
+            // Password login turned Off during the hash, so the right password gets the answer of PWD-6 and starts nothing (IDP-15).
+            case PasswordOutcome.SignedIn when !modes.PasswordsAreOn:
+                return await LoginPageAsync(http, modes, store, ownerClaim, scopes, timeProvider, client, typedName, PasswordLogin.WrongMessage,
+                    StatusCodes.Status401Unauthorized, cancellationToken);
             case PasswordOutcome.SignedIn signedIn:
                 return await CompleteAsync(completion, passwords, client, signedIn, http, cancellationToken);
+            // While password login is Off, a temporary password only links a provider, and the session starts after the link (IDP-20).
+            case PasswordOutcome.MustChoose choose when !modes.PasswordsAreOn:
+                return await StartTemporaryLinkAsync(http, modes, store, ownerClaim, scopes, timeProvider, client, typedName, choose, cancellationToken);
             case PasswordOutcome.MustChoose choose:
                 return AuthPages.ChoosePassword(await StartFormAsync(http, store, timeProvider, client, choose, cancellationToken), client, null);
             case PasswordOutcome.Wait wait:
@@ -100,6 +109,64 @@ public static class PasswordEndpoints
             default:
                 return AuthPages.Refused();
         }
+    }
+
+    /// <summary>
+    /// Starts the login at a Usable provider with <c>prompt=login</c> after a right temporary password (IDP-20). Each attempt holds the user
+    /// and the time of the temporary password, as a choose attempt does, and the client of the form. With several providers, the page
+    /// links to each, and the attempts that the person does not use expire. A provider that does not let Recall ask for a new sign-in is
+    /// left out, as for a link from settings (IDP-9). With no Usable provider, the form says so (IDP-15).
+    /// </summary>
+    private static async Task<IResult> StartTemporaryLinkAsync(
+        HttpContext http, LoginModes modes, SessionStore store, OwnerClaim ownerClaim, IServiceScopeFactory scopes, TimeProvider timeProvider,
+        LoginClient client, string? typedName, PasswordOutcome.MustChoose choose, CancellationToken cancellationToken)
+    {
+        var redirectUri = AuthRoutes.OriginOf(http.Request) + AuthRoutes.Callback;
+        if (modes.Oidc.Count == 0 || redirectUri.Length > LoginAttempt.RedirectUriMaxLength)
+            return await LoginPageAsync(http, modes, store, ownerClaim, scopes, timeProvider, client, typedName, AuthPages.NoLoginMethodMessage,
+                StatusCodes.Status503ServiceUnavailable, cancellationToken);
+
+        var native = client as LoginClient.Native;
+        var starts = new List<(string DisplayName, string Url)>();
+        foreach (var mode in modes.Oidc)
+        {
+            if (await mode.DiscoverAsync(cancellationToken) is not { AcceptsPromptLogin: true } discovery)
+                continue;
+
+            var state = Secrets.New();
+            var nonce = Secrets.New();
+            var verifier = Secrets.New();
+            var binding = Secrets.New();
+            var stateHash = TokenHash.Of(state);
+            var expiresAt = timeProvider.GetUtcNow() + SessionPolicy.AttemptLifetime;
+            await store.AddAttemptAsync(new LoginAttempt
+            {
+                StateHash = stateHash.Hex,
+                BindingHash = TokenHash.Of(binding).Hex,
+                ModeId = mode.Id,
+                Nonce = nonce,
+                PkceVerifier = verifier,
+                RedirectUri = redirectUri,
+                ClientKind = native is null ? SessionKind.Web : SessionKind.Native,
+                ReturnPath = (client as LoginClient.Web)?.ReturnPath,
+                NativeRedirect = native?.Redirect.Value,
+                NativeChallenge = native?.Challenge,
+                NativeState = native?.ClientState,
+                UserId = choose.UserId,
+                CredentialChangedAt = choose.ChangedAt,
+                ExpiresAt = expiresAt,
+            }, cancellationToken);
+            BindingCookie.Write(http.Response, http.Request, stateHash, binding, expiresAt);
+            starts.Add((mode.DisplayName, mode.BuildAuthorizeUrl(discovery, state, nonce, verifier, redirectUri, promptLogin: true)));
+        }
+
+        return starts switch
+        {
+            [] => await LoginPageAsync(http, modes, store, ownerClaim, scopes, timeProvider, client, typedName, AuthPages.NoProviderAnsweredMessage,
+                StatusCodes.Status503ServiceUnavailable, cancellationToken),
+            [var only] => new AuthRedirect(only.Url),
+            _ => AuthPages.ChooseProviderToLink(starts, client),
+        };
     }
 
     private static async Task<IResult> SetupPageAsync(
@@ -151,6 +218,9 @@ public static class PasswordEndpoints
         HttpContext http, LoginModes modes, SessionStore store, PasswordLogin passwords, LoginCompletion completion, OwnerClaim ownerClaim,
         IServiceScopeFactory scopes, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
+        // While password login is Off, no one picks a password (IDP-15).
+        if (!modes.PasswordsAreOn)
+            return Results.NotFound();
         if (await ConsumeAsync(http, store, isChoose: true, cancellationToken) is not { } consumed)
             return AuthPages.Refused();
 
@@ -165,6 +235,9 @@ public static class PasswordEndpoints
         var outcome = await passwords.ChooseAsync(choose.UserId, choose.ChangedAt, AuthForm.OneValue(form, "password"), cancellationToken);
         switch (outcome)
         {
+            // Password login turned Off during the choice, so no session starts (IDP-15). An Admin issues a new temporary password.
+            case PasswordOutcome.SignedIn when !modes.PasswordsAreOn:
+                return Results.NotFound();
             case PasswordOutcome.SignedIn signedIn:
                 return await CompleteAsync(completion, passwords, client, signedIn, http, cancellationToken);
             case PasswordOutcome.Wait wait:
@@ -246,8 +319,11 @@ public static class PasswordEndpoints
     /// The change of a password from the SPA or an app (PWD-17). A refusal is a problem whose <c>errors</c> names the field, so the
     /// form shows the message at that field.
     /// </summary>
-    private static async Task<IResult> ChangeAsync(HttpContext http, PasswordLogin passwords, CancellationToken cancellationToken)
+    private static async Task<IResult> ChangeAsync(HttpContext http, LoginModes modes, PasswordLogin passwords, CancellationToken cancellationToken)
     {
+        if (!modes.PasswordsAreOn)
+            return Results.NotFound();
+
         var form = await AuthForm.ReadAsync(http.Request, cancellationToken, FormMaxBytes);
         if (form is null)
             return Results.Problem(detail: ChangeFormMessage, statusCode: StatusCodes.Status400BadRequest);

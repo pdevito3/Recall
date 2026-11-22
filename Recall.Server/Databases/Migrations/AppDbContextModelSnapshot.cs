@@ -751,6 +751,42 @@ namespace Recall.Server.Databases.Migrations
                     b.ToTable("auth_oidc_providers", (string)null);
                 });
 
+            modelBuilder.Entity("Recall.Server.Domain.LoginProviders.LoginSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<string>("PasswordLogin")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("password_login");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_auth_login_settings");
+
+                    b.ToTable("auth_login_settings", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_auth_login_settings_one_row", "id = 1");
+
+                            t.HasCheckConstraint("ck_auth_login_settings_password_login", "password_login IN ('On', 'Off')");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            PasswordLogin = "On",
+                            Version = 1u
+                        });
+                });
+
             modelBuilder.Entity("Recall.Server.Domain.ModelProviders.KeyRingMarker", b =>
                 {
                     b.Property<int>("Id")
