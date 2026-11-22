@@ -6347,6 +6347,128 @@
         }
       }
     },
+    "/api/v1/me/external-logins": {
+      "get": {
+        "tags": [
+          "ExternalLogins"
+        ],
+        "summary": "Gets the links of the caller to identities at providers, oldest first. Only a person signed in to Recall can read them.",
+        "operationId": "GetExternalLogins",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ExternalLoginDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "ExternalLogins"
+        ],
+        "summary": "Removes a link of the caller, named by its issuer and subject. A link that is gone also gives 204. It is refused when the tenant\nwould keep no Admin who can sign in and manage access. Only a person signed in to Recall can remove one.",
+        "operationId": "RemoveExternalLogin",
+        "parameters": [
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExternalLoginForRemovalDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/users/by-identifier/{identifier}": {
       "get": {
         "tags": [
@@ -6397,6 +6519,166 @@
           },
           "401": {
             "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
+    "/api/v1/users/{id}/external-logins": {
+      "get": {
+        "tags": [
+          "ExternalLogins"
+        ],
+        "summary": "Gets the links of a user of the tenant of the caller. Another user needs manage_user_access and each permission that the user\nholds. Only a person signed in to Recall can read them.",
+        "operationId": "GetUserExternalLogins",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ExternalLoginDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "ExternalLogins"
+        ],
+        "summary": "Removes a link of a user of the tenant of the caller, named by its issuer and subject. Another user needs manage_user_access and\neach permission that the user holds. It is refused when the tenant would keep no Admin who can sign in and manage access.",
+        "operationId": "RemoveUserExternalLogin",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExternalLoginForRemovalDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -7504,6 +7786,72 @@
           }
         },
         "description": "A provider from `Auth:Providers`. The app cannot change it."
+      },
+      "ExternalLoginDto": {
+        "required": [
+          "issuer",
+          "subject",
+          "createdAt",
+          "lastLoginAt"
+        ],
+        "type": "object",
+        "properties": {
+          "issuer": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string",
+            "description": "The subject that the provider gave the identity. A removal names it with the issuer."
+          },
+          "displayLabel": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The email, else the name, that the provider gave at the link. Null for a link from before Recall kept it."
+          },
+          "providerId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The ID of the sign-in method with this issuer, or null when no provider on the login page has it, so the link signs no one in."
+          },
+          "providerName": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The name of that provider on the login page, or null."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastLoginAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "A link of the user to an identity at a provider. A person signs in with it at that provider."
+      },
+      "ExternalLoginForRemovalDto": {
+        "required": [
+          "issuer",
+          "subject"
+        ],
+        "type": "object",
+        "properties": {
+          "issuer": {
+            "maxLength": 2048,
+            "type": "string"
+          },
+          "subject": {
+            "maxLength": 255,
+            "type": "string"
+          }
+        },
+        "description": "The link to remove, by its issuer and subject (IDP-12)."
       },
       "FileStoreStatusDto": {
         "required": [
@@ -9597,6 +9945,7 @@
                 "AddPermission",
                 "Delete",
                 "IssueTemporaryPassword",
+                "ManageExternalLogins",
                 "RemovePermission",
                 "Update",
                 "UpdateRole"
@@ -9941,6 +10290,9 @@
     },
     {
       "name": "Users"
+    },
+    {
+      "name": "ExternalLogins"
     },
     {
       "name": "FileStore"

@@ -28,6 +28,7 @@ export const userDtoAllowedActionsEnum = {
     AddPermission: "AddPermission",
     Delete: "Delete",
     IssueTemporaryPassword: "IssueTemporaryPassword",
+    ManageExternalLogins: "ManageExternalLogins",
     RemovePermission: "RemovePermission",
     Update: "Update",
     UpdateRole: "UpdateRole"

@@ -34,6 +34,12 @@ public static class AuthHosts
     /// <summary>A fresh host with no provider that boots on the database of <see cref="RowAtBootDatabase"/>, which only <see cref="LoginProviderTests"/> uses.</summary>
     public static AuthFlowFactory RowAtBoot { get; private set; } = null!;
 
+    /// <summary>A host with closed signup that only <see cref="ExternalLoginLinkTests"/> uses, so a link is never the work of the provisioner.</summary>
+    public static AuthFlowFactory Links { get; private set; } = null!;
+
+    /// <summary>A host whose provider lists <c>prompt_values_supported</c> without <c>login</c>, which only <see cref="ExternalLoginLinkTests"/> uses.</summary>
+    public static AuthFlowFactory NoPromptLogin { get; private set; } = null!;
+
     /// <summary>A fresh host with no provider, which only the setup test uses.</summary>
     public static AuthFlowFactory Setup { get; private set; } = null!;
 
@@ -118,6 +124,8 @@ public static class AuthHosts
         SetupWithProvider = Start(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts });
         Mixed = Start(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts });
         LoginProviders = Start(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts });
+        Links = Start(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts });
+        NoPromptLogin = Start(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts }, new StubOidcProvider { PromptValues = ["none", "consent"] });
         LoginProvidersNoEnvironment = Start(new AuthFlowFactory(new Dictionary<string, string?>
         {
             ["Auth:StartPermitsPerWindow"] = ManyStarts,
@@ -240,7 +248,7 @@ public static class AuthHosts
     public static async Task StopAsync()
     {
         // RowAtBoot runs on the database of RowAtBootDatabase, so it stops first.
-        foreach (var host in new[] { Password, LoginProviders, LoginProvidersNoEnvironment, RowAtBoot, RowAtBootDatabase, SetupLogs, Setup, SetupWithProvider, Mixed, PasswordClaim, LostJobTable, FrozenClock, WriterLine, KeepAlive, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, FirstPartyClient, Bundle, OwnerDemotion, Sweep, Jobs, Cleanups, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
+        foreach (var host in new[] { Password, LoginProviders, Links, NoPromptLogin, LoginProvidersNoEnvironment, RowAtBoot, RowAtBootDatabase, SetupLogs, Setup, SetupWithProvider, Mixed, PasswordClaim, LostJobTable, FrozenClock, WriterLine, KeepAlive, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, FirstPartyClient, Bundle, OwnerDemotion, Sweep, Jobs, Cleanups, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
         {
             if (host is not null)
                 await host.DisposeAsync();

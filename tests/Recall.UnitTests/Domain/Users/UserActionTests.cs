@@ -15,7 +15,7 @@ public class UserActionTests
     private static readonly UserAction[] Actions =
     [
         UserAction.Update(), UserAction.UpdateRole(), UserAction.AddPermission(), UserAction.RemovePermission(),
-        UserAction.Delete(), UserAction.IssueTemporaryPassword(),
+        UserAction.Delete(), UserAction.IssueTemporaryPassword(), UserAction.ManageExternalLogins(),
     ];
 
     private static Caller.Member MemberWith(params Permission[] permissions) => new("usr_caller", permissions);
@@ -93,6 +93,15 @@ public class UserActionTests
         yield return () => ("access manager on an admin", "Admin", UserAction.IssueTemporaryPassword(),
             _ => MemberWith(Permission.ManageUserAccess(), Permission.ReadUsers()), adminPermissionDenial);
         yield return () => ("admin on an admin", "Admin", UserAction.IssueTemporaryPassword(),
+            _ => MemberWith([.. Permission.GetAll()]), null);
+
+        yield return () => ("user on their own record", "User", UserAction.ManageExternalLogins(), OwnRecord, null);
+        yield return () => ("user on another user", "User", UserAction.ManageExternalLogins(), _ => MemberWith(), manageUserAccessDenial);
+        yield return () => ("access manager on a user", "User", UserAction.ManageExternalLogins(),
+            _ => MemberWith(Permission.ManageUserAccess()), null);
+        yield return () => ("access manager on an admin", "Admin", UserAction.ManageExternalLogins(),
+            _ => MemberWith(Permission.ManageUserAccess(), Permission.ReadUsers()), adminPermissionDenial);
+        yield return () => ("admin on an admin", "Admin", UserAction.ManageExternalLogins(),
             _ => MemberWith([.. Permission.GetAll()]), null);
     }
 
@@ -195,7 +204,7 @@ public class UserActionTests
         var allowedActions = user.AllowedActions(callerBeforeTheChange);
 
         // Assert
-        allowedActions.ShouldBe([UserAction.Update()]);
+        allowedActions.ShouldBe([UserAction.Update(), UserAction.ManageExternalLogins()]);
     }
 
     // A member holds the permission rows of their own user.

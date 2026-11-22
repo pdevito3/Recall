@@ -32,6 +32,9 @@ public sealed record LoginAttempt
 
     /// <summary>The time that the temporary password of a choose attempt was issued. A new password after it voids the attempt.</summary>
     public DateTimeOffset? CredentialChangedAt { get; init; }
+
+    /// <summary>Set only on an attempt that links a provider to the person of this web session (IDP-9). Its callback adds a link and starts no session.</summary>
+    public string? LinkSessionId { get; init; }
     public required DateTimeOffset ExpiresAt { get; init; }
 
     public override string ToString() => "[login attempt]";
@@ -58,6 +61,7 @@ public sealed class LoginAttemptConfiguration : IEntityTypeConfiguration<LoginAt
         builder.Property(e => e.NativeState).HasMaxLength(LoginAttempt.NativeStateMaxLength);
 
         builder.Property(e => e.UserId).HasMaxLength(EntityId.MaxLength).UseCollation(EntityId.Collation);
+        builder.Property(e => e.LinkSessionId).HasMaxLength(EntityId.MaxLength).UseCollation(EntityId.Collation);
 
         builder.HasIndex(e => e.ExpiresAt);
     }

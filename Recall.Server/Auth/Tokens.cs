@@ -161,6 +161,9 @@ public static class SessionPolicy
     public static readonly TimeSpan AttemptLifetime = TimeSpan.FromMinutes(10);
     public static readonly TimeSpan AppCodeLifetime = TimeSpan.FromMinutes(2);
 
+    /// <summary>A link starts only from a web session that began at most this long ago (IDP-10).</summary>
+    public static readonly TimeSpan LinkSessionAge = TimeSpan.FromMinutes(15);
+
     public static readonly TimeSpan KeepEndedSession = TimeSpan.FromDays(30);
 
     public static readonly TimeSpan PersonalAccessTokenUseMarkEvery = TimeSpan.FromHours(1);

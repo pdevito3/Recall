@@ -64,6 +64,18 @@ public sealed class SessionStore(AppDbContext dbContext, TimeProvider timeProvid
         return row is null ? null : new SessionPrincipal(row.Id, row.UserId, kind, row.AccessExpiresAt);
     }
 
+    /// <summary>The time that a live web session began, or null when it ended. A slide does not move it (IDP-10).</summary>
+    public async Task<DateTimeOffset?> StartOfLiveWebSessionAsync(string sessionId, CancellationToken cancellationToken)
+    {
+        var now = timeProvider.GetUtcNow();
+        return await dbContext.Set<AuthSession>()
+            .AsNoTracking()
+            .TagWithOperationCallSite("auth.sessions.start_of_live_web")
+            .Where(s => s.Id == sessionId && s.ClientKind == SessionKind.Web && s.RevokedAt == null && s.AccessExpiresAt > now)
+            .Select(s => (DateTimeOffset?)s.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public Task<string?> LoginModeOfWebSessionEvenIfEndedAsync(TokenHash hash, CancellationToken cancellationToken)
         => dbContext.Set<AuthSession>()
             .AsNoTracking()

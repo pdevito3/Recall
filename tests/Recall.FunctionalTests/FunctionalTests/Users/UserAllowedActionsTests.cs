@@ -27,7 +27,7 @@ public class UserAllowedActionsTests : TestBase
         var allowedActions = await GetAllowedActionsAsync(other.Id);
 
         // Assert
-        allowedActions.ShouldBe(["Update", "UpdateRole", "AddPermission", "RemovePermission", "Delete", "IssueTemporaryPassword"]);
+        allowedActions.ShouldBe(["Update", "UpdateRole", "AddPermission", "RemovePermission", "Delete", "IssueTemporaryPassword", "ManageExternalLogins"]);
     }
 
     [Test]
@@ -56,7 +56,7 @@ public class UserAllowedActionsTests : TestBase
         var allowedActions = await GetAllowedActionsAsync(member.Id);
 
         // Assert
-        allowedActions.ShouldBe(["Update"]);
+        allowedActions.ShouldBe(["Update", "ManageExternalLogins"]);
     }
 
     [Test]
@@ -75,7 +75,7 @@ public class UserAllowedActionsTests : TestBase
         var users = (await result.Content.ReadFromJsonAsync<List<UserDto>>()).ShouldNotBeNull();
         // The manager cannot take away the permissions of the admin, so the admin row has no Delete
         users.Single(u => u.Id == admin.Id).AllowedActions.ShouldBe(["Update"]);
-        users.Single(u => u.Id == manager.Id).AllowedActions.ShouldBe(["Update", "Delete"]);
+        users.Single(u => u.Id == manager.Id).AllowedActions.ShouldBe(["Update", "Delete", "ManageExternalLogins"]);
     }
 
     [Test]
@@ -109,7 +109,7 @@ public class UserAllowedActionsTests : TestBase
         // Assert
         result.StatusCode.ShouldBe(HttpStatusCode.OK);
         var user = (await result.Content.ReadFromJsonAsync<UserDto>()).ShouldNotBeNull();
-        user.AllowedActions.ShouldBe(["Update"]);
+        user.AllowedActions.ShouldBe(["Update", "ManageExternalLogins"]);
     }
 
     private async Task<string[]> GetAllowedActionsAsync(string userId)

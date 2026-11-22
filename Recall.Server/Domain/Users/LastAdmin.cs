@@ -56,6 +56,28 @@ public static class LastAdmin
     }
 
     /// <summary>
+    /// Refuses a removal of <paramref name="link"/> when it is the last way in of <paramref name="user"/> and the tenant would keep no other
+    /// Admin who holds each Admin permission and can sign in (IDP-12, IDP-14). A link whose issuer no Usable provider has is no way in, so
+    /// its removal takes nothing.
+    /// </summary>
+    /// <exception cref="ConflictException">The removal would leave the tenant with no Admin who holds each Admin permission and can sign in.</exception>
+    public static async Task GuardLinkRemovalAsync(AppDbContext dbContext, LoginModes modes, User user, ExternalLogin link, CancellationToken cancellationToken)
+    {
+        var issuers = modes.UsableIssuers;
+        if (!issuers.Contains(link.Issuer))
+            return;
+
+        var keepsAWayIn = await dbContext.Set<ExternalLogin>()
+                .TagWithOperationCallSite("users.last_admin.other_link")
+                .AnyAsync(l => l.UserId == user.Id && issuers.Contains(l.Issuer) && !(l.Issuer == link.Issuer && l.Subject == link.Subject), cancellationToken)
+            || await dbContext.Set<PasswordCredential>()
+                .TagWithOperationCallSite("users.last_admin.password")
+                .AnyAsync(p => p.UserId == user.Id && p.FailedCount < PasswordCredential.StopAt, cancellationToken);
+        if (!keepsAWayIn)
+            await GuardAsync(dbContext, modes, user, cancellationToken);
+    }
+
+    /// <summary>
     /// Runs the work with the exclusive lock of each live tenant, taken in the order of the tenant ID, as a change of the ways to sign in of
     /// the whole install needs (IDP-14).
     /// </summary>

@@ -260,6 +260,9 @@ public sealed class OidcLoginMode : ILoginMode, IDisposable
     public string DisplayName { get; }
     public string Kind => "oidc";
 
+    /// <summary>The issuer of the settings. A link holds the issuer that the discovery document gave, which can differ by a trailing slash.</summary>
+    public bool HasIssuer(string issuer) => issuer.TrimEnd('/') == _provider.Issuer!.TrimEnd('/');
+
     public void Dispose() => _http.Dispose();
 
     public static SocketsHttpHandler DefaultHandler(OidcProviderOptions provider)
