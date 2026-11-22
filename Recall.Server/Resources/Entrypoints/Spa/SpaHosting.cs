@@ -17,7 +17,7 @@ public static class SpaHosting
         ["/api", "/auth", "/mcp", "/swagger", "/openapi", "/health", "/alive", "/.well-known", JobDashboard.Path];
 
     public const string ContentSecurityPolicy =
-        "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; " +
+        "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; manifest-src 'self'; " +
         "base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 
     public static bool IsPresent(WebApplication app) => app.Environment.WebRootFileProvider.GetFileInfo(IndexFile).Exists;

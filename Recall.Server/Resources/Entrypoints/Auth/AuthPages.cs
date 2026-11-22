@@ -23,12 +23,18 @@ public static class AuthPages
         + "main{box-sizing:border-box;width:100%;max-width:28rem;padding:2rem;overflow-wrap:anywhere}@media (max-width:24rem){main{padding:1rem}}h1{font-size:1.5rem;margin:0 0 1rem}p{margin:0 0 1rem}code{font-size:.875rem}"
         + "ul{list-style:none;margin:1rem 0 0;padding:0}li{margin:.5rem 0}li.note{margin:1rem 0}ul+p{margin-top:1rem}form{margin:1rem 0 0}"
         + "label{display:block;margin:.75rem 0 .25rem}input{box-sizing:border-box;width:100%;min-height:2.75rem;padding:.5rem .75rem;border:1px solid var(--border);border-radius:.5rem;background:var(--background);color:var(--foreground);font:inherit}form button{margin-top:1rem}"
-        + "a{color:var(--primary)}a.button,button{display:block;box-sizing:border-box;width:100%;min-height:2.75rem;padding:.75rem 1rem;border:0;border-radius:.5rem;background:var(--primary);color:var(--primary-foreground);font:inherit;text-align:center;text-decoration:none;cursor:pointer}";
+        + "a{color:var(--primary)}a.button,button{display:block;box-sizing:border-box;width:100%;min-height:2.75rem;padding:.75rem 1rem;border:0;border-radius:.5rem;background:var(--primary);color:var(--primary-foreground);font:inherit;text-align:center;text-decoration:none;cursor:pointer}"
+        + "img.logo{display:block;width:3rem;height:3rem;margin:0 0 1rem}";
 
     private static readonly string StyleHash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(Style)));
 
     // A form that redirects to a custom scheme fails under a form-action limit, so only the page with that form leaves it out.
-    private static readonly string BasePolicy = $"default-src 'none'; style-src 'sha256-{StyleHash}'; base-uri 'none'; frame-ancestors 'none'";
+    private static readonly string BasePolicy = $"default-src 'none'; style-src 'sha256-{StyleHash}'; img-src data:; base-uri 'none'; frame-ancestors 'none'";
+
+    private const string IconResource = "Recall.Server.Resources.Entrypoints.Auth.recall-icon.png";
+
+    // The icon is in the page, because a page here must work with no SPA files on the Server, and its policy loads no other file.
+    private static readonly string IconUri = "data:image/png;base64," + Convert.ToBase64String(ReadIcon());
     private static readonly string StrictPolicy = BasePolicy + "; form-action 'self'";
 
     public const string PromptLogin = "login";
@@ -225,7 +231,16 @@ public static class AuthPages
 
     private static PageResult Page(int status, string heading, string body, string? policy = null)
         => new(status, policy ?? StrictPolicy,
-            themeClass => $"<!doctype html><html lang=\"en\"{themeClass}><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{E(heading.Contains("Recall", StringComparison.Ordinal) ? heading : $"{heading} - Recall")}</title><style>{Style}</style></head><body><main><h1>{E(heading)}</h1>{body}</main></body></html>");
+            themeClass => $"<!doctype html><html lang=\"en\"{themeClass}><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{E(heading.Contains("Recall", StringComparison.Ordinal) ? heading : $"{heading} - Recall")}</title><style>{Style}</style></head><body><main><img class=\"logo\" src=\"{IconUri}\" alt=\"\" width=\"48\" height=\"48\"><h1>{E(heading)}</h1>{body}</main></body></html>");
+
+    private static byte[] ReadIcon()
+    {
+        using var stream = typeof(AuthPages).Assembly.GetManifestResourceStream(IconResource)
+            ?? throw new InvalidOperationException($"The Server has no resource {IconResource}.");
+        using var bytes = new MemoryStream();
+        stream.CopyTo(bytes);
+        return bytes.ToArray();
+    }
 
     private sealed class PageResult(int status, string policy, Func<string, string> html) : IResult
     {

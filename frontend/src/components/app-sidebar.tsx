@@ -32,12 +32,6 @@ import { UserMenu } from "@/domain/auth/components/user-menu"
 import { useCanManageModelProviders, useMembership } from "@/domain/membership/apis/get-membership"
 
 const appName = "Recall"
-const appInitials = appName
-  .split(/[ .-]/)
-  .map((word) => word[0])
-  .join("")
-  .slice(0, 2)
-  .toUpperCase()
 
 const navItems = [
   {
@@ -113,9 +107,8 @@ export function AppSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuLink size="lg" to="/" onPress={closeMobile}>
-              <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                <span className="text-xs font-bold">{appInitials}</span>
-              </div>
+              {/* The name beside it labels the link, so the logo has no alt text of its own. */}
+              <img src="/favicon.png?v=3" alt="" width={32} height={32} className="size-8 shrink-0" />
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="line-clamp-2 font-semibold group-data-[collapsible=icon]:sr-only">{appName}</span>
               </div>

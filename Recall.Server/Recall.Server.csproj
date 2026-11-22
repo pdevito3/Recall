@@ -114,5 +114,6 @@
   <ItemGroup>
     <Content Include="ThirdPartyNotices/**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <EmbeddedResource Include="Auth/Passwords/*.txt" LogicalName="Recall.Server.Auth.Passwords.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Resources/Entrypoints/Auth/recall-icon.png" LogicalName="Recall.Server.Resources.Entrypoints.Auth.recall-icon.png" />
   </ItemGroup>
 </Project>
