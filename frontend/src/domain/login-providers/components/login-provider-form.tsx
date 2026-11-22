@@ -69,6 +69,9 @@ function TextField({ id, label, hint, error, ...input }: TextFieldProps) {
   )
 }
 
+/** The result of a test shows at the end of a tall form, under the footer of the dialog, so it scrolls into view when it comes. */
+const showWhole = (node: HTMLElement | null) => node?.scrollIntoView({ block: 'nearest' })
+
 interface LoginProviderFormProps {
   /** The row to edit. With none, the form adds a provider. */
   provider?: LoginProviderDto
@@ -144,7 +147,7 @@ export function LoginProviderForm({ provider, onSaved }: LoginProviderFormProps)
       <ResponsiveDialogHeader>
         <ResponsiveDialogTitle>{provider ? `Edit ${provider.displayName}` : 'Add a login provider'}</ResponsiveDialogTitle>
         <ResponsiveDialogDescription>
-          People sign in to Recall with an account at this OpenID Connect provider. The sign-in page shows it after the next save, with no restart.
+          People sign in with an account at this OpenID Connect provider.
         </ResponsiveDialogDescription>
       </ResponsiveDialogHeader>
 
@@ -169,6 +172,7 @@ export function LoginProviderForm({ provider, onSaved }: LoginProviderFormProps)
         label="Issuer URL"
         type="url"
         readOnly={Boolean(provider)}
+        className={provider ? 'bg-muted text-muted-foreground dark:bg-muted' : undefined}
         hint={provider ? 'The issuer of a provider cannot change. Add a new provider instead.' : 'Such as https://id.example.com/realms/home.'}
         error={errors.issuer?.message}
         {...discoveryField('issuer')}
@@ -227,12 +231,12 @@ export function LoginProviderForm({ provider, onSaved }: LoginProviderFormProps)
           Test the issuer
         </Button>
         {test.data?.ok && (
-          <p role="status" className="text-sm wrap-anywhere">
+          <p ref={showWhole} role="status" className="text-sm wrap-anywhere">
             The provider answered. Its issuer is {test.data.issuer}.
           </p>
         )}
         {test.data?.failure && (
-          <div role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+          <div ref={showWhole} role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
             <p className="font-medium">The test failed.</p>
             <p className="wrap-anywhere">{test.data.failure.message}</p>
           </div>

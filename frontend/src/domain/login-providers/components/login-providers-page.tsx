@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { Fragment, useRef, useState } from 'react'
 
 import { Notification } from '@/components/notification'
 import { Page } from '@/components/page'
@@ -32,7 +32,15 @@ function CallbackUrl({ url }: { url: string }) {
         <p className="text-sm text-muted-foreground">
           Register this URL at the provider as a redirect URI of the client that you give Recall.
         </p>
-        <p className="rounded-lg border bg-muted p-3 font-mono text-sm break-all select-all">{url}</p>
+        {/* A line breaks after a slash first, so a part of the URL such as callback stays whole. */}
+        <p className="rounded-lg border bg-muted p-3 font-mono text-sm wrap-anywhere select-all">
+          {url.split(/(?<=\/)(?!\/)/).map((part, index) => (
+            <Fragment key={index}>
+              {index > 0 && <wbr />}
+              {part}
+            </Fragment>
+          ))}
+        </p>
         <Button variant="outline" className="self-start" onPress={() => void handleCopy()}>
           Copy callback URL
         </Button>
