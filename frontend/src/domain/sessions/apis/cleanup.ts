@@ -90,5 +90,7 @@ export function useRespondToProposal(id: string) {
       void queryClient.invalidateQueries({ queryKey: PersonKeys.all })
       void queryClient.invalidateQueries({ queryKey: SessionKeys.revisions(id, 'cleaned') })
     },
+    // A refusal can come from People that changed after the directory loaded, such as a second Person of the name.
+    onError: () => queryClient.invalidateQueries({ queryKey: PersonKeys.directory() }),
   })
 }

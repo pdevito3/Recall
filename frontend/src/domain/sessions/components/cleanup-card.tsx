@@ -1,4 +1,3 @@
-import type { UseQueryResult } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { useEffect, useRef } from 'react'
 
@@ -12,9 +11,9 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useActiveModelProvider } from '@/domain/model-providers/apis/model-providers'
 import { UnusableAnswerText } from '@/domain/model-providers/components/unusable-answer-text'
-import { usePeople } from '@/domain/people/apis/people'
+import { usePeopleDirectory } from '@/domain/people/apis/people'
+import { candidatesOf } from '@/domain/people/proposal-candidates'
 import { refusalOf } from '@/hooks/use-server-errors'
-import { isProblemDetailsError } from '@/lib/problem-details'
 
 import {
   useApplyWaitingCleanup,
@@ -88,10 +87,8 @@ function Suggestions({ session }: CleanupPartProps) {
   )
 }
 
-function MatchDetails({ person, label }: { person: UseQueryResult<PersonDto>; label: string }) {
-  if (person.isPending) return <span role="status" className="text-muted-foreground">Loading the details of {label}</span>
-  if (person.isError) return <span className="text-muted-foreground">The details of this person did not load. Reload the page to try again.</span>
-  const { fullName, notes } = person.data
+function MatchDetails({ person }: { person: PersonDto }) {
+  const { fullName, notes } = person
   if (!fullName && !notes) return <span className="text-muted-foreground">No details. Add them on the People page.</span>
   return (
     <span className="flex min-w-0 flex-col">
@@ -101,15 +98,12 @@ function MatchDetails({ person, label }: { person: UseQueryResult<PersonDto>; la
   )
 }
 
-const detailsOf = (person: UseQueryResult<PersonDto>, label: string, index: number) =>
-  person.data?.fullName || person.data?.notes || `${label} ${index + 1}, no details`
+const detailsOf = (person: PersonDto, label: string, index: number) => person.fullName || person.notes || `${label} ${index + 1}, no details`
 
 function PeopleProposal({ session, proposal }: CleanupPartProps & { proposal: PersonProposalDto }) {
   const respond = useRespondToProposal(session.id)
-  // A Person that the person deleted after the Cleanup is no longer a choice.
-  const matches = usePeople(proposal.matchedPersonIds)
-    .map((person, index) => ({ person, id: proposal.matchedPersonIds[index] }))
-    .filter(({ person }) => !(isProblemDetailsError(person.error) && person.error.status === 404))
+  const directory = usePeopleDirectory()
+  const matches = directory.data ? candidatesOf(proposal, directory.data) : []
   const { label } = proposal
   const answer = (body: Omit<PersonProposalResponseDto, 'label'>) => respond.mutate({ label, ...body })
 
@@ -121,7 +115,7 @@ function PeopleProposal({ session, proposal }: CleanupPartProps & { proposal: Pe
       <div className="flex flex-wrap items-center gap-2">
         <span dir="auto" className="min-w-24 flex-1 basis-48 wrap-anywhere">{label}</span>
         <div className="flex flex-wrap items-center gap-2">
-          {matches.length < 2 && (
+          {!directory.isPending && matches.length < 2 && (
             <Button size="sm" variant="outline" aria-label={`Tag ${label}`} onPress={() => answer({ approve: true, createNew: false })}>
               Tag
             </Button>
@@ -136,21 +130,25 @@ function PeopleProposal({ session, proposal }: CleanupPartProps & { proposal: Pe
           </Button>
         </div>
       </div>
-      {matches.length === 1 && <MatchDetails person={matches[0].person} label={label} />}
+      {directory.isPending && <span role="status" className="text-muted-foreground">Loading the People named {label}</span>}
+      {directory.isError && (
+        <QueryError title="Your People did not load, so the card cannot show who has this name." error={directory.error} onRetry={() => void directory.refetch()} />
+      )}
+      {matches.length === 1 && <MatchDetails person={matches[0]} />}
       {matches.length > 1 && (
         <>
           <p className="text-muted-foreground">{matches.length} people have this name. Choose the person to tag.</p>
           <ul aria-label={`People named ${label}`} className="flex flex-col divide-y rounded-lg border">
-            {matches.map(({ person, id }, index) => (
-              <li key={id} className="flex flex-wrap items-center gap-2 p-2 pl-3">
+            {matches.map((person, index) => (
+              <li key={person.id} className="flex flex-wrap items-center gap-2 p-2 pl-3">
                 <span className="min-w-24 flex-1 basis-48">
-                  <MatchDetails person={person} label={label} />
+                  <MatchDetails person={person} />
                 </span>
                 <Button
                   size="sm"
                   variant="outline"
                   aria-label={`Tag ${detailsOf(person, label, index)}`}
-                  onPress={() => answer({ approve: true, createNew: false, bindToPersonId: id })}
+                  onPress={() => answer({ approve: true, createNew: false, bindToPersonId: person.id })}
                 >
                   Tag
                 </Button>

@@ -1,4 +1,4 @@
-import { queryOptions, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import type { PersonDetailsDto } from '@/api/generated/models/types/person-details-dto'
 import type { PersonDto } from '@/api/generated/models/types/person-dto'
@@ -48,10 +48,6 @@ export function personOptions(id: string) {
     staleTime: 60_000,
     retry: retryUnlessRefused,
   })
-}
-
-export function usePeople(ids: readonly string[]) {
-  return useQueries({ queries: ids.map((id) => personOptions(id)) })
 }
 
 export function useAddPerson() {

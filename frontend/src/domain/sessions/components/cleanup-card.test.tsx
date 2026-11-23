@@ -4,9 +4,11 @@ import { expect, onTestFinished, test } from 'vitest'
 import { commands, page, userEvent } from 'vitest/browser'
 import { render } from 'vitest-browser-react'
 
+import type { PersonDto } from '@/api/generated/models/types/person-dto'
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
 // The app sends each request through this client, and it gives the words of a failure.
 import '@/lib/api-client'
+import type { Answer } from '@/test/answer'
 import { member, signedInMember } from '@/test/session'
 
 import { useSession } from '../apis/get-session'
@@ -299,21 +301,45 @@ for (const width of [390, 1280]) {
   })
 }
 
-const janePark = { id: 'per_1', label: 'Jane', fullName: 'Jane Park', notes: "Sam's teacher", version: 2 }
-const janeDoe = { id: 'per_2', label: 'Jane', fullName: 'Jane Doe', notes: null, version: 2 }
+const janePark: PersonDto = { id: 'per_1', label: 'Jane', fullName: 'Jane Park', notes: "Sam's teacher", version: 2 }
+const janeDoe: PersonDto = { id: 'per_2', label: 'Jane', fullName: 'Jane Doe', notes: null, version: 2 }
 const proposalOf = (...matchedPersonIds: string[]): Partial<SessionDto> => ({
   peopleProposals: [{ label: 'Jane', matchedPersonIds, isNew: matchedPersonIds.length === 0, contexts: [] }],
+})
+const directoryOf = (...people: PersonDto[]): Answer => ({
+  method: 'GET',
+  path: '/api/v1/people',
+  headers: {
+    'x-pagination': JSON.stringify({
+      totalCount: people.length,
+      pageSize: 100,
+      currentPageSize: people.length,
+      currentStartIndex: 1,
+      currentEndIndex: people.length,
+      pageNumber: 1,
+      totalPages: 1,
+      hasPrevious: false,
+      hasNext: false,
+    }),
+  },
+  body: people,
 })
 const respondPath = '/api/v1/sessions/ses_1/people-proposals/respond'
 const sentResponses = async () =>
   (await commands.takeSentRequests()).filter((request) => request.path === respondPath).map((request) => request.body)
+const askWhich = 'Two or more People have this name. Choose the person to tag, or add a new person.'
+const askWhichRefusal: Answer = {
+  method: 'POST',
+  path: respondPath,
+  status: 422,
+  body: { type: 'https://tools.ietf.org/html/rfc4918#section-11.2', title: 'Unprocessable Entity', status: 422, detail: askWhich, errors: { bindToPersonId: [askWhich] } },
+}
 
 test('a proposal of two people of one name shows the details of each, and a Tag tags the one that the person chose', async () => {
   // Arrange
   const screen = await renderCard([
     { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id, janeDoe.id)) },
-    { method: 'GET', path: '/api/v1/people/per_1', body: janePark },
-    { method: 'GET', path: '/api/v1/people/per_2', body: janeDoe },
+    directoryOf(janePark, janeDoe),
     { method: 'POST', path: respondPath, body: session({}) },
   ])
   const choices = screen.getByRole('list', { name: 'People named Jane' })
@@ -334,8 +360,7 @@ test('a proposal of two people of one name can add a new person', async () => {
   // Arrange
   const screen = await renderCard([
     { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id, janeDoe.id)) },
-    { method: 'GET', path: '/api/v1/people/per_1', body: janePark },
-    { method: 'GET', path: '/api/v1/people/per_2', body: janeDoe },
+    directoryOf(janePark, janeDoe),
     { method: 'POST', path: respondPath, body: session({}) },
   ])
   await expect.element(screen.getByText('Jane Doe')).toBeVisible()
@@ -349,14 +374,15 @@ test('a proposal of two people of one name can add a new person', async () => {
   expect(await sentResponses()).toEqual([{ label: 'Jane', approve: true, createNew: true }])
 })
 
-test('a proposal of one match shows its details, and a Tag leaves the choice to the Server', async () => {
+test('a proposal of one match shows its details, and one click on Tag leaves the choice to the Server', async () => {
   // Arrange
   const screen = await renderCard([
     { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id)) },
-    { method: 'GET', path: '/api/v1/people/per_1', body: janePark },
+    directoryOf(janePark),
     { method: 'POST', path: respondPath, body: session({}) },
   ])
   await expect.element(screen.getByText('Jane Park')).toBeVisible()
+  await expect.element(screen.getByRole('list', { name: 'People named Jane' })).not.toBeInTheDocument()
   await commands.takeSentRequests()
 
   // Act
@@ -371,8 +397,7 @@ test('a match with no details says where to add them', async () => {
   // Arrange
   const screen = await renderCard([
     { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id, janeDoe.id)) },
-    { method: 'GET', path: '/api/v1/people/per_1', body: janePark },
-    { method: 'GET', path: '/api/v1/people/per_2', body: { ...janeDoe, fullName: null } },
+    directoryOf(janePark, { ...janeDoe, fullName: null }),
   ])
 
   // Act
@@ -385,14 +410,13 @@ test('a match with no details says where to add them', async () => {
 
 test('a match that was deleted after the Cleanup is not a choice, and a Tag leaves the choice to the Server', async () => {
   // Arrange
-  const gone = { type: 'https://tools.ietf.org/html/rfc9110#section-15.5.5', title: 'Not Found', status: 404 }
   const screen = await renderCard([
     { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id, janeDoe.id)) },
-    { method: 'GET', path: '/api/v1/people/per_1', body: janePark },
-    { method: 'GET', path: '/api/v1/people/per_2', status: 404, body: gone },
+    directoryOf(janePark),
     { method: 'POST', path: respondPath, body: session({}) },
   ])
   await expect.element(screen.getByText('Jane Park')).toBeVisible()
+  await expect.element(screen.getByText('Jane Doe')).not.toBeInTheDocument()
   await commands.takeSentRequests()
 
   // Act
@@ -403,25 +427,82 @@ test('a match that was deleted after the Cleanup is not a choice, and a Tag leav
   expect(await sentResponses()).toEqual([{ label: 'Jane', approve: true, createNew: false }])
 })
 
-test('a Tag that the Server refuses because two people have the name shows why, and the proposal stays', async () => {
+test('a Person of the name that was added after the Cleanup is a choice, after the match of the Cleanup', async () => {
   // Arrange
-  const askWhich = 'Two or more People have this name. Choose the person to tag, or add a new person.'
   const screen = await renderCard([
-    { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id)) },
-    { method: 'GET', path: '/api/v1/people/per_1', body: janePark },
-    {
-      method: 'POST',
-      path: respondPath,
-      status: 422,
-      body: { type: 'https://tools.ietf.org/html/rfc4918#section-11.2', title: 'Unprocessable Entity', status: 422, detail: askWhich, errors: { bindToPersonId: [askWhich] } },
-    },
+    { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janeDoe.id)) },
+    directoryOf(janePark, janeDoe),
+    { method: 'POST', path: respondPath, body: session({}) },
   ])
+  const choices = screen.getByRole('list', { name: 'People named Jane' })
+  await expect.element(choices.getByRole('button', { name: /^Tag / }).first()).toHaveAccessibleName('Tag Jane Doe')
+  await expect.element(choices.getByRole('button', { name: /^Tag / }).nth(1)).toHaveAccessibleName('Tag Jane Park')
+  await expect.element(screen.getByRole('button', { name: 'Tag Jane', exact: true })).not.toBeInTheDocument()
+  await commands.takeSentRequests()
+
+  // Act
+  await userEvent.click(choices.getByRole('button', { name: 'Tag Jane Park' }))
+
+  // Assert
+  await expect.element(screen.getByText('People to tag')).not.toBeInTheDocument()
+  expect(await sentResponses()).toEqual([{ label: 'Jane', approve: true, createNew: false, bindToPersonId: 'per_1' }])
+})
+
+test('a proposal with no match from the Cleanup asks which when two People have the name now', async () => {
+  // Act
+  const screen = await renderCard([
+    { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf()) },
+    directoryOf(janePark, janeDoe),
+  ])
+
+  // Assert
+  const choices = screen.getByRole('list', { name: 'People named Jane' })
+  await expect.element(choices.getByRole('button', { name: 'Tag Jane Park' })).toBeVisible()
+  await expect.element(choices.getByRole('button', { name: 'Tag Jane Doe' })).toBeVisible()
+  await expect.element(screen.getByRole('button', { name: 'Tag Jane', exact: true })).not.toBeInTheDocument()
+})
+
+test('a Person whose name differs only in case or in spaces is a choice, and another name is not', async () => {
+  // Act
+  const screen = await renderCard([
+    {
+      method: 'GET',
+      path: '/api/v1/sessions/ses_1',
+      body: session({ peopleProposals: [{ label: 'Mary  jane ', matchedPersonIds: [], isNew: true, contexts: [] }] }),
+    },
+    directoryOf(
+      { ...janePark, label: 'MARY JANE' },
+      { ...janeDoe, label: 'mary jane' },
+      { id: 'per_3', label: 'Mary-Jane', fullName: 'Mary-Jane Low', notes: null, version: 1 },
+    ),
+  ])
+
+  // Assert
+  const choices = screen.getByRole('list', { name: 'People named Mary jane' })
+  await expect.element(choices.getByRole('button', { name: 'Tag Jane Park' })).toBeVisible()
+  await expect.element(choices.getByRole('button', { name: 'Tag Jane Doe' })).toBeVisible()
+  expect(choices.getByRole('button', { name: /^Tag / }).elements()).toHaveLength(2)
+  await expect.element(screen.getByText('Mary-Jane Low')).not.toBeInTheDocument()
+})
+
+test('a Tag that the Server refuses because a second Person has the name now shows why, and then the choice', async () => {
+  // Arrange
+  const answers: Answer[] = [
+    { method: 'GET', path: '/api/v1/model-providers/active', body: { name: 'Mine' } },
+    { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id)) },
+    askWhichRefusal,
+  ]
+  const screen = await renderCard([...answers, directoryOf(janePark)])
   await expect.element(screen.getByText('Jane Park')).toBeVisible()
+  await commands.answerRequests([...answers, directoryOf(janePark, janeDoe)])
 
   // Act
   await userEvent.click(screen.getByRole('button', { name: 'Tag Jane', exact: true }))
 
   // Assert
   await expect.element(screen.getByRole('alert')).toHaveTextContent(askWhich)
+  const choices = screen.getByRole('list', { name: 'People named Jane' })
+  await expect.element(choices.getByRole('button', { name: 'Tag Jane Park' })).toBeVisible()
+  await expect.element(choices.getByRole('button', { name: 'Tag Jane Doe' })).toBeVisible()
   await expect.element(screen.getByRole('button', { name: 'Add a new person named Jane' })).toBeVisible()
 })
