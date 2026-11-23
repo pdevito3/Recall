@@ -335,7 +335,7 @@ const askWhichRefusal: Answer = {
   body: { type: 'https://tools.ietf.org/html/rfc4918#section-11.2', title: 'Unprocessable Entity', status: 422, detail: askWhich, errors: { bindToPersonId: [askWhich] } },
 }
 
-test('a proposal of two people of one name shows the details of each, and a Tag tags the one that the person chose', async () => {
+test('a proposal of two people of one name shows the details of each, and a Tag tags the one that the person chose and keeps the focus in the card', async () => {
   // Arrange
   const screen = await renderCard([
     { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id, janeDoe.id)) },
@@ -353,6 +353,7 @@ test('a proposal of two people of one name shows the details of each, and a Tag 
 
   // Assert
   await expect.element(screen.getByText('People to tag')).not.toBeInTheDocument()
+  await expect.element(screen.getByRole('heading', { name: 'Cleanup' })).toHaveFocus()
   expect(await sentResponses()).toEqual([{ label: 'Jane', approve: true, createNew: false, bindToPersonId: 'per_2' }])
 })
 

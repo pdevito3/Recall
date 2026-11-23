@@ -100,12 +100,16 @@ function MatchDetails({ person }: { person: PersonDto }) {
 
 const detailsOf = (person: PersonDto, label: string, index: number) => person.fullName || person.notes || `${label} ${index + 1}, no details`
 
-function PeopleProposal({ session, proposal }: CleanupPartProps & { proposal: PersonProposalDto }) {
+interface PeopleProposalsProps extends CleanupPartProps {
+  onAnswered: () => void
+}
+
+function PeopleProposal({ session, proposal, onAnswered }: PeopleProposalsProps & { proposal: PersonProposalDto }) {
   const respond = useRespondToProposal(session.id)
   const directory = usePeopleDirectory()
   const matches = directory.data ? candidatesOf(proposal, directory.data) : []
   const { label } = proposal
-  const answer = (body: Omit<PersonProposalResponseDto, 'label'>) => respond.mutate({ label, ...body })
+  const answer = (body: Omit<PersonProposalResponseDto, 'label'>) => respond.mutate({ label, ...body }, { onSuccess: onAnswered })
 
   return (
     <li className="flex flex-col gap-2 text-sm">
@@ -161,14 +165,14 @@ function PeopleProposal({ session, proposal }: CleanupPartProps & { proposal: Pe
   )
 }
 
-function PeopleProposals({ session }: CleanupPartProps) {
+function PeopleProposals({ session, onAnswered }: PeopleProposalsProps) {
   if (session.peopleProposals.length === 0) return null
   return (
     <section className="flex flex-col gap-2">
       <h3 className="text-sm font-medium">People to tag</h3>
       <ul className="flex flex-col gap-3">
         {session.peopleProposals.map((proposal) => (
-          <PeopleProposal key={proposal.label} session={session} proposal={proposal} />
+          <PeopleProposal key={proposal.label} session={session} proposal={proposal} onAnswered={onAnswered} />
         ))}
       </ul>
     </section>
@@ -194,6 +198,9 @@ export function CleanupCard({ session }: CleanupPartProps) {
   useEffect(() => {
     if (!isRunning) resetApply()
   }, [isRunning, resetApply])
+
+  // An answer removes its proposal and the button that had the focus, so the focus goes to the heading of the card.
+  const headingRef = useRef<HTMLHeadingElement>(null)
 
   // A run turns Run Cleanup off, and its end removes Stop Cleanup. The focus goes to the other button, so it does not fall to the page.
   const runRef = useRef<HTMLButtonElement>(null)
@@ -230,7 +237,7 @@ export function CleanupCard({ session }: CleanupPartProps) {
 
   return (
     <section aria-labelledby="entry-cleanup" className="flex flex-col gap-3">
-      <h2 id="entry-cleanup" className="text-lg font-semibold">Cleanup</h2>
+      <h2 ref={headingRef} id="entry-cleanup" tabIndex={-1} className="text-lg font-semibold outline-none">Cleanup</h2>
       <p role="status" className="text-sm">
         {statusText}
       </p>
@@ -303,7 +310,7 @@ export function CleanupCard({ session }: CleanupPartProps) {
         )}
       </div>
       <Suggestions session={session} />
-      <PeopleProposals key={session.cleanedLatestRevision} session={session} />
+      <PeopleProposals key={session.cleanedLatestRevision} session={session} onAnswered={() => headingRef.current?.focus()} />
     </section>
   )
 }
