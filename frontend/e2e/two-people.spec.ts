@@ -93,7 +93,9 @@ test('the words of a tab go to the journal of the person who wrote them, after a
   const heldSave = firstTab.waitForRequest((request) => request.method() === 'PUT' && request.url().endsWith('/draft'))
   await firstTab.route(draftSave, () => undefined)
   await firstTab.keyboard.type(` ${laterWords}`)
-  await heldSave
+  const held = await heldSave
+  expect(held.headers()['x-recall-user']).toBe(firstSub)
+  expect(held.postData()).toContain(laterWords)
 
   const secondTab = await context.newPage()
   await endSessionWithNoTabTold(secondTab)
@@ -102,12 +104,22 @@ test('the words of a tab go to the journal of the person who wrote them, after a
   const secondSub = await subOf(secondTab)
   expect(secondSub).not.toBe(firstSub)
 
+  // A save that the page sends after the sign-in has the headers of the page and the cookie of the second person. Only
+  // these headers go, because the held request still carries the ended cookie of the first person
+  const { 'content-type': contentType, 'x-csrf': csrf, 'x-recall-user': pageUser } = held.headers()
+  const lateSave = await firstTab.request.put(held.url(), {
+    headers: { 'Content-Type': contentType, 'X-CSRF': csrf, 'X-Recall-User': pageUser },
+    data: held.postData() ?? '',
+  })
+  expect(lateSave.status()).toBe(409)
+  expect(await lateSave.text()).toContain('urn:recall:problem:page-user-mismatch')
+
   await firstTab.waitForURL(/\/auth\/login\?anotherPerson=1/, { timeout: 30_000 })
   await expect(firstTab.locator('body')).toContainText('Another person signed in on this browser')
   await expect(firstTab.locator('body')).not.toContainText('Earlier words')
-  const held = await outboxWords(firstTab)
-  expect(held.filter(({ key }) => key.includes(`.${firstSub}.`)).map(({ stored }) => stored).join()).toContain(laterWords)
-  expect(held.filter(({ key }) => key.includes(`.${secondSub}.`))).toEqual([])
+  const outbox = await outboxWords(firstTab)
+  expect(outbox.filter(({ key }) => key.includes(`.${firstSub}.`)).map(({ stored }) => stored).join()).toContain(laterWords)
+  expect(outbox.filter(({ key }) => key.includes(`.${secondSub}.`))).toEqual([])
 
   const refused = await askAs(firstTab, firstSub, '/api/v1/sessions')
   expect(refused.status).toBe(409)
