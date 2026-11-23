@@ -49,9 +49,21 @@ public sealed class RecordingSweep(IServiceScopeFactory scopeFactory, FileStore 
     private async Task SweepOwnerFoldersOfTenantAsync(string tenantId, CancellationToken cancellationToken)
     {
         var names = fileStore.FolderNamesUnder(FileKey.ForTenant(tenantId, RecordingFiles.RootFolder)).ToList();
-        var (owners, _, _) = await ReadOwnersAsync(cancellationToken);
-        foreach (var userId in names.Where(name => !owners.Contains(new JournalOwner(name, tenantId))))
+        var users = await ReadUsersOfTenantAsync(tenantId, cancellationToken);
+        foreach (var userId in names.Where(name => !users.Contains(name)))
             RecordingWork.TryDeleteFolder(fileStore, RecordingFiles.OwnerFolder(tenantId, userId), userId, _logger);
+    }
+
+    private async Task<HashSet<string>> ReadUsersOfTenantAsync(string tenantId, CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateSystemScope();
+        var users = await scope.ServiceProvider.GetRequiredService<AppDbContext>().Users
+            .TagWithOperationCallSite("recordings.sweep.users_of_tenant")
+            .AsNoTracking()
+            .Where(u => u.TenantId == tenantId)
+            .Select(u => u.Id)
+            .ToListAsync(cancellationToken);
+        return users.ToHashSet(StringComparer.Ordinal);
     }
 
     public async Task QueueWaitingRecordingsAsync(CancellationToken cancellationToken)

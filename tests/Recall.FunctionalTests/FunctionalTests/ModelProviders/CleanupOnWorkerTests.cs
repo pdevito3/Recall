@@ -286,7 +286,7 @@ public class CleanupOnWorkerTests
         var marker = $"handedit{Guid.NewGuid():N}";
         fake.Behavior.Mode = FakeMode.Hold;
         fake.Behavior.HoldOnly = marker;
-        fake.Behavior.DelayMs = 3_000;
+        fake.Behavior.DelayMs = 300_000;
         using var owner = await OwnerAsync();
         await ConnectAsync(owner, fake, key);
         var session = await SessionWithWordsAsync(owner, marker);
@@ -295,6 +295,7 @@ public class CleanupOnWorkerTests
 
         // Act
         var edit = await SendAsync(owner, HttpMethod.Put, ApiRoutes.Sessions.Cleaned(session.Id), new { text = "My own words", baseRevision = started.CleanedDraftRevision, savedAt = DateTimeOffset.UtcNow });
+        fake.Behavior.Release();
         var finished = await SessionAfterRunAsync(owner, session.Id);
         var fromOldBase = await SendAsync(owner, HttpMethod.Post, ApiRoutes.Sessions.ApplyWaitingCleanup(session.Id), new { revision = finished.WaitingCleanupRevision, baseCleanedRevision = started.CleanedDraftRevision });
         var used = await ReadAsync<SessionDto>(

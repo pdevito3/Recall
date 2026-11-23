@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
@@ -153,6 +154,12 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
             services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
                 options.ConfigurationManager = new StaticConfigurationManager<OpenIdConnectConfiguration>(Provider.JwtConfiguration()));
         });
+    }
+
+    protected override IHost CreateHost(IHostBuilder builder)
+    {
+        HostBoots.ThrowIfClosed();
+        return base.CreateHost(builder);
     }
 
     public override async ValueTask DisposeAsync()

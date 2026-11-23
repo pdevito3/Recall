@@ -23,6 +23,7 @@
     <ItemGroup>
         <Compile Include="..\Recall.FunctionalTests\TestingWebApplicationFactory.cs" Link="Linked\TestingWebApplicationFactory.cs" />
         <Compile Include="..\Recall.FunctionalTests\TestUtilities\CapturedLogs.cs" Link="Linked\CapturedLogs.cs" />
+        <Compile Include="..\Recall.FunctionalTests\TestUtilities\HostBoots.cs" Link="Linked\HostBoots.cs" />
         <Compile Include="..\Recall.FunctionalTests\TestUtilities\ExportedTelemetry.cs" Link="Linked\ExportedTelemetry.cs" />
         <Compile Include="..\Recall.FunctionalTests\TestUtilities\HttpClientExtensions.cs" Link="Linked\HttpClientExtensions.cs" />
         <Compile Include="..\Recall.FunctionalTests\TestUtilities\AppSessionTestPrincipal.cs" Link="Linked\AppSessionTestPrincipal.cs" />

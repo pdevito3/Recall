@@ -139,6 +139,24 @@ public class RecordingSweepTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "REC-11")]
+    public async Task the_sweep_removes_a_folder_named_for_a_user_of_another_tenant()
+    {
+        // Arrange
+        var (tenant, _) = await AddTenantWithAdminAsync();
+        var (_, other) = await AddTenantWithAdminAsync();
+        using var folder = new SweptFolder();
+        var orphan = FileKey.ForTenant(tenant.Id, RecordingFiles.RootFolder, other.Id, "rec_1", "audio.webm");
+        await folder.WriteAsync(orphan);
+
+        // Act
+        await folder.Sweep.RunAsync(CancellationToken.None);
+
+        // Assert
+        folder.Holds(orphan).ShouldBeFalse();
+    }
+
+    [Test]
     [Property("Rule", "REC-7")]
     public async Task the_hourly_check_queues_a_recording_that_still_waits()
     {
@@ -148,19 +166,39 @@ public class RecordingSweepTests : TestBase
         var session = await FactoryClient.AddSessionAsync();
         var recording = await FactoryClient.AddFinishedRecordingAsync(session.Id);
         using var folder = new SweptFolder();
-        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var clock = new ClockThatTellsOfItsTimer(DateTimeOffset.UtcNow);
         var sweep = new RecordingSweep(Services.GetRequiredService<IServiceScopeFactory>(), folder.Store, Services.GetRequiredService<IJobStore>(), clock);
         using var service = new RecordingSweepService(sweep, clock);
         var before = await CountJobsAsync("transcribe-recording", recording.Id);
 
         // Act
         await service.StartAsync(CancellationToken.None);
-        var afterStart = await WaitForMoreJobsAsync(recording.Id, before, () => { });
-        var afterHour = await WaitForMoreJobsAsync(recording.Id, afterStart, () => clock.Advance(RecordingSweepService.WaitingCheck));
+        // The hourly timer starts when the first sweep ends. That sweep reads every owner of the shared database, so its time grows with the suite.
+        await clock.TimerMade.WaitAsync(SweepLimit);
+        var afterStart = await CountJobsAsync("transcribe-recording", recording.Id);
+        clock.Advance(RecordingSweepService.WaitingCheck);
+        var afterHour = await WaitForMoreJobsAsync(recording.Id, afterStart);
         await service.StopAsync(CancellationToken.None);
 
         // Assert
+        afterStart.ShouldBeGreaterThan(before);
         afterHour.ShouldBeGreaterThan(afterStart);
+    }
+
+    private static readonly TimeSpan SweepLimit = TimeSpan.FromMinutes(1);
+
+    private sealed class ClockThatTellsOfItsTimer(DateTimeOffset start) : FakeTimeProvider(start)
+    {
+        private readonly TaskCompletionSource _timerMade = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task TimerMade => _timerMade.Task;
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = base.CreateTimer(callback, state, dueTime, period);
+            _timerMade.TrySetResult();
+            return timer;
+        }
     }
 
     [Test]
@@ -271,13 +309,12 @@ public class RecordingSweepTests : TestBase
         (await CountJobsAsync("transcribe-recording", jobGone.Id)).ShouldBeGreaterThan(0);
     }
 
-    // The timer exists only after the first sweep, so one advance can come too early.
-    private static async Task<long> WaitForMoreJobsAsync(string recordingId, long known, Action beforeEachLook)
+    private static async Task<long> WaitForMoreJobsAsync(string recordingId, long known)
     {
+        using var limit = new CancellationTokenSource(SweepLimit);
         var count = known;
-        for (var tries = 0; tries < 200 && count <= known; tries++)
+        while (count <= known && !limit.IsCancellationRequested)
         {
-            beforeEachLook();
             await Task.Delay(100);
             count = await CountJobsAsync("transcribe-recording", recordingId);
         }
