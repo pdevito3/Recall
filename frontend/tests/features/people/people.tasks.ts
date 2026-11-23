@@ -29,5 +29,14 @@ export function peoplePage(page: Page) {
       await at.saveName.click()
       await renamed
     },
+
+    async describe(id: string, name: string, details: { fullName: string; notes: string }) {
+      const described = page.waitForResponse((r) => r.request().method() === 'PUT' && new URL(r.url()).pathname === peoplePaths.details(id))
+      await at.details(name).click()
+      await at.fullNameField.fill(details.fullName)
+      await at.notesField.fill(details.notes)
+      await at.saveDetails.click()
+      await described
+    },
   }
 }

@@ -7,7 +7,7 @@ import * as z from 'zod'
 
 export const personProposalDtoSchema = z.object({
   label: z.string(),
-  matchedPersonId: z.string().nullish(),
-  isNew: z.boolean().describe('True when the directory had no match when the Cleanup ran. An approval still looks at the directory of that moment.'),
+  matchedPersonIds: z.array(z.string()).describe('Each Person that an approve with no choice reads now: each match of the Cleanup that still exists, then each other Person\nof the name. Read the details of each from the People API. With two or more, an approve must name one in\n`bindToPersonId` or send `createNew`.'),
+  isNew: z.boolean().describe('True when IReadOnlyList&lt;string&gt; PersonProposalDto.MatchedPersonIds is empty, so a plain approve adds a Person of the name.'),
   contexts: z.array(z.string()).describe('The first sentences of Cleaned that an approval tags, as previews. The number of previews and the width of each have a limit.'),
 })

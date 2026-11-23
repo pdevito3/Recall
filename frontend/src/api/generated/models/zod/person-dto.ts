@@ -8,5 +8,7 @@ import * as z from 'zod'
 export const personDtoSchema = z.object({
   id: z.string(),
   label: z.string(),
+  fullName: z.string().nullish(),
+  notes: z.string().nullish(),
   version: z.int().min(0).max(4294967295),
 })

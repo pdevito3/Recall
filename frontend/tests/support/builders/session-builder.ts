@@ -120,7 +120,11 @@ class SessionBuilder {
   }
 
   proposing(...labels: string[]) {
-    return this.with({ peopleProposals: labels.map((label) => ({ label, matchedPersonId: null, isNew: true, contexts: [] })) })
+    return this.with({ peopleProposals: labels.map((label) => ({ label, matchedPersonIds: [], isNew: true, contexts: [] })) })
+  }
+
+  proposingOneOf(label: string, ...matchedPersonIds: string[]) {
+    return this.with({ peopleProposals: [{ label, matchedPersonIds, isNew: matchedPersonIds.length === 0, contexts: [] }] })
   }
 
   withSynopsis(synopsis: string) {

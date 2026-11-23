@@ -1,9 +1,9 @@
 namespace Recall.Server.Domain.Sessions.Features;
 
 using System.Diagnostics;
-using Cleanup;
 using Databases;
 using Dtos;
+using Exceptions;
 using Mappings;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -44,35 +44,38 @@ public static class RespondToPersonProposal
                 _logger.Here().Information("Took a response to a people proposal of session {SessionId}, approve {Approve}", session.Id, request.Dto.Approve);
             }
 
-            return session.ToSessionDto();
+            return session.ToSessionDto(await ProposalPeople.LoadAsync(dbContext, [session], cancellationToken));
         }
 
         private async Task<Person> PersonForAsync(Session session, PersonProposal proposal, PersonProposalResponseDto dto, CancellationToken cancellationToken)
         {
-            if (dto.BindToPersonId is { } chosen)
-            {
-                return await dbContext.People
+            var chosen = dto.BindToPersonId is { } id
+                ? await dbContext.People
                     .TagWithOperationCallSite("sessions.respond_to_person_proposal.chosen")
-                    .GetById(chosen, cancellationToken);
-            }
-
-            // The directory can change after the Cleanup: a person can delete the match, or an answer to the proposal of
-            // another Session can add this name. So the name decides now, and only an explicit request adds a second Person.
-            if (!dto.CreateNew)
-            {
-                var people = await dbContext.People.AsNoTracking()
+                    .GetById(id, cancellationToken)
+                : null;
+            var people = chosen is null && !dto.CreateNew
+                ? await dbContext.People.AsNoTracking()
                     .TagWithOperationCallSite("sessions.respond_to_person_proposal.match")
-                    .ToListAsync(cancellationToken);
-                var match = people.FirstOrDefault(person => person.Id == proposal.MatchedPersonId) ?? CleanupCompletion.MatchOf(people, proposal.Label);
-                if (match is not null)
-                    return match;
-            }
+                    .ToListAsync(cancellationToken)
+                : [];
 
-            var person = dto.CreateNew
-                ? Person.Create(session.TenantId, session.UserId, proposal.Label)
-                : Person.CreateFromProposedName(session.TenantId, session.UserId, proposal.Label);
-            await dbContext.People.AddAsync(person, cancellationToken);
-            return person;
+            switch (PersonProposalApproval.Decide(proposal, chosen, dto.CreateNew, people))
+            {
+                case PersonProposalApproval.Bind bind:
+                    return bind.Person;
+                case PersonProposalApproval.Create create:
+                    var person = create.Kind == NewPersonKind.AnotherOfTheName
+                        ? Person.Create(session.TenantId, session.UserId, proposal.Label)
+                        : Person.CreateFromProposedName(session.TenantId, session.UserId, proposal.Label);
+                    await dbContext.People.AddAsync(person, cancellationToken);
+                    return person;
+                case PersonProposalApproval.AskWhich ask:
+                    Activity.Current?.SetTag("app.person_proposal.match_count", ask.PersonIds.Count);
+                    throw new ValidationException(PersonProposalApproval.AskWhichField, PersonProposalApproval.AskWhichMessage);
+                default:
+                    throw new InvalidOperationException("An approval has a case that the handler does not know.");
+            }
         }
     }
 }

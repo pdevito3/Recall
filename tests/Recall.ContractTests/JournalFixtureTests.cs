@@ -42,7 +42,7 @@ public class JournalFixtureTests
         var fixtures = new ContractFixtures(FixtureDirectory());
 
         // Act and assert
-        var person = await client.PostAsJsonAsync(ApiRoutes.People.Root, new { label = "Sam" });
+        var person = await client.PostAsJsonAsync(ApiRoutes.People.Root, new { label = "Sam", fullName = "Sam Lee", notes = "From the climbing gym" });
         person.StatusCode.ShouldBe(HttpStatusCode.Created);
         await fixtures.CheckAsync("person", person);
         var personId = (await person.Content.ReadFromJsonAsync<PersonDto>())!.Id;

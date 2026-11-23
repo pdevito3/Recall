@@ -2089,7 +2089,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PersonLabelDto"
+                "$ref": "#/components/schemas/PersonForCreationDto"
               }
             }
           },
@@ -2386,6 +2386,108 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/PersonLabelDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/people/{id}/details": {
+      "put": {
+        "tags": [
+          "People"
+        ],
+        "summary": "Sets the full name and the notes of a Person, which tell People of one label apart. The label and each mention stay.\nA version that is not the stored version gives 409.",
+        "operationId": "DescribePerson",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonDetailsDto"
               }
             }
           },
@@ -8780,6 +8882,34 @@
           }
         }
       },
+      "PersonDetailsDto": {
+        "required": [
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "fullName": {
+            "maxLength": 200,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "notes": {
+            "maxLength": 1000,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "description": "The details replace the stored details. A null or blank detail clears it."
+      },
       "PersonDto": {
         "required": [
           "id",
@@ -8794,10 +8924,48 @@
           "label": {
             "type": "string"
           },
+          "fullName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "notes": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "version": {
             "maximum": 4294967295,
             "minimum": 0,
             "type": "integer"
+          }
+        }
+      },
+      "PersonForCreationDto": {
+        "required": [
+          "label"
+        ],
+        "type": "object",
+        "properties": {
+          "label": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "fullName": {
+            "maxLength": 200,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "notes": {
+            "maxLength": 1000,
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -8816,6 +8984,7 @@
       "PersonProposalDto": {
         "required": [
           "label",
+          "matchedPersonIds",
           "isNew",
           "contexts"
         ],
@@ -8824,15 +8993,16 @@
           "label": {
             "type": "string"
           },
-          "matchedPersonId": {
-            "type": [
-              "null",
-              "string"
-            ]
+          "matchedPersonIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Each Person that an approve with no choice reads now: each match of the Cleanup that still exists, then each other Person\nof the name. Read the details of each from the People API. With two or more, an approve must name one in\n`bindToPersonId` or send `createNew`."
           },
           "isNew": {
             "type": "boolean",
-            "description": "True when the directory had no match when the Cleanup ran. An approval still looks at the directory of that moment."
+            "description": "True when IReadOnlyList&lt;string&gt; PersonProposalDto.MatchedPersonIds is empty, so a plain approve adds a Person of the name."
           },
           "contexts": {
             "type": "array",
@@ -8865,7 +9035,7 @@
               "null",
               "string"
             ],
-            "description": "The Person to tag. When this is null, the Person is the match of the proposal, then the Person of this label, then a new Person."
+            "description": "The Person to tag. When this is null and createNew is false, the one Person of this label or of a match of the proposal is\ntagged, or a new Person when none is. When two or more are, the approve gets 422 on this field, and the proposal stays."
           },
           "createNew": {
             "type": "boolean",
@@ -9761,7 +9931,8 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SessionDto"
-            }
+            },
+            "description": "Each changed Session, and each Session that the device already holds and that a Person of this page joins as a match of a\nproposal, so that its `matchedPersonIds` are of now."
           },
           "people": {
             "type": "array",

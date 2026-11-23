@@ -42,7 +42,7 @@ public sealed class CleanupCompletion(AppDbContext dbContext)
         var added = new List<Person>();
         if (approvalIsOn)
         {
-            proposals = names.Select(name => new PersonProposal(name, MatchOf(people, name)?.Id)).ToList();
+            proposals = names.Select(name => new PersonProposal(name, IdsOf(MatchesOf(people, name)))).ToList();
         }
         else
         {
@@ -51,7 +51,11 @@ public sealed class CleanupCompletion(AppDbContext dbContext)
             var personOfName = new List<(string Name, Person Person)>();
             foreach (var name in names)
             {
-                var person = MatchOf(people.Concat(newPeople), name);
+                var matches = MatchesOf(people.Concat(newPeople), name);
+                if (matches.Count > 1)
+                    continue;
+
+                var person = matches.SingleOrDefault();
                 if (person is null)
                 {
                     person = Person.CreateFromProposedName(session.TenantId, session.UserId, name);
@@ -67,8 +71,9 @@ public sealed class CleanupCompletion(AppDbContext dbContext)
             cleaned = MentionInsertion.Insert(cleaned, spans);
             var tagged = PersonMentions.PersonIdsIn(cleaned);
             added.AddRange(newPeople.Where(person => tagged.Contains(person.Id)));
-            proposals = personOfName.Where(pair => !tagged.Contains(pair.Person.Id))
-                .Select(pair => new PersonProposal(pair.Name, MatchOf(people, pair.Name)?.Id))
+            var taggedNames = personOfName.Where(pair => tagged.Contains(pair.Person.Id)).Select(pair => pair.Name).ToHashSet();
+            proposals = names.Where(name => !taggedNames.Contains(name))
+                .Select(name => new PersonProposal(name, IdsOf(MatchesOf(people, name))))
                 .ToList();
         }
 
@@ -79,8 +84,10 @@ public sealed class CleanupCompletion(AppDbContext dbContext)
         return new CleanupOutcome(cleaned, output.Synopsis, output.TopicSuggestions, output.MoodSuggestions, proposals);
     }
 
-    public static Person? MatchOf(IEnumerable<Person> people, string name)
-        => people.FirstOrDefault(person => Person.KeyOf(person.Label) == Person.KeyOf(name));
+    public static IReadOnlyList<Person> MatchesOf(IEnumerable<Person> people, string name)
+        => people.Where(person => Person.KeyOf(person.Label) == Person.KeyOf(name)).ToList();
+
+    private static List<string> IdsOf(IEnumerable<Person> people) => people.Select(person => person.Id).ToList();
 
     /// <summary>Each hard-replace mishearing becomes its term, whole word and in any case. Raw is not an input here.</summary>
     public static string WithHardReplacements(string markdown, IEnumerable<Correction> corrections)

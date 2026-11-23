@@ -1,6 +1,8 @@
 namespace Recall.Server.Databases.EntityConfigurations;
 
 using System.Text.Json;
+using Domain;
+using Domain.People;
 using Domain.Sessions;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -10,8 +12,14 @@ public sealed class PersonProposalListConverter()
         list => JsonSerializer.Serialize(list, Web),
         json => JsonSerializer.Deserialize<List<PersonProposal>>(json, Web) ?? new List<PersonProposal>())
 {
-    // Ten labels of the longest name, with an escape for each character, and an ID and the field names for each.
-    public const int ColumnMaxLength = 10 * (200 * 6 + 100);
+    // SQLite does not hold a text to its length, so a list longer than this still saves.
+    public const int ColumnMaxLength = Proposals * (EscapedLabelLength + FieldNamesLength + (MatchesOfAProposal * QuotedIdLength));
+
+    private const int Proposals = 10;
+    private const int EscapedLabelLength = Person.LabelMaxLength * 6;
+    private const int FieldNamesLength = 100;
+    private const int MatchesOfAProposal = 10;
+    private const int QuotedIdLength = EntityId.MaxLength + 3;
 
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 

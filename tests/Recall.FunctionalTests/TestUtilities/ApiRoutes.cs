@@ -81,6 +81,7 @@ public static class ApiRoutes
     {
         public static string Root => $"{Base}/people";
         public static string GetRecord(string id) => $"{Base}/people/{id}";
+        public static string Details(string id) => $"{Base}/people/{id}/details";
     }
 
     public static class Corrections

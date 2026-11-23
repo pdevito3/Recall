@@ -8,6 +8,6 @@ import * as z from 'zod'
 export const personProposalResponseDtoSchema = z.object({
   label: z.string().max(200),
   approve: z.boolean().describe('False drops the proposal. True tags each place in Cleaned.'),
-  bindToPersonId: z.string().max(50).nullish().describe('The Person to tag. When this is null, the Person is the match of the proposal, then the Person of this label, then a new Person.'),
+  bindToPersonId: z.string().max(50).nullish().describe('The Person to tag. When this is null and createNew is false, the one Person of this label or of a match of the proposal is\ntagged, or a new Person when none is. When two or more are, the approve gets 422 on this field, and the proposal stays.'),
   createNew: z.boolean().describe('True adds a Person with this label, also when one has that label. Send it only when a person asks for a second one.'),
 })

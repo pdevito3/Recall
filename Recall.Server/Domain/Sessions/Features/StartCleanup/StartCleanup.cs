@@ -57,7 +57,7 @@ public static class StartCleanup
                 _logger.Here().Information("Started Cleanup {CleanupRunId} of session {SessionId}", runId, session.Id);
             }
 
-            return session.ToSessionDto();
+            return session.ToSessionDto(await ProposalPeople.LoadAsync(dbContext, [session], cancellationToken));
         }
     }
 }

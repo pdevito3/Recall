@@ -13,7 +13,7 @@ import { userSettingDtoSchema } from './user-setting-dto'
 export const syncChangePageDtoSchema = z.object({
   cursor: z.string().describe('Send it as the cursor of the next pull.'),
   hasMore: z.boolean().describe('True when a next page already exists, so pull again with no wait.'),
-  sessions: z.array(sessionDtoSchema),
+  sessions: z.array(sessionDtoSchema).describe('Each changed Session, and each Session that the device already holds and that a Person of this page joins as a match of a\nproposal, so that its `matchedPersonIds` are of now.'),
   people: z.array(personDtoSchema),
   corrections: z.array(correctionDtoSchema),
   settings: z.union([z.null(), userSettingDtoSchema.strict()]).optional(),

@@ -25,8 +25,8 @@ public class DeletePersonCommandTests : TestBase
     {
         // Arrange
         var scope = new TestingServiceScope();
-        var sam = await scope.SendAsync(new AddPerson.Command(new PersonLabelDto { Label = "Sam" }));
-        var ana = await scope.SendAsync(new AddPerson.Command(new PersonLabelDto { Label = "Ana" }));
+        var sam = await scope.SendAsync(new AddPerson.Command(new PersonForCreationDto { Label = "Sam" }));
+        var ana = await scope.SendAsync(new AddPerson.Command(new PersonForCreationDto { Label = "Ana" }));
         var session = (await scope.SendAsync(new AddSession.Command(new SessionForCreationDto
         {
             ClientSessionId = Guid.NewGuid().ToString(),

@@ -5,7 +5,7 @@
 
 import * as z from 'zod'
 import { personDtoSchema } from '../../models/zod/person-dto'
-import { personLabelDtoSchema } from '../../models/zod/person-label-dto'
+import { personForCreationDtoSchema } from '../../models/zod/person-for-creation-dto'
 import { problemDetailsSchema } from '../../models/zod/problem-details'
 import { validationProblemDetailsSchema } from '../../models/zod/validation-problem-details'
 
@@ -27,4 +27,4 @@ export const addPersonResponseSchema = addPersonStatus201Schema
 
 export const addPersonErrorSchema = z.union([addPersonStatus400Schema, addPersonStatus401Schema, addPersonStatus403Schema, addPersonStatus422Schema, addPersonStatus507Schema])
 
-export const addPersonBodySchema = personLabelDtoSchema
+export const addPersonBodySchema = personForCreationDtoSchema

@@ -4,9 +4,11 @@ import { expect, onTestFinished, test } from 'vitest'
 import { commands, page, userEvent } from 'vitest/browser'
 import { render } from 'vitest-browser-react'
 
+import type { PersonDto } from '@/api/generated/models/types/person-dto'
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
 // The app sends each request through this client, and it gives the words of a failure.
 import '@/lib/api-client'
+import type { Answer } from '@/test/answer'
 import { member, signedInMember } from '@/test/session'
 
 import { useSession } from '../apis/get-session'
@@ -298,3 +300,304 @@ for (const width of [390, 1280]) {
     expect(Math.abs(chip.top + chip.height / 2 - (value.top + value.height / 2))).toBeLessThan(4)
   })
 }
+
+const janePark: PersonDto = { id: 'per_1', label: 'Jane', fullName: 'Jane Park', notes: "Sam's teacher", version: 2 }
+const janeDoe: PersonDto = { id: 'per_2', label: 'Jane', fullName: 'Jane Doe', notes: null, version: 2 }
+const proposalOf = (...matchedPersonIds: string[]): Partial<SessionDto> => ({
+  peopleProposals: [{ label: 'Jane', matchedPersonIds, isNew: matchedPersonIds.length === 0, contexts: [] }],
+})
+const directoryOf = (...people: PersonDto[]): Answer => ({
+  method: 'GET',
+  path: '/api/v1/people',
+  headers: {
+    'x-pagination': JSON.stringify({
+      totalCount: people.length,
+      pageSize: 100,
+      currentPageSize: people.length,
+      currentStartIndex: 1,
+      currentEndIndex: people.length,
+      pageNumber: 1,
+      totalPages: 1,
+      hasPrevious: false,
+      hasNext: false,
+    }),
+  },
+  body: people,
+})
+const respondPath = '/api/v1/sessions/ses_1/people-proposals/respond'
+const sentResponses = async () =>
+  (await commands.takeSentRequests()).filter((request) => request.path === respondPath).map((request) => request.body)
+const askWhich = 'Two or more People have this name. Choose the person to tag, or add a new person.'
+const askWhichRefusal: Answer = {
+  method: 'POST',
+  path: respondPath,
+  status: 422,
+  body: { type: 'https://tools.ietf.org/html/rfc4918#section-11.2', title: 'Unprocessable Entity', status: 422, detail: askWhich, errors: { bindToPersonId: [askWhich] } },
+}
+
+test('a proposal of two people of one name shows the details of each, and a Tag tags the one that the person chose and keeps the focus in the card', async () => {
+  // Arrange
+  const screen = await renderCard([
+    { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id, janeDoe.id)) },
+    directoryOf(janePark, janeDoe),
+    { method: 'POST', path: respondPath, body: session({}) },
+  ])
+  const choices = screen.getByRole('list', { name: 'People named Jane' })
+  await expect.element(choices.getByText("Sam's teacher")).toBeVisible()
+  await expect.element(choices.getByText('Jane Doe')).toBeVisible()
+  await expect.element(screen.getByRole('button', { name: 'Tag Jane', exact: true })).not.toBeInTheDocument()
+  await commands.takeSentRequests()
+
+  // Act
+  await userEvent.click(screen.getByRole('button', { name: 'Tag Jane Doe' }))
+
+  // Assert
+  await expect.element(screen.getByText('People to tag')).not.toBeInTheDocument()
+  await expect.element(screen.getByRole('heading', { name: 'Cleanup' })).toHaveFocus()
+  expect(await sentResponses()).toEqual([{ label: 'Jane', approve: true, createNew: false, bindToPersonId: 'per_2' }])
+})
+
+test('a proposal of two people of one name can add a new person', async () => {
+  // Arrange
+  const screen = await renderCard([
+    { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id, janeDoe.id)) },
+    directoryOf(janePark, janeDoe),
+    { method: 'POST', path: respondPath, body: session({}) },
+  ])
+  await expect.element(screen.getByText('Jane Doe')).toBeVisible()
+  await commands.takeSentRequests()
+
+  // Act
+  await userEvent.click(screen.getByRole('button', { name: 'Add a new person named Jane' }))
+
+  // Assert
+  await expect.element(screen.getByText('People to tag')).not.toBeInTheDocument()
+  expect(await sentResponses()).toEqual([{ label: 'Jane', approve: true, createNew: true }])
+})
+
+test('a proposal of one match shows its details, and a Tag tags that person', async () => {
+  // Arrange
+  const screen = await renderCard([
+    { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id)) },
+    directoryOf(janePark),
+    { method: 'POST', path: respondPath, body: session({}) },
+  ])
+  await expect.element(screen.getByText('Jane Park')).toBeVisible()
+  await expect.element(screen.getByRole('list', { name: 'People named Jane' })).not.toBeInTheDocument()
+  await commands.takeSentRequests()
+
+  // Act
+  await userEvent.click(screen.getByRole('button', { name: 'Tag Jane', exact: true }))
+
+  // Assert
+  await expect.element(screen.getByText('People to tag')).not.toBeInTheDocument()
+  expect(await sentResponses()).toEqual([{ label: 'Jane', approve: true, createNew: false, bindToPersonId: 'per_1' }])
+})
+
+test('a match with no details says where to add them', async () => {
+  // Arrange
+  const screen = await renderCard([
+    { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id, janeDoe.id)) },
+    directoryOf(janePark, { ...janeDoe, fullName: null }),
+  ])
+
+  // Act
+  const choices = screen.getByRole('list', { name: 'People named Jane' })
+
+  // Assert
+  await expect.element(choices.getByText('No details. Add them on the People page.')).toBeVisible()
+  await expect.element(choices.getByRole('button', { name: 'Tag Jane 2, no details' })).toBeVisible()
+})
+
+test('a match that came after the People directory loaded is read on its own, and the person must choose', async () => {
+  // Arrange
+  const screen = await renderCard([
+    { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id, janeDoe.id)) },
+    directoryOf(janePark),
+    { method: 'GET', path: `/api/v1/people/${janeDoe.id}`, body: janeDoe },
+    { method: 'POST', path: respondPath, body: session({}) },
+  ])
+  const choices = screen.getByRole('list', { name: 'People named Jane' })
+  await expect.element(choices.getByText('Jane Doe')).toBeVisible()
+  await expect.element(screen.getByRole('button', { name: 'Tag Jane', exact: true })).not.toBeInTheDocument()
+  await commands.takeSentRequests()
+
+  // Act
+  await userEvent.click(choices.getByRole('button', { name: 'Tag Jane Doe' }))
+
+  // Assert
+  expect(await sentResponses()).toEqual([{ label: 'Jane', approve: true, createNew: false, bindToPersonId: 'per_2' }])
+})
+
+test('a match that is gone when the card reads it is not shown, and a Tag tags the match that is shown', async () => {
+  // Arrange
+  const screen = await renderCard([
+    { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id, janeDoe.id)) },
+    directoryOf(janePark),
+    { method: 'GET', path: `/api/v1/people/${janeDoe.id}`, status: 404, body: { type: 'https://tools.ietf.org/html/rfc9110#section-15.5.5', title: 'Not Found', status: 404 } },
+    { method: 'POST', path: respondPath, body: session({}) },
+  ])
+  await expect.element(screen.getByRole('button', { name: 'Tag Jane', exact: true })).toBeVisible()
+  await expect.element(screen.getByText('Jane Doe')).not.toBeInTheDocument()
+  await commands.takeSentRequests()
+
+  // Act
+  await userEvent.click(screen.getByRole('button', { name: 'Tag Jane', exact: true }))
+
+  // Assert
+  await expect.element(screen.getByText('People to tag')).not.toBeInTheDocument()
+  expect(await sentResponses()).toEqual([{ label: 'Jane', approve: true, createNew: false, bindToPersonId: 'per_1' }])
+})
+
+test('a match whose read fails with other than a 404 hides the plain Tag, says so, and a retry shows the choice', async () => {
+  // Arrange
+  const sessionAnswer = { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id, janeDoe.id)) } as const
+  const failure = { type: 'https://tools.ietf.org/html/rfc9110#section-15.6.1', title: 'Internal Server Error', status: 500 }
+  const screen = await renderCard([sessionAnswer, directoryOf(janePark), { method: 'GET', path: `/api/v1/people/${janeDoe.id}`, status: 500, body: failure }])
+  await expect.element(screen.getByText('Your People did not load, so the card cannot show who has this name.')).toBeVisible()
+  await expect.element(screen.getByRole('button', { name: 'Tag Jane', exact: true })).not.toBeInTheDocument()
+  await commands.answerRequests([
+    { method: 'GET', path: '/api/v1/model-providers/active', body: { name: 'Mine' } },
+    sessionAnswer,
+    directoryOf(janePark),
+    { method: 'GET', path: `/api/v1/people/${janeDoe.id}`, body: janeDoe },
+  ])
+
+  // Act
+  await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+  // Assert
+  const choices = screen.getByRole('list', { name: 'People named Jane' })
+  await expect.element(choices.getByText('Jane Doe')).toBeVisible()
+  await expect.element(screen.getByText('Your People did not load, so the card cannot show who has this name.')).not.toBeInTheDocument()
+})
+
+test('a proposal with no match keeps its Tag when the People directory does not load', async () => {
+  // Arrange
+  const failure = { type: 'https://tools.ietf.org/html/rfc9110#section-15.6.1', title: 'Internal Server Error', status: 500 }
+  const screen = await renderCard([
+    { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf()) },
+    { method: 'GET', path: '/api/v1/people', status: 500, body: failure },
+  ])
+
+  // Assert
+  await expect.element(screen.getByRole('button', { name: 'Tag Jane', exact: true })).toBeVisible()
+  await expect.element(screen.getByText('Your People did not load, so the card cannot show who has this name.')).not.toBeInTheDocument()
+})
+
+test('while the reads of two matches fail, the match that loaded is no choice, and one Try again reads each failed match', async () => {
+  // Arrange
+  const janeLee: PersonDto = { id: 'per_3', label: 'Jane', fullName: 'Jane Lee', notes: null, version: 1 }
+  const sessionAnswer = { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id, janeDoe.id, janeLee.id)) } as const
+  const failure = { type: 'https://tools.ietf.org/html/rfc9110#section-15.6.1', title: 'Internal Server Error', status: 500 }
+  const screen = await renderCard([
+    sessionAnswer,
+    directoryOf(janePark),
+    { method: 'GET', path: `/api/v1/people/${janeDoe.id}`, status: 500, body: failure },
+    { method: 'GET', path: `/api/v1/people/${janeLee.id}`, status: 500, body: failure },
+  ])
+  await expect.element(screen.getByText('Your People did not load, so the card cannot show who has this name.')).toBeVisible()
+  await expect.element(screen.getByRole('button', { name: /^Tag / })).not.toBeInTheDocument()
+  await commands.answerRequests([
+    { method: 'GET', path: '/api/v1/model-providers/active', body: { name: 'Mine' } },
+    sessionAnswer,
+    directoryOf(janePark),
+    { method: 'GET', path: `/api/v1/people/${janeDoe.id}`, body: janeDoe },
+    { method: 'GET', path: `/api/v1/people/${janeLee.id}`, body: janeLee },
+  ])
+
+  // Act
+  await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+  // Assert
+  const choices = screen.getByRole('list', { name: 'People named Jane' })
+  await expect.element(choices.getByRole('button', { name: 'Tag Jane Lee' })).toBeVisible()
+  await expect.element(choices.getByRole('button', { name: /^Tag / })).toHaveLength(3)
+})
+
+test('while the read of a match is pending, the matches that loaded are no choice', async () => {
+  // Arrange
+  const janeLee: PersonDto = { id: 'per_3', label: 'Jane', fullName: 'Jane Lee', notes: null, version: 1 }
+  await commands.holdRequests(`/api/v1/people/${janeLee.id}`)
+  const screen = await renderCard([
+    { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id, janeDoe.id, janeLee.id)) },
+    directoryOf(janePark, janeDoe),
+    { method: 'GET', path: `/api/v1/people/${janeLee.id}`, body: janeLee },
+  ])
+
+  // Assert
+  await expect.element(screen.getByText('Loading the People named Jane')).toBeVisible()
+  await expect.element(screen.getByText('Jane Doe')).toBeVisible()
+  await expect.element(screen.getByRole('button', { name: /^Tag / })).not.toBeInTheDocument()
+  await commands.releaseRequests(`/api/v1/people/${janeLee.id}`)
+  await expect.element(screen.getByRole('list', { name: 'People named Jane' }).getByRole('button', { name: /^Tag / })).toHaveLength(3)
+})
+
+test('the choice lists the matches of the Server in its order', async () => {
+  // Arrange
+  const screen = await renderCard([
+    { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janeDoe.id, janePark.id)) },
+    directoryOf(janePark, janeDoe),
+    { method: 'POST', path: respondPath, body: session({}) },
+  ])
+  const choices = screen.getByRole('list', { name: 'People named Jane' })
+  await expect.element(choices.getByRole('button', { name: /^Tag / }).first()).toHaveAccessibleName('Tag Jane Doe')
+  await expect.element(choices.getByRole('button', { name: /^Tag / }).nth(1)).toHaveAccessibleName('Tag Jane Park')
+  await expect.element(screen.getByRole('button', { name: 'Tag Jane', exact: true })).not.toBeInTheDocument()
+  await commands.takeSentRequests()
+
+  // Act
+  await userEvent.click(choices.getByRole('button', { name: 'Tag Jane Park' }))
+
+  // Assert
+  await expect.element(screen.getByText('People to tag')).not.toBeInTheDocument()
+  expect(await sentResponses()).toEqual([{ label: 'Jane', approve: true, createNew: false, bindToPersonId: 'per_1' }])
+})
+
+test('a proposal with no match sends the plain approve, and a Person of the name that the Server does not list is no choice', async () => {
+  // Arrange
+  const screen = await renderCard([
+    { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf()) },
+    directoryOf(janePark, janeDoe),
+    { method: 'POST', path: respondPath, body: session({}) },
+  ])
+  await expect.element(screen.getByRole('button', { name: 'Tag Jane', exact: true })).toBeVisible()
+  await expect.element(screen.getByRole('list', { name: 'People named Jane' })).not.toBeInTheDocument()
+  await expect.element(screen.getByRole('button', { name: 'Add a new person named Jane' })).not.toBeInTheDocument()
+  await commands.takeSentRequests()
+
+  // Act
+  await userEvent.click(screen.getByRole('button', { name: 'Tag Jane', exact: true }))
+
+  // Assert
+  await expect.element(screen.getByText('People to tag')).not.toBeInTheDocument()
+  expect(await sentResponses()).toEqual([{ label: 'Jane', approve: true, createNew: false }])
+})
+
+test('a Tag that the Server refuses because a second Person has the name now shows why, then reads the Session and shows the choice', async () => {
+  // Arrange
+  const answers: Answer[] = [{ method: 'GET', path: '/api/v1/model-providers/active', body: { name: 'Mine' } }, askWhichRefusal]
+  const screen = await renderCard([
+    ...answers,
+    { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf()) },
+    directoryOf(janePark),
+  ])
+  await expect.element(screen.getByRole('button', { name: 'Tag Jane', exact: true })).toBeVisible()
+  await commands.answerRequests([
+    ...answers,
+    { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id, janeDoe.id)) },
+    directoryOf(janePark, janeDoe),
+    // The Session can come back before the directory, and then the card reads the new Jane on her own.
+    { method: 'GET', path: `/api/v1/people/${janeDoe.id}`, body: janeDoe },
+  ])
+
+  // Act
+  await userEvent.click(screen.getByRole('button', { name: 'Tag Jane', exact: true }))
+
+  // Assert
+  await expect.element(screen.getByRole('alert')).toHaveTextContent(askWhich)
+  const choices = screen.getByRole('list', { name: 'People named Jane' })
+  await expect.element(choices.getByRole('button', { name: 'Tag Jane Park' })).toBeVisible()
+  await expect.element(choices.getByRole('button', { name: 'Tag Jane Doe' })).toBeVisible()
+  await expect.element(screen.getByRole('button', { name: 'Add a new person named Jane' })).toBeVisible()
+})

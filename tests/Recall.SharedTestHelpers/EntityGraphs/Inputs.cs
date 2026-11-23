@@ -51,6 +51,8 @@ public sealed class SessionInput
 public sealed class PersonInput
 {
     public string? Label { get; set; }
+    public string? FullName { get; set; }
+    public string? Notes { get; set; }
 }
 
 public sealed class CorrectionInput

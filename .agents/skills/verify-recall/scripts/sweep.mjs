@@ -26,11 +26,13 @@ const emailKeys = new Set(['email'])
 
 function longValues() {
   const seen = new Map()
+  const originals = new Map()
   const longFor = (key, value) => {
     const seenKey = `${emailKeys.has(key) ? 'email' : 'name'}|${value}`
     if (!seen.has(seenKey)) {
       const id = String(seen.size).padStart(3, '0')
       seen.set(seenKey, emailKeys.has(key) ? longEmail.replace('@', `${id}@`) : longName.slice(0, -id.length) + id)
+      originals.set(seen.get(seenKey), value)
     }
     return seen.get(seenKey)
   }
@@ -43,7 +45,14 @@ function longValues() {
     }
     return Object.fromEntries(Object.entries(node).map(([key, value]) => [key, rewrites(key, value) ? longFor(key, value) : walk(value)]))
   }
-  return walk
+  // The page sends some names back as keys, such as the label of a People proposal. A request gets the value of the Server again.
+  const restore = (node) => {
+    if (typeof node === 'string') return originals.get(node) ?? node
+    if (Array.isArray(node)) return node.map(restore)
+    if (!node || typeof node !== 'object') return node
+    return Object.fromEntries(Object.entries(node).map(([key, value]) => [key, restore(value)]))
+  }
+  return { walk, restore }
 }
 
 // The request body limit of Kestrel in the Server. The Server answers a larger body with a 413 and closes the connection
@@ -51,12 +60,22 @@ function longValues() {
 // often fails with no answer. So the browser itself sends such a request, and the sweep does not change its answer.
 const SERVER_BODY_LIMIT_BYTES = 30_000_000
 
+const parsedOrUndefined = (text) => {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return undefined
+  }
+}
+
 export async function routeLongValues(context, webUrl) {
-  const rewrite = longValues()
+  const { walk: rewrite, restore } = longValues()
   await context.route((url) => url.origin === new URL(webUrl).origin && (url.pathname.startsWith('/api/') || url.pathname === '/auth/me'),
     async (route) => {
       if ((route.request().postDataBuffer()?.length ?? 0) > SERVER_BODY_LIMIT_BYTES) return route.continue()
-      const response = await route.fetch().catch(() => null)
+      const sent = route.request().postData()
+      const sentJson = sent && (route.request().headers()['content-type'] ?? '').includes('json') ? parsedOrUndefined(sent) : undefined
+      const response = await route.fetch(sentJson === undefined ? undefined : { postData: JSON.stringify(restore(sentJson)) }).catch(() => null)
       if (!response) return route.abort().catch(() => {})
       const { 'content-length': _, ...headers } = response.headers()
       if (!(headers['content-type'] ?? '').includes('json')) return route.fulfill({ response })

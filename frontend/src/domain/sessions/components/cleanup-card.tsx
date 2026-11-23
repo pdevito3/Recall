@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react'
 import { useEffect, useRef } from 'react'
 
+import type { PersonDto } from '@/api/generated/models/types/person-dto'
+import type { PersonProposalDto } from '@/api/generated/models/types/person-proposal-dto'
+import type { PersonProposalResponseDto } from '@/api/generated/models/types/person-proposal-response-dto'
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
 import { QueryError } from '@/components/query-error'
 import { RefusedSaveAlert } from '@/components/refused-save-alert'
@@ -8,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useActiveModelProvider } from '@/domain/model-providers/apis/model-providers'
 import { UnusableAnswerText } from '@/domain/model-providers/components/unusable-answer-text'
+import { usePeopleOf } from '@/domain/people/apis/people'
 import { refusalOf } from '@/hooks/use-server-errors'
 
 import {
@@ -82,30 +86,100 @@ function Suggestions({ session }: CleanupPartProps) {
   )
 }
 
-function PeopleProposals({ session }: CleanupPartProps) {
+function MatchDetails({ person }: { person: PersonDto }) {
+  const { fullName, notes } = person
+  if (!fullName && !notes) return <span className="text-muted-foreground">No details. Add them on the People page.</span>
+  return (
+    <span className="flex min-w-0 flex-col">
+      {fullName && <span dir="auto" className="wrap-anywhere">{fullName}</span>}
+      {notes && <span dir="auto" className="line-clamp-3 whitespace-pre-line text-muted-foreground wrap-anywhere">{notes}</span>}
+    </span>
+  )
+}
+
+const detailsOf = (person: PersonDto, label: string, index: number) => person.fullName || person.notes || `${label} ${index + 1}, no details`
+
+interface PeopleProposalsProps extends CleanupPartProps {
+  onAnswered: () => void
+}
+
+function PeopleProposal({ session, proposal, onAnswered }: PeopleProposalsProps & { proposal: PersonProposalDto }) {
   const respond = useRespondToProposal(session.id)
+  const { people: matches, isPending, error, retry } = usePeopleOf(proposal.matchedPersonIds)
+  // A Tag shows only when the card holds each match that the Server lists, so a shown choice is the whole choice.
+  const isWholeChoice = !isPending && !error
+  const { label } = proposal
+  const answer = (body: Omit<PersonProposalResponseDto, 'label'>) => respond.mutate({ label, ...body }, { onSuccess: onAnswered })
+
+  return (
+    <li className="flex flex-col gap-2 text-sm">
+      {respond.error && (
+        <RefusedSaveAlert problem={refusalOf(respond.error, []).problem} />
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <span dir="auto" className="min-w-24 flex-1 basis-48 wrap-anywhere">{label}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          {isWholeChoice && matches.length < 2 && (
+            <Button
+              size="sm"
+              variant="outline"
+              aria-label={`Tag ${label}`}
+              onPress={() => answer({ approve: true, createNew: false, bindToPersonId: matches[0]?.id })}
+            >
+              Tag
+            </Button>
+          )}
+          {matches.length > 0 && (
+            <Button size="sm" variant="ghost" aria-label={`Add a new person named ${label}`} onPress={() => answer({ approve: true, createNew: true })}>
+              Add a new person
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" aria-label={`Do not tag ${label}`} onPress={() => answer({ approve: false, createNew: false })}>
+            Do not tag
+          </Button>
+        </div>
+      </div>
+      {isPending && <span role="status" className="text-muted-foreground">Loading the People named {label}</span>}
+      {error && (
+        <QueryError title="Your People did not load, so the card cannot show who has this name." error={error} onRetry={() => void retry()} />
+      )}
+      {matches.length === 1 && <MatchDetails person={matches[0]} />}
+      {matches.length > 1 && (
+        <>
+          <p className="text-muted-foreground">{matches.length} people have this name. Choose the person to tag.</p>
+          <ul aria-label={`People named ${label}`} className="flex flex-col divide-y rounded-lg border">
+            {matches.map((person, index) => (
+              <li key={person.id} className="flex flex-wrap items-center gap-2 p-2 pl-3">
+                <span className="min-w-24 flex-1 basis-48">
+                  <MatchDetails person={person} />
+                </span>
+                {isWholeChoice && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    aria-label={`Tag ${detailsOf(person, label, index)}`}
+                    onPress={() => answer({ approve: true, createNew: false, bindToPersonId: person.id })}
+                  >
+                    Tag
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </li>
+  )
+}
+
+function PeopleProposals({ session, onAnswered }: PeopleProposalsProps) {
   if (session.peopleProposals.length === 0) return null
   return (
     <section className="flex flex-col gap-2">
       <h3 className="text-sm font-medium">People to tag</h3>
-      <ul className="flex flex-col gap-2">
-        {session.peopleProposals.map(({ label }) => (
-          <li key={label} className="flex flex-wrap items-center gap-2 text-sm">
-            {respond.error && respond.variables?.label === label && (
-              <div className="basis-full">
-                <RefusedSaveAlert problem={refusalOf(respond.error, []).problem} />
-              </div>
-            )}
-            <span dir="auto" className="min-w-24 flex-1 basis-48 wrap-anywhere">{label}</span>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" aria-label={`Tag ${label}`} onPress={() => respond.mutate({ label, approve: true, createNew: false })}>
-                Tag
-              </Button>
-              <Button size="sm" variant="ghost" aria-label={`Do not tag ${label}`} onPress={() => respond.mutate({ label, approve: false, createNew: false })}>
-                Do not tag
-              </Button>
-            </div>
-          </li>
+      <ul className="flex flex-col gap-3">
+        {session.peopleProposals.map((proposal) => (
+          <PeopleProposal key={proposal.label} session={session} proposal={proposal} onAnswered={onAnswered} />
         ))}
       </ul>
     </section>
@@ -131,6 +205,9 @@ export function CleanupCard({ session }: CleanupPartProps) {
   useEffect(() => {
     if (!isRunning) resetApply()
   }, [isRunning, resetApply])
+
+  // An answer removes its proposal and the button that had the focus, so the focus goes to the heading of the card.
+  const headingRef = useRef<HTMLHeadingElement>(null)
 
   // A run turns Run Cleanup off, and its end removes Stop Cleanup. The focus goes to the other button, so it does not fall to the page.
   const runRef = useRef<HTMLButtonElement>(null)
@@ -167,7 +244,7 @@ export function CleanupCard({ session }: CleanupPartProps) {
 
   return (
     <section aria-labelledby="entry-cleanup" className="flex flex-col gap-3">
-      <h2 id="entry-cleanup" className="text-lg font-semibold">Cleanup</h2>
+      <h2 ref={headingRef} id="entry-cleanup" tabIndex={-1} className="text-lg font-semibold outline-none">Cleanup</h2>
       <p role="status" className="text-sm">
         {statusText}
       </p>
@@ -240,7 +317,7 @@ export function CleanupCard({ session }: CleanupPartProps) {
         )}
       </div>
       <Suggestions session={session} />
-      <PeopleProposals key={session.cleanedLatestRevision} session={session} />
+      <PeopleProposals key={session.cleanedLatestRevision} session={session} onAnswered={() => headingRef.current?.focus()} />
     </section>
   )
 }

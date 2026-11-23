@@ -6,7 +6,7 @@ import { Notification } from '@/components/notification'
 import { MentionList, type MentionListHandle, type MentionOption } from './mention-list'
 
 export interface MentionSource {
-  people: () => { id: string; label: string }[]
+  people: () => { id: string; label: string; fullName?: string | null }[]
   addPerson: (label: string) => Promise<{ id: string; label: string }>
 }
 
@@ -14,10 +14,10 @@ const shownOptions = 8
 const gapPx = 4
 const edgePx = 8
 
-export function optionsFor(people: { id: string; label: string }[], query: string): MentionOption[] {
+export function optionsFor(people: { id: string; label: string; fullName?: string | null }[], query: string): MentionOption[] {
   const wanted = query.trim().toLowerCase()
   const matches = people.filter((person) => person.label.toLowerCase().includes(wanted)).slice(0, shownOptions)
-  const options: MentionOption[] = matches.map((person) => ({ kind: 'person', personId: person.id, label: person.label }))
+  const options: MentionOption[] = matches.map((person) => ({ kind: 'person', personId: person.id, label: person.label, fullName: person.fullName }))
   const hasExactMatch = people.some((person) => person.label.toLowerCase() === wanted)
   return wanted && !hasExactMatch ? [...options, { kind: 'create', label: query.trim() }] : options
 }
@@ -67,33 +67,43 @@ export function mentionSuggestion(source: MentionSource): MentionOptions<Mention
     },
     render: () => {
       let list: ReactRenderer<MentionListHandle> | undefined
+      let caret: (() => DOMRect | null) | null | undefined
+      // A turn of the phone, or the on-screen keyboard, resizes the viewport while the list is open.
+      const placeAgain = () => {
+        if (list) place(list.element as HTMLElement, caret?.())
+      }
+      const close = () => {
+        window.visualViewport?.removeEventListener('resize', placeAgain)
+        window.removeEventListener('resize', placeAgain)
+        list?.destroy()
+        list?.element.remove()
+        list = undefined
+      }
       return {
         onStart: (props) => {
           list = new ReactRenderer(MentionList, { props, editor: props.editor })
+          caret = props.clientRect
           const popup = list.element as HTMLElement
           popup.style.position = 'fixed'
           popup.style.zIndex = '50'
           document.body.append(popup)
-          place(popup, props.clientRect?.())
+          window.visualViewport?.addEventListener('resize', placeAgain)
+          window.addEventListener('resize', placeAgain)
+          placeAgain()
         },
         onUpdate: (props) => {
           list?.updateProps(props)
-          if (list) place(list.element as HTMLElement, props.clientRect?.())
+          caret = props.clientRect
+          placeAgain()
         },
         onKeyDown: ({ event }) => {
           if (event.key === 'Escape') {
-            list?.destroy()
-            list?.element.remove()
-            list = undefined
+            close()
             return true
           }
           return list?.ref?.onKeyDown(event) ?? false
         },
-        onExit: () => {
-          list?.destroy()
-          list?.element.remove()
-          list = undefined
-        },
+        onExit: close,
       }
     },
   }

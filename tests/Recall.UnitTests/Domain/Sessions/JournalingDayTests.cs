@@ -21,7 +21,7 @@ public class JournalingDayTests
         var session = Session.Create("ten_1", "usr_1", "device-1", LateAtNight, null, TimeZoneId.Of(zone), Later);
 
         // Act
-        var journalingDay = session.ToSessionDto().JournalingDay;
+        var journalingDay = session.ToSessionDto(ProposalPeople.Of([])).JournalingDay;
 
         // Assert
         journalingDay.ShouldBe(new DateOnly(2026, 6, day));

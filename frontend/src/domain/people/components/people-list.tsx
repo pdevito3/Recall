@@ -18,6 +18,8 @@ import {
 import { useAddPerson, useDeletePerson, usePeopleDirectory, useRenamePerson } from '@/domain/people/apis/people'
 import { isProblemDetailsError } from '@/lib/problem-details'
 
+import { PersonDetailsForm } from './person-details-form'
+
 const longestName = 200
 
 function FailedSave({ error }: { error: Error | null }) {
@@ -42,12 +44,23 @@ export function PeopleList({ headingRef }: { headingRef: RefObject<HTMLHeadingEl
       {directory.data && directory.data.length > 0 && (
         <ul aria-label="Your people" className="flex flex-col divide-y rounded-lg border">
           {directory.data.map((person) => (
-            <li key={person.id} className="flex items-center justify-between gap-3 p-2 pl-3">
-              <span dir="auto" className="min-w-0 wrap-anywhere">{person.label}</span>
-              <div className="flex shrink-0 gap-1">
-                <RenamePerson person={person} />
-                <DeletePerson person={person} headingRef={headingRef} />
+            <li key={person.id} className="flex flex-col gap-1 p-2 pl-3">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span dir="auto" className="min-w-24 flex-1 basis-48 wrap-anywhere">{person.label}</span>
+                <div className="flex flex-wrap gap-1">
+                  <DescribePerson person={person} />
+                  <RenamePerson person={person} />
+                  <DeletePerson person={person} headingRef={headingRef} />
+                </div>
               </div>
+              {person.fullName && (
+                <span dir="auto" className="pr-1 text-sm text-muted-foreground wrap-anywhere">{person.fullName}</span>
+              )}
+              {person.notes && (
+                <span dir="auto" className="line-clamp-3 pr-1 pb-1 text-sm whitespace-pre-line text-muted-foreground wrap-anywhere">
+                  {person.notes}
+                </span>
+              )}
             </li>
           ))}
         </ul>
@@ -80,6 +93,19 @@ function AddPersonForm() {
       </div>
       <FailedSave error={add.error} />
     </form>
+  )
+}
+
+function DescribePerson({ person }: { person: PersonDto }) {
+  const [isOpen, setIsOpen] = useState(false)
+
+  return (
+    <ResponsiveDialogTrigger isOpen={isOpen} onOpenChange={setIsOpen}>
+      <Button variant="ghost" aria-label={`Edit the details of ${person.label}`}>Details</Button>
+      <ResponsiveDialog>
+        <PersonDetailsForm person={person} onSaved={() => setIsOpen(false)} />
+      </ResponsiveDialog>
+    </ResponsiveDialogTrigger>
   )
 }
 

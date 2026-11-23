@@ -6,6 +6,8 @@
 export type PersonDto = {
     id: string;
     label: string;
+    fullName?: string | null;
+    notes?: string | null;
     /**
      * @minLength 0
      * @maxLength 4294967295

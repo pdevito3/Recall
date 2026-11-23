@@ -34,7 +34,7 @@ public static class ApplyWaitingCleanup
             await dbContext.SaveChangesAsync(cancellationToken);
             _logger.Here().Information("Took the waiting Cleanup result into Cleaned of session {SessionId}", session.Id);
 
-            return session.ToSessionDto();
+            return session.ToSessionDto(await ProposalPeople.LoadAsync(dbContext, [session], cancellationToken));
         }
     }
 }

@@ -10,7 +10,7 @@ using Serilog;
 
 public static class AddPerson
 {
-    public sealed record Command(PersonLabelDto Dto) : IRequest<PersonDto>;
+    public sealed record Command(PersonForCreationDto Dto) : IRequest<PersonDto>;
 
     public sealed class Handler(AppDbContext dbContext) : IRequestHandler<Command, PersonDto>
     {
@@ -22,7 +22,7 @@ public static class AddPerson
 
             var person = await RootLock.Tenant.RunSharedAsync(dbContext, owner.TenantId, async ct =>
             {
-                var added = Person.Create(owner.TenantId, owner.UserId, request.Dto.Label);
+                var added = Person.Create(owner.TenantId, owner.UserId, request.Dto.Label, request.Dto.FullName, request.Dto.Notes);
                 await dbContext.People.AddAsync(added, ct);
                 await dbContext.SaveChangesAsync(ct);
                 return added;

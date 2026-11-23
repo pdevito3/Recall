@@ -172,6 +172,12 @@ export function entryPage(page: Page) {
       await answered
     },
 
+    async addNewPerson(id: string, label: string) {
+      const answered = postTo(sessionsPaths.respondToProposal(id))
+      await at.addNewPerson(label).click()
+      await answered
+    },
+
     async showCleaned() {
       await at.cleanedTab.click()
       await expect(at.cleanedEditor).toBeVisible()

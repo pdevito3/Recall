@@ -56,4 +56,32 @@ test.describe('the people of a journal', () => {
     expect(api.last('put', peoplePaths.one('per_1'))?.body).toEqual({ label: 'Ana R' })
     await expect(people.at.renameField).toHaveCount(0)
   })
+
+  test('edits the details of a person, keeps the name, and lists the details under it', async ({ page, api }) => {
+    const details = { fullName: 'Jane Park', notes: "Sam's teacher" }
+    api.mock(peopleApi.listIs([aPerson('per_1', 'Jane')]))
+    const people = peoplePage(page)
+    await people.open()
+    api.mock(peopleApi.listIs([aPerson('per_1', 'Jane', details)]), peopleApi.describes(aPerson('per_1', 'Jane', details)))
+
+    await people.describe('per_1', 'Jane', details)
+
+    expect(api.last('put', peoplePaths.details('per_1'))?.body).toEqual({ ...details, version: 1 })
+    await expect(people.at.fullNameField).toHaveCount(0)
+    await expect(people.at.person('Jane')).toBeVisible()
+    await expect(people.at.person('Jane Park')).toBeVisible()
+    await expect(people.at.person("Sam's teacher")).toBeVisible()
+  })
+
+  test('long details with no spaces stay in the page on a phone', async ({ page, api }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    api.mock(peopleApi.listIs([aPerson('per_1', 'Jane', { fullName: 'J'.repeat(200), notes: 'n'.repeat(1000) })]))
+    const people = peoplePage(page)
+
+    await people.open()
+
+    await expect(people.at.details('Jane')).toBeInViewport({ ratio: 1 })
+    await expect(people.at.rename('Jane')).toBeInViewport({ ratio: 1 })
+    expect(await people.sideScrollRange()).toBe(0)
+  })
 })

@@ -383,7 +383,7 @@ public class JournalRaceTests : TestBase
     {
         // Arrange
         var owner = await AddOwnerAsync();
-        var person = await ScopeOf(owner).SendAsync(new AddPerson.Command(new PersonLabelDto { Label = "Sam" }));
+        var person = await ScopeOf(owner).SendAsync(new AddPerson.Command(new PersonForCreationDto { Label = "Sam" }));
         var session = await AddSessionAsync(owner);
         await ScopeOf(owner).SendAsync(new SaveRawDraft.Command(session.Id, Save(Mention(person.Id, "Sam", "First"), Morning)));
         var pause = PauseAtQuery.After("people.rename.sessions");
@@ -414,7 +414,7 @@ public class JournalRaceTests : TestBase
     {
         // Arrange
         var owner = await AddOwnerAsync();
-        var person = await ScopeOf(owner).SendAsync(new AddPerson.Command(new PersonLabelDto { Label = "Sam" }));
+        var person = await ScopeOf(owner).SendAsync(new AddPerson.Command(new PersonForCreationDto { Label = "Sam" }));
         var session = await AddSessionAsync(owner);
         await ScopeOf(owner).SendAsync(new SaveRawDraft.Command(session.Id, Save(Mention(person.Id, "Sam", "First"), Morning)));
         var pause = PauseAtQuery.After("people.delete.sessions");
@@ -445,7 +445,7 @@ public class JournalRaceTests : TestBase
     {
         // Arrange
         var owner = await AddOwnerAsync();
-        var person = await ScopeOf(owner).SendAsync(new AddPerson.Command(new PersonLabelDto { Label = "Sam" }));
+        var person = await ScopeOf(owner).SendAsync(new AddPerson.Command(new PersonForCreationDto { Label = "Sam" }));
         var session = await AddSessionAsync(owner);
         await ScopeOf(owner).SendAsync(new SaveRawDraft.Command(session.Id, Save(Mention(person.Id, "Sam", "First"), Morning)));
         var pause = PauseAtQuery.After("people.delete.load");
