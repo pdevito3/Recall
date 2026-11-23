@@ -45,9 +45,9 @@ export function PeopleList({ headingRef }: { headingRef: RefObject<HTMLHeadingEl
         <ul aria-label="Your people" className="flex flex-col divide-y rounded-lg border">
           {directory.data.map((person) => (
             <li key={person.id} className="flex flex-col gap-1 p-2 pl-3">
-              <div className="flex items-center justify-between gap-3">
-                <span dir="auto" className="min-w-0 wrap-anywhere">{person.label}</span>
-                <div className="flex shrink-0 gap-1">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span dir="auto" className="min-w-24 flex-1 basis-48 wrap-anywhere">{person.label}</span>
+                <div className="flex flex-wrap gap-1">
                   <DescribePerson person={person} />
                   <RenamePerson person={person} />
                   <DeletePerson person={person} headingRef={headingRef} />
