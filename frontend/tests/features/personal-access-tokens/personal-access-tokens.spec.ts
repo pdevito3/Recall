@@ -170,7 +170,7 @@ test.describe('the personal access tokens of a person', () => {
     await expect(tokens.at.anyTokenValue).toHaveCount(0)
   })
 
-  test('Back while a create runs asks first', { tag: '@PAT-1' }, async ({ page, api }) => {
+  test('Back while a create runs asks first, also a Back at the click on Create', { tag: '@PAT-1' }, async ({ page, api }) => {
     let answer!: () => void
     const answered = new Promise<void>((resolve) => (answer = resolve))
     api.mock(personalAccessTokensApi.mineAre([]), { ...personalAccessTokensApi.creates(aToken().named('Laptop').created(value)), heldUntil: answered })
@@ -178,10 +178,13 @@ test.describe('the personal access tokens of a person', () => {
     await tokens.openAfterAboutAndSettings()
     await tokens.openForm()
     await tokens.at.nameField.fill('Laptop')
-    await tokens.at.create.click()
 
+    await tokens.createAndGoBackAtOnce()
+
+    await expect(tokens.at.leaveQuestion).toBeVisible()
+    await tokens.at.stay.click()
+    await expect(tokens.at.cancel).toBeDisabled()
     await page.goBack()
-
     await expect(tokens.at.leaveQuestion).toBeVisible()
     await tokens.at.stay.click()
     answer()

@@ -18,7 +18,7 @@ import { copyToClipboard } from '@/lib/copy-to-clipboard'
 import { browserTimeZone, formatInstant, todayAt } from '@/lib/zoned-time'
 
 import { useAddPersonalAccessToken } from '../apis/personal-access-tokens'
-import { TokenForm } from './token-form'
+import { TokenForm, type TokenFormProps } from './token-form'
 
 interface NewTokenDialogProps {
   permissions: readonly string[]
@@ -27,25 +27,44 @@ interface NewTokenDialogProps {
 export function NewTokenDialog({ permissions }: NewTokenDialogProps) {
   const add = useAddPersonalAccessToken()
   const isLocked = add.isPending || add.data !== undefined
+  // True from the send of a create until it fails or the dialog closes. The send comes in the click, but isLocked turns
+  // true only at a later render, so a Back or a second submit before that render reads this ref.
+  const hasSent = useRef(false)
   // A Back while the question shows goes through. A block of it too would put back only one of the two steps at Stay.
   const isAsking = useRef(false)
   const leaving = useBlocker({
     shouldBlockFn: () => {
-      if (isAsking.current) return false
+      if (isAsking.current || !hasSent.current) return false
       isAsking.current = true
       return true
     },
-    disabled: !isLocked,
-    enableBeforeUnload: () => !isDeparting(),
+    enableBeforeUnload: () => hasSent.current && !isDeparting(),
     withResolver: true,
   })
 
+  const create: TokenFormProps['onCreate'] = (body, onError) => {
+    if (hasSent.current) return
+    hasSent.current = true
+    add.mutate(body, {
+      onError: (error) => {
+        hasSent.current = false
+        onError(error)
+      },
+    })
+  }
+
   return (
     <>
-      <ResponsiveDialogTrigger onOpenChange={(isOpen) => { if (!isOpen) add.reset() }}>
+      <ResponsiveDialogTrigger
+        onOpenChange={(isOpen) => {
+          if (isOpen) return
+          hasSent.current = false
+          add.reset()
+        }}
+      >
         <Button>New token</Button>
         <ResponsiveDialog isDismissable={!isLocked} isKeyboardDismissDisabled={isLocked} showCloseButton={!isLocked}>
-          <NewToken add={add} permissions={permissions} />
+          <NewToken add={add} permissions={permissions} onCreate={create} />
         </ResponsiveDialog>
       </ResponsiveDialogTrigger>
       <ResponsiveDialog
@@ -76,11 +95,13 @@ export function NewTokenDialog({ permissions }: NewTokenDialogProps) {
   )
 }
 
-function NewToken({ add, permissions }: NewTokenDialogProps & { add: ReturnType<typeof useAddPersonalAccessToken> }) {
+function NewToken({
+  add,
+  permissions,
+  onCreate,
+}: NewTokenDialogProps & Pick<TokenFormProps, 'onCreate'> & { add: ReturnType<typeof useAddPersonalAccessToken> }) {
   const [zone] = useState(browserTimeZone)
   const [today] = useState(() => todayAt(zone, new Date()))
-  // A second submit in the same task still reads isPending as false, so only a ref stops a second create.
-  const isSending = useRef(false)
 
   if (add.data) return <CreatedToken created={add.data} />
 
@@ -90,11 +111,7 @@ function NewToken({ add, permissions }: NewTokenDialogProps & { add: ReturnType<
       today={today}
       zone={zone}
       isPending={add.isPending}
-      onCreate={(body, onError) => {
-        if (isSending.current) return
-        isSending.current = true
-        add.mutate(body, { onError, onSettled: () => (isSending.current = false) })
-      }}
+      onCreate={onCreate}
     />
   )
 }
