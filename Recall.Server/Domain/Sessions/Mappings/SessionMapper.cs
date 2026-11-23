@@ -26,14 +26,14 @@ public static partial class SessionMapper
         if (session.PeopleProposals.Count == 0)
             return [];
 
-        // A Person whom Cleaned tags has nothing left to tag.
+        // A Person whom Cleaned tags has nothing left to tag. With two People of one name, a tag of one of them is the choice of the person.
         var tagged = PersonMentions.PersonIdsIn(session.Cleaned.Text);
         var plain = ProseMirrorToPlainText.Render(session.Cleaned.Text);
-        return session.PeopleProposals.Where(proposal => proposal.MatchedPersonId is null || !tagged.Contains(proposal.MatchedPersonId)).Select(proposal => new PersonProposalDto
+        return session.PeopleProposals.Where(proposal => !proposal.MatchedPersonIds.Any(tagged.Contains)).Select(proposal => new PersonProposalDto
         {
             Label = proposal.Label,
-            MatchedPersonId = proposal.MatchedPersonId,
-            IsNew = proposal.MatchedPersonId is null,
+            MatchedPersonIds = proposal.MatchedPersonIds,
+            IsNew = proposal.MatchedPersonIds.Count == 0,
             Contexts = PeopleTagSpans.Contexts(plain, proposal.Label),
         }).ToList();
     }

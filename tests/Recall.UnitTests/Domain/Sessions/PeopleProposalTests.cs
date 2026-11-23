@@ -30,7 +30,7 @@ public class PeopleProposalTests
         var session = Session.Create("ten_1", "usr_1", "device-1", Noon, null, TimeZoneId.Utc, Noon);
         session.SaveRaw(DraftSave.Of("raw words", 0, Noon));
         session.BeginCleanup();
-        var proposals = new[] { new PersonProposal("Sam", "per_sam"), new PersonProposal("Kim", "per_kim"), new PersonProposal("Lee", null) };
+        var proposals = new[] { new PersonProposal("Sam", ["per_sam"]), new PersonProposal("Kim", ["per_kim"]), new PersonProposal("Lee", []) };
         session.CompleteCleanup(new CleanupOutcome(Tagged("per_sam", "Sam"), "A recap", [], [], proposals), session.Raw.DraftRevision, Noon);
 
         // Act
@@ -38,5 +38,26 @@ public class PeopleProposalTests
 
         // Assert
         dto.PeopleProposals.Select(proposal => proposal.Label).ShouldBe(["Kim", "Lee"]);
+    }
+
+    [Test]
+    [Property("Rule", "SES-56")]
+    public void a_proposal_of_two_people_shows_both_until_cleaned_tags_one_of_them()
+    {
+        // Arrange
+        var session = Session.Create("ten_1", "usr_1", "device-1", Noon, null, TimeZoneId.Utc, Noon);
+        session.SaveRaw(DraftSave.Of("raw words", 0, Noon));
+        session.BeginCleanup();
+        var proposals = new[] { new PersonProposal("Jane", ["per_park", "per_doe"]), new PersonProposal("Sam", ["per_sam", "per_sam_lee"]) };
+        session.CompleteCleanup(new CleanupOutcome(Tagged("per_sam_lee", "Sam"), "A recap", [], [], proposals), session.Raw.DraftRevision, Noon);
+
+        // Act
+        var dto = session.ToSessionDto();
+
+        // Assert
+        var jane = dto.PeopleProposals.ShouldHaveSingleItem();
+        jane.Label.ShouldBe("Jane");
+        jane.MatchedPersonIds.ShouldBe(["per_park", "per_doe"]);
+        jane.IsNew.ShouldBeFalse();
     }
 }

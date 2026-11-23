@@ -15,7 +15,7 @@ export type PersonProposalResponseDto = {
     */
     approve: boolean;
     /**
-     * @description The Person to tag. When this is null, the Person is the match of the proposal, then the Person of this label, then a new Person.
+     * @description The Person to tag. When this is null and createNew is false, the one Person of this label or of a match of the proposal is\ntagged, or a new Person when none is. When two or more are, the approve gets 422 on this field, and the proposal stays.
      * @maxLength 50
      * @type string | undefined
     */

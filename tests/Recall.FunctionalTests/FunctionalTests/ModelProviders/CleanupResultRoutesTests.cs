@@ -297,7 +297,7 @@ public class CleanupResultRoutesTests : TestBase
         var added = await FactoryClient.PostAsJsonAsync(ApiRoutes.People.Root, new { label = "Sam" });
         var sam = (await added.Content.ReadFromJsonAsync<PersonDto>()).ShouldNotBeNull();
         var session = await CleanedSessionAsync(scenario, ReplyWith("I had lunch with Sam.", people: ["Sam"]));
-        session.PeopleProposals.ShouldHaveSingleItem().MatchedPersonId.ShouldBe(sam.Id);
+        session.PeopleProposals.ShouldHaveSingleItem().MatchedPersonIds.ShouldBe([sam.Id]);
         await JournalScenario.ExecuteOutOfBandAsync("UPDATE people SET is_deleted = 1 WHERE id = $id", ("$id", sam.Id));
 
         // Act

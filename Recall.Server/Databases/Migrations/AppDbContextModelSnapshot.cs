@@ -1298,7 +1298,7 @@ namespace Recall.Server.Databases.Migrations
 
                     b.Property<string>("PeopleProposals")
                         .IsRequired()
-                        .HasMaxLength(13000)
+                        .HasMaxLength(18300)
                         .HasColumnType("TEXT")
                         .HasColumnName("people_proposals");
 

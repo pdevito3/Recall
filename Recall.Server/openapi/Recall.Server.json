@@ -8984,6 +8984,7 @@
       "PersonProposalDto": {
         "required": [
           "label",
+          "matchedPersonIds",
           "isNew",
           "contexts"
         ],
@@ -8992,11 +8993,12 @@
           "label": {
             "type": "string"
           },
-          "matchedPersonId": {
-            "type": [
-              "null",
-              "string"
-            ]
+          "matchedPersonIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Each Person whose label matched the name when the Cleanup ran. Read the details of each from the People API. With two or\nmore, an approve must name one in `bindToPersonId` or send `createNew`."
           },
           "isNew": {
             "type": "boolean",
@@ -9033,7 +9035,7 @@
               "null",
               "string"
             ],
-            "description": "The Person to tag. When this is null, the Person is the match of the proposal, then the Person of this label, then a new Person."
+            "description": "The Person to tag. When this is null and createNew is false, the one Person of this label or of a match of the proposal is\ntagged, or a new Person when none is. When two or more are, the approve gets 422 on this field, and the proposal stays."
           },
           "createNew": {
             "type": "boolean",

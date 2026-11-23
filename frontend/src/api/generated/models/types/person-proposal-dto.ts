@@ -5,7 +5,11 @@
 
 export type PersonProposalDto = {
     label: string;
-    matchedPersonId?: string | null;
+    /**
+     * @description Each Person whose label matched the name when the Cleanup ran. Read the details of each from the People API. With two or\nmore, an approve must name one in `bindToPersonId` or send `createNew`.
+     * @type array
+    */
+    matchedPersonIds: string[];
     /**
      * @description True when the directory had no match when the Cleanup ran. An approval still looks at the directory of that moment.
      * @type boolean
