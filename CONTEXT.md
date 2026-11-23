@@ -100,14 +100,14 @@ What the User physically did while journaling: a known activity or the free text
 _Avoid_: Unset, null activity
 
 **Person**:
-A record in the directory of one User. A mention in the text refers to the Person, and the People of a Session are the Persons that its Raw and its Cleaned mention. A rename changes the label of each mention and makes a Revision of each text that changes _(agent default)_. A delete turns each mention in the current Raw and Cleaned into its label as plain words, so no word of the User goes, and makes a Revision of each text that changes. The older Revisions keep their mentions, and a Synopsis and a Summary keep the name, because the name stays in the words. A client shows a mention whose Person is not in the directory as its label, with no link _(agent default)_.
+A record in the directory of one User. A mention in the text refers to the Person, and the People of a Session are the Persons that its Raw and its Cleaned mention. A rename changes the label of each mention and makes a Revision of each text that changes _(agent default)_. A delete turns each mention in the current Raw and Cleaned into its label as plain words, so no word of the User goes, and makes a Revision of each text that changes. The older Revisions keep their mentions, and a Synopsis and a Summary keep the name, because the name stays in the words. A client shows a mention whose Person is not in the directory as its label, with no link _(agent default)_. Two People can have one label. Their optional details, a full name and notes, tell them apart, and a mention shows only the label. The details never go to a model provider.
 _Avoid_: Contact, person tag
 
 **Suggestion**:
 A Topic or a Mood that AI proposes, which the User accepts or rejects. It is not metadata until the User accepts it. A Person is never a Suggestion.
 
 **People proposal**:
-A name that Cleanup proposes as a mention of a Person, which the User approves or rejects one Person at a time. An approval adds the mention to Cleaned. A User can turn off this review, and then Cleanup adds the mentions itself.
+A name that Cleanup proposes as a mention of a Person, which the User approves or rejects one Person at a time. An approval adds the mention to Cleaned. A User can turn off this review, and then Cleanup adds the mentions itself, except for a name that two or more People have. Cleanup never picks one of them, so that name stays a People proposal until the User picks the Person or adds a new one.
 _Avoid_: People suggestion
 
 **Location**:
