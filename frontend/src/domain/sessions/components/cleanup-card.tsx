@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button'
 import { useActiveModelProvider } from '@/domain/model-providers/apis/model-providers'
 import { UnusableAnswerText } from '@/domain/model-providers/components/unusable-answer-text'
 import { usePeopleDirectory } from '@/domain/people/apis/people'
-import { candidatesOf } from '@/domain/people/proposal-candidates'
 import { refusalOf } from '@/hooks/use-server-errors'
 
 import {
@@ -107,7 +106,8 @@ interface PeopleProposalsProps extends CleanupPartProps {
 function PeopleProposal({ session, proposal, onAnswered }: PeopleProposalsProps & { proposal: PersonProposalDto }) {
   const respond = useRespondToProposal(session.id)
   const directory = usePeopleDirectory()
-  const matches = directory.data ? candidatesOf(proposal, directory.data) : []
+  // The Server sends the matches of now. The directory gives their details, and a match that it does not hold is not shown.
+  const matches = proposal.matchedPersonIds.flatMap((id) => directory.data?.filter((person) => person.id === id) ?? [])
   const { label } = proposal
   const answer = (body: Omit<PersonProposalResponseDto, 'label'>) => respond.mutate({ label, ...body }, { onSuccess: onAnswered })
 
@@ -120,7 +120,12 @@ function PeopleProposal({ session, proposal, onAnswered }: PeopleProposalsProps 
         <span dir="auto" className="min-w-24 flex-1 basis-48 wrap-anywhere">{label}</span>
         <div className="flex flex-wrap items-center gap-2">
           {!directory.isPending && matches.length < 2 && (
-            <Button size="sm" variant="outline" aria-label={`Tag ${label}`} onPress={() => answer({ approve: true, createNew: false })}>
+            <Button
+              size="sm"
+              variant="outline"
+              aria-label={`Tag ${label}`}
+              onPress={() => answer({ approve: true, createNew: false, bindToPersonId: matches[0]?.id })}
+            >
               Tag
             </Button>
           )}

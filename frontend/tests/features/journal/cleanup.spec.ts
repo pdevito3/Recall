@@ -254,6 +254,30 @@ test.describe('the Cleanup of an entry', () => {
     expect(api.last('post', sessionsPaths.respondToProposal(session.id))?.body).toEqual({ label: 'Jane', approve: true, createNew: true })
   })
 
+  test('a tag that the server refuses because a second person has the name now reads the entry again and offers both', async ({ page, api }) => {
+    const askWhich = 'Two or more People have this name. Choose the person to tag, or add a new person.'
+    const entry = aSession().cleaned('I met Jane today.')
+    const session = entry.proposingOneOf('Jane', 'per_1').build()
+    const park = aPerson('per_1', 'Jane', { fullName: 'Jane Park' })
+    api.mock(sessionsApi.oneIs(session), peopleApi.listIs([park]), sessionsApi.proposalIsRefused(session, askWhich))
+    const at = entryPage(page)
+    await at.open(session.id)
+    await expect(at.at.textOfThePage('Jane Park')).toBeVisible()
+
+    api.mock(sessionsApi.oneIs(entry.proposingOneOf('Jane', 'per_1', 'per_2').build()), peopleApi.listIs([park, aPerson('per_2', 'Jane', { fullName: 'Jane Doe' })]))
+    await at.tagPerson(session.id, 'Jane')
+
+    await expect(at.at.cleanupAlert(askWhich)).toBeVisible()
+    await expect(at.at.peopleNamed('Jane')).toBeVisible()
+    await expect(at.at.tagPerson('Jane Doe')).toBeVisible()
+    expect(api.last('post', sessionsPaths.respondToProposal(session.id))?.body).toEqual({
+      label: 'Jane',
+      approve: true,
+      createNew: false,
+      bindToPersonId: 'per_1',
+    })
+  })
+
   test('a refused tag shows the words of the server once, and no toast', async ({ page, api }) => {
     const message = 'A tag of this name makes Cleaned too long. Choose Do not tag, or run a new Cleanup.'
     const session = aSession().cleaned('I met Sam today.').proposing('Sam').build()

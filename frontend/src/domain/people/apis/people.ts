@@ -54,7 +54,13 @@ export function useAddPerson() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (label: string) => addPerson({ body: { label }, options: { suppressErrorToast: true } }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: PersonKeys.all }),
+    // A new Person can be a match of a People proposal, so an open entry reads its matches again.
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: PersonKeys.all }),
+        queryClient.invalidateQueries({ queryKey: SessionKeys.all }),
+      ])
+    },
   })
 }
 
