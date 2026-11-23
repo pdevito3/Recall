@@ -11,8 +11,7 @@ public sealed class PersonProposalListConverter()
         list => JsonSerializer.Serialize(list, Web),
         json => JsonSerializer.Deserialize<List<PersonProposal>>(json, Web) ?? new List<PersonProposal>())
 {
-    // Ten labels of the longest name, with an escape for each character, the field names, and the IDs of ten People of that
-    // name for each. SQLite does not hold a text to its length, so a person with more People of one name still saves.
+    // SQLite does not hold a text to its length, so a list longer than this still saves.
     public const int ColumnMaxLength = 10 * (200 * 6 + 100 + (10 * (EntityId.MaxLength + 3)));
 
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);

@@ -26,7 +26,6 @@ export default async ({ page, step, capture, expect, login }) => {
       const response = await answer
       expect(response.status()).toBe(201)
       added.push(await response.json())
-      // The field clears after the list reads the new Person again.
       await expect(page.getByRole('textbox', { name: 'Add a person' })).toHaveValue('')
     }
     await expect(list.getByText('Jane', { exact: true })).toHaveCount(2)

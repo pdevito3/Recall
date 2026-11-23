@@ -12,7 +12,6 @@ using Recall.Server.Domain.UserSettings.Dtos;
 using Shouldly;
 using TestUtilities;
 
-/// <summary>Two People of one label, two Janes. Cleanup never picks one of them for the person.</summary>
 public class TwoPeopleOfOneNameTests : TestBase
 {
     private static readonly string[] Jane = ["Jane"];

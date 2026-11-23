@@ -26,7 +26,6 @@ public static partial class SessionMapper
         if (session.PeopleProposals.Count == 0)
             return [];
 
-        // A Person whom Cleaned tags has nothing left to tag. With two People of one name, a tag of one of them is the choice of the person.
         var tagged = PersonMentions.PersonIdsIn(session.Cleaned.Text);
         var plain = ProseMirrorToPlainText.Render(session.Cleaned.Text);
         return session.PeopleProposals.Where(proposal => !proposal.MatchedPersonIds.Any(tagged.Contains)).Select(proposal => new PersonProposalDto

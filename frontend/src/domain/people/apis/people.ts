@@ -50,7 +50,6 @@ export function personOptions(id: string) {
   })
 }
 
-/** Each Person of the IDs, in the order of the IDs. */
 export function usePeople(ids: readonly string[]) {
   return useQueries({ queries: ids.map((id) => personOptions(id)) })
 }

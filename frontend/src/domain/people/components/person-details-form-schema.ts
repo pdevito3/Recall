@@ -26,7 +26,6 @@ export function detailsOf(person: PersonDto): PersonDetailsFormValues {
   return { fullName: person.fullName ?? '', notes: person.notes ?? '', version: person.version }
 }
 
-/** A blank detail clears it. */
 export function bodyOf(values: PersonDetailsFormValues): PersonDetailsDto {
   return { fullName: values.fullName.trim() || null, notes: values.notes.trim() || null, version: values.version }
 }

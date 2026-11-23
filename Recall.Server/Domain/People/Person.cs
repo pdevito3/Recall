@@ -27,10 +27,8 @@ public class Person : BaseEntity, ITenantable, IJournalOwned
     /// </summary>
     [Sensitive] public string? ProposalKey { get; private set; }
 
-    /// <summary>A detail that tells two People of one label apart, such as "Jane Park". A mention never shows it.</summary>
     [Sensitive] public string? FullName { get; private set; }
 
-    /// <summary>Free words of the person about this Person, such as "Sam's teacher". A mention never shows them.</summary>
     [Sensitive] public string? Notes { get; private set; }
 
     public static Person Create(string tenantId, string userId, string label, string? fullName = null, string? notes = null)
@@ -61,10 +59,6 @@ public class Person : BaseEntity, ITenantable, IJournalOwned
         ProposalKey = null;
     }
 
-    /// <summary>
-    /// Sets the details that tell People of one label apart. The label, the proposal key, and each mention stay as they are.
-    /// A blank detail becomes no detail.
-    /// </summary>
     public void Describe(string? fullName, string? notes, uint version)
     {
         GuardVersion(version);

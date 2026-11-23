@@ -51,7 +51,6 @@ public sealed class CleanupCompletion(AppDbContext dbContext)
             var personOfName = new List<(string Name, Person? Person)>();
             foreach (var name in names)
             {
-                // Two People of one name are a choice that only the person makes, so the name gets no tag and stays a proposal.
                 var matches = MatchesOf(people.Concat(newPeople), name);
                 if (matches.Count > 1)
                 {
@@ -87,7 +86,6 @@ public sealed class CleanupCompletion(AppDbContext dbContext)
         return new CleanupOutcome(cleaned, output.Synopsis, output.TopicSuggestions, output.MoodSuggestions, proposals);
     }
 
-    /// <summary>Each Person whose label is the name, in any case and spacing. Duplicate labels are allowed, so there can be many.</summary>
     public static IReadOnlyList<Person> MatchesOf(IEnumerable<Person> people, string name)
         => people.Where(person => Person.KeyOf(person.Label) == Person.KeyOf(name)).ToList();
 

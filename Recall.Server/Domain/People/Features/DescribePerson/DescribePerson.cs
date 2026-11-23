@@ -8,7 +8,6 @@ using MediatR;
 using Resources;
 using Serilog;
 
-/// <summary>Sets the details of a Person. No mention shows them, so no Session changes.</summary>
 public static class DescribePerson
 {
     public sealed record Command(string Id, PersonDetailsDto Dto) : IRequest<PersonDto>;

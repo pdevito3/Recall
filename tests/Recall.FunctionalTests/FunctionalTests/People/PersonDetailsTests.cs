@@ -10,7 +10,6 @@ using Sessions;
 using Shouldly;
 using TestUtilities;
 
-/// <summary>The details of a Person tell two People of one label apart. A mention shows only the label.</summary>
 public class PersonDetailsTests : TestBase
 {
     private const string StaleVersionType = "urn:recall:problem:stale-version";

@@ -8,7 +8,6 @@ using Shouldly;
 
 public class DescribePersonCommandTests : TestBase
 {
-    // A Person is a journal row, so the audit log records only its create and its delete, and no word of the journal (ADR 0020).
     [Test]
     [Property("Rule", "SES-55")]
     public async Task a_detail_edit_writes_no_audit_entry_and_no_entry_holds_a_detail()

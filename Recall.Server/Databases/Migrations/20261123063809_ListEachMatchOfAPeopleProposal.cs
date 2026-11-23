@@ -4,10 +4,7 @@
 
 namespace Recall.Server.Databases.Migrations
 {
-    /// <summary>
-    /// A People proposal stored its match as one ID or null. It now stores each match, and a name with no match has an empty
-    /// list. The order of the proposals stays.
-    /// </summary>
+    /// <inheritdoc />
     public partial class ListEachMatchOfAPeopleProposal : Migration
     {
         /// <inheritdoc />
@@ -26,7 +23,6 @@ namespace Recall.Server.Databases.Migrations
                 """);
         }
 
-        // A proposal keeps its first match, as the code before this migration stored it.
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
