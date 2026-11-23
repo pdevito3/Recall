@@ -1,12 +1,17 @@
+import type { UseQueryResult } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { useEffect, useRef } from 'react'
 
+import type { PersonDto } from '@/api/generated/models/types/person-dto'
+import type { PersonProposalDto } from '@/api/generated/models/types/person-proposal-dto'
+import type { PersonProposalResponseDto } from '@/api/generated/models/types/person-proposal-response-dto'
 import type { SessionDto } from '@/api/generated/models/types/session-dto'
 import { QueryError } from '@/components/query-error'
 import { RefusedSaveAlert } from '@/components/refused-save-alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useActiveModelProvider } from '@/domain/model-providers/apis/model-providers'
+import { usePeople } from '@/domain/people/apis/people'
 import { UnusableAnswerText } from '@/domain/model-providers/components/unusable-answer-text'
 import { refusalOf } from '@/hooks/use-server-errors'
 
@@ -82,30 +87,86 @@ function Suggestions({ session }: CleanupPartProps) {
   )
 }
 
-function PeopleProposals({ session }: CleanupPartProps) {
+function MatchDetails({ person, label }: { person: UseQueryResult<PersonDto>; label: string }) {
+  if (person.isPending) return <span role="status" className="text-muted-foreground">Loading the details of {label}</span>
+  if (person.isError) return <span className="text-muted-foreground">The details of this person did not load. Reload the page to try again.</span>
+  const { fullName, notes } = person.data
+  if (!fullName && !notes) return <span className="text-muted-foreground">No details. Add them on the People page.</span>
+  return (
+    <span className="flex min-w-0 flex-col">
+      {fullName && <span dir="auto" className="wrap-anywhere">{fullName}</span>}
+      {notes && <span dir="auto" className="line-clamp-3 whitespace-pre-line text-muted-foreground wrap-anywhere">{notes}</span>}
+    </span>
+  )
+}
+
+const detailsOf = (person: UseQueryResult<PersonDto>, label: string) =>
+  person.data?.fullName || person.data?.notes || `${label}, no details`
+
+function PeopleProposal({ session, proposal }: CleanupPartProps & { proposal: PersonProposalDto }) {
   const respond = useRespondToProposal(session.id)
+  const matches = usePeople(proposal.matchedPersonIds)
+  const { label } = proposal
+  const answer = (body: Omit<PersonProposalResponseDto, 'label'>) => respond.mutate({ label, ...body })
+
+  return (
+    <li className="flex flex-col gap-2 text-sm">
+      {respond.error && (
+        <RefusedSaveAlert problem={refusalOf(respond.error, []).problem} />
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <span dir="auto" className="min-w-24 flex-1 basis-48 wrap-anywhere">{label}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          {matches.length < 2 && (
+            <Button size="sm" variant="outline" aria-label={`Tag ${label}`} onPress={() => answer({ approve: true, createNew: false })}>
+              Tag
+            </Button>
+          )}
+          {matches.length > 0 && (
+            <Button size="sm" variant="ghost" aria-label={`Add a new person named ${label}`} onPress={() => answer({ approve: true, createNew: true })}>
+              Add a new person
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" aria-label={`Do not tag ${label}`} onPress={() => answer({ approve: false, createNew: false })}>
+            Do not tag
+          </Button>
+        </div>
+      </div>
+      {matches.length === 1 && <MatchDetails person={matches[0]} label={label} />}
+      {matches.length > 1 && (
+        <>
+          <p className="text-muted-foreground">{matches.length} people have this name. Choose the person to tag.</p>
+          <ul aria-label={`People named ${label}`} className="flex flex-col divide-y rounded-lg border">
+            {matches.map((person, index) => (
+              <li key={proposal.matchedPersonIds[index]} className="flex flex-wrap items-center gap-2 p-2 pl-3">
+                <span className="min-w-24 flex-1 basis-48">
+                  <MatchDetails person={person} label={label} />
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  aria-label={`Tag ${detailsOf(person, label)}`}
+                  onPress={() => answer({ approve: true, createNew: false, bindToPersonId: proposal.matchedPersonIds[index] })}
+                >
+                  Tag
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </li>
+  )
+}
+
+function PeopleProposals({ session }: CleanupPartProps) {
   if (session.peopleProposals.length === 0) return null
   return (
     <section className="flex flex-col gap-2">
       <h3 className="text-sm font-medium">People to tag</h3>
-      <ul className="flex flex-col gap-2">
-        {session.peopleProposals.map(({ label }) => (
-          <li key={label} className="flex flex-wrap items-center gap-2 text-sm">
-            {respond.error && respond.variables?.label === label && (
-              <div className="basis-full">
-                <RefusedSaveAlert problem={refusalOf(respond.error, []).problem} />
-              </div>
-            )}
-            <span dir="auto" className="min-w-24 flex-1 basis-48 wrap-anywhere">{label}</span>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" aria-label={`Tag ${label}`} onPress={() => respond.mutate({ label, approve: true, createNew: false })}>
-                Tag
-              </Button>
-              <Button size="sm" variant="ghost" aria-label={`Do not tag ${label}`} onPress={() => respond.mutate({ label, approve: false, createNew: false })}>
-                Do not tag
-              </Button>
-            </div>
-          </li>
+      <ul className="flex flex-col gap-3">
+        {session.peopleProposals.map((proposal) => (
+          <PeopleProposal key={proposal.label} session={session} proposal={proposal} />
         ))}
       </ul>
     </section>

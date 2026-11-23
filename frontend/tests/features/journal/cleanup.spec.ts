@@ -212,6 +212,49 @@ test.describe('the Cleanup of an entry', () => {
     expect(await at.isTheSamePage()).toBe(true)
   })
 
+  test('a proposal of two people of one name shows the details of each, and a Tag tags the chosen one', async ({ page, api }) => {
+    const entry = aSession().cleaned('I met Jane today.')
+    const session = entry.proposingOneOf('Jane', 'per_1', 'per_2').build()
+    api.mock(
+      sessionsApi.oneIs(session),
+      peopleApi.gets(aPerson('per_1', 'Jane', { fullName: 'Jane Park', notes: "Sam's teacher" })),
+      peopleApi.gets(aPerson('per_2', 'Jane', { fullName: 'Jane Doe' })),
+      sessionsApi.proposalAnswered(entry.mentioning('per_2').build()),
+    )
+    const at = entryPage(page)
+    await at.open(session.id)
+    await expect(at.at.textOfThePage("Sam's teacher")).toBeVisible()
+    await expect(at.at.tagPerson('Jane')).toHaveCount(0)
+
+    await at.tagPerson(session.id, 'Jane Doe')
+
+    await expect(at.at.peopleNamed('Jane')).toHaveCount(0)
+    expect(api.last('post', sessionsPaths.respondToProposal(session.id))?.body).toEqual({
+      label: 'Jane',
+      approve: true,
+      createNew: false,
+      bindToPersonId: 'per_2',
+    })
+  })
+
+  test('a proposal of a name that a person has can add a new person of that name', async ({ page, api }) => {
+    const entry = aSession().cleaned('I met Jane today.')
+    const session = entry.proposingOneOf('Jane', 'per_1').build()
+    api.mock(
+      sessionsApi.oneIs(session),
+      peopleApi.gets(aPerson('per_1', 'Jane', { fullName: 'Jane Park' })),
+      sessionsApi.proposalAnswered(entry.mentioning('per_9').build()),
+    )
+    const at = entryPage(page)
+    await at.open(session.id)
+    await expect(at.at.textOfThePage('Jane Park')).toBeVisible()
+
+    await at.addNewPerson(session.id, 'Jane')
+
+    await expect(at.at.addNewPerson('Jane')).toHaveCount(0)
+    expect(api.last('post', sessionsPaths.respondToProposal(session.id))?.body).toEqual({ label: 'Jane', approve: true, createNew: true })
+  })
+
   test('a refused tag shows the words of the server once, and no toast', async ({ page, api }) => {
     const message = 'A tag of this name makes Cleaned too long. Choose Do not tag, or run a new Cleanup.'
     const session = aSession().cleaned('I met Sam today.').proposing('Sam').build()
@@ -361,6 +404,24 @@ test.describe('the Cleanup of an entry on a 320 px phone', () => {
 
     expect((await at.at.rejectSuggestion('Calm').boundingBox())?.y).toBe((await at.at.acceptSuggestion('Calm').boundingBox())?.y)
     expect((await at.at.doNotTagPerson('Sam').boundingBox())?.y).toBe((await at.at.tagPerson('Sam').boundingBox())?.y)
+    expect(await at.at.pageOverflow()).toBe(0)
+  })
+
+  test('the choices of a proposal of two people with long details stay in the page', async ({ page, api }) => {
+    const session = aSession().cleaned('Done.').proposingOneOf('Jane', 'per_1', 'per_2').build()
+    api.mock(
+      sessionsApi.oneIs(session),
+      peopleApi.gets(aPerson('per_1', 'Jane', { fullName: 'P'.repeat(200), notes: 'n'.repeat(1000) })),
+      peopleApi.gets(aPerson('per_2', 'Jane', { fullName: 'Jane Doe' })),
+    )
+    const at = entryPage(page)
+
+    await at.open(session.id)
+    await expect(at.at.tagPerson('Jane Doe')).toBeVisible()
+    await at.at.tagPerson('P'.repeat(200)).scrollIntoViewIfNeeded()
+
+    await expect(at.at.tagPerson('P'.repeat(200))).toBeInViewport({ ratio: 1 })
+    expect((await at.at.doNotTagPerson('Jane').boundingBox())?.y).toBe((await at.at.addNewPerson('Jane').boundingBox())?.y)
     expect(await at.at.pageOverflow()).toBe(0)
   })
 

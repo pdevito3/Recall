@@ -123,6 +123,11 @@ class SessionBuilder {
     return this.with({ peopleProposals: labels.map((label) => ({ label, matchedPersonIds: [], isNew: true, contexts: [] })) })
   }
 
+  /** A proposal of a name that each of the People of the IDs has. */
+  proposingOneOf(label: string, ...matchedPersonIds: string[]) {
+    return this.with({ peopleProposals: [{ label, matchedPersonIds, isNew: matchedPersonIds.length === 0, contexts: [] }] })
+  }
+
   withSynopsis(synopsis: string) {
     return this.with({ synopsis })
   }

@@ -88,6 +88,8 @@ export const entry = (page: Page) => ({
   noProviderNote: page.getByText('An Admin must connect a model provider, pick a model, and make it active first.', { exact: true }),
   tagPerson: (label: string) => page.getByRole('button', { name: `Tag ${label}`, exact: true }),
   doNotTagPerson: (label: string) => page.getByRole('button', { name: `Do not tag ${label}`, exact: true }),
+  addNewPerson: (label: string) => page.getByRole('button', { name: `Add a new person named ${label}`, exact: true }),
+  peopleNamed: (label: string) => page.getByRole('list', { name: `People named ${label}` }),
   acceptSuggestion: (value: string) => page.getByRole('button', { name: `Accept ${value}`, exact: true }),
   rejectSuggestion: (value: string) => page.getByRole('button', { name: `Reject ${value}`, exact: true }),
   synopsis: (text: string) => page.getByRole('main').getByText(text, { exact: true }),
