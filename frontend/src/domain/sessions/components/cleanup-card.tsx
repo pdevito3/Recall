@@ -11,8 +11,8 @@ import { RefusedSaveAlert } from '@/components/refused-save-alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useActiveModelProvider } from '@/domain/model-providers/apis/model-providers'
-import { usePeople } from '@/domain/people/apis/people'
 import { UnusableAnswerText } from '@/domain/model-providers/components/unusable-answer-text'
+import { usePeople } from '@/domain/people/apis/people'
 import { refusalOf } from '@/hooks/use-server-errors'
 
 import {

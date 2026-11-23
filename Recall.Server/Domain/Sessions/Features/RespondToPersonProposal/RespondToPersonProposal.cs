@@ -2,8 +2,8 @@ namespace Recall.Server.Domain.Sessions.Features;
 
 using System.Diagnostics;
 using Databases;
-using Exceptions;
 using Dtos;
+using Exceptions;
 using Mappings;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
