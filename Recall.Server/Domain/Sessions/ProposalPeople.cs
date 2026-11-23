@@ -26,5 +26,5 @@ public sealed class ProposalPeople
         return new ProposalPeople(people);
     }
 
-    public static ProposalPeople Of(IReadOnlyCollection<Person> people) => new(people);
+    internal static ProposalPeople Of(IReadOnlyCollection<Person> people) => new(people);
 }

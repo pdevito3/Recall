@@ -60,13 +60,21 @@ function longValues() {
 // often fails with no answer. So the browser itself sends such a request, and the sweep does not change its answer.
 const SERVER_BODY_LIMIT_BYTES = 30_000_000
 
+const parsedOrUndefined = (text) => {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return undefined
+  }
+}
+
 export async function routeLongValues(context, webUrl) {
   const { walk: rewrite, restore } = longValues()
   await context.route((url) => url.origin === new URL(webUrl).origin && (url.pathname.startsWith('/api/') || url.pathname === '/auth/me'),
     async (route) => {
       if ((route.request().postDataBuffer()?.length ?? 0) > SERVER_BODY_LIMIT_BYTES) return route.continue()
       const sent = route.request().postData()
-      const sentJson = sent && (route.request().headers()['content-type'] ?? '').includes('json') ? JSON.parse(sent) : undefined
+      const sentJson = sent && (route.request().headers()['content-type'] ?? '').includes('json') ? parsedOrUndefined(sent) : undefined
       const response = await route.fetch(sentJson === undefined ? undefined : { postData: JSON.stringify(restore(sentJson)) }).catch(() => null)
       if (!response) return route.abort().catch(() => {})
       const { 'content-length': _, ...headers } = response.headers()
