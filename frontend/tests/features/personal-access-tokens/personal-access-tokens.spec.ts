@@ -115,6 +115,24 @@ test.describe('the personal access tokens of a person', () => {
     await expect(tokens.at.value(value)).toBeVisible()
   })
 
+  test('before a create, Cancel, Escape, and a click outside close the form and send nothing', { tag: '@PAT-1' }, async ({ page, api }) => {
+    api.mock(personalAccessTokensApi.mineAre([]))
+    const tokens = personalAccessTokensPage(page)
+    await tokens.open()
+
+    await tokens.openForm()
+    await tokens.at.cancel.click()
+    await expect(tokens.at.dialog).toHaveCount(0)
+    await tokens.openForm()
+    await page.keyboard.press('Escape')
+    await expect(tokens.at.dialog).toHaveCount(0)
+    await tokens.openForm()
+    await page.mouse.click(5, 5)
+
+    await expect(tokens.at.dialog).toHaveCount(0)
+    expect(api.all('post', personalAccessTokensPaths.mine)).toHaveLength(0)
+  })
+
   test('a double click on Create sends one create', { tag: '@PAT-1' }, async ({ page, api }) => {
     let answer!: () => void
     const answered = new Promise<void>((resolve) => (answer = resolve))
