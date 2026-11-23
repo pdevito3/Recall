@@ -7,8 +7,12 @@ public class Person : BaseEntity, ITenantable, IJournalOwned
 {
     public const string IdPrefix = "per";
     public const int LabelMaxLength = 200;
+    public const int FullNameMaxLength = 200;
+    public const int NotesMaxLength = 1000;
 
     private const string LabelField = "label";
+    private const string FullNameField = "fullName";
+    private const string NotesField = "notes";
 
     [NotSensitive] public string TenantId { get; private set; } = default!;
 
@@ -23,10 +27,17 @@ public class Person : BaseEntity, ITenantable, IJournalOwned
     /// </summary>
     [Sensitive] public string? ProposalKey { get; private set; }
 
-    public static Person Create(string tenantId, string userId, string label)
+    /// <summary>A detail that tells two People of one label apart, such as "Jane Park". A mention never shows it.</summary>
+    [Sensitive] public string? FullName { get; private set; }
+
+    /// <summary>Free words of the person about this Person, such as "Sam's teacher". A mention never shows them.</summary>
+    [Sensitive] public string? Notes { get; private set; }
+
+    public static Person Create(string tenantId, string userId, string label, string? fullName = null, string? notes = null)
     {
         var person = new Person { TenantId = tenantId, UserId = userId };
         person.Rename(label);
+        person.ApplyDetails(fullName, notes);
         return person;
     }
 
@@ -48,6 +59,38 @@ public class Person : BaseEntity, ITenantable, IJournalOwned
         ValidationException.ThrowWhenLongerThan(trimmed, LabelMaxLength, LabelField, $"The name must not have more than {LabelMaxLength} characters.");
         Label = trimmed;
         ProposalKey = null;
+    }
+
+    /// <summary>
+    /// Sets the details that tell People of one label apart. The label, the proposal key, and each mention stay as they are.
+    /// A blank detail becomes no detail.
+    /// </summary>
+    public void Describe(string? fullName, string? notes, uint version)
+    {
+        GuardVersion(version);
+        ApplyDetails(fullName, notes);
+    }
+
+    private void ApplyDetails(string? fullName, string? notes)
+    {
+        string? full = null;
+        if (fullName is not null)
+        {
+            ValidationException.ThrowWhenHasCharacterNotStorable(fullName, FullNameField, "The full name has a character that is not allowed.");
+            full = VisibleText.OneLine(fullName);
+            ValidationException.ThrowWhenLongerThan(full, FullNameMaxLength, FullNameField, $"The full name must not have more than {FullNameMaxLength} characters.");
+        }
+
+        string? note = null;
+        if (notes is not null)
+        {
+            ValidationException.ThrowWhenHasCharacterNotStorable(notes, NotesField, "The notes have a character that is not allowed.");
+            note = VisibleText.Without(notes).Trim();
+            ValidationException.ThrowWhenLongerThan(note, NotesMaxLength, NotesField, $"The notes must not have more than {NotesMaxLength} characters.");
+        }
+
+        FullName = string.IsNullOrEmpty(full) ? null : full;
+        Notes = string.IsNullOrEmpty(note) ? null : note;
     }
 
     /// <summary>A delete runs again when a Session save races it, so a stale version that the caller saw must not run it again.</summary>

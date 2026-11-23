@@ -889,6 +889,11 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnName("id")
                         .UseCollation("BINARY");
 
+                    b.Property<string>("FullName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("full_name");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("INTEGER")
                         .HasColumnName("is_deleted");
@@ -902,6 +907,11 @@ namespace Recall.Server.Databases.Migrations
                     b.Property<string>("LastModifiedOn")
                         .HasColumnType("TEXT")
                         .HasColumnName("last_modified_on");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("notes");
 
                     b.Property<string>("ProposalKey")
                         .HasMaxLength(200)

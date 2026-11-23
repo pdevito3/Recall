@@ -62,6 +62,8 @@ public class StringColumnLengthTests
         ["agents.name"] = new("name", Text, v => TestGraph.Start(out _).AddTenant(out _).AddAgent(out _, a => a.Name = v)),
         ["agents.client_id"] = new("clientId", Text, v => TestGraph.Start(out _).AddTenant(out _).AddAgent(out _, a => a.ClientId = v)),
         ["people.label"] = new("label", Text, v => Person.Create("ten_1", "usr_1", v)),
+        ["people.full_name"] = new("fullName", Text, v => Person.Create("ten_1", "usr_1", "Jane", v)),
+        ["people.notes"] = new("notes", Text, v => Person.Create("ten_1", "usr_1", "Jane", null, v)),
         ["corrections.canonical_term"] = new("canonicalTerm", Text, v => Correction.Create("ten_1", "usr_1", v, [], false)),
         ["sessions.client_session_id"] = new("clientSessionId", Text, v => Session.Create("ten_1", "usr_1", v, DateTimeOffset.UnixEpoch, null, TimeZoneId.Utc, DateTimeOffset.UnixEpoch)),
         ["sessions.activity"] = new("activity", Text, v => SessionMetadata.Of(v, [], [])),

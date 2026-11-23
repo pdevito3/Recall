@@ -17,6 +17,8 @@ public sealed class PersonConfiguration : IEntityTypeConfiguration<Person>
         builder.Property(e => e.UserId).IsRequired().HasMaxLength(EntityId.MaxLength).UseCollation(EntityId.Collation);
         builder.Property(e => e.Label).IsRequired().HasMaxLength(Person.LabelMaxLength);
         builder.Property(e => e.ProposalKey).HasMaxLength(Person.LabelMaxLength);
+        builder.Property(e => e.FullName).HasMaxLength(Person.FullNameMaxLength);
+        builder.Property(e => e.Notes).HasMaxLength(Person.NotesMaxLength);
 
         builder.HasOne<Tenant>().WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.ClientNoAction);
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.ClientNoAction);

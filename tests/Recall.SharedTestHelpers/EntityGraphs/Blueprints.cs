@@ -94,7 +94,7 @@ public static class Blueprints
     public static readonly ChildInputBlueprint<TestSeed, User, PersonInput, Server.Domain.People.Person> Person = Blueprint
         .ChildFromInput<TestSeed, User, PersonInput, Server.Domain.People.Person>(
             () => new(),
-            (user, input, _) => Server.Domain.People.Person.Create(user.TenantId, user.Id, input.Label!))
+            (user, input, _) => Server.Domain.People.Person.Create(user.TenantId, user.Id, input.Label!, input.FullName, input.Notes))
         .Derive(i => i.Label, (_, _) => Faker.Person.FullName);
 
     public static readonly ChildInputBlueprint<TestSeed, User, CorrectionInput, Correction> Correction = Blueprint

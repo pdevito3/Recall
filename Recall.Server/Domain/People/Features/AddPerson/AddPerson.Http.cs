@@ -21,7 +21,7 @@ public sealed class AddPersonEndpoint : IEndpoint
     /// Adds a Person to the directory of the caller.
     /// </summary>
     public static async Task<CreatedAtRoute<PersonDto>> Handle(
-        PersonLabelDto dto,
+        PersonForCreationDto dto,
         IMediator mediator,
         CancellationToken cancellationToken)
     {

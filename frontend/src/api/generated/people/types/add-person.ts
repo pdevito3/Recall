@@ -4,7 +4,7 @@
 */
 
 import type { PersonDto } from '../../models/types/person-dto'
-import type { PersonLabelDto } from '../../models/types/person-label-dto'
+import type { PersonForCreationDto } from '../../models/types/person-for-creation-dto'
 import type { ProblemDetails } from '../../models/types/problem-details'
 import type { ValidationProblemDetails } from '../../models/types/validation-problem-details'
 
@@ -28,7 +28,7 @@ export type AddPersonStatus422 = ValidationProblemDetails;
 
 export type AddPersonStatus507 = ProblemDetails;
 
-export type AddPersonBody = PersonLabelDto;
+export type AddPersonBody = PersonForCreationDto;
 
 export type AddPersonOptions = {
     body: AddPersonBody;
