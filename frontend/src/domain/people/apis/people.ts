@@ -9,7 +9,7 @@ import { getPerson } from '@/api/generated/people/clients/get-person'
 import { getPersonList } from '@/api/generated/people/clients/get-person-list'
 import { renamePerson } from '@/api/generated/people/clients/rename-person'
 import { parsePagination } from '@/lib/pagination'
-import { retryUnlessRefused } from '@/lib/problem-details'
+import { isProblemDetailsError, retryUnlessRefused } from '@/lib/problem-details'
 
 import { SessionKeys } from '@/domain/sessions/apis/session.keys'
 
@@ -52,19 +52,26 @@ export function personOptions(id: string) {
 
 /**
  * The People of these IDs, in their order. The directory gives each one it holds. An ID that the cached directory lacks
- * is a Person added since the directory loaded, so it is read on its own, and a 404 leaves it out.
+ * is a Person added since the directory loaded, so it is read on its own. Only a 404 leaves it out. Any other failure
+ * is the `error`, because the list is then shorter than the Server's and must not be offered as the whole choice.
  */
 export function usePeopleOf(ids: readonly string[]) {
   const directory = usePeopleDirectory()
   const held = new Map(directory.data?.map((person) => [person.id, person]))
-  const unheld = useQueries({ queries: directory.isSuccess ? ids.filter((id) => !held.has(id)).map((id) => personOptions(id)) : [] })
+  const unheld = useQueries({
+    queries: directory.data ? ids.filter((id) => !held.has(id)).map((id) => personOptions(id)) : [],
+  })
   const read = new Map(unheld.flatMap((query) => (query.data ? [[query.data.id, query.data] as const] : [])))
+  const failed = unheld.find((query) => !query.data && query.isError && !isNotFound(query.error))
   return {
     people: ids.flatMap((id) => held.get(id) ?? read.get(id) ?? []),
     isPending: directory.isPending || unheld.some((query) => query.isPending),
-    directory,
+    error: directory.data ? (failed?.error ?? null) : directory.error,
+    retry: () => (directory.data ? failed?.refetch() : directory.refetch()),
   }
 }
+
+const isNotFound = (error: unknown) => isProblemDetailsError(error) && error.status === 404
 
 export function useAddPerson() {
   const queryClient = useQueryClient()

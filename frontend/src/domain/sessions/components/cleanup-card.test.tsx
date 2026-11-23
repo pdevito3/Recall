@@ -449,6 +449,29 @@ test('a match that is gone when the card reads it is not shown, and a Tag tags t
   expect(await sentResponses()).toEqual([{ label: 'Jane', approve: true, createNew: false, bindToPersonId: 'per_1' }])
 })
 
+test('a match whose read fails with other than a 404 hides the plain Tag, says so, and a retry shows the choice', async () => {
+  // Arrange
+  const sessionAnswer = { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id, janeDoe.id)) } as const
+  const failure = { type: 'https://tools.ietf.org/html/rfc9110#section-15.6.1', title: 'Internal Server Error', status: 500 }
+  const screen = await renderCard([sessionAnswer, directoryOf(janePark), { method: 'GET', path: `/api/v1/people/${janeDoe.id}`, status: 500, body: failure }])
+  await expect.element(screen.getByText('Your People did not load, so the card cannot show who has this name.')).toBeVisible()
+  await expect.element(screen.getByRole('button', { name: 'Tag Jane', exact: true })).not.toBeInTheDocument()
+  await commands.answerRequests([
+    { method: 'GET', path: '/api/v1/model-providers/active', body: { name: 'Mine' } },
+    sessionAnswer,
+    directoryOf(janePark),
+    { method: 'GET', path: `/api/v1/people/${janeDoe.id}`, body: janeDoe },
+  ])
+
+  // Act
+  await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+  // Assert
+  const choices = screen.getByRole('list', { name: 'People named Jane' })
+  await expect.element(choices.getByText('Jane Doe')).toBeVisible()
+  await expect.element(screen.getByText('Your People did not load, so the card cannot show who has this name.')).not.toBeInTheDocument()
+})
+
 test('the choice lists the matches of the Server in its order', async () => {
   // Arrange
   const screen = await renderCard([
@@ -503,6 +526,8 @@ test('a Tag that the Server refuses because a second Person has the name now sho
     ...answers,
     { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id, janeDoe.id)) },
     directoryOf(janePark, janeDoe),
+    // The Session can come back before the directory, and then the card reads the new Jane on her own.
+    { method: 'GET', path: `/api/v1/people/${janeDoe.id}`, body: janeDoe },
   ])
 
   // Act

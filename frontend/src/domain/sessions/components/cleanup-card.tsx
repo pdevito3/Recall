@@ -105,7 +105,7 @@ interface PeopleProposalsProps extends CleanupPartProps {
 
 function PeopleProposal({ session, proposal, onAnswered }: PeopleProposalsProps & { proposal: PersonProposalDto }) {
   const respond = useRespondToProposal(session.id)
-  const { people: matches, isPending, directory } = usePeopleOf(proposal.matchedPersonIds)
+  const { people: matches, isPending, error, retry } = usePeopleOf(proposal.matchedPersonIds)
   const { label } = proposal
   const answer = (body: Omit<PersonProposalResponseDto, 'label'>) => respond.mutate({ label, ...body }, { onSuccess: onAnswered })
 
@@ -117,7 +117,7 @@ function PeopleProposal({ session, proposal, onAnswered }: PeopleProposalsProps 
       <div className="flex flex-wrap items-center gap-2">
         <span dir="auto" className="min-w-24 flex-1 basis-48 wrap-anywhere">{label}</span>
         <div className="flex flex-wrap items-center gap-2">
-          {!isPending && matches.length < 2 && (
+          {!isPending && !error && matches.length < 2 && (
             <Button
               size="sm"
               variant="outline"
@@ -138,8 +138,8 @@ function PeopleProposal({ session, proposal, onAnswered }: PeopleProposalsProps 
         </div>
       </div>
       {isPending && <span role="status" className="text-muted-foreground">Loading the People named {label}</span>}
-      {directory.isError && (
-        <QueryError title="Your People did not load, so the card cannot show who has this name." error={directory.error} onRetry={() => void directory.refetch()} />
+      {error && (
+        <QueryError title="Your People did not load, so the card cannot show who has this name." error={error} onRetry={() => void retry()} />
       )}
       {matches.length === 1 && <MatchDetails person={matches[0]} />}
       {matches.length > 1 && (
