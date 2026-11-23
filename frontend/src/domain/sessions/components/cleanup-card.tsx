@@ -106,6 +106,8 @@ interface PeopleProposalsProps extends CleanupPartProps {
 function PeopleProposal({ session, proposal, onAnswered }: PeopleProposalsProps & { proposal: PersonProposalDto }) {
   const respond = useRespondToProposal(session.id)
   const { people: matches, isPending, error, retry } = usePeopleOf(proposal.matchedPersonIds)
+  // A Tag shows only when the card holds each match that the Server lists, so a shown choice is the whole choice.
+  const isWholeChoice = !isPending && !error
   const { label } = proposal
   const answer = (body: Omit<PersonProposalResponseDto, 'label'>) => respond.mutate({ label, ...body }, { onSuccess: onAnswered })
 
@@ -117,7 +119,7 @@ function PeopleProposal({ session, proposal, onAnswered }: PeopleProposalsProps 
       <div className="flex flex-wrap items-center gap-2">
         <span dir="auto" className="min-w-24 flex-1 basis-48 wrap-anywhere">{label}</span>
         <div className="flex flex-wrap items-center gap-2">
-          {!isPending && !error && matches.length < 2 && (
+          {isWholeChoice && matches.length < 2 && (
             <Button
               size="sm"
               variant="outline"
@@ -151,7 +153,7 @@ function PeopleProposal({ session, proposal, onAnswered }: PeopleProposalsProps 
                 <span className="min-w-24 flex-1 basis-48">
                   <MatchDetails person={person} />
                 </span>
-                {!error && (
+                {isWholeChoice && (
                   <Button
                     size="sm"
                     variant="outline"
