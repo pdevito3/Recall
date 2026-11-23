@@ -14,6 +14,7 @@ import { useActiveModelProvider } from '@/domain/model-providers/apis/model-prov
 import { UnusableAnswerText } from '@/domain/model-providers/components/unusable-answer-text'
 import { usePeople } from '@/domain/people/apis/people'
 import { refusalOf } from '@/hooks/use-server-errors'
+import { isProblemDetailsError } from '@/lib/problem-details'
 
 import {
   useApplyWaitingCleanup,
@@ -100,12 +101,15 @@ function MatchDetails({ person, label }: { person: UseQueryResult<PersonDto>; la
   )
 }
 
-const detailsOf = (person: UseQueryResult<PersonDto>, label: string) =>
-  person.data?.fullName || person.data?.notes || `${label}, no details`
+const detailsOf = (person: UseQueryResult<PersonDto>, label: string, index: number) =>
+  person.data?.fullName || person.data?.notes || `${label} ${index + 1}, no details`
 
 function PeopleProposal({ session, proposal }: CleanupPartProps & { proposal: PersonProposalDto }) {
   const respond = useRespondToProposal(session.id)
+  // A Person that the person deleted after the Cleanup is no longer a choice.
   const matches = usePeople(proposal.matchedPersonIds)
+    .map((person, index) => ({ person, id: proposal.matchedPersonIds[index] }))
+    .filter(({ person }) => !(isProblemDetailsError(person.error) && person.error.status === 404))
   const { label } = proposal
   const answer = (body: Omit<PersonProposalResponseDto, 'label'>) => respond.mutate({ label, ...body })
 
@@ -132,21 +136,21 @@ function PeopleProposal({ session, proposal }: CleanupPartProps & { proposal: Pe
           </Button>
         </div>
       </div>
-      {matches.length === 1 && <MatchDetails person={matches[0]} label={label} />}
+      {matches.length === 1 && <MatchDetails person={matches[0].person} label={label} />}
       {matches.length > 1 && (
         <>
           <p className="text-muted-foreground">{matches.length} people have this name. Choose the person to tag.</p>
           <ul aria-label={`People named ${label}`} className="flex flex-col divide-y rounded-lg border">
-            {matches.map((person, index) => (
-              <li key={proposal.matchedPersonIds[index]} className="flex flex-wrap items-center gap-2 p-2 pl-3">
+            {matches.map(({ person, id }, index) => (
+              <li key={id} className="flex flex-wrap items-center gap-2 p-2 pl-3">
                 <span className="min-w-24 flex-1 basis-48">
                   <MatchDetails person={person} label={label} />
                 </span>
                 <Button
                   size="sm"
                   variant="outline"
-                  aria-label={`Tag ${detailsOf(person, label)}`}
-                  onPress={() => answer({ approve: true, createNew: false, bindToPersonId: proposal.matchedPersonIds[index] })}
+                  aria-label={`Tag ${detailsOf(person, label, index)}`}
+                  onPress={() => answer({ approve: true, createNew: false, bindToPersonId: id })}
                 >
                   Tag
                 </Button>

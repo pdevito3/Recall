@@ -26,6 +26,7 @@ Preconditions:
 - **Details.** Choose the first `Edit the details of Jane`, fill `Full name` with a long name with no spaces and `Notes`, and choose `Save details`. The `PUT /api/v1/people/<id>/details` answer keeps the label `Jane`, and the list shows its details. Do the same for the second Jane with `Jane Doe`.
 - **Proposal.** Through the API from the page, create an entry, save its words, and `POST /api/v1/sessions/<id>/cleanup/result` with `peopleProposal: ['Jane']`. The answer has both IDs in `matchedPersonIds` and no `personIds`. Open the entry: `People named Jane` lists both, with their details.
 - **Choose.** Choose `Tag Jane Doe`. The answer has `personIds` of that Jane only, and the proposal leaves.
+- **Mention.** In the editor, type ` @Jane`. The `People` picker lists two options, each with its full name under `Jane`.
 
 Recipe: `recipes/people.mjs`.
 

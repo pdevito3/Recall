@@ -21,3 +21,14 @@ test('a query matches any part of the name, with case ignored, and offers a new 
 test('an exact name offers no new person of that name', () => {
   expect(optionsFor(people, 'ana reyes')).toEqual([{ kind: 'person', personId: '1', label: 'Ana Reyes' }])
 })
+
+test('a person option carries the full name, so two people of one name differ', () => {
+  const janes = [
+    { id: '1', label: 'Jane', fullName: 'Jane Park' },
+    { id: '2', label: 'Jane', fullName: null },
+  ]
+  expect(optionsFor(janes, 'jane')).toEqual([
+    { kind: 'person', personId: '1', label: 'Jane', fullName: 'Jane Park' },
+    { kind: 'person', personId: '2', label: 'Jane', fullName: null },
+  ])
+})

@@ -380,7 +380,27 @@ test('a match with no details says where to add them', async () => {
 
   // Assert
   await expect.element(choices.getByText('No details. Add them on the People page.')).toBeVisible()
-  await expect.element(choices.getByRole('button', { name: 'Tag Jane, no details' })).toBeVisible()
+  await expect.element(choices.getByRole('button', { name: 'Tag Jane 2, no details' })).toBeVisible()
+})
+
+test('a match that was deleted after the Cleanup is not a choice, and a Tag leaves the choice to the Server', async () => {
+  // Arrange
+  const gone = { type: 'https://tools.ietf.org/html/rfc9110#section-15.5.5', title: 'Not Found', status: 404 }
+  const screen = await renderCard([
+    { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id, janeDoe.id)) },
+    { method: 'GET', path: '/api/v1/people/per_1', body: janePark },
+    { method: 'GET', path: '/api/v1/people/per_2', status: 404, body: gone },
+    { method: 'POST', path: respondPath, body: session({}) },
+  ])
+  await expect.element(screen.getByText('Jane Park')).toBeVisible()
+  await commands.takeSentRequests()
+
+  // Act
+  await userEvent.click(screen.getByRole('button', { name: 'Tag Jane', exact: true }))
+
+  // Assert
+  await expect.element(screen.getByText('People to tag')).not.toBeInTheDocument()
+  expect(await sentResponses()).toEqual([{ label: 'Jane', approve: true, createNew: false }])
 })
 
 test('a Tag that the Server refuses because two people have the name shows why, and the proposal stays', async () => {

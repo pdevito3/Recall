@@ -2,7 +2,7 @@ import { useImperativeHandle, useState, type Ref } from 'react'
 
 import { cn } from '@/lib/utils'
 
-export type MentionOption = { kind: 'person'; personId: string; label: string } | { kind: 'create'; label: string }
+export type MentionOption = { kind: 'person'; personId: string; label: string; fullName?: string | null } | { kind: 'create'; label: string }
 
 export interface MentionListHandle {
   onKeyDown: (event: KeyboardEvent) => boolean
@@ -60,7 +60,14 @@ export function MentionList({ items, command, ref }: MentionListProps) {
             command(item)
           }}
         >
-          {item.kind === 'person' ? item.label : `Add ${item.label} to your people`}
+          {item.kind === 'person' ? (
+            <span className="flex min-w-0 flex-col">
+              <span>{item.label}</span>
+              {item.fullName && <span dir="auto" className="line-clamp-2 text-xs text-muted-foreground">{item.fullName}</span>}
+            </span>
+          ) : (
+            `Add ${item.label} to your people`
+          )}
         </button>
       ))}
     </div>

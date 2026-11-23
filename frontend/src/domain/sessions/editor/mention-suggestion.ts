@@ -6,7 +6,7 @@ import { Notification } from '@/components/notification'
 import { MentionList, type MentionListHandle, type MentionOption } from './mention-list'
 
 export interface MentionSource {
-  people: () => { id: string; label: string }[]
+  people: () => { id: string; label: string; fullName?: string | null }[]
   addPerson: (label: string) => Promise<{ id: string; label: string }>
 }
 
@@ -14,10 +14,10 @@ const shownOptions = 8
 const gapPx = 4
 const edgePx = 8
 
-export function optionsFor(people: { id: string; label: string }[], query: string): MentionOption[] {
+export function optionsFor(people: { id: string; label: string; fullName?: string | null }[], query: string): MentionOption[] {
   const wanted = query.trim().toLowerCase()
   const matches = people.filter((person) => person.label.toLowerCase().includes(wanted)).slice(0, shownOptions)
-  const options: MentionOption[] = matches.map((person) => ({ kind: 'person', personId: person.id, label: person.label }))
+  const options: MentionOption[] = matches.map((person) => ({ kind: 'person', personId: person.id, label: person.label, fullName: person.fullName }))
   const hasExactMatch = people.some((person) => person.label.toLowerCase() === wanted)
   return wanted && !hasExactMatch ? [...options, { kind: 'create', label: query.trim() }] : options
 }

@@ -95,4 +95,16 @@ export default async ({ page, step, capture, expect, login }) => {
     await expect(page.getByRole('list', { name: 'People named Jane' })).toHaveCount(0)
   })
   await capture('tagged-jane-doe')
+
+  await step('the @ picker of the editor shows the full name under each Jane', async () => {
+    const editor = page.locator('.ProseMirror').first()
+    await editor.click()
+    await page.keyboard.press('End')
+    await page.keyboard.type(' @Jane')
+    const picker = page.getByRole('listbox', { name: 'People' })
+    await expect(picker.getByRole('option')).toHaveCount(2)
+    await expect(picker.getByRole('option', { name: 'Jane Jane Doe' })).toBeVisible()
+  })
+  await capture('mention-picker')
+  await page.keyboard.press('Escape')
 }
