@@ -59,8 +59,8 @@ function TagLine({ label, tags }: { label: string; tags: string[] }) {
     <div className="flex flex-wrap items-center gap-1.5 text-sm">
       <span className="text-muted-foreground">{label}</span>
       {tags.map((tag) => (
-        <Badge key={tag} variant="secondary" className="max-w-full">
-          <span dir="auto" className="truncate">{tag}</span>
+        <Badge key={tag} variant="secondary" className="h-auto max-w-full whitespace-normal">
+          <span dir="auto" className="min-w-0 wrap-anywhere">{tag}</span>
         </Badge>
       ))}
     </div>
