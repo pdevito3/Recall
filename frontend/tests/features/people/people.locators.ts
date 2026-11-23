@@ -9,4 +9,8 @@ export const people = (page: Page) => ({
   rename: (name: string) => page.getByRole('button', { name: `Rename ${name}`, exact: true }),
   renameField: page.getByRole('dialog').getByRole('textbox', { name: 'Name' }),
   saveName: page.getByRole('button', { name: 'Save name', exact: true }),
+  details: (name: string) => page.getByRole('button', { name: `Edit the details of ${name}`, exact: true }),
+  fullNameField: page.getByRole('dialog').getByRole('textbox', { name: 'Full name' }),
+  notesField: page.getByRole('dialog').getByRole('textbox', { name: 'Notes' }),
+  saveDetails: page.getByRole('button', { name: 'Save details', exact: true }),
 })

@@ -5,9 +5,17 @@ import { paginationHeaders } from './pagination'
 export const peoplePaths = {
   list: '/api/v1/people',
   one: (id: string) => `/api/v1/people/${id}`,
+  details: (id: string) => `/api/v1/people/${id}/details`,
 }
 
-export const aPerson = (id: string, label: string): PersonDto => ({ id, label, version: 1 })
+export const aPerson = (id: string, label: string, details: Pick<PersonDto, 'fullName' | 'notes'> = {}): PersonDto => ({
+  id,
+  label,
+  fullName: null,
+  notes: null,
+  ...details,
+  version: 1,
+})
 
 export const peopleApi = {
   listIs(people: PersonDto[]): MockRoute {
@@ -20,5 +28,13 @@ export const peopleApi = {
 
   renames(person: PersonDto): MockRoute {
     return { method: 'put', path: peoplePaths.one(person.id), status: 200, body: person }
+  },
+
+  gets(person: PersonDto): MockRoute {
+    return { method: 'get', path: peoplePaths.one(person.id), status: 200, body: person }
+  },
+
+  describes(person: PersonDto): MockRoute {
+    return { method: 'put', path: peoplePaths.details(person.id), status: 200, body: person }
   },
 }

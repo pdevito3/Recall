@@ -1,8 +1,11 @@
-import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryOptions, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import type { PersonDetailsDto } from '@/api/generated/models/types/person-details-dto'
 import type { PersonDto } from '@/api/generated/models/types/person-dto'
 import { addPerson } from '@/api/generated/people/clients/add-person'
 import { deletePerson } from '@/api/generated/people/clients/delete-person'
+import { describePerson } from '@/api/generated/people/clients/describe-person'
+import { getPerson } from '@/api/generated/people/clients/get-person'
 import { getPersonList } from '@/api/generated/people/clients/get-person-list'
 import { renamePerson } from '@/api/generated/people/clients/rename-person'
 import { parsePagination } from '@/lib/pagination'
@@ -38,6 +41,20 @@ export function usePeopleDirectory() {
   return useQuery(peopleDirectoryOptions)
 }
 
+export function personOptions(id: string) {
+  return queryOptions({
+    queryKey: PersonKeys.detail(id),
+    queryFn: ({ signal }) => getPerson({ path: { id }, signal, options: { suppressErrorToast: true } }),
+    staleTime: 60_000,
+    retry: retryUnlessRefused,
+  })
+}
+
+/** Each Person of the IDs, in the order of the IDs. */
+export function usePeople(ids: readonly string[]) {
+  return useQueries({ queries: ids.map((id) => personOptions(id)) })
+}
+
 export function useAddPerson() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -56,6 +73,19 @@ export function useRenamePerson() {
         queryClient.invalidateQueries({ queryKey: PersonKeys.all }),
         queryClient.invalidateQueries({ queryKey: SessionKeys.all }),
       ])
+    },
+  })
+}
+
+export function useDescribePerson() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: PersonDetailsDto }) =>
+      describePerson({ path: { id }, body, options: { suppressErrorToast: true } }),
+    onMutate: ({ id }) => queryClient.cancelQueries({ queryKey: PersonKeys.detail(id) }),
+    onSuccess: (person) => {
+      queryClient.setQueryData(PersonKeys.detail(person.id), person)
+      return queryClient.invalidateQueries({ queryKey: PersonKeys.directory() })
     },
   })
 }
