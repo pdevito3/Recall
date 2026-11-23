@@ -65,7 +65,7 @@ public static class RespondToPersonProposal
                 case PersonProposalApproval.Bind bind:
                     return bind.Person;
                 case PersonProposalApproval.Create create:
-                    var person = create.Kind == NewPersonKind.AskedFor
+                    var person = create.Kind == NewPersonKind.AnotherOfTheName
                         ? Person.Create(session.TenantId, session.UserId, proposal.Label)
                         : Person.CreateFromProposedName(session.TenantId, session.UserId, proposal.Label);
                     await dbContext.People.AddAsync(person, cancellationToken);

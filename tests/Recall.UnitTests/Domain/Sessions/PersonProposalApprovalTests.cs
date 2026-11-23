@@ -52,7 +52,7 @@ public class PersonProposalApprovalTests
 
         // Assert
         bound.ShouldBeOfType<PersonProposalApproval.Bind>().Person.ShouldBe(doe);
-        added.ShouldBeOfType<PersonProposalApproval.Create>().Kind.ShouldBe(NewPersonKind.AskedFor);
+        added.ShouldBeOfType<PersonProposalApproval.Create>().Kind.ShouldBe(NewPersonKind.AnotherOfTheName);
     }
 
     [Test]
@@ -70,6 +70,6 @@ public class PersonProposalApprovalTests
 
         // Assert
         bound.ShouldBeOfType<PersonProposalApproval.Bind>().Person.ShouldBe(renamed);
-        added.ShouldBeOfType<PersonProposalApproval.Create>().Kind.ShouldBe(NewPersonKind.ProposedName);
+        added.ShouldBeOfType<PersonProposalApproval.Create>().Kind.ShouldBe(NewPersonKind.OnePerProposedName);
     }
 }

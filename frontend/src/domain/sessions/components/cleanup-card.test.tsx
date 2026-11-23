@@ -309,6 +309,7 @@ const sentResponses = async () =>
   (await commands.takeSentRequests()).filter((request) => request.path === respondPath).map((request) => request.body)
 
 test('a proposal of two people of one name shows the details of each, and a Tag tags the one that the person chose', async () => {
+  // Arrange
   const screen = await renderCard([
     { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id, janeDoe.id)) },
     { method: 'GET', path: '/api/v1/people/per_1', body: janePark },
@@ -321,13 +322,16 @@ test('a proposal of two people of one name shows the details of each, and a Tag 
   await expect.element(screen.getByRole('button', { name: 'Tag Jane', exact: true })).not.toBeInTheDocument()
   await commands.takeSentRequests()
 
+  // Act
   await userEvent.click(screen.getByRole('button', { name: 'Tag Jane Doe' }))
 
+  // Assert
   await expect.element(screen.getByText('People to tag')).not.toBeInTheDocument()
   expect(await sentResponses()).toEqual([{ label: 'Jane', approve: true, createNew: false, bindToPersonId: 'per_2' }])
 })
 
 test('a proposal of two people of one name can add a new person', async () => {
+  // Arrange
   const screen = await renderCard([
     { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id, janeDoe.id)) },
     { method: 'GET', path: '/api/v1/people/per_1', body: janePark },
@@ -337,13 +341,16 @@ test('a proposal of two people of one name can add a new person', async () => {
   await expect.element(screen.getByText('Jane Doe')).toBeVisible()
   await commands.takeSentRequests()
 
+  // Act
   await userEvent.click(screen.getByRole('button', { name: 'Add a new person named Jane' }))
 
+  // Assert
   await expect.element(screen.getByText('People to tag')).not.toBeInTheDocument()
   expect(await sentResponses()).toEqual([{ label: 'Jane', approve: true, createNew: true }])
 })
 
 test('a proposal of one match shows its details, and a Tag leaves the choice to the Server', async () => {
+  // Arrange
   const screen = await renderCard([
     { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id)) },
     { method: 'GET', path: '/api/v1/people/per_1', body: janePark },
@@ -352,26 +359,32 @@ test('a proposal of one match shows its details, and a Tag leaves the choice to 
   await expect.element(screen.getByText('Jane Park')).toBeVisible()
   await commands.takeSentRequests()
 
+  // Act
   await userEvent.click(screen.getByRole('button', { name: 'Tag Jane', exact: true }))
 
+  // Assert
   await expect.element(screen.getByText('People to tag')).not.toBeInTheDocument()
   expect(await sentResponses()).toEqual([{ label: 'Jane', approve: true, createNew: false }])
 })
 
 test('a match with no details says where to add them', async () => {
+  // Arrange
   const screen = await renderCard([
     { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id, janeDoe.id)) },
     { method: 'GET', path: '/api/v1/people/per_1', body: janePark },
     { method: 'GET', path: '/api/v1/people/per_2', body: { ...janeDoe, fullName: null } },
   ])
 
+  // Act
   const choices = screen.getByRole('list', { name: 'People named Jane' })
 
+  // Assert
   await expect.element(choices.getByText('No details. Add them on the People page.')).toBeVisible()
   await expect.element(choices.getByRole('button', { name: 'Tag Jane, no details' })).toBeVisible()
 })
 
 test('a Tag that the Server refuses because two people have the name shows why, and the proposal stays', async () => {
+  // Arrange
   const askWhich = 'Two or more People have this name. Choose the person to tag, or add a new person.'
   const screen = await renderCard([
     { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id)) },
@@ -385,8 +398,10 @@ test('a Tag that the Server refuses because two people have the name shows why, 
   ])
   await expect.element(screen.getByText('Jane Park')).toBeVisible()
 
+  // Act
   await userEvent.click(screen.getByRole('button', { name: 'Tag Jane', exact: true }))
 
+  // Assert
   await expect.element(screen.getByRole('alert')).toHaveTextContent(askWhich)
   await expect.element(screen.getByRole('button', { name: 'Add a new person named Jane' })).toBeVisible()
 })

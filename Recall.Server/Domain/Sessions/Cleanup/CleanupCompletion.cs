@@ -48,15 +48,12 @@ public sealed class CleanupCompletion(AppDbContext dbContext)
         {
             var spans = new List<MentionSpan>();
             var newPeople = new List<Person>();
-            var personOfName = new List<(string Name, Person? Person)>();
+            var personOfName = new List<(string Name, Person Person)>();
             foreach (var name in names)
             {
                 var matches = MatchesOf(people.Concat(newPeople), name);
                 if (matches.Count > 1)
-                {
-                    personOfName.Add((name, null));
                     continue;
-                }
 
                 var person = matches.SingleOrDefault();
                 if (person is null)
@@ -74,8 +71,9 @@ public sealed class CleanupCompletion(AppDbContext dbContext)
             cleaned = MentionInsertion.Insert(cleaned, spans);
             var tagged = PersonMentions.PersonIdsIn(cleaned);
             added.AddRange(newPeople.Where(person => tagged.Contains(person.Id)));
-            proposals = personOfName.Where(pair => pair.Person is null || !tagged.Contains(pair.Person.Id))
-                .Select(pair => new PersonProposal(pair.Name, IdsOf(MatchesOf(people, pair.Name))))
+            var taggedNames = personOfName.Where(pair => tagged.Contains(pair.Person.Id)).Select(pair => pair.Name).ToHashSet();
+            proposals = names.Where(name => !taggedNames.Contains(name))
+                .Select(name => new PersonProposal(name, IdsOf(MatchesOf(people, name))))
                 .ToList();
         }
 

@@ -28,7 +28,7 @@ public static partial class SessionMapper
 
         var tagged = PersonMentions.PersonIdsIn(session.Cleaned.Text);
         var plain = ProseMirrorToPlainText.Render(session.Cleaned.Text);
-        return session.PeopleProposals.Where(proposal => !proposal.MatchedPersonIds.Any(tagged.Contains)).Select(proposal => new PersonProposalDto
+        return session.PeopleProposals.Where(proposal => !proposal.IsSettledBy(tagged)).Select(proposal => new PersonProposalDto
         {
             Label = proposal.Label,
             MatchedPersonIds = proposal.MatchedPersonIds,

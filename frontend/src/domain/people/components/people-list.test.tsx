@@ -98,14 +98,17 @@ test('a delete after a rename keeps the person, shows the message, and shows the
 const janePark: PersonDto = { id: 'per_3', label: 'Jane', fullName: 'Jane Park', notes: "Sam's teacher", version: 5 }
 
 test('the list shows the full name and the notes under the name', async () => {
+  // Arrange and Act
   const screen = await renderPeople([ada, janePark])
 
+  // Assert
   const list = screen.getByRole('list', { name: 'Your people' })
   await expect.element(list.getByText('Jane Park')).toBeVisible()
   await expect.element(list.getByText("Sam's teacher")).toBeVisible()
 })
 
 test('a details save sends the version, keeps the name, and the list shows the new details', async () => {
+  // Arrange
   const screen = await renderPeople()
   await userEvent.click(screen.getByRole('button', { name: 'Edit the details of Grace' }))
   const saved = { ...grace, fullName: 'Grace Hopper', notes: 'From the navy', version: 4 }
@@ -118,8 +121,10 @@ test('a details save sends the version, keeps the name, and the list shows the n
   await userEvent.fill(screen.getByRole('textbox', { name: 'Notes' }), ' From the navy ')
   await commands.takeSentRequests()
 
+  // Act
   await userEvent.click(screen.getByRole('button', { name: 'Save details' }))
 
+  // Assert
   await expect.element(screen.getByText('Details saved')).toBeVisible()
   const list = screen.getByRole('list', { name: 'Your people' })
   await expect.element(list.getByText('From the navy')).toBeVisible()
@@ -131,6 +136,7 @@ test('a details save sends the version, keeps the name, and the list shows the n
 })
 
 test('a stale details save keeps the edits, and Load the latest takes the details that the other save changed', async () => {
+  // Arrange
   const screen = await renderPeople()
   await userEvent.click(screen.getByRole('button', { name: 'Edit the details of Grace' }))
   await commands.answerRequests([
@@ -144,8 +150,10 @@ test('a stale details save keeps the edits, and Load the latest takes the detail
   const dialog = screen.getByRole('dialog')
   await expect.element(dialog.getByText('This person changed after you opened it.')).toBeVisible()
 
+  // Act
   await userEvent.click(dialog.getByRole('button', { name: 'Load the latest' }))
 
+  // Assert
   await expect.element(dialog.getByRole('textbox', { name: 'Full name' })).toHaveValue('Grace B. Hopper')
   await expect.element(dialog.getByRole('textbox', { name: 'Notes' })).toHaveValue('From the navy')
   await expect.element(dialog.getByText(/changed Full name/)).toBeVisible()

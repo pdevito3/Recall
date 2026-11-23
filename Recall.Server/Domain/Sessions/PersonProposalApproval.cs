@@ -20,14 +20,14 @@ public abstract record PersonProposalApproval
         if (chosen is not null)
             return new Bind(chosen);
         if (createNew)
-            return new Create(NewPersonKind.AskedFor);
+            return new Create(NewPersonKind.AnotherOfTheName);
 
         var candidates = people
-            .Where(person => proposal.MatchedPersonIds.Contains(person.Id) || Person.KeyOf(person.Label) == Person.KeyOf(proposal.Label))
+            .Where(proposal.Matches)
             .ToList();
         return candidates.Count switch
         {
-            0 => new Create(NewPersonKind.ProposedName),
+            0 => new Create(NewPersonKind.OnePerProposedName),
             1 => new Bind(candidates[0]),
             _ => new AskWhich(candidates.Select(person => person.Id).ToList()),
         };
@@ -36,7 +36,7 @@ public abstract record PersonProposalApproval
 
 public enum NewPersonKind
 {
-    ProposedName,
+    OnePerProposedName,
 
-    AskedFor,
+    AnotherOfTheName,
 }
