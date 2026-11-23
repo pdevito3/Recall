@@ -23,7 +23,8 @@ Preconditions:
 - The database has no tenant, so `login()` makes an Admin with no People.
 
 - **Before any Jane.** Through the API from the page, create an entry, save its words, and `POST /api/v1/sessions/<id>/cleanup/result` with `peopleProposal: ['Jane']`. The answer has no `matchedPersonIds`.
-- **Add.** Fill `Add a person` with `Jane` and choose `Add`. The list shows `Jane`. A second device Cleanup that names Jane stores only this Jane in `matchedPersonIds`. Add a second `Jane`. The list shows `Jane` two times.
+- **Add.** Fill `Add a person` with `Jane` and choose `Add`. The list shows `Jane`. A second device Cleanup that names Jane stores only this Jane in `matchedPersonIds`.
+- **A Jane comes while the entry is open.** Make a third such entry and open it. The card shows a plain `Tag Jane` and no list. Through the API, add a second `Jane`, as another device does. Choose `Tag Jane`: the answer is 200, with `personIds` of the first Jane only, because the Tag sends the ID of the Jane that the card shows. On the People page, the list shows `Jane` two times.
 - **Details.** Choose the first `Edit the details of Jane`, fill `Full name` with a long name with no spaces and `Notes`, and choose `Save details`. The `PUT /api/v1/people/<id>/details` answer keeps the label `Jane`, and the list shows its details. Do the same for the second Jane with `Jane Doe`.
 - **Proposal.** Through the API from the page, create an entry, save its words, and `POST /api/v1/sessions/<id>/cleanup/result` with `peopleProposal: ['Jane']`. The answer has both IDs in `matchedPersonIds` and no `personIds`. Open the entry: `People named Jane` lists both, with their details.
 - **Choose.** Choose `Tag Jane Doe`. The answer has `personIds` of that Jane only, the proposal leaves, and the focus goes to the heading `Cleanup`.

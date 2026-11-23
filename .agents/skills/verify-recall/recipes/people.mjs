@@ -56,12 +56,34 @@ export default async ({ page, step, capture, expect, login }) => {
     return session
   })
 
-  await step('add a second Jane', async () => {
-    await addJane()
-  })
-
+  const respondTo = (id) => page.waitForResponse(isCall('POST', `/api/v1/sessions/${id}/people-proposals/respond`))
   const label = janes[0].label
+
+  const openEntry = await step('an entry with one Jane offers her', async () => {
+    const session = await device(page, 'walk with jane', 'Walk with Jane.')
+    await page.goto(`/sessions/${session.id}`)
+    await expect(page.getByRole('button', { name: `Tag ${label}`, exact: true })).toBeVisible()
+    await expect(page.getByRole('list', { name: `People named ${label}` })).toHaveCount(0)
+    return session
+  })
+  await capture('one-jane-offered')
+
+  await step('another device adds a second Jane while the entry is open, and the Tag still tags the Jane that the card shows', async () => {
+    const added = await api(page, 'POST', '/api/v1/people', { label: 'Jane' })
+    expect(added.status).toBe(201)
+    janes.push(added.body)
+    const answer = respondTo(openEntry.id)
+    await page.getByRole('button', { name: `Tag ${label}`, exact: true }).click()
+    const response = await answer
+    expect(response.status()).toBe(200)
+    expect((await response.json()).personIds).toEqual([janes[0].id])
+    await expect(page.getByRole('button', { name: `Tag ${label}`, exact: true })).toHaveCount(0)
+  })
+  await capture('tagged-after-a-second-jane-came')
+
   const details = await step('give each Jane details, and the list shows them under the name', async () => {
+    await page.goto('/people')
+    await expect(list.getByText(label, { exact: true })).toHaveCount(2)
     const wanted = [
       { fullName: longName, notes: "Sam's teacher. We met at the school fair in the spring." },
       { fullName: 'Jane Doe', notes: '' },
@@ -101,7 +123,6 @@ export default async ({ page, step, capture, expect, login }) => {
 
   const choices = page.getByRole('list', { name: `People named ${label}` })
   const tagOf = (index) => choices.getByRole('button', { name: `Tag ${details[index].fullName}`, exact: true })
-  const respondTo = (id) => page.waitForResponse(isCall('POST', `/api/v1/sessions/${id}/people-proposals/respond`))
 
   await step('the entry shows the details of each Jane, and a Tag with no choice is not offered', async () => {
     await page.goto(`/sessions/${sessionId}`)
