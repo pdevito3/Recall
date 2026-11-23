@@ -472,6 +472,48 @@ test('a match whose read fails with other than a 404 hides the plain Tag, says s
   await expect.element(screen.getByText('Your People did not load, so the card cannot show who has this name.')).not.toBeInTheDocument()
 })
 
+test('a proposal with no match keeps its Tag when the People directory does not load', async () => {
+  // Arrange
+  const failure = { type: 'https://tools.ietf.org/html/rfc9110#section-15.6.1', title: 'Internal Server Error', status: 500 }
+  const screen = await renderCard([
+    { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf()) },
+    { method: 'GET', path: '/api/v1/people', status: 500, body: failure },
+  ])
+
+  // Assert
+  await expect.element(screen.getByRole('button', { name: 'Tag Jane', exact: true })).toBeVisible()
+  await expect.element(screen.getByText('Your People did not load, so the card cannot show who has this name.')).not.toBeInTheDocument()
+})
+
+test('while the read of one match fails, the matches that loaded are no choice, and one Try again reads each failed match', async () => {
+  // Arrange
+  const janeLee: PersonDto = { id: 'per_3', label: 'Jane', fullName: 'Jane Lee', notes: null, version: 1 }
+  const sessionAnswer = { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id, janeDoe.id, janeLee.id)) } as const
+  const failure = { type: 'https://tools.ietf.org/html/rfc9110#section-15.6.1', title: 'Internal Server Error', status: 500 }
+  const screen = await renderCard([
+    sessionAnswer,
+    directoryOf(janePark, janeDoe),
+    { method: 'GET', path: `/api/v1/people/${janeLee.id}`, status: 500, body: failure },
+  ])
+  await expect.element(screen.getByText('Your People did not load, so the card cannot show who has this name.')).toBeVisible()
+  await expect.element(screen.getByRole('button', { name: /^Tag / })).not.toBeInTheDocument()
+  await commands.answerRequests([
+    { method: 'GET', path: '/api/v1/model-providers/active', body: { name: 'Mine' } },
+    sessionAnswer,
+    directoryOf(janePark),
+    { method: 'GET', path: `/api/v1/people/${janeDoe.id}`, body: janeDoe },
+    { method: 'GET', path: `/api/v1/people/${janeLee.id}`, body: janeLee },
+  ])
+
+  // Act
+  await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+  // Assert
+  const choices = screen.getByRole('list', { name: 'People named Jane' })
+  await expect.element(choices.getByRole('button', { name: 'Tag Jane Lee' })).toBeVisible()
+  await expect.element(choices.getByRole('button', { name: /^Tag / })).toHaveLength(3)
+})
+
 test('the choice lists the matches of the Server in its order', async () => {
   // Arrange
   const screen = await renderCard([

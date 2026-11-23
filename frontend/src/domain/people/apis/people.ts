@@ -62,12 +62,13 @@ export function usePeopleOf(ids: readonly string[]) {
     queries: directory.data ? ids.filter((id) => !held.has(id)).map((id) => personOptions(id)) : [],
   })
   const read = new Map(unheld.flatMap((query) => (query.data ? [[query.data.id, query.data] as const] : [])))
-  const failed = unheld.find((query) => !query.data && query.isError && !isNotFound(query.error))
+  const failed = unheld.filter((query) => !query.data && query.isError && !isNotFound(query.error))
+  if (ids.length === 0) return { people: [], isPending: false, error: null, retry: () => {} }
   return {
     people: ids.flatMap((id) => held.get(id) ?? read.get(id) ?? []),
     isPending: directory.isPending || unheld.some((query) => query.isPending),
-    error: directory.data ? (failed?.error ?? null) : directory.error,
-    retry: () => (directory.data ? failed?.refetch() : directory.refetch()),
+    error: directory.data ? (failed[0]?.error ?? null) : directory.error,
+    retry: () => (directory.data ? Promise.all(failed.map((query) => query.refetch())) : directory.refetch()),
   }
 }
 

@@ -151,14 +151,16 @@ function PeopleProposal({ session, proposal, onAnswered }: PeopleProposalsProps 
                 <span className="min-w-24 flex-1 basis-48">
                   <MatchDetails person={person} />
                 </span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  aria-label={`Tag ${detailsOf(person, label, index)}`}
-                  onPress={() => answer({ approve: true, createNew: false, bindToPersonId: person.id })}
-                >
-                  Tag
-                </Button>
+                {!error && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    aria-label={`Tag ${detailsOf(person, label, index)}`}
+                    onPress={() => answer({ approve: true, createNew: false, bindToPersonId: person.id })}
+                  >
+                    Tag
+                  </Button>
+                )}
               </li>
             ))}
           </ul>
