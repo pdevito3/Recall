@@ -67,33 +67,43 @@ export function mentionSuggestion(source: MentionSource): MentionOptions<Mention
     },
     render: () => {
       let list: ReactRenderer<MentionListHandle> | undefined
+      let caret: (() => DOMRect | null) | null | undefined
+      // A turn of the phone, or the on-screen keyboard, resizes the viewport while the list is open.
+      const placeAgain = () => {
+        if (list) place(list.element as HTMLElement, caret?.())
+      }
+      const close = () => {
+        window.visualViewport?.removeEventListener('resize', placeAgain)
+        window.removeEventListener('resize', placeAgain)
+        list?.destroy()
+        list?.element.remove()
+        list = undefined
+      }
       return {
         onStart: (props) => {
           list = new ReactRenderer(MentionList, { props, editor: props.editor })
+          caret = props.clientRect
           const popup = list.element as HTMLElement
           popup.style.position = 'fixed'
           popup.style.zIndex = '50'
           document.body.append(popup)
-          place(popup, props.clientRect?.())
+          window.visualViewport?.addEventListener('resize', placeAgain)
+          window.addEventListener('resize', placeAgain)
+          placeAgain()
         },
         onUpdate: (props) => {
           list?.updateProps(props)
-          if (list) place(list.element as HTMLElement, props.clientRect?.())
+          caret = props.clientRect
+          placeAgain()
         },
         onKeyDown: ({ event }) => {
           if (event.key === 'Escape') {
-            list?.destroy()
-            list?.element.remove()
-            list = undefined
+            close()
             return true
           }
           return list?.ref?.onKeyDown(event) ?? false
         },
-        onExit: () => {
-          list?.destroy()
-          list?.element.remove()
-          list = undefined
-        },
+        onExit: close,
       }
     },
   }
