@@ -217,8 +217,7 @@ test.describe('the Cleanup of an entry', () => {
     const session = entry.proposingOneOf('Jane', 'per_1', 'per_2').build()
     api.mock(
       sessionsApi.oneIs(session),
-      peopleApi.gets(aPerson('per_1', 'Jane', { fullName: 'Jane Park', notes: "Sam's teacher" })),
-      peopleApi.gets(aPerson('per_2', 'Jane', { fullName: 'Jane Doe' })),
+      peopleApi.listIs([aPerson('per_1', 'Jane', { fullName: 'Jane Park', notes: "Sam's teacher" }), aPerson('per_2', 'Jane', { fullName: 'Jane Doe' })]),
       sessionsApi.proposalAnswered(entry.mentioning('per_2').build()),
     )
     const at = entryPage(page)
@@ -242,7 +241,7 @@ test.describe('the Cleanup of an entry', () => {
     const session = entry.proposingOneOf('Jane', 'per_1').build()
     api.mock(
       sessionsApi.oneIs(session),
-      peopleApi.gets(aPerson('per_1', 'Jane', { fullName: 'Jane Park' })),
+      peopleApi.listIs([aPerson('per_1', 'Jane', { fullName: 'Jane Park' })]),
       sessionsApi.proposalAnswered(entry.mentioning('per_9').build()),
     )
     const at = entryPage(page)
@@ -411,8 +410,7 @@ test.describe('the Cleanup of an entry on a 320 px phone', () => {
     const session = aSession().cleaned('Done.').proposingOneOf('Jane', 'per_1', 'per_2').build()
     api.mock(
       sessionsApi.oneIs(session),
-      peopleApi.gets(aPerson('per_1', 'Jane', { fullName: 'P'.repeat(200), notes: 'n'.repeat(1000) })),
-      peopleApi.gets(aPerson('per_2', 'Jane', { fullName: 'Jane Doe' })),
+      peopleApi.listIs([aPerson('per_1', 'Jane', { fullName: 'P'.repeat(200), notes: 'n'.repeat(1000) }), aPerson('per_2', 'Jane', { fullName: 'Jane Doe' })]),
     )
     const at = entryPage(page)
 

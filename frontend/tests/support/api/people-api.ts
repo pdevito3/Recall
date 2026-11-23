@@ -30,10 +30,6 @@ export const peopleApi = {
     return { method: 'put', path: peoplePaths.one(person.id), status: 200, body: person }
   },
 
-  gets(person: PersonDto): MockRoute {
-    return { method: 'get', path: peoplePaths.one(person.id), status: 200, body: person }
-  },
-
   describes(person: PersonDto): MockRoute {
     return { method: 'put', path: peoplePaths.details(person.id), status: 200, body: person }
   },
