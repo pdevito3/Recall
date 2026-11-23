@@ -28,7 +28,7 @@ public static class SetSessionMetadata
             await dbContext.SaveChangesAsync(cancellationToken);
 
             _logger.Here().Information("Took a metadata change of session {SessionId}, applied {Applied}", session.Id, applied);
-            return session.ToSessionDto();
+            return session.ToSessionDto(await ProposalPeople.LoadAsync(dbContext, [session], cancellationToken));
         }
     }
 }

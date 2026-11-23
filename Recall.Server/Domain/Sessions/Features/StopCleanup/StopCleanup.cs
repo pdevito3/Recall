@@ -38,7 +38,7 @@ public static class StopCleanup
                 _logger.Here().Information("Stopped Cleanup {CleanupRunId} of session {SessionId}", runId, session.Id);
             }
 
-            return session.ToSessionDto();
+            return session.ToSessionDto(await ProposalPeople.LoadAsync(dbContext, [session], cancellationToken));
         }
     }
 }

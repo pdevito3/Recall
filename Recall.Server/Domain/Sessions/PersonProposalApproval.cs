@@ -22,9 +22,7 @@ public abstract record PersonProposalApproval
         if (createNew)
             return new Create(NewPersonKind.AnotherOfTheName);
 
-        var candidates = people
-            .Where(proposal.Matches)
-            .ToList();
+        var candidates = proposal.MatchesIn(people);
         return candidates.Count switch
         {
             0 => new Create(NewPersonKind.OnePerProposedName),

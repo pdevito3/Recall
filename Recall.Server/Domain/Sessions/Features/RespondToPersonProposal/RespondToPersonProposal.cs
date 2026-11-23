@@ -44,7 +44,7 @@ public static class RespondToPersonProposal
                 _logger.Here().Information("Took a response to a people proposal of session {SessionId}, approve {Approve}", session.Id, request.Dto.Approve);
             }
 
-            return session.ToSessionDto();
+            return session.ToSessionDto(await ProposalPeople.LoadAsync(dbContext, [session], cancellationToken));
         }
 
         private async Task<Person> PersonForAsync(Session session, PersonProposal proposal, PersonProposalResponseDto dto, CancellationToken cancellationToken)

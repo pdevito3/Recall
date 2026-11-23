@@ -24,6 +24,10 @@ export type SyncChangePageDto = {
      * @type boolean
     */
     hasMore: boolean;
+    /**
+     * @description Each changed Session, and each Session that the device already holds and that a Person of this page joins as a match of a\nproposal, so that its `matchedPersonIds` are of now.
+     * @type array
+    */
     sessions: SessionDto[];
     people: PersonDto[];
     corrections: CorrectionDto[];

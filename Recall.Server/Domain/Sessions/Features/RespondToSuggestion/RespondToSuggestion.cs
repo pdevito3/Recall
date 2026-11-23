@@ -41,7 +41,7 @@ public static class RespondToSuggestion
             await dbContext.SaveChangesAsync(cancellationToken);
 
             _logger.Here().Information("Took a response to a suggestion of session {SessionId}, kind {SuggestionKind}, accept {Accept}, changed {Changed}", session.Id, kind, request.Accept, changed);
-            return session.ToSessionDto();
+            return session.ToSessionDto(await ProposalPeople.LoadAsync(dbContext, [session], cancellationToken));
         }
     }
 }

@@ -57,7 +57,7 @@ public static class RecordCleanupResult
                 _logger.Here().Information("Took a Cleanup result from a device for session {SessionId}", session.Id);
             }
 
-            return session.ToSessionDto();
+            return session.ToSessionDto(await ProposalPeople.LoadAsync(dbContext, [session], cancellationToken));
         }
 
         private static string HashOf(CleanupOutput output, int baseRawRevision, int baseCleanedRevision)

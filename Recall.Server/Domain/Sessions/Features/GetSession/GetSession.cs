@@ -21,7 +21,7 @@ public static class GetSession
                 .TagWithOperationCallSite("sessions.get")
                 .AsNoTracking()
                 .GetById(request.Id, cancellationToken);
-            return session.ToSessionDto();
+            return session.ToSessionDto(await ProposalPeople.LoadAsync(dbContext, [session], cancellationToken));
         }
     }
 }

@@ -13,6 +13,11 @@ public sealed record SyncChangePageDto
 
     /// <summary>True when a next page already exists, so pull again with no wait.</summary>
     public bool HasMore { get; init; }
+
+    /// <summary>
+    /// Each changed Session, and each Session that the device already holds and that a Person of this page joins as a match of a
+    /// proposal, so that its <c>matchedPersonIds</c> are of now.
+    /// </summary>
     public IReadOnlyList<SessionDto> Sessions { get; init; } = [];
     public IReadOnlyList<PersonDto> People { get; init; } = [];
     public IReadOnlyList<CorrectionDto> Corrections { get; init; } = [];

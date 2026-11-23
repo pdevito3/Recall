@@ -2,18 +2,20 @@ namespace Recall.Server.Domain.Sessions.Mappings;
 
 using Content;
 using Dtos;
+using People;
 using Riok.Mapperly.Abstractions;
 
 [Mapper]
 public static partial class SessionMapper
 {
-    public static SessionDto ToSessionDto(this Session session)
+    /// <summary>The DTO with the matches that each proposal has in <paramref name="people"/> now.</summary>
+    public static SessionDto ToSessionDto(this Session session, ProposalPeople people)
         => session.ToDtoWithoutDerivedValues() with
         {
             Topics = TopicsOf(session.UserTopics, session.AiTopics),
             CleanupFailure = session.CleanupFailure.ToString(),
             Suggestions = SuggestionsOf(session),
-            PeopleProposals = ProposalsOf(session),
+            PeopleProposals = ProposalsOf(session, people.People),
         };
 
     private static List<SessionSuggestionDto> SuggestionsOf(Session session)
@@ -21,20 +23,23 @@ public static partial class SessionMapper
             .Concat(session.MoodSuggestions.Select(value => new SessionSuggestionDto { Kind = nameof(SuggestionKind.Mood), Value = value }))
             .ToList();
 
-    private static List<PersonProposalDto> ProposalsOf(Session session)
+    private static List<PersonProposalDto> ProposalsOf(Session session, IReadOnlyCollection<Person> people)
     {
         if (session.PeopleProposals.Count == 0)
             return [];
 
         var tagged = PersonMentions.PersonIdsIn(session.Cleaned.Text);
         var plain = ProseMirrorToPlainText.Render(session.Cleaned.Text);
-        return session.PeopleProposals.Where(proposal => !proposal.IsSettledBy(tagged)).Select(proposal => new PersonProposalDto
-        {
-            Label = proposal.Label,
-            MatchedPersonIds = proposal.MatchedPersonIds,
-            IsNew = proposal.MatchedPersonIds.Count == 0,
-            Contexts = PeopleTagSpans.Contexts(plain, proposal.Label),
-        }).ToList();
+        return session.PeopleProposals
+            .Select(proposal => (proposal, matches: proposal.MatchesIn(people)))
+            .Where(pair => !PersonProposal.IsSettledBy(tagged, pair.matches))
+            .Select(pair => new PersonProposalDto
+            {
+                Label = pair.proposal.Label,
+                MatchedPersonIds = pair.matches.Select(person => person.Id).ToList(),
+                IsNew = pair.matches.Count == 0,
+                Contexts = PeopleTagSpans.Contexts(plain, pair.proposal.Label),
+            }).ToList();
     }
 
     public static IReadOnlyList<SessionTopicDto> TopicsOf(IEnumerable<string> userTopics, IEnumerable<string> aiTopics)

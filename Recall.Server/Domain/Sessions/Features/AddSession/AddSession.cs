@@ -37,7 +37,7 @@ public static class AddSession
                     .AsNoTracking()
                     .FirstOrDefaultAsync(s => s.ClientSessionId == dto.ClientSessionId, ct);
                 if (existing is not null)
-                    return new Result(existing.ToSessionDto(), false);
+                    return new Result(existing.ToSessionDto(await ProposalPeople.LoadAsync(dbContext, [existing], ct)), false);
 
                 var deleted = await dbContext.SyncChanges
                     .TagWithOperationCallSite("sessions.add.tombstone")
@@ -50,7 +50,7 @@ public static class AddSession
                 var session = Session.Create(owner.TenantId, owner.UserId, dto.ClientSessionId, dto.StartedAt, location, zone, timeProvider.GetUtcNow());
                 await dbContext.Sessions.AddAsync(session, ct);
                 await dbContext.SaveChangesAsync(ct);
-                return new Result(session.ToSessionDto(), true);
+                return new Result(session.ToSessionDto(await ProposalPeople.LoadAsync(dbContext, [session], ct)), true);
             }, cancellationToken);
 
             Activity.Current?.SetTag("app.session_id", result.Session.Id);
