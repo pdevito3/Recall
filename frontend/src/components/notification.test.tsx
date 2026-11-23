@@ -1,9 +1,11 @@
-import { expect, onTestFinished, test, vi } from 'vitest'
-import { page } from 'vitest/browser'
+import { beforeAll, expect, onTestFinished, test, vi } from 'vitest'
+import { commands, page } from 'vitest/browser'
 import { render } from 'vitest-browser-react'
 
 import { Notification, toastQueue } from '@/components/notification'
 import { Toaster } from '@/components/toaster'
+
+beforeAll(() => commands.emulateReducedMotion('no-preference'))
 
 test('two toasts in the same tick both show, and the skipped view transition raises no unhandled rejection', async () => {
   const unhandled: unknown[] = []
