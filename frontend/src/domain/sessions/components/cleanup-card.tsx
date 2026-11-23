@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useActiveModelProvider } from '@/domain/model-providers/apis/model-providers'
 import { UnusableAnswerText } from '@/domain/model-providers/components/unusable-answer-text'
-import { usePeopleDirectory } from '@/domain/people/apis/people'
+import { usePeopleOf } from '@/domain/people/apis/people'
 import { refusalOf } from '@/hooks/use-server-errors'
 
 import {
@@ -105,9 +105,7 @@ interface PeopleProposalsProps extends CleanupPartProps {
 
 function PeopleProposal({ session, proposal, onAnswered }: PeopleProposalsProps & { proposal: PersonProposalDto }) {
   const respond = useRespondToProposal(session.id)
-  const directory = usePeopleDirectory()
-  // The Server sends the matches of now. The directory gives their details, and a match that it does not hold is not shown.
-  const matches = proposal.matchedPersonIds.flatMap((id) => directory.data?.filter((person) => person.id === id) ?? [])
+  const { people: matches, isPending, directory } = usePeopleOf(proposal.matchedPersonIds)
   const { label } = proposal
   const answer = (body: Omit<PersonProposalResponseDto, 'label'>) => respond.mutate({ label, ...body }, { onSuccess: onAnswered })
 
@@ -119,7 +117,7 @@ function PeopleProposal({ session, proposal, onAnswered }: PeopleProposalsProps 
       <div className="flex flex-wrap items-center gap-2">
         <span dir="auto" className="min-w-24 flex-1 basis-48 wrap-anywhere">{label}</span>
         <div className="flex flex-wrap items-center gap-2">
-          {!directory.isPending && matches.length < 2 && (
+          {!isPending && matches.length < 2 && (
             <Button
               size="sm"
               variant="outline"
@@ -139,7 +137,7 @@ function PeopleProposal({ session, proposal, onAnswered }: PeopleProposalsProps 
           </Button>
         </div>
       </div>
-      {directory.isPending && <span role="status" className="text-muted-foreground">Loading the People named {label}</span>}
+      {isPending && <span role="status" className="text-muted-foreground">Loading the People named {label}</span>}
       {directory.isError && (
         <QueryError title="Your People did not load, so the card cannot show who has this name." error={directory.error} onRetry={() => void directory.refetch()} />
       )}

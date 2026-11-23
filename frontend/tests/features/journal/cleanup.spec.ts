@@ -264,7 +264,8 @@ test.describe('the Cleanup of an entry', () => {
     await at.open(session.id)
     await expect(at.at.textOfThePage('Jane Park')).toBeVisible()
 
-    api.mock(sessionsApi.oneIs(entry.proposingOneOf('Jane', 'per_1', 'per_2').build()), peopleApi.listIs([park, aPerson('per_2', 'Jane', { fullName: 'Jane Doe' })]))
+    const doe = aPerson('per_2', 'Jane', { fullName: 'Jane Doe' })
+    api.mock(sessionsApi.oneIs(entry.proposingOneOf('Jane', 'per_1', 'per_2').build()), peopleApi.listIs([park, doe]), peopleApi.oneIs(doe))
     await at.tagPerson(session.id, 'Jane')
 
     await expect(at.at.cleanupAlert(askWhich)).toBeVisible()

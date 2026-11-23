@@ -22,6 +22,10 @@ export const peopleApi = {
     return { method: 'get', path: peoplePaths.list, status: 200, headers: paginationHeaders(people.length, 1), body: people }
   },
 
+  oneIs(person: PersonDto): MockRoute {
+    return { method: 'get', path: peoplePaths.one(person.id), status: 200, body: person }
+  },
+
   adds(person: PersonDto): MockRoute {
     return { method: 'post', path: peoplePaths.list, status: 201, body: person }
   },

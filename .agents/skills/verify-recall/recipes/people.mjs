@@ -133,6 +133,17 @@ export default async ({ page, step, capture, expect, login }) => {
   })
   await capture('two-janes-proposal')
 
+  await step('a third Jane that another device adds joins the choice when the open entry reads its Session again', async () => {
+    const added = await api(page, 'POST', '/api/v1/people', { label: 'Jane' })
+    expect(added.status).toBe(201)
+    await page.waitForResponse((r) => isCall('GET', `/api/v1/sessions/${sessionId}`)(r) && r.ok(), { timeout: 45_000 })
+    await expect(choices.getByRole('button', { name: /^Tag / })).toHaveCount(3)
+    await expect(page.getByRole('button', { name: `Tag ${label}`, exact: true })).toHaveCount(0)
+    await choices.scrollIntoViewIfNeeded()
+    await capture('third-jane-joined-the-choice')
+    expect((await api(page, 'DELETE', `/api/v1/people/${added.body.id}`)).status).toBe(204)
+  })
+
   await step('a Tag of Jane Doe tags that Jane', async () => {
     const answer = respondTo(sessionId)
     await tagOf(1).click()

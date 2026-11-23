@@ -1,4 +1,4 @@
-import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryOptions, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import type { PersonDetailsDto } from '@/api/generated/models/types/person-details-dto'
 import type { PersonDto } from '@/api/generated/models/types/person-dto'
@@ -48,6 +48,22 @@ export function personOptions(id: string) {
     staleTime: 60_000,
     retry: retryUnlessRefused,
   })
+}
+
+/**
+ * The People of these IDs, in their order. The directory gives each one it holds. An ID that the cached directory lacks
+ * is a Person added since the directory loaded, so it is read on its own, and a 404 leaves it out.
+ */
+export function usePeopleOf(ids: readonly string[]) {
+  const directory = usePeopleDirectory()
+  const held = new Map(directory.data?.map((person) => [person.id, person]))
+  const unheld = useQueries({ queries: directory.isSuccess ? ids.filter((id) => !held.has(id)).map((id) => personOptions(id)) : [] })
+  const read = new Map(unheld.flatMap((query) => (query.data ? [[query.data.id, query.data] as const] : [])))
+  return {
+    people: ids.flatMap((id) => held.get(id) ?? read.get(id) ?? []),
+    isPending: directory.isPending || unheld.some((query) => query.isPending),
+    directory,
+  }
 }
 
 export function useAddPerson() {

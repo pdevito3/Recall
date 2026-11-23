@@ -409,14 +409,35 @@ test('a match with no details says where to add them', async () => {
   await expect.element(choices.getByRole('button', { name: 'Tag Jane 2, no details' })).toBeVisible()
 })
 
-test('a match that the People directory does not hold is not shown, and a Tag tags the match that is shown', async () => {
+test('a match that came after the People directory loaded is read on its own, and the person must choose', async () => {
   // Arrange
   const screen = await renderCard([
     { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id, janeDoe.id)) },
     directoryOf(janePark),
+    { method: 'GET', path: `/api/v1/people/${janeDoe.id}`, body: janeDoe },
     { method: 'POST', path: respondPath, body: session({}) },
   ])
-  await expect.element(screen.getByText('Jane Park')).toBeVisible()
+  const choices = screen.getByRole('list', { name: 'People named Jane' })
+  await expect.element(choices.getByText('Jane Doe')).toBeVisible()
+  await expect.element(screen.getByRole('button', { name: 'Tag Jane', exact: true })).not.toBeInTheDocument()
+  await commands.takeSentRequests()
+
+  // Act
+  await userEvent.click(choices.getByRole('button', { name: 'Tag Jane Doe' }))
+
+  // Assert
+  expect(await sentResponses()).toEqual([{ label: 'Jane', approve: true, createNew: false, bindToPersonId: 'per_2' }])
+})
+
+test('a match that is gone when the card reads it is not shown, and a Tag tags the match that is shown', async () => {
+  // Arrange
+  const screen = await renderCard([
+    { method: 'GET', path: '/api/v1/sessions/ses_1', body: session(proposalOf(janePark.id, janeDoe.id)) },
+    directoryOf(janePark),
+    { method: 'GET', path: `/api/v1/people/${janeDoe.id}`, status: 404, body: { type: 'https://tools.ietf.org/html/rfc9110#section-15.5.5', title: 'Not Found', status: 404 } },
+    { method: 'POST', path: respondPath, body: session({}) },
+  ])
+  await expect.element(screen.getByRole('button', { name: 'Tag Jane', exact: true })).toBeVisible()
   await expect.element(screen.getByText('Jane Doe')).not.toBeInTheDocument()
   await commands.takeSentRequests()
 
