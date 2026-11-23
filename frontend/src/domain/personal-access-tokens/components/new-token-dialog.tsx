@@ -26,21 +26,30 @@ interface NewTokenDialogProps {
 
 export function NewTokenDialog({ permissions }: NewTokenDialogProps) {
   const add = useAddPersonalAccessToken()
+  const [isOpen, setIsOpen] = useState(false)
   const isLocked = add.isPending || add.data !== undefined
   // True from the send of a create until it fails or the dialog closes. The send comes in the click, but isLocked turns
-  // true only at a later render, so a Back or a second submit before that render reads this ref.
+  // true only at a later render, so a Back, a close, or a second submit before that render reads this ref.
   const hasSent = useRef(false)
-  // A Back while the question shows goes through. A block of it too would put back only one of the two steps at Stay.
   const isAsking = useRef(false)
   const leaving = useBlocker({
     shouldBlockFn: () => {
-      if (isAsking.current || !hasSent.current) return false
+      // A move while the question shows lets the first one through, to where the browser now is. After a Forward, that is this page.
+      if (isAsking.current) {
+        leave()
+        return false
+      }
+      if (!hasSent.current) return false
       isAsking.current = true
       return true
     },
     enableBeforeUnload: () => hasSent.current && !isDeparting(),
     withResolver: true,
   })
+  const leave = () => {
+    isAsking.current = false
+    leaving.proceed?.()
+  }
 
   const create: TokenFormProps['onCreate'] = (body, onError) => {
     if (hasSent.current) return
@@ -56,8 +65,11 @@ export function NewTokenDialog({ permissions }: NewTokenDialogProps) {
   return (
     <>
       <ResponsiveDialogTrigger
-        onOpenChange={(isOpen) => {
-          if (isOpen) return
+        isOpen={isOpen}
+        onOpenChange={(open) => {
+          if (!open && hasSent.current && add.data === undefined) return
+          setIsOpen(open)
+          if (open) return
           hasSent.current = false
           add.reset()
         }}
@@ -85,7 +97,7 @@ export function NewTokenDialog({ permissions }: NewTokenDialogProps) {
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
         <ResponsiveDialogFooter>
-          <Button variant="outline" onPress={() => leaving.proceed?.()}>
+          <Button variant="outline" onPress={leave}>
             Leave
           </Button>
           <ResponsiveDialogClose variant="default">Stay</ResponsiveDialogClose>
