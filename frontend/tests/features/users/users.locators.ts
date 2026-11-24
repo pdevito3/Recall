@@ -45,6 +45,7 @@ export const users = (page: Page) => {
     confirmDelete: deleteDialog.getByRole('button', { name: 'Delete user', exact: true }),
     temporaryPasswordAsk,
     loginNameField: temporaryPasswordAsk.getByRole('textbox', { name: 'Login name' }),
+    cancelTemporaryPassword: temporaryPasswordAsk.getByRole('button', { name: 'Cancel', exact: true }),
     temporaryPasswordRefusal: temporaryPasswordAsk.getByRole('alert'),
     confirmTemporaryPassword: temporaryPasswordAsk.getByRole('button', { name: 'Set temporary password', exact: true }),
     temporaryPasswordResult,

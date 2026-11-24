@@ -88,6 +88,35 @@ export function usersPage(page: Page) {
       await settled
     },
 
+    async setTemporaryPasswordAgain(id: string, loginName: string) {
+      await at.loginNameField.fill(loginName)
+      const settled = answered('POST', usersPaths.temporaryPassword(id))
+      await at.confirmTemporaryPassword.click()
+      await settled
+    },
+
+    async openTemporaryPassword(name: string) {
+      await at.actionButton(name, 'Set temporary password').click()
+      await expect(at.confirmTemporaryPassword).toBeEnabled()
+    },
+
+    async setTemporaryPasswordAndCloseAtOnce(exit: 'Cancel' | 'Escape' | 'a click outside') {
+      const cancel = await at.cancelTemporaryPassword.elementHandle()
+      await at.confirmTemporaryPassword.evaluate(
+        (set: HTMLElement, { exit, cancel }) => {
+          set.click()
+          setTimeout(() => {
+            if (exit === 'Cancel') return cancel?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+            if (exit === 'Escape') return set.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+            const outside = document.elementFromPoint(5, 5)
+            outside?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 1, pointerType: 'mouse', isPrimary: true }))
+            if (outside instanceof HTMLElement) outside.click()
+          })
+        },
+        { exit, cancel },
+      )
+    },
+
     async keepRole() {
       await at.keepRole.click()
       await expect(at.roleDialog).toBeHidden()
