@@ -252,6 +252,28 @@ test.describe('the users of a tenant', () => {
     await expect(users.at.toasts).toHaveCount(0)
   })
 
+  for (const exit of ['Cancel', 'Escape', 'a click outside'] as const) {
+    test(`${exit} at the click on Set temporary password keeps the dialog open, and then shows the password`, { tag: '@PWD-14' }, async ({ page, api }) => {
+      const grace = aUser().named('Grace Hopper').allowing('IssueTemporaryPassword')
+      const { id } = grace.build()
+      const issued = { loginName: 'grace.h', password: 'acorn-ladder-velvet-tundra', expiresAt: '2026-11-28T10:00:00Z' }
+      let answer!: () => void
+      const answered = new Promise<void>((resolve) => (answer = resolve))
+      api.mock(usersApi.oneIs(grace), loginProvidersApi.settingsHold(), { ...usersApi.issuesTemporaryPassword(id, issued), heldUntil: answered })
+      const users = usersPage(page)
+      await users.openDetail(id)
+      await users.openTemporaryPassword('Grace Hopper')
+      await users.at.loginNameField.fill('grace.h')
+
+      await users.setTemporaryPasswordAndCloseAtOnce(exit)
+
+      await expect(users.at.cancelTemporaryPassword).toBeDisabled()
+      answer()
+      await expect(users.at.temporaryPasswordResult).toContainText(issued.password)
+      expect(api.all('post', usersPaths.temporaryPassword(id))).toHaveLength(1)
+    })
+  }
+
   test('shows no Set temporary password to a caller whom the Server does not allow', { tag: '@PWD-14' }, async ({ page, api }) => {
     const grace = aUser().named('Grace Hopper').seenByAdmin()
     const { id } = grace.build()
