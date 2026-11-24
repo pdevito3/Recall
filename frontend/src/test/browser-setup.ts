@@ -2,7 +2,7 @@
 // The app styles load, so that a test sees the real layout and the real visibility of each element.
 import '@/index.css'
 
-import { afterEach, beforeEach } from 'vitest'
+import { afterEach, beforeAll, beforeEach } from 'vitest'
 import { commands } from 'vitest/browser'
 import { cleanup } from 'vitest-browser-react'
 
@@ -28,6 +28,8 @@ declare module 'vitest/browser' {
     pressPointer: () => Promise<void>
     /** Releases the left mouse button where the mouse is. */
     releasePointer: () => Promise<void>
+    /** Sets `prefers-reduced-motion` of the page. */
+    emulateReducedMotion: (reducedMotion: 'reduce' | 'no-preference') => Promise<void>
   }
 }
 
@@ -39,6 +41,11 @@ XMLHttpRequest.prototype.send = function (body) {
   this.setRequestHeader(testHeader, String(test))
   send.call(this, body)
 }
+
+// Without an animation, a sheet opens in its place. A click on a sheet that slides in can press its button and release
+// on the button below it, and then the click does nothing. Each file starts so, because the test files that run in one
+// page share the setting.
+beforeAll(() => commands.emulateReducedMotion('reduce'))
 
 beforeEach(async () => {
   await cleanup()

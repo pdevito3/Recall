@@ -30,6 +30,12 @@ A click on an option of a combobox can scroll the page, and a scroll of the page
 
 When a component test fails in CI, open the `.vitest/attachments/` folder in the test report artifact of the job. It has the failure screenshot and the Playwright trace of each failed test. The screenshot is at `failure-screenshots/<path of the test file>/<full test name>.png`, with a `-` in place of each character that is not a letter, a digit, or `_`. Vitest 5.0.5 puts only the file name of the test file in that path. So when two files of one name in two folders had a failed test of the same name, one screenshot replaced the other. The patch of `@vitest/browser` in `frontend/patches/` puts the path of the file there. Open the trace at https://trace.playwright.dev. For a test that timed out, the last action with no end is the step that the test waited on. Only CI records the traces, because they make `pnpm test` about 50% slower. In CI that is 16 s more for each job: the median of 8 runs with traces and 8 runs without traces, on one commit, in each of the `api-contract` and `without-examples` jobs. To record them locally, run `CI=1 pnpm test`.
 
+### Motion
+
+The setup file sets `prefers-reduced-motion: reduce` before each test file, as the functional suite does. So a sheet opens in its place, and a toast shows and closes with no view transition. With motion, a sheet slides in for about 0.4 s. A click can press a button of the sheet and release on the button below it, because the sheet moved up between the two events. Then the click does nothing. On a busy CI runner, Playwright clicked a sheet that still moved, and the test waited for a delete that was never sent.
+
+A test of an animation turns motion on in its file with `beforeAll(() => commands.emulateReducedMotion('no-preference'))`. See `notification.test.tsx` and `toaster.test.tsx`. The test files that run in one page share the setting, so the setup file sets it again for the next file.
+
 ## The functional suite
 
 `pnpm test:e2e` starts the Vite dev server on a free port. Then it runs the specs in Chromium. No Server or IdP runs. The suite mocks each request to `/api/*` and `/auth/*` in the browser with `page.route`. The hooks, the components, the generated clients, and `apiClient` all run.

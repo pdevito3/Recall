@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
-import { afterEach, beforeEach, expect, test, vi, type MockInstance } from 'vitest'
-import { page, userEvent } from 'vitest/browser'
+import { afterEach, beforeAll, beforeEach, expect, test, vi, type MockInstance } from 'vitest'
+import { commands, page, userEvent } from 'vitest/browser'
 import { render } from 'vitest-browser-react'
 
 import { Notification, toastQueue } from '@/components/notification'
@@ -13,6 +13,8 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from '@/components/ui/responsive-dialog'
+
+beforeAll(() => commands.emulateReducedMotion('no-preference'))
 
 let startViewTransition: MockInstance<Document['startViewTransition']>
 

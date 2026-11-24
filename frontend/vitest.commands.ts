@@ -144,6 +144,11 @@ export const takeSentRequests: BrowserCommand<[]> = async ({ page }) => {
   return state.sent.splice(0)
 }
 
+/** Sets `prefers-reduced-motion` of the page until the next call. The setup file calls it before each test file. */
+export const emulateReducedMotion: BrowserCommand<[reducedMotion: 'reduce' | 'no-preference']> = async ({ page }, reducedMotion) => {
+  await page.emulateMedia({ reducedMotion })
+}
+
 type Role = Parameters<Page['getByRole']>[0]
 
 /**
