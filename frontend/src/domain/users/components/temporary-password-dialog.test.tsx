@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from '@tanstack/react-router'
 import { expect, test } from 'vitest'
 import { commands, page } from 'vitest/browser'
 import { render } from 'vitest-browser-react'
@@ -30,9 +31,11 @@ const passwordLogin = (state: 'On' | 'Off') => ({ method: 'GET' as const, path: 
 const issued = { loginName: 'bob', password: 'acorn-ladder-velvet-tundra', expiresAt: '2026-11-28T10:00:00Z' }
 
 async function renderDialog(user: UserDto, isSelf = false, client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
+  const rootRoute = createRootRoute({ component: () => <TemporaryPasswordDialog user={user} isSelf={isSelf} /> })
+  const router = createRouter({ routeTree: rootRoute, history: createMemoryHistory({ initialEntries: ['/'] }) })
   return render(
     <QueryClientProvider client={client}>
-      <TemporaryPasswordDialog user={user} isSelf={isSelf} />
+      <RouterProvider router={router} />
     </QueryClientProvider>,
   )
 }
