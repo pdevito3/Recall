@@ -30,6 +30,7 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
     public const string ConnectionAddressHeader = "X-Test-Connection-Address";
 
     private readonly SqliteTestDatabase _database = new();
+    private readonly TemporaryFileRoot _fileRoot = new();
     private readonly Lock _clientLock = new();
     private readonly AsyncLocal<bool> _inRequest = new();
 
@@ -124,6 +125,7 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
         }
 
         builder.UseSetting("Jobs:RunWorkers", "false");
+        builder.UseSetting("FileStore:Root", _fileRoot.Path);
         foreach (var (key, value) in settings)
             builder.UseSetting(key, value);
 
@@ -166,6 +168,7 @@ public sealed class AuthFlowFactory(IReadOnlyDictionary<string, string?> setting
     {
         await base.DisposeAsync();
         await _database.DisposeAsync();
+        _fileRoot.Dispose();
         if (ClaimFilePath is { } claimFile)
             Directory.Delete(Path.GetDirectoryName(claimFile)!, recursive: true);
     }
