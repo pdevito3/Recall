@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import * as z from 'zod'
 
@@ -52,13 +52,35 @@ export function TemporaryPasswordDialog({ user, isSelf }: TemporaryPasswordDialo
   // it opens, because another Admin can turn it while this page is open. The caller holds manage_user_access, so it can read it.
   const settings = useLoginSettings()
   const passwordsOff = settings.data && settings.data.passwordLogin === 'Off'
+  const [isOpen, setIsOpen] = useState(false)
   const isLocked = issue.isPending || issue.data !== undefined
+  // True from the send of an issue until it fails or the dialog closes. The send comes in the click, but isLocked turns
+  // true only at a later render, so a close or a second submit before that render reads this ref.
+  const hasSent = useRef(false)
+
+  const send: AskForIssueProps['onIssue'] = (loginName, onError) => {
+    if (hasSent.current) return
+    hasSent.current = true
+    issue.mutate(loginName, {
+      onError: (error) => {
+        hasSent.current = false
+        onError(error)
+      },
+    })
+  }
 
   return (
     <ResponsiveDialogTrigger
-      onOpenChange={(isOpen) => {
-        if (isOpen) void settings.refetch()
-        else issue.reset()
+      isOpen={isOpen}
+      onOpenChange={(open) => {
+        if (!open && hasSent.current && issue.data === undefined) return
+        setIsOpen(open)
+        if (open) {
+          void settings.refetch()
+          return
+        }
+        hasSent.current = false
+        issue.reset()
       }}
     >
       <Button variant="outline">Set temporary password</Button>
@@ -66,7 +88,7 @@ export function TemporaryPasswordDialog({ user, isSelf }: TemporaryPasswordDialo
         {issue.data ? (
           <IssuedPassword user={user} issued={issue.data} isSelf={isSelf} passwordsOff={passwordsOff ?? false} />
         ) : (
-          <AskForIssue user={user} isSelf={isSelf} issue={issue} settings={settings} />
+          <AskForIssue user={user} isSelf={isSelf} isPending={issue.isPending} settings={settings} onIssue={send} />
         )}
       </ResponsiveDialog>
     </ResponsiveDialogTrigger>
@@ -74,11 +96,12 @@ export function TemporaryPasswordDialog({ user, isSelf }: TemporaryPasswordDialo
 }
 
 interface AskForIssueProps extends TemporaryPasswordDialogProps {
-  issue: ReturnType<typeof useIssueTemporaryPassword>
+  isPending: boolean
   settings: ReturnType<typeof useLoginSettings>
+  onIssue: (loginName: string | undefined, onError: (error: unknown) => void) => void
 }
 
-function AskForIssue({ user, isSelf, issue, settings }: AskForIssueProps) {
+function AskForIssue({ user, isSelf, isPending, settings, onIssue }: AskForIssueProps) {
   const needsLoginName = !user.loginName
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema(needsLoginName)),
@@ -86,20 +109,14 @@ function AskForIssue({ user, isSelf, issue, settings }: AskForIssueProps) {
     shouldFocusError: false,
   })
   const serverErrors = useServerErrors(form, FIELDS)
-  // A second submit in the same task still reads isPending as false, so only a ref stops a second issue.
-  const isSending = useRef(false)
   const { errors } = form.formState
   // While password login is Off, a temporary password only links a provider (IDP-20). Until the read of the open ends, the dialog says nothing of it.
   const passwordsOff = settings.isFetching || !settings.data ? undefined : settings.data.passwordLogin === 'Off'
 
   const handleSubmit = form.handleSubmit(({ loginName }) => {
-    if (isSending.current || passwordsOff === undefined) return
-    isSending.current = true
+    if (passwordsOff === undefined) return
     serverErrors.clear()
-    issue.mutate(needsLoginName ? loginName.trim() : undefined, {
-      onError: serverErrors.show,
-      onSettled: () => (isSending.current = false),
-    })
+    onIssue(needsLoginName ? loginName.trim() : undefined, serverErrors.show)
   }, focusFirstError(form, FIELDS))
 
   const ends = isSelf
@@ -163,8 +180,8 @@ function AskForIssue({ user, isSelf, issue, settings }: AskForIssueProps) {
       <RefusedSaveAlert problem={serverErrors.problem} />
 
       <ResponsiveDialogFooter>
-        <ResponsiveDialogClose isDisabled={issue.isPending}>Cancel</ResponsiveDialogClose>
-        <Button type="submit" variant="destructive" isPending={issue.isPending} isDisabled={passwordsOff === undefined}>
+        <ResponsiveDialogClose isDisabled={isPending}>Cancel</ResponsiveDialogClose>
+        <Button type="submit" variant="destructive" isPending={isPending} isDisabled={passwordsOff === undefined}>
           Set temporary password
         </Button>
       </ResponsiveDialogFooter>
