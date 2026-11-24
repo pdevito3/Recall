@@ -1,11 +1,13 @@
 namespace Recall.FunctionalTests.FunctionalTests.Recordings;
 
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using BackWave.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Recall.FunctionalTests.Auth;
 using Recall.Server.Domain.Recordings;
 using Recall.Server.Domain.Recordings.Dtos;
 using Recall.Server.Domain.Recordings.Jobs;
@@ -365,5 +367,38 @@ public class LateRecordingPartTests : TestBase
         ended.Status.ShouldBe(nameof(RecordingStatus.Transcribed));
         ended.ProblemText.ShouldBe("Part of the audio of this recording was lost on the server, so the words of that part are missing. Tell the Owner of this server.");
         (await PlainRawAsync(recording.SessionId)).ShouldBe("first part\nlate part");
+    }
+
+    [Test]
+    [Property("Rule", "REC-24")]
+    public async Task a_late_finish_gets_200_and_joins_the_late_part_while_another_host_of_the_run_prepares_its_file_store()
+    {
+        // Arrange
+        var (recording, owner) = await QuietEndedWithWordsAsync("first part");
+        byte[] late = [3, 3];
+        (await FactoryClient.PutSliceAsync(recording.Id, 2, late)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var lateSlice = Directory.GetFiles(Store.LocalPathOf(RecordingFiles.Slices(RecordingScenario.RowOf(recording.Id, owner))), "000002-*").Single();
+        File.Delete(lateSlice);
+        using (var makePipe = Process.Start("mkfifo", lateSlice))
+        {
+            await makePipe.WaitForExitAsync();
+            makePipe.ExitCode.ShouldBe(0);
+        }
+
+        // Act
+        var finishing = FactoryClient.FinishAsync(recording.Id, 3, RecordingScenario.WebmStart.Length + SecondSlice.Length + late.Length);
+        // The open of the pipe returns only when the finish opens the late slice for its join.
+        await using (var writer = await Task.Run(() => new FileStream(lateSlice, FileMode.Open, FileAccess.Write)).WaitAsync(TimeSpan.FromSeconds(30)))
+        {
+            AuthHosts.FileStoreRestart.Services.GetRequiredService<FileStore>().Prepare();
+            await writer.WriteAsync(late);
+        }
+
+        var finish = await finishing;
+
+        // Assert
+        finish.StatusCode.ShouldBe(HttpStatusCode.OK, await finish.Content.ReadAsStringAsync());
+        StoredAudio(recording, owner).ShouldBe([.. RecordingScenario.WebmStart, .. SecondSlice, .. late]);
+        (await FactoryClient.GetRecordingAsync(recording.Id)).Status.ShouldBe(nameof(RecordingStatus.Received));
     }
 }
