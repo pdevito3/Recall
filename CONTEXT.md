@@ -129,6 +129,19 @@ A Summary whose sources changed after it was made. A Person rename counts as a c
 **Failed summary**:
 A Summary whose last run gave no words. It shows a closed reason, such as no model provider, and never shows as ready with empty words. A person can open the period again to retry.
 
+### Imports
+
+**Import batch**:
+A draft area that an agent fills with journal text from another app, such as "Notion 2019-2023". It is outside the journal: no timeline, Summary, Cleanup, or Sync feed sees it. A batch is Open until the accept, which makes a Session of each kept Import entry. The batch then stays as the mark of those Sessions. Recall does not parse a source. The agent does.
+_Avoid_: Draft session, staging, upload
+
+**Import entry**:
+One entry of an Import batch, which the accept makes into one Session. It holds the layer of the agent (the Client session ID, the date and the position in the source day, a time from the text, a zone, Raw, the Moods, and the Topics) and the layer of the review (a reject, or an edit of the words or the time). It is not a Session, and it has no Revisions and no Tombstone.
+_Avoid_: Draft session (an Import entry is not a Session)
+
+**Import review**:
+The check of an Import batch by its person before the accept. It is on by default. While it is on, only the person, in a browser, accepts a batch. When the person turns it off, the agent can accept its own batch.
+
 ### Identity
 
 **User**:
