@@ -1,11 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import * as z from 'zod'
 
 import type { TemporaryPasswordDto } from '@/api/generated/models/types/temporary-password-dto'
 import type { UserDto } from '@/api/generated/models/types/user-dto'
 import { temporaryPasswordForIssueDtoSchema } from '@/api/generated/models/zod/temporary-password-for-issue-dto'
+import { LeaveQuestion } from '@/components/leave-question'
 import { Notification } from '@/components/notification'
 import { RefusedSaveAlert } from '@/components/refused-save-alert'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/responsive-dialog'
 import { useLoginSettings } from '@/domain/login-providers/apis/login-settings'
 import { useServerErrors } from '@/hooks/use-server-errors'
+import { useShownOnce } from '@/hooks/use-shown-once'
 import { maxLengthOf } from '@/lib/api-contract'
 import { copyToClipboard } from '@/lib/copy-to-clipboard'
 import { focusFirstError } from '@/lib/focus-first-error'
@@ -52,46 +53,32 @@ export function TemporaryPasswordDialog({ user, isSelf }: TemporaryPasswordDialo
   // it opens, because another Admin can turn it while this page is open. The caller holds manage_user_access, so it can read it.
   const settings = useLoginSettings()
   const passwordsOff = settings.data && settings.data.passwordLogin === 'Off'
-  const [isOpen, setIsOpen] = useState(false)
-  const isLocked = issue.isPending || issue.data !== undefined
-  // True from the send of an issue until it fails or the dialog closes. The send comes in the click, but isLocked turns
-  // true only at a later render, so a close or a second submit before that render reads this ref.
-  const hasSent = useRef(false)
-
-  const send: AskForIssueProps['onIssue'] = (loginName, onError) => {
-    if (hasSent.current) return
-    hasSent.current = true
-    issue.mutate(loginName, {
-      onError: (error) => {
-        hasSent.current = false
-        onError(error)
-      },
-    })
-  }
+  const { isOpen, onOpenChange, send, isLocked, leaving } = useShownOnce(issue)
 
   return (
-    <ResponsiveDialogTrigger
-      isOpen={isOpen}
-      onOpenChange={(open) => {
-        if (!open && hasSent.current && issue.data === undefined) return
-        setIsOpen(open)
-        if (open) {
-          void settings.refetch()
-          return
-        }
-        hasSent.current = false
-        issue.reset()
-      }}
-    >
-      <Button variant="outline">Set temporary password</Button>
-      <ResponsiveDialog isDismissable={!isLocked} isKeyboardDismissDisabled={isLocked} showCloseButton={!isLocked}>
-        {issue.data ? (
-          <IssuedPassword user={user} issued={issue.data} isSelf={isSelf} passwordsOff={passwordsOff ?? false} />
-        ) : (
-          <AskForIssue user={user} isSelf={isSelf} isPending={issue.isPending} settings={settings} onIssue={send} />
-        )}
-      </ResponsiveDialog>
-    </ResponsiveDialogTrigger>
+    <>
+      <ResponsiveDialogTrigger
+        isOpen={isOpen}
+        onOpenChange={(open) => {
+          onOpenChange(open)
+          if (open) void settings.refetch()
+        }}
+      >
+        <Button variant="outline">Set temporary password</Button>
+        <ResponsiveDialog isDismissable={!isLocked} isKeyboardDismissDisabled={isLocked} showCloseButton={!isLocked}>
+          {issue.data ? (
+            <IssuedPassword user={user} issued={issue.data} isSelf={isSelf} passwordsOff={passwordsOff ?? false} />
+          ) : (
+            <AskForIssue user={user} isSelf={isSelf} isPending={issue.isPending} settings={settings} onIssue={send} />
+          )}
+        </ResponsiveDialog>
+      </ResponsiveDialogTrigger>
+      <LeaveQuestion
+        leaving={leaving}
+        title="Leave without the password?"
+        description="Recall cannot show this password again. Stay to copy it, or leave and set a new temporary password when you need one."
+      />
+    </>
   )
 }
 

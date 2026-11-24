@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from '@tanstack/react-router'
 import { expect, test, vi } from 'vitest'
 import { commands, page } from 'vitest/browser'
 import { render } from 'vitest-browser-react'
@@ -37,9 +38,13 @@ test('shows a button for each action that the Server allows and that the page ca
 
 test('@PWD-14 shows Set temporary password only when the Server allows it', async () => {
   await commands.answerRequests([{ method: 'GET', path: '/api/v1/login-settings', body: { passwordLogin: 'On', version: 1 } }])
+  const rootRoute = createRootRoute({
+    component: () => <UserActions user={aUser(['IssueTemporaryPassword'])} isSelf={false} onChangeRole={() => {}} onDelete={() => {}} />,
+  })
+  const router = createRouter({ routeTree: rootRoute, history: createMemoryHistory({ initialEntries: ['/'] }) })
   await render(
     <QueryClientProvider client={new QueryClient()}>
-      <UserActions user={aUser(['IssueTemporaryPassword'])} isSelf={false} onChangeRole={() => {}} onDelete={() => {}} />
+      <RouterProvider router={router} />
     </QueryClientProvider>,
   )
 
