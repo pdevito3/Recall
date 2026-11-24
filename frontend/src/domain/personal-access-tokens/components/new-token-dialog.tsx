@@ -1,7 +1,7 @@
-import { useBlocker } from '@tanstack/react-router'
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 
 import type { PersonalAccessTokenCreatedDto } from '@/api/generated/models/types/personal-access-token-created-dto'
+import { LeaveQuestion } from '@/components/leave-question'
 import { Notification } from '@/components/notification'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,7 +13,7 @@ import {
   ResponsiveDialogTitle,
   ResponsiveDialogTrigger,
 } from '@/components/ui/responsive-dialog'
-import { isDeparting } from '@/domain/auth/apis/leave-the-app'
+import { useShownOnce } from '@/hooks/use-shown-once'
 import { copyToClipboard } from '@/lib/copy-to-clipboard'
 import { browserTimeZone, formatInstant, todayAt } from '@/lib/zoned-time'
 
@@ -26,83 +26,21 @@ interface NewTokenDialogProps {
 
 export function NewTokenDialog({ permissions }: NewTokenDialogProps) {
   const add = useAddPersonalAccessToken()
-  const [isOpen, setIsOpen] = useState(false)
-  const isLocked = add.isPending || add.data !== undefined
-  // True from the send of a create until it fails or the dialog closes. The send comes in the click, but isLocked turns
-  // true only at a later render, so a Back, a close, or a second submit before that render reads this ref.
-  const hasSent = useRef(false)
-  const isAsking = useRef(false)
-  const leaving = useBlocker({
-    shouldBlockFn: () => {
-      // A move while the question shows lets the first one through, to where the browser now is. After a Forward, that is this page.
-      if (isAsking.current) {
-        leave()
-        return false
-      }
-      if (!hasSent.current) return false
-      isAsking.current = true
-      return true
-    },
-    enableBeforeUnload: () => hasSent.current && !isDeparting(),
-    withResolver: true,
-  })
-  const leave = () => {
-    isAsking.current = false
-    leaving.proceed?.()
-  }
-
-  const create: TokenFormProps['onCreate'] = (body, onError) => {
-    if (hasSent.current) return
-    hasSent.current = true
-    add.mutate(body, {
-      onError: (error) => {
-        hasSent.current = false
-        onError(error)
-      },
-    })
-  }
+  const { isOpen, onOpenChange, send, isLocked, leaving } = useShownOnce(add)
 
   return (
     <>
-      <ResponsiveDialogTrigger
-        isOpen={isOpen}
-        onOpenChange={(open) => {
-          if (!open && hasSent.current && add.data === undefined) return
-          setIsOpen(open)
-          if (open) return
-          hasSent.current = false
-          add.reset()
-        }}
-      >
+      <ResponsiveDialogTrigger isOpen={isOpen} onOpenChange={onOpenChange}>
         <Button>New token</Button>
         <ResponsiveDialog isDismissable={!isLocked} isKeyboardDismissDisabled={isLocked} showCloseButton={!isLocked}>
-          <NewToken add={add} permissions={permissions} onCreate={create} />
+          <NewToken add={add} permissions={permissions} onCreate={send} />
         </ResponsiveDialog>
       </ResponsiveDialogTrigger>
-      <ResponsiveDialog
-        role="alertdialog"
-        isOpen={leaving.status === 'blocked'}
-        onOpenChange={(isOpen) => {
-          if (isOpen) return
-          isAsking.current = false
-          leaving.reset?.()
-        }}
-        isDismissable={false}
-        showCloseButton={false}
-      >
-        <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>Leave without your token?</ResponsiveDialogTitle>
-          <ResponsiveDialogDescription>
-            Recall cannot show this token again. Stay to copy it, or leave and make a new token when you need one.
-          </ResponsiveDialogDescription>
-        </ResponsiveDialogHeader>
-        <ResponsiveDialogFooter>
-          <Button variant="outline" onPress={leave}>
-            Leave
-          </Button>
-          <ResponsiveDialogClose variant="default">Stay</ResponsiveDialogClose>
-        </ResponsiveDialogFooter>
-      </ResponsiveDialog>
+      <LeaveQuestion
+        leaving={leaving}
+        title="Leave without your token?"
+        description="Recall cannot show this token again. Stay to copy it, or leave and make a new token when you need one."
+      />
     </>
   )
 }
