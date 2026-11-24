@@ -252,6 +252,26 @@ test.describe('the users of a tenant', () => {
     await expect(users.at.toasts).toHaveCount(0)
   })
 
+  test('before a Set, Cancel, Escape, and a click outside close the dialog and send nothing', { tag: '@PWD-14' }, async ({ page, api }) => {
+    const grace = aUser().named('Grace Hopper').allowing('IssueTemporaryPassword')
+    const { id } = grace.build()
+    api.mock(usersApi.oneIs(grace), loginProvidersApi.settingsHold())
+    const users = usersPage(page)
+    await users.openDetail(id)
+
+    await users.openTemporaryPassword('Grace Hopper')
+    await users.at.cancelTemporaryPassword.click()
+    await expect(users.at.temporaryPasswordAsk).toHaveCount(0)
+    await users.openTemporaryPassword('Grace Hopper')
+    await page.keyboard.press('Escape')
+    await expect(users.at.temporaryPasswordAsk).toHaveCount(0)
+    await users.openTemporaryPassword('Grace Hopper')
+    await page.mouse.click(5, 5)
+
+    await expect(users.at.temporaryPasswordAsk).toHaveCount(0)
+    expect(api.all('post', usersPaths.temporaryPassword(id))).toHaveLength(0)
+  })
+
   for (const exit of ['Cancel', 'Escape', 'a click outside'] as const) {
     test(`${exit} at the click on Set temporary password keeps the dialog open, and then shows the password`, { tag: '@PWD-14' }, async ({ page, api }) => {
       const grace = aUser().named('Grace Hopper').allowing('IssueTemporaryPassword')
