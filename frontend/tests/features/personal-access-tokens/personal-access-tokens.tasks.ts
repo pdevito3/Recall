@@ -72,6 +72,27 @@ export function personalAccessTokensPage(page: Page) {
         history.back()
       }),
 
+    /**
+     * Closes the dialog with Cancel, Escape, or a click outside in the first task after the click on Create, before React
+     * renders the pending create, as a quick person can on a slow phone.
+     */
+    async createAndCloseAtOnce(exit: 'Cancel' | 'Escape' | 'a click outside') {
+      const cancel = await at.cancel.elementHandle()
+      await at.create.evaluate(
+        (create: HTMLElement, { exit, cancel }) => {
+          create.click()
+          setTimeout(() => {
+            if (exit === 'Cancel') return cancel?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+            if (exit === 'Escape') return create.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+            const outside = document.elementFromPoint(5, 5)
+            outside?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 1, pointerType: 'mouse', isPrimary: true }))
+            if (outside instanceof HTMLElement) outside.click()
+          })
+        },
+        { exit, cancel },
+      )
+    },
+
     /** History /about, /settings, then this page, in one document, so that Back stays in the app. */
     async openAfterAboutAndSettings() {
       await page.goto('/about')

@@ -115,6 +115,24 @@ test.describe('the personal access tokens of a person', () => {
     await expect(tokens.at.value(value)).toBeVisible()
   })
 
+  test('before a create, Cancel, Escape, and a click outside close the form and send nothing', { tag: '@PAT-1' }, async ({ page, api }) => {
+    api.mock(personalAccessTokensApi.mineAre([]))
+    const tokens = personalAccessTokensPage(page)
+    await tokens.open()
+
+    await tokens.openForm()
+    await tokens.at.cancel.click()
+    await expect(tokens.at.dialog).toHaveCount(0)
+    await tokens.openForm()
+    await page.keyboard.press('Escape')
+    await expect(tokens.at.dialog).toHaveCount(0)
+    await tokens.openForm()
+    await page.mouse.click(5, 5)
+
+    await expect(tokens.at.dialog).toHaveCount(0)
+    expect(api.all('post', personalAccessTokensPaths.mine)).toHaveLength(0)
+  })
+
   test('a double click on Create sends one create', { tag: '@PAT-1' }, async ({ page, api }) => {
     let answer!: () => void
     const answered = new Promise<void>((resolve) => (answer = resolve))
@@ -190,6 +208,45 @@ test.describe('the personal access tokens of a person', () => {
     answer()
     await expect(tokens.at.value(value)).toBeVisible()
   })
+
+  test('Forward while the question shows closes it on the page, and the next Back asks again', { tag: '@PAT-1' }, async ({ page, api }) => {
+    api.mock(personalAccessTokensApi.mineAre([]), personalAccessTokensApi.creates(aToken().named('Laptop').created(value)))
+    const tokens = personalAccessTokensPage(page)
+    await tokens.openAfterAboutAndSettings()
+    await tokens.createNamed('Laptop')
+    await page.goBack()
+    await expect(tokens.at.leaveQuestion).toBeVisible()
+
+    await page.goForward()
+
+    await expect(tokens.at.leaveQuestion).toHaveCount(0)
+    await expect(tokens.at.value(value)).toBeVisible()
+    await expect(page).toHaveURL(/\/settings\/personal-access-tokens$/)
+    await page.goBack()
+    await expect(tokens.at.leaveQuestion).toBeVisible()
+    await tokens.at.leave.click()
+    await expect(page).toHaveURL(/\/settings$/)
+    await expect(tokens.at.anyTokenValue).toHaveCount(0)
+  })
+
+  for (const exit of ['Cancel', 'Escape', 'a click outside'] as const) {
+    test(`${exit} at the click on Create keeps the dialog open, and then shows the value`, { tag: '@PAT-1' }, async ({ page, api }) => {
+      let answer!: () => void
+      const answered = new Promise<void>((resolve) => (answer = resolve))
+      api.mock(personalAccessTokensApi.mineAre([]), { ...personalAccessTokensApi.creates(aToken().named('Laptop').created(value)), heldUntil: answered })
+      const tokens = personalAccessTokensPage(page)
+      await tokens.open()
+      await tokens.openForm()
+      await tokens.at.nameField.fill('Laptop')
+
+      await tokens.createAndCloseAtOnce(exit)
+
+      await expect(tokens.at.cancel).toBeDisabled()
+      answer()
+      await expect(tokens.at.value(value)).toBeVisible()
+      expect(api.all('post', personalAccessTokensPaths.mine)).toHaveLength(1)
+    })
+  }
 
   test('Back from an empty form, and Back after Done, leave with no question', { tag: '@PAT-1' }, async ({ page, api }) => {
     api.mock(personalAccessTokensApi.mineAre([]), personalAccessTokensApi.creates(aToken().named('Laptop').created(value)))
