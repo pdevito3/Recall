@@ -88,6 +88,13 @@ export function usersPage(page: Page) {
       await settled
     },
 
+    async setTemporaryPasswordAgain(id: string, loginName: string) {
+      await at.loginNameField.fill(loginName)
+      const settled = answered('POST', usersPaths.temporaryPassword(id))
+      await at.confirmTemporaryPassword.click()
+      await settled
+    },
+
     async openTemporaryPassword(name: string) {
       await at.actionButton(name, 'Set temporary password').click()
       await expect(at.confirmTemporaryPassword).toBeEnabled()

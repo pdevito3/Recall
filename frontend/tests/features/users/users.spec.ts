@@ -252,6 +252,23 @@ test.describe('the users of a tenant', () => {
     await expect(users.at.toasts).toHaveCount(0)
   })
 
+  test('after a login name in use, a Set with another name shows the password', { tag: '@PWD-14' }, async ({ page, api }) => {
+    const grace = aUser().named('Grace Hopper').allowing('IssueTemporaryPassword')
+    const { id } = grace.build()
+    const issued = { loginName: 'grace.h', password: 'acorn-ladder-velvet-tundra', expiresAt: '2026-11-28T10:00:00Z' }
+    api.mock(usersApi.oneIs(grace), loginProvidersApi.settingsHold(), usersApi.temporaryPasswordFails(id, aProblem().conflict('This login name is in use. Pick another.')))
+    const users = usersPage(page)
+    await users.openDetail(id)
+    await users.setTemporaryPassword('Grace Hopper', id, 'taken')
+    await expect(users.at.temporaryPasswordRefusal).toBeVisible()
+    api.mock(usersApi.issuesTemporaryPassword(id, issued))
+
+    await users.setTemporaryPasswordAgain(id, 'grace.h')
+
+    await expect(users.at.temporaryPasswordResult).toContainText(issued.password)
+    expect(api.last('post', usersPaths.temporaryPassword(id))?.body).toEqual({ loginName: 'grace.h' })
+  })
+
   test('before a Set, Cancel, Escape, and a click outside close the dialog and send nothing', { tag: '@PWD-14' }, async ({ page, api }) => {
     const grace = aUser().named('Grace Hopper').allowing('IssueTemporaryPassword')
     const { id } = grace.build()
