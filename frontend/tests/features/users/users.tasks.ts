@@ -100,6 +100,12 @@ export function usersPage(page: Page) {
       await expect(at.confirmTemporaryPassword).toBeEnabled()
     },
 
+    setTemporaryPasswordAndGoBackAtOnce: () =>
+      at.confirmTemporaryPassword.evaluate((set: HTMLElement) => {
+        set.click()
+        history.back()
+      }),
+
     async setTemporaryPasswordAndCloseAtOnce(exit: 'Cancel' | 'Escape' | 'a click outside') {
       const cancel = await at.cancelTemporaryPassword.elementHandle()
       await at.confirmTemporaryPassword.evaluate(

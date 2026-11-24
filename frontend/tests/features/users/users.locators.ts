@@ -7,6 +7,7 @@ export const users = (page: Page) => {
   const details = page.getByRole('region', { name: 'Details' })
   const temporaryPasswordAsk = page.getByRole('dialog', { name: /^Set a temporary password for .+\?$/ })
   const temporaryPasswordResult = page.getByRole('dialog', { name: /^Give .+ this password$/ })
+  const leaveQuestion = page.getByRole('alertdialog', { name: 'Leave without the password?' })
 
   return {
     listHeading: page.getByRole('heading', { name: 'Users', exact: true }),
@@ -51,6 +52,9 @@ export const users = (page: Page) => {
     temporaryPasswordResult,
     copyPassword: temporaryPasswordResult.getByRole('button', { name: 'Copy password', exact: true }),
     donePassword: temporaryPasswordResult.getByRole('button', { name: 'Done', exact: true }),
+    leaveQuestion,
+    stay: leaveQuestion.getByRole('button', { name: 'Stay', exact: true }),
+    leave: leaveQuestion.getByRole('button', { name: 'Leave', exact: true }),
     toast: (text: string) => page.getByRole('alertdialog').filter({ hasText: text }),
     toasts: page.getByRole('alertdialog'),
   }

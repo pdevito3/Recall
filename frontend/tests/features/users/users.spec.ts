@@ -269,6 +269,83 @@ test.describe('the users of a tenant', () => {
     expect(api.last('post', usersPaths.temporaryPassword(id))?.body).toEqual({ loginName: 'grace.h' })
   })
 
+  test('Back while the password shows asks first, Stay keeps the password, and Leave goes back', { tag: '@PWD-14' }, async ({ page, api }) => {
+    const grace = aUser().named('Grace Hopper').allowing('IssueTemporaryPassword')
+    const { id } = grace.build()
+    const issued = { loginName: 'grace.h', password: 'acorn-ladder-velvet-tundra', expiresAt: '2026-11-28T10:00:00Z' }
+    api.mock(membershipApi.userMayReadUsers(), usersApi.listReturns([grace]), usersApi.oneIs(grace), loginProvidersApi.settingsHold(), usersApi.issuesTemporaryPassword(id, issued))
+    const users = usersPage(page)
+    await users.openList()
+    await users.openUser('Grace Hopper', id)
+    await users.setTemporaryPassword('Grace Hopper', id, 'grace.h')
+
+    await page.goBack()
+
+    await expect(users.at.leaveQuestion).toBeVisible()
+    await users.at.stay.click()
+    await expect(users.at.leaveQuestion).toHaveCount(0)
+    await expect(users.at.temporaryPasswordResult).toContainText(issued.password)
+    await expect(page).toHaveURL(new RegExp(`/users/${id}$`))
+    await page.goBack()
+    await users.at.leave.click()
+    await expect(page).toHaveURL(/\/users$/)
+    await expect(users.at.temporaryPasswordResult).toHaveCount(0)
+  })
+
+  test('Back while an issue runs asks first, also a Back at the click on Set', { tag: '@PWD-14' }, async ({ page, api }) => {
+    let answer!: () => void
+    const answered = new Promise<void>((resolve) => (answer = resolve))
+    const grace = aUser().named('Grace Hopper').allowing('IssueTemporaryPassword')
+    const { id } = grace.build()
+    const issued = { loginName: 'grace.h', password: 'acorn-ladder-velvet-tundra', expiresAt: '2026-11-28T10:00:00Z' }
+    api.mock(
+      membershipApi.userMayReadUsers(),
+      usersApi.listReturns([grace]),
+      usersApi.oneIs(grace),
+      loginProvidersApi.settingsHold(),
+      { ...usersApi.issuesTemporaryPassword(id, issued), heldUntil: answered },
+    )
+    const users = usersPage(page)
+    await users.openList()
+    await users.openUser('Grace Hopper', id)
+    await users.openTemporaryPassword('Grace Hopper')
+    await users.at.loginNameField.fill('grace.h')
+
+    await users.setTemporaryPasswordAndGoBackAtOnce()
+
+    await expect(users.at.leaveQuestion).toBeVisible()
+    await users.at.stay.click()
+    await expect(users.at.cancelTemporaryPassword).toBeDisabled()
+    await page.goBack()
+    await expect(users.at.leaveQuestion).toBeVisible()
+    await users.at.stay.click()
+    answer()
+    await expect(users.at.temporaryPasswordResult).toContainText(issued.password)
+    expect(api.all('post', usersPaths.temporaryPassword(id))).toHaveLength(1)
+  })
+
+  test('Back from the form before a Set, and Back after Done, leave with no question', { tag: '@PWD-14' }, async ({ page, api }) => {
+    const grace = aUser().named('Grace Hopper').allowing('IssueTemporaryPassword')
+    const { id } = grace.build()
+    const issued = { loginName: 'grace.h', password: 'acorn-ladder-velvet-tundra', expiresAt: '2026-11-28T10:00:00Z' }
+    api.mock(membershipApi.userMayReadUsers(), usersApi.listReturns([grace]), usersApi.oneIs(grace), loginProvidersApi.settingsHold(), usersApi.issuesTemporaryPassword(id, issued))
+    const users = usersPage(page)
+    await users.openList()
+    await users.openUser('Grace Hopper', id)
+    await users.openTemporaryPassword('Grace Hopper')
+
+    await page.goBack()
+
+    await expect(page).toHaveURL(/\/users$/)
+    await expect(users.at.leaveQuestion).toHaveCount(0)
+    await users.openUser('Grace Hopper', id)
+    await users.setTemporaryPassword('Grace Hopper', id, 'grace.h')
+    await users.at.donePassword.click()
+    await page.goBack()
+    await expect(page).toHaveURL(/\/users$/)
+    await expect(users.at.leaveQuestion).toHaveCount(0)
+  })
+
   test('before a Set, Cancel, Escape, and a click outside close the dialog and send nothing', { tag: '@PWD-14' }, async ({ page, api }) => {
     const grace = aUser().named('Grace Hopper').allowing('IssueTemporaryPassword')
     const { id } = grace.build()
