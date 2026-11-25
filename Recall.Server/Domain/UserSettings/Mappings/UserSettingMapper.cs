@@ -13,6 +13,7 @@ public static class UserSettingMapper
         RequirePeopleProposalApproval = setting.RequirePeopleProposalApproval,
         RemoveFillerWords = setting.RemoveFillerWords,
         WriteNumbersAsDigits = setting.WriteNumbersAsDigits,
+        RequireImportReview = setting.RequireImportReview,
         Version = setting.Version,
     };
 }

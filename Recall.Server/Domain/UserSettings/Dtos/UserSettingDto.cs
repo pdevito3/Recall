@@ -20,5 +20,8 @@ public sealed record UserSettingDto
     /// <summary>True when the Cleanup prompt asks the model to write a spoken number, date, time, or amount of money in its usual written form in Cleaned, such as "3:30 PM" and "$20". Raw keeps each word.</summary>
     public bool WriteNumbersAsDigits { get; init; }
 
+    /// <summary>True when only a web session of the person accepts an import batch. Only <c>PUT /me/settings/import-review</c> changes it.</summary>
+    public bool RequireImportReview { get; init; }
+
     public uint Version { get; init; }
 }

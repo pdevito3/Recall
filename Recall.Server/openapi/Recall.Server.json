@@ -6447,6 +6447,100 @@
         }
       }
     },
+    "/api/v1/me/settings/import-review": {
+      "put": {
+        "tags": [
+          "UserSettings"
+        ],
+        "summary": "Turns the import review on or off. Only a web session of the person changes it, so no agent can turn off the review\nthat guards its own accept. A save from another version gets 409, unless the row already holds this value.",
+        "operationId": "ChangeImportReview",
+        "parameters": [
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportReviewChangeDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSettingDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/me/settings": {
       "put": {
         "tags": [
@@ -9278,6 +9372,25 @@
           }
         }
       },
+      "ImportReviewChangeDto": {
+        "required": [
+          "requireImportReview",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "requireImportReview": {
+            "type": "boolean",
+            "description": "True to let only a web session of the person accept an import batch. False to let each caller with journal write accept one."
+          },
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "description": "The `version` of the settings that the client read. A save from another version gets 409, unless the row already holds this value."
+          }
+        }
+      },
       "ImportReviewDto": {
         "required": [
           "rejected"
@@ -11676,6 +11789,7 @@
           "requirePeopleProposalApproval",
           "removeFillerWords",
           "writeNumbersAsDigits",
+          "requireImportReview",
           "version"
         ],
         "type": "object",
@@ -11712,6 +11826,10 @@
           "writeNumbersAsDigits": {
             "type": "boolean",
             "description": "True when the Cleanup prompt asks the model to write a spoken number, date, time, or amount of money in its usual written form in Cleaned, such as \"3:30 PM\" and \"$20\". Raw keeps each word."
+          },
+          "requireImportReview": {
+            "type": "boolean",
+            "description": "True when only a web session of the person accepts an import batch. Only `PUT /me/settings/import-review` changes it."
           },
           "version": {
             "maximum": 4294967295,
