@@ -10,7 +10,7 @@ import { recordingsApi } from './api/recordings-api'
 import { aSetting, settingsApi } from './api/settings-api'
 import { transcriptionEngineApi } from './api/summaries-api'
 import { usersApi } from './api/users-api'
-import { answers, mockedPaths, requestRecorder, type HttpMethod, type MockRoute, type ServedRequest } from './api/mock-route'
+import { answers, mockedPaths, requestRecorder, type HttpMethod, type MockRoute, type RequestBody, type ServedRequest } from './api/mock-route'
 import { as, type Identity } from './auth/actors'
 
 export interface Api {
@@ -24,7 +24,7 @@ export interface Api {
 
 // `postDataJSON` throws on a body that is not JSON. That leaves the route unfulfilled and the test
 // times out, so a recorder must not let it throw.
-function postBody(request: Request): unknown {
+function postBody(request: Request): RequestBody {
   try {
     return request.postDataJSON()
   } catch {
@@ -88,13 +88,12 @@ export const test = base.extend<{ actor: Identity; api: Api }>({
           }
           if (newestMock.delayMs) await Promise.race([new Promise((resolve) => setTimeout(resolve, newestMock.delayMs)), testEnded])
           if (newestMock.heldUntil) await Promise.race([newestMock.heldUntil, testEnded])
-          await route.fulfill({
-            status: newestMock.status,
-            headers: newestMock.headers,
-            ...(newestMock.body === undefined
-              ? {}
-              : { contentType: 'application/json', body: JSON.stringify(newestMock.body) }),
-          })
+          const answer: NonNullable<Parameters<Route['fulfill']>[0]> = { status: newestMock.status, headers: newestMock.headers }
+          if (newestMock.body !== undefined) {
+            answer.contentType = 'application/json'
+            answer.body = JSON.stringify(newestMock.body)
+          }
+          await route.fulfill(answer)
         },
       )
 

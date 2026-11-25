@@ -1,3 +1,5 @@
+import type { JsonValue } from '@/test/json-value'
+
 export type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete'
 
 export interface MockRoute {
@@ -29,13 +31,16 @@ export const answers = (route: MockRoute, method: string, pathname: string) =>
 export interface ServedRequest {
   query: URLSearchParams
   headers: Headers
-  body: unknown
+  body: RequestBody
 }
+
+/** The JSON of a request body, its text when it is not JSON, or undefined when it has no body. */
+export type RequestBody = JsonValue | undefined
 
 // A mock matches on method and path alone. Only a test that reads the request back can prove
 // what the application put on the wire.
 export function requestRecorder() {
-  const served: { method: HttpMethod; url: URL; headers: Headers; body: unknown }[] = []
+  const served: { method: HttpMethod; url: URL; headers: Headers; body: RequestBody }[] = []
 
   const all = (method: HttpMethod, path: string): ServedRequest[] =>
     served
@@ -43,7 +48,7 @@ export function requestRecorder() {
       .map((r) => ({ query: r.url.searchParams, headers: r.headers, body: r.body }))
 
   return {
-    add(method: HttpMethod, url: URL, headers: Headers, body: unknown) {
+    add(method: HttpMethod, url: URL, headers: Headers, body: RequestBody) {
       served.push({ method, url, headers, body })
     },
     all,
