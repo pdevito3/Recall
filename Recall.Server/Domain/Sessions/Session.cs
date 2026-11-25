@@ -130,6 +130,19 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         };
     }
 
+    /// <summary>The Session of a kept entry of an accept (IMP-14): Raw is Revision 1, no Cleanup ran, and it names its batch.</summary>
+    public static Session Import(
+        string tenantId, string userId, string clientSessionId, DateTimeOffset startedAt, TimeZoneId zone, string raw,
+        IReadOnlyList<string> moods, IReadOnlyList<string> aiTopics, string importBatchId, DateTimeOffset now)
+    {
+        var session = Create(tenantId, userId, clientSessionId, startedAt, null, zone, now);
+        session.ImportBatchId = importBatchId;
+        session.Moods = moods;
+        session.AiTopics = aiTopics;
+        session.SaveRaw(DraftSave.Of(raw, DraftSlot.NoRevision, now));
+        return session;
+    }
+
     /// <exception cref="ValidationException">The ID is blank, is too long, or has a character that is not allowed.</exception>
     public static void CheckClientSessionId(string clientSessionId)
     {
