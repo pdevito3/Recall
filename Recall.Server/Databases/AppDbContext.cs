@@ -7,6 +7,7 @@ using Domain;
 using Domain.Agents;
 using Domain.AuditEntries;
 using Domain.Corrections;
+using Domain.ImportBatches;
 using Domain.People;
 using Domain.Recordings;
 using Domain.Sessions;
@@ -55,6 +56,9 @@ public class AppDbContext(
     public DbSet<Recording> Recordings => Set<Recording>();
     public DbSet<RecordingSlice> RecordingSlices => Set<RecordingSlice>();
     public DbSet<Domain.Summaries.Summary> Summaries => Set<Domain.Summaries.Summary>();
+    public DbSet<ImportBatch> ImportBatches => Set<ImportBatch>();
+    public DbSet<ImportEntry> ImportEntries => Set<ImportEntry>();
+    public DbSet<ImportDay> ImportDays => Set<ImportDay>();
     // new-feature:db-sets
     #endregion
 

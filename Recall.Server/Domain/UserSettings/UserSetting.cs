@@ -29,6 +29,8 @@ public class UserSetting : BaseEntity, ITenantable, IJournalOwned
 
     public bool WriteNumbersAsDigits { get; private set; } = true;
 
+    public bool RequireImportReview { get; private set; } = true;
+
     public static UserSetting DefaultsFor(string tenantId, string userId) => new() { TenantId = tenantId, UserId = userId };
 
     public bool TimeZoneIsKnown => TimeZoneValue is null || TimeZoneId.TryOf(TimeZoneValue) is not null;
@@ -54,6 +56,17 @@ public class UserSetting : BaseEntity, ITenantable, IJournalOwned
         RequirePeopleProposalApproval = requirePeopleProposalApproval;
         RemoveFillerWords = removeFillerWords;
         WriteNumbersAsDigits = writeNumbersAsDigits;
+        return true;
+    }
+
+    public bool ChangeImportReview(bool requireImportReview, uint version)
+    {
+        var isStored = requireImportReview == RequireImportReview;
+        if (isStored && version != Version)
+            return false;
+
+        GuardVersion(version);
+        RequireImportReview = requireImportReview;
         return true;
     }
 

@@ -129,6 +129,27 @@ public static class JournalTriggers
             """);
     }
 
+    public static void AddOwnerPurgeWithImports(this MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.Sql("DROP TRIGGER users_purge_journal;");
+        migrationBuilder.Sql("""
+            CREATE TRIGGER users_purge_journal BEFORE UPDATE OF is_deleted ON users
+            WHEN new.is_deleted = 1 AND old.is_deleted = 0
+            BEGIN
+                DELETE FROM import_entries WHERE user_id = new.id;
+                DELETE FROM import_days WHERE user_id = new.id;
+                DELETE FROM import_batches WHERE user_id = new.id;
+                DELETE FROM summaries WHERE user_id = new.id;
+                DELETE FROM recordings WHERE user_id = new.id;
+                DELETE FROM sessions WHERE user_id = new.id;
+                DELETE FROM people WHERE user_id = new.id;
+                DELETE FROM corrections WHERE user_id = new.id;
+                DELETE FROM user_settings WHERE user_id = new.id;
+                DELETE FROM sync_changes WHERE user_id = new.id;
+            END;
+            """);
+    }
+
     public static void AddOwnerPurge(this MigrationBuilder migrationBuilder) => migrationBuilder.Sql("""
         CREATE TRIGGER users_purge_journal BEFORE UPDATE OF is_deleted ON users
         WHEN new.is_deleted = 1 AND old.is_deleted = 0

@@ -9,10 +9,11 @@ import { sessionSuggestionDtoSchema } from './session-suggestion-dto'
 import { sessionTopicDtoSchema } from './session-topic-dto'
 
 export const sessionDtoSchema = z.object({
+  importBatchId: z.string().nullish().describe('The Import batch whose accept made the Session. Null for a Session that no import made.'),
   id: z.string(),
   clientSessionId: z.string(),
   startedAt: z.iso.datetime(),
-  journalingDay: z.iso.date().describe('The date of DateTimeOffset SessionDto.StartedAt in the zone that the create stored. A later change of the settings does not move it.'),
+  journalingDay: z.iso.date().describe('The date of DateTimeOffset SyncSessionDto.StartedAt in the zone that the create stored. A later change of the settings does not move it.'),
   rawText: z.string(),
   rawDraftRevision: z.int32(),
   rawLatestRevision: z.int32(),
@@ -38,4 +39,4 @@ export const sessionDtoSchema = z.object({
   longitude: z.number().nullish(),
   version: z.int().min(0).max(4294967295),
   metadataVersion: z.int().min(0).max(4294967295).describe('Send it with the next metadata save. A save of a Draft does not change it.'),
-})
+}).describe('A Session as a read of it gives it.')

@@ -39,6 +39,11 @@ export type UserSettingDto = {
     */
     writeNumbersAsDigits: boolean;
     /**
+     * @description True when only a web session of the person accepts an import batch. Only `PUT /me/settings/import-review` changes it.
+     * @type boolean
+    */
+    requireImportReview: boolean;
+    /**
      * @minLength 0
      * @maxLength 4294967295
      * @type integer

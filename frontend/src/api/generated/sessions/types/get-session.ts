@@ -10,6 +10,10 @@ export type GetSessionPath = {
     id: string;
 };
 
+/**
+ * @description A Session as a read of it gives it.
+ * @type object
+*/
 export type GetSessionStatus200 = SessionDto;
 
 export type GetSessionStatus401 = unknown;

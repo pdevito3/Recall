@@ -1,0 +1,78 @@
+namespace Recall.IntegrationTests.FeatureTests.ImportBatches;
+
+using System.Globalization;
+using Microsoft.EntityFrameworkCore;
+using Recall.Server.Auth.Entities;
+using Recall.Server.Domain.AuditEntries;
+using Recall.Server.Domain.ImportBatches.Dtos;
+using Recall.Server.Domain.ImportBatches.Features;
+using Recall.Server.Domain.Users;
+using Recall.SharedTestHelpers.EntityGraphs;
+
+internal static class ImportScenario
+{
+    public static readonly DateOnly Day = new(2024, 3, 1);
+
+    public static async Task<User> AddOwnerAsync()
+    {
+        await new TestingServiceScope().StartGraph(out _)
+            .AddTenant(out var tenant)
+            .AddUser(out var owner)
+            .Under(tenant)
+            .BuildAsync();
+        return owner;
+    }
+
+    public static Task<List<AuditEntry>> ActionsOfAsync(User owner, string batchId)
+        => WebSessionOf(owner).ExecuteDbContextAsync(db => db.AuditEntries.IgnoreQueryFilters()
+            .Where(e => e.RootId == batchId && e.Kind == AuditEntryKind.Action)
+            .ToListAsync());
+
+    public static TestingServiceScope WebSessionOf(User owner, IServiceProvider? services = null)
+    {
+        var scope = services is null ? new TestingServiceScope() : new TestingServiceScope(services);
+        scope.SetAppSession(owner.Identifier, SessionKind.Web);
+        return scope;
+    }
+
+    public static Task<ImportBatchDto> OpenAsync(User owner, string zone = "UTC")
+        => WebSessionOf(owner).SendAsync(new OpenImportBatch.Command(new ImportBatchForCreationDto { Name = "Day One", TimeZone = zone }));
+
+    public static ImportEntryPutDto Entry(string id, int position = 0, string raw = "words", DateOnly? date = null, string? time = null) => new()
+    {
+        ClientSessionId = id,
+        Date = (date ?? Day).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        Position = position,
+        Raw = raw,
+        Time = time,
+    };
+
+    public static Task<ImportPutResultDto> PutAsync(User owner, string batchId, params ImportEntryPutDto[] entries)
+        => PutAsync(WebSessionOf(owner), batchId, entries);
+
+    public static Task<ImportPutResultDto> PutAsync(TestingServiceScope scope, string batchId, params ImportEntryPutDto[] entries)
+        => scope.SendAsync(new PutImportEntries.Command(batchId, new ImportEntriesPutDto { Entries = entries }));
+
+    public static Task<ImportRemoveResultDto> RemoveAsync(User owner, string batchId, params string[] ids)
+        => WebSessionOf(owner).SendAsync(new RemoveImportEntries.Command(batchId, new ImportEntriesRemoveDto { ClientSessionIds = ids }));
+
+    public static Task<ImportEntryPageDto> EntriesAsync(User owner, string batchId)
+        => WebSessionOf(owner).SendAsync(new GetImportEntries.Query(batchId, null, null));
+
+    public static Task<ImportEntryReviewedDto> RejectAsync(User owner, string batchId, string id)
+        => WebSessionOf(owner).SendAsync(new ReviewImportEntry.Command(batchId, new ImportEntryReviewDto { ClientSessionId = id, Rejected = true }));
+
+    public static Task<ImportDayReviewedDto> RejectDayAsync(User owner, string batchId, DateOnly date, bool rejected = true)
+        => WebSessionOf(owner).SendAsync(new ReviewImportDay.Command(batchId, new ImportDayReviewDto { Date = date, Rejected = rejected }));
+
+    public static Task<ImportBatchDto> AcceptAsync(User owner, string batchId) => AcceptAsync(WebSessionOf(owner), owner, batchId);
+
+    public static async Task<ImportBatchDto> AcceptAsync(TestingServiceScope scope, User owner, string batchId)
+    {
+        var version = (await EntriesAsync(owner, batchId)).Version;
+        return await scope.SendAsync(new AcceptImportBatch.Command(batchId, new ImportBatchAcceptDto { Version = version }));
+    }
+
+    public static IReadOnlyList<(string Id, string Outcome)> OutcomesOf(ImportPutResultDto result)
+        => result.Outcomes.Select(o => (o.ClientSessionId, o.Outcome)).ToList();
+}

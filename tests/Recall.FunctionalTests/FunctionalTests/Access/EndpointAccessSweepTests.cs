@@ -10,6 +10,7 @@ using Recall.Server.Auth;
 using Recall.Server.Auth.Entities;
 using Recall.Server.Domain;
 using Recall.Server.Domain.Corrections;
+using Recall.Server.Domain.ImportBatches;
 using Recall.Server.Domain.ModelProviders;
 using Recall.Server.Domain.People;
 using Recall.Server.Domain.Recordings;
@@ -18,6 +19,7 @@ using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Summaries;
 using Recall.Server.Domain.TimeZones;
 using Recall.Server.Domain.Users;
+using Recall.Server.Domain.UserSettings;
 using Recall.Server.Resources.Storage;
 using Recall.Server.Resources.Entrypoints;
 using Recall.Server.Resources.Entrypoints.Auth;
@@ -102,6 +104,16 @@ public class EndpointAccessSweepTests : TestBase
         ["RevokePersonalAccessToken"] = new("Each member revokes the own tokens. A token of another person is 404 unless the caller can list that person's tokens.", OwnerOnly: true),
         ["GetExternalLogins"] = new("Each person lists the own links. It takes no ID."),
         ["RemoveExternalLogin"] = new("Each person removes the own links, and the body names one of them. It takes no ID."),
+        ["OpenImportBatch"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetImportBatches"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["PutImportEntries"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["RemoveImportEntries"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetImportEntries"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["ReviewImportEntry"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["ReviewImportDay"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["AcceptImportBatch"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["DiscardImportBatch"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetJournalDays"] = new(JournalOfEachMember, OwnerOnly: true),
         // new-feature:open-to-each-member
     };
 
@@ -418,6 +430,15 @@ public class EndpointAccessSweepTests : TestBase
             new LoginProviderForm("Sweep provider", $"https://sweep-{Guid.NewGuid():N}.example", "sweep", false, null),
             $"lpr_{Guid.NewGuid():N}", "protected", DateTimeOffset.UnixEpoch);
         await InsertAsync(loginProvider);
+        var batch = ImportBatch.Open(tenant.Id, admin.Id, "Sweep batch", "UTC", DateTimeOffset.UnixEpoch);
+        var entry = ImportEntry.Add(batch, SchemaSample.ImportEntryId, ImportAgentLayer.Of("1970-01-01", 0, null, null, "sweep words", null, null));
+        await ExecuteDbContextAsync(db =>
+        {
+            db.ImportBatches.Add(batch);
+            db.ImportEntries.Add(entry);
+            return db.SaveChangesAsync();
+        });
+        await InsertAsync(SettingThatLetsANativeSessionAccept(tenant.Id, admin.Id));
         // new-feature:sweep-inserts
 
         var idsByKind = new Dictionary<string, string>
@@ -433,9 +454,17 @@ public class EndpointAccessSweepTests : TestBase
             ["summaries"] = summary.Id,
             ["personal-access-tokens"] = token.Id,
             ["login-providers"] = loginProvider.Id,
+            ["import-batches"] = batch.Id,
             // new-feature:sweep-ids
         };
         return new TenantRecords(member, admin, new RecordIds(idsByKind, otherUser.Identifier));
+    }
+
+    private static UserSetting SettingThatLetsANativeSessionAccept(string tenantId, string userId)
+    {
+        var setting = UserSetting.DefaultsFor(tenantId, userId);
+        setting.ChangeImportReview(false, setting.Version);
+        return setting;
     }
 
     // ...Domain.AuditEntries.Features gives audit-entries, and ...Domain.Tenants.Features gives tenants

@@ -13,7 +13,7 @@ export const rejectSuggestionPathIdSchema = z.string()
 
 export const rejectSuggestionHeaderXRecallUserSchema = z.string().optional().describe('The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.')
 
-export const rejectSuggestionStatus200Schema = sessionDtoSchema
+export const rejectSuggestionStatus200Schema = sessionDtoSchema.describe('A Session as a read of it gives it.')
 
 export const rejectSuggestionStatus400Schema = validationProblemDetailsSchema
 

@@ -51,6 +51,8 @@ public sealed class SessionConfiguration : IEntityTypeConfiguration<Session>
         builder.HasIndex(e => new { e.UserId, e.ClientSessionId }).IsUnique().ForStaleVersion();
         builder.HasIndex(e => new { e.UserId, e.StartedAt, e.Id }).IsDescending(false, true, true);
         builder.HasIndex(e => e.TenantId);
+        builder.Property(e => e.ImportBatchId).HasMaxLength(EntityId.MaxLength).UseCollation(EntityId.Collation);
+        builder.HasIndex(e => e.ImportBatchId);
     }
 
     private static void ConfigureSlot(ComplexPropertyBuilder<DraftSlot> slot, string prefix)

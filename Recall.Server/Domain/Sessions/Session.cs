@@ -1,6 +1,7 @@
 namespace Recall.Server.Domain.Sessions;
 
 using System.Text;
+using Databases.Sqlite;
 using Content;
 using Exceptions;
 using Metadata;
@@ -86,6 +87,9 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
 
     [Sensitive] public double? Longitude { get; private set; }
 
+    /// <summary>No foreign key, because EF Core adds one to a SQLite table only with a rebuild of the table (IMP-15).</summary>
+    [NotSensitive] public string? ImportBatchId { get; private set; }
+
     public DateOnly JournalingDay => JournalingDayOf(StartedAt, TimeZone);
 
     /// <summary>The day of the start in the zone of the Session. A zone that this host does not know gives the UTC day.</summary>
@@ -113,22 +117,39 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         string tenantId, string userId, string clientSessionId, DateTimeOffset claimedStartedAt, CapturedLocation? location, TimeZoneId zone,
         DateTimeOffset now)
     {
-        ValidationException.ThrowWhenNullOrWhitespace(clientSessionId, ClientSessionIdField, "Please provide a client session ID.");
-        ValidationException.ThrowWhenLongerThan(clientSessionId, ClientSessionIdMaxLength, ClientSessionIdField,
-            $"The client session ID must not have more than {ClientSessionIdMaxLength} characters.");
-        ValidationException.ThrowWhenHasCharacterNotStorable(clientSessionId, ClientSessionIdField,
-            "The client session ID has a character that is not allowed.");
+        CheckClientSessionId(clientSessionId);
 
         return new Session
         {
             TenantId = tenantId,
             UserId = userId,
             ClientSessionId = clientSessionId,
-            StartedAt = StoredInstantOf(claimedStartedAt < now ? claimedStartedAt : now),
+            StartedAt = UtcTextConverter.StoredInstantOf(claimedStartedAt < now ? claimedStartedAt : now),
             TimeZone = zone.Value,
             Latitude = location?.Latitude,
             Longitude = location?.Longitude,
         };
+    }
+
+    public static Session Import(
+        string tenantId, string userId, string clientSessionId, DateTimeOffset startedAt, TimeZoneId zone, string raw,
+        IReadOnlyList<string> moods, IReadOnlyList<string> aiTopics, string importBatchId, DateTimeOffset now)
+    {
+        var session = Create(tenantId, userId, clientSessionId, startedAt, null, zone, now);
+        session.ImportBatchId = importBatchId;
+        session.Moods = moods;
+        session.AiTopics = aiTopics;
+        session.SaveRaw(DraftSave.Of(raw, DraftSlot.NoRevision, now));
+        return session;
+    }
+
+    public static void CheckClientSessionId(string clientSessionId)
+    {
+        ValidationException.ThrowWhenNullOrWhitespace(clientSessionId, ClientSessionIdField, "Please provide a client session ID.");
+        ValidationException.ThrowWhenLongerThan(clientSessionId, ClientSessionIdMaxLength, ClientSessionIdField,
+            $"The client session ID must not have more than {ClientSessionIdMaxLength} characters.");
+        ValidationException.ThrowWhenHasCharacterNotStorable(clientSessionId, ClientSessionIdField,
+            "The client session ID has a character that is not allowed.");
     }
 
     public DraftDecision SaveRaw(DraftSave save, DraftAnswer? earlier = null)
@@ -372,9 +393,6 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
 
     private void RequireRunningCleanup()
         => ValidationException.Must(CleanupRun == CleanupRunState.Running, CleanupField, "No Cleanup of this Session runs.");
-
-    private static DateTimeOffset StoredInstantOf(DateTimeOffset instant)
-        => new(instant.UtcTicks - instant.UtcTicks % TimeSpan.TicksPerMicrosecond, TimeSpan.Zero);
 
     private static bool IsStale(int rawDraftRevision, int? lastCleanupRawRevision)
         => lastCleanupRawRevision is { } read && rawDraftRevision > read;

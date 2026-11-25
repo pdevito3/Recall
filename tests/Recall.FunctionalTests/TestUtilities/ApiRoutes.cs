@@ -101,6 +101,18 @@ public static class ApiRoutes
     {
         public static string Root => $"{Base}/me/settings";
         public static string DeviceTimeZone => $"{Base}/me/settings/device-time-zone";
+        public static string ImportReview => $"{Base}/me/settings/import-review";
+    }
+
+    public static class ImportBatches
+    {
+        public static string Root => $"{Base}/import-batches";
+        public static string GetRecord(string id) => $"{Base}/import-batches/{id}";
+        public static string Entries(string id) => $"{Base}/import-batches/{id}/entries";
+        public static string RemoveEntries(string id) => $"{Base}/import-batches/{id}/entries/remove";
+        public static string ReviewEntry(string id) => $"{Base}/import-batches/{id}/entries/review";
+        public static string ReviewDay(string id) => $"{Base}/import-batches/{id}/days/review";
+        public static string Accept(string id) => $"{Base}/import-batches/{id}/accept";
     }
 
     public static class FileStore
