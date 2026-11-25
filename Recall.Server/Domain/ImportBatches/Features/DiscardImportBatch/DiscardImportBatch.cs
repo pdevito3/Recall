@@ -9,7 +9,7 @@ using Serilog;
 
 public static class DiscardImportBatch
 {
-    public sealed record Command(string Id) : IRequest;
+    public sealed record Command(string Id) : IRequest, IRunsAgainWhenRaced;
 
     public sealed class Handler(AppDbContext dbContext) : IRequestHandler<Command>
     {
