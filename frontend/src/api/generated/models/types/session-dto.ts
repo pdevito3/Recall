@@ -30,7 +30,16 @@ export const sessionDtoCleanupFailureEnum = {
 
 export type SessionDtoCleanupFailureEnumKey = (typeof sessionDtoCleanupFailureEnum)[keyof typeof sessionDtoCleanupFailureEnum];
 
+/**
+ * @description A Session as a read of it gives it.
+ * @type object
+*/
 export type SessionDto = {
+    /**
+     * @description The Import batch whose accept made the Session. Null for a Session that no import made.
+     * @type string | undefined
+    */
+    importBatchId?: string | null;
     id: string;
     clientSessionId: string;
     /**
@@ -40,7 +49,7 @@ export type SessionDto = {
     */
     startedAt: string;
     /**
-     * @description The date of DateTimeOffset SessionDto.StartedAt in the zone that the create stored. A later change of the settings does not move it.
+     * @description The date of DateTimeOffset SyncSessionDto.StartedAt in the zone that the create stored. A later change of the settings does not move it.
      *
      * Format: `date`
      * @type string

@@ -64,7 +64,6 @@ public static partial class SessionMapper
     [MapperIgnoreTarget(nameof(SessionDto.PeopleProposals))]
     [MapperIgnoreSource(nameof(Session.CleanupFailure))]
     [MapperIgnoreSource(nameof(Session.CleanupRunId))]
-    [MapperIgnoreSource(nameof(Session.ImportBatchId))]
     [MapperIgnoreSource(nameof(Session.TopicSuggestions))]
     [MapperIgnoreSource(nameof(Session.MoodSuggestions))]
     [MapperIgnoreSource(nameof(Session.PeopleProposals))]

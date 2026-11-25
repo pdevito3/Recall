@@ -19,6 +19,10 @@ export type StartCleanupHeaders = {
     "X-Recall-User"?: string;
 };
 
+/**
+ * @description A Session as a read of it gives it.
+ * @type object
+*/
 export type StartCleanupStatus202 = SessionDto;
 
 export type StartCleanupStatus401 = unknown;

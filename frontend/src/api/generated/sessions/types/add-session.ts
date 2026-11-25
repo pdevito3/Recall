@@ -16,8 +16,16 @@ export type AddSessionHeaders = {
     "X-Recall-User"?: string;
 };
 
+/**
+ * @description A Session as a read of it gives it.
+ * @type object
+*/
 export type AddSessionStatus200 = SessionDto;
 
+/**
+ * @description A Session as a read of it gives it.
+ * @type object
+*/
 export type AddSessionStatus201 = SessionDto;
 
 export type AddSessionStatus400 = ValidationProblemDetails;

@@ -20,6 +20,10 @@ export type AcceptSuggestionHeaders = {
     "X-Recall-User"?: string;
 };
 
+/**
+ * @description A Session as a read of it gives it.
+ * @type object
+*/
 export type AcceptSuggestionStatus200 = SessionDto;
 
 export type AcceptSuggestionStatus400 = ValidationProblemDetails;

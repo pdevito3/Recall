@@ -20,6 +20,10 @@ export type RecordCleanupResultHeaders = {
     "X-Recall-User"?: string;
 };
 
+/**
+ * @description A Session as a read of it gives it.
+ * @type object
+*/
 export type RecordCleanupResultStatus200 = SessionDto;
 
 export type RecordCleanupResultStatus400 = ValidationProblemDetails;

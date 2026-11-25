@@ -1,6 +1,7 @@
 namespace Recall.Server.Domain.Sessions.Dtos;
 
-public sealed record SessionDto
+/// <summary>A Session as the Sync feed carries it.</summary>
+public record SyncSessionDto
 {
     public string Id { get; init; } = default!;
     public string ClientSessionId { get; init; } = default!;
@@ -44,4 +45,11 @@ public sealed record SessionDto
 
     /// <summary>Send it with the next metadata save. A save of a Draft does not change it.</summary>
     public uint MetadataVersion { get; init; }
+}
+
+/// <summary>A Session as a read of it gives it.</summary>
+public sealed record SessionDto : SyncSessionDto
+{
+    /// <summary>The Import batch whose accept made the Session. Null for a Session that no import made.</summary>
+    public string? ImportBatchId { get; init; }
 }

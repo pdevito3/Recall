@@ -20,6 +20,10 @@ export type SetSessionMetadataHeaders = {
     "X-Recall-User"?: string;
 };
 
+/**
+ * @description A Session as a read of it gives it.
+ * @type object
+*/
 export type SetSessionMetadataStatus200 = SessionDto;
 
 export type SetSessionMetadataStatus400 = ValidationProblemDetails;

@@ -9,7 +9,7 @@ import { sessionDtoSchema } from '../../models/zod/session-dto'
 
 export const getSessionPathIdSchema = z.string()
 
-export const getSessionStatus200Schema = sessionDtoSchema
+export const getSessionStatus200Schema = sessionDtoSchema.describe('A Session as a read of it gives it.')
 
 export const getSessionStatus401Schema = z.unknown()
 
