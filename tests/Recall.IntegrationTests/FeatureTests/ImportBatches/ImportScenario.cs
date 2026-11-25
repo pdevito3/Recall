@@ -59,6 +59,14 @@ internal static class ImportScenario
     public static Task<ImportDayReviewedDto> RejectDayAsync(User owner, string batchId, DateOnly date, bool rejected = true)
         => ScopeOf(owner).SendAsync(new ReviewImportDay.Command(batchId, date, new ImportDayReviewDto { Rejected = rejected }));
 
+    public static Task<ImportBatchDto> AcceptAsync(User owner, string batchId) => AcceptAsync(ScopeOf(owner), owner, batchId);
+
+    public static async Task<ImportBatchDto> AcceptAsync(TestingServiceScope scope, User owner, string batchId)
+    {
+        var version = (await EntriesAsync(owner, batchId)).Version;
+        return await scope.SendAsync(new AcceptImportBatch.Command(batchId, new ImportBatchAcceptDto { Version = version }));
+    }
+
     public static IReadOnlyList<(string Id, string Outcome)> OutcomesOf(ImportPutResultDto result)
         => result.Outcomes.Select(o => (o.ClientSessionId, o.Outcome)).ToList();
 }

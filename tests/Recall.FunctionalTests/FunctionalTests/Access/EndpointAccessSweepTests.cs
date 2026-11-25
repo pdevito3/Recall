@@ -19,6 +19,7 @@ using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Summaries;
 using Recall.Server.Domain.TimeZones;
 using Recall.Server.Domain.Users;
+using Recall.Server.Domain.UserSettings;
 using Recall.Server.Resources.Storage;
 using Recall.Server.Resources.Entrypoints;
 using Recall.Server.Resources.Entrypoints.Auth;
@@ -111,6 +112,8 @@ public class EndpointAccessSweepTests : TestBase
         ["GetImportEntries"] = new(JournalOfEachMember, OwnerOnly: true),
         ["ReviewImportEntry"] = new(JournalOfEachMember, OwnerOnly: true),
         ["ReviewImportDay"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["AcceptImportBatch"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["DiscardImportBatch"] = new(JournalOfEachMember, OwnerOnly: true),
         // new-feature:open-to-each-member
     };
 
@@ -438,6 +441,10 @@ public class EndpointAccessSweepTests : TestBase
             db.ImportEntries.AddRange(put.Added);
             return db.SaveChangesAsync();
         });
+        // The accept of the control call comes from a native session, which the import review refuses
+        var setting = UserSetting.DefaultsFor(tenant.Id, admin.Id);
+        setting.ChangeImportReview(false, setting.Version);
+        await InsertAsync(setting);
         // new-feature:sweep-inserts
 
         var idsByKind = new Dictionary<string, string>
