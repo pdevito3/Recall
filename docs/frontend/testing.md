@@ -114,7 +114,7 @@ Set only the values that the scenario is about. If a scenario needs a value that
 - Do not use `page.waitForTimeout`, retries, or `test.only`.
 - To assert a state that shows only while a call is open, such as Saving, hold the call with `heldUntil` and settle it after the assertion. Do not use `delayMs` for this. After its first 0.3 s, `expect` checks the page about each 0.5 s. So a state that shows for 0.5 s or less can show and go between two checks.
 
-Check: `pnpm lint` fails when a `*.spec.ts` file calls a selector (`locator`, `getByRole`, and the other `getBy` calls), a `page.waitFor` call, `setTimeout`, or `test.only` (also `test.describe.only`), or imports `test` or `expect` from `@playwright/test`. It fails on `waitForTimeout` in each file of `tests/`. The rules are in `frontend/eslint.config.js`. No check finds a wait in a locators file, and no check reads the three parts of a spec.
+Check: `pnpm lint` fails when a `*.spec.ts` file calls a selector (`locator`, `getByRole`, and the other `getBy` calls), a `page.waitFor` call, `setTimeout`, or `test.only` (also `test.describe.only`), or imports `test` or `expect` from `@playwright/test`. It fails on `waitForTimeout` in each file of `tests/`. The rules are in `frontend/lint/playwright.js`. No check finds a wait in a locators file, and no check reads the three parts of a spec.
 
 ### Selectors
 

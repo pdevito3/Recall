@@ -1,0 +1,95 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["eslint", "typescript", "react", "import"],
+  "jsPlugins": ["./lint/recall.js", "./lint/server-state.js", "./lint/playwright.js"],
+  "categories": { "correctness": "off" },
+  "options": { "reportUnusedDisableDirectives": "warn" },
+  "env": { "browser": true, "es2020": true },
+  "ignorePatterns": ["dist", "src/api/generated*"],
+  "rules": {
+    "for-direction": "error", "no-async-promise-executor": "error", "no-case-declarations": "error", "no-compare-neg-zero": "error", "no-cond-assign": "error", "no-constant-binary-expression": "error", "no-constant-condition": "error", "no-control-regex": "error", "no-debugger": "error", "no-delete-var": "error", "no-dupe-else-if": "error", "no-duplicate-case": "error", "no-empty": "error", "no-empty-character-class": "error", "no-empty-pattern": "error", "no-empty-static-block": "error", "no-ex-assign": "error", "no-extra-boolean-cast": "error", "no-fallthrough": "error", "no-global-assign": "error", "no-invalid-regexp": "error", "no-irregular-whitespace": "error", "no-loss-of-precision": "error", "no-misleading-character-class": "error", "no-nonoctal-decimal-escape": "error", "no-prototype-builtins": "error", "no-regex-spaces": "error", "no-self-assign": "error", "no-shadow-restricted-names": "error", "no-sparse-arrays": "error", "no-unexpected-multiline": "error", "no-unsafe-finally": "error", "no-unsafe-optional-chaining": "error", "no-unused-labels": "error", "no-unused-private-class-members": "error", "no-useless-backreference": "error", "no-useless-catch": "error", "no-useless-escape": "error", "require-yield": "error", "use-isnan": "error", "valid-typeof": "error", "no-var": "error", "prefer-const": "error", "prefer-rest-params": "error", "prefer-spread": "error", "typescript/ban-ts-comment": "error", "no-array-constructor": "error", "typescript/no-duplicate-enum-values": "error", "typescript/no-empty-object-type": "error", "typescript/no-explicit-any": "error", "typescript/no-extra-non-null-assertion": "error", "typescript/no-misused-new": "error", "typescript/no-namespace": "error", "typescript/no-non-null-asserted-optional-chain": "error", "typescript/no-require-imports": "error", "typescript/no-this-alias": "error", "typescript/no-unnecessary-type-constraint": "error", "typescript/no-unsafe-declaration-merging": "error", "typescript/no-unsafe-function-type": "error", "no-unused-expressions": "error", "no-unused-vars": ["error", { "argsIgnorePattern": "[^\\s\\S]", "varsIgnorePattern": "[^\\s\\S]", "caughtErrorsIgnorePattern": "[^\\s\\S]", "destructuredArrayIgnorePattern": "[^\\s\\S]" }], "typescript/no-wrapper-object-types": "error", "typescript/prefer-as-const": "error", "typescript/prefer-namespace-keyword": "error", "typescript/triple-slash-reference": "error",
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "warn",
+    "react/only-export-components": ["error", { "allowConstantExport": true, "customHOCs": ["createRouterLink", "createFileRoute", "createRootRoute", "createRootRouteWithContext", "createLazyFileRoute"] }],
+    "recall/import-order": "error",
+    "no-restricted-imports": ["error", {
+      "paths": [
+        { "name": "react-aria-components", "importNames": ["Link"], "message": "Use Link from @/components/ui/link. It takes typed `to` and `params`. The href of a React Aria Link is a string that TypeScript does not check." },
+        { "name": "@animate-ui/react/primitives/react-aria", "importNames": ["Link"], "message": "Use Link from @/components/ui/link. It takes typed `to` and `params`. The href of a React Aria Link is a string that TypeScript does not check." },
+        { "name": "@tanstack/react-router", "importNames": ["Link"], "message": "Use Link from @/components/ui/link. It has the React Aria focus and press behavior." }
+      ]
+    }]
+  },
+  "overrides": [
+    {
+      "files": ["src/**/*.ts", "src/**/*.tsx"],
+      "rules": {
+        "server-state/no-copied-state": "error",
+        "server-state/query-key-has-inputs": "error",
+        "no-restricted-properties": ["error", {
+          "object": "crypto",
+          "property": "randomUUID",
+          "message": "This is undefined on http://LAN-IP, which is not a secure context. Use crypto.getRandomValues."
+        }],
+        "recall/no-browser-zone": "error",
+        "recall/no-words-from-code": "error",
+        "recall/no-way-out": "error",
+        "recall/no-login-page": "error"
+      }
+    },
+    {
+      "files": ["src/**/*.keys.ts"],
+      "rules": { "server-state/key-has-each-param": "error" }
+    },
+    {
+      // The route code splitter keeps each import that the route options do not use
+      // as an inline type import, such as `import { type Option } from '...'`. TypeScript keeps that line as an import with
+      // side effects, so the module and each module that it imports load with the entry chunk.
+      "files": ["src/routes/**/*.ts", "src/routes/**/*.tsx"],
+      "rules": {
+        "import/consistent-type-specifier-style": ["error", "prefer-top-level"]
+      }
+    },
+    {
+      "files": ["src/components/ui/link.tsx"],
+      "rules": { "no-restricted-imports": "off" }
+    },
+    {
+      "files": ["src/lib/zoned-time.ts"],
+      "rules": { "recall/no-browser-zone": "off" }
+    },
+    {
+      "files": ["src/domain/auth/apis/leave-the-app.ts"],
+      "rules": { "recall/no-way-out": "off", "recall/no-login-page": "off" }
+    },
+    {
+      "files": ["src/**/*.test.ts", "src/**/*.test.tsx"],
+      "rules": { "recall/no-browser-zone": "off", "recall/no-words-from-code": "off", "recall/no-login-page": "off" }
+    },
+    {
+      "files": ["tests/**/*.ts"],
+      "rules": {
+        "playwright/no-selector-string": ["error", "app"],
+        "playwright/no-position": "error",
+        "playwright/no-wait-for-timeout": "error"
+      }
+    },
+    {
+      "files": ["tests/**/*.spec.ts"],
+      "rules": {
+        "playwright/spec-no-locator": "error",
+        "playwright/spec-no-wait": "error",
+        "playwright/spec-no-timer": "error",
+        "playwright/spec-no-playwright-test": "error",
+        "playwright/no-test-only": "error"
+      }
+    },
+    {
+      "files": ["e2e/**/*.ts"],
+      "rules": {
+        "playwright/no-selector-string": ["error", "stack"],
+        "playwright/no-test-only": "error"
+      }
+    }
+  ]
+}

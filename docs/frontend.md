@@ -18,7 +18,7 @@ cd frontend
 pnpm install
 pnpm dev      # dev server
 pnpm build    # production build
-pnpm lint     # ESLint
+pnpm lint     # Oxlint
 pnpm test     # Vitest: unit tests (src/**/*.test.ts, e2e/*.test.ts) in Node, component tests (src/**/*.test.tsx) in headless Chromium
 pnpm test:e2e # Playwright: the functional suite (tests/), the SPA against a mocked Server. See docs/frontend/testing.md
 pnpm generate:api  # API contract from the OpenAPI document
@@ -109,7 +109,7 @@ The `api-contract` skill gives the full procedure and the checks.
 
 If a generated file has a merge conflict, do not merge it by hand. Accept either side, then do steps 1 and 2 again. The `api-contract` job of the `CI` workflow fails when the committed files are not current. See [ADR 0001](adr/0001-commit-generated-api-contract.md).
 
-Do not edit the generated files. ESLint ignores them, but `tsc` compiles them.
+Do not edit the generated files. Oxlint ignores them, but `tsc` compiles them.
 
 - A list client (an operation name that ends in `List`) returns the full response, because the paging metadata is in the `X-Pagination` header. Read the header with `parsePagination` from `lib/pagination.ts`. It returns the `PaginationMetadata` type.
 - The other clients return only the response body.
@@ -194,7 +194,7 @@ Thus a page always has a session. Do not add a Login button or a signed-out stat
 
 `leaveTheApp` in `frontend/src/domain/auth/apis/leave-the-app.ts` is the only way out of the signed-in app. Each reason to leave calls it: a sign-out in this tab or in another tab, a user query that reads `null`, a restored page with an ended or a newer session, a restored page with no answer about its session, the session of another person, and `Load the page again` on the error page. Words that only the memory of the tab holds have no key, so the tab shows them first, as the table of [Unsent words](#unsent-words) says. The tab also stops its recording and names the audio of the person that waits in this browser for the Server. The audio stays in this browser and uploads at the next sign-in. A sign-out in this tab does not name again the audio that its question named. An open question about unsent words at a sign-out closes, and that sign-out ends with no error.
 
-The rule `no-restricted-syntax` in `frontend/eslint.config.js` (`wayOutRules` and `loginPageRules`) refuses each other way out in `src`: a `reload`, `assign`, or `replace` of `location`, an assignment to `location` or `location.href`, and a path that starts with `/auth/login`. A test can name the login page, but it cannot leave the page of the test. To add a way out, add a reason to `Departure` and call `leaveTheApp`.
+The lint rules `recall/no-way-out` and `recall/no-login-page` in `frontend/lint/recall.js` refuse each other way out in `src`: a `reload`, `assign`, or `replace` of `location`, an assignment to `location` or `location.href`, and a path that starts with `/auth/login`. A test can name the login page, but it cannot leave the page of the test. To add a way out, add a reason to `Departure` and call `leaveTheApp`.
 
 ### Unsent words
 
@@ -374,7 +374,7 @@ import { Link } from '@/components/ui/link'
 - `SidebarMenuLink` and `SidebarMenuSubLink` set `aria-current` from their `current` prop, not from the router: `page` on the page of the item, and `true` on a page under it. The `useCurrentNavItem` hook in `components/current-nav-item.ts` picks the one current item of the sidebar with the match of the router.
 - To make another link component, render `RouterLinkPrimitive` in it and wrap it with `createRouterLink`. See `BreadcrumbLink` in `components/ui/breadcrumb.tsx`.
 
-ESLint does not let you import `Link` from `react-aria-components`, `@animate-ui/react/primitives/react-aria`, or `@tanstack/react-router`.
+The lint does not let you import `Link` from `react-aria-components`, `@animate-ui/react/primitives/react-aria`, or `@tanstack/react-router`.
 
 Other React Aria components take a plain `href`, for example `MenuItem` and `Tab`. The root route wraps the app in `HrefRouterProvider` from `@/components/ui/link`, so the router goes to the `href` with no page load. TypeScript does not check a plain `href`, so for a link to a route, prefer a typed wrapper made with `createRouterLink`. An `href` that has no route in the SPA, such as `/auth/login`, loads the page from the server.
 
