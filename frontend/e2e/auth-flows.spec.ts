@@ -397,7 +397,6 @@ test.describe(`Swagger - ${currentIdp.name}`, () => {
 // The live discovery document of the provider must match the capabilities in its e2e/idps/ file, so that a provider
 // upgrade that adds or drops a feature fails here and not in a feature test
 test.describe(`Provider discovery - ${currentIdp.name}`, () => {
-  /** The members of the discovery document that name a capability. A provider can leave out each one. */
   interface DiscoveryDocument {
     revocation_endpoint?: string
     authorization_response_iss_parameter_supported?: boolean
@@ -434,7 +433,6 @@ test.describe(`Native app login - ${currentIdp.name}`, () => {
     expires_in: number
   }
 
-  /** The body of an answer of the token endpoint: a token pair, or the `error` of OAuth. */
   interface TokenAnswer extends Partial<TokenPair> {
     error?: string
   }

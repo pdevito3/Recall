@@ -21,7 +21,6 @@ export function createRouterLink<
   > = createLink(Host)
   return (props) => {
     // The returned type checks the props of each caller against its own route.
-    // React Aria takes the options of the registered router.
     const options = props as LinkComponentProps<THost>
     return <RouterLink activeOptions={{ exact: true }} {...options} routerOptions={options} />
   }

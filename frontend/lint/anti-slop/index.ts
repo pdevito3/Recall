@@ -12,8 +12,7 @@ import { noUnknownTypeAliasesRule } from "./rules/no-unknown-type-aliases.ts";
 import { noUnsafeDictionaryTypeRule } from "./rules/no-unsafe-dictionary-type.ts";
 import { noWidenThenAssertRule } from "./rules/no-widen-then-assert.ts";
 
-// Vendored from https://github.com/dmmulroy/anti-slop at 63dbb09f73438e550a6991dc6d778f979ffbf183, with only the
-// rules that frontend/.oxlintrc.json turns on.
+// Vendored from https://github.com/dmmulroy/anti-slop at 63dbb09f73438e550a6991dc6d778f979ffbf183.
 export default eslintCompatPlugin({
 	meta: { name: "anti-slop" },
 	rules: {

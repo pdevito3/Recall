@@ -34,7 +34,6 @@ export interface ServedRequest {
   body: RequestBody
 }
 
-/** The JSON of a request body, its text when it is not JSON, or undefined when it has no body. */
 export type RequestBody = JsonValue | undefined
 
 // A mock matches on method and path alone. Only a test that reads the request back can prove
