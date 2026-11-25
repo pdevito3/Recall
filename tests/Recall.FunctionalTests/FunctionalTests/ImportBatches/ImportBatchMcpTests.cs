@@ -240,7 +240,7 @@ public class ImportBatchMcpTests : TestBase
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.RequestEntityTooLarge);
         var problem = (await response.Content.ReadFromJsonAsync<ProblemDetails>()).ShouldNotBeNull();
-        problem.Detail.ShouldBe(PutImportEntriesEndpoint.TooLargeMessage);
+        problem.Detail.ShouldBe(EntrypointRegistration.McpTooLargeMessage);
         (await CallAsync(mcp, "list_import_entries", new() { ["id"] = batchId })).GetProperty("entries").EnumerateArray().ShouldBeEmpty();
     }
 
