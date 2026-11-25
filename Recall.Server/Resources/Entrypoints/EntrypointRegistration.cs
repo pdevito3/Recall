@@ -1,11 +1,13 @@
 namespace Recall.Server.Resources.Entrypoints;
 
 using Auth;
+using Domain.ImportBatches.Features;
 using Domain.Users;
 using Http;
 using Http.OpenApi;
 using Jobs;
 using Mcp;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 using Serilog.Core;
@@ -86,7 +88,9 @@ public static class EntrypointRegistration
     {
         app.MapVersionedEndpoints();
         McpToolAccess.Validate(app.Services.GetRequiredService<IOptions<McpServerOptions>>().Value.ToolCollection ?? []);
-        app.MapMcp(McpPath).RequireAuthorization();
+        app.MapMcp(McpPath).RequireAuthorization().WithMetadata(
+            new RequestSizeLimitAttribute(PutImportEntriesEndpoint.MaxBodyBytes),
+            new RequestTooLargeDetail(PutImportEntriesEndpoint.TooLargeMessage));
         app.MapJobMcp();
         if (AuthRegistration.JwtIsOn(app.Configuration))
             app.MapMcpResourceMetadata();

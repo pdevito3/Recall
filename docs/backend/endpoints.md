@@ -13,7 +13,7 @@ Domain/Tenants/
 │       └── AddTenant.Mcp.cs       # MCP: AddTenantTool, an [McpServerToolType] static class
 ```
 
-Each adapter is optional. A feature has only the adapters that it needs, and it can have none. For example, a feature that only a domain event handler or a background job sends has no adapter. A feature with no file for a transport is not exposed on that transport. Now, all of the Agents, AuditEntries, Tenants, and Users features have HTTP. `AddTenant`, `GetTenant`, `GetTenantList`, and `UpdateTenant` have MCP.
+Each adapter is optional. A feature has only the adapters that it needs, and it can have none. For example, a feature that only a domain event handler or a background job sends has no adapter. A feature with no file for a transport is not exposed on that transport. Now, all of the Agents, AuditEntries, Tenants, and Users features have HTTP. `AddTenant`, `GetTenant`, `GetTenantList`, and `UpdateTenant` have MCP, and so do the import features of [the imports spec](../specs/imports.md#5-endpoints-and-tools).
 
 The reason for this layout is in [ADR 0002](../adr/0002-colocate-entrypoints-with-features.md).
 
@@ -118,7 +118,7 @@ Each MCP tool is a static class. The example is `Domain/Tenants/Features/AddTena
 2. Give it one `public static` method with `[McpServerTool(Name = "...", UseStructuredContent = true)]` and a `[Description]`. Set `ReadOnly = true` for a read, and `Destructive = false` for an add.
 3. Take `IMediator` and `CancellationToken` as method parameters. The SDK resolves a registered service from the request services, so the service is not in the input schema.
 4. Give each other parameter a `[Description]`. These parameters are the input schema.
-5. Return the DTO. For a list, return `McpPage.From(result)`, so that the result has the page data.
+5. Return the DTO. For a page, return `McpPage.From(result)`, so that the result has the page data. For a whole list, return `McpList.From(...)`, so that the result is `{ "items": [...] }` on each protocol version, the same shape as a page. The SDK sends a bare array as `{ "result": [...] }` to a client before protocol 2026-07-28, and as an array to a later client.
 6. Give the method exactly one `[ToolAccess]` attribute, next to `[McpServerTool]`. It names what the handler requires. See [Tool access](#tool-access).
 7. Put no other access check in the tool. If the handler checks a permission, also name the permission in the `[Description]`, so that the model knows why a call can fail.
 
@@ -126,19 +126,23 @@ Each MCP tool is a static class. The example is `Domain/Tenants/Features/AddTena
 
 ### Tool access
 
-`[ToolAccess]` has three forms:
+`[ToolAccess]` has these forms:
 
 | Attribute | Use it for | A caller sees and can call the tool if |
 |---|---|---|
 | `[ToolAccess(ToolAccessKind.Read)]` | A read with no permission check, for example a tool that gets one record | The caller is recognized: each caller except an unknown client and an anonymous request. The tenant filter decides the rows. |
 | `[ToolAccess(Permission.Names.ManageTenant)]` | A tool whose handler calls `RequireAsync` with that permission, for example a tool that renames a tenant | `Caller.Has` gives true for the permission |
 | `[ToolAccess(ToolAccessKind.ManageAllTenants)]` | A tool whose handler checks `Caller.ManagesAllTenants`, for example `add_tenant` | The caller can manage all tenants |
+| `[ToolAccess(ToolAccessKind.JournalRead)]` | A read of the journal, whose handler calls `RequireJournalOwner`, for example `list_import_entries` | `CallerIdentity.Journal` can read: the person, or a PAT with journal access Read or ReadWrite |
+| `[ToolAccess(ToolAccessKind.JournalWrite)]` | A change to the journal, whose handler also calls `RequireJournalWriter`, for example `put_import_entries` | `CallerIdentity.Journal` can write: the person, or a PAT with journal access ReadWrite |
+
+Each MCP tool of a journal domain has `JournalRead` or `JournalWrite`, and `JournalRulesTests` fails on any other (SES-15, IMP-22). A machine agent, a delegated agent, an all-tenants client, and a PAT with no journal access have no journal, so they see no such tool.
 
 Use a `Permission.Names` constant, so that the compiler checks the name. If the handler checks more than one permission, name the permission that each call needs. The handler checks the others. If the handler lets a user act on their own record with `Caller.RequireSelfOr`, use `ToolAccessKind.Read`, so that the handler decides. A permission in the attribute would hide the tool from that user.
 
 `ToolAccessKind.Read` is stricter on MCP than on HTTP. An unknown client gets a `permission_denied` tool error that tells it to ask for a registration. Over HTTP, the same caller gets an empty list or 404, because the tenant filter shows it no rows.
 
-`McpToolAccess.ListFilter` removes from `tools/list` each tool that the caller cannot use. `McpToolAccess.CallFilter` denies a call to such a tool. It runs inside `McpDomainErrors.Filter`, so the denial is a `permission_denied` tool error with the message of `Caller`. Both filters load the caller with `IPermissionGuard.GetCallerAsync` and ask `Caller`, so the list, the call, and the handler give the same answer. For an agent, the caller holds only the permissions of its grant. See [Agents](../authentication.md#agents).
+`McpToolAccess.ListFilter` removes from `tools/list` each tool that the caller cannot use. `McpToolAccess.CallFilter` denies a call to such a tool. It runs inside `McpDomainErrors.Filter`, so the denial is a `permission_denied` tool error with the message of `Caller`. Both filters load the caller with `IPermissionGuard.GetCallerAsync` and ask `Caller`, or for a journal kind ask `CallerIdentity.Journal`, the decision that `RequireJournalWriter` also reads. So the list, the call, and the handler give the same answer. For an agent, the caller holds only the permissions of its grant. See [Agents](../authentication.md#agents).
 
 At startup, `McpToolAccess.Validate` stops the server if a tool has no `[ToolAccess]`, has a `ToolAccessKind` that is not defined, or names a permission that does not exist. A unit test runs the same check on each tool of the Server.
 

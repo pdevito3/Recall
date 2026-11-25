@@ -42,6 +42,12 @@ public static class SchemaSample
         };
     }
 
+    public static JsonNode? PropertyOf(string name, JsonNode property, JsonNode root)
+        => StringsThatARuleChecksAgainstAList.TryGetValue(name, out var value)
+            || StringsThatNameARecord.TryGetValue(name, out value)
+            ? JsonValue.Create(value)
+            : Of(property, root);
+
     public static IReadOnlyList<string> RequiredOf(JsonNode schema, JsonNode root)
     {
         var resolved = schema["$ref"]?.GetValue<string>() is { } reference ? Resolve(root, reference) : schema;
@@ -56,10 +62,7 @@ public static class SchemaSample
         {
             var property = properties?[name]
                 ?? throw new SweepSetupException($"The schema requires {name}, but it has no such property.");
-            sample[name] = StringsThatARuleChecksAgainstAList.TryGetValue(name, out var value)
-                || StringsThatNameARecord.TryGetValue(name, out value)
-                ? JsonValue.Create(value)
-                : Of(property, root);
+            sample[name] = PropertyOf(name, property, root);
         }
         foreach (var (name, flag) in OptionalFlagsThatARuleNeeds)
         {
