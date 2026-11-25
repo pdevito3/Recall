@@ -1,5 +1,6 @@
 namespace Recall.Server.Domain.ImportBatches;
 
+using Databases.Sqlite;
 using Exceptions;
 
 public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
@@ -57,7 +58,7 @@ public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
             Name = trimmed,
             TimeZone = ImportZone.Parse(timeZone, TimeZoneField).Value,
             State = ImportBatchState.Open,
-            OpenedAt = now,
+            OpenedAt = UtcTextConverter.StoredInstantOf(now),
         };
     }
 
@@ -167,7 +168,7 @@ public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
         var sessions = identities[ImportIdentity.InThisBatch].Select(entry => entry.ToSession(this, now)).ToList();
 
         State = ImportBatchState.Accepted;
-        AcceptedAt = now;
+        AcceptedAt = UtcTextConverter.StoredInstantOf(now);
         Result = new ImportAcceptResult(
             sessions.Count, entries.Count - kept.Count, _days.Count(day => day.Rejected),
             identities[ImportIdentity.InJournal].Count(), identities[ImportIdentity.Deleted].Count());

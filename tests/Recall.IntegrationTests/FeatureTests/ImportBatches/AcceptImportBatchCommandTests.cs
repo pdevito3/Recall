@@ -2,6 +2,8 @@ namespace Recall.IntegrationTests.FeatureTests.ImportBatches;
 
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using Recall.Server.Auth.Entities;
 using Recall.Server.Databases;
 using Recall.Server.Domain.AuditEntries;
@@ -138,6 +140,26 @@ public class AcceptImportBatchCommandTests : TestBase
         // Assert
         again.ShouldBe(accepted);
         (await ActionsOfAsync(owner, batch.Id)).Count.ShouldBe(1);
+    }
+
+    [Test]
+    [Property("Rule", "IMP-17")]
+    public async Task the_answer_of_an_accept_holds_the_times_that_a_later_read_gives()
+    {
+        // Arrange
+        var now = new DateTimeOffset(2026, 11, 25, 12, 0, 0, TimeSpan.Zero).AddTicks(1_234_567);
+        await using var services = TestFixture.BuildServiceProvider(s => s.AddSingleton<TimeProvider>(new FakeTimeProvider(now)));
+        var owner = await AddOwnerAsync();
+        var opened = await WebSessionOf(owner, services).SendAsync(new OpenImportBatch.Command(new ImportBatchForCreationDto { Name = "Day One", TimeZone = "UTC" }));
+        await PutAsync(owner, opened.Id, Entry("a", 0));
+
+        // Act
+        var accepted = await AcceptAsync(WebSessionOf(owner, services), owner, opened.Id);
+        var again = await AcceptAsync(owner, opened.Id);
+
+        // Assert
+        opened.OpenedAt.ShouldBe(now.AddTicks(-7));
+        accepted.ShouldBe(again);
     }
 
     [Test]
