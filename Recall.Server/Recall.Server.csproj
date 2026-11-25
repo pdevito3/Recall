@@ -67,6 +67,8 @@
     <PackageReference Include="BackWave.Dashboard" />
     <PackageReference Include="BackWave.Hosting" />
     <PackageReference Include="BackWave.OpenTelemetry" />
+    <PackageReference Include="BackWave.Pro" />
+    <PackageReference Include="BackWave.Pro.Mcp" />
     <PackageReference Include="BackWave.Sqlite" />
     <PackageReference Include="ModelContextProtocol.AspNetCore" />
     <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" />

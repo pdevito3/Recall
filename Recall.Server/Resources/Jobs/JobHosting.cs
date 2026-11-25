@@ -4,6 +4,7 @@ using BackWave.Core;
 using BackWave.Dashboard;
 using BackWave.Generated;
 using BackWave.Hosting;
+using BackWave.Pro;
 using BackWave.Sqlite;
 using Databases;
 using Domain.Recordings.Jobs;
@@ -74,7 +75,8 @@ public static class JobHosting
         Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
     };
 
-    public static void AddJobs(this WebApplicationBuilder builder)
+    // The composition root gives the entrypoints that BackWave registers, such as its MCP server.
+    public static void AddJobs(this WebApplicationBuilder builder, Action<BackWaveBuilder>? entrypoints = null)
     {
         var section = builder.Configuration.GetSection(JobOptions.SectionName);
         var settingsAtRegistration = section.Get<JobOptions>() ?? new JobOptions();
@@ -107,6 +109,7 @@ public static class JobHosting
                 BusyTimeout = StoreBusyTimeout,
                 LoggerFactory = services.GetRequiredService<ILoggerFactory>(),
             })).UseJobs(JobFailureFilter.Applied(BackWaveJobs.Module));
+            entrypoints?.Invoke(backwave);
             if (settingsAtRegistration.RunWorkers || !inDevelopmentOrTest)
             {
                 backwave.AddWorkerGroup(SystemWorkers(settingsAtRegistration));
@@ -122,6 +125,8 @@ public static class JobHosting
                 builder.Services.AddHostedService<SummaryScheduleSync>();
             }
         });
+        // A keyless BackWave Pro logs one warning at the start and changes no feature.
+        builder.Services.AddBackWavePro();
         builder.Services.AddBackWaveDashboardMetrics();
         builder.Services.AddSingleton<JobHostStatus>();
         builder.Services.AddSingleton<SaveJobs>();

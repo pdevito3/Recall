@@ -87,6 +87,7 @@ public static class EntrypointRegistration
         app.MapVersionedEndpoints();
         McpToolAccess.Validate(app.Services.GetRequiredService<IOptions<McpServerOptions>>().Value.ToolCollection ?? []);
         app.MapMcp(McpPath).RequireAuthorization();
+        app.MapJobMcp();
         if (AuthRegistration.JwtIsOn(app.Configuration))
             app.MapMcpResourceMetadata();
         app.MapRecallAuth();

@@ -48,7 +48,7 @@ try
 
     builder.AddServiceDefaults(); // OpenTelemetry, Serilog, health checks, resilience, service discovery
     builder.Services.AddHostedService<MigrationHostedService<AppDbContext>>();
-    builder.ConfigureServices();
+    builder.ConfigureServices(JobMcp.Add);
     if (OwnerOnlyFiles.KeysDirectory(builder.Configuration) is { } keys)
         builder.Services.AddDataProtection().SetApplicationName("Recall").PersistKeysToFileSystem(new DirectoryInfo(keys));
     builder.AddEntrypoints();

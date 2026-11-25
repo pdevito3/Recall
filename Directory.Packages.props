@@ -48,6 +48,8 @@
     <PackageVersion Include="BackWave.Dashboard" Version="1.9.3" />
     <PackageVersion Include="BackWave.Hosting" Version="1.9.3" />
     <PackageVersion Include="BackWave.OpenTelemetry" Version="1.9.3" />
+    <PackageVersion Include="BackWave.Pro" Version="1.9.3" />
+    <PackageVersion Include="BackWave.Pro.Mcp" Version="1.9.3" />
     <PackageVersion Include="BackWave.Sqlite" Version="1.9.3" />
 
     <!-- OpenTelemetry -->
