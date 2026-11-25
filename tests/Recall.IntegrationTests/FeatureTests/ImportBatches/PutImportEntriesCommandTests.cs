@@ -130,7 +130,7 @@ public class PutImportEntriesCommandTests : TestBase
         var owner = await AddOwnerAsync();
         var other = await OpenAsync(owner);
         await PutAsync(owner, other.Id, Entry("elsewhere", 0));
-        var scope = ScopeOf(owner);
+        var scope = WebSessionOf(owner);
         await scope.SendAsync(new AddSession.Command(new SessionForCreationDto { ClientSessionId = "journal", StartedAt = DateTimeOffset.UtcNow.AddDays(-1) }));
         var deleted = await scope.SendAsync(new AddSession.Command(new SessionForCreationDto { ClientSessionId = "deleted", StartedAt = DateTimeOffset.UtcNow.AddDays(-1) }));
         await scope.SendAsync(new DeleteSession.Command(deleted.Session.Id));

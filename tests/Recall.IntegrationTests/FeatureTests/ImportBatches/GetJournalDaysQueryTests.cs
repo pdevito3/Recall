@@ -14,7 +14,7 @@ public class GetJournalDaysQueryTests : TestBase
     {
         // Arrange
         var owner = await AddOwnerAsync();
-        var scope = ScopeOf(owner);
+        var scope = WebSessionOf(owner);
         (DateTimeOffset Start, string Zone)[] starts =
         [
             (new DateTimeOffset(2024, 3, 2, 5, 30, 0, TimeSpan.Zero), "America/Chicago"),
@@ -46,7 +46,7 @@ public class GetJournalDaysQueryTests : TestBase
         var owner = await AddOwnerAsync();
 
         // Act
-        var read = () => ScopeOf(owner).SendAsync(new GetJournalDays.Query(DateOnly.Parse(from, System.Globalization.CultureInfo.InvariantCulture), DateOnly.Parse(to, System.Globalization.CultureInfo.InvariantCulture)));
+        var read = () => WebSessionOf(owner).SendAsync(new GetJournalDays.Query(DateOnly.Parse(from, System.Globalization.CultureInfo.InvariantCulture), DateOnly.Parse(to, System.Globalization.CultureInfo.InvariantCulture)));
 
         // Assert
         var refused = await read.ShouldThrowAsync<ValidationException>();
@@ -61,7 +61,7 @@ public class GetJournalDaysQueryTests : TestBase
         var owner = await AddOwnerAsync();
 
         // Act
-        var days = await ScopeOf(owner).SendAsync(new GetJournalDays.Query(new DateOnly(2024, 1, 1), new DateOnly(2024, 12, 31)));
+        var days = await WebSessionOf(owner).SendAsync(new GetJournalDays.Query(new DateOnly(2024, 1, 1), new DateOnly(2024, 12, 31)));
 
         // Assert
         days.ShouldBeEmpty();

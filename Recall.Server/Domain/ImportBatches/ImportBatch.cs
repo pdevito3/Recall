@@ -1,7 +1,6 @@
 namespace Recall.Server.Domain.ImportBatches;
 
 using Exceptions;
-using Sessions;
 
 public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
 {
@@ -89,12 +88,10 @@ public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
         return true;
     }
 
-    public ImportPut Put(
-        IReadOnlyList<ImportPutEntry> entries, IReadOnlyCollection<ImportEntry> stored, IReadOnlySet<string> sessionIds, IReadOnlySet<string> tombstoneIds,
-        DateTimeOffset now)
+    public ImportPut Put(IReadOnlyList<ImportPutEntry> entries, ImportPutFacts facts, DateTimeOffset now)
     {
         EnsureOpen();
-        var byId = stored.ToDictionary(entry => entry.ClientSessionId, StringComparer.Ordinal);
+        var byId = facts.Stored.ToDictionary(entry => entry.ClientSessionId, StringComparer.Ordinal);
         var results = new Dictionary<string, ImportPutResult>(StringComparer.Ordinal);
         var candidates = new List<(string Id, ImportAgentLayer Agent, ImportIdentity Identity, ImportEntry? Known)>();
         foreach (var entry in entries)
@@ -107,7 +104,7 @@ public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
             }
 
             var other = byId.GetValueOrDefault(id);
-            var identity = ImportIdentities.Classify(sessionIds.Contains(id), tombstoneIds.Contains(id), other?.BatchId, Id);
+            var identity = ImportIdentities.Classify(facts.SessionIds.Contains(id), facts.TombstoneIds.Contains(id), other?.BatchId, Id);
             var known = identity == ImportIdentity.InThisBatch ? other : null;
             var inTheFuture = ImportEntry.StartOf(agent, known?.Review ?? ImportReview.None, this) > now;
             if (inTheFuture || identity is ImportIdentity.InJournal or ImportIdentity.Deleted or ImportIdentity.InOtherBatch)
@@ -117,7 +114,7 @@ public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
         }
 
         var takenBy = ImportPositions.Check(
-            stored.Where(entry => entry.BatchId == Id)
+            facts.Stored.Where(entry => entry.BatchId == Id)
                 .ToDictionary(entry => entry.ClientSessionId, entry => new ImportSlot(entry.Agent.Date, entry.Agent.Position), StringComparer.Ordinal),
             candidates.ToDictionary(c => c.Id, c => new ImportSlot(c.Agent.Date, c.Agent.Position), StringComparer.Ordinal));
         var added = new List<ImportEntry>();
@@ -155,7 +152,7 @@ public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
         return new ImportRemove(results, results.Where(r => r.Outcome == ImportRemoveOutcome.Removed).Select(r => byId[r.ClientSessionId]).ToList());
     }
 
-    public IReadOnlyList<Session> Accept(
+    public ImportAccept Accept(
         uint version, IReadOnlyList<ImportEntry> entries, IReadOnlySet<string> sessionIds, IReadOnlySet<string> tombstoneIds, DateTimeOffset now)
     {
         EnsureOpen();
@@ -174,7 +171,7 @@ public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
             sessions.Count, entries.Count - kept.Count, _days.Count(day => day.Rejected),
             identities[ImportIdentity.InJournal].Count(), identities[ImportIdentity.Deleted].Count());
         _days.Clear();
-        return sessions;
+        return new ImportAccept(sessions, entries);
     }
 
     protected ImportBatch() : base(IdPrefix) { }

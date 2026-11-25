@@ -18,7 +18,7 @@ public class ImportReviewSettingTests : TestBase
         var owner = await AddOwnerAsync();
 
         // Act
-        var settings = await ScopeOf(owner).SendAsync(new GetUserSetting.Query());
+        var settings = await WebSessionOf(owner).SendAsync(new GetUserSetting.Query());
 
         // Assert
         settings.RequireImportReview.ShouldBeTrue();
@@ -42,8 +42,8 @@ public class ImportReviewSettingTests : TestBase
         var refusals = new List<ForbiddenAccessException>();
         foreach (var caller in new[] { native, token, provider })
             refusals.Add(await Should.ThrowAsync<ForbiddenAccessException>(() => caller.SendAsync(new ChangeImportReview.Command(off))));
-        var changed = await ScopeOf(owner).SendAsync(new ChangeImportReview.Command(off));
-        var on = await ScopeOf(owner).SendAsync(new ChangeImportReview.Command(new ImportReviewChangeDto { RequireImportReview = true, Version = changed.Version }));
+        var changed = await WebSessionOf(owner).SendAsync(new ChangeImportReview.Command(off));
+        var on = await WebSessionOf(owner).SendAsync(new ChangeImportReview.Command(new ImportReviewChangeDto { RequireImportReview = true, Version = changed.Version }));
 
         // Assert
         refusals.Select(r => r.Message).ShouldBe(Enumerable.Repeat(ChangeImportReview.WebSessionMessage, 3));
@@ -58,7 +58,7 @@ public class ImportReviewSettingTests : TestBase
     {
         // Arrange
         var owner = await AddOwnerAsync();
-        var off = await ScopeOf(owner).SendAsync(new ChangeImportReview.Command(new ImportReviewChangeDto { RequireImportReview = false, Version = 0 }));
+        var off = await WebSessionOf(owner).SendAsync(new ChangeImportReview.Command(new ImportReviewChangeDto { RequireImportReview = false, Version = 0 }));
         var native = new TestingServiceScope();
         native.SetAppSession(owner.Identifier, SessionKind.Native);
 
@@ -80,15 +80,15 @@ public class ImportReviewSettingTests : TestBase
     {
         // Arrange
         var owner = await AddOwnerAsync();
-        var off = await ScopeOf(owner).SendAsync(new ChangeImportReview.Command(new ImportReviewChangeDto { RequireImportReview = false, Version = 0 }));
+        var off = await WebSessionOf(owner).SendAsync(new ChangeImportReview.Command(new ImportReviewChangeDto { RequireImportReview = false, Version = 0 }));
 
         // Act
-        var replay = await ScopeOf(owner).SendAsync(new ChangeImportReview.Command(new ImportReviewChangeDto { RequireImportReview = false, Version = 0 }));
-        var stale = () => ScopeOf(owner).SendAsync(new ChangeImportReview.Command(new ImportReviewChangeDto { RequireImportReview = true, Version = 0 }));
+        var replay = await WebSessionOf(owner).SendAsync(new ChangeImportReview.Command(new ImportReviewChangeDto { RequireImportReview = false, Version = 0 }));
+        var stale = () => WebSessionOf(owner).SendAsync(new ChangeImportReview.Command(new ImportReviewChangeDto { RequireImportReview = true, Version = 0 }));
 
         // Assert
         replay.ShouldBe(off);
         await stale.ShouldThrowAsync<StaleVersionException>();
-        (await ScopeOf(owner).SendAsync(new GetUserSetting.Query())).RequireImportReview.ShouldBeFalse();
+        (await WebSessionOf(owner).SendAsync(new GetUserSetting.Query())).RequireImportReview.ShouldBeFalse();
     }
 }

@@ -37,24 +37,8 @@ public static class PutImportEntries
             var entries = request.Dto.Entries
                 .Select(e => ImportPutEntry.Parse(e.ClientSessionId, () => ImportAgentLayer.Of(e.Date, e.Position, e.Time, e.TimeZone, e.Raw, e.Moods, e.Topics)))
                 .ToList();
-            var ids = entries.Where(e => e.Agent is not null).Select(e => e.ClientSessionId).ToList();
-            var dates = entries.Select(e => e.Agent?.Date).OfType<DateOnly>().Distinct().ToList();
-            var sessionIds = await dbContext.Sessions
-                .TagWithOperationCallSite("import_batches.put.sessions")
-                .Where(s => ids.Contains(s.ClientSessionId))
-                .Select(s => s.ClientSessionId)
-                .ToListAsync(cancellationToken);
-            var tombstoneIds = await dbContext.SyncChanges
-                .TagWithOperationCallSite("import_batches.put.tombstones")
-                .Where(c => c.IsTombstone && ids.Contains(c.ClientSessionId!))
-                .Select(c => c.ClientSessionId!)
-                .ToListAsync(cancellationToken);
-            var stored = await dbContext.ImportEntries
-                .TagWithOperationCallSite("import_batches.put.entries")
-                .Where(e => ids.Contains(e.ClientSessionId) || (e.BatchId == batch.Id && dates.Contains(e.Agent.Date)))
-                .ToListAsync(cancellationToken);
-
-            var put = batch.Put(entries, stored, sessionIds.ToHashSet(StringComparer.Ordinal), tombstoneIds.ToHashSet(StringComparer.Ordinal), timeProvider.GetUtcNow());
+            var facts = await ImportPutFacts.LoadAsync(dbContext, batch, entries, cancellationToken);
+            var put = batch.Put(entries, facts, timeProvider.GetUtcNow());
             await dbContext.ImportEntries.AddRangeAsync(put.Added, cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
 

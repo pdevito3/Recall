@@ -24,7 +24,7 @@ public class ImportBatchRaceTests : TestBase
         await using var services = pause.BuildServices();
 
         // Act
-        var put = PutAsync(ScopeOf(owner, services), batch.Id, Entry("late", 1));
+        var put = PutAsync(WebSessionOf(owner, services), batch.Id, Entry("late", 1));
         await pause.ReachedAsync();
         var accepted = await AcceptAsync(owner, batch.Id);
         pause.Release();
@@ -33,7 +33,7 @@ public class ImportBatchRaceTests : TestBase
         // Assert
         failure.ShouldBeOfType<ConflictException>().Message.ShouldBe(ImportBatch.AcceptedMessage);
         accepted.Result!.SessionsMade.ShouldBe(1);
-        var rows = await ScopeOf(owner).ExecuteDbContextAsync(async db =>
+        var rows = await WebSessionOf(owner).ExecuteDbContextAsync(async db =>
             (await db.Sessions.Select(s => s.ClientSessionId).ToListAsync(), await db.ImportEntries.CountAsync()));
         rows.Item1.ShouldBe(["a"]);
         rows.Item2.ShouldBe(0);
@@ -52,7 +52,7 @@ public class ImportBatchRaceTests : TestBase
         await using var services = pause.BuildServices();
 
         // Act
-        var accept = ScopeOf(owner, services).SendAsync(new AcceptImportBatch.Command(batch.Id, new ImportBatchAcceptDto { Version = version }));
+        var accept = WebSessionOf(owner, services).SendAsync(new AcceptImportBatch.Command(batch.Id, new ImportBatchAcceptDto { Version = version }));
         await pause.ReachedAsync();
         var put = await PutAsync(owner, batch.Id, Entry("late", 1));
         pause.Release();
@@ -64,6 +64,6 @@ public class ImportBatchRaceTests : TestBase
         var stored = await EntriesAsync(owner, batch.Id);
         stored.Entries.Select(e => e.ClientSessionId).ShouldBe(["a", "late"]);
         stored.Version.ShouldBe(put.Version);
-        (await ScopeOf(owner).ExecuteDbContextAsync(db => db.Sessions.CountAsync())).ShouldBe(0);
+        (await WebSessionOf(owner).ExecuteDbContextAsync(db => db.Sessions.CountAsync())).ShouldBe(0);
     }
 }

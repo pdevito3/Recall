@@ -61,7 +61,8 @@ public class UserSetting : BaseEntity, ITenantable, IJournalOwned
 
     public bool ChangeImportReview(bool requireImportReview, uint version)
     {
-        if (requireImportReview == RequireImportReview && version != Version)
+        var isStored = requireImportReview == RequireImportReview;
+        if (isStored && version != Version)
             return false;
 
         GuardVersion(version);
