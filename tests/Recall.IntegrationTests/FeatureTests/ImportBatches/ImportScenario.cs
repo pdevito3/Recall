@@ -1,7 +1,9 @@
 namespace Recall.IntegrationTests.FeatureTests.ImportBatches;
 
 using System.Globalization;
+using Microsoft.EntityFrameworkCore;
 using Recall.Server.Auth.Entities;
+using Recall.Server.Domain.AuditEntries;
 using Recall.Server.Domain.ImportBatches.Dtos;
 using Recall.Server.Domain.ImportBatches.Features;
 using Recall.Server.Domain.Users;
@@ -20,6 +22,11 @@ internal static class ImportScenario
             .BuildAsync();
         return owner;
     }
+
+    public static Task<List<AuditEntry>> ActionsOfAsync(User owner, string batchId)
+        => WebSessionOf(owner).ExecuteDbContextAsync(db => db.AuditEntries.IgnoreQueryFilters()
+            .Where(e => e.RootId == batchId && e.Kind == AuditEntryKind.Action)
+            .ToListAsync());
 
     public static TestingServiceScope WebSessionOf(User owner, IServiceProvider? services = null)
     {

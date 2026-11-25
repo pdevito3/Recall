@@ -93,6 +93,7 @@ public class ImportBatchRaceTests : TestBase
         second.Result.ShouldBe(first.Result);
         second.Version.ShouldBe(first.Version);
         (await WebSessionOf(owner).ExecuteDbContextAsync(db => db.Sessions.Select(s => s.ClientSessionId).ToListAsync())).ShouldBe(["a"]);
+        (await ActionsOfAsync(owner, batch.Id)).ShouldHaveSingleItem().Action.ShouldBe("import_batch_accepted");
     }
 
     [Test]
@@ -122,6 +123,9 @@ public class ImportBatchRaceTests : TestBase
             db.Sessions.OrderBy(s => s.ClientSessionId).Select(s => new { s.ClientSessionId, s.ImportBatchId }).ToListAsync());
         sessions.Select(s => (s.ClientSessionId, s.ImportBatchId)).ShouldBe([("a", null), ("b", batch.Id)]);
         (await WebSessionOf(owner).ExecuteDbContextAsync(db => db.ImportEntries.CountAsync())).ShouldBe(0);
+        var action = (await ActionsOfAsync(owner, batch.Id)).ShouldHaveSingleItem();
+        action.Data.ShouldContain("\"SessionsMade\":1");
+        action.Data.ShouldContain("\"SkippedInJournal\":1");
     }
 
     [Test]

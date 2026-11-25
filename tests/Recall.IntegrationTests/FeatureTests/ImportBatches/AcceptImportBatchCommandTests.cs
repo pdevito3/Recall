@@ -350,9 +350,4 @@ public class AcceptImportBatchCommandTests : TestBase
         read.RawText.ShouldContain("agent words");
         read.RawText.ShouldNotContain("person words");
     }
-
-    private static Task<List<AuditEntry>> ActionsOfAsync(User owner, string batchId)
-        => WebSessionOf(owner).ExecuteDbContextAsync(db => db.AuditEntries.IgnoreQueryFilters()
-            .Where(e => e.RootId == batchId && e.Kind == AuditEntryKind.Action)
-            .ToListAsync());
 }
