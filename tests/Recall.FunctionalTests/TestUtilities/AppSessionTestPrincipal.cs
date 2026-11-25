@@ -15,6 +15,9 @@ public sealed class AppSessionTestPrincipal : IClaimsTransformation
 
     public Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
         => Task.FromResult(principal.HasClaim(c => c.Type == Marker)
-            ? new ClaimsPrincipal(new ClaimsIdentity(principal.Claims.Where(c => c.Type != Marker), AppSessionHandler.SchemeName, "name", "role"))
+            ? new ClaimsPrincipal(new ClaimsIdentity(principal.Claims.Where(c => c.Type != Marker).Select(AsIssued), AppSessionHandler.SchemeName, "name", "role"))
             : principal);
+
+    // The fake bearer maps sub to the name identifier type, and AppSessionHandler issues sub, which the page user check reads
+    private static Claim AsIssued(Claim claim) => claim.Type == ClaimTypes.NameIdentifier ? new Claim("sub", claim.Value) : claim;
 }

@@ -11,6 +11,8 @@ using TimeZones;
 public class ImportEntry : BaseEntity, IJournalOwned
 {
     public const string IdPrefix = "impent";
+    public const string FutureMessage = "The time of an entry cannot be in the future.";
+    public const string NotInBatchMessage = "This entry is not in the batch.";
 
     [NotSensitive] public string BatchId { get; private set; } = default!;
 
@@ -29,8 +31,6 @@ public class ImportEntry : BaseEntity, IJournalOwned
 
     /// <summary>True when a put changed the time after the last edit of the time by the person (IMP-12).</summary>
     public bool TimeChangedAfterEdit { get; private set; }
-
-    public const string FutureMessage = "The time of an entry cannot be in the future.";
 
     /// <summary>The zone of an entry: its own, else the zone of the batch (IMP-10). A zone that this host no longer knows gives UTC.</summary>
     public static TimeZoneId ZoneOf(ImportAgentLayer agent, ImportBatch batch) => TimeZoneId.TryOf(agent.TimeZone) ?? TimeZoneId.OrUtc(batch.TimeZone);

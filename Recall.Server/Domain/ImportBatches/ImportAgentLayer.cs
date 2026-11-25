@@ -17,6 +17,7 @@ public sealed record ImportAgentLayer
 
     /// <summary>A day holds positions 0 to 719, so the start of the last one, 12:00 plus 719 minutes, is on the same day (IMP-7).</summary>
     public const int PositionMax = 719;
+    public const int PositionMin = 0;
 
     public const int RawMaxLength = Session.DraftMaxLength;
 
@@ -44,7 +45,7 @@ public sealed record ImportAgentLayer
     {
         if (!DateOnly.TryParseExact(date, DateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
             throw new ValidationException("date", "Give the date as YYYY-MM-DD, for example 2024-03-31.");
-        ValidationException.Must(position is >= 0 and <= PositionMax, "position", $"The position must be from 0 to {PositionMax}.");
+        ValidationException.Must(position is >= PositionMin and <= PositionMax, "position", $"The position must be from {PositionMin} to {PositionMax}.");
 
         return new ImportAgentLayer
         {

@@ -2,9 +2,13 @@ namespace Recall.IntegrationTests;
 
 using System.Security.Claims;
 using Bogus;
+using Recall.Server.Auth;
+using Recall.Server.Auth.Entities;
 using Recall.Server.Databases;
+using Recall.Server.Domain;
 using Recall.Server.Domain.Tenants;
 using Recall.Server.Domain.Users;
+using Recall.Server.Resources.Entrypoints.Auth;
 using Recall.SharedTestHelpers.EntityGraphs;
 using Recall.SharedTestHelpers.EntityGraphs.Core;
 using MediatR;
@@ -114,6 +118,25 @@ public class TestingServiceScope
     /// </summary>
     public void SetDelegatedClient(string userIdentifier, string clientId)
         => SetToken([new Claim("sub", userIdentifier), new Claim("azp", clientId)], userIdentifier, clientId);
+
+    /// <summary>Sets up a session of the app for the user with this identifier, as a person who signed in to Recall.</summary>
+    public void SetAppSession(string identifier, SessionKind kind)
+        => SetPrincipal(AppSessionHandler.PrincipalOf(new SessionPrincipal(EntityId.New(AuthSession.IdPrefix), identifier, kind, DateTimeOffset.MaxValue)));
+
+    /// <summary>Sets up a personal access token of the user with this identifier.</summary>
+    public void SetPersonalAccessToken(string identifier, TokenGrant grant)
+        => SetPrincipal(new PatClaims(EntityId.New(PatClaims.IdPrefix), grant).PrincipalOf(identifier));
+
+    private void SetPrincipal(ClaimsPrincipal principal)
+    {
+        var currentUserService = GetService<ICurrentUserService>();
+
+        currentUserService.User.Returns(principal);
+        currentUserService.ClientId.Returns(principal.FindFirst("client_id")?.Value);
+        currentUserService.UserIdentifier.Returns(principal.FindFirst("sub")?.Value);
+        currentUserService.IsAuthenticated.Returns(true);
+        RefreshTenantScope();
+    }
 
     private void SetToken(Claim[] claims, string? subject, string clientId)
     {

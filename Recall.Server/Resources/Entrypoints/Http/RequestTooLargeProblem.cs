@@ -23,7 +23,14 @@ public static class RequestTooLargeProblem
             await context.RequestServices.GetRequiredService<IProblemDetailsService>().WriteAsync(new ProblemDetailsContext
             {
                 HttpContext = context,
-                ProblemDetails = { Status = StatusCodes.Status413PayloadTooLarge, Detail = Detail },
+                ProblemDetails =
+                {
+                    Status = StatusCodes.Status413PayloadTooLarge,
+                    Detail = context.GetEndpoint()?.Metadata.GetMetadata<RequestTooLargeDetail>()?.Detail ?? Detail,
+                },
             });
         });
 }
+
+/// <summary>The detail of the 413 of an endpoint whose body is not a file.</summary>
+public sealed record RequestTooLargeDetail(string Detail);

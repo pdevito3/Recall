@@ -11,6 +11,7 @@ public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
 {
     public const string IdPrefix = "imp";
     public const int NameMaxLength = 200;
+    public const int PutMaxEntries = 500;
 
     /// <summary>The most kept entries of one accept, so that its save ends inside the 30 s limit of the writer (IMP-27).</summary>
     public const int AcceptMaxEntries = 10_000;
@@ -44,6 +45,8 @@ public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
 
     public static readonly string NameMessage = $"Give the batch a name of 1 to {NameMaxLength} characters.";
 
+    public static readonly string PutCallMessage = $"Send each entry once, and at most {PutMaxEntries} entries in one call.";
+
     public static readonly string TooManyToAcceptMessage =
         $"This batch has more than {AcceptMaxEntries:N0} entries to accept. Split it into smaller batches, for example one for each year.";
 
@@ -73,6 +76,12 @@ public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
             throw new ConflictException(string.Empty, AcceptedMessage);
     }
 
+    /// <exception cref="ValidationException">The call names one ID twice, or holds more than <see cref="PutMaxEntries"/> entries (IMP-28).</exception>
+    public static void CheckPutCall(IReadOnlyCollection<string> clientSessionIds)
+        => ValidationException.Must(
+            clientSessionIds.Count <= PutMaxEntries && clientSessionIds.Distinct(StringComparer.Ordinal).Count() == clientSessionIds.Count,
+            "entries", PutCallMessage);
+
     public bool IsDayRejected(DateOnly date) => _days.Any(day => day.Date == date && day.Rejected);
 
     /// <summary>The last review of a day wins (IMP-6). It gives false when the day already has this review.</summary>
@@ -92,8 +101,88 @@ public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
     }
 
     /// <summary>
-    /// Makes a Session of each kept entry whose ID is still free, and keeps the counts (IMP-14, IMP-16, IMP-20). The caller
-    /// deletes the entries and the days in the same save.
+    /// Puts the entries of one call (IMP-3). Each entry gets the first outcome of IMP-28 that applies, and only
+    /// <c>Rejected</c>, <c>Changed</c>, and <c>Added</c> store its agent layer.
+    /// </summary>
+    /// <param name="entries">The entries of the call, each ID once.</param>
+    /// <param name="stored">Each entry of the User with an ID of the call, in any batch, and each entry of this batch on a date of the call.</param>
+    /// <param name="sessionIds">Each ID of the call that a Session of the User has.</param>
+    /// <param name="tombstoneIds">Each ID of the call that has a Tombstone.</param>
+    /// <param name="now">The time of the put.</param>
+    /// <exception cref="ConflictException">The batch is accepted (IMP-23).</exception>
+    public ImportPut Put(
+        IReadOnlyList<ImportPutEntry> entries, IReadOnlyCollection<ImportEntry> stored, IReadOnlySet<string> sessionIds, IReadOnlySet<string> tombstoneIds,
+        DateTimeOffset now)
+    {
+        EnsureOpen();
+        var byId = stored.ToDictionary(entry => entry.ClientSessionId, StringComparer.Ordinal);
+        var results = new Dictionary<string, ImportPutResult>(StringComparer.Ordinal);
+        var candidates = new List<(string Id, ImportAgentLayer Agent, ImportIdentity Identity, ImportEntry? Known)>();
+        foreach (var entry in entries)
+        {
+            var id = entry.ClientSessionId;
+            if (entry.Agent is not { } agent)
+            {
+                results[id] = new ImportPutResult(id, ImportPutOutcome.Invalid, entry.Field, entry.Reason);
+                continue;
+            }
+
+            var other = byId.GetValueOrDefault(id);
+            var identity = ImportIdentities.Classify(sessionIds.Contains(id), tombstoneIds.Contains(id), other?.BatchId, Id);
+            var known = identity == ImportIdentity.InThisBatch ? other : null;
+            var inTheFuture = ImportEntry.StartOf(agent, known?.Review ?? ImportReview.None, this) > now;
+            if (inTheFuture || identity is ImportIdentity.InJournal or ImportIdentity.Deleted or ImportIdentity.InOtherBatch)
+                results[id] = new ImportPutResult(id, ImportPutOutcomes.Of(identity, inTheFuture, false, false, false));
+            else
+                candidates.Add((id, agent, identity, known));
+        }
+
+        var takenBy = ImportPositions.Check(
+            stored.Where(entry => entry.BatchId == Id)
+                .ToDictionary(entry => entry.ClientSessionId, entry => new ImportSlot(entry.Agent.Date, entry.Agent.Position), StringComparer.Ordinal),
+            candidates.ToDictionary(c => c.Id, c => new ImportSlot(c.Agent.Date, c.Agent.Position), StringComparer.Ordinal));
+        var added = new List<ImportEntry>();
+        foreach (var (id, agent, identity, known) in candidates)
+        {
+            var other = takenBy.GetValueOrDefault(id);
+            var rejected = ImportEntry.IsRejected(agent, known?.Review ?? ImportReview.None, this);
+            var outcome = ImportPutOutcomes.Of(identity, false, other is not null, rejected, known?.Agent == agent);
+            if (outcome.Stores())
+            {
+                if (known is null)
+                    added.Add(ImportEntry.Add(this, id, agent));
+                else
+                    known.PutFromAgent(agent);
+            }
+
+            results[id] = new ImportPutResult(id, outcome, PositionTakenBy: other);
+        }
+
+        return new ImportPut(entries.Select(entry => results[entry.ClientSessionId]).ToList(), added);
+    }
+
+    /// <summary>Removes the named entries (IMP-13). A rejected entry stays, with its reject, so the agent cannot undo a reject.</summary>
+    /// <param name="clientSessionIds">The IDs of the call, each once.</param>
+    /// <param name="stored">Each entry of this batch with an ID of the call.</param>
+    /// <exception cref="ConflictException">The batch is accepted (IMP-23).</exception>
+    public ImportRemove Remove(IReadOnlyList<string> clientSessionIds, IReadOnlyCollection<ImportEntry> stored)
+    {
+        EnsureOpen();
+        var byId = stored.Where(entry => entry.BatchId == Id).ToDictionary(entry => entry.ClientSessionId, StringComparer.Ordinal);
+        var results = clientSessionIds
+            .Select(id => new ImportRemoveResult(id, byId.GetValueOrDefault(id) switch
+            {
+                null => ImportRemoveOutcome.NotFound,
+                var entry when entry.IsRejectedIn(this) => ImportRemoveOutcome.Rejected,
+                _ => ImportRemoveOutcome.Removed,
+            }))
+            .ToList();
+        return new ImportRemove(results, results.Where(r => r.Outcome == ImportRemoveOutcome.Removed).Select(r => byId[r.ClientSessionId]).ToList());
+    }
+
+    /// <summary>
+    /// Makes a Session of each kept entry whose ID is still free, keeps the counts, and removes the days (IMP-14, IMP-16,
+    /// IMP-20). The caller deletes the entries in the same save.
     /// </summary>
     /// <param name="version">The version of the batch that the caller read.</param>
     /// <param name="entries">Each entry of the batch.</param>
@@ -121,6 +210,7 @@ public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
         Result = new ImportAcceptResult(
             sessions.Count, entries.Count - kept.Count, _days.Count(day => day.Rejected),
             identities[ImportIdentity.InJournal].Count(), identities[ImportIdentity.Deleted].Count());
+        _days.Clear();
         return sessions;
     }
 
