@@ -11,6 +11,9 @@ public static class GetJournalDays
 {
     public const int MaxDays = 366;
     public const string RangeMessage = "Pick a range of at most 366 days, with the end on or after the start.";
+    public const string DatesMessage = "Pick dates from 1000-01-01 to 9998-12-31.";
+    private static readonly DateOnly DateMin = new(1000, 1, 1);
+    private static readonly DateOnly DateMax = new(9998, 12, 31);
 
     // A Session in any zone can start up to one day before or after the UTC day of its Journaling day
     private static readonly TimeSpan AnyZone = TimeSpan.FromDays(1);
@@ -23,6 +26,8 @@ public static class GetJournalDays
         {
             dbContext.RequireJournalOwner();
             var (first, last) = (request.From, request.To);
+            ValidationException.Must(first >= DateMin && first <= DateMax, "from", DatesMessage);
+            ValidationException.Must(last >= DateMin && last <= DateMax, "to", DatesMessage);
             ValidationException.Must(last >= first && last.DayNumber - first.DayNumber < MaxDays, "to", RangeMessage);
 
             var from = new ZonedDate(first, TimeZoneId.Utc).Start - AnyZone;
