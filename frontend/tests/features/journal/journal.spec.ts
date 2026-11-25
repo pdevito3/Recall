@@ -116,7 +116,7 @@ test.describe('writing a new entry', () => {
     await page.reload()
 
     await expect(journal.at.composer).toContainText('Words with no reply')
-    await expect.poll(() => (api.last('put', sessionsPaths.rawDraft(created.id))?.body as { savedAt: string }).savedAt).toBe(first.savedAt)
+    await expect.poll(() => (api.last('put', sessionsPaths.rawDraft(created.id))!.body as { savedAt: string }).savedAt).toBe(first.savedAt)
     await expect(journal.at.status('Saved at')).toBeVisible()
   })
 
@@ -172,7 +172,7 @@ test.describe('writing a new entry', () => {
     await expect(journal.at.composer).toHaveText('From the other tab')
     await expect(journal.at.composer).toBeFocused()
     await journal.write(' and more')
-    expect((api.last('put', sessionsPaths.rawDraft(created.id))?.body as { baseRevision: number }).baseRevision).toBe(3)
+    expect((api.last('put', sessionsPaths.rawDraft(created.id))!.body as { baseRevision: number }).baseRevision).toBe(3)
   })
 
   test('an entry that another tab deleted starts again as a new entry with all the words on the page', async ({ page, api }) => {
