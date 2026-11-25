@@ -9,6 +9,8 @@ public static class ImportTimeOfDay
     public const string Format = "HH:mm";
     public const int TextLength = 5;
 
+    public static string? Text(TimeOnly? time) => time?.ToString(Format, CultureInfo.InvariantCulture);
+
     /// <exception cref="ValidationException">The value is not a time of day as <c>HH:mm</c>.</exception>
     public static TimeOnly? Parse(string? value, string field)
     {

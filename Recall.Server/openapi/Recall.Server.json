@@ -994,6 +994,670 @@
         }
       }
     },
+    "/api/v1/import-batches": {
+      "get": {
+        "tags": [
+          "ImportBatches"
+        ],
+        "summary": "Gets each import batch of the caller, newest first. An accepted batch stays, with the counts of its accept.",
+        "operationId": "GetImportBatches",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ImportBatchDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "ImportBatches"
+        ],
+        "summary": "Opens an import batch: a draft area outside the journal, where an agent puts the entries of another app. No entry is\nin the journal until the person accepts the batch.",
+        "operationId": "OpenImportBatch",
+        "parameters": [
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportBatchForCreationDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportBatchDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/import-batches/{id}/entries": {
+      "get": {
+        "tags": [
+          "ImportBatches"
+        ],
+        "summary": "Gets the entries of a batch in order of their date and position, with the review of the person, the start that the\naccept gives each one now, and the version of the batch. `from` and `to` limit the dates, both included.",
+        "operationId": "GetImportEntries",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportEntryPageDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "ImportBatches"
+        ],
+        "summary": "Adds or changes entries of an open batch by Client session ID. Each entry gets an outcome, in the order of the call. The\nsame call again changes nothing. A put never changes what the person reviewed, and it removes no entry.",
+        "operationId": "PutImportEntries",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportEntriesPutDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportPutResultDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/import-batches/{id}/entries/remove": {
+      "post": {
+        "tags": [
+          "ImportBatches"
+        ],
+        "summary": "Removes the named entries of an open batch. An entry that the person rejected stays, with its reject, so that a\nlater put cannot bring it back as kept.",
+        "operationId": "RemoveImportEntries",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportEntriesRemoveDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportRemoveResultDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/import-batches/{id}/days/{date}/review": {
+      "put": {
+        "tags": [
+          "ImportBatches"
+        ],
+        "summary": "Rejects or keeps a day of a batch. A rejected day holds each entry of its date, also an entry that a later put adds.\nAn entry that the person rejected alone stays rejected when its day is kept again.",
+        "operationId": "ReviewImportDay",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportDayReviewDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDayReviewedDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/import-batches/{id}/entries/review": {
+      "put": {
+        "tags": [
+          "ImportBatches"
+        ],
+        "summary": "Sets the whole review of one entry: rejected, the edited words or null, and the edited time or null. The last review\nwins. A put of the agent never changes it.",
+        "operationId": "ReviewImportEntry",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportEntryReviewDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportEntryReviewedDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/login-providers": {
       "post": {
         "tags": [
@@ -8097,6 +8761,553 @@
           }
         }
       },
+      "ImportAcceptResultDto": {
+        "required": [
+          "sessionsMade",
+          "entriesRejected",
+          "daysRejected",
+          "skippedInJournal",
+          "skippedDeleted"
+        ],
+        "type": "object",
+        "properties": {
+          "sessionsMade": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "entriesRejected": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "daysRejected": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "skippedInJournal": {
+            "type": "integer",
+            "description": "The kept entries whose ID became a Session after the put. The Session stays as it is.",
+            "format": "int32"
+          },
+          "skippedDeleted": {
+            "type": "integer",
+            "description": "The kept entries whose ID has a Tombstone, because the person deleted its Session after the put.",
+            "format": "int32"
+          }
+        }
+      },
+      "ImportBatchDto": {
+        "required": [
+          "id",
+          "name",
+          "timeZone",
+          "state",
+          "openedAt",
+          "entryCount",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "timeZone": {
+            "type": "string",
+            "description": "The IANA zone of each entry that has no zone of its own."
+          },
+          "state": {
+            "enum": [
+              "Open",
+              "Accepted"
+            ],
+            "type": "string"
+          },
+          "openedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "acceptedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "entryCount": {
+            "type": "integer",
+            "description": "The entries that the batch holds now. The accept removes them, so an accepted batch has none.",
+            "format": "int32"
+          },
+          "result": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The counts of the accept, or null while the batch is open.",
+                "$ref": "#/components/schemas/ImportAcceptResultDto"
+              }
+            ]
+          },
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "description": "Send it with the accept. Each write to the batch, its entries, or its days moves it."
+          }
+        }
+      },
+      "ImportBatchForCreationDto": {
+        "required": [
+          "name",
+          "timeZone"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "timeZone": {
+            "maxLength": 100,
+            "type": "string",
+            "description": "The IANA zone of the source, such as `America/Chicago`. Each entry with no zone of its own takes it."
+          }
+        }
+      },
+      "ImportDayReviewDto": {
+        "required": [
+          "rejected"
+        ],
+        "type": "object",
+        "properties": {
+          "rejected": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ImportDayReviewedDto": {
+        "required": [
+          "version",
+          "date",
+          "rejected"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "description": "The version of the batch after the review."
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "rejected": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ImportEntriesPutDto": {
+        "required": [
+          "entries"
+        ],
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportEntryPutDto"
+            },
+            "description": "At most 500 entries, each Client session ID once."
+          }
+        }
+      },
+      "ImportEntriesRemoveDto": {
+        "required": [
+          "clientSessionIds"
+        ],
+        "type": "object",
+        "properties": {
+          "clientSessionIds": {
+            "type": "array",
+            "items": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ImportEntryDto": {
+        "required": [
+          "clientSessionId",
+          "date",
+          "position",
+          "raw",
+          "moods",
+          "topics",
+          "review",
+          "isRejected",
+          "startsAt",
+          "wordsChangedAfterEdit",
+          "timeChangedAfterEdit"
+        ],
+        "type": "object",
+        "properties": {
+          "clientSessionId": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "time": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The time of the agent as `HH:mm`, or null."
+          },
+          "timeZone": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The zone of the agent, or null for the zone of the batch."
+          },
+          "raw": {
+            "type": "string",
+            "description": "The Markdown of the agent, as the put sent it."
+          },
+          "moods": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "review": {
+            "$ref": "#/components/schemas/ImportReviewDto"
+          },
+          "isRejected": {
+            "type": "boolean",
+            "description": "True when the entry or its day is rejected. The accept makes no Session of it."
+          },
+          "startsAt": {
+            "type": "string",
+            "description": "The start of the Session that the accept makes now: the time of the person, else of the agent, else 12:00 plus the position in minutes.",
+            "format": "date-time"
+          },
+          "wordsChangedAfterEdit": {
+            "type": "boolean",
+            "description": "True when a put changed Raw after the last edit of the words by the person."
+          },
+          "timeChangedAfterEdit": {
+            "type": "boolean",
+            "description": "True when a put changed the time after the last edit of the time by the person."
+          }
+        }
+      },
+      "ImportEntryPageDto": {
+        "required": [
+          "version",
+          "entries",
+          "rejectedDays"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "description": "The version of the batch when the entries were read. Send it with the accept."
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportEntryDto"
+            },
+            "description": "The entries in order of their date and position."
+          },
+          "rejectedDays": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Each day that the person rejected. A rejected day holds each entry of its date."
+          }
+        }
+      },
+      "ImportEntryPutDto": {
+        "required": [
+          "clientSessionId",
+          "date",
+          "position",
+          "raw"
+        ],
+        "type": "object",
+        "properties": {
+          "clientSessionId": {
+            "maxLength": 100,
+            "type": "string",
+            "description": "The ID that the Session of the entry gets at the accept. The same ID again changes the same entry."
+          },
+          "date": {
+            "maxLength": 10,
+            "type": "string",
+            "description": "The day of the source, as `YYYY-MM-DD`."
+          },
+          "position": {
+            "maximum": 719,
+            "minimum": 0,
+            "type": "integer",
+            "description": "The order of the entry in its day. With no time, the entry starts at 12:00 plus this number of minutes.",
+            "format": "int32"
+          },
+          "time": {
+            "maxLength": 5,
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The time of day as `HH:mm`, only when the source gives one."
+          },
+          "timeZone": {
+            "maxLength": 100,
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The IANA zone of the entry, or null for the zone of the batch."
+          },
+          "raw": {
+            "maxLength": 1000000,
+            "type": "string",
+            "description": "The words of the source as Markdown, with no change to the words of the person."
+          },
+          "moods": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          "topics": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ImportEntryReviewDto": {
+        "required": [
+          "clientSessionId",
+          "rejected"
+        ],
+        "type": "object",
+        "properties": {
+          "clientSessionId": {
+            "maxLength": 100,
+            "type": "string"
+          },
+          "rejected": {
+            "type": "boolean"
+          },
+          "words": {
+            "maxLength": 4000000,
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The words of the person as a ProseMirror document, or null to keep the Raw of the agent."
+          },
+          "time": {
+            "maxLength": 5,
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The time of the person as `HH:mm`, or null to keep the time of the agent."
+          }
+        },
+        "description": "The whole review of one entry. Null clears an edit."
+      },
+      "ImportEntryReviewedDto": {
+        "required": [
+          "version",
+          "entry"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "description": "The version of the batch after the review."
+          },
+          "entry": {
+            "$ref": "#/components/schemas/ImportEntryDto"
+          }
+        }
+      },
+      "ImportPutOutcomeDto": {
+        "required": [
+          "clientSessionId",
+          "outcome"
+        ],
+        "type": "object",
+        "properties": {
+          "clientSessionId": {
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "Invalid",
+              "InJournal",
+              "Deleted",
+              "InOtherBatch",
+              "InTheFuture",
+              "PositionTaken",
+              "Rejected",
+              "Unchanged",
+              "Changed",
+              "Added"
+            ],
+            "type": "string"
+          },
+          "field": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "For `Invalid`, the field of the entry that is not valid."
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "For `Invalid`, why the field is not valid."
+          },
+          "positionTakenBy": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "For `PositionTaken`, the Client session ID of the entry that holds the date and the position."
+          }
+        }
+      },
+      "ImportPutResultDto": {
+        "required": [
+          "version",
+          "outcomes"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "description": "The version of the batch after the put. A put that stores nothing does not move it."
+          },
+          "outcomes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportPutOutcomeDto"
+            },
+            "description": "The outcome of each entry, in the order of the call."
+          }
+        }
+      },
+      "ImportRemoveOutcomeDto": {
+        "required": [
+          "clientSessionId",
+          "outcome"
+        ],
+        "type": "object",
+        "properties": {
+          "clientSessionId": {
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "Removed",
+              "NotFound",
+              "Rejected"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "ImportRemoveResultDto": {
+        "required": [
+          "version",
+          "outcomes"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "description": "The version of the batch after the remove. A remove that deletes nothing does not move it."
+          },
+          "outcomes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportRemoveOutcomeDto"
+            },
+            "description": "The outcome of each ID, in the order of the call, each ID once."
+          }
+        }
+      },
+      "ImportReviewDto": {
+        "required": [
+          "rejected"
+        ],
+        "type": "object",
+        "properties": {
+          "rejected": {
+            "type": "boolean"
+          },
+          "words": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The words of the person as a ProseMirror document, or null for the Raw of the agent."
+          },
+          "time": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The time of the person as `HH:mm`, or null for the time of the agent."
+          }
+        }
+      },
       "InitiateUserAndTenantDto": {
         "required": [
           "tenantName",
@@ -10608,6 +11819,9 @@
     },
     {
       "name": "Corrections"
+    },
+    {
+      "name": "ImportBatches"
     },
     {
       "name": "LoginProviders"

@@ -8,6 +8,12 @@ public static class SchemaSample
 {
     private static readonly Dictionary<string, string> StringsThatARuleChecksAgainstAList = new() { ["timeZone"] = "UTC" };
 
+    /// <summary>The entry that a review names in its body. The sweep puts an entry with this ID in each batch.</summary>
+    public const string ImportEntryId = "sweep-import-entry";
+
+    // A body that names its record in a field, and not in the route, names the record that the sweep made
+    private static readonly Dictionary<string, string> StringsThatNameARecord = new() { ["clientSessionId"] = ImportEntryId };
+
     // A rule needs one of two optional values, so the sample sends this one. The dates of the sample are in the past.
     private static readonly Dictionary<string, bool> OptionalFlagsThatARuleNeeds = new() { ["neverExpires"] = true };
 
@@ -52,7 +58,10 @@ public static class SchemaSample
         {
             var property = properties?[name]
                 ?? throw new SweepSetupException($"The schema requires {name}, but it has no such property.");
-            sample[name] = StringsThatARuleChecksAgainstAList.TryGetValue(name, out var value) ? JsonValue.Create(value) : Of(property, root);
+            sample[name] = StringsThatARuleChecksAgainstAList.TryGetValue(name, out var value)
+                || StringsThatNameARecord.TryGetValue(name, out value)
+                ? JsonValue.Create(value)
+                : Of(property, root);
         }
         foreach (var (name, flag) in OptionalFlagsThatARuleNeeds)
         {

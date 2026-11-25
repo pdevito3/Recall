@@ -31,9 +31,22 @@ public static class HttpClientExtensions
         => client.SetFakeBearerToken(new Dictionary<string, object> { ["sub"] = subject, ["azp"] = clientId });
 
     /// <summary>Signs in as a native session of the app for the user with this identifier, as a person who signed in to Recall.</summary>
-    public static void SignInAsAppSession(this HttpClient client, string subject)
+    public static void SignInAsAppSession(this HttpClient client, string subject) => client.SignInAsAppSession(subject, SessionKind.Native);
+
+    /// <summary>
+    /// Signs in as a web session of the app for the user with this identifier, as a page of Recall in a browser. It sends
+    /// the user of the page, as the SPA does.
+    /// </summary>
+    public static void SignInAsWebSession(this HttpClient client, string subject)
     {
-        var session = new SessionPrincipal(EntityId.New(AuthSession.IdPrefix), subject, SessionKind.Native, DateTimeOffset.MaxValue);
+        client.SignInAsAppSession(subject, SessionKind.Web);
+        client.DefaultRequestHeaders.Remove(PageUserCheck.Header);
+        client.DefaultRequestHeaders.Add(PageUserCheck.Header, subject);
+    }
+
+    private static void SignInAsAppSession(this HttpClient client, string subject, SessionKind kind)
+    {
+        var session = new SessionPrincipal(EntityId.New(AuthSession.IdPrefix), subject, kind, DateTimeOffset.MaxValue);
         var claims = AppSessionHandler.PrincipalOf(session).Claims.ToDictionary(c => c.Type, c => (object)c.Value);
         claims[AppSessionTestPrincipal.Marker] = "1";
         client.SetFakeBearerToken(claims);
