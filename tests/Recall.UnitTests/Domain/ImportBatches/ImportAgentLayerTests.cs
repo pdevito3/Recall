@@ -1,5 +1,6 @@
 namespace Recall.UnitTests.Domain.ImportBatches;
 
+using System.Globalization;
 using Recall.Server.Domain.ImportBatches;
 using Recall.Server.Exceptions;
 using Shouldly;
@@ -15,6 +16,10 @@ public class ImportAgentLayerTests
     {
         yield return (() => Layer(date: "31.03.2024"), "date");
         yield return (() => Layer(date: "2024-02-30"), "date");
+        yield return (() => Layer(date: "0001-01-01"), "date");
+        yield return (() => Layer(date: "0999-12-31"), "date");
+        yield return (() => Layer(date: "9999-01-01"), "date");
+        yield return (() => Layer(date: "9999-12-31"), "date");
         yield return (() => Layer(position: -1), "position");
         yield return (() => Layer(position: 720), "position");
         yield return (() => Layer(time: "9pm"), "time");
@@ -37,6 +42,19 @@ public class ImportAgentLayerTests
 
         // Assert
         exception.Property.ShouldBe(field);
+    }
+
+    [Test]
+    [Property("Rule", "IMP-28")]
+    [Arguments("1000-01-01")]
+    [Arguments("9998-12-31")]
+    public void a_date_at_an_edge_of_the_range_is_taken(string date)
+    {
+        // Act
+        var layer = Layer(date: date);
+
+        // Assert
+        layer.Date.ToString(ImportAgentLayer.DateFormat, CultureInfo.InvariantCulture).ShouldBe(date);
     }
 
     [Test]

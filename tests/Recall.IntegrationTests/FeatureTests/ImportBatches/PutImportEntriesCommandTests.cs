@@ -161,4 +161,29 @@ public class PutImportEntriesCommandTests : TestBase
         refused.Message.ShouldBe(ImportBatch.PutCallMessage);
         (await EntriesAsync(owner, batch.Id)).Entries.ShouldBeEmpty();
     }
+
+    [Test]
+    [Property("Rule", "IMP-28")]
+    public async Task a_date_outside_the_range_gets_invalid_and_a_date_at_its_edge_is_judged()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var batch = await OpenAsync(owner);
+
+        // Act
+        var put = await PutAsync(owner, batch.Id,
+            Entry("first-day", date: DateOnly.MinValue),
+            Entry("before", date: new DateOnly(999, 12, 31)),
+            Entry("first", date: new DateOnly(1000, 1, 1)),
+            Entry("last", date: new DateOnly(9998, 12, 31)),
+            Entry("after", date: new DateOnly(9999, 1, 1)),
+            Entry("last-day", date: DateOnly.MaxValue));
+
+        // Assert
+        OutcomesOf(put).ShouldBe([
+            ("first-day", "Invalid"), ("before", "Invalid"), ("first", "Added"), ("last", "InTheFuture"), ("after", "Invalid"), ("last-day", "Invalid"),
+        ]);
+        put.Outcomes.Where(o => o.Outcome == "Invalid").Select(o => o.Field).ShouldBe(["date", "date", "date", "date"]);
+        (await EntriesAsync(owner, batch.Id)).Entries.Select(e => e.ClientSessionId).ShouldBe(["first"]);
+    }
 }

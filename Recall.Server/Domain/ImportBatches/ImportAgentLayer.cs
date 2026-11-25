@@ -11,6 +11,9 @@ public sealed record ImportAgentLayer
     public const string DateFormat = "yyyy-MM-dd";
     public const int DateTextLength = 10;
 
+    public static readonly DateOnly DateMin = new(1000, 1, 1);
+    public static readonly DateOnly DateMax = new(9998, 12, 31);
+
     public const int PositionMax = ((24 - ImportStartTime.FirstPositionHour) * 60) - 1;
     public const int PositionMin = 0;
 
@@ -39,6 +42,8 @@ public sealed record ImportAgentLayer
     {
         if (!DateOnly.TryParseExact(date, DateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
             throw new ValidationException("date", "Give the date as YYYY-MM-DD, for example 2024-03-31.");
+        ValidationException.Must(day >= DateMin && day <= DateMax, "date",
+            $"The date must be from {DateMin.ToString(DateFormat, CultureInfo.InvariantCulture)} to {DateMax.ToString(DateFormat, CultureInfo.InvariantCulture)}.");
         ValidationException.Must(position is >= PositionMin and <= PositionMax, "position", $"The position must be from {PositionMin} to {PositionMax}.");
 
         return new ImportAgentLayer
