@@ -4,6 +4,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Recall.Server.Databases;
 using Recall.Server.Domain;
+using Recall.Server.Domain.ImportBatches;
 using Recall.Server.Domain.Recordings;
 using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sessions.Features;
@@ -152,9 +153,11 @@ public class JournalTriggerTests : TestBase
         left.Lines.ShouldBe(0);
     }
 
-    private static readonly Type[] JournalTablesOutsideTheFeed = [typeof(SyncChange), typeof(Recording), typeof(Summary)];
+    private static readonly Type[] JournalTablesOutsideTheFeed =
+        [typeof(SyncChange), typeof(Recording), typeof(Summary), typeof(ImportBatch), typeof(ImportEntry), typeof(ImportDay)];
 
     [Test]
+    [Property("Rule", "IMP-2")]
     public async Task each_journal_table_of_the_model_has_its_triggers()
     {
         // Arrange
@@ -172,10 +175,13 @@ public class JournalTriggerTests : TestBase
         var model = new TestingServiceScope().GetService<AppDbContext>().Model;
         var journalRoots = model.GetEntityTypes().Where(e => e.ClrType.IsAssignableTo(typeof(IJournalOwned))).ToList();
         var fed = journalRoots.Where(e => !JournalTablesOutsideTheFeed.Contains(e.ClrType)).Select(e => e.GetTableName()!).ToList();
+        var guarded = journalRoots.Where(e => JournalTablesOutsideTheFeed.Contains(e.ClrType) && e.ClrType != typeof(SyncChange))
+            .Select(e => e.GetTableName()!).ToList();
         var revisions = new[] { model.FindEntityType(typeof(RawRevision))!.GetTableName()!, model.FindEntityType(typeof(CleanedRevision))!.GetTableName()! };
 
         // Act
         var missing = fed.SelectMany(table => new[] { $"{table}_sync_insert", $"{table}_sync_update", $"{table}_sync_delete" })
+            .Concat(guarded.Select(table => $"{table}_refuse_deleted_owner"))
             .Concat(revisions.SelectMany(table => new[] { $"{table}_refuse_update", $"{table}_refuse_delete" }))
             .Append("users_purge_journal")
             .Where(name => !triggers.ContainsKey(name))
@@ -185,6 +191,34 @@ public class JournalTriggerTests : TestBase
         missing.ShouldBeEmpty("An EF table rebuild drops the triggers of the table, so call JournalTriggers again in that migration.");
         foreach (var table in journalRoots.Select(e => e.GetTableName()!))
             triggers["users_purge_journal"].ShouldContain($"DELETE FROM {table} WHERE user_id = new.id");
+    }
+
+    [Test]
+    [Property("Rule", "IMP-15")]
+    public async Task the_import_batch_of_a_session_has_an_index_and_no_foreign_key()
+    {
+        // Arrange
+        await using var connection = new SqliteConnection(TestFixture.UnpooledConnectionString);
+        await connection.OpenAsync();
+
+        async Task<List<string>> ColumnAsync(string sql, int column)
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            await using var rows = await command.ExecuteReaderAsync();
+            var values = new List<string>();
+            while (await rows.ReadAsync())
+                values.Add(rows.GetString(column));
+            return values;
+        }
+
+        // Act
+        var keyColumns = await ColumnAsync("PRAGMA foreign_key_list(sessions)", 3);
+        var indexed = await ColumnAsync("SELECT name FROM pragma_index_info('ix_sessions_import_batch_id')", 0);
+
+        // Assert
+        keyColumns.ShouldNotContain("import_batch_id");
+        indexed.ShouldBe(["import_batch_id"]);
     }
 
     [Test]

@@ -27,8 +27,8 @@ public class JournalWriteRuleTests
         // Assert
         journal.ShouldBe(
         [
-            "CleanedRevision", "Correction", "Person", "RawRevision", "Recording", "RecordingSlice", "Session",
-            "Summary", "SyncChange", "UserSetting",
+            "CleanedRevision", "Correction", "ImportBatch", "ImportDay", "ImportEntry", "Person", "RawRevision", "Recording",
+            "RecordingSlice", "Session", "Summary", "SyncChange", "UserSetting",
         ], ignoreOrder: true);
     }
 

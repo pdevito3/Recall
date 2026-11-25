@@ -23,11 +23,16 @@ public sealed record SessionMetadata
         var canonicalActivity = SessionActivity.Canonical(activity);
         CheckValue(canonicalActivity, "activity");
 
-        return new SessionMetadata(
-            canonicalActivity,
-            ListOf(VisibleValuesOf(moods, "moods").Select(Mood.Canonical), "moods"),
-            ListOf(VisibleValuesOf(userTopics, "userTopics"), "userTopics"));
+        return new SessionMetadata(canonicalActivity, MoodsOf(moods, "moods"), TopicsOf(userTopics, "userTopics"));
     }
+
+    /// <exception cref="ValidationException">The list or a value is over the limits of a Session.</exception>
+    public static List<string> MoodsOf(IEnumerable<string?>? moods, string field)
+        => ListOf(VisibleValuesOf(moods, field).Select(Mood.Canonical), field);
+
+    /// <exception cref="ValidationException">The list or a value is over the limits of a Session.</exception>
+    public static List<string> TopicsOf(IEnumerable<string?>? topics, string field)
+        => ListOf(VisibleValuesOf(topics, field), field);
 
     /// <summary>A character that the store refuses stays refused. The other hidden characters go, so a page shows what the value holds.</summary>
     private static IEnumerable<string> VisibleValuesOf(IEnumerable<string?>? values, string field)

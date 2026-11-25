@@ -86,6 +86,9 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
 
     [Sensitive] public double? Longitude { get; private set; }
 
+    /// <summary>The batch whose accept made this Session, or null (IMP-14). It has no foreign key, so its column needs no rebuild of the table (IMP-15).</summary>
+    [NotSensitive] public string? ImportBatchId { get; private set; }
+
     public DateOnly JournalingDay => JournalingDayOf(StartedAt, TimeZone);
 
     /// <summary>The day of the start in the zone of the Session. A zone that this host does not know gives the UTC day.</summary>
@@ -113,11 +116,7 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         string tenantId, string userId, string clientSessionId, DateTimeOffset claimedStartedAt, CapturedLocation? location, TimeZoneId zone,
         DateTimeOffset now)
     {
-        ValidationException.ThrowWhenNullOrWhitespace(clientSessionId, ClientSessionIdField, "Please provide a client session ID.");
-        ValidationException.ThrowWhenLongerThan(clientSessionId, ClientSessionIdMaxLength, ClientSessionIdField,
-            $"The client session ID must not have more than {ClientSessionIdMaxLength} characters.");
-        ValidationException.ThrowWhenHasCharacterNotStorable(clientSessionId, ClientSessionIdField,
-            "The client session ID has a character that is not allowed.");
+        CheckClientSessionId(clientSessionId);
 
         return new Session
         {
@@ -129,6 +128,16 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
             Latitude = location?.Latitude,
             Longitude = location?.Longitude,
         };
+    }
+
+    /// <exception cref="ValidationException">The ID is blank, is too long, or has a character that is not allowed.</exception>
+    public static void CheckClientSessionId(string clientSessionId)
+    {
+        ValidationException.ThrowWhenNullOrWhitespace(clientSessionId, ClientSessionIdField, "Please provide a client session ID.");
+        ValidationException.ThrowWhenLongerThan(clientSessionId, ClientSessionIdMaxLength, ClientSessionIdField,
+            $"The client session ID must not have more than {ClientSessionIdMaxLength} characters.");
+        ValidationException.ThrowWhenHasCharacterNotStorable(clientSessionId, ClientSessionIdField,
+            "The client session ID has a character that is not allowed.");
     }
 
     public DraftDecision SaveRaw(DraftSave save, DraftAnswer? earlier = null)
