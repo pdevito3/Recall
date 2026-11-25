@@ -9,9 +9,6 @@ using Microsoft.EntityFrameworkCore;
 
 public static class GetImportEntries
 {
-    /// <param name="Id">The ID of the batch.</param>
-    /// <param name="From">The first date to read, or null for the first entry.</param>
-    /// <param name="To">The last date to read, or null for the last entry.</param>
     public sealed record Query(string Id, DateOnly? From, DateOnly? To) : IRequest<ImportEntryPageDto>;
 
     public sealed class Handler(AppDbContext dbContext) : IRequestHandler<Query, ImportEntryPageDto>

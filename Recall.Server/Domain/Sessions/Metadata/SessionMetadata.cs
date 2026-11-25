@@ -26,11 +26,9 @@ public sealed record SessionMetadata
         return new SessionMetadata(canonicalActivity, MoodsOf(moods, "moods"), TopicsOf(userTopics, "userTopics"));
     }
 
-    /// <exception cref="ValidationException">The list or a value is over the limits of a Session.</exception>
     public static List<string> MoodsOf(IEnumerable<string?>? moods, string field)
         => ListOf(VisibleValuesOf(moods, field).Select(Mood.Canonical), field);
 
-    /// <exception cref="ValidationException">The list or a value is over the limits of a Session.</exception>
     public static List<string> TopicsOf(IEnumerable<string?>? topics, string field)
         => ListOf(VisibleValuesOf(topics, field), field);
 

@@ -55,7 +55,6 @@ public class StringColumnLengthTests
     // The document of a text of emoji is longer than the text, because its JSON escapes each emoji. So the text has one.
     private static string TextWithOne(string character, int length) => character + Text("a", length - 1);
 
-    // The limit of a column of edited words is on the stored document, so the value is a document with one word.
     private static string DocumentWithOneWord(string character, int length)
     {
         const string start = "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"a\"}]}],\"padding\":\"";

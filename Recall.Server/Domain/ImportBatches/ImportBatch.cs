@@ -3,17 +3,12 @@ namespace Recall.Server.Domain.ImportBatches;
 using Exceptions;
 using Sessions;
 
-/// <summary>
-/// The draft area of one import (ADR 0026). Its entries and days are outside the journal until the accept, which makes a
-/// Session of each kept entry and deletes the entries and days. The row stays, with its counts, as the mark of its Sessions.
-/// </summary>
 public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
 {
     public const string IdPrefix = "imp";
     public const int NameMaxLength = 200;
     public const int PutMaxEntries = 500;
 
-    /// <summary>The most kept entries of one accept, so that its save ends inside the 30 s limit of the writer (IMP-27).</summary>
     public const int AcceptMaxEntries = 10_000;
     public const string NotFoundMessage = "This import batch does not exist.";
     public const string AcceptedMessage = "This batch is in your journal, so it cannot change.";
@@ -30,7 +25,6 @@ public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
 
     [Sensitive] public string Name { get; private set; } = default!;
 
-    /// <summary>The IANA zone of each entry that has no zone of its own (IMP-10).</summary>
     [Sensitive] public string TimeZone { get; private set; } = default!;
 
     public ImportBatchState State { get; private set; }
@@ -50,7 +44,6 @@ public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
     public static readonly string TooManyToAcceptMessage =
         $"This batch has more than {AcceptMaxEntries:N0} entries to accept. Split it into smaller batches, for example one for each year.";
 
-    /// <exception cref="ValidationException">The name is blank or too long, or the zone is not a zone of a place that this host knows.</exception>
     public static ImportBatch Open(string tenantId, string userId, string name, string timeZone, DateTimeOffset now)
     {
         var trimmed = name.Trim();
@@ -69,14 +62,12 @@ public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
         };
     }
 
-    /// <exception cref="ConflictException">The batch is accepted (IMP-23).</exception>
     public void EnsureOpen()
     {
         if (State != ImportBatchState.Open)
             throw new ConflictException(string.Empty, AcceptedMessage);
     }
 
-    /// <exception cref="ValidationException">The call names one ID twice, or holds more than <see cref="PutMaxEntries"/> entries (IMP-28).</exception>
     public static void CheckPutCall(IReadOnlyCollection<string> clientSessionIds)
         => ValidationException.Must(
             clientSessionIds.Count <= PutMaxEntries && clientSessionIds.Distinct(StringComparer.Ordinal).Count() == clientSessionIds.Count,
@@ -84,8 +75,6 @@ public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
 
     public bool IsDayRejected(DateOnly date) => _days.Any(day => day.Date == date && day.Rejected);
 
-    /// <summary>The last review of a day wins (IMP-6). It gives false when the day already has this review.</summary>
-    /// <exception cref="ConflictException">The batch is accepted (IMP-23).</exception>
     public bool ReviewDay(DateOnly date, bool rejected)
     {
         EnsureOpen();
@@ -100,16 +89,6 @@ public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
         return true;
     }
 
-    /// <summary>
-    /// Puts the entries of one call (IMP-3). Each entry gets the first outcome of IMP-28 that applies, and only
-    /// <c>Rejected</c>, <c>Changed</c>, and <c>Added</c> store its agent layer.
-    /// </summary>
-    /// <param name="entries">The entries of the call, each ID once.</param>
-    /// <param name="stored">Each entry of the User with an ID of the call, in any batch, and each entry of this batch on a date of the call.</param>
-    /// <param name="sessionIds">Each ID of the call that a Session of the User has.</param>
-    /// <param name="tombstoneIds">Each ID of the call that has a Tombstone.</param>
-    /// <param name="now">The time of the put.</param>
-    /// <exception cref="ConflictException">The batch is accepted (IMP-23).</exception>
     public ImportPut Put(
         IReadOnlyList<ImportPutEntry> entries, IReadOnlyCollection<ImportEntry> stored, IReadOnlySet<string> sessionIds, IReadOnlySet<string> tombstoneIds,
         DateTimeOffset now)
@@ -161,10 +140,6 @@ public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
         return new ImportPut(entries.Select(entry => results[entry.ClientSessionId]).ToList(), added);
     }
 
-    /// <summary>Removes the named entries (IMP-13). A rejected entry stays, with its reject, so the agent cannot undo a reject.</summary>
-    /// <param name="clientSessionIds">The IDs of the call, each once.</param>
-    /// <param name="stored">Each entry of this batch with an ID of the call.</param>
-    /// <exception cref="ConflictException">The batch is accepted (IMP-23).</exception>
     public ImportRemove Remove(IReadOnlyList<string> clientSessionIds, IReadOnlyCollection<ImportEntry> stored)
     {
         EnsureOpen();
@@ -180,18 +155,6 @@ public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
         return new ImportRemove(results, results.Where(r => r.Outcome == ImportRemoveOutcome.Removed).Select(r => byId[r.ClientSessionId]).ToList());
     }
 
-    /// <summary>
-    /// Makes a Session of each kept entry whose ID is still free, keeps the counts, and removes the days (IMP-14, IMP-16,
-    /// IMP-20). The caller deletes the entries in the same save.
-    /// </summary>
-    /// <param name="version">The version of the batch that the caller read.</param>
-    /// <param name="entries">Each entry of the batch.</param>
-    /// <param name="sessionIds">Each Client session ID of an entry that a Session of the User has now.</param>
-    /// <param name="tombstoneIds">Each Client session ID of an entry that has a Tombstone now.</param>
-    /// <param name="now">The time of the accept.</param>
-    /// <exception cref="ConflictException">The batch is accepted.</exception>
-    /// <exception cref="ValidationException">The batch has more than <see cref="AcceptMaxEntries"/> kept entries (IMP-27).</exception>
-    /// <exception cref="StaleVersionException">The batch changed after the caller read it (IMP-17).</exception>
     public IReadOnlyList<Session> Accept(
         uint version, IReadOnlyList<ImportEntry> entries, IReadOnlySet<string> sessionIds, IReadOnlySet<string> tombstoneIds, DateTimeOffset now)
     {

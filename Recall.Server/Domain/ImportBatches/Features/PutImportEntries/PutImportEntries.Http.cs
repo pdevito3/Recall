@@ -8,7 +8,6 @@ using Resources.Entrypoints.Http;
 
 public sealed class PutImportEntriesEndpoint : IEndpoint
 {
-    /// <summary>The largest body of one put (IMP-28). Each entry can have a long Raw, so a call of many entries is split.</summary>
     public const int MaxBodyBytes = 16 * 1024 * 1024;
 
     public const string TooLargeMessage = "This call is larger than 16 MB. Send fewer entries in each call.";

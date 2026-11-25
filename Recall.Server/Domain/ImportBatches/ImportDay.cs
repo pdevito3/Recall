@@ -1,6 +1,5 @@
 namespace Recall.Server.Domain.ImportBatches;
 
-/// <summary>The review of one date of a batch. A row exists only for a date that the person reviewed (IMP-6).</summary>
 public class ImportDay : BaseEntity, IJournalOwned
 {
     public const string IdPrefix = "impday";

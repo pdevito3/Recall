@@ -6,16 +6,11 @@ using Sessions;
 using Sessions.Content;
 using Sessions.Metadata;
 
-/// <summary>
-/// What the agent writes of an entry (IMP-5). A put replaces it whole, and no route of the agent writes the review.
-/// <see cref="Raw"/> is the Markdown of the source, which the accept turns into a document (IMP-11).
-/// </summary>
 public sealed record ImportAgentLayer
 {
     public const string DateFormat = "yyyy-MM-dd";
     public const int DateTextLength = 10;
 
-    /// <summary>A day holds positions 0 to 719, so the start of the last one, 12:00 plus 719 minutes, is on the same day (IMP-7).</summary>
     public const int PositionMax = 719;
     public const int PositionMin = 0;
 
@@ -39,7 +34,6 @@ public sealed record ImportAgentLayer
 
     public IReadOnlyList<string> Topics { get; private init; } = [];
 
-    /// <exception cref="ValidationException">A value is not valid. The property names its request field (IMP-28).</exception>
     public static ImportAgentLayer Of(
         string date, int position, string? time, string? timeZone, string raw, IEnumerable<string?>? moods, IEnumerable<string?>? topics)
     {
@@ -59,7 +53,6 @@ public sealed record ImportAgentLayer
         };
     }
 
-    /// <summary>The document that the accept stores as Raw. The conversion keeps each word (IMP-11).</summary>
     public string ToDocument() => MarkdownToProseMirror.ConvertToJson(Raw);
 
     public bool Equals(ImportAgentLayer? other)

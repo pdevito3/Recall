@@ -29,7 +29,6 @@ public class ImportAcceptCostBenchmark : TestBase
         var entries = int.Parse(Environment.GetEnvironmentVariable("IMPORT_ACCEPT_BENCHMARK_ENTRIES")
             ?? ImportBatch.AcceptMaxEntries.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
         var clock = new AcceptClock();
-        // Production logs Entity Framework at Warning, and a log line for each of the 60,000 commands would be the cost
         await using var services = TestFixture.BuildServiceProvider(s => s
             .AddLogging(logging => logging.AddFilter("Microsoft.EntityFrameworkCore", LogLevel.Warning))
             .ConfigureDbContext<AppDbContext>((_, options) => options.AddInterceptors(clock)));
@@ -95,10 +94,6 @@ public class ImportAcceptCostBenchmark : TestBase
         return peak;
     }
 
-    /// <summary>
-    /// Splits an accept at the start of the EF save and at the commit. Load is the reads up to the last reader that
-    /// closes before the save, build is the rest until the save, and save is the write up to the end of the commit.
-    /// </summary>
     private sealed class AcceptClock : ISaveChangesInterceptor, IDbCommandInterceptor, IDbTransactionInterceptor
     {
         private readonly Stopwatch _watch = new();

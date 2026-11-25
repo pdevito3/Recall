@@ -13,8 +13,6 @@ public sealed class StaleVersionException : Exception
     {
     }
 
-    /// <param name="message">The words of a record whose own rule names what changed, such as the accept of a batch.</param>
-    /// <param name="innerException">The failure that caused it, if any.</param>
     public StaleVersionException(string message, Exception? innerException = null)
         : base(message, innerException)
     {

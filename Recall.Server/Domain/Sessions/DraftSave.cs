@@ -29,8 +29,6 @@ public sealed class DraftSave
         return new DraftSave(text, baseRevision, savedAt);
     }
 
-    /// <summary>The limits of the words of a Draft, for each request field that holds a document.</summary>
-    /// <exception cref="ValidationException">The document is too long, has a character that is not allowed, or has a link that no page may open.</exception>
     public static void CheckDocument(string text, string field)
     {
         ValidationException.ThrowWhenLongerThan(text, Session.DraftMaxStoredLength, field,
