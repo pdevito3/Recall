@@ -21,4 +21,5 @@ export const sessionSummaryDtoSchema = z.object({
   personIds: z.array(z.string()),
   version: z.int().min(0).max(4294967295),
   metadataVersion: z.int().min(0).max(4294967295).describe('Send it with the next metadata save. A save of a Draft does not change it.'),
+  importBatchId: z.string().nullish().describe('The Import batch whose accept made the Session. Null for a Session that no import made.'),
 }).describe('One row of the timeline. It has no Draft, so a page costs the same whatever the length of the text.')

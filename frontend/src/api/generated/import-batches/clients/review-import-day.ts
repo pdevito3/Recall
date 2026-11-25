@@ -10,10 +10,10 @@ import { client, unwrapResult } from '../../.kubb/client'
 /**
  * @summary Rejects or keeps a day of a batch. A rejected day holds each entry of its date, also an entry that a later put adds.
  * An entry that the person rejected alone stays rejected when its day is kept again.
- * {@link /api/v1/import-batches/:id/days/:date/review}
+ * {@link /api/v1/import-batches/:id/days/review}
  */
 export function reviewImportDay<ThrowOnError extends boolean = true>(options: Options<ReviewImportDayOptions, ThrowOnError>): Promise<UnwrappedResult<ReviewImportDayResponses, ThrowOnError>> {
   const { client: request = client, ...config } = options
 
-  return unwrapResult(request({ method: 'PUT', url: '/api/v1/import-batches/{id}/days/{date}/review', ...config, throwOnError: config.throwOnError ?? true }), config.throwOnError ?? true) as Promise<UnwrappedResult<ReviewImportDayResponses, ThrowOnError>>
+  return unwrapResult(request({ method: 'PUT', url: '/api/v1/import-batches/{id}/days/review', ...config, throwOnError: config.throwOnError ?? true }), config.throwOnError ?? true) as Promise<UnwrappedResult<ReviewImportDayResponses, ThrowOnError>>
 }

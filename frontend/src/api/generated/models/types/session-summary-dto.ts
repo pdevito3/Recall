@@ -72,4 +72,9 @@ export type SessionSummaryDto = {
      * @type integer
     */
     metadataVersion: number;
+    /**
+     * @description The Import batch whose accept made the Session. Null for a Session that no import made.
+     * @type string | undefined
+    */
+    importBatchId?: string | null;
 };

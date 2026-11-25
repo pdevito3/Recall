@@ -49,7 +49,7 @@ public class ImportBatchHttpTests : TestBase
             }),
             await FactoryClient.GetAsync(ApiRoutes.ImportBatches.Entries(batch.Id)),
             await FactoryClient.PutAsJsonAsync(ApiRoutes.ImportBatches.ReviewEntry(batch.Id), new { clientSessionId = "edited", rejected = false, words = $"edit {marker}", time = "20:00" }),
-            await FactoryClient.PutAsJsonAsync(ApiRoutes.ImportBatches.ReviewDay(batch.Id, new DateOnly(2024, 3, 2)), new { rejected = true }),
+            await FactoryClient.PutAsJsonAsync(ApiRoutes.ImportBatches.ReviewDay(batch.Id), new { date = "2024-03-02", rejected = true }),
             await FactoryClient.PostAsJsonAsync(ApiRoutes.ImportBatches.RemoveEntries(batch.Id), new { clientSessionIds = new[] { marker } }),
             await FactoryClient.GetAsync(ApiRoutes.ImportBatches.Root),
         };
@@ -68,7 +68,7 @@ public class ImportBatchHttpTests : TestBase
         var spanText = spans.SelectMany(s => s.TagObjects.Select(t => $"{t.Key}={t.Value}")
             .Concat(s.Events.SelectMany(e => e.Tags.Select(t => $"{t.Key}={t.Value}").Append(e.Name)))
             .Append(s.DisplayName));
-        spanText.Where(text => text.Contains(marker, StringComparison.Ordinal)).ShouldBeEmpty();
+        spanText.Where(text => text.Contains(marker, StringComparison.Ordinal) || text.Contains("2024-03-02", StringComparison.Ordinal)).ShouldBeEmpty();
         var sessionIds = await ExecuteDbContextAsync(db => db.Sessions.IgnoreQueryFilters()
             .Where(s => s.ImportBatchId == batch.Id).Select(s => s.Id).ToListAsync());
         var audit = await ExecuteDbContextAsync(db => db.AuditEntries.IgnoreQueryFilters()
@@ -97,8 +97,8 @@ public class ImportBatchHttpTests : TestBase
         var version = (await put.Content.ReadFromJsonAsync<ImportPutResultDto>())!.Version;
         (await FactoryClient.PostAsJsonAsync(ApiRoutes.ImportBatches.Accept(batch.Id), new { version })).StatusCode.ShouldBe(HttpStatusCode.OK);
         var timeline = await FactoryClient.GetFromJsonAsync<JsonElement>(ApiRoutes.Sessions.Root);
-        var importedId = timeline.GetProperty("items").EnumerateArray()
-            .Single(item => item.GetProperty("clientSessionId").GetString() == "imported").GetProperty("id").GetString()!;
+        var items = timeline.GetProperty("items").EnumerateArray().ToList();
+        var importedId = items.Single(item => item.GetProperty("clientSessionId").GetString() == "imported").GetProperty("id").GetString()!;
 
         // Act
         var imported = await FactoryClient.GetFromJsonAsync<JsonElement>(ApiRoutes.Sessions.GetRecord(importedId));
@@ -106,6 +106,8 @@ public class ImportBatchHttpTests : TestBase
         var feed = await FactoryClient.GetFromJsonAsync<JsonElement>(ApiRoutes.Sync.Changes);
 
         // Assert
+        items.Select(item => (item.GetProperty("id").GetString(), item.GetProperty("importBatchId").GetString()))
+            .ShouldBe([(importedId, batch.Id), (deviceId, null)], ignoreOrder: true);
         imported.GetProperty("importBatchId").GetString().ShouldBe(batch.Id);
         fromDevice.GetProperty("importBatchId").ValueKind.ShouldBe(JsonValueKind.Null);
         var sessions = feed.GetProperty("sessions").EnumerateArray().ToList();

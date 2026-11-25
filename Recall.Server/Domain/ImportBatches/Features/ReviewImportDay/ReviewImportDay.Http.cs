@@ -8,7 +8,7 @@ using Resources.Entrypoints.Http;
 public sealed class ReviewImportDayEndpoint : IEndpoint
 {
     public void Map(IEndpointRouteBuilder versionedGroup) => versionedGroup
-        .MapPut("/import-batches/{id}/days/{date}/review", Handle)
+        .MapPut("/import-batches/{id}/days/review", Handle)
         .WithName("ReviewImportDay")
         .WithTags("ImportBatches")
         .MapToApiVersion(ApiVersions.V1)
@@ -24,6 +24,6 @@ public sealed class ReviewImportDayEndpoint : IEndpoint
     /// An entry that the person rejected alone stays rejected when its day is kept again.
     /// </summary>
     public static async Task<Ok<ImportDayReviewedDto>> Handle(
-        string id, DateOnly date, ImportDayReviewDto dto, IMediator mediator, CancellationToken cancellationToken)
-        => TypedResults.Ok(await mediator.Send(new ReviewImportDay.Command(id, date, dto), cancellationToken));
+        string id, ImportDayReviewDto dto, IMediator mediator, CancellationToken cancellationToken)
+        => TypedResults.Ok(await mediator.Send(new ReviewImportDay.Command(id, dto), cancellationToken));
 }

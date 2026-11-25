@@ -4,5 +4,12 @@
 */
 
 export type ImportDayReviewDto = {
+    /**
+     * @description The date of the day as `YYYY-MM-DD`. It is in the body, so that no request span holds it.
+     *
+     * Format: `date`
+     * @type string
+    */
+    date: string;
     rejected: boolean;
 };

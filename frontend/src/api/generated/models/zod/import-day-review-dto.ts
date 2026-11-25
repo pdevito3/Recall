@@ -6,5 +6,6 @@
 import * as z from 'zod'
 
 export const importDayReviewDtoSchema = z.object({
+  date: z.iso.date().describe('The date of the day as `YYYY-MM-DD`. It is in the body, so that no request span holds it.'),
   rejected: z.boolean(),
 })

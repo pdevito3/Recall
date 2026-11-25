@@ -22,4 +22,7 @@ public sealed record SessionSummaryDto
 
     /// <summary>Send it with the next metadata save. A save of a Draft does not change it.</summary>
     public uint MetadataVersion { get; init; }
+
+    /// <summary>The Import batch whose accept made the Session. Null for a Session that no import made.</summary>
+    public string? ImportBatchId { get; init; }
 }

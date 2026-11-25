@@ -45,6 +45,7 @@ public static class GetSessionPage
                     s.MentionedPersonIds,
                     s.Version,
                     s.MetadataVersion,
+                    s.ImportBatchId,
                 })
                 .ToKeysetPageAsync(request.Parameters.PageSize, cancellationToken);
 
@@ -66,6 +67,7 @@ public static class GetSessionPage
                     PersonIds = row.MentionedPersonIds,
                     Version = row.Version,
                     MetadataVersion = row.MetadataVersion,
+                    ImportBatchId = row.ImportBatchId,
                 }).ToList(),
                 NextCursor = hasMore ? new SessionCursor(page[^1].StartedAt, page[^1].Id).ToString() : null,
             };

@@ -1622,7 +1622,7 @@
         }
       }
     },
-    "/api/v1/import-batches/{id}/days/{date}/review": {
+    "/api/v1/import-batches/{id}/days/review": {
       "put": {
         "tags": [
           "ImportBatches"
@@ -1636,15 +1636,6 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
-          },
-          {
-            "name": "date",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "date"
             }
           },
           {
@@ -9256,10 +9247,16 @@
       },
       "ImportDayReviewDto": {
         "required": [
+          "date",
           "rejected"
         ],
         "type": "object",
         "properties": {
+          "date": {
+            "type": "string",
+            "description": "The date of the day as `YYYY-MM-DD`. It is in the body, so that no request span holds it.",
+            "format": "date"
+          },
           "rejected": {
             "type": "boolean"
           }
@@ -11416,6 +11413,13 @@
             "minimum": 0,
             "type": "integer",
             "description": "Send it with the next metadata save. A save of a Draft does not change it."
+          },
+          "importBatchId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The Import batch whose accept made the Session. Null for a Session that no import made."
           }
         },
         "description": "One row of the timeline. It has no Draft, so a page costs the same whatever the length of the text."

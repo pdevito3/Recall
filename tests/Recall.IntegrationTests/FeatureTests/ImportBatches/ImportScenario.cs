@@ -56,7 +56,7 @@ internal static class ImportScenario
         => WebSessionOf(owner).SendAsync(new ReviewImportEntry.Command(batchId, new ImportEntryReviewDto { ClientSessionId = id, Rejected = true }));
 
     public static Task<ImportDayReviewedDto> RejectDayAsync(User owner, string batchId, DateOnly date, bool rejected = true)
-        => WebSessionOf(owner).SendAsync(new ReviewImportDay.Command(batchId, date, new ImportDayReviewDto { Rejected = rejected }));
+        => WebSessionOf(owner).SendAsync(new ReviewImportDay.Command(batchId, new ImportDayReviewDto { Date = date, Rejected = rejected }));
 
     public static Task<ImportBatchDto> AcceptAsync(User owner, string batchId) => AcceptAsync(WebSessionOf(owner), owner, batchId);
 
