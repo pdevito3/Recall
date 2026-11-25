@@ -39,8 +39,10 @@ internal static class JournalScenario
     }
 
     public static async Task<long> CountOutOfBandAsync(string sql, params (string Name, object Value)[] parameters)
+        => await CountOutOfBandAsync(await TestBase.ExecuteDbContextAsync(db => Task.FromResult(db.Database.GetConnectionString()!)), sql, parameters);
+
+    public static async Task<long> CountOutOfBandAsync(string connectionString, string sql, params (string Name, object Value)[] parameters)
     {
-        var connectionString = await TestBase.ExecuteDbContextAsync(db => Task.FromResult(db.Database.GetConnectionString()!));
         await using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
