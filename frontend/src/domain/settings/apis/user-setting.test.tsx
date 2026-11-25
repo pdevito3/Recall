@@ -113,7 +113,7 @@ test('a new entry sends the fixed zone of the row, also when this browser does n
 test('a new entry sends no zone while the setting follows a browser that cannot name its zone, so the Server takes the zone of the row', () => {
   const resolvedOptions = Intl.DateTimeFormat.prototype.resolvedOptions
   vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockImplementation(function (this: Intl.DateTimeFormat) {
-    return { ...resolvedOptions.call(this), timeZone: undefined as unknown as string }
+    return Object.assign(resolvedOptions.call(this), { timeZone: undefined })
   })
   resetLocalTimeZone()
   try {

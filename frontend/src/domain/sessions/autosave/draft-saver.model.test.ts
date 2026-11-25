@@ -10,11 +10,11 @@ import { parseDocument } from '../editor/content'
 // A request of a tab reaches the server also while the tab is frozen. Only the answer waits until the tab wakes.
 vi.mock('@/api/generated/sessions/clients/add-session', () => ({ addSession: (request: never) => viaTab(current, () => world.addSession(request)) }))
 vi.mock('@/api/generated/sessions/clients/save-raw-draft', () => ({
-  saveRawDraft: (request: { body: { text: string; baseRevision: number } }) => {
+  saveRawDraft: (request: { path: { id: string }; body: { text: string; baseRevision: number } }) => {
     const tab = current
     return viaTab(current, async () => {
       const reply = await world.saveRaw(request as never)
-      world.noteSave?.(`tab ${tab?.name} saves "${tokensIn(request.body.text).join(' ')}" on base ${request.body.baseRevision} in ${(request as unknown as { path: { id: string } }).path.id}: ${reply.outcome}`)
+      world.noteSave?.(`tab ${tab?.name} saves "${tokensIn(request.body.text).join(' ')}" on base ${request.body.baseRevision} in ${request.path.id}: ${reply.outcome}`)
       return reply
     })
   },
@@ -296,7 +296,7 @@ class ModelLocks {
 
   managerFor(tab: Tab) {
     return {
-      request: (name: string, options: LockOptions, callback: (lock: Lock | null) => Promise<unknown>) => this.request(tab, name, options, callback),
+      request: (name: string, options: LockOptions, callback: (lock: Lock | null) => Promise<void>) => this.request(tab, name, options, callback),
       // The manager answers each tab in order, so an answer comes after each end of a lock that the manager sent the tab before.
       query: () =>
         new Promise<LockManagerSnapshot>((resolve, reject) => {
@@ -311,8 +311,8 @@ class ModelLocks {
     return this.held.get(name)?.tab ?? null
   }
 
-  private request(tab: Tab, name: string, options: LockOptions, callback: (lock: Lock | null) => Promise<unknown>) {
-    return new Promise<unknown>((resolve, reject) => {
+  private request(tab: Tab, name: string, options: LockOptions, callback: (lock: Lock | null) => Promise<void>) {
+    return new Promise<void>((resolve, reject) => {
       const ask: LockAsk = { tab, name, callback, resolve, reject }
       if (options.steal) {
         const holder = this.held.get(name)
@@ -348,9 +348,9 @@ class ModelLocks {
   private answer(ask: LockAsk, lock: Lock | null, release = () => undefined) {
     clock.set(() => asTab(ask.tab, () => {
       ask.callback(lock).then(
-        (value) => {
+        () => {
           release()
-          ask.resolve(value)
+          ask.resolve()
         },
         (error: unknown) => {
           release()
@@ -382,8 +382,8 @@ class ModelLocks {
 interface LockAsk {
   tab: Tab
   name: string
-  callback: (lock: Lock | null) => Promise<unknown>
-  resolve: (value: unknown) => void
+  callback: (lock: Lock | null) => Promise<void>
+  resolve: () => void
   reject: (error: unknown) => void
 }
 
@@ -405,7 +405,7 @@ class ModelChannels {
   }
 
   /** The answer is the words of the messages that will not come to the tab now. */
-  closeChannelsOf(tab: object) {
+  closeChannelsOf(tab: Tab) {
     const lost: unknown[] = []
     for (const message of [...this.onTheWay]) {
       if (message.to.tab !== tab) continue
