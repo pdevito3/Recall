@@ -17,6 +17,7 @@ public static class EntrypointRegistration
 {
     /// <summary>The path of the MCP streamable HTTP endpoint.</summary>
     public const string McpPath = "/mcp";
+    public const string McpTooLargeMessage = "This call is larger than 16 MB. Send less data in each call, for example fewer entries.";
 
     public static void AddEntrypoints(this WebApplicationBuilder builder)
     {
@@ -90,7 +91,7 @@ public static class EntrypointRegistration
         McpToolAccess.Validate(app.Services.GetRequiredService<IOptions<McpServerOptions>>().Value.ToolCollection ?? []);
         app.MapMcp(McpPath).RequireAuthorization().WithMetadata(
             new RequestSizeLimitAttribute(PutImportEntriesEndpoint.MaxBodyBytes),
-            new RequestTooLargeDetail(PutImportEntriesEndpoint.TooLargeMessage));
+            new RequestTooLargeDetail(McpTooLargeMessage));
         app.MapJobMcp();
         if (AuthRegistration.JwtIsOn(app.Configuration))
             app.MapMcpResourceMetadata();
