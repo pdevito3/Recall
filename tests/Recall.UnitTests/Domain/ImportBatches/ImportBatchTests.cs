@@ -64,7 +64,7 @@ public class ImportBatchTests
 
     [Test]
     [Property("Rule", "IMP-27")]
-    public void an_accept_of_more_than_10_000_kept_entries_is_refused_before_the_version_is_checked()
+    public void an_accept_of_more_than_20_000_kept_entries_is_refused_before_the_version_is_checked()
     {
         // Arrange
         var batch = Open();
@@ -74,7 +74,7 @@ public class ImportBatchTests
         var exception = Should.Throw<ValidationException>(() => batch.Accept(batch.Version + 1, entries, new HashSet<string>(), new HashSet<string>(), Now));
 
         // Assert
-        exception.Message.ShouldBe("This batch has more than 10,000 entries to accept. Split it into smaller batches, for example one for each year.");
+        exception.Message.ShouldBe("This batch has more than 20,000 entries to accept. Split it into smaller batches, for example one for each year.");
         batch.State.ShouldBe(ImportBatchState.Open);
     }
 
