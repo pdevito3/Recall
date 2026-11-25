@@ -397,13 +397,22 @@ test.describe(`Swagger - ${currentIdp.name}`, () => {
 // The live discovery document of the provider must match the capabilities in its e2e/idps/ file, so that a provider
 // upgrade that adds or drops a feature fails here and not in a feature test
 test.describe(`Provider discovery - ${currentIdp.name}`, () => {
+  /** The members of the discovery document that name a capability. A provider can leave out each one. */
+  interface DiscoveryDocument {
+    revocation_endpoint?: string
+    authorization_response_iss_parameter_supported?: boolean
+    backchannel_logout_supported?: boolean
+    end_session_endpoint?: string
+    pushed_authorization_request_endpoint?: string
+  }
+
   test('live discovery matches the capabilities of the IdP file', async ({ request }) => {
     const authority = process.env.AUTHORITY
     test.skip(!authority, 'AUTHORITY is not set. pnpm test:e2e:stack sets it from the stack.')
 
     const response = await request.get(`${authority!.replace(/\/$/, '')}/.well-known/openid-configuration`)
     expect(response.status()).toBe(200)
-    const discovery = (await response.json()) as Record<string, unknown>
+    const discovery = (await response.json()) as DiscoveryDocument
 
     const live: IdpCapabilities = {
       revocation: typeof discovery.revocation_endpoint === 'string',
@@ -425,14 +434,19 @@ test.describe(`Native app login - ${currentIdp.name}`, () => {
     expires_in: number
   }
 
+  /** The body of an answer of the token endpoint: a token pair, or the `error` of OAuth. */
+  interface TokenAnswer extends Partial<TokenPair> {
+    error?: string
+  }
+
   function appOrigin(baseURL: string | undefined): string {
     expect(baseURL, 'BASE_URL').toBeTruthy()
     return new URL(baseURL!).origin
   }
 
-  async function postToken(origin: string, form: Record<string, string>): Promise<{ status: number; body: Record<string, unknown> }> {
+  async function postToken(origin: string, form: Record<string, string>): Promise<{ status: number; body: TokenAnswer }> {
     const response = await fetch(`${origin}/auth/token`, { method: 'POST', body: new URLSearchParams(form) })
-    return { status: response.status, body: (await response.json()) as Record<string, unknown> }
+    return { status: response.status, body: (await response.json()) as TokenAnswer }
   }
 
   async function currentUserStatus(origin: string, accessToken: string): Promise<number> {
@@ -478,7 +492,7 @@ test.describe(`Native app login - ${currentIdp.name}`, () => {
       const exchange = await postToken(origin, { grant_type: 'authorization_code', code: code!, code_verifier: codeVerifier, redirect_uri: redirectUri })
       expect(exchange.status, 'the code exchange').toBe(200)
       expect(exchange.body).toMatchObject({ token_type: 'Bearer', expires_in: 900 })
-      return exchange.body as unknown as TokenPair
+      return exchange.body as TokenPair
     } finally {
       loopback.close()
     }
