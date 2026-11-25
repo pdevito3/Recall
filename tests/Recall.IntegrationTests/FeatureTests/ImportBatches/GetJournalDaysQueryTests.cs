@@ -55,6 +55,23 @@ public class GetJournalDaysQueryTests : TestBase
 
     [Test]
     [Property("Rule", "IMP-26")]
+    [Arguments("0001-01-01", "0001-01-01", "from")]
+    [Arguments("9998-12-31", "9999-12-31", "to")]
+    public async Task a_date_outside_the_calendar_of_an_import_gets_422_on_its_field(string from, string to, string field)
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+
+        // Act
+        var read = () => WebSessionOf(owner).SendAsync(new GetJournalDays.Query(DateOnly.Parse(from, System.Globalization.CultureInfo.InvariantCulture), DateOnly.Parse(to, System.Globalization.CultureInfo.InvariantCulture)));
+
+        // Assert
+        var refused = await read.ShouldThrowAsync<ValidationException>();
+        (refused.Property, refused.Message).ShouldBe((field, GetJournalDays.DatesMessage));
+    }
+
+    [Test]
+    [Property("Rule", "IMP-26")]
     public async Task a_range_of_366_days_is_allowed()
     {
         // Arrange
