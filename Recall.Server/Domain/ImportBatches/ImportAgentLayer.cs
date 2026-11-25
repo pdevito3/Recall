@@ -11,7 +11,7 @@ public sealed record ImportAgentLayer
     public const string DateFormat = "yyyy-MM-dd";
     public const int DateTextLength = 10;
 
-    public const int PositionMax = 719;
+    public const int PositionMax = ((24 - ImportStartTime.FirstPositionHour) * 60) - 1;
     public const int PositionMin = 0;
 
     public const int RawMaxLength = Session.DraftMaxLength;

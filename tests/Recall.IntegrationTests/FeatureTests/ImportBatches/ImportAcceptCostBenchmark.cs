@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Recall.Server.Databases;
@@ -17,6 +18,7 @@ using static ImportScenario;
 
 public class ImportAcceptCostBenchmark : TestBase
 {
+    private const string EntityFramework = "Microsoft.EntityFrameworkCore";
     private const int RawLength = 1_500;
     private const int EntriesPerDay = 10;
     private static readonly TimeSpan SampleInterval = TimeSpan.FromMilliseconds(20);
@@ -30,7 +32,7 @@ public class ImportAcceptCostBenchmark : TestBase
             ?? ImportBatch.AcceptMaxEntries.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
         var clock = new AcceptClock();
         await using var services = TestFixture.BuildServiceProvider(s => s
-            .AddLogging(logging => logging.AddFilter("Microsoft.EntityFrameworkCore", LogLevel.Warning))
+            .AddLogging(logging => logging.AddFilter(EntityFramework, ProductionLevelOf(EntityFramework)))
             .ConfigureDbContext<AppDbContext>((_, options) => options.AddInterceptors(clock)));
         var owner = await AddOwnerAsync();
         var batch = await OpenAsync(owner);
@@ -38,13 +40,13 @@ public class ImportAcceptCostBenchmark : TestBase
         uint version = 0;
         foreach (var call in Enumerable.Range(0, entries).Chunk(ImportBatch.PutMaxEntries))
         {
-            var put = await PutAsync(ScopeOf(owner, services), batch.Id, call.Select(i => Entry(
+            var put = await PutAsync(WebSessionOf(owner, services), batch.Id, call.Select(i => Entry(
                 $"bench-{i}", i % EntriesPerDay, raw, new DateOnly(2020, 1, 1).AddDays(i / EntriesPerDay))).ToArray());
             put.Outcomes.ShouldAllBe(o => o.Outcome == nameof(ImportPutOutcome.Added));
             version = put.Version;
         }
 
-        var scope = ScopeOf(owner, services);
+        var scope = WebSessionOf(owner, services);
         var heapBefore = GC.GetTotalMemory(forceFullCollection: true);
         var allocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
         using var sampling = new CancellationTokenSource();
@@ -60,7 +62,7 @@ public class ImportAcceptCostBenchmark : TestBase
         var peak = await peakHeap;
         var allocated = GC.GetTotalAllocatedBytes(precise: true) - allocatedBefore;
         accepted.Result!.SessionsMade.ShouldBe(entries);
-        var written = await ScopeOf(owner).ExecuteDbContextAsync(async db => (
+        var written = await WebSessionOf(owner).ExecuteDbContextAsync(async db => (
             Sessions: await db.Sessions.CountAsync(s => s.ImportBatchId == batch.Id),
             Entries: await db.ImportEntries.CountAsync(e => e.BatchId == batch.Id),
             Audit: await db.AuditEntries.IgnoreQueryFilters().CountAsync(),
@@ -74,6 +76,11 @@ public class ImportAcceptCostBenchmark : TestBase
             + $"heap_growth_mb={(peak - heapBefore) / 1048576} allocated_mb={allocated / 1048576} "
             + $"audit_rows={written.Audit} sync_rows={written.Sync}");
     }
+
+    private static LogLevel ProductionLevelOf(string category)
+        => Enum.Parse<LogLevel>(new ConfigurationBuilder()
+            .AddJsonFile(Path.Combine(AppContext.BaseDirectory, "appsettings.json"))
+            .Build()[$"Serilog:MinimumLevel:Override:{category}"]!);
 
     private static string RawOfLength(int length)
     {

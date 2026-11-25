@@ -61,10 +61,10 @@ public static class AcceptImportBatch
                     .Select(c => c.ClientSessionId!)
                     .ToListAsync(ct);
 
-                var sessions = batch.Accept(request.Dto.Version, entries, sessionIds.ToHashSet(StringComparer.Ordinal),
+                var accept = batch.Accept(request.Dto.Version, entries, sessionIds.ToHashSet(StringComparer.Ordinal),
                     tombstoneIds.ToHashSet(StringComparer.Ordinal), timeProvider.GetUtcNow());
-                await dbContext.Sessions.AddRangeAsync(sessions, ct);
-                dbContext.ImportEntries.RemoveRange(entries);
+                await dbContext.Sessions.AddRangeAsync(accept.Sessions, ct);
+                dbContext.ImportEntries.RemoveRange(accept.Removed);
                 var result = batch.Result;
                 dbContext.RecordAction(new ImportBatchAccepted(AuditSubject.Of(batch), result.SessionsMade, result.EntriesRejected,
                     result.DaysRejected, result.SkippedInJournal, result.SkippedDeleted));

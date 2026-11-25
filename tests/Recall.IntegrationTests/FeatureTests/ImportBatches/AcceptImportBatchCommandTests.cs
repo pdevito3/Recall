@@ -38,18 +38,18 @@ public class AcceptImportBatchCommandTests : TestBase
         // Assert
         accepted.State.ShouldBe("Accepted");
         accepted.Result.ShouldBe(new ImportAcceptResultDto { SessionsMade = 3, EntriesRejected = 1 });
-        var sessions = await ScopeOf(owner).ExecuteDbContextAsync(db => db.Sessions.OrderBy(s => s.StartedAt).ToListAsync());
+        var sessions = await WebSessionOf(owner).ExecuteDbContextAsync(db => db.Sessions.OrderBy(s => s.StartedAt).ToListAsync());
         sessions.Select(s => (s.ClientSessionId, s.StartedAt.UtcDateTime, s.TimeZone, s.ImportBatchId)).ShouldBe([
             ("noon", new DateTime(2024, 3, 1, 18, 0, 0, DateTimeKind.Utc), "America/Chicago", batch.Id),
             ("after", new DateTime(2024, 3, 1, 18, 2, 0, DateTimeKind.Utc), "America/Chicago", batch.Id),
             ("evening", new DateTime(2024, 3, 2, 3, 0, 0, DateTimeKind.Utc), "America/Chicago", batch.Id),
         ]);
-        var after = await ScopeOf(owner).SendAsync(new GetSession.Query(sessions[1].Id));
+        var after = await WebSessionOf(owner).SendAsync(new GetSession.Query(sessions[1].Id));
         (after.RawDraftRevision, after.RawLatestRevision, after.CleanupStatus).ShouldBe((1, 1, "NotRun"));
         after.RawText.ShouldContain("words");
         after.Moods.ShouldBe(["Calm"]);
         after.Topics.ShouldBe([new SessionTopicDto { Name = "work", Provenance = "AiSuggested" }]);
-        var left = await ScopeOf(owner).ExecuteDbContextAsync(async db =>
+        var left = await WebSessionOf(owner).ExecuteDbContextAsync(async db =>
             (await db.ImportEntries.CountAsync(), await db.ImportDays.CountAsync(), await db.People.CountAsync()));
         left.ShouldBe((0, 0, 0));
     }
@@ -61,7 +61,7 @@ public class AcceptImportBatchCommandTests : TestBase
     {
         // Arrange
         var owner = await AddOwnerAsync();
-        await ScopeOf(owner).SendAsync(new ChangeUserSetting.Command(new UserSettingChangeDto
+        await WebSessionOf(owner).SendAsync(new ChangeUserSetting.Command(new UserSettingChangeDto
         {
             TimeZoneMode = "Fixed", TimeZone = "Asia/Tokyo", LocationCaptureEnabled = false, RequirePeopleProposalApproval = true, Version = 0,
         }));
@@ -72,10 +72,10 @@ public class AcceptImportBatchCommandTests : TestBase
         await AcceptAsync(owner, batch.Id);
 
         // Assert
-        var sessions = await ScopeOf(owner).ExecuteDbContextAsync(db => db.Sessions.OrderBy(s => s.ClientSessionId).ToListAsync());
+        var sessions = await WebSessionOf(owner).ExecuteDbContextAsync(db => db.Sessions.OrderBy(s => s.ClientSessionId).ToListAsync());
         sessions.Select(s => (s.ClientSessionId, s.TimeZone)).ShouldBe([("batch", "America/Chicago"), ("own", "Europe/Paris")]);
         foreach (var session in sessions)
-            (await ScopeOf(owner).SendAsync(new GetSession.Query(session.Id))).JournalingDay.ShouldBe(Day);
+            (await WebSessionOf(owner).SendAsync(new GetSession.Query(session.Id))).JournalingDay.ShouldBe(Day);
     }
 
     [Test]
@@ -86,7 +86,7 @@ public class AcceptImportBatchCommandTests : TestBase
         var owner = await AddOwnerAsync();
         var batch = await OpenAsync(owner);
         await PutAsync(owner, batch.Id, Entry("device", 0), Entry("gone", 1), Entry("kept", 2));
-        var scope = ScopeOf(owner);
+        var scope = WebSessionOf(owner);
         var device = await scope.SendAsync(new AddSession.Command(new SessionForCreationDto { ClientSessionId = "device", StartedAt = DateTimeOffset.UtcNow.AddDays(-1) }));
         var gone = await scope.SendAsync(new AddSession.Command(new SessionForCreationDto { ClientSessionId = "gone", StartedAt = DateTimeOffset.UtcNow.AddDays(-1) }));
         await scope.SendAsync(new DeleteSession.Command(gone.Session.Id));
@@ -96,7 +96,7 @@ public class AcceptImportBatchCommandTests : TestBase
 
         // Assert
         accepted.Result.ShouldBe(new ImportAcceptResultDto { SessionsMade = 1, SkippedInJournal = 1, SkippedDeleted = 1 });
-        var sessions = await ScopeOf(owner).ExecuteDbContextAsync(db => db.Sessions.OrderBy(s => s.ClientSessionId).ToListAsync());
+        var sessions = await WebSessionOf(owner).ExecuteDbContextAsync(db => db.Sessions.OrderBy(s => s.ClientSessionId).ToListAsync());
         sessions.Select(s => (s.ClientSessionId, s.ImportBatchId)).ShouldBe([("device", null), ("kept", batch.Id)]);
         sessions[0].Id.ShouldBe(device.Session.Id);
     }
@@ -112,12 +112,12 @@ public class AcceptImportBatchCommandTests : TestBase
         await PutAsync(owner, batch.Id, Entry("b", 1));
 
         // Act
-        var accept = () => ScopeOf(owner).SendAsync(new AcceptImportBatch.Command(batch.Id, new ImportBatchAcceptDto { Version = put.Version }));
+        var accept = () => WebSessionOf(owner).SendAsync(new AcceptImportBatch.Command(batch.Id, new ImportBatchAcceptDto { Version = put.Version }));
 
         // Assert
         (await accept.ShouldThrowAsync<StaleVersionException>()).Message.ShouldBe(ImportBatch.ChangedMessage);
         (await EntriesAsync(owner, batch.Id)).Entries.Count.ShouldBe(2);
-        (await ScopeOf(owner).ExecuteDbContextAsync(db => db.Sessions.CountAsync())).ShouldBe(0);
+        (await WebSessionOf(owner).ExecuteDbContextAsync(db => db.Sessions.CountAsync())).ShouldBe(0);
     }
 
     [Test]
@@ -173,7 +173,7 @@ public class AcceptImportBatchCommandTests : TestBase
     {
         // Arrange
         var owner = await AddOwnerAsync();
-        var settings = await ScopeOf(owner).SendAsync(new ChangeImportReview.Command(new ImportReviewChangeDto { RequireImportReview = false, Version = 0 }));
+        var settings = await WebSessionOf(owner).SendAsync(new ChangeImportReview.Command(new ImportReviewChangeDto { RequireImportReview = false, Version = 0 }));
         var batch = await OpenAsync(owner);
         await PutAsync(owner, batch.Id, Entry("a", 0), Entry("b", 1), Entry("c", 0, date: Day.AddDays(1)));
         await RejectAsync(owner, batch.Id, "b");
@@ -192,8 +192,8 @@ public class AcceptImportBatchCommandTests : TestBase
         JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(action.Data)!.Select(p => $"{p.Key}={p.Value}").Order().ShouldBe([
             "DaysRejected=1", "EntriesRejected=2", "SessionsMade=1", "SkippedDeleted=0", "SkippedInJournal=0",
         ]);
-        var session = await ScopeOf(owner).ExecuteDbContextAsync(db => db.Sessions.SingleAsync());
-        var insert = await ScopeOf(owner).ExecuteDbContextAsync(db => db.AuditEntries.IgnoreQueryFilters()
+        var session = await WebSessionOf(owner).ExecuteDbContextAsync(db => db.Sessions.SingleAsync());
+        var insert = await WebSessionOf(owner).ExecuteDbContextAsync(db => db.AuditEntries.IgnoreQueryFilters()
             .SingleAsync(e => e.EntityId == session.Id && e.Kind == AuditEntryKind.Created));
         insert.RecordId.ShouldBe(action.RecordId);
         insert.Data.ShouldNotContain("words");
@@ -212,7 +212,7 @@ public class AcceptImportBatchCommandTests : TestBase
         var discarded = await OpenAsync(owner);
         await PutAsync(owner, discarded.Id, Entry("discarded", 0));
         await RejectAsync(owner, discarded.Id, "discarded");
-        await ScopeOf(owner).SendAsync(new DiscardImportBatch.Command(discarded.Id));
+        await WebSessionOf(owner).SendAsync(new DiscardImportBatch.Command(discarded.Id));
         var later = await OpenAsync(owner);
 
         // Act
@@ -220,7 +220,7 @@ public class AcceptImportBatchCommandTests : TestBase
 
         // Assert
         OutcomesOf(put).ShouldBe([("rejected", "Added"), ("discarded", "Added"), ("kept", "InJournal")]);
-        var rows = await ScopeOf(owner).ExecuteDbContextAsync(async db => (
+        var rows = await WebSessionOf(owner).ExecuteDbContextAsync(async db => (
             await db.SyncChanges.CountAsync(c => c.IsTombstone),
             await db.ImportBatches.Select(b => b.Id).ToListAsync()));
         rows.Item1.ShouldBe(0);
@@ -236,7 +236,7 @@ public class AcceptImportBatchCommandTests : TestBase
         var batch = await OpenAsync(owner);
         await PutAsync(owner, batch.Id, Entry("a", 0));
         var accepted = await AcceptAsync(owner, batch.Id);
-        var scope = ScopeOf(owner);
+        var scope = WebSessionOf(owner);
 
         // Act
         Func<Task>[] writes =
@@ -293,7 +293,7 @@ public class AcceptImportBatchCommandTests : TestBase
     }
 
     private static Task<List<AuditEntry>> ActionsOfAsync(User owner, string batchId)
-        => ScopeOf(owner).ExecuteDbContextAsync(db => db.AuditEntries.IgnoreQueryFilters()
+        => WebSessionOf(owner).ExecuteDbContextAsync(db => db.AuditEntries.IgnoreQueryFilters()
             .Where(e => e.RootId == batchId && e.Kind == AuditEntryKind.Action)
             .ToListAsync());
 }

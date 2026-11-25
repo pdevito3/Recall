@@ -433,18 +433,14 @@ public class EndpointAccessSweepTests : TestBase
             $"lpr_{Guid.NewGuid():N}", "protected", DateTimeOffset.UnixEpoch);
         await InsertAsync(loginProvider);
         var batch = ImportBatch.Open(tenant.Id, admin.Id, "Sweep batch", "UTC", DateTimeOffset.UnixEpoch);
-        var put = batch.Put(
-            [ImportPutEntry.Parse(SchemaSample.ImportEntryId, () => ImportAgentLayer.Of("1970-01-01", 0, null, null, "sweep words", null, null))],
-            [], new HashSet<string>(), new HashSet<string>(), DateTimeOffset.UtcNow);
+        var entry = ImportEntry.Add(batch, SchemaSample.ImportEntryId, ImportAgentLayer.Of("1970-01-01", 0, null, null, "sweep words", null, null));
         await ExecuteDbContextAsync(db =>
         {
             db.ImportBatches.Add(batch);
-            db.ImportEntries.AddRange(put.Added);
+            db.ImportEntries.Add(entry);
             return db.SaveChangesAsync();
         });
-        var setting = UserSetting.DefaultsFor(tenant.Id, admin.Id);
-        setting.ChangeImportReview(false, setting.Version);
-        await InsertAsync(setting);
+        await InsertAsync(SettingThatLetsANativeSessionAccept(tenant.Id, admin.Id));
         // new-feature:sweep-inserts
 
         var idsByKind = new Dictionary<string, string>
@@ -464,6 +460,13 @@ public class EndpointAccessSweepTests : TestBase
             // new-feature:sweep-ids
         };
         return new TenantRecords(member, admin, new RecordIds(idsByKind, otherUser.Identifier));
+    }
+
+    private static UserSetting SettingThatLetsANativeSessionAccept(string tenantId, string userId)
+    {
+        var setting = UserSetting.DefaultsFor(tenantId, userId);
+        setting.ChangeImportReview(false, setting.Version);
+        return setting;
     }
 
     // ...Domain.AuditEntries.Features gives audit-entries, and ...Domain.Tenants.Features gives tenants

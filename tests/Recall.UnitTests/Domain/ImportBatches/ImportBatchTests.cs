@@ -88,7 +88,7 @@ public class ImportBatchTests
         batch.ReviewDay(Day, rejected: true);
 
         // Act
-        var sessions = batch.Accept(batch.Version, entries, new HashSet<string>(), new HashSet<string>(), Now);
+        var sessions = batch.Accept(batch.Version, entries, new HashSet<string>(), new HashSet<string>(), Now).Sessions;
 
         // Assert
         sessions.Count.ShouldBe(ImportBatch.AcceptMaxEntries + 1 - 720);
@@ -119,10 +119,11 @@ public class ImportBatchTests
         var entries = ThreeIds.Select((id, i) => Entry(batch, id, i)).ToList();
 
         // Act
-        var sessions = batch.Accept(batch.Version, entries, new HashSet<string> { "in-journal" }, new HashSet<string> { "deleted" }, Now);
+        var accept = batch.Accept(batch.Version, entries, new HashSet<string> { "in-journal" }, new HashSet<string> { "deleted" }, Now);
 
         // Assert
-        sessions.Select(s => s.ClientSessionId).ShouldBe(["kept"]);
+        accept.Sessions.Select(s => s.ClientSessionId).ShouldBe(["kept"]);
+        accept.Removed.ShouldBe(entries);
         batch.Result.ShouldBe(new ImportAcceptResult(1, 0, 0, 1, 1));
     }
 
@@ -135,7 +136,7 @@ public class ImportBatchTests
         var entry = ImportEntry.Add(batch, "lake", ImportAgentLayer.Of("2024-03-31", 1, "21:00", null, "At the *lake*", ["calm"], ["Lake"]));
 
         // Act
-        var session = batch.Accept(batch.Version, [entry], new HashSet<string>(), new HashSet<string>(), Now).Single();
+        var session = batch.Accept(batch.Version, [entry], new HashSet<string>(), new HashSet<string>(), Now).Sessions.Single();
 
         // Assert
         session.ClientSessionId.ShouldBe("lake");

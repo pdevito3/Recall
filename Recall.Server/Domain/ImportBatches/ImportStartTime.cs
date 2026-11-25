@@ -4,7 +4,9 @@ using TimeZones;
 
 public static class ImportStartTime
 {
-    public static readonly TimeOnly FirstPosition = new(12, 0);
+    public const int FirstPositionHour = 12;
+
+    public static readonly TimeOnly FirstPosition = new(FirstPositionHour, 0);
 
     // The longest gap of the tz database is a whole day, when Pacific/Apia moved across the date line in 2011.
     private const int MostMinutesInAGap = 24 * 60;
