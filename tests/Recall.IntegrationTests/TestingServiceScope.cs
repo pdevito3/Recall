@@ -119,11 +119,9 @@ public class TestingServiceScope
     public void SetDelegatedClient(string userIdentifier, string clientId)
         => SetToken([new Claim("sub", userIdentifier), new Claim("azp", clientId)], userIdentifier, clientId);
 
-    /// <summary>Sets up a session of the app for the user with this identifier, as a person who signed in to Recall.</summary>
     public void SetAppSession(string identifier, SessionKind kind)
         => SetPrincipal(AppSessionHandler.PrincipalOf(new SessionPrincipal(EntityId.New(AuthSession.IdPrefix), identifier, kind, DateTimeOffset.MaxValue)));
 
-    /// <summary>Sets up a personal access token of the user with this identifier.</summary>
     public void SetPersonalAccessToken(string identifier, TokenGrant grant)
         => SetPrincipal(new PatClaims(EntityId.New(PatClaims.IdPrefix), grant).PrincipalOf(identifier));
 

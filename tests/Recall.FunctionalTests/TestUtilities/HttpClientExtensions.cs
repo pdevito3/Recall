@@ -33,10 +33,6 @@ public static class HttpClientExtensions
     /// <summary>Signs in as a native session of the app for the user with this identifier, as a person who signed in to Recall.</summary>
     public static void SignInAsAppSession(this HttpClient client, string subject) => client.SignInAsAppSession(subject, SessionKind.Native);
 
-    /// <summary>
-    /// Signs in as a web session of the app for the user with this identifier, as a page of Recall in a browser. It sends
-    /// the user of the page, as the SPA does.
-    /// </summary>
     public static void SignInAsWebSession(this HttpClient client, string subject)
     {
         client.SignInAsAppSession(subject, SessionKind.Web);

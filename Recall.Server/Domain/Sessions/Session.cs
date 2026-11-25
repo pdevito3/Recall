@@ -86,7 +86,7 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
 
     [Sensitive] public double? Longitude { get; private set; }
 
-    /// <summary>The batch whose accept made this Session, or null (IMP-14). It has no foreign key, so its column needs no rebuild of the table (IMP-15).</summary>
+    /// <summary>No foreign key, because EF Core adds one to a SQLite table only with a rebuild of the table (IMP-15).</summary>
     [NotSensitive] public string? ImportBatchId { get; private set; }
 
     public DateOnly JournalingDay => JournalingDayOf(StartedAt, TimeZone);
@@ -130,7 +130,6 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         };
     }
 
-    /// <summary>The Session of a kept entry of an accept (IMP-14): Raw is Revision 1, no Cleanup ran, and it names its batch.</summary>
     public static Session Import(
         string tenantId, string userId, string clientSessionId, DateTimeOffset startedAt, TimeZoneId zone, string raw,
         IReadOnlyList<string> moods, IReadOnlyList<string> aiTopics, string importBatchId, DateTimeOffset now)
@@ -143,7 +142,6 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
         return session;
     }
 
-    /// <exception cref="ValidationException">The ID is blank, is too long, or has a character that is not allowed.</exception>
     public static void CheckClientSessionId(string clientSessionId)
     {
         ValidationException.ThrowWhenNullOrWhitespace(clientSessionId, ClientSessionIdField, "Please provide a client session ID.");

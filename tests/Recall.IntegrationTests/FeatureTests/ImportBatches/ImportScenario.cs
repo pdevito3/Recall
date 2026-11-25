@@ -21,7 +21,6 @@ internal static class ImportScenario
         return owner;
     }
 
-    /// <summary>A web session of the owner: the one caller that accepts while the import review is on.</summary>
     public static TestingServiceScope ScopeOf(User owner, IServiceProvider? services = null)
     {
         var scope = services is null ? new TestingServiceScope() : new TestingServiceScope(services);

@@ -2,10 +2,6 @@ namespace Recall.Server.Domain.ImportBatches;
 
 using TimeZones;
 
-/// <summary>
-/// The start of an entry (IMP-7): the time of the person, else the time of the agent, else 12:00 plus one minute for each
-/// position, on the date of the entry in its zone. No row stores it, so a change of one entry never moves another.
-/// </summary>
 public static class ImportStartTime
 {
     public static readonly TimeOnly FirstPosition = new(12, 0);

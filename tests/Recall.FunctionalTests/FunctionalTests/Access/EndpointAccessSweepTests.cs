@@ -440,7 +440,6 @@ public class EndpointAccessSweepTests : TestBase
             db.ImportEntries.AddRange(put.Added);
             return db.SaveChangesAsync();
         });
-        // The accept of the control call comes from a native session, which the import review refuses
         var setting = UserSetting.DefaultsFor(tenant.Id, admin.Id);
         setting.ChangeImportReview(false, setting.Version);
         await InsertAsync(setting);

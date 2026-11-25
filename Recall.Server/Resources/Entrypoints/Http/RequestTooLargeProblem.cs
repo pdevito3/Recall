@@ -32,5 +32,4 @@ public static class RequestTooLargeProblem
         });
 }
 
-/// <summary>The detail of the 413 of an endpoint whose body is not a file.</summary>
 public sealed record RequestTooLargeDetail(string Detail);

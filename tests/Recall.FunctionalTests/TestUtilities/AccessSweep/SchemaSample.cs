@@ -8,10 +8,8 @@ public static class SchemaSample
 {
     private static readonly Dictionary<string, string> StringsThatARuleChecksAgainstAList = new() { ["timeZone"] = "UTC" };
 
-    /// <summary>The entry that a review names in its body. The sweep puts an entry with this ID in each batch.</summary>
     public const string ImportEntryId = "sweep-import-entry";
 
-    // A body that names its record in a field, and not in the route, names the record that the sweep made
     private static readonly Dictionary<string, string> StringsThatNameARecord = new() { ["clientSessionId"] = ImportEntryId };
 
     // A rule needs one of two optional values, so the sample sends this one. The dates of the sample are in the past.
