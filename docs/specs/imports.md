@@ -64,7 +64,7 @@ An accept deletes the `ImportEntry` and `ImportDay` rows. The `ImportBatch` row 
 | IMP-24 (later) | A delete of a User, also through a delete of the tenant, removes each batch of the User and its rows. | | `users_purge_journal` deletes from `import_entries`, `import_days`, and `import_batches` |
 | IMP-25 (later) | No word of an entry, no name of a batch, and no Raw reaches a log, a span, or an audit value. | `AuditModel`, each handler | Test with a marker through each import route |
 | IMP-26 (later) | A list of journal days gives each Journaling day from a start date to an end date, both included, that has a Session, with the count of its Sessions. A range of more than 366 days, or an end before the start, gives 422. The agent uses it to find an overlap with the journal. | `GetJournalDays` | |
-| IMP-27 (later) | An accept of more than 10,000 kept entries gives 422 and changes nothing, so that one accept ends inside the 30 s limit of the writer. The person splits the batch, for example by year. | `ImportBatch.Accept` | |
+| IMP-27 (later) | An accept of more than 20,000 kept entries gives 422 and changes nothing, so that one accept ends inside the 30 s limit of the writer. The person splits the batch, for example by year. | `ImportBatch.Accept` | |
 | IMP-28 (later) | The outcome of a put entry is the first that applies: `Invalid` with the field and the reason, `InJournal`, `Deleted`, `InOtherBatch`, `InTheFuture`, `PositionTaken`, `Rejected`, `Unchanged`, `Changed`, `Added`. `Invalid` covers a Client session ID that is blank or has more than 100 characters, a date that is not valid, a position outside 0 to 719, a time that is not `HH:mm`, a zone of IMP-10, a Raw of IMP-11, and Moods or Topics over the limits of a Session (50 values of at most 100 characters). Only `Rejected`, `Changed`, and `Added` store the agent layer. A whole call gets 422 when it names one Client session ID twice or holds more than 500 entries, and 413 when its HTTP body, on REST or on `/mcp`, is more than 16 MB. | `PutImportEntries`, `ImportPutOutcome` | |
 | IMP-29 (later) | A Session read carries `importBatchId`, null for a Session that no import made. The Sync feed does not carry it. | `SessionMapper` | |
 | IMP-30 (later) | The `recall-import` skill names exactly the MCP tools of the import. | `frontend/src/domain/imports/recall-import.md` | A test that compares the skill with the tool list |
@@ -105,7 +105,7 @@ The review routes have no MCP tool, because the review is the work of the person
 | IMP-19 | 403 | Only you can change the import review, in Recall in a browser. |
 | IMP-23 | 409 | This batch is in your journal, so it cannot change. |
 | IMP-26 | 422 | Pick a range of at most 366 days, with the end on or after the start. |
-| IMP-27 | 422 | This batch has more than 10,000 entries to accept. Split it into smaller batches, for example one for each year. |
+| IMP-27 | 422 | This batch has more than 20,000 entries to accept. Split it into smaller batches, for example one for each year. |
 | IMP-28 | 422 | Send each entry once, and at most 500 entries in one call. |
 | IMP-28 | 413 | This call is larger than 16 MB. Send fewer entries in each call. |
 
@@ -122,6 +122,4 @@ The review routes have no MCP tool, because the review is the work of the person
 
 ## 8. Open decisions
 
-| Question | Who decides | Rules that wait |
-|---|---|---|
-| The limit of 10,000 entries for one accept. The probe of 2026-11-14 put the edge near 20,000 on a laptop, and a NAS is slower. The probe did not hold the entry deletes, their audit entries, or the Sync feed lines of a real accept, so Phase 2 measures a full accept first. Decision 4 of the operator gives a batch no size limit, and this limit is on the accept only. | The operator, after the measure of Phase 2 | IMP-27 |
+None. On 2026-11-25 the operator set the limit of IMP-27 at 20,000 kept entries, after the measure of Phase 2.
