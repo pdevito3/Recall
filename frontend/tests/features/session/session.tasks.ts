@@ -22,7 +22,7 @@ export function sessionPage(page: Page) {
         rendered = true
       })
       await page.addInitScript(() => {
-        const report = (window as unknown as { reportRender: () => void }).reportRender
+        const report = window.reportRender
         new MutationObserver(() => {
           if (document.getElementById('root')?.hasChildNodes()) report()
         }).observe(document, { childList: true, subtree: true })
@@ -41,12 +41,8 @@ export function sessionPage(page: Page) {
         navigations += 1
       })
       await page.addInitScript((loginPath) => {
-        const { navigation, reportLoginNavigation } = window as unknown as {
-          navigation: EventTarget
-          reportLoginNavigation: () => void
-        }
-        navigation.addEventListener('navigate', (event) => {
-          const { destination } = event as unknown as { destination: { url: string } }
+        const { navigation, reportLoginNavigation } = window
+        navigation.addEventListener('navigate', ({ destination }) => {
           if (new URL(destination.url).pathname === loginPath) reportLoginNavigation()
         })
       }, authPaths.login)
@@ -79,7 +75,7 @@ export function sessionPage(page: Page) {
         toasted = true
       })
       await page.evaluate(() => {
-        const report = (window as unknown as { reportToast: () => void }).reportToast
+        const report = window.reportToast
         new MutationObserver(() => {
           if (document.querySelector('[role="alertdialog"]')) report()
         }).observe(document.body, { childList: true, subtree: true })
@@ -152,7 +148,7 @@ export function sessionPage(page: Page) {
       await page.goto('/')
       await expect(at.navigation).toBeVisible()
       await page.evaluate(() => {
-        ;(window as unknown as { firstLoadMark: boolean }).firstLoadMark = true
+        window.firstLoadMark = true
       })
       await page.goto('/about')
       await expect(at.navigation).toBeVisible()
@@ -174,7 +170,7 @@ export function sessionPage(page: Page) {
 
     /** A poll can read during the new load, and that read fails. The next read decides. */
     isStillTheFirstLoad() {
-      return page.evaluate(() => (window as unknown as { firstLoadMark?: boolean }).firstLoadMark === true).catch(() => true)
+      return page.evaluate(() => window.firstLoadMark === true).catch(() => true)
     },
 
     async screenShowsOneColor() {

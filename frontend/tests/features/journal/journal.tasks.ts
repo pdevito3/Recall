@@ -54,11 +54,11 @@ export function journalPage(page: Page) {
 
     async markTheEditor() {
       await at.composer.evaluate((editor) => {
-        ;(window as unknown as { markedEditor: Element }).markedEditor = editor
+        window.markedEditor = editor
       })
     },
 
-    isTheSameEditor: () => at.composer.evaluate((editor) => (window as unknown as { markedEditor: Element }).markedEditor === editor),
+    isTheSameEditor: () => at.composer.evaluate((editor) => window.markedEditor === editor),
 
     aReadOfTheSettingsAnswered() {
       return page.waitForResponse((r) => r.request().method() === 'GET' && new URL(r.url()).pathname === settingsPaths.mine)
@@ -186,11 +186,11 @@ export function entryPage(page: Page) {
     /** A mark in the window of the page, which a reload or a page load clears. */
     async markThePage() {
       await page.evaluate(() => {
-        ;(window as unknown as { markedPage: boolean }).markedPage = true
+        window.markedPage = true
       })
     },
 
-    isTheSamePage: () => page.evaluate(() => (window as unknown as { markedPage?: boolean }).markedPage === true),
+    isTheSamePage: () => page.evaluate(() => window.markedPage === true),
 
     async goToAnotherEntryThroughTheJournal(preview: string) {
       await at.journalLink.click()
