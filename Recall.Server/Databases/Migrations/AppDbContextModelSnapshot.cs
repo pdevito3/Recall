@@ -682,6 +682,281 @@ namespace Recall.Server.Databases.Migrations
                     b.ToTable("corrections", (string)null);
                 });
 
+            modelBuilder.Entity("Recall.Server.Domain.ImportBatches.ImportBatch", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id")
+                        .UseCollation("BINARY");
+
+                    b.Property<string>("AcceptedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("accepted_at");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("LastModifiedOn")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_modified_on");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<string>("OpenedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("opened_at");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("state");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("tenant_id")
+                        .UseCollation("BINARY");
+
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("time_zone");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id")
+                        .UseCollation("BINARY");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.ComplexProperty(typeof(Dictionary<string, object>), "Result", "Recall.Server.Domain.ImportBatches.ImportBatch.Result#ImportAcceptResult", b1 =>
+                        {
+                            b1.IsRequired();
+
+                            b1.Property<int>("DaysRejected")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("days_rejected");
+
+                            b1.Property<int>("EntriesRejected")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("entries_rejected");
+
+                            b1.Property<int>("SessionsMade")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("sessions_made");
+
+                            b1.Property<int>("SkippedDeleted")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("skipped_deleted");
+
+                            b1.Property<int>("SkippedInJournal")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("skipped_in_journal");
+                        });
+
+                    b.HasKey("Id")
+                        .HasName("pk_import_batches");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_import_batches_tenant_id");
+
+                    b.HasIndex("UserId", "OpenedAt")
+                        .HasDatabaseName("ix_import_batches_user_id_opened_at");
+
+                    b.ToTable("import_batches", (string)null);
+                });
+
+            modelBuilder.Entity("Recall.Server.Domain.ImportBatches.ImportDay", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id")
+                        .UseCollation("BINARY");
+
+                    b.Property<string>("BatchId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("batch_id")
+                        .UseCollation("BINARY");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("date");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("LastModifiedOn")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_modified_on");
+
+                    b.Property<bool>("Rejected")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("rejected");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id")
+                        .UseCollation("BINARY");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_import_days");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_import_days_user_id");
+
+                    b.HasIndex("BatchId", "Date")
+                        .IsUnique()
+                        .HasDatabaseName("ix_import_days_batch_id_date");
+
+                    b.ToTable("import_days", (string)null);
+                });
+
+            modelBuilder.Entity("Recall.Server.Domain.ImportBatches.ImportEntry", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id")
+                        .UseCollation("BINARY");
+
+                    b.Property<string>("BatchId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("batch_id")
+                        .UseCollation("BINARY");
+
+                    b.Property<string>("ClientSessionId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("client_session_id");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("LastModifiedOn")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_modified_on");
+
+                    b.Property<bool>("TimeChangedAfterEdit")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("time_changed_after_edit");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id")
+                        .UseCollation("BINARY");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.Property<bool>("WordsChangedAfterEdit")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("words_changed_after_edit");
+
+                    b.ComplexProperty(typeof(Dictionary<string, object>), "Agent", "Recall.Server.Domain.ImportBatches.ImportEntry.Agent#ImportAgentLayer", b1 =>
+                        {
+                            b1.IsRequired();
+
+                            b1.Property<DateOnly>("Date")
+                                .HasColumnType("TEXT")
+                                .HasColumnName("date");
+
+                            b1.PrimitiveCollection<string>("Moods")
+                                .IsRequired()
+                                .HasMaxLength(30150)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("moods");
+
+                            b1.Property<int>("Position")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("position");
+
+                            b1.Property<string>("Raw")
+                                .IsRequired()
+                                .HasMaxLength(1000000)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("raw");
+
+                            b1.Property<TimeOnly?>("Time")
+                                .HasColumnType("TEXT")
+                                .HasColumnName("time");
+
+                            b1.Property<string>("TimeZone")
+                                .HasMaxLength(100)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("time_zone");
+
+                            b1.PrimitiveCollection<string>("Topics")
+                                .IsRequired()
+                                .HasMaxLength(30150)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("topics");
+                        });
+
+                    b.ComplexProperty(typeof(Dictionary<string, object>), "Review", "Recall.Server.Domain.ImportBatches.ImportEntry.Review#ImportReview", b1 =>
+                        {
+                            b1.IsRequired();
+
+                            b1.Property<bool>("Rejected")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("review_rejected");
+
+                            b1.Property<TimeOnly?>("Time")
+                                .HasColumnType("TEXT")
+                                .HasColumnName("review_time");
+
+                            b1.Property<string>("Words")
+                                .HasMaxLength(4000000)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("review_words");
+                        });
+
+                    b.HasKey("Id")
+                        .HasName("pk_import_entries");
+
+                    b.HasIndex("BatchId")
+                        .HasDatabaseName("ix_import_entries_batch_id");
+
+                    b.HasIndex("UserId", "ClientSessionId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_import_entries_user_id_client_session_id");
+
+                    b.ToTable("import_entries", (string)null);
+                });
+
             modelBuilder.Entity("Recall.Server.Domain.LoginProviders.LoginProvider", b =>
                 {
                     b.Property<string>("Id")
@@ -1254,6 +1529,12 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("client_session_id");
 
+                    b.Property<string>("ImportBatchId")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("import_batch_id")
+                        .UseCollation("BINARY");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("INTEGER")
                         .HasColumnName("is_deleted");
@@ -1407,6 +1688,9 @@ namespace Recall.Server.Databases.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_sessions");
+
+                    b.HasIndex("ImportBatchId")
+                        .HasDatabaseName("ix_sessions_import_batch_id");
 
                     b.HasIndex("TenantId")
                         .HasDatabaseName("ix_sessions_tenant_id");
@@ -1637,6 +1921,10 @@ namespace Recall.Server.Databases.Migrations
                     b.Property<bool>("RemoveFillerWords")
                         .HasColumnType("INTEGER")
                         .HasColumnName("remove_filler_words");
+
+                    b.Property<bool>("RequireImportReview")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("require_import_review");
 
                     b.Property<bool>("RequirePeopleProposalApproval")
                         .HasColumnType("INTEGER")
@@ -1904,6 +2192,61 @@ namespace Recall.Server.Databases.Migrations
                         .HasConstraintName("fk_corrections_users_user_id");
                 });
 
+            modelBuilder.Entity("Recall.Server.Domain.ImportBatches.ImportBatch", b =>
+                {
+                    b.HasOne("Recall.Server.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.ClientNoAction)
+                        .IsRequired()
+                        .HasConstraintName("fk_import_batches_tenants_tenant_id");
+
+                    b.HasOne("Recall.Server.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.ClientNoAction)
+                        .IsRequired()
+                        .HasConstraintName("fk_import_batches_users_user_id");
+                });
+
+            modelBuilder.Entity("Recall.Server.Domain.ImportBatches.ImportDay", b =>
+                {
+                    b.HasOne("Recall.Server.Domain.ImportBatches.ImportBatch", "Batch")
+                        .WithMany("Days")
+                        .HasForeignKey("BatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_import_days_import_batches_batch_id");
+
+                    b.HasOne("Recall.Server.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.ClientNoAction)
+                        .IsRequired()
+                        .HasConstraintName("fk_import_days_users_user_id");
+
+                    b.Navigation("Batch");
+                });
+
+            modelBuilder.Entity("Recall.Server.Domain.ImportBatches.ImportEntry", b =>
+                {
+                    b.HasOne("Recall.Server.Domain.ImportBatches.ImportBatch", "Batch")
+                        .WithMany()
+                        .HasForeignKey("BatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_import_entries_import_batches_batch_id");
+
+                    b.HasOne("Recall.Server.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.ClientNoAction)
+                        .IsRequired()
+                        .HasConstraintName("fk_import_entries_users_user_id");
+
+                    b.Navigation("Batch");
+                });
+
             modelBuilder.Entity("Recall.Server.Domain.ModelProviders.ModelProvider", b =>
                 {
                     b.HasOne("Recall.Server.Domain.Tenants.Tenant", null)
@@ -2067,6 +2410,11 @@ namespace Recall.Server.Databases.Migrations
             modelBuilder.Entity("Recall.Server.Domain.Agents.Agent", b =>
                 {
                     b.Navigation("Permissions");
+                });
+
+            modelBuilder.Entity("Recall.Server.Domain.ImportBatches.ImportBatch", b =>
+                {
+                    b.Navigation("Days");
                 });
 
             modelBuilder.Entity("Recall.Server.Domain.Sessions.Session", b =>

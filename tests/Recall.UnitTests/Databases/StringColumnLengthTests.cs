@@ -6,6 +6,7 @@ using Recall.Server.Databases;
 using Recall.Server.Domain.Agents;
 using Recall.Server.Domain.AuditEntries;
 using Recall.Server.Domain.Corrections;
+using Recall.Server.Domain.ImportBatches;
 using Recall.Server.Domain.LoginProviders;
 using Recall.Server.Domain.ModelProviders;
 using Recall.Server.Domain.People;
@@ -51,6 +52,17 @@ public class StringColumnLengthTests
         return start + Text(character, Math.Max(0, length - start.Length - end.Length)) + end;
     }
 
+    // The document of a text of emoji is longer than the text, because its JSON escapes each emoji. So the text has one.
+    private static string TextWithOne(string character, int length) => character + Text("a", length - 1);
+
+    // The limit of a column of edited words is on the stored document, so the value is a document with one word.
+    private static string DocumentWithOneWord(string character, int length)
+    {
+        const string start = "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"a\"}]}],\"padding\":\"";
+        const string end = "\"}";
+        return start + Text(character, Math.Max(0, length - start.Length - end.Length)) + end;
+    }
+
     private static readonly Dictionary<string, CallerColumn> CallerColumns = new()
     {
         ["users.first_name"] = new("firstName", Text, v => TestGraph.Start(out _).AddTenant(out _).AddUser(out _, u => u.FirstName = v)),
@@ -83,6 +95,10 @@ public class StringColumnLengthTests
         ["auth_oidc_providers.display_name"] = new("displayName", Text, v => LoginProvider.Add(new LoginProviderForm(v, "https://idp.test", "client", false, null), "mine", "protected", DateTimeOffset.UnixEpoch)),
         ["auth_oidc_providers.client_id"] = new("clientId", Text, v => LoginProvider.Add(new LoginProviderForm("Mine", "https://idp.test", v, false, null), "mine", "protected", DateTimeOffset.UnixEpoch)),
         ["auth_oidc_providers.issuer"] = new("issuer", IssuerOfLength, v => LoginProvider.IssuerOf(v, allowHttp: false)),
+        ["import_batches.name"] = new("name", Text, v => ImportBatch.Open("ten_1", "usr_1", v, "UTC", DateTimeOffset.UnixEpoch)),
+        ["import_entries.client_session_id"] = new("clientSessionId", Text, v => Session.CheckClientSessionId(v)),
+        ["import_entries.raw"] = new("raw", TextWithOne, v => ImportAgentLayer.Of("2024-03-31", 0, null, null, v, [], []), MessageNamesTheLimit: false),
+        ["import_entries.review_words"] = new("words", DocumentWithOneWord, v => ImportReview.Of(false, v, null), MessageNamesTheLimit: false),
         // new-feature:caller-columns
     };
 
@@ -113,6 +129,11 @@ public class StringColumnLengthTests
         ["summaries.period"] = Enum.GetNames<SummaryPeriod>(),
         ["summaries.run_state"] = Enum.GetNames<SummaryRunState>(),
         ["summaries.failure"] = Enum.GetNames<SummaryFailure>(),
+        ["import_batches.state"] = Enum.GetNames<ImportBatchState>(),
+        ["import_batches.time_zone"] = TimeZoneInfo.GetSystemTimeZones().Where(zone => zone.HasIanaId).Select(zone => zone.Id)
+            .Concat(TimeZoneNames.Links.Select(link => link.Name)).Concat(TimeZoneNames.Zones).ToList(),
+        ["import_entries.time_zone"] = TimeZoneInfo.GetSystemTimeZones().Where(zone => zone.HasIanaId).Select(zone => zone.Id)
+            .Concat(TimeZoneNames.Links.Select(link => link.Name)).Concat(TimeZoneNames.Zones).ToList(),
         // new-feature:fixed-option-columns
     };
 
@@ -166,6 +187,7 @@ public class StringColumnLengthTests
         "sessions.ai_topics",
         "sessions.mentioned_person_ids",
         "sessions.cleanup_run_id",
+        "sessions.import_batch_id",
         "sessions.mood_suggestions",
         "sessions.moods",
         "sessions.people_proposals",
@@ -179,6 +201,8 @@ public class StringColumnLengthTests
         "sync_changes.client_session_id",
         "sync_changes.entity_id",
         "sync_changes.user_id",
+        "import_entries.moods",
+        "import_entries.topics",
     ];
 
     [Test]

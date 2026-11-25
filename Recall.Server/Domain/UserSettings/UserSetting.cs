@@ -29,6 +29,9 @@ public class UserSetting : BaseEntity, ITenantable, IJournalOwned
 
     public bool WriteNumbersAsDigits { get; private set; } = true;
 
+    /// <summary>True when only a web session of the person can accept an import batch (IMP-18, IMP-19).</summary>
+    public bool RequireImportReview { get; private set; } = true;
+
     public static UserSetting DefaultsFor(string tenantId, string userId) => new() { TenantId = tenantId, UserId = userId };
 
     public bool TimeZoneIsKnown => TimeZoneValue is null || TimeZoneId.TryOf(TimeZoneValue) is not null;
