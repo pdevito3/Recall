@@ -2,7 +2,6 @@ namespace Recall.Server.Resources.Entrypoints.Jobs;
 
 using Auth;
 using BackWave.Dashboard;
-using Domain.Users;
 
 public static class JobDashboard
 {
@@ -62,13 +61,13 @@ public static class JobDashboard
 
     public static readonly BackWaveDashboardOptions DashboardOptions = new()
     {
-        AuthorizeView = CallerIsOwnerAsync,
-        AuthorizeRequeue = CallerIsOwnerAsync,
-        AuthorizeCancel = CallerIsOwnerAsync,
-        AuthorizePauseQueue = CallerIsOwnerAsync,
-        AuthorizeTriggerSchedule = CallerIsOwnerAsync,
+        AuthorizeView = JobOwnerCheck.PassesAsync,
+        AuthorizeRequeue = JobOwnerCheck.PassesAsync,
+        AuthorizeCancel = JobOwnerCheck.PassesAsync,
+        AuthorizePauseQueue = JobOwnerCheck.PassesAsync,
+        AuthorizeTriggerSchedule = JobOwnerCheck.PassesAsync,
         ExposeSensitiveData = false,
-        ResolveActor = context => context.User.FindFirst("sub")?.Value ?? "unknown",
+        ResolveActor = JobOwnerCheck.ActorOf,
     };
 
     public static async Task LimitLiveStreamAndExplainRefusalAsync(HttpContext context, RequestDelegate next)
@@ -95,11 +94,5 @@ public static class JobDashboard
 
             await AuthPages.OwnerOnly(Path).ExecuteAsync(context);
         }
-    }
-
-    private static async ValueTask<bool> CallerIsOwnerAsync(HttpContext context)
-    {
-        var ownerGuard = context.RequestServices.GetRequiredService<IOwnerGuard>();
-        return await ownerGuard.CallerIfOwnerAsync(context.RequestAborted) is not null;
     }
 }
