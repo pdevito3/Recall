@@ -44,7 +44,7 @@ public class TokenGrantTests
 
     [Test]
     [Property("Rule", "PAT-21")]
-    public void the_job_tools_are_a_third_part_of_the_text_and_a_grant_from_before_them_holds_none()
+    public void the_job_tools_are_a_name_of_the_list_and_a_grant_from_before_them_holds_none()
     {
         // Arrange
         var withJobTools = new TokenGrant([Permission.ReadUsers()], JournalAccess.Read, jobTools: true);
@@ -54,7 +54,7 @@ public class TokenGrantTests
         var older = TokenGrant.Decode("read:read_users");
 
         // Assert
-        text.ShouldBe("read:read_users:job_tools");
+        text.ShouldBe("read:job_tools,read_users");
         new TokenGrant([Permission.ReadUsers()], JournalAccess.Read).Encode().ShouldBe("read:read_users");
         older.JobTools.ShouldBeFalse();
         older.ShouldNotBe(withJobTools);
@@ -62,10 +62,10 @@ public class TokenGrantTests
 
     [Test]
     [Property("Rule", "PAT-21")]
-    [Arguments("read::job_tools,run_spaceships", true)]
-    [Arguments("read::run_spaceships", false)]
-    [Arguments("read::JOB_TOOLS", false)]
-    [Arguments("read:job_tools", false)]
+    [Arguments("read:job_tools,run_spaceships", true)]
+    [Arguments("read:run_spaceships", false)]
+    [Arguments("read:JOB_TOOLS", false)]
+    [Arguments("read::job_tools", false)]
     public void an_item_that_the_build_does_not_know_is_dropped(string text, bool jobTools)
     {
         // Act

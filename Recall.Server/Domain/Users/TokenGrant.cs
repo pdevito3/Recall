@@ -56,30 +56,29 @@ public sealed record TokenGrant
     public bool JobTools { get; }
 
     /// <summary>
-    /// The text of the grant, for example <c>read:manage_users,read_users</c>, or <c>read:read_users:job_tools</c> with
-    /// <see cref="JobTools"/>.
+    /// The text of the grant, for example <c>read:manage_users,read_users</c>, or <c>read:job_tools,read_users</c> with
+    /// <see cref="JobTools"/>. <c>job_tools</c> is a name of the list, so a build that does not know it drops only that name.
     /// </summary>
     public string Encode()
     {
-        var text = $"{Journal.Name}:{string.Join(',', Permissions.Select(p => p.Value).Order(StringComparer.Ordinal))}";
-        return JobTools ? $"{text}:{JobToolsItem}" : text;
+        var names = Permissions.Select(p => p.Value).Concat(JobTools ? [JobToolsItem] : []);
+        return $"{Journal.Name}:{string.Join(',', names.Order(StringComparer.Ordinal))}";
     }
 
     /// <summary>
-    /// Reads the text of <see cref="Encode"/>. A permission name or an item that this build does not know is dropped, and a
-    /// journal access that it does not know is <see cref="JournalAccess.None"/>, so a removed name grants nothing. A text
-    /// with no third part holds no job tools.
+    /// Reads the text of <see cref="Encode"/>. A name that this build does not know is dropped, and a journal access that it
+    /// does not know is <see cref="JournalAccess.None"/>, so a removed name grants nothing.
     /// </summary>
     public static TokenGrant Decode(string text)
     {
-        var parts = text.Split(':', 3);
-        var journal = parts[0];
-        var permissions = parts.Length > 1 ? parts[1] : "";
-        var items = parts.Length > 2 ? parts[2].Split(',', StringSplitOptions.RemoveEmptyEntries) : [];
+        var (journal, list) = text.IndexOf(':') is var colon and >= 0
+            ? (text[..colon], text[(colon + 1)..])
+            : (text, "");
+        var names = list.Split(',', StringSplitOptions.RemoveEmptyEntries);
         return new TokenGrant(
-            permissions.Split(',', StringSplitOptions.RemoveEmptyEntries).Where(KnownPermissions.Contains).Select(Permission.Of),
+            names.Where(KnownPermissions.Contains).Select(Permission.Of),
             JournalAccess.TryFromName(journal, out var access) ? access : JournalAccess.None,
-            items.Contains(JobToolsItem, StringComparer.Ordinal));
+            names.Contains(JobToolsItem, StringComparer.Ordinal));
     }
 
     public bool Equals(TokenGrant? other)

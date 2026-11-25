@@ -724,7 +724,7 @@ The lookup of a token is one indexed read and no write. When the last use of the
 
 ### Audit
 
-A create and a revoke from the API record the audit actions `access_token_created` and `access_token_revoked` on the user, with the token ID, its name, its grant, and its expiry. The grant of a token with the job tools ends in `:job_tools`, for example `none::job_tools`. So a reader can map a `pat_…` actor to a name after the row is gone. A revoke by `revoke-others` or by a user delete records no action. A write by a token records the token ID as `actor_client` and the person as `actor_user_id`.
+A create and a revoke from the API record the audit actions `access_token_created` and `access_token_revoked` on the user, with the token ID, its name, its grant, and its expiry. The grant of a token with the job tools names `job_tools` in its list, for example `none:job_tools`. So a reader can map a `pat_…` actor to a name after the row is gone. A revoke by `revoke-others` or by a user delete records no action. A write by a token records the token ID as `actor_client` and the person as `actor_user_id`.
 
 ## E2E tests
 
