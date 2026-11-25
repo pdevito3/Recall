@@ -4851,6 +4851,83 @@
         }
       }
     },
+    "/api/v1/journal-days": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Gets each Journaling day from `from` to `to`, both included, that has a Session, with the count of its\nSessions. An import agent uses it to find the days that the journal already has. The range is at most 366 days.",
+        "operationId": "GetJournalDays",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/JournalDayDto"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
     "/api/v1/sessions/{id}/raw-revisions/{number}": {
       "get": {
         "tags": [
@@ -9679,6 +9756,24 @@
           },
           "user": {
             "$ref": "#/components/schemas/UserDto"
+          }
+        }
+      },
+      "JournalDayDto": {
+        "required": [
+          "date",
+          "sessionCount"
+        ],
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "The Journaling day: the day of the start of a Session in its own zone.",
+            "format": "date"
+          },
+          "sessionCount": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },

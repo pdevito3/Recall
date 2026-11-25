@@ -113,6 +113,7 @@ public class EndpointAccessSweepTests : TestBase
         ["ReviewImportDay"] = new(JournalOfEachMember, OwnerOnly: true),
         ["AcceptImportBatch"] = new(JournalOfEachMember, OwnerOnly: true),
         ["DiscardImportBatch"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetJournalDays"] = new(JournalOfEachMember, OwnerOnly: true),
         // new-feature:open-to-each-member
     };
 
