@@ -196,7 +196,7 @@ public class AcceptImportBatchCommandTests : TestBase
         var insert = await WebSessionOf(owner).ExecuteDbContextAsync(db => db.AuditEntries.IgnoreQueryFilters()
             .SingleAsync(e => e.EntityId == session.Id && e.Kind == AuditEntryKind.Created));
         insert.RecordId.ShouldBe(action.RecordId);
-        insert.Data.ShouldNotContain("words");
+        JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(insert.Data)!.Keys.Order().ShouldBe(["TenantId", "UserId"]);
     }
 
     [Test]
@@ -321,6 +321,34 @@ public class AcceptImportBatchCommandTests : TestBase
         (await WebSessionOf(owner).SendAsync(new GetImportBatches.Query())).ShouldHaveSingleItem().State.ShouldBe(nameof(ImportBatchState.Open));
         (await WebSessionOf(owner).ExecuteDbContextAsync(db => db.Sessions.CountAsync())).ShouldBe(0);
         (await ActionsOfAsync(owner, batch.Id)).ShouldBeEmpty();
+    }
+
+    [Test]
+    [Property("Rule", "IMP-6")]
+    public async Task a_later_review_replaces_the_whole_review_and_null_gives_the_accept_the_agent_layer_again()
+    {
+        // Arrange
+        const string personWords = """{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"person words"}]}]}""";
+        var owner = await AddOwnerAsync();
+        var batch = await OpenAsync(owner);
+        await PutAsync(owner, batch.Id, Entry("a", 0, raw: "agent words", time: "09:00"));
+        var scope = WebSessionOf(owner);
+        var edited = await scope.SendAsync(new ReviewImportEntry.Command(batch.Id,
+            new ImportEntryReviewDto { ClientSessionId = "a", Rejected = true, Words = personWords, Time = "20:00" }));
+
+        // Act
+        var cleared = await scope.SendAsync(new ReviewImportEntry.Command(batch.Id, new ImportEntryReviewDto { ClientSessionId = "a", Rejected = false }));
+        var accepted = await AcceptAsync(owner, batch.Id);
+
+        // Assert
+        edited.Entry.Review.ShouldBe(new ImportReviewDto { Rejected = true, Words = personWords, Time = "20:00" });
+        cleared.Entry.Review.ShouldBe(new ImportReviewDto { Rejected = false, Words = null, Time = null });
+        accepted.Result!.SessionsMade.ShouldBe(1);
+        var session = await scope.ExecuteDbContextAsync(db => db.Sessions.SingleAsync());
+        session.StartedAt.ShouldBe(new DateTimeOffset(Day.ToDateTime(new TimeOnly(9, 0)), TimeSpan.Zero));
+        var read = await scope.SendAsync(new GetSession.Query(session.Id));
+        read.RawText.ShouldContain("agent words");
+        read.RawText.ShouldNotContain("person words");
     }
 
     private static Task<List<AuditEntry>> ActionsOfAsync(User owner, string batchId)
