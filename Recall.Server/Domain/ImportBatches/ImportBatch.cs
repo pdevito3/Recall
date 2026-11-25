@@ -107,8 +107,9 @@ public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
             var identity = ImportIdentities.Classify(facts.SessionIds.Contains(id), facts.TombstoneIds.Contains(id), other?.BatchId, Id);
             var known = identity == ImportIdentity.InThisBatch ? other : null;
             var inTheFuture = ImportEntry.StartOf(agent, known?.Review ?? ImportReview.None, this) > now;
-            if (inTheFuture || identity is ImportIdentity.InJournal or ImportIdentity.Deleted or ImportIdentity.InOtherBatch)
-                results[id] = new ImportPutResult(id, ImportPutOutcomes.Of(identity, inTheFuture, false, false, false));
+            var heldByItsDay = known is not null && agent.Date != known.Agent.Date && IsDayRejected(known.Agent.Date);
+            if (inTheFuture || heldByItsDay || identity is ImportIdentity.InJournal or ImportIdentity.Deleted or ImportIdentity.InOtherBatch)
+                results[id] = new ImportPutResult(id, ImportPutOutcomes.Of(identity, inTheFuture, false, heldByItsDay, false));
             else
                 candidates.Add((id, agent, identity, known));
         }
