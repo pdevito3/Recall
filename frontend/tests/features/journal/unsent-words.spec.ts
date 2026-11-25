@@ -682,7 +682,7 @@ test.describe('the location of a new entry', () => {
 
   const createdLatitude = async (api: Api) => {
     await expect.poll(() => api.all('post', sessionsPaths.timeline).length, { timeout: 40_000 }).toBeGreaterThan(0)
-    return (api.last('post', sessionsPaths.timeline)?.body as { latitude: number | null }).latitude
+    return (api.last('post', sessionsPaths.timeline)!.body as { latitude: number | null }).latitude
   }
 
   test('goes with the entry while capture stays on', async ({ page, context, api }) => {
@@ -708,7 +708,7 @@ test.describe('the location of a new entry', () => {
     await expect(unsent.at.locationCapture).not.toBeChecked()
     api.mock(sessionsApi.creates(session), sessionsApi.draftSaveWins(session, 1))
 
-    await expect.poll(() => (api.last('post', sessionsPaths.timeline)?.body as { latitude: number | null }).latitude, { timeout: 40_000 }).toBeNull()
+    await expect.poll(() => (api.last('post', sessionsPaths.timeline)!.body as { latitude: number | null }).latitude, { timeout: 40_000 }).toBeNull()
   })
 
   test('stays out while another tab holds a change to off', async ({ page, context, api }) => {

@@ -92,8 +92,8 @@ async function audioThatWaits(owner: string): Promise<StoredCapture[]> {
 }
 
 /**
- * The one way out of the signed-in app, and the lint rule `no-restricted-syntax` in eslint.config.js refuses each other
- * navigation in src. Words that only the memory of this tab holds have no other place, so the tab shows them alone with
+ * The one way out of the signed-in app, and the lint rules `recall/no-way-out` and `recall/no-login-page` refuse each
+ * other navigation in src. Words that only the memory of this tab holds have no other place, so the tab shows them alone with
  * a Copy before it goes, and goes only when the person says so. Audio that waits stays in this browser, and the same
  * screen names it, so the person knows that it did not reach the server. Another person must not read the words, so for
  * that reason the words go at once, and the next page says that they are gone. A later reason to leave keeps the way out

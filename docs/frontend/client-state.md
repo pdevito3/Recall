@@ -57,7 +57,7 @@ type AsyncState<T> =
 
 Use `useEffect` only to synchronize with a system outside React: a browser API, a subscription, a timer, or a third-party library.
 
-1. Put each reactive value that the effect reads in the dependency array. Do not disable the `react-hooks` lint rule.
+1. Put each reactive value that the effect reads in the dependency array. Do not disable the `react/exhaustive-deps` lint rule.
 2. Return a cleanup that undoes the setup.
 3. Give each concern its own effect.
 

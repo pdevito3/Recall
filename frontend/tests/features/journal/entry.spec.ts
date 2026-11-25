@@ -305,7 +305,7 @@ test.describe('an entry', () => {
     await entry.edit(session.id, ' more')
 
     await expect(entry.at.status('Saved at')).toBeVisible()
-    expect((api.last('put', sessionsPaths.rawDraft(session.id))?.body as { baseRevision: number }).baseRevision).toBe(5)
+    expect((api.last('put', sessionsPaths.rawDraft(session.id))!.body as { baseRevision: number }).baseRevision).toBe(5)
     await expect(entry.at.conflict('safe in History')).toHaveCount(0)
   })
 
@@ -322,7 +322,7 @@ test.describe('an entry', () => {
     await expect(entry.at.updatedNotice).toHaveCount(0)
     api.mock(sessionsApi.draftSaveWins(session, 6))
     await entry.edit(session.id, ' again')
-    await expect.poll(() => (api.last('put', sessionsPaths.rawDraft(session.id))?.body as { baseRevision: number }).baseRevision).toBe(5)
+    await expect.poll(() => (api.last('put', sessionsPaths.rawDraft(session.id))!.body as { baseRevision: number }).baseRevision).toBe(5)
     await expect(entry.at.conflict('safe in History')).toHaveCount(0)
   })
 
@@ -374,7 +374,7 @@ test.describe('an entry', () => {
 
     await entry.edit(session.id, ' offline words')
     await expect(entry.at.status('Recall keeps trying')).toBeVisible()
-    const claimed = (api.last('put', sessionsPaths.rawDraft(session.id))?.body as { savedAt: string }).savedAt
+    const claimed = (api.last('put', sessionsPaths.rawDraft(session.id))!.body as { savedAt: string }).savedAt
 
     api.mock(sessionsApi.draftSaveWins(session, 2))
     await entry.signalThatTheConnectionReturned()
@@ -680,7 +680,7 @@ test.describe('the history of an entry', () => {
     await entry.restore(session.id)
 
     await expect(entry.at.words('First words')).toBeVisible()
-    expect((api.last('put', sessionsPaths.rawDraft(session.id))?.body as { text: string }).text).toContain('First words')
+    expect((api.last('put', sessionsPaths.rawDraft(session.id))!.body as { text: string }).text).toContain('First words')
   })
 
   test('a closed history shows no button for older versions', async ({ page, api }) => {
