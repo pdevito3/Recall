@@ -1,6 +1,7 @@
 namespace Recall.Server.Domain.Sessions;
 
 using System.Text;
+using Databases.Sqlite;
 using Content;
 using Exceptions;
 using Metadata;
@@ -123,7 +124,7 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
             TenantId = tenantId,
             UserId = userId,
             ClientSessionId = clientSessionId,
-            StartedAt = StoredInstantOf(claimedStartedAt < now ? claimedStartedAt : now),
+            StartedAt = UtcTextConverter.StoredInstantOf(claimedStartedAt < now ? claimedStartedAt : now),
             TimeZone = zone.Value,
             Latitude = location?.Latitude,
             Longitude = location?.Longitude,
@@ -392,9 +393,6 @@ public class Session : BaseEntity, ITenantable, IJournalOwned
 
     private void RequireRunningCleanup()
         => ValidationException.Must(CleanupRun == CleanupRunState.Running, CleanupField, "No Cleanup of this Session runs.");
-
-    private static DateTimeOffset StoredInstantOf(DateTimeOffset instant)
-        => new(instant.UtcTicks - instant.UtcTicks % TimeSpan.TicksPerMicrosecond, TimeSpan.Zero);
 
     private static bool IsStale(int rawDraftRevision, int? lastCleanupRawRevision)
         => lastCleanupRawRevision is { } read && rawDraftRevision > read;

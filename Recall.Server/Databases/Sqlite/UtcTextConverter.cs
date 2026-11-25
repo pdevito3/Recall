@@ -12,6 +12,9 @@ public sealed class UtcTextConverter() : ValueConverter<DateTimeOffset, string>(
     public static string ToText(DateTimeOffset value)
         => value.UtcDateTime.ToString(Format, CultureInfo.InvariantCulture);
 
+    public static DateTimeOffset StoredInstantOf(DateTimeOffset instant)
+        => new(instant.UtcTicks - instant.UtcTicks % TimeSpan.TicksPerMicrosecond, TimeSpan.Zero);
+
     public static DateTimeOffset FromText(string text)
         => DateTimeOffset.ParseExact(text, Format, CultureInfo.InvariantCulture,
             DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal);
