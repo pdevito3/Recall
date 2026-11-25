@@ -12,7 +12,7 @@ public static class ImportPositions
             after[id] = slot;
 
         var takenBy = new Dictionary<string, string>();
-        while (Clashes(after, proposed, takenBy) is { Count: > 0 } refused)
+        while (Clashes(after, stored, proposed, takenBy) is { Count: > 0 } refused)
         {
             foreach (var (id, other) in refused)
             {
@@ -25,12 +25,17 @@ public static class ImportPositions
     }
 
     private static List<(string Id, string Other)> Clashes(
-        Dictionary<string, ImportSlot> after, IReadOnlyDictionary<string, ImportSlot> proposed, Dictionary<string, string> takenBy)
+        Dictionary<string, ImportSlot> after, IReadOnlyDictionary<string, ImportSlot> stored, IReadOnlyDictionary<string, ImportSlot> proposed,
+        Dictionary<string, string> takenBy)
         => after.GroupBy(entry => entry.Value, entry => entry.Key)
             .Where(holders => holders.Count() > 1)
-            .SelectMany(holders => holders
-                .Where(id => proposed.ContainsKey(id) && !takenBy.ContainsKey(id))
-                .Select(id => (Id: id, Other: holders.Where(other => other != id).Order(StringComparer.Ordinal).First())))
+            .SelectMany(holders =>
+            {
+                var stays = holders.FirstOrDefault(id => stored.TryGetValue(id, out var slot) && slot == holders.Key);
+                return holders
+                    .Where(id => id != stays && proposed.ContainsKey(id) && !takenBy.ContainsKey(id))
+                    .Select(id => (Id: id, Other: stays ?? holders.Where(other => other != id).Order(StringComparer.Ordinal).First()));
+            })
             .ToList();
 
     private static void KeepStoredSlot(Dictionary<string, ImportSlot> after, IReadOnlyDictionary<string, ImportSlot> stored, string id)
