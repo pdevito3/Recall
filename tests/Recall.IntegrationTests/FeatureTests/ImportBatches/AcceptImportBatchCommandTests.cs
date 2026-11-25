@@ -292,6 +292,37 @@ public class AcceptImportBatchCommandTests : TestBase
         (await reader.SendAsync(new GetImportBatches.Query())).Select(b => b.Id).ShouldBe([batch.Id]);
     }
 
+    [Test]
+    [Property("Rule", "IMP-27")]
+    [Property("Rule", "IMP-17")]
+    public async Task an_accept_over_the_limit_is_refused_after_the_gate_of_the_review_and_changes_nothing()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var batch = await OpenAsync(owner);
+        foreach (var call in Enumerable.Range(0, ImportBatch.AcceptMaxEntries + 1).Chunk(ImportBatch.PutMaxEntries))
+            await PutAsync(owner, batch.Id, call.Select(i => Entry($"entry-{i}", i % 720, date: Day.AddDays(i / 720))).ToArray());
+        var before = await EntriesAsync(owner, batch.Id);
+        var token = new TestingServiceScope();
+        token.SetPersonalAccessToken(owner.Identifier, ReadWrite);
+        var command = new AcceptImportBatch.Command(batch.Id, new ImportBatchAcceptDto { Version = before.Version });
+
+        // Act
+        var byToken = () => token.SendAsync(command);
+        var gated = await byToken.ShouldThrowAsync<ForbiddenAccessException>();
+        var byPerson = () => WebSessionOf(owner).SendAsync(command);
+        var limited = await byPerson.ShouldThrowAsync<ValidationException>();
+
+        // Assert
+        gated.Message.ShouldBe(AcceptImportBatch.ReviewMessage);
+        limited.Message.ShouldBe(ImportBatch.TooManyToAcceptMessage);
+        var after = await EntriesAsync(owner, batch.Id);
+        (after.Version, after.Entries.Count).ShouldBe((before.Version, ImportBatch.AcceptMaxEntries + 1));
+        (await WebSessionOf(owner).SendAsync(new GetImportBatches.Query())).ShouldHaveSingleItem().State.ShouldBe(nameof(ImportBatchState.Open));
+        (await WebSessionOf(owner).ExecuteDbContextAsync(db => db.Sessions.CountAsync())).ShouldBe(0);
+        (await ActionsOfAsync(owner, batch.Id)).ShouldBeEmpty();
+    }
+
     private static Task<List<AuditEntry>> ActionsOfAsync(User owner, string batchId)
         => WebSessionOf(owner).ExecuteDbContextAsync(db => db.AuditEntries.IgnoreQueryFilters()
             .Where(e => e.RootId == batchId && e.Kind == AuditEntryKind.Action)

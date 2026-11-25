@@ -80,6 +80,22 @@ public class ImportBatchTests
 
     [Test]
     [Property("Rule", "IMP-27")]
+    public void an_accept_of_exactly_20_000_kept_entries_makes_a_session_of_each()
+    {
+        // Arrange
+        var batch = Open();
+        var entries = ManyEntries(batch, ImportBatch.AcceptMaxEntries);
+
+        // Act
+        var sessions = batch.Accept(batch.Version, entries, new HashSet<string>(), new HashSet<string>(), Now).Sessions;
+
+        // Assert
+        sessions.Count.ShouldBe(20_000);
+        batch.State.ShouldBe(ImportBatchState.Accepted);
+    }
+
+    [Test]
+    [Property("Rule", "IMP-27")]
     public void a_rejected_entry_does_not_count_toward_the_limit()
     {
         // Arrange
