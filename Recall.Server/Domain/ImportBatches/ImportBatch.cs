@@ -8,7 +8,7 @@ public class ImportBatch : BaseEntity, ITenantable, IJournalOwned
     public const int NameMaxLength = 200;
     public const int PutMaxEntries = 500;
 
-    public const int AcceptMaxEntries = 10_000;
+    public const int AcceptMaxEntries = 20_000;
     public const string NotFoundMessage = "This import batch does not exist.";
     public const string AcceptedMessage = "This batch is in your journal, so it cannot change.";
     public const string ChangedMessage = "This batch changed after you read it. Read it again, then accept it.";
