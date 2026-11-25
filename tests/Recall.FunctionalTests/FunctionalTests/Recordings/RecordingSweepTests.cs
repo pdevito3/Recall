@@ -69,7 +69,7 @@ public class RecordingSweepTests : TestBase
     public static Task<long> CountJobsAsync(string kind, string idInPayload) => JournalScenario.CountOutOfBandAsync(
         CountJobsSql, ("$kind", kind), ("$id", $"%{idInPayload}%"));
 
-    private static Task<long> CountJobsAsync(AuthFlowFactory host, string recordingId) => JournalScenario.CountOutOfBandAsync(
+    private static Task<long> CountTranscribeJobsAsync(AuthFlowFactory host, string recordingId) => JournalScenario.CountOutOfBandAsync(
         host.ConnectionString, CountJobsSql, ("$kind", "transcribe-recording"), ("$id", $"%{recordingId}%"));
 
     private static async Task<(Tenant Tenant, User Admin)> AddTenantWithAdminAsync()
@@ -177,13 +177,13 @@ public class RecordingSweepTests : TestBase
         var clock = new ClockThatTellsOfItsTimer(DateTimeOffset.UtcNow);
         var sweep = new RecordingSweep(host.Services.GetRequiredService<IServiceScopeFactory>(), host.Services.GetRequiredService<FileStore>(), host.Services.GetRequiredService<IJobStore>(), clock);
         using var service = new RecordingSweepService(sweep, clock);
-        var before = await CountJobsAsync(host, recording.Id);
+        var before = await CountTranscribeJobsAsync(host, recording.Id);
 
         // Act
         await service.StartAsync(CancellationToken.None);
         // The hourly timer starts when the first sweep ends.
         await clock.TimerMade.WaitAsync(SweepLimit);
-        var afterStart = await CountJobsAsync(host, recording.Id);
+        var afterStart = await CountTranscribeJobsAsync(host, recording.Id);
         clock.Advance(RecordingSweepService.WaitingCheck);
         var afterHour = await WaitForMoreJobsAsync(host, recording.Id, afterStart);
         await service.StopAsync(CancellationToken.None);
@@ -324,7 +324,7 @@ public class RecordingSweepTests : TestBase
         while (count <= known && !limit.IsCancellationRequested)
         {
             await Task.Delay(100);
-            count = await CountJobsAsync(host, recordingId);
+            count = await CountTranscribeJobsAsync(host, recordingId);
         }
 
         return count;
