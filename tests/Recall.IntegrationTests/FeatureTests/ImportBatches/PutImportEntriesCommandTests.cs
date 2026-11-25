@@ -103,6 +103,26 @@ public class PutImportEntriesCommandTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "IMP-6")]
+    public async Task a_put_cannot_move_an_entry_out_of_a_rejected_day()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var batch = await OpenAsync(owner);
+        await PutAsync(owner, batch.Id, Entry("a", 0));
+        var rejected = await RejectDayAsync(owner, batch.Id, Day);
+
+        // Act
+        var put = await PutAsync(owner, batch.Id, Entry("a", 0, raw: "moved words", date: Day.AddDays(1)));
+
+        // Assert
+        OutcomesOf(put).ShouldBe([("a", "Rejected")]);
+        put.Version.ShouldBe(rejected.Version);
+        var entry = (await EntriesAsync(owner, batch.Id)).Entries.ShouldHaveSingleItem();
+        (entry.Date, entry.Raw, entry.IsRejected).ShouldBe((Day, "words", true));
+    }
+
+    [Test]
     [Property("Rule", "IMP-13")]
     public async Task a_remove_deletes_the_named_entries_and_an_id_that_the_batch_does_not_hold_gets_not_found()
     {
