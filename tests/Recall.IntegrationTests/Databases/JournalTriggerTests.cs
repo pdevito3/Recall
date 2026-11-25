@@ -189,6 +189,8 @@ public class JournalTriggerTests : TestBase
 
         // Assert
         missing.ShouldBeEmpty("An EF table rebuild drops the triggers of the table, so call JournalTriggers again in that migration.");
+        triggers.Keys.Where(name => name.StartsWith("import_", StringComparison.Ordinal) && name.Contains("_sync_", StringComparison.Ordinal))
+            .ShouldBeEmpty("An entry of an open batch is not in the Sync feed (IMP-2).");
         foreach (var table in journalRoots.Select(e => e.GetTableName()!))
             triggers["users_purge_journal"].ShouldContain($"DELETE FROM {table} WHERE user_id = new.id");
     }
@@ -219,6 +221,29 @@ public class JournalTriggerTests : TestBase
         // Assert
         keyColumns.ShouldNotContain("import_batch_id");
         indexed.ShouldBe(["import_batch_id"]);
+    }
+
+    [Test]
+    [Property("Rule", "IMP-8")]
+    public async Task the_slot_lookup_of_a_put_has_its_index_from_the_migration()
+    {
+        // Arrange
+        await using var connection = new SqliteConnection(TestFixture.UnpooledConnectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT name FROM pragma_index_info('ix_import_entries_batch_id_date_position') ORDER BY seqno";
+
+        // Act
+        var columns = new List<string>();
+        await using (var rows = await command.ExecuteReaderAsync())
+        {
+            while (await rows.ReadAsync())
+                columns.Add(rows.GetString(0));
+        }
+
+        // Assert
+        columns.ShouldBe(["batch_id", "date", "position"],
+            "The model does not hold this index, so an EF rebuild of import_entries drops it. Add it again in that migration.");
     }
 
     [Test]
