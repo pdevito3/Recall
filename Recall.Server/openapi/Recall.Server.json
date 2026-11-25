@@ -11025,6 +11025,13 @@
         ],
         "type": "object",
         "properties": {
+          "importBatchId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The Import batch whose accept made the Session. Null for a Session that no import made."
+          },
           "id": {
             "type": "string"
           },
@@ -11037,7 +11044,7 @@
           },
           "journalingDay": {
             "type": "string",
-            "description": "The date of DateTimeOffset SessionDto.StartedAt in the zone that the create stored. A later change of the settings does not move it.",
+            "description": "The date of DateTimeOffset SyncSessionDto.StartedAt in the zone that the create stored. A later change of the settings does not move it.",
             "format": "date"
           },
           "rawText": {
@@ -11190,7 +11197,8 @@
             "type": "integer",
             "description": "Send it with the next metadata save. A save of a Draft does not change it."
           }
-        }
+        },
+        "description": "A Session as a read of it gives it."
       },
       "SessionForCreationDto": {
         "required": [
@@ -11560,7 +11568,7 @@
           "sessions": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/SessionDto"
+              "$ref": "#/components/schemas/SyncSessionDto"
             },
             "description": "Each changed Session, and each Session that the device already holds and that a Person of this page joins as a match of a\nproposal, so that its `matchedPersonIds` are of now."
           },
@@ -11594,6 +11602,200 @@
           }
         },
         "description": "Each changed row of one page, in its newest state."
+      },
+      "SyncSessionDto": {
+        "required": [
+          "id",
+          "clientSessionId",
+          "startedAt",
+          "journalingDay",
+          "rawText",
+          "rawDraftRevision",
+          "rawLatestRevision",
+          "cleanedText",
+          "cleanedDraftRevision",
+          "cleanedLatestRevision",
+          "cleanedHasHandEdits",
+          "cleanupStatus",
+          "cleanupFailure",
+          "suggestions",
+          "peopleProposals",
+          "activity",
+          "moods",
+          "topics",
+          "personIds",
+          "version",
+          "metadataVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "clientSessionId": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "journalingDay": {
+            "type": "string",
+            "description": "The date of DateTimeOffset SyncSessionDto.StartedAt in the zone that the create stored. A later change of the settings does not move it.",
+            "format": "date"
+          },
+          "rawText": {
+            "type": "string"
+          },
+          "rawDraftRevision": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rawLatestRevision": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rawSavedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "cleanedText": {
+            "type": "string"
+          },
+          "cleanedDraftRevision": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cleanedLatestRevision": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cleanedSavedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "cleanedHasHandEdits": {
+            "type": "boolean"
+          },
+          "synopsis": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "cleanupStatus": {
+            "enum": [
+              "NotRun",
+              "Running",
+              "Clean",
+              "Stale",
+              "Failed"
+            ],
+            "type": "string"
+          },
+          "lastCleanupRawRevision": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "cleanupBaseCleanedRevision": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "description": "The number of the Cleaned Draft at the start of the last run. While the run runs, a newer Cleaned means its result will wait in History.",
+            "format": "int32"
+          },
+          "waitingCleanupRevision": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "description": "The Cleaned Revision that holds a Cleanup result that did not replace Cleaned, because Cleaned moved during its run. Null when none waits.",
+            "format": "int32"
+          },
+          "cleanupFailure": {
+            "enum": [
+              "None",
+              "NoModelProvider",
+              "KeyUnreadable",
+              "ProviderRefused",
+              "ProviderUnavailable",
+              "BadModelOutput",
+              "Interrupted",
+              "Stopped"
+            ],
+            "type": "string",
+            "description": "Why the last Cleanup failed. It is a closed code, and the words of a model provider never come here."
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionSuggestionDto"
+            }
+          },
+          "peopleProposals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PersonProposalDto"
+            }
+          },
+          "activity": {
+            "type": "string"
+          },
+          "moods": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionTopicDto"
+            }
+          },
+          "personIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "latitude": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "longitude": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "metadataVersion": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "description": "Send it with the next metadata save. A save of a Draft does not change it."
+          }
+        },
+        "description": "A Session as the Sync feed carries it."
       },
       "SyncTombstoneDto": {
         "required": [

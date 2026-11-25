@@ -20,6 +20,10 @@ export type RespondToPersonProposalHeaders = {
     "X-Recall-User"?: string;
 };
 
+/**
+ * @description A Session as a read of it gives it.
+ * @type object
+*/
 export type RespondToPersonProposalStatus200 = SessionDto;
 
 export type RespondToPersonProposalStatus400 = ValidationProblemDetails;

@@ -20,6 +20,10 @@ export type ApplyWaitingCleanupHeaders = {
     "X-Recall-User"?: string;
 };
 
+/**
+ * @description A Session as a read of it gives it.
+ * @type object
+*/
 export type ApplyWaitingCleanupStatus200 = SessionDto;
 
 export type ApplyWaitingCleanupStatus400 = ValidationProblemDetails;

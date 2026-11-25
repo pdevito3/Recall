@@ -80,6 +80,40 @@ public class ImportBatchHttpTests : TestBase
     }
 
     [Test]
+    [Property("Rule", "IMP-29")]
+    public async Task a_session_read_names_the_batch_of_its_import_and_the_sync_feed_does_not()
+    {
+        // Arrange
+        var (_, member) = await JournalScenario.AddPeopleAsync();
+        FactoryClient.SignInAsWebSession(member.Identifier);
+        var device = await FactoryClient.PostAsJsonAsync(ApiRoutes.Sessions.Root, new { clientSessionId = "device", startedAt = DateTimeOffset.UtcNow.AddHours(-1) });
+        var deviceId = (await device.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString()!;
+        var opened = await FactoryClient.PostAsJsonAsync(ApiRoutes.ImportBatches.Root, new { name = "Diary", timeZone = "UTC" });
+        var batch = (await opened.Content.ReadFromJsonAsync<ImportBatchDto>()).ShouldNotBeNull();
+        var put = await FactoryClient.PutAsJsonAsync(ApiRoutes.ImportBatches.Entries(batch.Id), new
+        {
+            entries = new[] { new { clientSessionId = "imported", date = Day, position = 0, raw = "words" } },
+        });
+        var version = (await put.Content.ReadFromJsonAsync<ImportPutResultDto>())!.Version;
+        (await FactoryClient.PostAsJsonAsync(ApiRoutes.ImportBatches.Accept(batch.Id), new { version })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var timeline = await FactoryClient.GetFromJsonAsync<JsonElement>(ApiRoutes.Sessions.Root);
+        var importedId = timeline.GetProperty("items").EnumerateArray()
+            .Single(item => item.GetProperty("clientSessionId").GetString() == "imported").GetProperty("id").GetString()!;
+
+        // Act
+        var imported = await FactoryClient.GetFromJsonAsync<JsonElement>(ApiRoutes.Sessions.GetRecord(importedId));
+        var fromDevice = await FactoryClient.GetFromJsonAsync<JsonElement>(ApiRoutes.Sessions.GetRecord(deviceId));
+        var feed = await FactoryClient.GetFromJsonAsync<JsonElement>(ApiRoutes.Sync.Changes);
+
+        // Assert
+        imported.GetProperty("importBatchId").GetString().ShouldBe(batch.Id);
+        fromDevice.GetProperty("importBatchId").ValueKind.ShouldBe(JsonValueKind.Null);
+        var sessions = feed.GetProperty("sessions").EnumerateArray().ToList();
+        sessions.Select(session => session.GetProperty("id").GetString()).ShouldBe([deviceId, importedId], ignoreOrder: true);
+        sessions.Where(session => session.TryGetProperty("importBatchId", out _)).ShouldBeEmpty();
+    }
+
+    [Test]
     [NotInParallel(nameof(AuthHosts.KeepAlive))]
     [Property("Rule", "IMP-28")]
     public async Task a_put_whose_body_is_more_than_16_mb_gets_413_on_kestrel_and_stores_nothing()

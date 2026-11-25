@@ -5,7 +5,7 @@
 
 import type { CorrectionDto } from './correction-dto'
 import type { PersonDto } from './person-dto'
-import type { SessionDto } from './session-dto'
+import type { SyncSessionDto } from './sync-session-dto'
 import type { SyncTombstoneDto } from './sync-tombstone-dto'
 import type { UserSettingDto } from './user-setting-dto'
 
@@ -28,7 +28,7 @@ export type SyncChangePageDto = {
      * @description Each changed Session, and each Session that the device already holds and that a Person of this page joins as a match of a\nproposal, so that its `matchedPersonIds` are of now.
      * @type array
     */
-    sessions: SessionDto[];
+    sessions: SyncSessionDto[];
     people: PersonDto[];
     corrections: CorrectionDto[];
     settings?: (null | UserSettingDto);

@@ -255,7 +255,7 @@ public class TwoPeopleOfOneNameTests : TestBase
 
         // Act
         var onePage = await FactoryClient.PullAsync();
-        var paged = new List<SessionDto>();
+        var paged = new List<SyncSessionDto>();
         string? cursor = null;
         bool hasMore;
         do
