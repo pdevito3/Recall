@@ -114,6 +114,9 @@ public static class AuthHosts
 
     public static AuthFlowFactory FileStoreRestart { get; private set; } = null!;
 
+    /// <summary>A host that only the test of the hourly check of the audio sweep uses, so its first sweep reads only the owners of that test.</summary>
+    public static AuthFlowFactory HourlyCheck { get; private set; } = null!;
+
     /// <summary>A host on Kestrel, so a test can send two requests on one keep-alive connection. Only <see cref="PersonalAccessTokenTests"/> holds its writer line.</summary>
     public static AuthFlowFactory KeepAlive { get; private set; } = null!;
 
@@ -210,6 +213,7 @@ public static class AuthHosts
             Clock = WriterLineClock,
         });
         FileStoreRestart = Start(new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts }) { NoProvider = true });
+        HourlyCheck = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
         KeepAlive = new AuthFlowFactory(new Dictionary<string, string?> { ["Auth:StartPermitsPerWindow"] = ManyStarts });
         KeepAlive.UseKestrel(0);
         KeepAlive.StartServer();
@@ -265,7 +269,7 @@ public static class AuthHosts
     public static async Task StopAsync()
     {
         // RowAtBoot runs on the database of RowAtBootDatabase, so it stops first.
-        foreach (var host in new[] { Password, LoginProviders, Links, PasswordsOff, NoLoginMethod, NoPromptLogin, LoginProvidersNoEnvironment, RowAtBoot, RowAtBootDatabase, SetupLogs, Setup, SetupWithProvider, Mixed, PasswordClaim, LostJobTable, FrozenClock, WriterLine, FileStoreRestart, KeepAlive, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, FirstPartyClient, Bundle, OwnerDemotion, Sweep, Jobs, Cleanups, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
+        foreach (var host in new[] { Password, LoginProviders, Links, PasswordsOff, NoLoginMethod, NoPromptLogin, LoginProvidersNoEnvironment, RowAtBoot, RowAtBootDatabase, SetupLogs, Setup, SetupWithProvider, Mixed, PasswordClaim, LostJobTable, FrozenClock, WriterLine, FileStoreRestart, HourlyCheck, KeepAlive, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, FirstPartyClient, Bundle, OwnerDemotion, Sweep, Jobs, Cleanups, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
         {
             if (host is not null)
                 await host.DisposeAsync();

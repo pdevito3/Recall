@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using ModelProviders;
+using Recall.FunctionalTests.Auth;
 using Recall.FakeModelProvider;
 using Recall.Server.Domain.ModelProviders;
 using Recall.Server.Domain.Recordings;
@@ -63,8 +64,13 @@ public class RecordingSweepTests : TestBase
 
     private static FileStore SharedStore => Services.GetRequiredService<FileStore>();
 
+    private const string CountJobsSql = "SELECT count(*) FROM backwave_jobs WHERE wire_name = $kind AND IFNULL(CAST(payload AS TEXT), '') LIKE $id";
+
     public static Task<long> CountJobsAsync(string kind, string idInPayload) => JournalScenario.CountOutOfBandAsync(
-        "SELECT count(*) FROM backwave_jobs WHERE wire_name = $kind AND IFNULL(CAST(payload AS TEXT), '') LIKE $id", ("$kind", kind), ("$id", $"%{idInPayload}%"));
+        CountJobsSql, ("$kind", kind), ("$id", $"%{idInPayload}%"));
+
+    private static Task<long> CountTranscribeJobsAsync(AuthFlowFactory host, string recordingId) => JournalScenario.CountOutOfBandAsync(
+        host.ConnectionString, CountJobsSql, ("$kind", "transcribe-recording"), ("$id", $"%{recordingId}%"));
 
     private static async Task<(Tenant Tenant, User Admin)> AddTenantWithAdminAsync()
     {
@@ -161,23 +167,25 @@ public class RecordingSweepTests : TestBase
     public async Task the_hourly_check_queues_a_recording_that_still_waits()
     {
         // Arrange
-        var (admin, _) = await JournalScenario.AddPeopleAsync();
-        FactoryClient.SignInAsAppUser(admin.Identifier);
-        var session = await FactoryClient.AddSessionAsync();
-        var recording = await FactoryClient.AddFinishedRecordingAsync(session.Id);
-        using var folder = new SweptFolder();
+        var host = AuthHosts.HourlyCheck;
+        using var browser = new AuthBrowser(host);
+        var tokens = await browser.LoginNativeAsync($"hourly-check-{Guid.NewGuid():N}");
+        using var client = host.NewClient();
+        client.DefaultRequestHeaders.Authorization = AuthBrowser.Bearer(tokens.AccessToken);
+        var session = await client.AddSessionAsync();
+        var recording = await client.AddFinishedRecordingAsync(session.Id);
         var clock = new ClockThatTellsOfItsTimer(DateTimeOffset.UtcNow);
-        var sweep = new RecordingSweep(Services.GetRequiredService<IServiceScopeFactory>(), folder.Store, Services.GetRequiredService<IJobStore>(), clock);
+        var sweep = new RecordingSweep(host.Services.GetRequiredService<IServiceScopeFactory>(), host.Services.GetRequiredService<FileStore>(), host.Services.GetRequiredService<IJobStore>(), clock);
         using var service = new RecordingSweepService(sweep, clock);
-        var before = await CountJobsAsync("transcribe-recording", recording.Id);
+        var before = await CountTranscribeJobsAsync(host, recording.Id);
 
         // Act
         await service.StartAsync(CancellationToken.None);
-        // The hourly timer starts when the first sweep ends. That sweep reads every owner of the shared database, so its time grows with the suite.
+        // The hourly timer starts when the first sweep ends.
         await clock.TimerMade.WaitAsync(SweepLimit);
-        var afterStart = await CountJobsAsync("transcribe-recording", recording.Id);
+        var afterStart = await CountTranscribeJobsAsync(host, recording.Id);
         clock.Advance(RecordingSweepService.WaitingCheck);
-        var afterHour = await WaitForMoreJobsAsync(recording.Id, afterStart);
+        var afterHour = await WaitForMoreJobsAsync(host, recording.Id, afterStart);
         await service.StopAsync(CancellationToken.None);
 
         // Assert
@@ -309,14 +317,14 @@ public class RecordingSweepTests : TestBase
         (await CountJobsAsync("transcribe-recording", jobGone.Id)).ShouldBeGreaterThan(0);
     }
 
-    private static async Task<long> WaitForMoreJobsAsync(string recordingId, long known)
+    private static async Task<long> WaitForMoreJobsAsync(AuthFlowFactory host, string recordingId, long known)
     {
         using var limit = new CancellationTokenSource(SweepLimit);
         var count = known;
         while (count <= known && !limit.IsCancellationRequested)
         {
             await Task.Delay(100);
-            count = await CountJobsAsync("transcribe-recording", recordingId);
+            count = await CountTranscribeJobsAsync(host, recordingId);
         }
 
         return count;
