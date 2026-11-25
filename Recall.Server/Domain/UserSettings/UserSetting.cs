@@ -60,6 +60,18 @@ public class UserSetting : BaseEntity, ITenantable, IJournalOwned
         return true;
     }
 
+    /// <summary>Turns the import review on or off (IMP-19). A save of the stored value from another version changes nothing.</summary>
+    /// <exception cref="StaleVersionException">The row changed after the caller read it.</exception>
+    public bool ChangeImportReview(bool requireImportReview, uint version)
+    {
+        if (requireImportReview == RequireImportReview && version != Version)
+            return false;
+
+        GuardVersion(version);
+        RequireImportReview = requireImportReview;
+        return true;
+    }
+
     /// <summary>A device reports the zone that it is in. Only a row that follows the device takes it.</summary>
     /// <exception cref="ValidationException">The zone is not an IANA zone.</exception>
     public bool ReportDeviceZone(string zone)

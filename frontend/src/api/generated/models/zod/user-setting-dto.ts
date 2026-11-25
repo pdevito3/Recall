@@ -13,5 +13,6 @@ export const userSettingDtoSchema = z.object({
   requirePeopleProposalApproval: z.boolean(),
   removeFillerWords: z.boolean().describe('True when the Cleanup prompt asks the model to remove filler words, stutters, and false starts from Cleaned. Raw keeps each word.'),
   writeNumbersAsDigits: z.boolean().describe('True when the Cleanup prompt asks the model to write a spoken number, date, time, or amount of money in its usual written form in Cleaned, such as "3:30 PM" and "$20". Raw keeps each word.'),
+  requireImportReview: z.boolean().describe('True when only a web session of the person accepts an import batch. Only `PUT /me/settings/import-review` changes it.'),
   version: z.int().min(0).max(4294967295),
 })

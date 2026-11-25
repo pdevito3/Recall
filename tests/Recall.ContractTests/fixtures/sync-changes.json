@@ -102,6 +102,7 @@
     "requirePeopleProposalApproval": true,
     "removeFillerWords": true,
     "writeNumbersAsDigits": true,
+    "requireImportReview": true,
     "version": 1
   },
   "tombstones": []

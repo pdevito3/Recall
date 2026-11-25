@@ -466,7 +466,7 @@ test('a late part whose recording lost its audio on the server offers Discard an
   expect(card.getByRole('button', { name: /^Send again/ }).elements()).toHaveLength(0)
 })
 
-const setting: UserSettingDto = { timeZoneMode: 'Fixed', timeZone: 'Europe/Lisbon', timeZoneIsKnown: true, locationCaptureEnabled: false, requirePeopleProposalApproval: false, removeFillerWords: true, writeNumbersAsDigits: true, version: 1 }
+const setting: UserSettingDto = { timeZoneMode: 'Fixed', timeZone: 'Europe/Lisbon', timeZoneIsKnown: true, locationCaptureEnabled: false, requirePeopleProposalApproval: false, requireImportReview: true, removeFillerWords: true, writeNumbersAsDigits: true, version: 1 }
 
 async function aRefusedCapture(clientRecordingId: string, recordingId: string, agoMs: number, problem: UploadProblem = { kind: 'refused', text: 'The audio is larger than 8 MiB.' }) {
   await aFinishedCapture({
