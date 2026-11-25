@@ -21,15 +21,21 @@ public class TenantMcpToolTests : TestBase
 {
     private const string UnregisteredClientId = "unregistered-agent";
 
+    private static readonly string[] ImportTools =
+    [
+        "open_import_batch", "list_import_batches", "put_import_entries", "remove_import_entries",
+        "list_import_entries", "list_journal_days", "accept_import_batch", "discard_import_batch",
+    ];
+
     public static IEnumerable<Func<(string Caller, string[] Tools)>> ToolsOfEachCaller()
     {
         yield return () => ("member",
         [
-            "get_tenant", "list_tenants",
+            "get_tenant", "list_tenants", .. ImportTools,
         ]);
         yield return () => ("admin",
         [
-            "get_tenant", "list_tenants", "update_tenant",
+            "get_tenant", "list_tenants", "update_tenant", .. ImportTools,
         ]);
         yield return () => ("manage-all client",
         [

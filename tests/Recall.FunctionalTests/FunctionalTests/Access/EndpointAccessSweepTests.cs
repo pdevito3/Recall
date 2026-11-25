@@ -114,6 +114,14 @@ public class EndpointAccessSweepTests : TestBase
         ["AcceptImportBatch"] = new(JournalOfEachMember, OwnerOnly: true),
         ["DiscardImportBatch"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetJournalDays"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["open_import_batch"] = new($"ToolAccessKind.JournalWrite. {JournalOfEachMember}", OwnerOnly: true),
+        ["list_import_batches"] = new($"ToolAccessKind.JournalRead. {JournalOfEachMember}", OwnerOnly: true),
+        ["put_import_entries"] = new($"ToolAccessKind.JournalWrite. {JournalOfEachMember}", OwnerOnly: true),
+        ["remove_import_entries"] = new($"ToolAccessKind.JournalWrite. {JournalOfEachMember}", OwnerOnly: true),
+        ["list_import_entries"] = new($"ToolAccessKind.JournalRead. {JournalOfEachMember}", OwnerOnly: true),
+        ["list_journal_days"] = new($"ToolAccessKind.JournalRead. {JournalOfEachMember}", OwnerOnly: true),
+        ["accept_import_batch"] = new($"ToolAccessKind.JournalWrite. {JournalOfEachMember}", OwnerOnly: true),
+        ["discard_import_batch"] = new($"ToolAccessKind.JournalWrite. {JournalOfEachMember}", OwnerOnly: true),
         // new-feature:open-to-each-member
     };
 
@@ -606,6 +614,6 @@ public class EndpointAccessSweepTests : TestBase
                 name => ids.ValueFor(name, Kind) is { } value
                     ? JsonSerializer.SerializeToElement(value)
                     : (object?)JsonSerializer.SerializeToElement(
-                        SchemaSample.Of(InputSchema["properties"]![name]!, InputSchema)));
+                        SchemaSample.PropertyOf(name, InputSchema["properties"]![name]!, InputSchema)));
     }
 }
