@@ -8,6 +8,7 @@ public class ImportEntryTests
 {
     private static readonly DateTimeOffset Now = new(2026, 11, 25, 12, 0, 0, TimeSpan.Zero);
     private const string Edit = """{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"My words"}]}]}""";
+    private const string OtherEdit = """{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"My new words"}]}]}""";
 
     private static ImportAgentLayer Layer(string raw = "Words", string? time = null)
         => ImportAgentLayer.Of("2024-03-31", 0, time, null, raw, null, null);
@@ -51,35 +52,40 @@ public class ImportEntryTests
 
     [Test]
     [Property("Rule", "IMP-12")]
-    public void a_new_edit_clears_the_flag()
+    public void a_put_after_an_edit_sets_each_flag_and_a_new_edit_clears_it()
     {
         // Arrange
         var (batch, entry) = EntryOfABatch();
         entry.ChangeReview(ImportReview.Of(false, Edit, "08:00"), batch, Now);
         entry.PutFromAgent(Layer("New words", "21:00"));
+        var afterPut = (entry.WordsChangedAfterEdit, entry.TimeChangedAfterEdit);
 
         // Act
-        entry.ChangeReview(ImportReview.Of(false, null, "09:00"), batch, Now);
+        entry.ChangeReview(ImportReview.Of(false, OtherEdit, "09:00"), batch, Now);
 
         // Assert
-        entry.WordsChangedAfterEdit.ShouldBeFalse();
-        entry.TimeChangedAfterEdit.ShouldBeFalse();
+        afterPut.ShouldBe((true, true));
+        (entry.WordsChangedAfterEdit, entry.TimeChangedAfterEdit).ShouldBe((false, false));
     }
 
     [Test]
+    [Property("Rule", "IMP-5")]
     [Property("Rule", "IMP-6")]
-    public void a_put_never_changes_the_review()
+    public void a_put_replaces_the_agent_layer_and_leaves_the_review_layer()
     {
         // Arrange
         var (batch, entry) = EntryOfABatch();
         var review = ImportReview.Of(true, Edit, "08:00");
         entry.ChangeReview(review, batch, Now);
+        var agent = ImportAgentLayer.Of("2024-04-01", 3, "21:00", "Europe/Paris", "New words", ["calm"], ["Lake"]);
 
         // Act
-        entry.PutFromAgent(Layer("New words", "21:00"));
+        var changed = entry.PutFromAgent(agent);
 
         // Assert
-        entry.Review.ShouldBe(review);
+        changed.ShouldBeTrue();
+        entry.Agent.ShouldBeSameAs(agent);
+        entry.Review.ShouldBeSameAs(review);
     }
 
     [Test]

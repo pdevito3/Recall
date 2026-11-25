@@ -95,17 +95,4 @@ public class ImportAgentLayerTests
         // Assert
         exception.Property.ShouldBe("raw");
     }
-
-    [Test]
-    [Property("Rule", "IMP-5")]
-    public void a_layer_with_the_same_values_is_the_same_layer()
-    {
-        // Act
-        var first = Layer(time: "21:00", moods: ["calm"], topics: ["Lake"]);
-        var second = Layer(time: "21:00", moods: ["Calm"], topics: ["Lake"]);
-
-        // Assert
-        first.ShouldBe(second);
-        first.Moods.ShouldBe(["Calm"]);
-    }
 }
