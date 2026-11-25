@@ -1,13 +1,13 @@
 namespace Recall.Server.Resources.Entrypoints.Mcp;
 
+using Databases;
 using Domain.Users;
 using Exceptions;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 /// <summary>
-/// Shows each caller only the MCP tools it can use, and denies a call to any other tool. Both filters read the
-/// <see cref="ToolAccessAttribute"/> of the tool and ask <see cref="Caller"/>, so the list and the call agree.
+/// Shows each caller only the MCP tools it can use, and denies a call to any other tool.
 /// </summary>
 public static class McpToolAccess
 {
@@ -72,38 +72,67 @@ public static class McpToolAccess
                 => new ToolRequirement.Needs(Permission.Of(permission)),
             { Kind: ToolAccessKind.Read } => new ToolRequirement.Read(),
             { Kind: ToolAccessKind.ManageAllTenants } => new ToolRequirement.ManageAllTenants(),
+            { Kind: ToolAccessKind.JournalRead } => new ToolRequirement.JournalRead(),
+            { Kind: ToolAccessKind.JournalWrite } => new ToolRequirement.JournalWrite(),
             _ => null,
         };
 
-    private static Task<Caller> GetCallerAsync(MessageContext context, CancellationToken cancellationToken)
+    private static async Task<ToolCaller> GetCallerAsync(MessageContext context, CancellationToken cancellationToken)
     {
         var services = context.Services
             ?? throw new InvalidOperationException("The MCP request has no services, so it cannot load the caller.");
-        return services.GetRequiredService<IPermissionGuard>().GetCallerAsync(cancellationToken);
+        var identity = await services.GetRequiredService<ICallerIdentityResolver>().GetAsync(cancellationToken);
+        var caller = await services.GetRequiredService<IPermissionGuard>().GetCallerAsync(cancellationToken);
+        return new ToolCaller(caller, identity.Journal);
     }
+
+    private sealed record ToolCaller(Caller Caller, JournalAccess Journal);
 
     private abstract record ToolRequirement
     {
-        public abstract bool Allows(Caller caller);
+        public abstract bool Allows(ToolCaller caller);
 
-        public abstract void Demand(Caller caller);
+        public abstract void Demand(ToolCaller caller);
 
         public sealed record Read : ToolRequirement
         {
-            public override bool Allows(Caller caller) => caller.IsRecognized;
-            public override void Demand(Caller caller) => caller.RequireRecognized();
+            public override bool Allows(ToolCaller caller) => caller.Caller.IsRecognized;
+            public override void Demand(ToolCaller caller) => caller.Caller.RequireRecognized();
         }
 
         public sealed record ManageAllTenants : ToolRequirement
         {
-            public override bool Allows(Caller caller) => caller.ManagesAllTenants;
-            public override void Demand(Caller caller) => caller.RequireManagesAllTenants();
+            public override bool Allows(ToolCaller caller) => caller.Caller.ManagesAllTenants;
+            public override void Demand(ToolCaller caller) => caller.Caller.RequireManagesAllTenants();
         }
 
         public sealed record Needs(Permission Permission) : ToolRequirement
         {
-            public override bool Allows(Caller caller) => caller.Has(Permission);
-            public override void Demand(Caller caller) => caller.Require(Permission);
+            public override bool Allows(ToolCaller caller) => caller.Caller.Has(Permission);
+            public override void Demand(ToolCaller caller) => caller.Caller.Require(Permission);
+        }
+
+        public sealed record JournalRead : ToolRequirement
+        {
+            public override bool Allows(ToolCaller caller) => caller.Journal.CanRead;
+
+            public override void Demand(ToolCaller caller)
+            {
+                if (!caller.Journal.CanRead)
+                    throw new ForbiddenAccessException(JournalOwnerExtensions.NoJournalMessage);
+            }
+        }
+
+        public sealed record JournalWrite : ToolRequirement
+        {
+            public override bool Allows(ToolCaller caller) => caller.Journal.CanWrite;
+
+            public override void Demand(ToolCaller caller)
+            {
+                new JournalRead().Demand(caller);
+                if (!caller.Journal.CanWrite)
+                    throw new ForbiddenAccessException(JournalWriteRule.Refusal);
+            }
         }
     }
 }

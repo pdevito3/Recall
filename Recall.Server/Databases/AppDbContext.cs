@@ -82,7 +82,7 @@ public class AppDbContext(
 
     public string? CurrentJournalOwnerId => callerIdentityResolver.Current.JournalOwnerId;
 
-    internal bool CurrentCallerCanWriteJournal => callerIdentityResolver.Current.CanWriteJournal;
+    internal JournalAccess CurrentJournalAccess => callerIdentityResolver.Current.Journal;
 
     internal bool IsRunningDomainEventHandlers => _saveStage == SaveStage.Dispatching;
 

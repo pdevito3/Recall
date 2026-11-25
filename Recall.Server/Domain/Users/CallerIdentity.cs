@@ -74,6 +74,10 @@ public abstract record CallerIdentity
     public bool CanWriteJournal => this is User { LiveUser: not null } or JournalWork
         or PersonalAccessToken { Grant.Journal.CanWrite: true };
 
+    public JournalAccess Journal => JournalOwnerId is null ? JournalAccess.None
+        : CanWriteJournal ? JournalAccess.ReadWrite
+        : JournalAccess.Read;
+
     /// <summary>
     /// True for system work and for a client on the manage allow-list. It is a capability, not a permission
     /// (ADR 0009).

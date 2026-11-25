@@ -1,11 +1,13 @@
 namespace Recall.Server.Resources.Entrypoints;
 
 using Auth;
+using Domain.ImportBatches.Features;
 using Domain.Users;
 using Http;
 using Http.OpenApi;
 using Jobs;
 using Mcp;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 using Serilog.Core;
@@ -15,6 +17,7 @@ public static class EntrypointRegistration
 {
     /// <summary>The path of the MCP streamable HTTP endpoint.</summary>
     public const string McpPath = "/mcp";
+    public const string McpTooLargeMessage = "This call is larger than 16 MB. Send less data in each call, for example fewer entries.";
 
     public static void AddEntrypoints(this WebApplicationBuilder builder)
     {
@@ -86,7 +89,9 @@ public static class EntrypointRegistration
     {
         app.MapVersionedEndpoints();
         McpToolAccess.Validate(app.Services.GetRequiredService<IOptions<McpServerOptions>>().Value.ToolCollection ?? []);
-        app.MapMcp(McpPath).RequireAuthorization();
+        app.MapMcp(McpPath).RequireAuthorization().WithMetadata(
+            new RequestSizeLimitAttribute(PutImportEntriesEndpoint.MaxBodyBytes),
+            new RequestTooLargeDetail(McpTooLargeMessage));
         if (AuthRegistration.JwtIsOn(app.Configuration))
             app.MapMcpResourceMetadata();
         app.MapRecallAuth();

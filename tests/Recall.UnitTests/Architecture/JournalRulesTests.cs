@@ -13,6 +13,7 @@ using Recall.Server.Domain.Sessions;
 using Recall.Server.Domain.Sync;
 using Recall.Server.Domain.Users;
 using Recall.Server.Resources;
+using Recall.Server.Resources.Entrypoints.Mcp;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Shouldly;
@@ -95,25 +96,53 @@ public class JournalRulesTests
 
     [Test]
     [Property("Rule", "SES-15")]
-    public void no_mcp_tool_or_grpc_service_is_in_a_journal_domain()
+    [Property("Rule", "IMP-22")]
+    public void each_mcp_tool_of_a_journal_domain_is_for_a_caller_with_a_journal()
     {
         // Arrange
+        var types = JournalDomainTypes();
+
+        // Act
+        var tools = types
+            .Where(t => t.GetCustomAttribute<McpServerToolTypeAttribute>() is not null)
+            .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Static))
+            .Where(m => m.GetCustomAttribute<McpServerToolAttribute>() is not null)
+            .ToList();
+        var notForAJournal = tools
+            .Where(m => m.GetCustomAttribute<ToolAccessAttribute>()?.Kind is not (ToolAccessKind.JournalRead or ToolAccessKind.JournalWrite))
+            .Select(m => $"{m.DeclaringType!.FullName}.{m.Name}");
+
+        // Assert
+        tools.ShouldNotBeEmpty();
+        notForAJournal.ShouldBeEmpty("A machine has no journal, so each MCP tool of a journal domain has [ToolAccess(ToolAccessKind.JournalRead)] or [ToolAccess(ToolAccessKind.JournalWrite)].");
+    }
+
+    [Test]
+    [Property("Rule", "SES-15")]
+    public void no_grpc_service_is_in_a_journal_domain()
+    {
+        // Arrange
+        var types = JournalDomainTypes();
+
+        // Act
+        var services = types
+            .Where(t => t.BaseType?.GetCustomAttribute<BindServiceMethodAttribute>() is not null)
+            .Select(t => t.FullName);
+
+        // Assert
+        services.ShouldBeEmpty("A machine has no journal, so a journal route has no gRPC service.");
+    }
+
+    private static List<Type> JournalDomainTypes()
+    {
         using var context = new AppDbContextFactory().CreateDbContext([]);
         var journalNamespaces = context.Model.GetEntityTypes()
             .Where(e => e.FindDeclaredQueryFilter(QueryFilterNames.JournalOwner) is not null)
             .Select(e => e.ClrType.Namespace!)
             .ToHashSet(StringComparer.Ordinal);
-        var types = typeof(Session).Assembly.GetTypes()
-            .Where(t => t.Namespace is { } name && journalNamespaces.Any(root => name.StartsWith(root, StringComparison.Ordinal)));
-
-        // Act
-        var adapters = types
-            .Where(t => t.GetCustomAttribute<McpServerToolTypeAttribute>() is not null
-                || t.BaseType?.GetCustomAttribute<BindServiceMethodAttribute>() is not null)
-            .Select(t => t.FullName);
-
-        // Assert
-        adapters.ShouldBeEmpty("A machine has no journal, so a journal route has only the HTTP adapter of the person who owns it.");
+        return typeof(Session).Assembly.GetTypes()
+            .Where(t => t.Namespace is { } name && journalNamespaces.Any(root => name.StartsWith(root, StringComparison.Ordinal)))
+            .ToList();
     }
 
     private static bool BelongsToAPersonOrAJournalRow(IEntityType table)
