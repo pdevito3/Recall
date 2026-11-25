@@ -82,4 +82,34 @@ public class ImportPositionsTests
         // Assert
         taken.ShouldBe(new Dictionary<string, string> { ["y"] = "z", ["z"] = "y", ["x"] = "y" });
     }
+
+    [Test]
+    [Property("Rule", "IMP-8")]
+    public void a_stored_entry_that_the_call_names_on_its_own_slot_stays_and_only_the_entry_that_moves_in_is_refused()
+    {
+        // Arrange
+        var stored = new Dictionary<string, ImportSlot> { ["kept"] = At(0) };
+        var proposed = new Dictionary<string, ImportSlot> { ["kept"] = At(0), ["new"] = At(0) };
+
+        // Act
+        var taken = ImportPositions.Check(stored, proposed);
+
+        // Assert
+        taken.ShouldBe(new Dictionary<string, string> { ["new"] = "kept" });
+    }
+
+    [Test]
+    [Property("Rule", "IMP-8")]
+    public void each_entry_that_moves_into_the_slot_of_an_entry_that_stays_names_the_one_that_stays()
+    {
+        // Arrange
+        var stored = new Dictionary<string, ImportSlot> { ["b-stays"] = At(0), ["a-moves"] = At(1) };
+        var proposed = new Dictionary<string, ImportSlot> { ["b-stays"] = At(0), ["a-moves"] = At(0), ["c-new"] = At(0) };
+
+        // Act
+        var taken = ImportPositions.Check(stored, proposed);
+
+        // Assert
+        taken.ShouldBe(new Dictionary<string, string> { ["a-moves"] = "b-stays", ["c-new"] = "b-stays" });
+    }
 }
