@@ -10,12 +10,6 @@ import type { ValidationProblemDetails } from '../../models/types/validation-pro
 
 export type ReviewImportDayPath = {
     id: string;
-    /**
-     * @description
-     * Format: `date`
-     * @type string
-    */
-    date: string;
 };
 
 export type ReviewImportDayHeaders = {

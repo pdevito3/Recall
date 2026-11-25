@@ -14,7 +14,8 @@
       "topics": [],
       "personIds": [],
       "version": 1,
-      "metadataVersion": 0
+      "metadataVersion": 0,
+      "importBatchId": null
     }
   ],
   "nextCursor": "1780304400000000_ses_00000000000000000000000000000004"

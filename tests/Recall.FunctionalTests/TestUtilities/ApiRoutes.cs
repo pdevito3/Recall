@@ -110,7 +110,7 @@ public static class ApiRoutes
         public static string Entries(string id) => $"{Base}/import-batches/{id}/entries";
         public static string RemoveEntries(string id) => $"{Base}/import-batches/{id}/entries/remove";
         public static string ReviewEntry(string id) => $"{Base}/import-batches/{id}/entries/review";
-        public static string ReviewDay(string id, DateOnly date) => $"{Base}/import-batches/{id}/days/{date:yyyy-MM-dd}/review";
+        public static string ReviewDay(string id) => $"{Base}/import-batches/{id}/days/review";
         public static string Accept(string id) => $"{Base}/import-batches/{id}/accept";
     }
 

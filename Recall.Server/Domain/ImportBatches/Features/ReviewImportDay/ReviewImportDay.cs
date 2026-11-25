@@ -10,7 +10,7 @@ using Serilog;
 
 public static class ReviewImportDay
 {
-    public sealed record Command(string Id, DateOnly Date, ImportDayReviewDto Dto) : IRequest<ImportDayReviewedDto>, IRunsAgainWhenRaced;
+    public sealed record Command(string Id, ImportDayReviewDto Dto) : IRequest<ImportDayReviewedDto>, IRunsAgainWhenRaced;
 
     public sealed class Handler(AppDbContext dbContext) : IRequestHandler<Command, ImportDayReviewedDto>
     {
@@ -26,12 +26,12 @@ public static class ReviewImportDay
                 .TagWithOperationCallSite("import_batches.review_day.load")
                 .Include(b => b.Days)
                 .GetBatchAsync(request.Id, cancellationToken);
-            var changed = batch.ReviewDay(request.Date, request.Dto.Rejected);
+            var changed = batch.ReviewDay(request.Dto.Date, request.Dto.Rejected);
             await dbContext.SaveChangesAsync(cancellationToken);
 
             _logger.Here().Information("Reviewed a day of import batch {ImportBatchId}, changed {Changed}, rejected {Rejected}",
                 batch.Id, changed, request.Dto.Rejected);
-            return new ImportDayReviewedDto { Version = batch.Version, Date = request.Date, Rejected = request.Dto.Rejected };
+            return new ImportDayReviewedDto { Version = batch.Version, Date = request.Dto.Date, Rejected = request.Dto.Rejected };
         }
     }
 }

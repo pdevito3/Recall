@@ -31,6 +31,9 @@ public sealed record ImportEntryReviewedDto
 
 public sealed record ImportDayReviewDto
 {
+    /// <summary>The date of the day as <c>YYYY-MM-DD</c>. It is in the body, so that no request span holds it.</summary>
+    public required DateOnly Date { get; init; }
+
     public required bool Rejected { get; init; }
 }
 

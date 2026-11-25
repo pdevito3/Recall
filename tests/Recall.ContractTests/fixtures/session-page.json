@@ -14,7 +14,8 @@
       "topics": [],
       "personIds": [],
       "version": 1,
-      "metadataVersion": 0
+      "metadataVersion": 0,
+      "importBatchId": null
     },
     {
       "id": "ses_00000000000000000000000000000003",
@@ -39,7 +40,8 @@
         "per_00000000000000000000000000000001"
       ],
       "version": 5,
-      "metadataVersion": 1
+      "metadataVersion": 1,
+      "importBatchId": null
     }
   ],
   "nextCursor": null

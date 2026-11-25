@@ -66,7 +66,7 @@ An accept deletes the `ImportEntry` and `ImportDay` rows. The `ImportBatch` row 
 | IMP-26 | A list of journal days gives each Journaling day from a start date to an end date, both included, that has a Session, with the count of its Sessions. A range of more than 366 days, or an end before the start, gives 422. The agent uses it to find an overlap with the journal. | `GetJournalDays` | |
 | IMP-27 | An accept of more than 20,000 kept entries gives 422 and changes nothing, so that one accept ends inside the 30 s limit of the writer. The person splits the batch, for example by year. | `ImportBatch.Accept` | |
 | IMP-28 | The outcome of a put entry is the first that applies: `Invalid` with the field and the reason, `InJournal`, `Deleted`, `InOtherBatch`, `InTheFuture`, `PositionTaken`, `Rejected`, `Unchanged`, `Changed`, `Added`. `Invalid` covers a Client session ID that is blank or has more than 100 characters, a date that is not valid or is outside 1000-01-01 to 9998-12-31, a position outside 0 to 719, a time that is not `HH:mm`, a zone of IMP-10, a Raw of IMP-11, and Moods or Topics over the limits of a Session (50 values of at most 100 characters). Only `Rejected`, `Changed`, and `Added` store the agent layer. A whole call gets 422 when it names one Client session ID twice or holds more than 500 entries, and 413 when its HTTP body, on REST or on `/mcp`, is more than 16 MB. | `PutImportEntries`, `ImportPutOutcomes.Of`, `ImportAgentLayer.Of` | |
-| IMP-29 | A Session read carries `importBatchId`, null for a Session that no import made. The Sync feed does not carry it. | `SessionMapper` | |
+| IMP-29 | A Session read and each row of the timeline (`GET /sessions`) carry `importBatchId`, null for a Session that no import made. The Sync feed does not carry it. | `SessionMapper`, `GetSessionPage` | |
 | IMP-30 (later) | The `recall-import` skill names exactly the MCP tools of the import. | `frontend/src/domain/imports/recall-import.md` | A test that compares the skill with the tool list |
 
 ## 4. Permissions
@@ -84,7 +84,7 @@ None. Each import route needs a caller with a journal (SES-15), and each write n
 | `GetImportEntries` | `GET /api/v1/import-batches/{id}/entries`, with optional `from` and `to` dates, both included | `list_import_entries` | A journal |
 | `GetJournalDays` | `GET /api/v1/journal-days` | `list_journal_days` | A journal |
 | `ReviewImportEntry` | `PUT /api/v1/import-batches/{id}/entries/review`, with the Client session ID in the body | None | Journal write |
-| `ReviewImportDay` | `PUT /api/v1/import-batches/{id}/days/{date}/review` | None | Journal write |
+| `ReviewImportDay` | `PUT /api/v1/import-batches/{id}/days/review`, with the date in the body | None | Journal write |
 | `AcceptImportBatch` | `POST /api/v1/import-batches/{id}/accept` | `accept_import_batch` | Journal write, and IMP-18 |
 | `DiscardImportBatch` | `DELETE /api/v1/import-batches/{id}` | `discard_import_batch` | Journal write |
 | `ChangeImportReview` | `PUT /api/v1/me/settings/import-review` | None | A web session |

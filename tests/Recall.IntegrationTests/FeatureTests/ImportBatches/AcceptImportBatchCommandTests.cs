@@ -278,7 +278,7 @@ public class AcceptImportBatchCommandTests : TestBase
             () => PutAsync(reader, batch.Id),
             () => reader.SendAsync(new RemoveImportEntries.Command(batch.Id, new ImportEntriesRemoveDto { ClientSessionIds = ["nothing"] })),
             () => reader.SendAsync(new ReviewImportEntry.Command(batch.Id, new ImportEntryReviewDto { ClientSessionId = "a", Rejected = false })),
-            () => reader.SendAsync(new ReviewImportDay.Command(batch.Id, Day, new ImportDayReviewDto { Rejected = false })),
+            () => reader.SendAsync(new ReviewImportDay.Command(batch.Id, new ImportDayReviewDto { Date = Day, Rejected = false })),
             () => reader.SendAsync(new AcceptImportBatch.Command(batch.Id, new ImportBatchAcceptDto { Version = version })),
             () => reader.SendAsync(new DiscardImportBatch.Command(batch.Id)),
         ];
