@@ -30,7 +30,7 @@ public abstract record Caller
 
     /// <summary>
     /// The user for whom the caller may use the job tools, if that user is the Owner: a person, or a personal access token
-    /// whose grant holds the job tools. Null for each other caller. The Owner gate of each other place takes only a person.
+    /// whose grant holds the job tools. Null for each other caller.
     /// </summary>
     public string? JobToolsUserId => this switch
     {
@@ -112,7 +112,6 @@ public abstract record Caller
 
         public string TokenId { get; }
 
-        /// <summary>The user of the token.</summary>
         public string UserId { get; }
 
         /// <inheritdoc cref="TokenGrant.JobTools"/>

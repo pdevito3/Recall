@@ -35,6 +35,7 @@ test.describe('the personal access tokens of a person', () => {
       permissions: [],
       readJournal: false,
       writeJournal: false,
+      jobTools: false,
       expiresAt: endOfDayIn('2027-02-15'),
     })
     await expect(tokens.at.createdTitle).toBeVisible()
@@ -333,6 +334,7 @@ test.describe('the personal access tokens of a person', () => {
       permissions: [],
       readJournal: false,
       writeJournal: false,
+      jobTools: false,
       neverExpires: true,
     })
     await expect(tokens.at.dialog).toContainText('It works until you revoke it.')

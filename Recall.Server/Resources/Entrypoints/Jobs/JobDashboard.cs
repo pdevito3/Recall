@@ -61,11 +61,11 @@ public static class JobDashboard
 
     public static readonly BackWaveDashboardOptions DashboardOptions = new()
     {
-        AuthorizeView = JobOwnerCheck.PassesAsync,
-        AuthorizeRequeue = JobOwnerCheck.PassesAsync,
-        AuthorizeCancel = JobOwnerCheck.PassesAsync,
-        AuthorizePauseQueue = JobOwnerCheck.PassesAsync,
-        AuthorizeTriggerSchedule = JobOwnerCheck.PassesAsync,
+        AuthorizeView = JobOwnerCheck.PassesForDashboardAsync,
+        AuthorizeRequeue = JobOwnerCheck.PassesForDashboardAsync,
+        AuthorizeCancel = JobOwnerCheck.PassesForDashboardAsync,
+        AuthorizePauseQueue = JobOwnerCheck.PassesForDashboardAsync,
+        AuthorizeTriggerSchedule = JobOwnerCheck.PassesForDashboardAsync,
         ExposeSensitiveData = false,
         ResolveActor = JobOwnerCheck.ActorOf,
     };

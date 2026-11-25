@@ -75,7 +75,6 @@ public static class JobHosting
         Retention = new RetentionPolicy { KeepSucceeded = KeepSucceeded },
     };
 
-    // The composition root gives the entrypoints that BackWave registers, such as its MCP server.
     public static void AddJobs(this WebApplicationBuilder builder, Action<BackWaveBuilder>? entrypoints = null)
     {
         var section = builder.Configuration.GetSection(JobOptions.SectionName);

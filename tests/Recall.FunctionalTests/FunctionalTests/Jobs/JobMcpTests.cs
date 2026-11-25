@@ -21,8 +21,7 @@ using Recall.Server.Resources.Entrypoints.Jobs;
 using Recall.Server.Resources.Entrypoints.Mcp;
 using Shouldly;
 
-// The Owner of AuthHosts.Jobs is the first subject that signs in, so these tests share the lock of JobDashboardTests.
-[NotInParallel(nameof(JobDashboardTests))]
+[NotInParallel(AuthHosts.JobsOwnerLock)]
 public class JobMcpTests
 {
     private const string OwnerSubject = "jobs-owner";

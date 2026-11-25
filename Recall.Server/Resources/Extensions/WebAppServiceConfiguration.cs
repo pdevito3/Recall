@@ -19,7 +19,6 @@ public static class WebAppServiceConfiguration
     /// <summary>
     /// Adds the core services: the database, the domain event handlers, MediatR, the caches, and the tenant scope. It adds no transport.
     /// </summary>
-    // The composition root gives the BackWave entrypoints, because the core does not see an entrypoint.
     public static void ConfigureServices(this WebApplicationBuilder builder, Action<BackWave.Hosting.BackWaveBuilder>? jobEntrypoints = null)
     {
         builder.Services.AddSingleton(TimeProvider.System);

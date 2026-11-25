@@ -83,6 +83,9 @@ public static class AuthHosts
 
     public static AuthFlowFactory Bundle { get; private set; } = null!;
 
+    /// <summary>The key of <c>NotInParallel</c> for each test class that makes or reads the Owner of <see cref="Jobs"/>.</summary>
+    public const string JobsOwnerLock = nameof(Jobs);
+
     public static AuthFlowFactory Jobs { get; private set; } = null!;
 
     public static AuthFlowFactory Cleanups { get; private set; } = null!;
@@ -97,7 +100,6 @@ public static class AuthHosts
 
     public static AuthFlowFactory OwnerDemotion { get; private set; } = null!;
 
-    /// <summary>A host whose Owner only the demotion test of <see cref="Recall.FunctionalTests.FunctionalTests.Jobs.JobMcpTests"/> demotes.</summary>
     public static AuthFlowFactory JobToolsDemotion { get; private set; } = null!;
 
     public static OtlpCollector BundleExport { get; private set; } = null!;

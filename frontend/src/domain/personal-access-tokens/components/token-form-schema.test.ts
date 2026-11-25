@@ -31,7 +31,7 @@ describe('the expiry of a new token', () => {
     const eastOfUtc = bodyOf({ ...EMPTY_TOKEN, name: 'Laptop' }, todayAt(kiritimati, instant), kiritimati)
 
     // Assert
-    expect(westOfUtc).toEqual({ name: 'Laptop', permissions: [], readJournal: false, writeJournal: false, expiresAt: '2027-02-14T10:59:59.999Z' })
+    expect(westOfUtc).toEqual({ name: 'Laptop', permissions: [], readJournal: false, writeJournal: false, jobTools: false, expiresAt: '2027-02-14T10:59:59.999Z' })
     expect(eastOfUtc.expiresAt).toBe('2027-02-14T09:59:59.999Z')
     expect(eastOfUtc.neverExpires).toBeUndefined()
   })
@@ -41,17 +41,17 @@ describe('the expiry of a new token', () => {
     const body = bodyOf({ ...EMPTY_TOKEN, name: 'Laptop', expiry: 'never' }, today, pagoPago)
 
     // Assert
-    expect(body).toEqual({ name: 'Laptop', permissions: [], readJournal: false, writeJournal: false, neverExpires: true })
+    expect(body).toEqual({ name: 'Laptop', permissions: [], readJournal: false, writeJournal: false, jobTools: false, neverExpires: true })
   })
 
-  test('@PAT-21 the body names the job tools only when they are picked', () => {
+  test('@PAT-21 the body sends the job tools as picked', () => {
     // Arrange, Act
     const picked = bodyOf({ ...EMPTY_TOKEN, name: 'Claude Code', expiry: 'never', jobTools: true }, today, pagoPago)
     const notPicked = bodyOf({ ...EMPTY_TOKEN, name: 'Laptop', expiry: 'never' }, today, pagoPago)
 
     // Assert
     expect(picked).toEqual({ name: 'Claude Code', permissions: [], readJournal: false, writeJournal: false, jobTools: true, neverExpires: true })
-    expect(notPicked).not.toHaveProperty('jobTools')
+    expect(notPicked.jobTools).toBe(false)
   })
 
   test('@PAT-8 a picked date ends at the end of that day in the zone of the browser', () => {

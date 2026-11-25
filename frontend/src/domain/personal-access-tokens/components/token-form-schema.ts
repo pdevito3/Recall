@@ -77,10 +77,7 @@ export function expiryDateOf(values: Pick<TokenFormValues, 'expiry' | 'expiresAt
 
 const endOfDayAt = (date: CalendarDate, zone: TimeZone): Date => new Date(startOfDayAt(date.add({ days: 1 }), zone).getTime() - 1)
 
-/**
- * The body of the create. A token works through the whole of its last day in the zone of the browser. Only the Owner sees
- * the job tools, so the body names them only when they are picked.
- */
+/** The body of the create. A token works through the whole of its last day in the zone of the browser. */
 export function bodyOf(values: TokenFormValues, today: CalendarDate, zone: TimeZone): PersonalAccessTokenForCreationDto {
   const lastDay = expiryDateOf(values, today)
   return {
@@ -88,7 +85,7 @@ export function bodyOf(values: TokenFormValues, today: CalendarDate, zone: TimeZ
     permissions: values.permissions,
     readJournal: values.readJournal,
     writeJournal: values.writeJournal,
-    ...(values.jobTools ? { jobTools: true } : {}),
+    jobTools: values.jobTools,
     ...(lastDay ? { expiresAt: endOfDayAt(lastDay, zone).toISOString() } : { neverExpires: true }),
   }
 }

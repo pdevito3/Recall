@@ -52,7 +52,7 @@ public sealed record TokenGrant
 
     public JournalAccess Journal { get; }
 
-    /// <summary>The token may use the job tools of the Owner. It is not a permission, because only the Owner holds it.</summary>
+    /// <summary>The token may use the job tools of the Owner.</summary>
     public bool JobTools { get; }
 
     /// <summary>
@@ -68,7 +68,7 @@ public sealed record TokenGrant
     /// <summary>
     /// Reads the text of <see cref="Encode"/>. A permission name or an item that this build does not know is dropped, and a
     /// journal access that it does not know is <see cref="JournalAccess.None"/>, so a removed name grants nothing. A text
-    /// with no third part, which each grant before the job tools has, holds no job tools.
+    /// with no third part holds no job tools.
     /// </summary>
     public static TokenGrant Decode(string text)
     {

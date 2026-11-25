@@ -50,7 +50,6 @@ function FieldMessage({ id, message }: { id: string; message?: string }) {
 
 export interface TokenFormProps {
   permissions: readonly string[]
-  /** True for the Owner, the only person who can give a token the job tools. */
   canGiveJobTools: boolean
   today: CalendarDate
   zone: TimeZone

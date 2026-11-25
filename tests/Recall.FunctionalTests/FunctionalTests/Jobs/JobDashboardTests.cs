@@ -24,7 +24,7 @@ using Recall.Server.Resources.Entrypoints.Jobs;
 using Recall.Server.Resources.Jobs;
 using Shouldly;
 
-[NotInParallel(nameof(JobDashboardTests))]
+[NotInParallel(AuthHosts.JobsOwnerLock)]
 public partial class JobDashboardTests
 {
     private const string OwnerSubject = "jobs-owner";

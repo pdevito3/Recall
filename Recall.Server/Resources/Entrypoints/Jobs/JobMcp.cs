@@ -14,11 +14,7 @@ public static class JobMcp
 
     public static bool Serves(PathString path) => path.StartsWithSegments(Path);
 
-    /// <summary>
-    /// Call it inside <c>AddBackWave</c>. BackWave allows a view by default, so each callback that BackWave allows by
-    /// default is set here. Of the write actions, the Owner gets only a requeue. The payload and the output of a job
-    /// stay hidden.
-    /// </summary>
+    /// <summary>BackWave allows a view by default, so each callback that BackWave allows by default is set here.</summary>
     public static void Add(BackWaveBuilder backwave) => backwave.AddMcp(options =>
     {
         options.AuthorizeView = JobOwnerCheck.PassesForJobToolsAsync;
@@ -27,6 +23,5 @@ public static class JobMcp
         options.ResolveActor = JobOwnerCheck.ActorOf;
     });
 
-    /// <summary>A request with no credential gets a 401 with a Bearer challenge from the authorization of the route.</summary>
     public static void MapJobMcp(this WebApplication app) => app.MapBackWaveProMcp(Path).RequireAuthorization();
 }
