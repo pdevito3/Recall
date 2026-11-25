@@ -22,9 +22,10 @@ import { TokenForm, type TokenFormProps } from './token-form'
 
 interface NewTokenDialogProps {
   permissions: readonly string[]
+  canGiveJobTools: boolean
 }
 
-export function NewTokenDialog({ permissions }: NewTokenDialogProps) {
+export function NewTokenDialog({ permissions, canGiveJobTools }: NewTokenDialogProps) {
   const add = useAddPersonalAccessToken()
   const { isOpen, onOpenChange, send, isLocked, leaving } = useShownOnce(add)
 
@@ -33,7 +34,7 @@ export function NewTokenDialog({ permissions }: NewTokenDialogProps) {
       <ResponsiveDialogTrigger isOpen={isOpen} onOpenChange={onOpenChange}>
         <Button>New token</Button>
         <ResponsiveDialog isDismissable={!isLocked} isKeyboardDismissDisabled={isLocked} showCloseButton={!isLocked}>
-          <NewToken add={add} permissions={permissions} onCreate={send} />
+          <NewToken add={add} permissions={permissions} canGiveJobTools={canGiveJobTools} onCreate={send} />
         </ResponsiveDialog>
       </ResponsiveDialogTrigger>
       <LeaveQuestion
@@ -48,6 +49,7 @@ export function NewTokenDialog({ permissions }: NewTokenDialogProps) {
 function NewToken({
   add,
   permissions,
+  canGiveJobTools,
   onCreate,
 }: NewTokenDialogProps & Pick<TokenFormProps, 'onCreate'> & { add: ReturnType<typeof useAddPersonalAccessToken> }) {
   const [zone] = useState(browserTimeZone)
@@ -58,6 +60,7 @@ function NewToken({
   return (
     <TokenForm
       permissions={permissions}
+      canGiveJobTools={canGiveJobTools}
       today={today}
       zone={zone}
       isPending={add.isPending}

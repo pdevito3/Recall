@@ -59,7 +59,7 @@ public sealed class PermissionGuard(
                 : new Caller.Outsider(OutsiderKind.NoUserRecord),
             CallerIdentity.DelegatedAgent agent => await LoadDelegatedAgentAsync(agent, cancellationToken),
             CallerIdentity.PersonalAccessToken token => await LoadUserAsync(token.Subject, cancellationToken) is { } user
-                ? new Caller.PersonalAccessToken(token.TokenId, user.UserPermissions.Select(p => p.Permission), token.Grant.Permissions)
+                ? new Caller.PersonalAccessToken(token.TokenId, user.Id, user.UserPermissions.Select(p => p.Permission), token.Grant)
                 : new Caller.Outsider(OutsiderKind.NoUserRecord),
             CallerIdentity.MachineAgent agent => await LoadGrantAsync(agent.AgentId, cancellationToken) is { } grant
                 ? new Caller.MachineAgent(agent.ClientId, grant)

@@ -15,6 +15,9 @@ public sealed record PersonalAccessTokenDto
 
     public bool ReadJournal { get; init; }
     public bool WriteJournal { get; init; }
+
+    /// <summary>The token may use the job tools at /backwave-mcp while its person is the Owner.</summary>
+    public bool JobTools { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
 
     /// <summary>Null for a token that never expires.</summary>

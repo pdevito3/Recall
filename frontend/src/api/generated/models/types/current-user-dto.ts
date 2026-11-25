@@ -18,4 +18,9 @@ export type CurrentUserDto = {
      * @type string | undefined
     */
     name?: string | null;
+    /**
+     * @description True when the caller is the Owner of this install, in person. A personal access token is never the Owner.
+     * @type boolean
+    */
+    isOwner: boolean;
 };

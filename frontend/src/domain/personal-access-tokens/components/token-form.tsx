@@ -50,13 +50,15 @@ function FieldMessage({ id, message }: { id: string; message?: string }) {
 
 export interface TokenFormProps {
   permissions: readonly string[]
+  /** True for the Owner, the only person who can give a token the job tools. */
+  canGiveJobTools: boolean
   today: CalendarDate
   zone: TimeZone
   isPending: boolean
   onCreate: (body: PersonalAccessTokenForCreationDto, onError: (error: unknown) => void) => void
 }
 
-export function TokenForm({ permissions, today, zone, isPending, onCreate }: TokenFormProps) {
+export function TokenForm({ permissions, canGiveJobTools, today, zone, isPending, onCreate }: TokenFormProps) {
   const form = useForm<TokenFormValues>({
     resolver: zodResolver(tokenFormSchema(today)),
     defaultValues: EMPTY_TOKEN,
@@ -162,6 +164,32 @@ export function TokenForm({ permissions, today, zone, isPending, onCreate }: Tok
             </CheckboxGroupWithLabel>
           )}
         />
+      )}
+
+      {canGiveJobTools && (
+        <fieldset className="flex flex-col gap-3">
+          <legend className="mb-2 text-sm font-medium">Jobs</legend>
+          <Controller
+            control={form.control}
+            name="jobTools"
+            render={({ field }) => (
+              <Checkbox
+                className="max-md:min-h-11"
+                isSelected={field.value}
+                onChange={field.onChange}
+                inputRef={field.ref}
+                aria-describedby="token-job-tools-hint"
+              >
+                Use the job tools
+              </Checkbox>
+            )}
+          />
+          <p id="token-job-tools-hint" className="text-sm text-muted-foreground">
+            An MCP client at <code className="font-mono wrap-anywhere">/backwave-mcp</code> reads the jobs, queues, schedules, and
+            failures of this server, and requeues a job. Only the Owner can give a token this, and it stops when you are no longer
+            the Owner.
+          </p>
+        </fieldset>
       )}
 
       <Controller

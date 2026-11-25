@@ -44,6 +44,16 @@ describe('the expiry of a new token', () => {
     expect(body).toEqual({ name: 'Laptop', permissions: [], readJournal: false, writeJournal: false, neverExpires: true })
   })
 
+  test('@PAT-21 the body names the job tools only when they are picked', () => {
+    // Arrange, Act
+    const picked = bodyOf({ ...EMPTY_TOKEN, name: 'Claude Code', expiry: 'never', jobTools: true }, today, pagoPago)
+    const notPicked = bodyOf({ ...EMPTY_TOKEN, name: 'Laptop', expiry: 'never' }, today, pagoPago)
+
+    // Assert
+    expect(picked).toEqual({ name: 'Claude Code', permissions: [], readJournal: false, writeJournal: false, jobTools: true, neverExpires: true })
+    expect(notPicked).not.toHaveProperty('jobTools')
+  })
+
   test('@PAT-8 a picked date ends at the end of that day in the zone of the browser', () => {
     // Arrange, Act
     const body = bodyOf({ ...EMPTY_TOKEN, name: 'Laptop', expiry: 'date', expiresAt: new CalendarDate(2027, 1, 31) }, today, kiritimati)

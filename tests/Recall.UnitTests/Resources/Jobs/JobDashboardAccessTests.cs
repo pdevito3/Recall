@@ -18,6 +18,8 @@ public class JobDashboardAccessTests
     private sealed class StubOwnerGuard(string? owner) : IOwnerGuard
     {
         public Task<string?> CallerIfOwnerAsync(CancellationToken cancellationToken) => Task.FromResult(owner);
+
+        public Task<string?> JobToolsCallerIfOwnerAsync(CancellationToken cancellationToken) => Task.FromResult(owner);
     }
 
     private static DefaultHttpContext ContextOf(string? owner) => new()

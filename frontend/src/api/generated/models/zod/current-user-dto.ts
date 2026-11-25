@@ -8,4 +8,5 @@ import * as z from 'zod'
 export const currentUserDtoSchema = z.object({
   identifier: z.string().describe('The `sub` claim of the token.'),
   name: z.string().nullish().describe('The display name from the token, or null when the identity provider sends no name.'),
+  isOwner: z.boolean().describe('True when the caller is the Owner of this install, in person. A personal access token is never the Owner.'),
 }).describe('The signed-in caller as the Server sees it in the access token.')

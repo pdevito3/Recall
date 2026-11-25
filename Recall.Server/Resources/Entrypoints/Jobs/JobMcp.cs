@@ -4,7 +4,8 @@ using BackWave.Hosting;
 using BackWave.Pro.Mcp;
 
 /// <summary>
-/// The BackWave MCP server, for the Owner only. It takes a bearer credential only: <see cref="Auth.AppSessionHandler"/>
+/// The BackWave MCP server, for the Owner only: a native session of the Owner, or a personal access token of the Owner
+/// whose grant holds the job tools. It takes a bearer credential only: <see cref="Auth.AppSessionHandler"/>
 /// refuses a session cookie on this path, also with <c>X-CSRF: 1</c>.
 /// </summary>
 public static class JobMcp
@@ -20,8 +21,8 @@ public static class JobMcp
     /// </summary>
     public static void Add(BackWaveBuilder backwave) => backwave.AddMcp(options =>
     {
-        options.AuthorizeView = JobOwnerCheck.PassesAsync;
-        options.AuthorizeRequeue = JobOwnerCheck.PassesAsync;
+        options.AuthorizeView = JobOwnerCheck.PassesForJobToolsAsync;
+        options.AuthorizeRequeue = JobOwnerCheck.PassesForJobToolsAsync;
         options.ExposeSensitiveData = false;
         options.ResolveActor = JobOwnerCheck.ActorOf;
     });

@@ -7,6 +7,7 @@ import { useMembership } from '@/domain/membership/apis/get-membership'
 import { useMyPersonalAccessTokens } from '@/domain/personal-access-tokens/apis/personal-access-tokens'
 import { NewTokenDialog } from '@/domain/personal-access-tokens/components/new-token-dialog'
 import { TokenList } from '@/domain/personal-access-tokens/components/token-list'
+import { useCurrentUser } from '@/domain/users/apis/get-current-user'
 
 export const Route = createFileRoute('/settings/personal-access-tokens')({
   component: PersonalAccessTokensPage,
@@ -16,6 +17,7 @@ export const Route = createFileRoute('/settings/personal-access-tokens')({
 function PersonalAccessTokensPage() {
   const membership = useMembership()
   const tokens = useMyPersonalAccessTokens()
+  const currentUser = useCurrentUser()
   const headingRef = useRef<HTMLHeadingElement>(null)
 
   return (
@@ -26,7 +28,9 @@ function PersonalAccessTokensPage() {
           A token lets a script or an MCP client call Recall as you. The client sends it as{' '}
           <code className="font-mono text-sm wrap-anywhere">Authorization: Bearer</code>. Revoke a token that you no longer use.
         </p>
-        {membership.status === 'member' && <NewTokenDialog permissions={membership.user.permissions} />}
+        {membership.status === 'member' && (
+          <NewTokenDialog permissions={membership.user.permissions} canGiveJobTools={currentUser.data?.isOwner === true} />
+        )}
       </div>
       <TokenList
         tokens={tokens}

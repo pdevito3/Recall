@@ -13,7 +13,7 @@ export const DEFAULT_EXPIRY_DAYS = 90
 export const EXPIRY_CHOICES = ['default', 'date', 'never'] as const
 export type ExpiryChoice = (typeof EXPIRY_CHOICES)[number]
 
-export const TOKEN_FIELDS = ['name', 'permissions', 'readJournal', 'writeJournal', 'expiry', 'expiresAt'] as const
+export const TOKEN_FIELDS = ['name', 'permissions', 'readJournal', 'writeJournal', 'jobTools', 'expiry', 'expiresAt'] as const
 
 export const EXPIRY_MESSAGE = 'Pick an expiry date in the future, or pick Never.'
 
@@ -29,6 +29,7 @@ export function tokenFormSchema(today: CalendarDate) {
       permissions: personalAccessTokenForCreationDtoSchema.shape.permissions.unwrap().unwrap(),
       readJournal: z.boolean(),
       writeJournal: z.boolean(),
+      jobTools: z.boolean(),
       expiry: z.enum(EXPIRY_CHOICES),
       expiresAt: z.custom<CalendarDate>(isCalendarDate).nullable(),
     })
@@ -52,6 +53,7 @@ export const EMPTY_TOKEN: TokenFormValues = {
   permissions: [],
   readJournal: false,
   writeJournal: false,
+  jobTools: false,
   expiry: 'default',
   expiresAt: null,
 }
@@ -75,7 +77,10 @@ export function expiryDateOf(values: Pick<TokenFormValues, 'expiry' | 'expiresAt
 
 const endOfDayAt = (date: CalendarDate, zone: TimeZone): Date => new Date(startOfDayAt(date.add({ days: 1 }), zone).getTime() - 1)
 
-/** The body of the create. A token works through the whole of its last day in the zone of the browser. */
+/**
+ * The body of the create. A token works through the whole of its last day in the zone of the browser. Only the Owner sees
+ * the job tools, so the body names them only when they are picked.
+ */
 export function bodyOf(values: TokenFormValues, today: CalendarDate, zone: TimeZone): PersonalAccessTokenForCreationDto {
   const lastDay = expiryDateOf(values, today)
   return {
@@ -83,6 +88,7 @@ export function bodyOf(values: TokenFormValues, today: CalendarDate, zone: TimeZ
     permissions: values.permissions,
     readJournal: values.readJournal,
     writeJournal: values.writeJournal,
+    ...(values.jobTools ? { jobTools: true } : {}),
     ...(lastDay ? { expiresAt: endOfDayAt(lastDay, zone).toISOString() } : { neverExpires: true }),
   }
 }

@@ -7883,7 +7883,8 @@
       },
       "CurrentUserDto": {
         "required": [
-          "identifier"
+          "identifier",
+          "isOwner"
         ],
         "type": "object",
         "properties": {
@@ -7897,6 +7898,10 @@
               "string"
             ],
             "description": "The display name from the token, or null when the identity provider sends no name."
+          },
+          "isOwner": {
+            "type": "boolean",
+            "description": "True when the caller is the Owner of this install, in person. A personal access token is never the Owner."
           }
         },
         "description": "The signed-in caller as the Server sees it in the access token."
@@ -8746,6 +8751,7 @@
           "permissions",
           "readJournal",
           "writeJournal",
+          "jobTools",
           "createdAt",
           "allowedActions"
         ],
@@ -8783,6 +8789,10 @@
           },
           "writeJournal": {
             "type": "boolean"
+          },
+          "jobTools": {
+            "type": "boolean",
+            "description": "The token may use the job tools at /backwave-mcp while its person is the Owner."
           },
           "createdAt": {
             "type": "string",
@@ -8864,6 +8874,13 @@
           "writeJournal": {
             "type": "boolean",
             "description": "The token changes the journal of the person. It needs readJournal."
+          },
+          "jobTools": {
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "description": "The token may use the job tools at /backwave-mcp. Only the Owner can send true. False when it is not sent."
           },
           "expiresAt": {
             "type": [

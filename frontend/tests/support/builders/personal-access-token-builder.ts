@@ -23,6 +23,7 @@ class PersonalAccessTokenBuilder {
       permissions: [],
       readJournal: false,
       writeJournal: false,
+      jobTools: false,
       createdAt: '2026-11-01T12:00:00Z',
       expiresAt: '2027-01-30T12:00:00Z',
       lastUsedAt: null,
@@ -53,6 +54,10 @@ class PersonalAccessTokenBuilder {
 
   changingTheJournal() {
     return this.with({ readJournal: true, writeJournal: true })
+  }
+
+  withTheJobTools() {
+    return this.with({ jobTools: true })
   }
 
   neverExpiring() {

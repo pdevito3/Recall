@@ -33,8 +33,8 @@ public class CallerTests
     private static Caller.MachineAgent MachineAgentWith(params Permission[] grant)
         => new(MachineClientId, grant);
 
-    private static Caller.PersonalAccessToken TokenOf(Permission[] userPermissions, Permission[] grant)
-        => new(TokenId, userPermissions, grant);
+    private static Caller.PersonalAccessToken TokenOf(Permission[] userPermissions, Permission[] grant, bool jobTools = false)
+        => new(TokenId, SelfId, userPermissions, new TokenGrant(grant, JournalAccess.None, jobTools));
 
     private static string TokenLacks(Permission permission)
         => $"This personal access token has no grant to {permission.Words}. Make a token that has it.";
@@ -148,6 +148,47 @@ public class CallerTests
 
         // Assert
         owner.ShouldBeNull();
+    }
+
+    [Test]
+    [Property("Rule", "PAT-12")]
+    [Property("Rule", "PAT-21")]
+    public async Task a_token_of_the_owner_with_the_job_tools_still_does_not_pass_the_owner_gate()
+    {
+        // Arrange
+        var guard = Substitute.For<IPermissionGuard>();
+        guard.GetCallerAsync(Arg.Any<CancellationToken>())
+            .Returns(TokenOf([.. Permission.GetAll()], [.. Permission.GetAll()], jobTools: true));
+        await using var dbContext = new AppDbContextFactory().CreateDbContext([]);
+
+        // Act
+        var owner = await new OwnerGuard(guard, dbContext).CallerIfOwnerAsync(CancellationToken.None);
+
+        // Assert
+        owner.ShouldBeNull();
+    }
+
+    public static IEnumerable<Func<(string Case, Caller Caller, string? UserId)>> JobToolsUserCases()
+    {
+        yield return () => ("person", MemberWith(), SelfId);
+        yield return () => ("token with the job tools", TokenOf([], [], jobTools: true), SelfId);
+        yield return () => ("token with every permission and no job tools", TokenOf([.. Permission.GetAll()], [.. Permission.GetAll()]), null);
+        yield return () => ("delegated agent", DelegatedAgentOf([.. Permission.GetAll()], [.. Permission.GetAll()]), null);
+        yield return () => ("machine agent", new Caller.MachineAgent(MachineClientId, Permission.GetAll()), null);
+        yield return () => ("all tenants manager", Caller.AllTenantsManager.Instance, null);
+        yield return () => ("anonymous", new Caller.Outsider(OutsiderKind.Anonymous), null);
+    }
+
+    [Test]
+    [Property("Rule", "PAT-21")]
+    [MethodDataSource(nameof(JobToolsUserCases))]
+    public void only_a_person_or_a_token_with_the_job_tools_names_a_user_for_the_job_tools(string @case, Caller caller, string? userId)
+    {
+        // Act
+        var jobToolsUser = caller.JobToolsUserId;
+
+        // Assert
+        jobToolsUser.ShouldBe(userId, @case);
     }
 
     [Test]

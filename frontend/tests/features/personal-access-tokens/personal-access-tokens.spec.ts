@@ -2,7 +2,7 @@ import { membershipApi } from '@tests/support/api/membership-api'
 import { authApi } from '@tests/support/api/auth-api'
 import { personalAccessTokensApi, personalAccessTokensPaths } from '@tests/support/api/personal-access-tokens-api'
 import { usersApi } from '@tests/support/api/users-api'
-import { as } from '@tests/support/auth/actors'
+import { actorSubject, as } from '@tests/support/auth/actors'
 import { browserZone, instantIn } from '@tests/support/clock'
 import { aToken } from '@tests/support/builders/personal-access-token-builder'
 import { aProblem } from '@tests/support/builders/problem-details-builder'
@@ -379,6 +379,47 @@ test.describe('the personal access tokens of a person', () => {
       readJournal: true,
       writeJournal: true,
     })
+  })
+
+  test('the Owner can give a token the job tools, and the list says so', { tag: '@PAT-21' }, async ({ page, api }) => {
+    const claude = aToken().named('Claude Code').withTheJobTools().neverExpiring()
+    api.mock(
+      usersApi.currentIs({ identifier: actorSubject, name: 'Ana Admin', isOwner: true }),
+      personalAccessTokensApi.mineAre([]),
+      personalAccessTokensApi.creates(claude.created(value)),
+    )
+    const tokens = personalAccessTokensPage(page)
+    await tokens.open()
+    await tokens.openForm()
+    await tokens.at.nameField.fill('Claude Code')
+    await tokens.pickExpiry('Never')
+
+    await tokens.at.jobTools.click({ force: true })
+    api.mock(personalAccessTokensApi.mineAre([claude]))
+    await tokens.create()
+
+    expect(api.last('post', personalAccessTokensPaths.mine)?.body).toEqual({
+      name: 'Claude Code',
+      permissions: [],
+      readJournal: false,
+      writeJournal: false,
+      jobTools: true,
+      neverExpires: true,
+    })
+    await tokens.at.done.click()
+    await expect(tokens.at.row('Claude Code')).toContainText('Can use the job tools of the Owner')
+  })
+
+  test('a person who is not the Owner gets no job tools choice', { tag: '@PAT-21' }, async ({ page, api }) => {
+    api.mock(personalAccessTokensApi.mineAre([aToken().named('Laptop')]))
+    const tokens = personalAccessTokensPage(page)
+    await tokens.open()
+
+    await tokens.openForm()
+
+    await expect(tokens.at.readJournal).toBeVisible()
+    await expect(tokens.at.jobTools).toHaveCount(0)
+    await expect(tokens.at.row('Laptop')).not.toContainText('job tools')
   })
 
   test('a person with no permission gets no permission choice', async ({ page, api }) => {

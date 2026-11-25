@@ -97,6 +97,9 @@ public static class AuthHosts
 
     public static AuthFlowFactory OwnerDemotion { get; private set; } = null!;
 
+    /// <summary>A host whose Owner only the demotion test of <see cref="Recall.FunctionalTests.FunctionalTests.Jobs.JobMcpTests"/> demotes.</summary>
+    public static AuthFlowFactory JobToolsDemotion { get; private set; } = null!;
+
     public static OtlpCollector BundleExport { get; private set; } = null!;
 
     public static AuthFlowFactory NoProviderLogout { get; private set; } = null!;
@@ -196,6 +199,7 @@ public static class AuthHosts
         HaltedJobs = StartWithWorker();
         DemotedLiveStream = StartWithWorker();
         OwnerDemotion = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
+        JobToolsDemotion = Start(new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts });
         NoProviderLogout = Start(
             new Dictionary<string, string?> { ["Auth:OpenSignup"] = "true", ["Auth:StartPermitsPerWindow"] = ManyStarts },
             new StubOidcProvider { EndSessionEndpoint = null });
@@ -265,7 +269,7 @@ public static class AuthHosts
     public static async Task StopAsync()
     {
         // RowAtBoot runs on the database of RowAtBootDatabase, so it stops first.
-        foreach (var host in new[] { Password, LoginProviders, Links, PasswordsOff, NoLoginMethod, NoPromptLogin, LoginProvidersNoEnvironment, RowAtBoot, RowAtBootDatabase, SetupLogs, Setup, SetupWithProvider, Mixed, PasswordClaim, LostJobTable, FrozenClock, WriterLine, FileStoreRestart, KeepAlive, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, FirstPartyClient, Bundle, OwnerDemotion, Sweep, Jobs, Cleanups, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
+        foreach (var host in new[] { Password, LoginProviders, Links, PasswordsOff, NoLoginMethod, NoPromptLogin, LoginProvidersNoEnvironment, RowAtBoot, RowAtBootDatabase, SetupLogs, Setup, SetupWithProvider, Mixed, PasswordClaim, LostJobTable, FrozenClock, WriterLine, FileStoreRestart, KeepAlive, Open, Closed, Limited, Failing, SecretInFormProvider, RollingKeyProvider, TwoProviders, TwoTenants, FirstPartyClient, Bundle, OwnerDemotion, JobToolsDemotion, Sweep, Jobs, Cleanups, FailingJobs, HaltedJobs, DemotedLiveStream, NoProviderLogout, DownAtLogout })
         {
             if (host is not null)
                 await host.DisposeAsync();
