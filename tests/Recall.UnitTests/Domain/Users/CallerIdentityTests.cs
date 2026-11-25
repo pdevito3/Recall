@@ -38,32 +38,34 @@ public sealed class CallerIdentityTests
         identity.CanManageAllTenants.ShouldBe(canManage);
     }
 
-    public static IEnumerable<Func<(string Case, CallerIdentity Identity, string? JournalOwnerId, bool CanWriteJournal)>> JournalCases()
+    public static IEnumerable<Func<(string Case, CallerIdentity Identity, string? JournalOwnerId, bool CanWriteJournal, JournalAccess Journal)>> JournalCases()
     {
-        yield return () => ("system work", new CallerIdentity.System(), null, false);
-        yield return () => ("client on the manage list", new CallerIdentity.AllTenantsClient("sync", CanManage: true), null, false);
-        yield return () => ("user", new CallerIdentity.User("user-1", Person), Person.UserId, true);
-        yield return () => ("user with no user record", new CallerIdentity.User("user-1", null), null, false);
-        yield return () => ("journal work", new CallerIdentity.JournalWork(Person.UserId, TenantId), Person.UserId, true);
+        yield return () => ("system work", new CallerIdentity.System(), null, false, JournalAccess.None);
+        yield return () => ("client on the manage list", new CallerIdentity.AllTenantsClient("sync", CanManage: true), null, false, JournalAccess.None);
+        yield return () => ("user", new CallerIdentity.User("user-1", Person), Person.UserId, true, JournalAccess.ReadWrite);
+        yield return () => ("user with no user record", new CallerIdentity.User("user-1", null), null, false, JournalAccess.None);
+        yield return () => ("journal work", new CallerIdentity.JournalWork(Person.UserId, TenantId), Person.UserId, true, JournalAccess.ReadWrite);
         yield return () => ("delegated agent",
-            new CallerIdentity.DelegatedAgent(AgentId, "clinic-assistant", "user-1", Person), null, false);
-        yield return () => ("machine agent", new CallerIdentity.MachineAgent(AgentId, "fleet-sync", TenantId), null, false);
-        yield return () => ("token with no journal access", TokenWith(JournalAccess.None), null, false);
-        yield return () => ("token that reads the journal", TokenWith(JournalAccess.Read), Person.UserId, false);
-        yield return () => ("token that reads and changes the journal", TokenWith(JournalAccess.ReadWrite), Person.UserId, true);
-        yield return () => ("unknown client", new CallerIdentity.UnknownClient("m2m"), null, false);
-        yield return () => ("anonymous", new CallerIdentity.Anonymous(), null, false);
+            new CallerIdentity.DelegatedAgent(AgentId, "clinic-assistant", "user-1", Person), null, false, JournalAccess.None);
+        yield return () => ("machine agent", new CallerIdentity.MachineAgent(AgentId, "fleet-sync", TenantId), null, false, JournalAccess.None);
+        yield return () => ("token with no journal access", TokenWith(JournalAccess.None), null, false, JournalAccess.None);
+        yield return () => ("token that reads the journal", TokenWith(JournalAccess.Read), Person.UserId, false, JournalAccess.Read);
+        yield return () => ("token that reads and changes the journal", TokenWith(JournalAccess.ReadWrite), Person.UserId, true, JournalAccess.ReadWrite);
+        yield return () => ("unknown client", new CallerIdentity.UnknownClient("m2m"), null, false, JournalAccess.None);
+        yield return () => ("anonymous", new CallerIdentity.Anonymous(), null, false, JournalAccess.None);
     }
 
     [Test]
     [Property("Rule", "PAT-6")]
+    [Property("Rule", "IMP-22")]
     [MethodDataSource(nameof(JournalCases))]
     public void a_caller_owns_a_journal_only_as_its_person_and_a_token_only_with_journal_access(
-        string @case, CallerIdentity identity, string? journalOwnerId, bool canWriteJournal)
+        string @case, CallerIdentity identity, string? journalOwnerId, bool canWriteJournal, JournalAccess journal)
     {
         // Act & Assert
         identity.JournalOwnerId.ShouldBe(journalOwnerId);
         identity.CanWriteJournal.ShouldBe(canWriteJournal);
+        identity.Journal.ShouldBe(journal);
     }
 
     [Test]

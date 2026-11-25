@@ -37,4 +37,8 @@ public enum ToolAccessKind
 
     /// <summary>Only a caller that manages all tenants can call it, for example <c>add_tenant</c>.</summary>
     ManageAllTenants,
+
+    JournalRead,
+
+    JournalWrite,
 }
