@@ -20,12 +20,11 @@ export function settingsPage(page: Page) {
      */
     async nameTheZoneOfTheSystem(zone: string | null) {
       await page.addInitScript((first) => {
-        const system = window as unknown as { zoneOfTheSystem: string | null }
-        system.zoneOfTheSystem = first
+        window.zoneOfTheSystem = first
         const nameZone = (format: Intl.DateTimeFormat, options?: Intl.DateTimeFormatOptions) => {
           if (options?.timeZone) return format
           const resolved = format.resolvedOptions.bind(format)
-          format.resolvedOptions = () => ({ ...resolved(), timeZone: system.zoneOfTheSystem as string })
+          format.resolvedOptions = () => ({ ...resolved(), timeZone: window.zoneOfTheSystem as string })
           return format
         }
         Intl.DateTimeFormat = new Proxy(Intl.DateTimeFormat, {
@@ -36,7 +35,7 @@ export function settingsPage(page: Page) {
       return {
         travelTo: (next: string) =>
           page.evaluate((nextZone) => {
-            ;(window as unknown as { zoneOfTheSystem: string }).zoneOfTheSystem = nextZone
+            window.zoneOfTheSystem = nextZone
             document.dispatchEvent(new Event('visibilitychange'))
             window.dispatchEvent(new Event('focus'))
           }, next),

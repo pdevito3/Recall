@@ -1,6 +1,6 @@
 import { chromium, type FullConfig, type Page } from '@playwright/test'
 
-type RouteNode = { options: Partial<Record<string, { preload?: () => Promise<unknown> }>>; children?: Record<string, RouteNode> | RouteNode[] }
+type RouteNode = { options: Partial<Record<string, { preload?: () => Promise<void> }>>; children?: Record<string, RouteNode> | RouteNode[] }
 
 async function openTheHtmlButNotTheApp(page: Page, url: string) {
   await page.route('**/src/main.tsx', (route) => route.fulfill({ contentType: 'text/javascript', body: '' }))

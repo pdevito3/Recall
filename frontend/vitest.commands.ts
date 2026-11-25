@@ -1,6 +1,7 @@
 import type { BrowserCommand } from 'vitest/node'
 
 import { testHeader, type Answer } from './src/test/answer'
+import type { JsonValue } from './src/test/json-value'
 
 // Browser commands for the component tests. They run in Node and drive the Playwright page.
 // A test calls them with `commands` from 'vitest/browser'.
@@ -51,7 +52,7 @@ const isServerRequest = (url: URL) => url.pathname.startsWith('/api/') || url.pa
 interface SentRequest {
   method: string
   path: string
-  body: unknown
+  body: JsonValue | null
 }
 
 interface Answering {
@@ -78,7 +79,7 @@ const body = (answer: Answer) => {
 }
 
 /** A body that is not JSON, such as an upload of audio, counts as no body. */
-const jsonBodyOf = (request: { postDataJSON: () => unknown }) => {
+const jsonBodyOf = (request: Parameters<RouteHandler>[1]): JsonValue | null => {
   try {
     return request.postDataJSON()
   } catch {

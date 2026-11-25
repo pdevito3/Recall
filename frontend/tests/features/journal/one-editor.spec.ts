@@ -79,7 +79,7 @@ test.describe('an entry open in two tabs', () => {
     // Each change of the page, so that a moment with the older words shows too.
     await secondPage.evaluate(() => {
       const shown: string[] = []
-      Object.assign(window, { shownWords: shown })
+      window.wordsOfAnotherTabShown = shown
       new MutationObserver(() => {
         const words = document.querySelector('[aria-label="Your words, open in another tab"]')?.textContent
         if (words !== undefined && words !== null) shown.push(words)
@@ -93,7 +93,7 @@ test.describe('an entry open in two tabs', () => {
     await expect.poll(() => api.all('get', sessionsPaths.one(session.id)).length).toBeGreaterThan(reads)
 
     await expect(second.at.wordsOfAnotherTab).toContainText('Mine and saved')
-    expect(await secondPage.evaluate(() => (window as unknown as { shownWords: string[] }).shownWords)).not.toContain('Mine')
+    expect(await secondPage.evaluate(() => window.wordsOfAnotherTabShown)).not.toContain('Mine')
     await second.at.editHere.click()
     await expect(second.at.editor).toContainText('Mine and saved')
   })

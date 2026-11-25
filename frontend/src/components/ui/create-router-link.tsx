@@ -1,5 +1,10 @@
 import type * as React from "react"
-import { createLink, type LinkComponent } from "@tanstack/react-router"
+import {
+  createLink,
+  type LinkComponent,
+  type LinkComponentProps,
+  type NavigateOptions,
+} from "@tanstack/react-router"
 
 import type { RouterLinkHostProps } from "@/components/ui/link"
 
@@ -11,12 +16,12 @@ import type { RouterLinkHostProps } from "@/components/ui/link"
 export function createRouterLink<
   THost extends React.ComponentType<RouterLinkHostProps>,
 >(Host: THost): LinkComponent<THost> {
-  // The returned type checks the props of each caller. The props go on to
-  // createLink as they are, with the router options added.
-  const RouterLink = createLink(Host) as unknown as React.ComponentType<
-    Record<string, unknown>
-  >
-  return (props) => (
-    <RouterLink activeOptions={{ exact: true }} {...props} routerOptions={props} />
-  )
+  const RouterLink: React.ComponentType<
+    LinkComponentProps<THost> & { routerOptions: NavigateOptions }
+  > = createLink(Host)
+  return (props) => {
+    // The returned type checks the props of each caller against its own route.
+    const options = props as LinkComponentProps<THost>
+    return <RouterLink activeOptions={{ exact: true }} {...options} routerOptions={options} />
+  }
 }

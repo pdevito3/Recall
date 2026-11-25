@@ -186,8 +186,10 @@ export class RowSaver<F extends object, R> {
     return withoutFields(this.queuedFields(), [...this.keptAsTheyAre.keys(), ...this.currentAsks.map((ask) => ask.field)])
   }
 
-  private queuedFields() {
-    return this.saver.unsettled().reduce<Partial<F>>((fields, { value }) => ({ ...fields, ...value }), {})
+  private queuedFields(): Partial<F> {
+    const fields: Partial<F> = {}
+    for (const { value } of this.saver.unsettled()) Object.assign(fields, value)
+    return fields
   }
 
   hasUnsaved() {

@@ -7,6 +7,7 @@ import { commands } from 'vitest/browser'
 import { cleanup } from 'vitest-browser-react'
 
 import { testHeader, type Answer } from './answer'
+import type { JsonValue } from './json-value'
 
 // The commands are in vitest.commands.ts. They run in Node and drive the Playwright page.
 declare module 'vitest/browser' {
@@ -17,7 +18,7 @@ declare module 'vitest/browser' {
     beginTest: (test: string) => Promise<void>
     takeUnansweredRequests: () => Promise<string[]>
     /** The method, pathname, and JSON body of each request other than a GET since the last call. */
-    takeSentRequests: () => Promise<{ method: string; path: string; body: unknown }[]>
+    takeSentRequests: () => Promise<{ method: string; path: string; body: JsonValue | null }[]>
     /** Holds each request for `path` (pathname and query) until `releaseRequests(path)`. */
     holdRequests: (path: string) => Promise<void>
     /** Lets the held requests for `path` go on. */

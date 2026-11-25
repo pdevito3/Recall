@@ -24,7 +24,9 @@ export function useLoadLatest<T extends FieldValues, F extends TextField<T>>(
       const latest = await read()
       if (!latest) return false
       const edited = form.getValues()
-      const result = latestOverEdits<F>(form.formState.defaultValues ?? {}, edited, latest, fields)
+      // React Hook Form types the defaults as a deep partial, but each field of F holds a whole TextComparable.
+      const loaded = (form.formState.defaultValues ?? {}) as Partial<Record<F, TextComparable>>
+      const result = latestOverEdits<F>(loaded, edited, latest, fields)
       // Before the reset, because a reset drops the field refs that setFocus reads until the next render.
       form.setFocus(result.changed[0] ?? fields[0])
       form.reset(latest)

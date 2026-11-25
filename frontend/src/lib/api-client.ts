@@ -79,12 +79,11 @@ function handleErrorResponse(error: AxiosError): ProblemDetailsError | Error {
   // Handle non-Problem Details responses
   // Try to extract a message from common error response formats
   if (responseData && typeof responseData === 'object') {
-    const data = responseData as Record<string, unknown>
     const message =
-      typeof data.message === 'string'
-        ? data.message
-        : typeof data.error === 'string'
-          ? data.error
+      'message' in responseData && typeof responseData.message === 'string'
+        ? responseData.message
+        : 'error' in responseData && typeof responseData.error === 'string'
+          ? responseData.error
           : failureWords(error)
 
     return new Error(message)

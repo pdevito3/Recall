@@ -6,7 +6,7 @@ import { firstPageChunks } from './first-page-chunks'
 type ChunkInput = { isEntry?: boolean; imports?: string[]; dynamicImports?: string[]; bytes?: number; code?: string }
 
 function bundleOf(chunks: Record<string, ChunkInput>): Rollup.OutputBundle {
-  const outputs: Record<string, unknown> = {
+  const outputs: Record<string, Partial<Rollup.OutputAsset> | Partial<Rollup.OutputChunk>> = {
     'index.css': { type: 'asset', fileName: 'index.css', source: 'x'.repeat(5000) },
   }
   for (const [fileName, chunk] of Object.entries(chunks)) {
