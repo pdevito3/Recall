@@ -1,6 +1,6 @@
 # Background jobs
 
-Work that does not fit in a request runs as a BackWave job. A job survives a crash and a restart, because its row is in the database of the app. `Recall.Server/Resources/Jobs/` holds the host setup and the one health job. `Recall.Server/Resources/Entrypoints/Jobs/` holds the dashboard.
+Work that does not fit in a request runs as a BackWave job. A job survives a crash and a restart, because its row is in the database of the app. `Recall.Server/Resources/Jobs/` holds the host setup and the one health job. `Recall.Server/Resources/Entrypoints/Jobs/` holds the dashboard and the job tools.
 
 ## Rules for a job
 
@@ -66,9 +66,35 @@ If the dashboard throws, for example because a job table is lost, `JobDashboardF
 
 A browser that opens the page sends no `X-CSRF` header, so `AppSessionHandler` accepts a session cookie on this path with no header. The session cookie is `SameSite=Strict`, and BackWave checks an antiforgery token on each write.
 
+## The job tools
+
+`JobMcp` serves the MCP server of BackWave Pro at `/backwave-mcp`. It is a separate server from the journal tools at `/mcp`, with its own server info and its own tools. Only the Owner can use it.
+
+To connect Claude Code:
+
+1. In the SPA, go to Settings > Personal access tokens, and choose New token.
+2. Select Use the job tools. Only the Owner sees this option. Copy the token.
+3. Run this command, with the token in `RECALL_PAT`:
+
+```bash
+claude mcp add --transport http backwave https://<host>/backwave-mcp --header "Authorization: Bearer $RECALL_PAT"
+```
+
+The Owner can:
+
+- Read the jobs, their history and dependencies, the queues and their depths, the schedules, the workflows, the failures, the dead letters of the observers, and the BackWave audit records.
+- Requeue a job with `requeue_job`. BackWave records the user ID of the Owner as the actor.
+
+The Owner cannot:
+
+- Cancel a job or a workflow, pause or resume a queue, set a concurrency limit, or trigger a schedule. These tools are not in `tools/list`, and a call gets a tool error. Use the dashboard for these actions.
+- Read the payload or the output of a job. `get_job_payload` and `get_job_output` are not in `tools/list`, because a payload can hold journal text.
+
+The path takes a bearer credential only: a personal access token with the job tools, or a native session of the Owner. A session cookie gets 401, also with `X-CSRF: 1`. A request with no credential gets 401 with a `Bearer` challenge. `JobOwnerCheck` runs the Owner check on each request, so a token whose person stops being the Owner sees no tool on its next request. A token without the job tools, a token of a person who is not the Owner, and each other caller see no tool and run none. The rules are PAT-21 in [the spec of personal access tokens](../specs/personal-access-tokens.md).
+
 ## The license
 
-BackWave is under the PolyForm Shield License 1.0.0, which needs each copy to carry the terms and the Required Notice. `Recall.Server/ThirdPartyNotices/BackWave/LICENSE.md` is the file of the package, byte for byte. `dotnet publish` copies it to `ThirdPartyNotices/BackWave/LICENSE.md` in its output, so the image has it at `/app/ThirdPartyNotices/BackWave/LICENSE.md`. Replace the file when the version of BackWave changes.
+BackWave is under the PolyForm Shield License 1.0.0, which needs each copy to carry the terms and the Required Notice. `Recall.Server/ThirdPartyNotices/BackWave/LICENSE.md` is the file of the package, byte for byte. `dotnet publish` copies it to `ThirdPartyNotices/BackWave/LICENSE.md` in its output, so the image has it at `/app/ThirdPartyNotices/BackWave/LICENSE.md`. BackWave.Pro, which serves the job tools, is under its own license. `Recall.Server/ThirdPartyNotices/BackWave.Pro/LICENSE-PRO.md` is the file of that package, byte for byte, and the image has it at `/app/ThirdPartyNotices/BackWave.Pro/LICENSE-PRO.md`. Replace both files when the version of BackWave changes.
 
 ## The Cleanup job
 

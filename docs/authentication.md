@@ -28,7 +28,7 @@ These routes are not in the OpenAPI document. This section is their contract.
 | `/auth/password/change` | POST | web or native session | The change of a password. See [Change a password](#change-a-password). A personal access token gets 403. |
 | `/auth/password/claim-owner` | GET, POST | a fresh `claim-owner` file | The new password of the Owner. See [Recover a lost Owner](#recover-a-lost-owner). |
 
-Each other Server path, also `/api/*`, reads the credential in the same way. Send the cookie with `X-CSRF: 1`, or send `Authorization: Bearer <token>`. The one exception is the job dashboard at `/backwave`. See [CSRF](#csrf).
+Each other Server path, also `/api/*`, reads the credential in the same way. Send the cookie with `X-CSRF: 1`, or send `Authorization: Bearer <token>`. There are two exceptions. The job dashboard at `/backwave` takes the cookie with no header. See [CSRF](#csrf). The job tools at `/backwave-mcp` take only a bearer, and a cookie gets 401, also with the header. See [the job tools](backend/background-jobs.md#the-job-tools).
 
 ## Web login
 
@@ -667,6 +667,7 @@ The body of a create names the grant and the expiry:
 ```
 
 - Each permission must be one that the caller holds, or the create gets 403 and makes no token. A grant may hold `manage_model_providers`.
+- `"jobTools": true` gives the token the job tools at `/backwave-mcp`. Only the Owner can send it. Anyone else gets 403 with "Only the Owner of this install can give a token the job tools. Make the token without them." and no token. With no `jobTools`, the token has no job tools. `GET /api/v1/users/me` gives `isOwner`, so the SPA shows the option only to the Owner.
 - `writeJournal` needs `readJournal`, or the create gets 422.
 - Send exactly one of `expiresAt`, a time in the future, and `"neverExpires": true`. Any other body gets 422 with "Pick an expiry date in the future, or pick Never." So a client that forgets the field does not get a token that never expires.
 
@@ -704,7 +705,7 @@ Or in a `.mcp.json`:
 
 `tools/list` shows only the tools that both the person and the grant allow. A token works with a provider and with none, because `SelectScheme` sends each `Bearer rcl_` value to the session handler.
 
-The token holds each permission that both its person and its grant hold, and the guard reads the permissions of the person on each check. So a revoke, an expiry, or a permission that the person loses applies on the next request. A token is not the person: it gets no exception of `RequireSelfOr` and never passes the Owner gate. With journal access `none`, it sees no journal row and no user setting. With `read`, a change of a journal row gets 403.
+The token holds each permission that both its person and its grant hold, and the guard reads the permissions of the person on each check. So a revoke, an expiry, or a permission that the person loses applies on the next request. A token is not the person: it gets no exception of `RequireSelfOr` and never passes the Owner gate. The one exception is a token with the job tools, which reaches `/backwave-mcp` while its person is the Owner, read on each request. It passes no other Owner gate, such as the dashboard or the support bundle. With journal access `none`, it sees no journal row and no user setting. With `read`, a change of a journal row gets 403.
 
 ### What `/auth` does with a token
 
@@ -723,7 +724,7 @@ The lookup of a token is one indexed read and no write. When the last use of the
 
 ### Audit
 
-A create and a revoke from the API record the audit actions `access_token_created` and `access_token_revoked` on the user, with the token ID, its name, its grant, and its expiry. So a reader can map a `pat_…` actor to a name after the row is gone. A revoke by `revoke-others` or by a user delete records no action. A write by a token records the token ID as `actor_client` and the person as `actor_user_id`.
+A create and a revoke from the API record the audit actions `access_token_created` and `access_token_revoked` on the user, with the token ID, its name, its grant, and its expiry. The grant of a token with the job tools ends in `:job_tools`, for example `none::job_tools`. So a reader can map a `pat_…` actor to a name after the row is gone. A revoke by `revoke-others` or by a user delete records no action. A write by a token records the token ID as `actor_client` and the person as `actor_user_id`.
 
 ## E2E tests
 
