@@ -175,6 +175,9 @@ test.describe('the recall-import skill', () => {
       const imports = importsPage(page)
       await imports.openList()
 
+      // The header of the token is one unit, so it never breaks inside.
+      await expect(imports.at.tokenHeader).toHaveText('Authorization: Bearer <your token>')
+      expect(await imports.lineCountOf(imports.at.tokenHeader)).toBe(1)
       const cardText = await imports.textLeftOf(imports.at.batchLink('Diary 2024'))
       expect(await imports.textLeftOf(imports.at.mcpUrlValue)).toBe(cardText)
       expect(await imports.textLeftOf(imports.at.commandValue)).toBe(cardText)
@@ -192,6 +195,21 @@ test.describe('the recall-import skill', () => {
       expect(await imports.textLeftOf(imports.at.skillToggle)).toBe(cardText)
     })
   }
+
+  test('at a root font size of 20 px, the arrow of the skill starts at the text edge of the MCP URL, closed and open', { tag: '@IMP-46' }, async ({ page, api }) => {
+    api.mock(importsApi.listIs([diary]))
+    const imports = importsPage(page)
+    await imports.openList()
+    // A person can set a larger font in the browser. The icon is 1rem, so its offsets must grow with it.
+    await page.addStyleTag({ content: 'html { font-size: 20px }' })
+
+    // The page moves while it lays out the new size, so the test reads both edges until they agree.
+    const arrowFromText = async () => (await imports.textLeftOf(imports.at.skillToggle)) - (await imports.textLeftOf(imports.at.mcpUrlValue))
+    await expect.poll(arrowFromText).toBe(0)
+    await imports.at.skillToggle.click()
+    await expect(imports.at.skillToggle).toHaveAttribute('aria-expanded', 'true')
+    await expect.poll(arrowFromText).toBe(0)
+  })
 
   test('the skill opens, and its box takes the keyboard focus after Copy skill', { tag: '@IMP-46' }, async ({ page, api }) => {
     api.mock(importsApi.listIs([diary]))

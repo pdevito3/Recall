@@ -38,6 +38,9 @@ export function importsPage(page: Page) {
       return box !== null && box.x >= 0 && box.x + box.width <= width
     },
 
+    /** The count of the lines of an inline element. */
+    lineCountOf: (element: Locator) => element.evaluate((node) => node.getClientRects().length),
+
     async hitAreaOf(element: Locator) {
       const box = (await element.boundingBox())!
       return Math.min(box.width, box.height)
