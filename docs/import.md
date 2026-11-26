@@ -18,7 +18,7 @@ A token with only **Read my journal** sees only the list tools. It gets an error
 
 ### Add Recall to the agent
 
-The MCP endpoint of Recall is `https://<your Recall host>/mcp`. The agent sends the token in the `Authorization` header. In the examples below, the environment variable `RECALL_PAT` holds the token.
+The MCP endpoint of Recall is `https://<your Recall host>/mcp`. **Imports** in Recall shows this URL, with **Copy MCP URL**. The agent sends the token in the `Authorization` header. In the examples below, the environment variable `RECALL_PAT` holds the token.
 
 For Claude Code:
 
@@ -40,14 +40,14 @@ For Claude Code with a `.mcp.json` file:
 }
 ```
 
-Claude Desktop starts a local MCP server for each entry of `claude_desktop_config.json`. Use a bridge, such as `mcp-remote`, that sends the header to `/mcp`:
+Claude Desktop starts a local MCP server for each entry of `claude_desktop_config.json`. Use a bridge, such as `mcp-remote`, that sends the header to `/mcp`. The bridge needs Node.js, which also gives `npx`:
 
 ```json
 {
   "mcpServers": {
     "recall": {
-      "command": "pnpm",
-      "args": ["dlx", "mcp-remote", "https://recall.example.com/mcp", "--header", "Authorization:${RECALL_AUTH}"],
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://recall.example.com/mcp", "--header", "Authorization:${RECALL_AUTH}"],
       "env": { "RECALL_AUTH": "Bearer rcl_pat_..." }
     }
   }
@@ -68,7 +68,7 @@ The answer is an event stream. The JSON-RPC result is on the `data:` line. Call 
 
 ### Give the agent the skill
 
-Open **Imports** in Recall. The section **Import with an agent** shows the `recall-import` skill. Choose **Copy skill**, and paste the text into your agent. For Claude Code, save it as `.claude/skills/recall-import/SKILL.md`. For another agent, paste it into the chat or into the instructions of the agent. The file of the skill is [`frontend/src/domain/imports/recall-import.md`](../frontend/src/domain/imports/recall-import.md).
+Open **Imports** in Recall. The section **Import with an agent**, below the list of batches, has the `recall-import` skill. Choose **Copy skill**, and give the text to your agent. To read the skill first, open **The recall-import skill**. For Claude Code, save it as `.claude/skills/recall-import/SKILL.md` in your project, or as `~/.claude/skills/recall-import/SKILL.md` for all your projects. For another agent, save it as a skill of the agent, or paste it at the start of the chat. The file of the skill is [`frontend/src/domain/imports/recall-import.md`](../frontend/src/domain/imports/recall-import.md).
 
 ## The tools
 
@@ -95,7 +95,7 @@ Open **Imports** in Recall. The section **Import with an agent** shows the `reca
 | `time` | `HH:mm`, only when the text gives a time. |
 | `timeZone` | An IANA zone, or leave it out for the zone of the batch. |
 | `raw` | The words of the person as Markdown, at most 1,000,000 characters. |
-| `moods` | At most 50 values of at most 100 characters. The skill tells the agent to use only the 10 Moods that Recall knows. |
+| `moods` | At most 50 values of at most 100 characters. The skill tells the agent to use only the Moods that Recall knows. |
 | `topics` | At most 50 values of at most 100 characters. |
 
 ### The start time
@@ -135,7 +135,7 @@ Each entry of a put gets the first outcome that applies.
 
 ### A put again is safe
 
-A put of the same call again changes nothing. So the agent can send a call again after an error or a lost answer. A second run of a whole import also stores only the new entries, because each entry that is already in the journal gets `InJournal`. A put never changes your review, and it removes no entry.
+A put of the same call again changes nothing. So the agent can send a put again after an error or a lost answer. A call of `open_import_batch` again opens a second batch. So after a lost answer of `open_import_batch`, the agent finds the batch with `list_import_batches`. A second run of a whole import also stores only the new entries, because each entry that is already in the journal gets `InJournal`. An entry that you rejected in an accepted or a discarded batch is not in the journal, so it gets `Added` again. Reject it again in the review. A put never changes your review, and it removes no entry.
 
 ### The review gate
 
