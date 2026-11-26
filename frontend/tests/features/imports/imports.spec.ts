@@ -205,7 +205,7 @@ test.describe('the review of a batch', () => {
     await expect(imports.at.counts).toHaveText('3 entries: 2 kept, 1 rejected')
   })
 
-  test('Reject day sends the review of the day, and the day and each of its entries say rejected with the day', { tag: ['@IMP-40', '@IMP-41'] }, async ({ page, api }) => {
+  test('Reject day sends the review of the day, the heading says the day is rejected, and each entry says rejected with the day', { tag: ['@IMP-40', '@IMP-41'] }, async ({ page, api }) => {
     reviewOf(api)
     api.mock(importsApi.reviewsDay(diary.id, '2024-03-01', true))
     const imports = importsPage(page)
@@ -221,7 +221,7 @@ test.describe('the review of a batch', () => {
     expect(api.last('put', importPaths.dayReview(diary.id))?.body).toEqual({ date: '2024-03-01', rejected: true })
     await expect(imports.at.entry('8:30 AM')).toContainText('Rejected with the day')
     await expect(imports.at.entry('12:01 PM')).toContainText('Rejected with the day')
-    await expect(imports.at.dayRegion(friday)).toContainText('2 entries, rejected with the day')
+    await expect(imports.at.dayRegion(friday)).toContainText('2 entries, day rejected')
     await expect(imports.at.reject('8:30 AM')).toHaveCount(0)
     await expect(imports.at.keepDay(friday)).toBeVisible()
     await expect(imports.at.counts).toHaveText('3 entries: 1 kept, 2 rejected')
