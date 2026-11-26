@@ -660,7 +660,7 @@ test('@IMP-43 an accepted batch shows the counts of its result and a link to the
   await expect.element(screen.getByRole('heading', { level: 1, name: 'Diary 2024' })).toHaveFocus()
 })
 
-test('@IMP-44 a 409 of a changed batch keeps the dialog open, and after a new read shows its counts and one status line, not the message of the Server', async () => {
+test('@IMP-44 a 409 of a changed batch keeps the dialog open, and after a new read shows its counts and one status line above them, in the color of the text, not the message of the Server', async () => {
   const { screen } = await renderReview()
   await userEvent.click(screen.getByRole('button', { name: 'Accept', exact: true }))
   const dialog = screen.getByRole('alertdialog', { name: 'Accept “Diary 2024”?' })
@@ -687,6 +687,10 @@ test('@IMP-44 a 409 of a changed batch keeps the dialog open, and after a new re
   await expect.element(dialog).toMatchTextContent('3 entries go into your journal')
   await commands.releaseRequests(daysPath)
   await expect.element(dialog.getByRole('status')).toHaveTextContent('The batch changed. Recall read it again. Check the new counts, then accept the batch.')
+  const status = dialog.getByRole('status').element()
+  const counts = dialog.getByText(/entries go into your journal/).element()
+  expect(status.compareDocumentPosition(counts) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(getComputedStyle(status).color).toBe(getComputedStyle(dialog.element()).color)
   await expect.element(dialog.getByRole('alert')).not.toBeInTheDocument()
   await expect.element(dialog).toMatchTextContent('4 entries go into your journal')
   await expect.element(dialog.getByRole('button', { name: 'Accept batch' })).not.toHaveAttribute('aria-disabled')
