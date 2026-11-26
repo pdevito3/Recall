@@ -301,14 +301,14 @@ test.describe('the refusals of the Server', () => {
 
   test('a 404 of a removed entry shows the message, reads the batch again, and moves the focus to the heading', { tag: '@IMP-44' }, async ({ page, api }) => {
     reviewOf(api)
-    api.mock(importsApi.refusesEntryReview(diary.id, aProblem().notFound('This entry is not in the batch.').build()))
+    api.mock(importsApi.refusesEntryReview(diary.id, aProblem().notFound('This entry is no longer in the batch. Review the other entries of the batch.').build()))
     const imports = importsPage(page)
     await imports.openReviewWithEntries(diary.id, 'Diary 2024')
     api.mock(importsApi.daysAre(diary.id, [anImportDay('2024-03-01', 1), anImportDay('2024-03-02', 1)], 5), importsApi.entriesOfAnyRangeAre(diary.id, [coffee, london]))
 
     await imports.reject(diary.id, '12:01 PM')
 
-    await expect(imports.at.text('This entry is not in the batch.')).toBeVisible()
+    await expect(imports.at.text('This entry is no longer in the batch. Review the other entries of the batch.')).toBeVisible()
     await expect(imports.at.entry('12:01 PM')).toHaveCount(0)
     await expect(imports.at.batchHeading('Diary 2024')).toBeFocused()
   })

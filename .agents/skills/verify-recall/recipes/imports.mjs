@@ -179,7 +179,7 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     const reviewed = answered('PUT', /\/entries\/review$/)
     await card('agent takes back').getByRole('button', { name: 'Reject the entry at 11:00 PM' }).click()
     expect((await reviewed).status()).toBe(404)
-    await expect(page.getByRole('alertdialog').filter({ hasText: 'This entry is not in the batch.' })).toBeVisible()
+    await expect(page.getByRole('alertdialog').filter({ hasText: 'This entry is no longer in the batch. Review the other entries of the batch.' })).toBeVisible()
     await expect(card('agent takes back')).toHaveCount(0)
     await expect(counts).toHaveText('7 entries: 4 kept, 3 rejected')
     await expect(page.getByRole('heading', { level: 1, name, exact: true })).toBeFocused()

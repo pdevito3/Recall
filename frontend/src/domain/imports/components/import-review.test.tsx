@@ -480,12 +480,12 @@ test('@IMP-44 a 404 of an entry that the agent removed shows the message, and th
     batchesAre([diary]),
     daysAre([dayOf('2024-03-01', 1), dayOf('2024-03-02', 1)], 5),
     entriesAre([coffee, london]),
-    { method: 'PUT', path: '/api/v1/import-batches/imp_1/entries/review', status: 404, body: problem(404, 'This entry is not in the batch.') },
+    { method: 'PUT', path: '/api/v1/import-batches/imp_1/entries/review', status: 404, body: problem(404, 'This entry is no longer in the batch. Review the other entries of the batch.') },
   ])
 
   await userEvent.click(screen.getByRole('button', { name: 'Reject the entry at 12:01 PM' }))
 
-  await expect.element(screen.getByText('This entry is not in the batch.')).toBeVisible()
+  await expect.element(screen.getByText('This entry is no longer in the batch. Review the other entries of the batch.')).toBeVisible()
   await expect.element(cardOf(screen, '12:01 PM')).not.toBeInTheDocument()
   await expect.element(screen.getByLabelText('Counts of this batch')).toMatchTextContent('2 entries: 2 kept, 0 rejected')
   await expect.element(screen.getByRole('heading', { level: 1, name: 'Diary 2024' })).toHaveFocus()
@@ -503,12 +503,12 @@ test('@IMP-44 a 404 of a save in the form shows the message, though the form lea
     batchesAre([diary]),
     daysAre([dayOf('2024-03-01', 1), dayOf('2024-03-02', 1)], 5),
     entriesAre([coffee, london]),
-    { method: 'PUT', path: '/api/v1/import-batches/imp_1/entries/review', status: 404, body: problem(404, 'This entry is not in the batch.') },
+    { method: 'PUT', path: '/api/v1/import-batches/imp_1/entries/review', status: 404, body: problem(404, 'This entry is no longer in the batch. Review the other entries of the batch.') },
   ])
 
   await userEvent.click(form.getByRole('button', { name: 'Save' }))
 
-  await expect.element(screen.getByText('This entry is not in the batch.')).toBeVisible()
+  await expect.element(screen.getByText('This entry is no longer in the batch. Review the other entries of the batch.')).toBeVisible()
   await expect.element(form).not.toBeInTheDocument()
   await expect.element(screen.getByRole('heading', { level: 1, name: 'Diary 2024' })).toHaveFocus()
 })

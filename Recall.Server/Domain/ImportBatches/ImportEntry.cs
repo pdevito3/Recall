@@ -8,7 +8,7 @@ public class ImportEntry : BaseEntity, IJournalOwned
 {
     public const string IdPrefix = "impent";
     public const string FutureMessage = "The time of an entry cannot be in the future.";
-    public const string NotInBatchMessage = "This entry is not in the batch.";
+    public const string NotInBatchMessage = "This entry is no longer in the batch. Review the other entries of the batch.";
 
     [NotSensitive] public string BatchId { get; private set; } = default!;
 

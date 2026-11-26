@@ -85,6 +85,24 @@ public class PutImportEntriesCommandTests : TestBase
 
     [Test]
     [Property("Rule", "IMP-6")]
+    public async Task a_review_of_an_entry_that_the_agent_removed_gets_404_with_what_to_do_next()
+    {
+        // Arrange
+        var owner = await AddOwnerAsync();
+        var batch = await OpenAsync(owner);
+        await PutAsync(owner, batch.Id, Entry("a", 0), Entry("b", 1));
+        await RemoveAsync(owner, batch.Id, "a");
+
+        // Act
+        var review = () => RejectAsync(owner, batch.Id, "a");
+
+        // Assert
+        var refused = await review.ShouldThrowAsync<NotFoundException>();
+        refused.Message.ShouldBe("This entry is no longer in the batch. Review the other entries of the batch.");
+    }
+
+    [Test]
+    [Property("Rule", "IMP-6")]
     public async Task a_rejected_day_holds_an_entry_that_a_later_put_adds_and_an_entry_rejected_alone_stays_rejected()
     {
         // Arrange
