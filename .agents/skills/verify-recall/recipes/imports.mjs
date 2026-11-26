@@ -10,7 +10,10 @@ export default async ({ page, context, step, capture, settle, expect, login, sta
   // A capture shows the page as a person sees it: no hover state of the last click, and no toast of an earlier step.
   const shot = async (name, { keepToast = false, ...options } = {}) => {
     if (!keepToast) {
-      for (const close of await page.locator('[data-slot="toast-region"]').getByRole('button', { name: 'Close' }).all()) await close.click()
+      // Close the first toast each time: the list moves when a toast closes, so a stored second locator can point at
+      // nothing. A toast can also close by itself between the count and the click, so a missed click only counts again.
+      const closers = page.locator('[data-slot="toast-region"]').getByRole('button', { name: 'Close' })
+      while ((await closers.count()) > 0) await closers.first().click({ timeout: 2000 }).catch(() => {})
       await expect(page.locator('[data-slot="toast-region"]').getByRole('button', { name: 'Close' })).toHaveCount(0)
     }
     const size = page.viewportSize()
@@ -61,39 +64,101 @@ export default async ({ page, context, step, capture, settle, expect, login, sta
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Imports', exact: true }).click()
     expect((await listed).status()).toBe(200)
     await expect(page.getByRole('heading', { level: 1, name: 'Imports' })).toBeVisible()
-    await expect(page.getByText(/^You have no import batches\. An agent opens a batch with a personal access token, then you review it here\.$/)).toBeVisible()
+    await expect(page.getByText(/^You have no import batches\. When an agent opens a batch, you review it here\.$/)).toBeVisible()
   })
   await shot('empty')
   await asPhone('empty-phone')
 
   const skillPanel = page.getByRole('region', { name: 'Import with an agent', exact: true })
+  const skillBox = skillPanel.getByRole('region', { name: 'The text of the recall-import skill', exact: true, includeHidden: true })
+  const skillToggle = skillPanel.getByRole('button', { name: 'The recall-import skill', exact: true })
+  const copySkill = skillPanel.getByRole('button', { name: 'Copy skill', exact: true })
+  const toast = (text) => page.locator('[data-slot="toast-region"]').getByText(text, { exact: true })
+  const mcpUrl = `${new URL(stack.urls.web).origin}/mcp`
   const atSkill = async (name, options) => {
     await skillPanel.scrollIntoViewIfNeeded()
     await shot(name, { fullPage: false, ...options })
   }
-  await step('the skill for an agent: the page shows the whole recall-import file', async () => {
-    await expect(skillPanel.getByText(/^Copy this skill into your agent, such as Claude Code or Claude Desktop\./)).toBeVisible()
+  const panelShots = async (name) => {
+    await atSkill(name)
+    await page.setViewportSize(phone)
+    await settle()
+    await atSkill(`${name}-phone`)
+    await page.setViewportSize(desktop)
+    await settle()
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await settle()
+    await atSkill(`${name}-dark`)
+    await page.emulateMedia({ colorScheme: 'light' })
+    await settle()
+  }
+  await step('the panel after the list: the MCP URL of this Recall, and the whole recall-import file in a closed disclosure', async () => {
+    await expect(skillPanel.getByText(/^Connect your agent, such as Claude Code or Claude Desktop, to this MCP URL with a personal access token that can change your journal\.$/)).toBeVisible()
     await expect(skillPanel.getByRole('link', { name: 'personal access token', exact: true })).toHaveAttribute('href', '/settings/personal-access-tokens')
-    expect(await skillPanel.getByLabel('The recall-import skill', { exact: true }).textContent()).toBe(skillFile)
+    await expect(skillPanel.getByRole('group', { name: 'MCP URL', exact: true }).getByText(mcpUrl, { exact: true })).toBeVisible()
+    await expect(skillPanel.getByText(/save it as a skill of the agent, or paste it at the start of a chat\.$/)).toBeVisible()
+    await expect(skillToggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(skillBox).toBeHidden()
+    expect(await skillBox.textContent()).toBe(skillFile)
   })
-  await atSkill('skill')
-  await page.setViewportSize(phone)
-  await settle()
-  await atSkill('skill-phone')
-  await page.setViewportSize(desktop)
-  await settle()
-  await page.emulateMedia({ colorScheme: 'dark' })
-  await settle()
-  await atSkill('skill-dark')
-  await page.emulateMedia({ colorScheme: 'light' })
-  await settle()
-  await step('Copy skill puts the whole file on the clipboard and says so', async () => {
+  await panelShots('panel-empty')
+  await step('the MCP URL of the panel answers an MCP client with the token of the agent', async () => {
+    const res = await fetch(mcpUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+    })
+    expect(res.status).toBe(200)
+    expect(await res.text()).toContain('"put_import_entries"')
+  })
+  await step('Copy MCP URL puts the URL on the clipboard and says so', async () => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])
-    await skillPanel.getByRole('button', { name: 'Copy skill', exact: true }).click()
-    await expect(page.locator('[data-slot="toast-region"]').getByText('Skill copied', { exact: true })).toBeVisible()
+    await skillPanel.getByRole('button', { name: 'Copy MCP URL', exact: true }).click()
+    await expect(toast('MCP URL copied')).toBeVisible()
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(mcpUrl)
+  })
+  await atSkill('mcp-url-copied', { keepToast: true })
+  await step('Copy skill, with the skill closed, puts the whole file on the clipboard, says so, and keeps the focus', async () => {
+    await copySkill.click()
+    await expect(toast('Skill copied')).toBeVisible()
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(skillFile)
+    await expect(copySkill).toBeFocused()
   })
   await atSkill('skill-copied', { keepToast: true })
+  await step('the disclosure opens the skill, and a list item wraps under its words', async () => {
+    await skillToggle.click()
+    await expect(skillToggle).toHaveAttribute('aria-expanded', 'true')
+    await expect(skillBox).toBeVisible()
+    const item = skillBox.locator('span').filter({ hasText: /^- `list_journal_days`/ })
+    expect(await item.evaluate((line) => getComputedStyle(line).textIndent)).not.toBe('0px')
+    // Scroll the box to the list of tools, so that the shots show how a wrapped list item lines up.
+    await skillBox.evaluate((box) => {
+      const tools = [...box.children].find((line) => line.textContent.startsWith('## The tools'))
+      box.scrollTop += tools.getBoundingClientRect().top - box.getBoundingClientRect().top - 12
+    })
+  })
+  await panelShots('skill-open')
+  await step('Tab from Copy skill puts the keyboard focus on the box of the skill', async () => {
+    await copySkill.focus()
+    await page.keyboard.press('Tab')
+    await expect(skillBox).toBeFocused()
+  })
+  await atSkill('skill-focus')
+  await step('a browser that refuses the copy: the skill opens with its whole text selected, and a toast says to copy it by hand', async () => {
+    await skillToggle.click()
+    await expect(skillBox).toBeHidden()
+    await page.evaluate(() => {
+      navigator.clipboard.writeText = () => Promise.reject(new Error('Not allowed'))
+      document.execCommand = () => false
+    })
+    await copySkill.click()
+    await expect(toast('The browser did not copy the skill. Recall selected the whole text of the skill, so copy it by hand.')).toBeVisible()
+    await expect(skillBox).toBeVisible()
+    expect(await page.evaluate(() => window.getSelection().toString())).toBe(skillFile.trimEnd())
+  })
+  await atSkill('skill-copy-failed', { keepToast: true })
+  await page.reload()
+  await expect(page.getByRole('heading', { level: 1, name: 'Imports' })).toBeVisible()
 
   const id = () => crypto.randomUUID()
   const e = { walk: id(), coffee: id(), london: id(), rain: id(), dinner: id(), garden: id(), evening: id(), gone: id(), late: id() }
@@ -132,6 +197,7 @@ export default async ({ page, context, step, capture, settle, expect, login, sta
   await shot('list')
   await asPhone('list-phone')
   await asDark('list-dark')
+  await panelShots('panel-batches')
 
   const card = (text) => page.getByRole('listitem', { name: /^Entry at / }).filter({ hasText: text })
   const counts = page.getByLabel('Counts of this batch')
