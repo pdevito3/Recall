@@ -25,6 +25,7 @@ public static class ImportBatchMapper
         Time = ImportTimeOfDay.Text(entry.Agent.Time),
         TimeZone = entry.Agent.TimeZone,
         Raw = entry.Agent.Raw,
+        Document = entry.RawAtAccept(),
         Moods = entry.Agent.Moods,
         Topics = entry.Agent.Topics,
         Review = new ImportReviewDto { Rejected = entry.Review.Rejected, Words = entry.Review.Words, Time = ImportTimeOfDay.Text(entry.Review.Time) },
