@@ -32,7 +32,7 @@ export function ImportDayGroup({ batchId, batchZone, day, entries, onEntryGone }
         <Button
           variant="ghost"
           size="sm"
-          className="-me-2.5 max-sm:h-11"
+          className="max-sm:h-11"
           aria-label={`${day.rejected ? 'Keep' : 'Reject'} ${heading}`}
           isPending={review.isPending}
           onPress={() => review.mutate({ date: day.date, rejected: !day.rejected })}

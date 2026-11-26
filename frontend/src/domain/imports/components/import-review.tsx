@@ -69,7 +69,7 @@ export function ImportReview({ batch, pageNumber }: ImportReviewProps) {
         ) : (
           <p role="status" aria-label="Loading the counts" className="text-sm text-muted-foreground">Loading the counts</p>
         )}
-        <div className="flex flex-wrap gap-2">
+        <div className="ml-auto flex flex-wrap justify-end gap-2">
           <DiscardImportBatch batch={batch} entryCount={counts?.entries} onDiscarded={() => void navigate({ to: '/imports' })} />
           {counts && days.data && (
             <AcceptImportBatch batchId={batch.id} batchName={batch.name} counts={counts} version={days.data.version} nothingKeptReasonId={nothingKeptReasonId} />
