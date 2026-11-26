@@ -49,6 +49,7 @@ Keep implementation details out of the map. Name only user paths, stable handles
 - [Users](./users.md) covers `/users` and `/users/<id>`: the list of the users of the tenant, the actions from `allowedActions`, the role change, the delete, and the refusal for a member.
 - [Personal access tokens](./personal-access-tokens.md) covers `/settings/personal-access-tokens` and the section on `/users/<id>`: make a token, see its value once, use it as a bearer, and revoke it.
 - [Model providers and Cleanup](./model-providers.md) covers `/model-providers`: connect, test, pick a model, and make it active with a local fake, a second provider with a model that does not take the place of the active provider, a wrong key, and a Cleanup that runs after the page closes.
+- [Imports](./imports.md) covers `/imports` and `/imports/<id>`: the batches that an agent fills over REST, the review of the entries by day, the edit, the reject of an entry or a day, the accept, the discard, and the setting on `/settings`.
 - [People](./people.md) covers `/people`: the list, the add, the full name and the notes of a Person, and the choice between two People of one name on the People proposal of an entry.
 
 ## Not mapped yet
