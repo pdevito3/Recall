@@ -352,7 +352,7 @@ test.describe('the accept of a batch', () => {
 })
 
 test.describe('the refusals of the Server', () => {
-  test('a 409 of a changed batch keeps the dialog open with the message and shows the new counts', { tag: '@IMP-44' }, async ({ page, api }) => {
+  test('a 409 of a changed batch keeps the dialog open and shows the new counts with one status line', { tag: '@IMP-44' }, async ({ page, api }) => {
     reviewOf(api)
     const changed = 'This batch changed after you read it. Read it again, then accept it.'
     api.mock(importsApi.refusesAccept(diary.id, { ...aProblem().staleVersion().build(), detail: changed, errors: { version: [changed] } }))
@@ -362,8 +362,8 @@ test.describe('the refusals of the Server', () => {
 
     await imports.accept(diary.id)
 
-    await expect(imports.at.acceptAlert).toHaveText(changed)
-    await expect(imports.at.acceptReread).toHaveText('Recall read the batch again. Check the new counts, then accept it.')
+    await expect(imports.at.acceptReread).toHaveText('The batch changed. Recall read it again. Check the new counts, then accept the batch.')
+    await expect(imports.at.acceptAlert).toHaveCount(0)
     await expect(imports.at.acceptDialog).toContainText('4 entries go into your journal')
     await expect(imports.at.result).toHaveCount(0)
   })
