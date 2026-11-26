@@ -16,11 +16,13 @@ import { entriesWord } from './import-words'
 
 interface DiscardImportBatchProps {
   batch: ImportBatchDto
+  /** The entries that the discard deletes. The detail page gives the count of the days that it read, which is newer than the list. */
+  entryCount?: number
   onDiscarded?: () => void
   onSettled?: () => void
 }
 
-export function DiscardImportBatch({ batch, onDiscarded, onSettled }: DiscardImportBatchProps) {
+export function DiscardImportBatch({ batch, entryCount = batch.entryCount, onDiscarded, onSettled }: DiscardImportBatchProps) {
   const discard = useDiscardImportBatch()
 
   const handleDiscard = () =>
@@ -39,9 +41,10 @@ export function DiscardImportBatch({ batch, onDiscarded, onSettled }: DiscardImp
       </Button>
       <ResponsiveDialog role="alertdialog">
         <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle className="wrap-anywhere">Discard {batch.name}?</ResponsiveDialogTitle>
+          <ResponsiveDialogTitle className="wrap-anywhere">Discard “{batch.name}”?</ResponsiveDialogTitle>
           <ResponsiveDialogDescription>
-            This batch and its {entriesWord(batch.entryCount)} leave Recall, and nothing of it reaches your journal. You cannot undo a discard.
+            {entryCount === 0 ? 'This batch is deleted.' : `This batch and its ${entriesWord(entryCount)} are deleted.`} Nothing of it goes into your journal. You
+            cannot undo a discard.
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
         <ResponsiveDialogFooter>

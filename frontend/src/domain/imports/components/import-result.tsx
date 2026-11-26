@@ -6,7 +6,7 @@ import { Link } from '@/components/ui/link'
 import { buttonVariants } from '@/components/ui/button-variants'
 import { browserTimeZone, formatInstant } from '@/lib/zoned-time'
 
-import { daysWord, entriesWord } from './import-words'
+import { agree, daysWord, entriesWord } from './import-words'
 
 export function ImportResult({ batch }: { batch: ImportBatchDto }) {
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -18,25 +18,27 @@ export function ImportResult({ batch }: { batch: ImportBatchDto }) {
   const lines = result
     ? [
         `${entriesWord(result.sessionsMade)} made in your journal`,
-        `${entriesWord(result.entriesRejected)} rejected`,
-        `${daysWord(result.daysRejected)} rejected`,
-        `${entriesWord(result.skippedInJournal)} skipped, because your journal has them`,
-        `${entriesWord(result.skippedDeleted)} skipped, because you deleted them`,
+        `${entriesWord(result.entriesRejected)} rejected, alone or with ${agree(result.entriesRejected, 'its day', 'their days')}`,
+        `${daysWord(result.daysRejected)} rejected as a whole`,
+        `${entriesWord(result.skippedInJournal)} skipped, because your journal has ${agree(result.skippedInJournal, 'it', 'them')}`,
+        `${entriesWord(result.skippedDeleted)} skipped, because you deleted ${agree(result.skippedDeleted, 'it', 'them')} from your journal`,
       ]
     : []
 
   return (
     <>
-      <PageHeading ref={headingRef}>{batch.name}</PageHeading>
-      <p className="text-muted-foreground">
-        This batch is in your journal.{acceptedAt && ` Accepted on ${acceptedAt}.`}
-      </p>
+      <div className="flex flex-col gap-2">
+        <PageHeading ref={headingRef}>{batch.name}</PageHeading>
+        <p className="text-sm text-muted-foreground">
+          This batch is in your journal.{acceptedAt && ` Accepted on ${acceptedAt}.`}
+        </p>
+      </div>
       <ul aria-label="Result of the accept" className="flex flex-col divide-y rounded-lg border">
         {lines.map((line) => (
           <li key={line} className="p-3 text-sm">{line}</li>
         ))}
       </ul>
-      <Link to="/" className={buttonVariants({ variant: 'outline', className: 'self-start' })}>
+      <Link to="/" className={buttonVariants({ className: 'self-start' })}>
         Go to your journal
       </Link>
     </>

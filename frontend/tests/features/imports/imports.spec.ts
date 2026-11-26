@@ -19,7 +19,12 @@ const reviewOf = (api: Api) => {
 
 test.describe('the list of import batches', () => {
   test('the sidebar opens the list, and each batch shows its name, count, zone, and state', { tag: '@IMP-33' }, async ({ page, api }) => {
-    const accepted = anImportBatch('imp_2', 'Diary 2023', { state: 'Accepted', acceptedAt: '2026-11-21T10:00:00Z', entryCount: 1 })
+    const accepted = anImportBatch('imp_2', 'Diary 2023', {
+      state: 'Accepted',
+      acceptedAt: '2026-11-21T10:00:00Z',
+      entryCount: 0,
+      result: { sessionsMade: 5, entriesRejected: 1, daysRejected: 0, skippedInJournal: 0, skippedDeleted: 0 },
+    })
     api.mock(importsApi.listIs([diary, accepted]))
     const imports = importsPage(page)
     await page.goto('/')
@@ -27,8 +32,8 @@ test.describe('the list of import batches', () => {
     await imports.at.nav.click()
 
     await expect(imports.at.heading).toBeVisible()
-    await expect(imports.at.batch('Diary 2024')).toContainText('Open3 entries in Eastern Time')
-    await expect(imports.at.batch('Diary 2023')).toContainText('In your journal1 entry in Eastern Time')
+    await expect(imports.at.batch('Diary 2024')).toContainText('Open3 entries. Times in Eastern Time.')
+    await expect(imports.at.batch('Diary 2023')).toContainText('In your journal5 entries made in your journal. Times in Eastern Time.')
     await expect(imports.at.batchLink('Diary 2024')).toHaveAttribute('href', '/imports/imp_1')
   })
 
@@ -46,7 +51,7 @@ test.describe('the list of import batches', () => {
     const imports = importsPage(page)
     await imports.openList()
     await imports.at.discardOf('Diary 2024').click()
-    await expect(imports.at.discardDialog('Diary 2024')).toContainText('This batch and its 3 entries leave Recall')
+    await expect(imports.at.discardDialog('Diary 2024')).toContainText('This batch and its 3 entries are deleted. Nothing of it goes into your journal. You cannot undo a discard.')
     api.mock(importsApi.listIs([]))
 
     await imports.at.discardBatch.click()
@@ -80,6 +85,7 @@ test.describe('the review of a batch', () => {
     const imports = importsPage(page)
     await imports.openReviewWithEntries(diary.id, 'Diary 2024')
     await expect(imports.at.entry('8:30 AM')).toBeVisible()
+    await expect(imports.at.pager).toContainText('Page 1 of 2: Mar 1, 2024')
     expect(api.last('get', importPaths.entries(diary.id))?.query.toString()).toBe('from=2024-03-01&to=2024-03-01')
     api.mock(importsApi.entriesOfAnyRangeAre(diary.id, [london]))
 
@@ -99,7 +105,7 @@ test.describe('the review of a batch', () => {
 
     await expect(imports.at.entriesOf(friday)).toHaveCount(2)
     await expect(imports.at.entry('8:30 AM')).toContainText('8:30 AMCoffee on the porch.CalmMorning')
-    await expect(imports.at.entry('12:01 PM')).toContainText('12:01 PMTime from its place in the dayLong walk.')
+    await expect(imports.at.entry('12:01 PM')).toContainText('12:01 PMNo time given. Set from its place in the day.Long walk.')
     await expect(imports.at.entriesOf(saturday)).toHaveCount(1)
     await expect(imports.at.entry('9:00 PM')).toContainText('9:00 PMUnited Kingdom TimeFlew to London.')
   })
@@ -199,7 +205,7 @@ test.describe('the review of a batch', () => {
     await expect(imports.at.counts).toHaveText('3 entries: 2 kept, 1 rejected')
   })
 
-  test('Reject day sends the review of the day, and each entry of the day shows Rejected with its day', { tag: ['@IMP-40', '@IMP-41'] }, async ({ page, api }) => {
+  test('Reject day sends the review of the day, and the day and each of its entries say rejected with the day', { tag: ['@IMP-40', '@IMP-41'] }, async ({ page, api }) => {
     reviewOf(api)
     api.mock(importsApi.reviewsDay(diary.id, '2024-03-01', true))
     const imports = importsPage(page)
@@ -213,11 +219,35 @@ test.describe('the review of a batch', () => {
     await imports.rejectDay(diary.id, friday)
 
     expect(api.last('put', importPaths.dayReview(diary.id))?.body).toEqual({ date: '2024-03-01', rejected: true })
-    await expect(imports.at.entry('8:30 AM')).toContainText('Rejected with its day')
-    await expect(imports.at.entry('12:01 PM')).toContainText('Rejected with its day')
+    await expect(imports.at.entry('8:30 AM')).toContainText('Rejected with the day')
+    await expect(imports.at.entry('12:01 PM')).toContainText('Rejected with the day')
+    await expect(imports.at.dayRegion(friday)).toContainText('2 entries, rejected with the day')
     await expect(imports.at.reject('8:30 AM')).toHaveCount(0)
     await expect(imports.at.keepDay(friday)).toBeVisible()
     await expect(imports.at.counts).toHaveText('3 entries: 1 kept, 2 rejected')
+  })
+
+  test('on a phone, Reject day and Keep day have a hit area of at least 44 by 44 px', { tag: '@IMP-40' }, async ({ page, api }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    api.mock(importsApi.listIs([diary]), importsApi.daysAre(diary.id, [anImportDay('2024-03-01', 2), anImportDay('2024-03-02', 1, { rejected: true })], 4), importsApi.entriesOfAnyRangeAre(diary.id, [coffee, walk, london]))
+    const imports = importsPage(page)
+
+    await imports.openReviewWithEntries(diary.id, 'Diary 2024')
+
+    for (const button of [imports.at.rejectDay(friday), imports.at.keepDay(saturday)]) {
+      const box = (await button.boundingBox())!
+      expect(Math.min(box.width, box.height)).toBeGreaterThanOrEqual(44)
+    }
+  })
+
+  test('with no kept entry, Accept is off and says why', { tag: '@IMP-42' }, async ({ page, api }) => {
+    api.mock(importsApi.listIs([diary]), importsApi.daysAre(diary.id, [anImportDay('2024-03-01', 2, { rejected: true }), anImportDay('2024-03-02', 1, { rejectedCount: 1 })], 4), importsApi.entriesOfAnyRangeAre(diary.id, [coffee, walk, london]))
+    const imports = importsPage(page)
+
+    await imports.openReviewWithEntries(diary.id, 'Diary 2024')
+
+    await expect(imports.at.accept).toBeDisabled()
+    await expect(imports.at.accept).toHaveAccessibleDescription('Keep an entry to accept this batch, or discard it.')
   })
 
   test('the counts come from the days', { tag: '@IMP-41' }, async ({ page, api }) => {
@@ -247,14 +277,20 @@ test.describe('the accept of a batch', () => {
     const imports = importsPage(page)
     await imports.openReviewWithEntries(diary.id, 'Diary 2024')
     await imports.at.accept.click()
-    await expect(imports.at.acceptDialog).toContainText('2 entries go into your journal, and 1 entry that you rejected stay out.')
+    await expect(imports.at.acceptDialog).toContainText('2 entries go into your journal, and 1 entry that you rejected stays out.')
     api.mock(importsApi.listIs([accepted]))
 
     await imports.at.acceptBatch.click()
 
     await expect(imports.at.result).toBeVisible()
     expect(api.last('post', importPaths.accept(diary.id))?.body).toEqual({ version: 9 })
-    await expect(imports.at.resultLines).toHaveText(['2 entries made in your journal', '1 entry rejected', '0 days rejected', '0 entries skipped, because your journal has them', '0 entries skipped, because you deleted them'])
+    await expect(imports.at.resultLines).toHaveText([
+      '2 entries made in your journal',
+      '1 entry rejected, alone or with its day',
+      '0 days rejected as a whole',
+      '0 entries skipped, because your journal has them',
+      '0 entries skipped, because you deleted them from your journal',
+    ])
     await expect(imports.at.toJournal).toHaveAttribute('href', '/')
     await expect(imports.at.accept).toHaveCount(0)
     await expect(imports.at.batchHeading('Diary 2024')).toBeFocused()
@@ -273,10 +309,10 @@ test.describe('the accept of a batch', () => {
 
     await expect(imports.at.resultLines).toHaveText([
       '12 entries made in your journal',
-      '3 entries rejected',
-      '1 day rejected',
+      '3 entries rejected, alone or with their days',
+      '1 day rejected as a whole',
       '2 entries skipped, because your journal has them',
-      '1 entry skipped, because you deleted them',
+      '1 entry skipped, because you deleted it from your journal',
     ])
     await expect(imports.at.discardOf('Diary 2024')).toHaveCount(0)
     await expect(imports.at.accept).toHaveCount(0)
@@ -294,7 +330,7 @@ test.describe('the refusals of the Server', () => {
 
     await imports.accept(diary.id)
 
-    await expect(imports.at.acceptAlert).toHaveText(changed)
+    await expect(imports.at.acceptAlert).toHaveText(`${changed}The counts above are new. Check them, then accept the batch.`)
     await expect(imports.at.acceptDialog).toContainText('4 entries go into your journal')
     await expect(imports.at.result).toHaveCount(0)
   })
@@ -332,6 +368,7 @@ test.describe('the refusals of the Server', () => {
 
     await page.goto('/imports/imp_9')
 
+    await expect(imports.at.missingHeading).toBeVisible()
     await expect(imports.at.missing).toBeVisible()
     await imports.at.toImports.click()
     await expect(imports.at.heading).toBeVisible()

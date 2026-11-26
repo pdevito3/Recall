@@ -10,21 +10,27 @@ import {
   ResponsiveDialogTitle,
 } from '@/components/ui/responsive-dialog'
 import { refusalOf } from '@/hooks/use-server-errors'
+import { isStaleVersionError } from '@/lib/problem-details'
 
-import { useAcceptImportBatch } from '../apis/imports'
+import { useAcceptImportBatch, useIsReviewing } from '../apis/imports'
 import type { ImportCounts } from '../pages-of'
-import { entriesWord } from './import-words'
+import { agree, entriesWord } from './import-words'
 
 interface AcceptImportBatchProps {
   batchId: string
+  batchName: string
   counts: ImportCounts
   version: number
+  /** The ID of the text that says why Accept is off when no entry is kept. */
+  nothingKeptReasonId: string
 }
 
-export function AcceptImportBatch({ batchId, counts, version }: AcceptImportBatchProps) {
+export function AcceptImportBatch({ batchId, batchName, counts, version, nothingKeptReasonId }: AcceptImportBatchProps) {
   const [isOpen, setIsOpen] = useState(false)
   const accept = useAcceptImportBatch(batchId)
+  const isReviewing = useIsReviewing(batchId)
   const problem = accept.error && messagesOf(accept.error)
+  const hasNothingKept = counts.kept === 0
 
   const open = (next: boolean) => {
     if (next) accept.reset()
@@ -33,12 +39,15 @@ export function AcceptImportBatch({ batchId, counts, version }: AcceptImportBatc
 
   return (
     <>
-      <Button className="shrink-0" onPress={() => open(true)}>Accept</Button>
+      <Button className="shrink-0" isDisabled={isReviewing || hasNothingKept} aria-describedby={hasNothingKept ? nothingKeptReasonId : undefined} onPress={() => open(true)}>
+        Accept
+      </Button>
       <ResponsiveDialog role="alertdialog" isOpen={isOpen} onOpenChange={open} isDismissable={!accept.isPending}>
         <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>Accept this batch?</ResponsiveDialogTitle>
+          <ResponsiveDialogTitle className="wrap-anywhere">Accept “{batchName}”?</ResponsiveDialogTitle>
           <ResponsiveDialogDescription>
-            {entriesWord(counts.kept)} go into your journal, and {entriesWord(counts.rejected)} that you rejected stay out. After the accept, the batch cannot change.
+            {entriesWord(counts.kept)} {agree(counts.kept, 'goes', 'go')} into your journal, and {entriesWord(counts.rejected)} that you rejected{' '}
+            {agree(counts.rejected, 'stays', 'stay')} out. After the accept, the batch cannot change.
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
         {problem && (
@@ -46,11 +55,12 @@ export function AcceptImportBatch({ batchId, counts, version }: AcceptImportBatc
             {problem.map((message, i) => (
               <p key={`${i}-${message}`}>{message}</p>
             ))}
+            {isStaleVersionError(accept.error) && <p className="mt-1">The counts above are new. Check them, then accept the batch.</p>}
           </div>
         )}
         <ResponsiveDialogFooter>
           <ResponsiveDialogClose isDisabled={accept.isPending}>Keep reviewing</ResponsiveDialogClose>
-          <Button isPending={accept.isPending} onPress={() => accept.mutate(version)}>
+          <Button isPending={accept.isPending} isDisabled={isReviewing || hasNothingKept} onPress={() => accept.mutate(version)}>
             Accept batch
           </Button>
         </ResponsiveDialogFooter>
