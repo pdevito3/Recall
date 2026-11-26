@@ -5,6 +5,7 @@ import { Page } from '@/components/page'
 import { PageHeading } from '@/components/page-heading'
 import { useImportBatches } from '@/domain/imports/apis/imports'
 import { ImportBatchList } from '@/domain/imports/components/import-batch-list'
+import { ImportSkill } from '@/domain/imports/components/import-skill'
 
 export const Route = createFileRoute('/imports/')({
   component: ImportsPage,
@@ -22,6 +23,7 @@ function ImportsPage() {
         An agent puts the entries of an old journal into an import batch. Review each batch here, then accept it to put its entries in your journal.
       </p>
       <ImportBatchList batches={batches} headingRef={headingRef} />
+      <ImportSkill />
     </Page>
   )
 }

@@ -48,5 +48,8 @@ export const imports = (page: Page) => ({
   toImports: page.getByRole('link', { name: 'Go to your imports' }),
   importReview: page.getByRole('checkbox', { name: 'Only I can accept an import batch' }),
   importReviewLabel: page.getByText('Only I can accept an import batch', { exact: true }),
+  skillPanel: page.getByRole('region', { name: 'Import with an agent', exact: true }),
+  skillText: page.getByRole('region', { name: 'Import with an agent', exact: true }).getByLabel('The recall-import skill', { exact: true }),
+  copySkill: page.getByRole('button', { name: 'Copy skill', exact: true }),
   text: (text: string) => page.getByText(text, { exact: true }),
 })

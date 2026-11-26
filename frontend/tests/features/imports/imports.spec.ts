@@ -1,8 +1,12 @@
+import { readFileSync } from 'node:fs'
+
 import { anImportBatch, anImportDay, anImportEntry, documentOf, importPaths, importsApi } from '@tests/support/api/imports-api'
 import { aSetting, settingsApi } from '@tests/support/api/settings-api'
 import { aProblem } from '@tests/support/builders/problem-details-builder'
 import { expect, test, type Api } from '@tests/support/fixtures'
 import { importsPage } from './imports.tasks'
+
+const skillFile = readFileSync(new URL('../../../src/domain/imports/recall-import.md', import.meta.url), 'utf8')
 
 const diary = anImportBatch('imp_1', 'Diary 2024', { entryCount: 3, version: 4 })
 const friday = 'Friday, March 1, 2024'
@@ -103,6 +107,34 @@ test.describe('the list of import batches', () => {
     await imports.openList()
 
     expect(await imports.heightOf(imports.at.batchLink('Diary 2024'))).toBeGreaterThanOrEqual(44)
+  })
+})
+
+test.describe('the recall-import skill', () => {
+  test('the list shows the skill file, and Copy skill puts the whole file on the clipboard', { tag: '@IMP-46' }, async ({ page, context, api }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    api.mock(importsApi.listIs([diary]))
+    const imports = importsPage(page)
+    await imports.openList()
+
+    await imports.at.copySkill.click()
+
+    await expect(imports.at.text('Skill copied')).toBeVisible()
+    await expect.poll(() => imports.clipboardText()).toBe(skillFile)
+    expect(await imports.at.skillText.textContent()).toBe(skillFile)
+  })
+
+  test('on a phone, the skill wraps in the page, and Copy skill has a hit area of at least 44 px', { tag: '@IMP-46' }, async ({ page, api }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    api.mock(importsApi.listIs([diary]))
+    const imports = importsPage(page)
+
+    await imports.openList()
+
+    expect(await imports.isInsideTheWindowWidth(imports.at.skillPanel)).toBe(true)
+    expect(await imports.sideScrollRange()).toBe(0)
+    expect(await imports.sideScrollOf(imports.at.skillText)).toBe(0)
+    expect(await imports.hitAreaOf(imports.at.copySkill)).toBeGreaterThanOrEqual(44)
   })
 })
 

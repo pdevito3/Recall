@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router'
-import { afterEach, expect, test } from 'vitest'
+import { afterEach, expect, test, vi } from 'vitest'
 import { commands, userEvent } from 'vitest/browser'
 import { render } from 'vitest-browser-react'
 
@@ -13,6 +13,7 @@ import { routeTree } from '@/routeTree.gen'
 import type { Answer } from '@/test/answer'
 import { memberSetting, signedInMember } from '@/test/session'
 
+import skill from '../recall-import.md?raw'
 import { ImportReviewSetting } from './import-review-setting'
 
 const batchesPath = '/api/v1/import-batches'
@@ -90,7 +91,10 @@ const entriesAre = (entries: ImportEntryDto[], from = '2024-03-01', to = '2024-0
 
 const problem = (status: number, detail: string, type = 'about:blank') => ({ type, title: 'Refused', status, detail })
 
-afterEach(() => toastQueue.clear())
+afterEach(() => {
+  toastQueue.clear()
+  vi.restoreAllMocks()
+})
 
 const noPeople: Answer = {
   method: 'GET',
@@ -153,8 +157,37 @@ test('@IMP-33 the list shows each batch with its name, zone, count, state, and t
 test('@IMP-33 with no batch, the list says that an agent opens one with a personal access token', async () => {
   const { screen } = await renderAt('/imports', [batchesAre([])])
 
-  await expect.element(screen.getByText(/^You have no import batches\. An agent opens a batch with a personal access token, then you review it here\.$/)).toBeVisible()
-  await expect.element(screen.getByRole('link', { name: 'personal access token' })).toHaveAttribute('href', '/settings/personal-access-tokens')
+  const empty = screen.getByText(/^You have no import batches\. An agent opens a batch with a personal access token, then you review it here\.$/)
+  await expect.element(empty).toBeVisible()
+  await expect.element(empty.getByRole('link', { name: 'personal access token' })).toHaveAttribute('href', '/settings/personal-access-tokens')
+})
+
+test('@IMP-46 the list shows the whole recall-import skill, and Copy skill puts it on the clipboard', async () => {
+  const copied: string[] = []
+  vi.spyOn(navigator.clipboard, 'writeText').mockImplementation((text) => {
+    copied.push(text)
+    return Promise.resolve()
+  })
+  const { screen } = await renderAt('/imports', [batchesAre([diary])])
+  const panel = screen.getByRole('region', { name: 'Import with an agent' })
+
+  await expect.element(panel).toMatchTextContent(/Copy this skill into your agent, such as Claude Code or Claude Desktop\./)
+  await expect.element(panel.getByRole('link', { name: 'personal access token' })).toHaveAttribute('href', '/settings/personal-access-tokens')
+  expect(panel.getByLabelText('The recall-import skill').element().textContent).toBe(skill)
+  await userEvent.click(panel.getByRole('button', { name: 'Copy skill' }))
+
+  await vi.waitFor(() => expect(copied).toEqual([skill]))
+  await expect.element(screen.getByRole('alertdialog').filter({ hasText: 'Skill copied' })).toBeVisible()
+})
+
+test('@IMP-46 when the browser refuses the copy, a toast says to copy the skill by hand', async () => {
+  vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('Not allowed'))
+  vi.spyOn(document, 'execCommand').mockReturnValue(false)
+  const { screen } = await renderAt('/imports', [batchesAre([diary])])
+
+  await userEvent.click(screen.getByRole('button', { name: 'Copy skill' }))
+
+  await expect.element(screen.getByRole('alertdialog').filter({ hasText: 'The browser did not copy the skill. Select the text of the skill, and copy it by hand.' })).toBeVisible()
 })
 
 test('@IMP-34 discard asks with the name and the count, sends the delete, and the batch leaves the list', async () => {
