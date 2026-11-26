@@ -150,7 +150,7 @@ export default async ({ page, context, step, capture, settle, expect, login, sta
   })
   await atSkill('skill-open-top')
   await step('a list item of the skill wraps under its words', async () => {
-    const item = skillBox.locator('span').filter({ hasText: /^- `list_journal_days`/ })
+    const item = skillBox.locator('span').filter({ hasText: /^- A batch can be large\./ })
     expect(await item.evaluate((line) => getComputedStyle(line).textIndent)).not.toBe('0px')
     // Scroll the box to the list of tools, so that the shots show how a wrapped list item lines up.
     await skillBox.evaluate((box) => {
