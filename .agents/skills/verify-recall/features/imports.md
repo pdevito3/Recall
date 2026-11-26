@@ -11,7 +11,7 @@ An agent puts the entries of an old journal into an import batch over REST or MC
 - `edit` opens the form `Edit the entry` from `Edit the entry at <time>`: `Words`, `Time`, `Save`, `Cancel`, and after an edit `Use the import words` and `Use the import time`, which are off with `Save or cancel your change first.` while the form has a change. A refusal shows in the form.
 - `reject` sends `Reject the entry at <time>` or `Keep the entry at <time>`. `Reject <day>` and `Keep <day>` do the same for a day.
 - `counts` in `Counts of this batch` show `<n entries>: <k> kept, <r> rejected` and change after each review.
-- `accept` opens `Accept “<name>”?` with the kept and rejected counts. `Accept batch` shows `Result of the accept` and `Go to your journal`. A 409 keeps the dialog open, reads the batch again, and then shows the new counts and the status `The batch changed. Recall read it again. Check the new counts, then accept the batch.`, with no alert
+- `accept` opens `Accept “<name>”?` with the kept and rejected counts. With no kept entry, `Accept` is off and the page says `Keep an entry to accept this batch, or discard it.`, and with no entry, `Wait for the agent to add entries, or discard this batch.` `Accept batch` shows `Result of the accept` and `Go to your journal`. A 409 keeps the dialog open, reads the batch again, and then shows the new counts and the status `The batch changed. Recall read it again. Check the new counts, then accept the batch.`, with no alert
 - `refusals`: a 404 or a 409 of a review shows the message of the Server in a toast, reads the batch again, and moves the focus to the heading when the entry leaves. A batch that does not exist says `This import batch does not exist. Pick a batch from your imports.` with `Go to your imports` on its own line.
 - `setting` on `/settings`, section `Imports`: the checkbox `Only I can accept an import batch`.
 
@@ -35,6 +35,7 @@ Preconditions:
 - **Gone.** Remove an entry with `POST .../entries/remove`, then choose its Reject: the 404 message shows, the entry leaves, and the focus is on the `h1`.
 - **Accept.** `Accept`, then put one more entry as the agent, then `Accept batch`: the 409 message and the new counts show. `Accept batch` again shows the result. `GET /api/v1/sessions` has the start times of the review.
 - **Setting and discard.** Toggle the setting off and on. Open a second batch and discard it from the list.
+- **Nothing to accept.** Open a batch of one day as the agent and reject the day: `Accept` is off with its reason. Open a batch with no entry: `Accept` is off with the other reason.
 
 Recipe: `recipes/imports.mjs`.
 
