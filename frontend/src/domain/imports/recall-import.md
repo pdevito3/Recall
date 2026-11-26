@@ -9,7 +9,7 @@ You split the source into entries and put them in an import batch. The person re
 
 ## The tools
 
-- A batch can be large. So always give `from` and `to` to `list_import_entries`.
+- A batch can be large. So always give `from` and `to` to `list_import_entries`, at most 31 days apart.
 - Use `remove_import_entries` only for an entry that you put by mistake, and only after the person says yes.
 - Leave `accept_import_batch` to the person.
 
@@ -71,6 +71,7 @@ If you do not see `open_import_batch` or `put_import_entries`, your token cannot
 13. After the last put, call `list_import_batches`. Count your entries whose last outcome is `Added`, `Changed`, `Unchanged`, or `Rejected`.
     - The entry count of the batch must be the same as your count.
     - If the batch has more entries, it holds entries of other rules. Put nothing more, and do the steps of "If the split rules change".
+    - Tell the person both counts. Do not read the whole batch to find the other entries.
 14. Tell the person the count of each outcome. Name each `InOtherBatch` entry and each entry that you could not correct. Tell the person to review the batch in Imports in Recall and accept it there.
 
 ### If the split rules change
