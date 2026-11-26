@@ -20,7 +20,13 @@ A token with only **Read my journal** sees only the list tools. It gets an error
 
 The MCP URL is the address of your Recall with `/mcp` at the end, for example `https://recall.example.com/mcp`. **Imports** in Recall shows this URL, with **Copy MCP URL**. The agent sends the token in the header `Authorization: Bearer <token>`.
 
-The examples below read the token from the environment variable `RECALL_PAT`. A token that you type in a command goes into the history of your shell. To keep it out of the history, run `read -rs RECALL_PAT`, paste the token, and press Enter. Then run `export RECALL_PAT`. Set the variable before you run `claude mcp add`, because the shell puts its value into the command when the command runs.
+The examples below read the token from the environment variable `RECALL_PAT`. A token that you type in a command goes into the history of your shell. To keep it out of the history, set the variable this way:
+
+1. Run `read -rs RECALL_PAT`.
+2. Paste the token, and press Enter.
+3. Run `export RECALL_PAT`.
+
+Set the variable before you run `claude mcp add`. The shell puts its value into the command when the command runs.
 
 For Claude Code, run this command with your MCP URL:
 
@@ -28,7 +34,7 @@ For Claude Code, run this command with your MCP URL:
 claude mcp add --transport http recall https://recall.example.com/mcp --header "Authorization: Bearer $RECALL_PAT"
 ```
 
-**Imports** in Recall shows the same command with your MCP URL and with `<your token>` in place of `$RECALL_PAT`, with **Copy command**. By default, `claude mcp add` adds Recall only to the project of the current directory. To add it to all your projects, put `--scope user` after `add`.
+**Imports** in Recall shows the same command with your MCP URL, and with **Copy command**. There, `<your token>` is in place of `$RECALL_PAT`. By default, `claude mcp add` adds Recall only to the project of the current directory. To add it to all your projects, put `--scope user` after `add`.
 
 For Claude Code with a `.mcp.json` file at the root of the project:
 
@@ -44,10 +50,12 @@ For Claude Code with a `.mcp.json` file at the root of the project:
 }
 ```
 
+Claude Code reads `RECALL_PAT` from the shell in which you start `claude`. So set `RECALL_PAT` in each shell where you start `claude`.
+
 Claude Desktop starts a local MCP server for each entry of its config file. Use a bridge, such as `mcp-remote`, that sends the header to `/mcp`. The bridge needs Node.js 18 or later, which also gives `npx`.
 
 1. In Claude Desktop, open **Settings** > **Developer**, and choose **Edit Config**. This opens the folder of `claude_desktop_config.json`.
-2. Add the entry below to the file, with your MCP URL and your token.
+2. Add the entry below to the file, with your MCP URL and your token. If the file already has `mcpServers`, add only the `recall` entry inside it.
 3. Quit Claude Desktop, and start it again.
 
 ```json
@@ -156,7 +164,17 @@ Each entry of a put gets the first outcome that applies.
 
 ### A put again is safe
 
-A put of the same call again changes nothing. So the agent can send a put again after an error or a lost result. A call of `open_import_batch` again opens a second batch. So after a lost result of `open_import_batch`, the agent finds the batch with `list_import_batches`. A second run of a whole import also stores only the new entries, because each entry that is already in the journal gets `InJournal`. An entry that you rejected in an accepted or a discarded batch is not in the journal, so it gets `Added` again. Reject it again in the review. A put never changes your review, and it removes no entry. So a second run with other split rules can put the same text again under other IDs. The skill tells the agent to compare its rules with the earlier entries before it puts more, and to stop and ask you when they differ.
+A put of the same call again changes nothing. So the agent can send a put again after an error or a lost result. A call of `open_import_batch` again opens a second batch. So after a lost result of `open_import_batch`, the agent finds the batch with `list_import_batches`. A second run of a whole import stores only the new entries. Each entry that is already in the journal gets `InJournal`. An entry that you rejected in an accepted or a discarded batch is not in the journal. So it gets `Added` again, and you reject it again in the review.
+
+### The rules check
+
+A put never changes your review, and it removes no entry. So a second run with other split rules can put the same text again under other IDs. A wrong source word in the IDs has the same result. So the skill tells the agent to check its rules before it puts more.
+
+- If an accepted batch of the same source exists, the agent opens a check batch, "Rules check, discard me". It puts the entries of one day that the journal has, and reads the outcomes. Then it discards the check batch at once. The check batch holds no review of yours, so the agent does not ask you first.
+- In the check, an outcome `InJournal` or `Deleted` shows that the source word is correct. If no entry gets one of them, the agent asks you for the word.
+- If a day has another count of entries than of Sessions, the agent tells you. Then it asks whether to go on. A reject in an earlier batch can cause a difference. A deleted Session or a Session that you made in Recall can too.
+- If an open batch of the same source exists, the agent compares some of its dates with its rules. After its last put, it compares the entry count of the batch with its own count.
+- If the open batch holds entries of other rules, the agent tells you. It discards the batch only after your yes, because a discard also deletes your rejects and edits.
 
 ### The review gate
 
@@ -172,4 +190,4 @@ The import review is on by default. With the review on, only you accept a batch,
 
 The accept makes one Session of each kept entry, in one save. The page then shows the counts of the result, with a link to your journal. A Summary of an affected period reads Stale. The accept starts no Cleanup.
 
-To drop a batch with none of its entries, choose **Discard** in the list of batches or on the page of the batch. A discard cannot be undone. After an accept or a discard, a rejected ID is free for a later import.
+To drop a batch with none of its entries, choose **Discard**. It is in the list of batches and on the page of the batch. A discard cannot be undone. After an accept or a discard, a rejected ID is free for a later import.
