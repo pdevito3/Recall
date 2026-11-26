@@ -5,6 +5,7 @@ An agent puts the entries of an old journal into an import batch over REST or MC
 ## Sub-features
 
 - `list` at `/imports` shows `Your import batches`: each name links to its batch, with `Open` or `In your journal`, `<n entries>. Times in <zone>.`, and `Opened on ...`. With no batch, the text names the personal access token.
+- `skill` at `/imports`, the region `Import with an agent`: the text says to copy the skill into an agent and links `personal access token`. The box `The recall-import skill` holds the whole text of `frontend/src/domain/imports/recall-import.md`. `Copy skill` puts that text on the clipboard and shows the toast `Skill copied`.
 - `discard` opens `Discard <name>?` from `Discard <name>` and drops the batch with `Discard batch` and the toast `Batch discarded`. An accepted batch has no Discard.
 - `days` show as `h2` headings with the list `Entries of <day>`. Each entry is the list item `Entry at <time>`. A batch of more than 200 entries has the pager `Pages of this batch`, and the URL has `?page=<n>`.
 - `entry` shows its time, the zone when it is not the zone of the batch, `No time given. Set from its place in the day.` when no one gave a time, `Edited`, `Rejected` or `Rejected with the day`, and the notes `The import changed the words after your edit. ...` and `The import changed the time after your edit. ...`, each with the next step.
@@ -29,6 +30,7 @@ Preconditions:
 
 - **Token.** On `/settings/personal-access-tokens`, make a token with `Change my journal`. The agent calls use it as `Authorization: Bearer <value>`.
 - **Agent.** `POST /api/v1/import-batches` with a name and `America/New_York`, then `PUT /api/v1/import-batches/<id>/entries` with entries on several days: with a time, without a time, with its own zone, with Moods and Topics.
+- **Skill.** On `/imports`, the box `The recall-import skill` has the text of the skill file. Grant the clipboard, choose `Copy skill`, and the clipboard holds the same text.
 - **List.** Open `/imports`. The row of the batch shows the count and the zone of the API answer.
 - **Review.** Choose the batch. Each entry shows the start time in its zone. Edit words and time, `Save`, and the `PUT .../entries/review` body has the whole review.
 - **Reject.** `Reject the entry at <time>` and `Reject <day>`. The counts change.
@@ -41,6 +43,7 @@ Recipe: `recipes/imports.mjs`.
 
 ## Gotchas
 
+- The recipe reads the skill file from the checkout, so it compares the page with the file of the same commit. A stack in `--preview` serves the build of its launch, so launch it again after a change to the file.
 - The sweep gives each batch name a long value, so the recipe reads the name from the list answer, not from a literal.
 - The text of the `Time` field has Unicode isolate marks, so match it with a pattern such as `/7:45\W*AM/`.
 - A fetch from the page needs `X-CSRF: 1` and `X-Recall-User: <sub of /auth/me>`. A token needs `neverExpires: true` or a future `expiresAt`.

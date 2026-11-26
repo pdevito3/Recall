@@ -1,4 +1,8 @@
-export default async ({ page, step, capture, settle, expect, login, stack }) => {
+import { readFileSync } from 'node:fs'
+
+const skillFile = readFileSync(new URL('../../../../frontend/src/domain/imports/recall-import.md', import.meta.url), 'utf8')
+
+export default async ({ page, context, step, capture, settle, expect, login, stack }) => {
   const desktop = { width: 1280, height: 800 }
   const phone = { width: 390, height: 844 }
   const answered = (method, pattern) =>
@@ -61,6 +65,35 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
   })
   await shot('empty')
   await asPhone('empty-phone')
+
+  const skillPanel = page.getByRole('region', { name: 'Import with an agent', exact: true })
+  const atSkill = async (name, options) => {
+    await skillPanel.scrollIntoViewIfNeeded()
+    await shot(name, { fullPage: false, ...options })
+  }
+  await step('the skill for an agent: the page shows the whole recall-import file', async () => {
+    await expect(skillPanel.getByText(/^Copy this skill into your agent, such as Claude Code or Claude Desktop\./)).toBeVisible()
+    await expect(skillPanel.getByRole('link', { name: 'personal access token', exact: true })).toHaveAttribute('href', '/settings/personal-access-tokens')
+    expect(await skillPanel.getByLabel('The recall-import skill', { exact: true }).textContent()).toBe(skillFile)
+  })
+  await atSkill('skill')
+  await page.setViewportSize(phone)
+  await settle()
+  await atSkill('skill-phone')
+  await page.setViewportSize(desktop)
+  await settle()
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await settle()
+  await atSkill('skill-dark')
+  await page.emulateMedia({ colorScheme: 'light' })
+  await settle()
+  await step('Copy skill puts the whole file on the clipboard and says so', async () => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    await skillPanel.getByRole('button', { name: 'Copy skill', exact: true }).click()
+    await expect(page.locator('[data-slot="toast-region"]').getByText('Skill copied', { exact: true })).toBeVisible()
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(skillFile)
+  })
+  await atSkill('skill-copied', { keepToast: true })
 
   const id = () => crypto.randomUUID()
   const e = { walk: id(), coffee: id(), london: id(), rain: id(), dinner: id(), garden: id(), evening: id(), gone: id(), late: id() }
