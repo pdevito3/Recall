@@ -171,9 +171,10 @@ test('@IMP-46 the panel shows the MCP URL, the Claude Code command, and the whol
   const { screen } = await renderAt('/imports', [batchesAre([diary])])
   const panel = screen.getByRole('region', { name: 'Import with an agent' })
 
-  await expect.element(panel).toMatchTextContent(/save it as a skill of the agent, or paste it at the start of a chat\./)
+  await expect.element(panel).toMatchTextContent(/save it as a skill of the agent, or paste it at the start of a chat\. For Claude Code, save it as ~\/\.claude\/skills\/recall-import\/SKILL\.md\./)
   await expect.element(panel.getByRole('link', { name: 'personal access token' })).toHaveAttribute('href', '/settings/personal-access-tokens')
-  await expect.element(panel).toMatchTextContent(/that has Change my journal\. The agent sends the token in the header Authorization: Bearer <token>\./)
+  await expect.element(panel).toMatchTextContent(/that has “Change my journal”\. The agent sends the token in the header Authorization: Bearer <your token>\./)
+  await expect.element(panel).toMatchTextContent(/For Claude Code, run this command with your token in place of <your token>\. Your shell then keeps the token in its history\./)
   await expect.element(panel.getByRole('group', { name: 'MCP URL' }).getByText(`${window.location.origin}/mcp`, { exact: true })).toBeVisible()
   const command = `claude mcp add --transport http recall ${window.location.origin}/mcp --header "Authorization: Bearer <your token>"`
   await expect.element(panel.getByRole('group', { name: 'Claude Code command' }).getByText(command, { exact: true })).toBeVisible()
