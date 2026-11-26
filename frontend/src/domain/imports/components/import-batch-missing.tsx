@@ -5,10 +5,10 @@ export function ImportBatchMissing() {
   return (
     <>
       <PageHeading>Batch not found</PageHeading>
-      <p className="max-w-prose text-muted-foreground">
-        This import batch does not exist. It may have been discarded.{' '}
-        <Link to="/imports" className="underline underline-offset-4 hover:text-primary max-md:inline-flex max-md:min-h-11 max-md:items-center">Go to your imports</Link>
-      </p>
+      <p className="max-w-prose text-muted-foreground">This import batch does not exist. Pick a batch from your imports.</p>
+      <Link to="/imports" className="flex w-fit items-center underline underline-offset-4 hover:text-primary max-sm:min-h-11">
+        Go to your imports
+      </Link>
     </>
   )
 }
