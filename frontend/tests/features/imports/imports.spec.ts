@@ -74,6 +74,27 @@ test.describe('the list of import batches', () => {
     expect(await imports.sideScrollRange()).toBe(0)
   })
 
+  test('on a phone, the date and the time when a batch opened and was accepted stay on one line', { tag: '@IMP-33' }, async ({ page, api }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    const accepted = anImportBatch('imp_2', 'Diary 2023', {
+      state: 'Accepted',
+      openedAt: '2026-11-20T22:14:00Z',
+      acceptedAt: '2026-11-26T22:14:00Z',
+      result: { sessionsMade: 5, entriesRejected: 1, daysRejected: 0, skippedInJournal: 0, skippedDeleted: 0 },
+    })
+    api.mock(importsApi.listIs([accepted]))
+    const imports = importsPage(page)
+
+    await imports.openList()
+
+    for (const words of ['Opened on ', 'Accepted on ']) {
+      expect(await imports.linesOfTheTimeAfter(imports.at.batch('Diary 2023'), words)).toBe(1)
+    }
+    await imports.at.batchLink('Diary 2023').click()
+    await expect(imports.at.result).toBeVisible()
+    expect(await imports.linesOfTheTimeAfter(imports.at.resultNote, 'Accepted on ')).toBe(1)
+  })
+
   test('on a phone, the name of a batch in the list has a hit area of at least 44 px high', { tag: '@IMP-33' }, async ({ page, api }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     api.mock(importsApi.listIs([diary]))

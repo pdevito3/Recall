@@ -56,6 +56,29 @@ export function importsPage(page: Page) {
       return box.y >= aboveBox.y + aboveBox.height
     },
 
+    /** The count of the lines of the time after `words` in the text of `element`, up to the period that ends it. */
+    linesOfTheTimeAfter: (element: Locator, words: string) =>
+      element.evaluate((root, words) => {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+        const nodes: Text[] = []
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) nodes.push(node as Text)
+        const text = nodes.map((node) => node.data).join('')
+        const from = text.indexOf(words) + words.length
+        const to = text.indexOf('.', from)
+        if (from < words.length || to < 0) throw new Error(`No text has ${words}`)
+        const at = (offset: number): [Text, number] => {
+          for (const node of nodes) {
+            if (offset <= node.length) return [node, offset]
+            offset -= node.length
+          }
+          throw new Error('The offset is after the text')
+        }
+        const range = document.createRange()
+        range.setStart(...at(from))
+        range.setEnd(...at(to))
+        return new Set([...range.getClientRects()].filter((rect) => rect.width > 0).map((rect) => Math.round(rect.top))).size
+      }, words),
+
     sideScrollRange: () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
 
     async reject(id: string, time: string) {

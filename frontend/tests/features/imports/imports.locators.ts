@@ -39,6 +39,7 @@ export const imports = (page: Page) => ({
   acceptReread: page.getByRole('alertdialog', { name: /^Accept “.+”\?$/ }).getByRole('status'),
   acceptBatch: page.getByRole('button', { name: 'Accept batch', exact: true }),
   result: page.getByRole('list', { name: 'Result of the accept' }),
+  resultNote: page.getByText(/^This batch is in your journal\./),
   resultLines: page.getByRole('list', { name: 'Result of the accept' }).getByRole('listitem'),
   toJournal: page.getByRole('link', { name: 'Go to your journal' }),
   missingHeading: page.getByRole('heading', { level: 1, name: 'Batch not found' }),

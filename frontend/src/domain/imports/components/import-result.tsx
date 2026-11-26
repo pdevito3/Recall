@@ -5,17 +5,14 @@ import { PageHeading } from '@/components/page-heading'
 import { Link } from '@/components/ui/link'
 import { buttonVariants } from '@/components/ui/button-variants'
 import { cn } from '@/lib/utils'
-import { browserTimeZone, formatInstant } from '@/lib/zoned-time'
 
-import { agree, daysWord, entriesWord } from './import-words'
+import { agree, daysWord, entriesWord, momentOf } from './import-words'
 
 export function ImportResult({ batch }: { batch: ImportBatchDto }) {
   const headingRef = useRef<HTMLHeadingElement>(null)
   useEffect(() => headingRef.current?.focus(), [])
   const result = batch.result
-  const acceptedAt = batch.acceptedAt
-    ? formatInstant(new Date(batch.acceptedAt), browserTimeZone(), { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-    : null
+  const acceptedAt = batch.acceptedAt ? momentOf(batch.acceptedAt) : null
   const lines = result
     ? [
         { count: result.sessionsMade, text: `${entriesWord(result.sessionsMade)} made in your journal` },

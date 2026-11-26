@@ -1,6 +1,6 @@
 import { parseDate } from '@internationalized/date'
 
-import { formatDate, parseTimeZone, timeZoneLabel } from '@/lib/zoned-time'
+import { browserTimeZone, formatDate, formatInstant, parseTimeZone, timeZoneLabel } from '@/lib/zoned-time'
 
 const numbers = new Intl.NumberFormat('en-US')
 
@@ -27,3 +27,7 @@ export const zoneLabelOf = (zone: string) => {
     return zone
   }
 }
+
+/** A moment in the zone of the browser, as "Nov 26, 2026, 4:14 PM", with no line break in it, so it wraps as one unit. */
+export const momentOf = (instant: string) =>
+  formatInstant(new Date(instant), browserTimeZone(), { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).replace(/\s/g, '\u00a0')

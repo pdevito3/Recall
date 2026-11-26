@@ -7,7 +7,6 @@ import { PageHeading } from '@/components/page-heading'
 import { QueryError } from '@/components/query-error'
 import { PagerButtons } from '@/components/ui/pager'
 import { isProblemDetailsError } from '@/lib/problem-details'
-import { browserTimeZone, formatInstant } from '@/lib/zoned-time'
 
 import { useImportDays, useImportEntries } from '../apis/imports'
 import { countsOf, pagesOf, type ImportPage } from '../pages-of'
@@ -15,7 +14,7 @@ import { AcceptImportBatch } from './accept-import-batch'
 import { DiscardImportBatch } from './discard-import-batch'
 import { ImportDayGroup } from './import-day-group'
 import { ImportBatchMissing } from './import-batch-missing'
-import { countOf, dateSpanOf, entriesWord, zoneLabelOf } from './import-words'
+import { countOf, dateSpanOf, entriesWord, momentOf, zoneLabelOf } from './import-words'
 
 interface ImportReviewProps {
   batch: ImportBatchDto
@@ -26,7 +25,6 @@ export function ImportReview({ batch, pageNumber }: ImportReviewProps) {
   const days = useImportDays(batch.id)
   const navigate = useNavigate()
   const headingRef = useRef<HTMLHeadingElement>(null)
-  const openedAt = formatInstant(new Date(batch.openedAt), browserTimeZone(), { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 
   if (days.isError && !days.data) {
     return isProblemDetailsError(days.error) && days.error.status === 404 ? (
@@ -50,7 +48,7 @@ export function ImportReview({ batch, pageNumber }: ImportReviewProps) {
       <div className="flex flex-col gap-2">
         <PageHeading ref={headingRef}>{batch.name}</PageHeading>
         <p className="text-sm text-muted-foreground wrap-anywhere">
-          Opened on {openedAt}. Times are in {zoneLabelOf(batch.timeZone)}, unless an entry names its own time zone.
+          Opened on {momentOf(batch.openedAt)}. Times are in {zoneLabelOf(batch.timeZone)}, unless an entry names its own time zone.
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-3">
