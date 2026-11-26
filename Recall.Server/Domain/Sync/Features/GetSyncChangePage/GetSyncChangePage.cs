@@ -52,7 +52,7 @@ public static class GetSyncChangePage
             {
                 Cursor = SyncCursor.Of(last),
                 HasMore = hasMore,
-                Sessions = sessions.Select(s => s.ToSessionDto(proposalPeople)).ToList(),
+                Sessions = sessions.Select(s => s.ToSyncSessionDto(proposalPeople)).ToList(),
                 People = people.Select(p => p.ToPersonDto()).ToList(),
                 Corrections = live.Contains(SyncEntityType.Correction)
                     ? (await RowsAsync(dbContext.Corrections, SyncEntityType.Correction, "sync.corrections", after, last, cancellationToken))

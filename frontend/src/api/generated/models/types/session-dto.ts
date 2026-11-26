@@ -49,7 +49,7 @@ export type SessionDto = {
     */
     startedAt: string;
     /**
-     * @description The date of DateTimeOffset SyncSessionDto.StartedAt in the zone that the create stored. A later change of the settings does not move it.
+     * @description The date of DateTimeOffset SessionDto.StartedAt in the zone that the create stored. A later change of the settings does not move it.
      *
      * Format: `date`
      * @type string
