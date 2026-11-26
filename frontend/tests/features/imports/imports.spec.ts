@@ -623,7 +623,7 @@ test.describe('the import review setting', () => {
     await imports.at.importReviewLabel.click()
 
     await expect(imports.at.importReview).not.toBeChecked()
-    expect(api.last('put', importPaths.importReview)?.body).toEqual({ requireImportReview: false, version: 1 })
+    await expect.poll(() => api.last('put', importPaths.importReview)?.body).toEqual({ requireImportReview: false, version: 1 })
   })
 
   test('a change from an old version reads the settings again and sends the change once more', { tag: '@IMP-45' }, async ({ page, api }) => {
@@ -638,7 +638,7 @@ test.describe('the import review setting', () => {
     await imports.at.importReviewLabel.click()
 
     await expect(imports.at.importReview).not.toBeChecked()
-    expect(api.all('put', importPaths.importReview).map((r) => r.body)).toEqual([
+    await expect.poll(() => api.all('put', importPaths.importReview).map((r) => r.body)).toEqual([
       { requireImportReview: false, version: 1 },
       { requireImportReview: false, version: 3 },
     ])
