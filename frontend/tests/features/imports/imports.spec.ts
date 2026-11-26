@@ -41,13 +41,13 @@ test.describe('the list of import batches', () => {
     await expect(imports.at.batchLink('Diary 2024')).toHaveAttribute('href', '/imports/imp_1')
   })
 
-  test('with no batch, the list says how an agent opens one', { tag: '@IMP-33' }, async ({ page, api }) => {
+  test('with no batch, the list says that the batches of an agent show here', { tag: '@IMP-33' }, async ({ page, api }) => {
     api.mock(importsApi.listIs([]))
     const imports = importsPage(page)
 
     await imports.openList()
 
-    await expect(imports.at.empty).toBeVisible()
+    await expect(imports.at.empty).toHaveText('You have no import batches. When an agent opens a batch, you review it here.')
   })
 
   test('discard asks first with the name and the count, sends the delete, and the batch leaves the list', { tag: '@IMP-34' }, async ({ page, api }) => {
@@ -111,7 +111,7 @@ test.describe('the list of import batches', () => {
 })
 
 test.describe('the recall-import skill', () => {
-  test('the list shows the skill file, and Copy skill puts the whole file on the clipboard', { tag: '@IMP-46' }, async ({ page, context, api }) => {
+  test('the panel comes after the list, and Copy skill puts the whole file on the clipboard with the skill closed', { tag: '@IMP-46' }, async ({ page, context, api }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])
     api.mock(importsApi.listIs([diary]))
     const imports = importsPage(page)
@@ -121,20 +121,69 @@ test.describe('the recall-import skill', () => {
 
     await expect(imports.at.text('Skill copied')).toBeVisible()
     await expect.poll(() => imports.clipboardText()).toBe(skillFile)
+    expect(await imports.isFocused(imports.at.copySkill)).toBe(true)
+    await expect(imports.at.skillToggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(imports.at.skillText).toBeHidden()
     expect(await imports.at.skillText.textContent()).toBe(skillFile)
+    expect(await imports.topOf(imports.at.skillPanel)).toBeGreaterThan(await imports.bottomOf(imports.at.batches))
   })
 
-  test('on a phone, the skill wraps in the page, and Copy skill has a hit area of at least 44 px', { tag: '@IMP-46' }, async ({ page, api }) => {
+  test('the panel shows the MCP URL of this Recall, and Copy MCP URL puts it on the clipboard', { tag: '@IMP-46' }, async ({ page, context, api, baseURL }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    api.mock(importsApi.listIs([]))
+    const imports = importsPage(page)
+    await imports.openList()
+
+    await imports.at.copyMcpUrl.click()
+
+    await expect(imports.at.text('MCP URL copied')).toBeVisible()
+    await expect.poll(() => imports.clipboardText()).toBe(`${new URL(baseURL!).origin}/mcp`)
+    await expect(imports.at.mcpUrl).toContainText(`${new URL(baseURL!).origin}/mcp`)
+  })
+
+  test('the skill opens, and its box takes the keyboard focus after Copy skill', { tag: '@IMP-46' }, async ({ page, api }) => {
+    api.mock(importsApi.listIs([diary]))
+    const imports = importsPage(page)
+    await imports.openList()
+
+    await imports.at.skillToggle.click()
+    await imports.at.copySkill.focus()
+    await page.keyboard.press('Tab')
+
+    await expect(imports.at.skillToggle).toHaveAttribute('aria-expanded', 'true')
+    await expect(imports.at.skillText).toBeVisible()
+    await expect(imports.at.skillText).toBeFocused()
+  })
+
+  test('when the browser refuses the copy, the skill opens with its whole text selected', { tag: '@IMP-46' }, async ({ page, api }) => {
+    api.mock(importsApi.listIs([diary]))
+    const imports = importsPage(page)
+    await imports.refuseEachCopy()
+    await imports.openList()
+
+    await imports.at.copySkill.click()
+
+    await expect(imports.at.text('The browser did not copy the skill. Recall selected the whole text of the skill, so copy it by hand.')).toBeVisible()
+    await expect(imports.at.skillText).toBeVisible()
+    // A copy of a selection drops the line break at the end of the file, and keeps each other line.
+    expect(await imports.selectedText()).toBe(skillFile.trimEnd())
+  })
+
+  test('on a phone, the panel wraps in the page, and its buttons have a hit area of at least 44 px', { tag: '@IMP-46' }, async ({ page, api }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     api.mock(importsApi.listIs([diary]))
     const imports = importsPage(page)
-
     await imports.openList()
 
+    await imports.at.skillToggle.click()
+
+    await expect(imports.at.skillText).toBeVisible()
     expect(await imports.isInsideTheWindowWidth(imports.at.skillPanel)).toBe(true)
     expect(await imports.sideScrollRange()).toBe(0)
     expect(await imports.sideScrollOf(imports.at.skillText)).toBe(0)
     expect(await imports.hitAreaOf(imports.at.copySkill)).toBeGreaterThanOrEqual(44)
+    expect(await imports.hitAreaOf(imports.at.copyMcpUrl)).toBeGreaterThanOrEqual(44)
+    expect(await imports.hitAreaOf(imports.at.skillToggle)).toBeGreaterThanOrEqual(44)
   })
 })
 

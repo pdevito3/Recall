@@ -87,7 +87,7 @@ const failStalledServerRequests: ProxyOptions['configure'] = (proxy) => {
   })
 }
 
-const serverPaths = ['/auth/', '/api', '/backwave']
+const serverPaths = ['/auth/', '/api', '/backwave', '/mcp']
 
 // With no Server, Vite answers each path with its index.html, so a request of the app gets HTML and no error.
 

@@ -154,15 +154,15 @@ test('@IMP-33 the list shows each batch with its name, zone, count, state, and t
   await expect.element(screen.getByRole('link', { name: 'Diary 2024' })).toHaveAttribute('href', '/imports/imp_1')
 })
 
-test('@IMP-33 with no batch, the list says that an agent opens one with a personal access token', async () => {
+test('@IMP-33 with no batch, the list says that the batches of an agent show here, and leaves the token to the panel', async () => {
   const { screen } = await renderAt('/imports', [batchesAre([])])
 
-  const empty = screen.getByText(/^You have no import batches\. An agent opens a batch with a personal access token, then you review it here\.$/)
+  const empty = screen.getByText(/^You have no import batches\. When an agent opens a batch, you review it here\.$/)
   await expect.element(empty).toBeVisible()
-  await expect.element(empty.getByRole('link', { name: 'personal access token' })).toHaveAttribute('href', '/settings/personal-access-tokens')
+  expect(empty.getByRole('link').elements()).toHaveLength(0)
 })
 
-test('@IMP-46 the list shows the whole recall-import skill, and Copy skill puts it on the clipboard', async () => {
+test('@IMP-46 the panel shows the MCP URL and the whole recall-import skill, and Copy skill puts it on the clipboard', async () => {
   const copied: string[] = []
   vi.spyOn(navigator.clipboard, 'writeText').mockImplementation((text) => {
     copied.push(text)
@@ -171,23 +171,49 @@ test('@IMP-46 the list shows the whole recall-import skill, and Copy skill puts 
   const { screen } = await renderAt('/imports', [batchesAre([diary])])
   const panel = screen.getByRole('region', { name: 'Import with an agent' })
 
-  await expect.element(panel).toMatchTextContent(/Copy this skill into your agent, such as Claude Code or Claude Desktop\./)
+  await expect.element(panel).toMatchTextContent(/save it as a skill of the agent, or paste it at the start of a chat\./)
   await expect.element(panel.getByRole('link', { name: 'personal access token' })).toHaveAttribute('href', '/settings/personal-access-tokens')
-  expect(panel.getByLabelText('The recall-import skill').element().textContent).toBe(skill)
-  await userEvent.click(panel.getByRole('button', { name: 'Copy skill' }))
+  await expect.element(panel.getByRole('group', { name: 'MCP URL' }).getByText(`${window.location.origin}/mcp`, { exact: true })).toBeVisible()
+  expect(panel.getByRole('region', { name: 'The text of the recall-import skill', includeHidden: true }).element().textContent).toBe(skill)
+  await expect.element(panel.getByRole('button', { name: 'The recall-import skill' })).toHaveAttribute('aria-expanded', 'false')
+  const copySkill = panel.getByRole('button', { name: 'Copy skill' })
+  await userEvent.click(copySkill)
 
   await vi.waitFor(() => expect(copied).toEqual([skill]))
   await expect.element(screen.getByRole('alertdialog').filter({ hasText: 'Skill copied' })).toBeVisible()
+  await userEvent.click(panel.getByRole('button', { name: 'Copy MCP URL' }))
+  await vi.waitFor(() => expect(copied).toEqual([skill, `${window.location.origin}/mcp`]))
+  await expect.element(screen.getByRole('alertdialog').filter({ hasText: 'MCP URL copied' })).toBeVisible()
 })
 
-test('@IMP-46 when the browser refuses the copy, a toast says to copy the skill by hand', async () => {
+test('@IMP-46 a copy through the hidden field gives the focus back to Copy skill', async () => {
+  vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('Not a secure context'))
+  vi.spyOn(document, 'execCommand').mockReturnValue(true)
+  const { screen } = await renderAt('/imports', [batchesAre([diary])])
+  const copySkill = screen.getByRole('button', { name: 'Copy skill' })
+  await expect.element(copySkill).toBeVisible()
+  copySkill.element().focus()
+
+  await userEvent.keyboard('{Enter}')
+
+  await expect.element(screen.getByRole('alertdialog').filter({ hasText: 'Skill copied' })).toBeVisible()
+  expect(document.activeElement).toBe(copySkill.element())
+})
+
+test('@IMP-46 when the browser refuses the copy, the skill opens with its whole text selected, and a toast says to copy it by hand', async () => {
   vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('Not allowed'))
   vi.spyOn(document, 'execCommand').mockReturnValue(false)
   const { screen } = await renderAt('/imports', [batchesAre([diary])])
 
   await userEvent.click(screen.getByRole('button', { name: 'Copy skill' }))
 
-  await expect.element(screen.getByRole('alertdialog').filter({ hasText: 'The browser did not copy the skill. Select the text of the skill, and copy it by hand.' })).toBeVisible()
+  await expect.element(screen.getByRole('alertdialog').filter({ hasText: 'The browser did not copy the skill. Recall selected the whole text of the skill, so copy it by hand.' })).toBeVisible()
+  const box = screen.getByRole('region', { name: 'The text of the recall-import skill' })
+  await expect.element(box).toBeVisible()
+  const selection = window.getSelection()!
+  expect(selection.containsNode(box.element(), true)).toBe(true)
+  expect(selection.toString()).toContain('name: recall-import')
+  expect(selection.toString()).toContain('The second entry can have the Mood Calm')
 })
 
 test('@IMP-34 discard asks with the name and the count, sends the delete, and the batch leaves the list', async () => {

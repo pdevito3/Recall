@@ -86,6 +86,26 @@ export function importsPage(page: Page) {
 
     clipboardText: () => page.evaluate(() => navigator.clipboard.readText()),
 
+    /** The browser refuses each copy, as a browser on plain HTTP with no copy command does. */
+    refuseEachCopy: () =>
+      page.addInitScript(() => {
+        navigator.clipboard.writeText = () => Promise.reject(new Error('Not allowed'))
+        document.execCommand = () => false
+      }),
+
+    selectedText: () => page.evaluate(() => window.getSelection()?.toString() ?? ''),
+
+    isFocused: (element: Locator) => element.evaluate((node) => node === document.activeElement),
+
+    async topOf(element: Locator) {
+      return (await element.boundingBox())!.y
+    },
+
+    async bottomOf(element: Locator) {
+      const box = (await element.boundingBox())!
+      return box.y + box.height
+    },
+
     sideScrollOf: (element: Locator) => element.evaluate((box) => box.scrollWidth - box.clientWidth),
 
     sideScrollRange: () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
