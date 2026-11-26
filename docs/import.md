@@ -171,9 +171,9 @@ A put of the same call again changes nothing. So the agent can send a put again 
 A put never changes your review, and it removes no entry. So a second run with other split rules can put the same text again under other IDs. A wrong source word in the IDs has the same result. So the skill tells the agent to check its rules before it puts more.
 
 - If an accepted batch of the same source exists, the agent opens a check batch, "Rules check, discard me". It puts the entries of one day that the journal has, and reads the outcomes. Then it discards the check batch at once. The check batch holds no review of yours, so the agent does not ask you first.
-- In the check, an outcome `InJournal`, `Deleted`, or `InOtherBatch` shows that the source word is correct. If no entry gets one of them, the agent asks you for the word.
+- In the check, an outcome `InJournal` or `Deleted` shows that the source word is correct. If no entry gets one of them, the agent asks you for the word.
 - If a day has another count of entries than of Sessions, the agent tells you. Then it asks whether to go on. A reject in an earlier batch can cause a difference. A deleted Session or a Session that you made in Recall can too.
-- If an open batch of the same source exists, the agent compares the entries of some dates of the batch with its rules. An entry that the batch does not hold yet is not a difference. After its last put, it compares the entry count of the batch with its own count.
+- If an open batch of the same source exists, the agent compares the entries of some dates of the batch with its rules. An entry that the batch does not hold yet is not a difference. If a put changes an entry that the agent did not correct in this run, the agent stops and tells you. After its last put, it compares the entry count of the batch with its own count.
 - If the open batch holds entries of other rules, the agent tells you. It discards the batch only after your yes, because a discard also deletes your rejects and edits.
 
 ### The review gate
@@ -190,4 +190,4 @@ The import review is on by default. With the review on, only you accept a batch,
 
 The accept makes one Session of each kept entry, in one save. The page then shows the counts of the result, with a link to your journal. A Summary of an affected period reads Stale. The accept starts no Cleanup.
 
-To drop a batch with none of its entries, choose **Discard**. It is in the list of batches and on the page of the batch. A discard cannot be undone. After an accept or a discard, a rejected ID is free for a later import.
+To drop a batch and keep all of its entries out of your journal, choose **Discard**. It is in the list of batches and on the page of the batch. A discard cannot be undone. After an accept or a discard, a rejected ID is free for a later import.
