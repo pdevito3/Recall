@@ -195,9 +195,10 @@ public class ImportBatchHttpTests : TestBase
         var (_, member) = await PatPeople.AddTenantAsync(host);
         var token = await PatPeople.StartTokenAsync(host, member, new TokenGrant([], JournalAccess.ReadWrite));
         var address = host.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.First();
-        using var client = new HttpClient { BaseAddress = new Uri(address) };
+        // Kestrel refuses the body before it reads it, so a client that does not wait for 100 Continue sees a broken pipe.
+        // The handler waits 1 s for it by default, and under the load of the whole suite the 413 came later than that.
+        using var client = new HttpClient(new SocketsHttpHandler { Expect100ContinueTimeout = TimeSpan.FromSeconds(30) }) { BaseAddress = new Uri(address) };
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.Value);
-        // Kestrel refuses the body before it reads it, so a client that does not wait for 100 Continue sees a broken pipe
         client.DefaultRequestHeaders.ExpectContinue = true;
         var opened = await client.PostAsJsonAsync(ApiRoutes.ImportBatches.Root, new { name = "Large", timeZone = "UTC" });
         var batch = (await opened.Content.ReadFromJsonAsync<ImportBatchDto>()).ShouldNotBeNull();
