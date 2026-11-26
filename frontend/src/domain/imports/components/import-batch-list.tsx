@@ -3,6 +3,7 @@ import type { RefObject } from 'react'
 
 import type { ImportBatchDto } from '@/api/generated/models/types/import-batch-dto'
 import { QueryError } from '@/components/query-error'
+import { Badge } from '@/components/ui/badge'
 import { Link } from '@/components/ui/link'
 import { browserTimeZone, formatInstant } from '@/lib/zoned-time'
 
@@ -26,7 +27,7 @@ export function ImportBatchList({ batches, headingRef }: ImportBatchListProps) {
   }
   if (batches.data.length === 0) {
     return (
-      <p className="text-muted-foreground wrap-anywhere">
+      <p className="max-w-prose text-muted-foreground wrap-anywhere">
         You have no import batches. An agent opens a batch with a{' '}
         <Link to="/settings/personal-access-tokens" className="underline underline-offset-4 hover:text-primary">personal access token</Link>
         , then you review it here.
@@ -44,16 +45,16 @@ export function ImportBatchList({ batches, headingRef }: ImportBatchListProps) {
                 to="/imports/$id"
                 params={{ id: batch.id }}
                 dir="auto"
-                className="min-w-0 text-base font-medium wrap-anywhere underline-offset-4 hover:underline max-md:inline-flex max-md:min-h-11 max-md:items-center"
+                className="min-w-0 text-base font-medium text-primary wrap-anywhere underline underline-offset-4 hover:decoration-2 max-md:inline-flex max-md:min-h-11 max-md:items-center"
               >
                 {batch.name}
               </Link>
-              <span className={batch.state === 'Open' ? 'font-medium text-primary' : 'text-muted-foreground'}>
-                {batch.state === 'Open' ? 'Open' : 'In your journal'}
-              </span>
+              <Badge variant="secondary">{batch.state === 'Open' ? 'Open' : 'In your journal'}</Badge>
             </div>
             <span>
-              {entriesWord(batch.entryCount)} in {zoneLabelOf(batch.timeZone)}
+              {batch.result
+                ? `${entriesWord(batch.result.sessionsMade)} made in your journal. Times in ${zoneLabelOf(batch.timeZone)}.`
+                : `${entriesWord(batch.entryCount)}. Times in ${zoneLabelOf(batch.timeZone)}.`}
             </span>
             <span className="text-muted-foreground">
               Opened on {timeOf(batch.openedAt)}.{batch.acceptedAt && ` Accepted on ${timeOf(batch.acceptedAt)}.`}

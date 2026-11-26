@@ -1,5 +1,5 @@
 import { parseTime, type Time } from '@internationalized/date'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 import type { ImportEntryDto } from '@/api/generated/models/types/import-entry-dto'
 import type { ImportEntryReviewDto } from '@/api/generated/models/types/import-entry-review-dto'
@@ -9,10 +9,10 @@ import { JollyTimeField } from '@/components/ui/datefield'
 import { JournalEditor } from '@/domain/sessions/editor/journal-editor'
 import { JournalStaticText } from '@/domain/sessions/editor/journal-static-text'
 import { refusalOf } from '@/hooks/use-server-errors'
-import { formatInstant, parseTimeZone, timeZoneLabel, type TimeZone } from '@/lib/zoned-time'
 import { cn } from '@/lib/utils'
 
 import { isOutdated, useReviewImportEntry } from '../apis/imports'
+import { entryTimeOf } from '../entry-time'
 
 interface ImportEntryCardProps {
   batchId: string
@@ -20,14 +20,6 @@ interface ImportEntryCardProps {
   entry: ImportEntryDto
   dayIsRejected: boolean
   onGone: () => void
-}
-
-const zoneOf = (zone: string): TimeZone => {
-  try {
-    return parseTimeZone(zone)
-  } catch {
-    return 'UTC' as TimeZone
-  }
 }
 
 const reviewOf = (entry: ImportEntryDto, patch: Partial<ImportEntryReviewDto> = {}): ImportEntryReviewDto => ({
@@ -47,15 +39,14 @@ export function ImportEntryCard({ batchId, batchZone, entry, dayIsRejected, onGo
     wasEditing.current = isEditing
   }, [isEditing])
   const review = useReviewImportEntry(batchId)
-  const zone = zoneOf(entry.timeZone ?? batchZone)
-  const time = formatInstant(new Date(entry.startsAt), zone, { hour: 'numeric', minute: '2-digit' })
+  const { time, zoneLabel, editZone } = entryTimeOf(entry, batchZone)
   const isEdited = entry.review.words != null || entry.review.time != null
   const label = `Entry at ${time}`
 
   if (isEditing) {
     return (
       <li aria-label={label} className="rounded-lg border bg-card p-3">
-        <ImportEntryEdit batchId={batchId} entry={entry} zone={zone} onDone={() => setIsEditing(false)} onGone={onGone} />
+        <ImportEntryEdit batchId={batchId} entry={entry} zone={editZone} onDone={() => setIsEditing(false)} onGone={onGone} />
       </li>
     )
   }
@@ -63,12 +54,12 @@ export function ImportEntryCard({ batchId, batchZone, entry, dayIsRejected, onGo
   return (
     <li aria-label={label} className="flex flex-col gap-2 rounded-lg border bg-card p-3">
       <div className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground">
-        <span className="font-medium text-foreground">{time}</span>
-        {entry.timeZone && entry.timeZone !== batchZone && <span className="wrap-anywhere">{timeZoneLabel(zone)}</span>}
-        {entry.review.time == null && entry.time == null && <span>Time from its place in the day</span>}
+        <span>{time}</span>
+        {zoneLabel && <span className="wrap-anywhere">{zoneLabel}</span>}
+        {entry.review.time == null && entry.time == null && <span>No time given. Set from its place in the day.</span>}
         {isEdited && <span>Edited</span>}
         {entry.isRejected && (
-          <span className="font-medium text-destructive">{entry.review.rejected ? 'Rejected' : 'Rejected with its day'}</span>
+          <span className="font-medium text-destructive">{entry.review.rejected ? 'Rejected' : 'Rejected with the day'}</span>
         )}
       </div>
       <div className={cn('min-w-0', entry.isRejected && 'text-muted-foreground')}>
@@ -120,7 +111,8 @@ const hhmm = (time: Time) => `${String(time.hour).padStart(2, '0')}:${String(tim
 interface ImportEntryEditProps {
   batchId: string
   entry: ImportEntryDto
-  zone: TimeZone
+  /** The zone that a typed time is in. */
+  zone: string
   onDone: () => void
   onGone: () => void
 }
@@ -131,7 +123,15 @@ function ImportEntryEdit({ batchId, entry, zone, onDone, onGone }: ImportEntryEd
   const [words, setWords] = useState<string | null>(null)
   const [time, setTime] = useState<Time | null>(shownTime ? parseTime(shownTime) : null)
   const timeChanged = (time ? hhmm(time) : null) !== shownTime
-  const problem = review.error ? refusalOf(review.error, []).problem : null
+  const hasChanges = words !== null || timeChanged
+  const refusal = review.error ? refusalOf(review.error, ['words']) : null
+  const wordsError = refusal?.byField.words
+  const problem = refusal?.problem
+  const wordsId = useId()
+  const wordsErrorId = `${wordsId}-error`
+  useEffect(() => {
+    if (wordsError) document.getElementById(wordsId)?.focus()
+  }, [wordsError, wordsId])
 
   const send = (patch: Partial<ImportEntryReviewDto>) => review.mutate(reviewOf(entry, patch), { onSuccess: onDone, onError: (error) => isOutdated(error) && onGone() })
   const save = () =>
@@ -151,11 +151,28 @@ function ImportEntryEdit({ batchId, entry, zone, onDone, onGone }: ImportEntryEd
     >
       <div className="flex flex-col gap-2">
         <span aria-hidden="true" className="text-sm leading-none font-medium select-none">Words</span>
-        <JournalEditor initialText={entry.document} revision={0} label="Words" autoFocus onChange={(text) => setWords(text)} />
+        <JournalEditor
+          initialText={entry.document}
+          revision={0}
+          label="Words"
+          id={wordsId}
+          errorId={wordsError ? wordsErrorId : undefined}
+          autoFocus
+          onChange={(text) => setWords(text)}
+        />
+        {wordsError && (
+          <p id={wordsErrorId} role="alert" className="text-sm text-destructive">
+            {wordsError}
+          </p>
+        )}
       </div>
       <JollyTimeField
         label="Time"
-        description={`In ${timeZoneLabel(zone)}. Leave it empty to keep the place of the entry in its day.`}
+        description={
+          entry.time == null
+            ? `In ${zone}. Leave it empty to keep the place of the entry in its day.`
+            : `In ${zone}. Leave it empty to use the import time.`
+        }
         value={time}
         onChange={setTime}
         className="max-w-60"
@@ -171,12 +188,12 @@ function ImportEntryEdit({ batchId, entry, zone, onDone, onGone }: ImportEntryEd
         <Button type="submit" isPending={review.isPending} className="max-sm:h-11">Save</Button>
         <Button variant="outline" className="max-sm:h-11" onPress={onDone}>Cancel</Button>
         {entry.review.words != null && (
-          <Button variant="ghost" className="max-sm:h-11" isDisabled={review.isPending} onPress={() => send({ words: null })}>
+          <Button variant="outline" className="max-sm:h-11" isDisabled={review.isPending || hasChanges} onPress={() => send({ words: null })}>
             Use the import words
           </Button>
         )}
         {entry.review.time != null && (
-          <Button variant="ghost" className="max-sm:h-11" isDisabled={review.isPending} onPress={() => send({ time: null })}>
+          <Button variant="outline" className="max-sm:h-11" isDisabled={review.isPending || hasChanges} onPress={() => send({ time: null })}>
             Use the import time
           </Button>
         )}

@@ -24,7 +24,7 @@ function ImportBatchRoute() {
   const { page } = Route.useSearch()
   const batches = useImportBatches()
   const batch = batches.data?.find((b) => b.id === id)
-  useBreadcrumbName(batch?.name)
+  useBreadcrumbName(batches.data && !batch ? 'Batch not found' : batch?.name)
 
   return (
     <Page>

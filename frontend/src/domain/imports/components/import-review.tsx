@@ -5,7 +5,7 @@ import type { ImportBatchDto } from '@/api/generated/models/types/import-batch-d
 import type { ImportEntryDto } from '@/api/generated/models/types/import-entry-dto'
 import { PageHeading } from '@/components/page-heading'
 import { QueryError } from '@/components/query-error'
-import { Pager } from '@/components/ui/pager'
+import { PagerButtons } from '@/components/ui/pager'
 import { isProblemDetailsError } from '@/lib/problem-details'
 import { browserTimeZone, formatInstant } from '@/lib/zoned-time'
 
@@ -15,7 +15,7 @@ import { AcceptImportBatch } from './accept-import-batch'
 import { DiscardImportBatch } from './discard-import-batch'
 import { ImportDayGroup } from './import-day-group'
 import { ImportBatchMissing } from './import-batch-missing'
-import { countOf, entriesWord, zoneLabelOf } from './import-words'
+import { countOf, dateSpanOf, entriesWord, zoneLabelOf } from './import-words'
 
 interface ImportReviewProps {
   batch: ImportBatchDto
@@ -55,16 +55,25 @@ export function ImportReview({ batch, pageNumber }: ImportReviewProps) {
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-3">
         {counts ? (
-          <p aria-label="Counts of this batch" className="text-sm">
-            <span className="font-medium">{entriesWord(counts.entries)}</span>
-            <span className="text-muted-foreground">: {countOf(counts.kept)} kept, {countOf(counts.rejected)} rejected</span>
-          </p>
+          <div className="flex flex-col gap-1">
+            <p aria-label="Counts of this batch" className="text-sm">
+              <span className="font-medium">{entriesWord(counts.entries)}</span>
+              <span className="text-muted-foreground">: {countOf(counts.kept)} kept, {countOf(counts.rejected)} rejected</span>
+            </p>
+            {counts.kept === 0 && (
+              <p id={nothingKeptReasonId} className="text-sm text-muted-foreground">
+                {counts.entries === 0 ? 'Wait for the agent to add entries, or discard this batch.' : 'Keep an entry to accept this batch, or discard it.'}
+              </p>
+            )}
+          </div>
         ) : (
           <p role="status" aria-label="Loading the counts" className="text-sm text-muted-foreground">Loading the counts</p>
         )}
         <div className="flex flex-wrap gap-2">
-          <DiscardImportBatch batch={batch} onDiscarded={() => void navigate({ to: '/imports' })} />
-          {counts && days.data && <AcceptImportBatch batchId={batch.id} counts={counts} version={days.data.version} />}
+          <DiscardImportBatch batch={batch} entryCount={counts?.entries} onDiscarded={() => void navigate({ to: '/imports' })} />
+          {counts && days.data && (
+            <AcceptImportBatch batchId={batch.id} batchName={batch.name} counts={counts} version={days.data.version} nothingKeptReasonId={nothingKeptReasonId} />
+          )}
         </div>
       </div>
       {days.isPending && <p role="status" aria-label="Loading the days" className="text-muted-foreground">Loading the days</p>}
@@ -73,25 +82,34 @@ export function ImportReview({ batch, pageNumber }: ImportReviewProps) {
       )}
       {page && (
         <>
-          {pages.length > 1 && <ImportPager label="Pages of this batch" shown={shown} total={pages.length} onPageChange={changePage} />}
+          {pages.length > 1 && <ImportPager label="Pages of this batch" page={page} shown={shown} total={pages.length} onPageChange={changePage} />}
           <ImportPageEntries batch={batch} page={page} onEntryGone={() => headingRef.current?.focus()} />
-          {pages.length > 1 && <ImportPager label="Pages of this batch, at the end" shown={shown} total={pages.length} onPageChange={changePage} />}
+          {pages.length > 1 && <ImportPager label="Pages of this batch, at the end" page={page} shown={shown} total={pages.length} onPageChange={changePage} />}
         </>
       )}
     </>
   )
 }
 
+const nothingKeptReasonId = 'import-nothing-kept'
+
 interface ImportPagerProps {
   label: string
+  page: ImportPage
   shown: number
   total: number
   onPageChange: (pageNumber: number) => void
 }
 
-function ImportPager({ label, shown, total, onPageChange }: ImportPagerProps) {
+/** The pager of a batch. A page holds whole days (IMP-35), so the pager names the dates of the page. */
+function ImportPager({ label, page, shown, total, onPageChange }: ImportPagerProps) {
   return (
-    <Pager label={label} pagination={{ pageNumber: shown, totalPages: total, hasPrevious: shown > 1, hasNext: shown < total }} onPageChange={onPageChange} />
+    <nav aria-label={label} className="flex items-center justify-end gap-2">
+      <span className="mr-auto text-sm text-muted-foreground">
+        Page {shown} of {total}: {dateSpanOf(page.from, page.to)}
+      </span>
+      <PagerButtons hasPrevious={shown > 1} hasNext={shown < total} onPrevious={() => onPageChange(shown - 1)} onNext={() => onPageChange(shown + 1)} />
+    </nav>
   )
 }
 

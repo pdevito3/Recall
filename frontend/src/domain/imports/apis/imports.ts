@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useIsMutating, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 
 import { acceptImportBatch } from '@/api/generated/import-batches/clients/accept-import-batch'
 import { discardImportBatch } from '@/api/generated/import-batches/clients/discard-import-batch'
@@ -61,6 +61,7 @@ export function useDiscardImportBatch() {
 export function useReviewImportEntry(id: string, { inForm = false } = {}) {
   const queryClient = useQueryClient()
   return useMutation({
+    mutationKey: ImportKeys.reviews(id),
     mutationFn: (review: ImportEntryReviewDto) =>
       reviewImportEntry({ path: { id }, body: review, options: { suppressErrorToast: inForm } }),
     onSuccess: ({ entry }) => {
@@ -81,11 +82,15 @@ export function useReviewImportEntry(id: string, { inForm = false } = {}) {
 export function useReviewImportDay(id: string) {
   const queryClient = useQueryClient()
   return useMutation({
+    mutationKey: ImportKeys.reviews(id),
     mutationFn: (review: ImportDayReviewDto) => reviewImportDay({ path: { id }, body: review }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ImportKeys.batch(id) }),
     onError: (error) => readAgainAfterARefusal(queryClient, id, error),
   })
 }
+
+/** True while a review of an entry or a day of the batch, with the read of the days after it, is not done. */
+export const useIsReviewing = (id: string) => useIsMutating({ mutationKey: ImportKeys.reviews(id) }) > 0
 
 export function useAcceptImportBatch(id: string) {
   const queryClient = useQueryClient()
@@ -96,8 +101,6 @@ export function useAcceptImportBatch(id: string) {
       void queryClient.invalidateQueries({ queryKey: SessionKeys.all })
       return queryClient.invalidateQueries({ queryKey: ImportKeys.lists() })
     },
-    onError: (error) => {
-      if (isProblemDetailsError(error) && error.status === 409) void queryClient.invalidateQueries({ queryKey: ImportKeys.batch(id) })
-    },
+    onError: (error) => readAgainAfterARefusal(queryClient, id, error),
   })
 }
