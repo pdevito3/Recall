@@ -6,6 +6,7 @@ import { QueryError } from '@/components/query-error'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ImportReviewSetting } from '@/domain/imports/components/import-review-setting'
 import { SaveStatusLine } from '@/domain/sessions/components/save-status'
 import { StaleChangePrompts } from '@/domain/sessions/components/stale-change-prompts'
 import { userSettingDtoTimeZoneModeEnum } from '@/api/generated/models/types/user-setting-dto'
@@ -146,6 +147,7 @@ export function SettingsForm() {
           </Checkbox>
         </div>
       </section>
+      <ImportReviewSetting />
       <section className="flex flex-col gap-2" aria-labelledby="settings-account">
         <h2 id="settings-account" className="text-lg font-semibold">Account</h2>
         <SignedInUser />
