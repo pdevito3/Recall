@@ -2,7 +2,7 @@
 
 ## 1. Scope
 
-A person has years of journal text in another app. An AI agent reads that source, splits it into entries, and writes them into an Import batch in Recall. The person reviews the batch in the SPA, and one accept makes each kept entry a Session of the journal. Recall does not parse a source. It gives the agent the tools, the person the review, and the agent a doc and a skill. [Issue #109](https://github.com/pdevito3/Recall/issues/109) gives the reasons. [ADR 0026](../adr/0026-an-import-batch-is-a-draft-area-outside-the-journal.md) records the design.
+A person has years of journal text in another app. An AI agent reads that source, splits it into entries, and writes them into an Import batch in Recall. The person reviews the batch in the SPA, and one accept makes each kept entry a Session of the journal. Recall does not parse a source. It gives the agent the tools, the person the review, and the agent a doc and a skill. [docs/import.md](../import.md) is the doc, and it links the skill. [Issue #109](https://github.com/pdevito3/Recall/issues/109) gives the reasons. [ADR 0026](../adr/0026-an-import-batch-is-a-draft-area-outside-the-journal.md) records the design.
 
 The import changes two rules of [the journal spec](sessions.md). The phase that builds each change also changes the rule:
 
