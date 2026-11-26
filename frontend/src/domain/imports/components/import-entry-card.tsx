@@ -11,7 +11,7 @@ import { JournalStaticText } from '@/domain/sessions/editor/journal-static-text'
 import { refusalOf } from '@/hooks/use-server-errors'
 import { cn } from '@/lib/utils'
 
-import { isOutdated, useReviewImportEntry } from '../apis/imports'
+import { useReviewImportEntry } from '../apis/imports'
 import { entryTimeOf } from '../entry-time'
 
 interface ImportEntryCardProps {
@@ -38,7 +38,7 @@ export function ImportEntryCard({ batchId, batchZone, entry, dayIsRejected, onGo
     if (wasEditing.current && !isEditing) editButton.current?.focus()
     wasEditing.current = isEditing
   }, [isEditing])
-  const review = useReviewImportEntry(batchId)
+  const review = useReviewImportEntry(batchId, { onOutdated: onGone })
   const { time, zoneLabel, editZone } = entryTimeOf(entry, batchZone)
   const isEdited = entry.review.words != null || entry.review.time != null
   const label = `Entry at ${time}`
@@ -92,7 +92,7 @@ export function ImportEntryCard({ batchId, batchZone, entry, dayIsRejected, onGo
             className="max-sm:h-11"
             aria-label={`${entry.review.rejected ? 'Keep' : 'Reject'} the entry at ${time}`}
             isPending={review.isPending}
-            onPress={() => review.mutate(reviewOf(entry, { rejected: !entry.review.rejected }), { onError: (error) => isOutdated(error) && onGone() })}
+            onPress={() => review.mutate(reviewOf(entry, { rejected: !entry.review.rejected }))}
           >
             {entry.review.rejected ? 'Keep' : 'Reject'}
           </Button>
@@ -118,7 +118,7 @@ interface ImportEntryEditProps {
 }
 
 function ImportEntryEdit({ batchId, entry, zone, onDone, onGone }: ImportEntryEditProps) {
-  const review = useReviewImportEntry(batchId, { inForm: true })
+  const review = useReviewImportEntry(batchId, { inForm: true, onOutdated: onGone })
   const shownTime = entry.review.time ?? entry.time ?? null
   const [words, setWords] = useState<string | null>(null)
   const [time, setTime] = useState<Time | null>(shownTime ? parseTime(shownTime) : null)
@@ -133,7 +133,7 @@ function ImportEntryEdit({ batchId, entry, zone, onDone, onGone }: ImportEntryEd
     if (wordsError) document.getElementById(wordsId)?.focus()
   }, [wordsError, wordsId])
 
-  const send = (patch: Partial<ImportEntryReviewDto>) => review.mutate(reviewOf(entry, patch), { onSuccess: onDone, onError: (error) => isOutdated(error) && onGone() })
+  const send = (patch: Partial<ImportEntryReviewDto>) => review.mutate(reviewOf(entry, patch), { onSuccess: onDone })
   const save = () =>
     send({
       ...(words !== null && { words }),

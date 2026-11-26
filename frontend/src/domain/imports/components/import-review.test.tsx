@@ -502,6 +502,29 @@ test('@IMP-42 Accept is off while a review and the read of the days after it are
   await expect.element(accept).toBeEnabled()
 })
 
+test('@IMP-42 Accept is off after a refused review until the read of the days after it is done', async () => {
+  const { screen } = await renderReview()
+  const accept = screen.getByRole('button', { name: 'Accept', exact: true })
+  await expect.element(accept).toBeEnabled()
+  await commands.answerRequests([
+    ...signedInMember,
+    noPeople,
+    batchesAre([diary]),
+    daysAre([dayOf('2024-03-01', 1), dayOf('2024-03-02', 1)], 5),
+    entriesAre([coffee, london]),
+    { method: 'PUT', path: '/api/v1/import-batches/imp_1/entries/review', status: 404, body: problem(404, 'This entry is no longer in the batch. Review the other entries of the batch.') },
+  ])
+  await commands.holdRequests(daysPath)
+
+  await userEvent.click(screen.getByRole('button', { name: 'Reject the entry at 12:01 PM' }))
+
+  await expect.poll(() => commands.countHeldRequests(daysPath)).toBe(1)
+  await expect.element(accept).toBeDisabled()
+  await commands.releaseRequests(daysPath)
+  await expect.element(screen.getByLabelText('Counts of this batch')).toMatchTextContent('2 entries: 2 kept, 0 rejected')
+  await expect.element(accept).toBeEnabled()
+})
+
 test('@IMP-44 a 404 of the accept reads the batches again, and the page says that the batch does not exist', async () => {
   const { screen } = await renderAt('/imports/imp_1', [batchesAre([diary]), daysAre([dayOf('2024-03-01', 1)]), entriesAre([coffee], '2024-03-01', '2024-03-01')])
   await userEvent.click(screen.getByRole('button', { name: 'Accept', exact: true }))
@@ -571,11 +594,20 @@ test('@IMP-44 a 409 of a changed batch keeps the dialog open with the message, a
     { method: 'POST', path: '/api/v1/import-batches/imp_1/accept', status: 409, body: { ...problem(409, changed, 'urn:recall:problem:stale-version'), errors: { version: [changed] } } },
   ])
   await commands.takeSentRequests()
+  await commands.holdRequests(daysPath)
 
   await userEvent.click(dialog.getByRole('button', { name: 'Accept batch' }))
 
-  await expect.element(dialog.getByRole('alert')).toMatchTextContent(`${changed}The counts above are new. Check them, then accept the batch.`)
+  await expect.poll(() => commands.countHeldRequests(daysPath)).toBe(1)
+  await expect.element(dialog.getByRole('button', { name: 'Accept batch' })).toHaveAttribute('aria-disabled', 'true')
+  await expect.element(dialog.getByRole('alert')).not.toBeInTheDocument()
+  await expect.element(dialog.getByRole('status')).not.toBeInTheDocument()
+  await expect.element(dialog).toMatchTextContent('3 entries go into your journal')
+  await commands.releaseRequests(daysPath)
+  await expect.element(dialog.getByRole('alert')).toHaveTextContent(changed, { normalizeWhitespace: true })
+  await expect.element(dialog.getByRole('status')).toHaveTextContent('Recall read the batch again. Check the new counts, then accept it.')
   await expect.element(dialog).toMatchTextContent('4 entries go into your journal')
+  await expect.element(dialog.getByRole('button', { name: 'Accept batch' })).not.toHaveAttribute('aria-disabled')
   await commands.answerRequests([
     ...signedInMember,
     noPeople,

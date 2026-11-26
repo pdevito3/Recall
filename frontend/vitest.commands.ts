@@ -10,6 +10,8 @@ type RouteHandler = Parameters<Page['route']>[1]
 
 interface Hold {
   release: () => void
+  /** The requests that wait on the hold now. */
+  waiting: number
   matcher: (url: URL) => boolean
   handler: RouteHandler
 }
@@ -28,14 +30,24 @@ export const holdRequests: BrowserCommand<[path: string]> = async ({ page }, pat
   let release = () => {}
   const held = new Promise<void>((resolve) => (release = resolve))
   const matcher = matches(path)
-  const handler: RouteHandler = async (route) => {
-    await held
-    // Not continue(): Playwright's unroute in releaseRequests can continue an in-flight request first, and a second continue throws "Route is already handled!".
-    await route.fallback()
+  const hold: Hold = {
+    release,
+    matcher,
+    waiting: 0,
+    handler: async (route) => {
+      hold.waiting++
+      await held
+      hold.waiting--
+      // Not continue(): Playwright's unroute in releaseRequests can continue an in-flight request first, and a second continue throws "Route is already handled!".
+      await route.fallback()
+    },
   }
-  holds.set(path, { release, matcher, handler })
-  await page.route(matcher, handler)
+  holds.set(path, hold)
+  await page.route(matcher, hold.handler)
 }
+
+/** The count of the requests for `path` that wait on `holdRequests(path)` now. */
+export const countHeldRequests: BrowserCommand<[path: string]> = async (_context, path) => holds.get(path)?.waiting ?? 0
 
 /** Lets the held requests for `path` go on, and removes the route. Does nothing if `path` is not held. */
 export const releaseRequests: BrowserCommand<[path: string]> = async ({ page }, path) => {
@@ -121,6 +133,8 @@ export const answerRequests: BrowserCommand<[answers: Answer[]]> = async ({ page
 }
 
 export const beginTest: BrowserCommand<[test: string]> = async (context, test) => {
+  // A test that fails before its release must not hold the requests of the next test.
+  for (const path of [...holds.keys()]) await releaseRequests(context, path)
   await answerRequests(context, [])
   const state = answering.get(context.page)
   if (!state) return
