@@ -11,6 +11,7 @@ import type { ImportBatchDto } from '@/api/generated/models/types/import-batch-d
 import type { ImportDayReviewDto } from '@/api/generated/models/types/import-day-review-dto'
 import type { ImportEntryPageDto } from '@/api/generated/models/types/import-entry-page-dto'
 import type { ImportEntryReviewDto } from '@/api/generated/models/types/import-entry-review-dto'
+import { Notification } from '@/components/notification'
 import { SessionKeys } from '@/domain/sessions/apis/session.keys'
 import { isProblemDetailsError, retryUnlessRefused } from '@/lib/problem-details'
 
@@ -41,9 +42,11 @@ export function useImportEntries(id: string, from: string, to: string) {
 }
 
 /** A 404 of an entry that the agent removed, or a 409 of a batch that an accept closed elsewhere: the page reads the batch again. */
+/** A 404 or a 409 says that the entry or the batch changed, so the page that shows it is old. */
+export const isGone = (error: Error) => isProblemDetailsError(error) && (error.status === 404 || error.status === 409)
+
 function readAgainAfterARefusal(queryClient: QueryClient, id: string, error: Error) {
-  const status = isProblemDetailsError(error) ? error.status : undefined
-  if (status === 404 || status === 409) {
+  if (isGone(error)) {
     void queryClient.invalidateQueries({ queryKey: ImportKeys.lists() })
     void queryClient.invalidateQueries({ queryKey: ImportKeys.batch(id) })
   }
@@ -71,7 +74,11 @@ export function useReviewImportEntry(id: string, { inForm = false } = {}) {
         })
       return queryClient.invalidateQueries({ queryKey: ImportKeys.batch(id) })
     },
-    onError: (error) => readAgainAfterARefusal(queryClient, id, error),
+    onError: (error) => {
+      // The reread takes the form off the page with the entry, so the message goes in a toast.
+      if (inForm && isGone(error)) Notification.error(error.message)
+      readAgainAfterARefusal(queryClient, id, error)
+    },
   })
 }
 

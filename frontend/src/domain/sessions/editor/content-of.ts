@@ -3,11 +3,11 @@ import { getSchema, type JSONContent } from '@tiptap/react'
 import { parseDocument, plainWordsOf } from './content'
 import { PersonMention, textExtensions } from './journal-extensions'
 
-const schema = getSchema([...textExtensions, PersonMention])
+export const journalSchema = getSchema([...textExtensions, PersonMention])
 
 function fitsTheEditor(document: JSONContent): boolean {
   try {
-    schema.nodeFromJSON(document).check()
+    journalSchema.nodeFromJSON(document).check()
     return true
   } catch {
     return false
