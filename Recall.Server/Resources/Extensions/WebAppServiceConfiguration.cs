@@ -19,7 +19,7 @@ public static class WebAppServiceConfiguration
     /// <summary>
     /// Adds the core services: the database, the domain event handlers, MediatR, the caches, and the tenant scope. It adds no transport.
     /// </summary>
-    public static void ConfigureServices(this WebApplicationBuilder builder)
+    public static void ConfigureServices(this WebApplicationBuilder builder, Action<BackWave.Hosting.BackWaveBuilder>? jobEntrypoints = null)
     {
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddFusionCache()
@@ -40,7 +40,7 @@ public static class WebAppServiceConfiguration
         builder.Services.AddAuthCore(builder.Configuration);
         builder.AddFileStore();
         builder.AddTranscription();
-        builder.AddJobs();
+        builder.AddJobs(jobEntrypoints);
         builder.Services.AddMediatR(cfg =>
         {
             cfg.RegisterServicesFromAssembly(typeof(Program).Assembly);

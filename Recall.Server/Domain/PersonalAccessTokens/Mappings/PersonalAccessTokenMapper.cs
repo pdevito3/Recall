@@ -15,6 +15,7 @@ public static class PersonalAccessTokenMapper
         Permissions = row.Grant.Permissions.Select(p => p.Value).Order(StringComparer.Ordinal).ToList(),
         ReadJournal = row.Grant.Journal.CanRead,
         WriteJournal = row.Grant.Journal.CanWrite,
+        JobTools = row.Grant.JobTools,
         CreatedAt = row.CreatedAt,
         ExpiresAt = row.ExpiresAt,
         LastUsedAt = row.LastUsedAt,

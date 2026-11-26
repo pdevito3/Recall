@@ -32,6 +32,7 @@ using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using OpenApi;
+using Recall.Server.Resources.Entrypoints.Jobs;
 using Shouldly;
 using TestUtilities;
 using TestUtilities.AccessSweep;
@@ -117,6 +118,7 @@ public class EndpointAccessSweepTests : TestBase
         ["/health"] = "The readiness probe of the host. It shows no tenant data.",
         ["/alive"] = "The liveness probe of the host. It shows no tenant data.",
         [$"{EntrypointRegistration.McpPath}/"] = "The MCP transport. The MCP test sweeps each tool behind it.",
+        [$"{JobMcp.Path}/"] = "The BackWave MCP transport. Only the Owner sees or calls a tool, with a bearer credential. JobMcpTests covers it.",
         [McpResourceMetadata.Path] = "The public OAuth metadata of the MCP endpoint (RFC 9728). It shows no tenant data.",
         [AuthRoutes.Status] = "Public. A phone reads it before sign-in. It names the sign-in methods and shows no tenant data.",
         [AuthRoutes.Login] = "Public. The chooser page and its redirects. It shows no tenant data.",

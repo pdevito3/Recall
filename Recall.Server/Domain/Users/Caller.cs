@@ -29,6 +29,17 @@ public abstract record Caller
     public bool IsRecognized => this is not Outsider { Kind: OutsiderKind.UnknownClient or OutsiderKind.Anonymous };
 
     /// <summary>
+    /// The user for whom the caller may use the job tools, if that user is the Owner: a person, or a personal access token
+    /// whose grant holds the job tools. Null for each other caller.
+    /// </summary>
+    public string? JobToolsUserId => this switch
+    {
+        Member member => member.UserId,
+        PersonalAccessToken { JobTools: true } token => token.UserId,
+        _ => null,
+    };
+
+    /// <summary>
     /// True only for <see cref="AllTenantsManager"/>: it can act outside one tenant, for example add a tenant. It is a
     /// capability, not a permission (ADR 0009).
     /// </summary>
@@ -87,17 +98,24 @@ public abstract record Caller
     /// <summary>
     /// A personal access token of a member. It holds only the permissions that both the member and the grant of the
     /// token have. It is not a <see cref="Member"/>, so <see cref="RequireSelfOr"/> gives it no exception for the record
-    /// of its user, and it is never the Owner.
+    /// of its user, and it is never the Owner. Only <see cref="JobToolsUserId"/> lets a token act for the Owner.
     /// </summary>
     public sealed record PersonalAccessToken : Caller
     {
-        public PersonalAccessToken(string tokenId, IEnumerable<Permission> userPermissions, IEnumerable<Permission> grant)
+        public PersonalAccessToken(string tokenId, string userId, IEnumerable<Permission> userPermissions, TokenGrant grant)
         {
             TokenId = tokenId;
-            (UserPermissions, Permissions) = Narrowing.Of(userPermissions, grant);
+            UserId = userId;
+            JobTools = grant.JobTools;
+            (UserPermissions, Permissions) = Narrowing.Of(userPermissions, grant.Permissions);
         }
 
         public string TokenId { get; }
+
+        public string UserId { get; }
+
+        /// <inheritdoc cref="TokenGrant.JobTools"/>
+        public bool JobTools { get; }
 
         /// <inheritdoc cref="DelegatedAgent.UserPermissions"/>
         public IReadOnlySet<Permission> UserPermissions { get; }

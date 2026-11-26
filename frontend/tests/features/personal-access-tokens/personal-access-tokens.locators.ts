@@ -21,6 +21,7 @@ export const personalAccessTokens = (page: Page) => {
     changeJournal: dialog.getByRole('checkbox', { name: 'Change my journal' }),
     permissionChoices: dialog.getByRole('group', { name: 'The token can also' }).getByRole('checkbox'),
     permission: (words: string) => dialog.getByRole('checkbox', { name: words, exact: true }),
+    jobTools: dialog.getByRole('checkbox', { name: 'Use the job tools', exact: true }),
     expiry: dialog.getByRole('button', { name: /Expires$/ }),
     expiryOption: (label: string | RegExp) => page.getByRole('option', { name: label }),
     lastDayMonth: dialog.getByRole('spinbutton', { name: 'month, Last day', exact: true }),

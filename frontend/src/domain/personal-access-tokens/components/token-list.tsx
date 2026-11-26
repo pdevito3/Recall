@@ -71,6 +71,7 @@ export function TokenList({ tokens, label, emptyText, headingRef }: TokenListPro
               </div>
               <span>{journalAccessWords(token)}</span>
               <span className="text-muted-foreground">{permissionsWords(token.permissions)}</span>
+              {token.jobTools && <span className="text-muted-foreground">Can use the job tools of the Owner</span>}
               <span className="text-muted-foreground">
                 Created on {dayOf(token.createdAt)}. {expiryWords(token, state)}.{' '}
                 {token.lastUsedAt ? `Last used on ${timeOf(token.lastUsedAt)}.` : 'Not used yet.'}

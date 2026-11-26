@@ -2,7 +2,7 @@
 
 ## 1. Scope
 
-A person makes a personal access token (PAT) in the SPA and pastes it once into a script or an MCP client. The client then calls `/api/*` and `/mcp` as that person, inside a grant the person picked. Issue #104 gives the reasons. [ADR 0023](../adr/0023-personal-access-tokens-are-auth-sessions.md) records the design.
+A person makes a personal access token (PAT) in the SPA and pastes it once into a script or an MCP client. The client then calls `/api/*` and `/mcp` as that person, inside a grant the person picked. The Owner can also give a PAT the job tools at `/backwave-mcp`. Issue #104 gives the reasons. [ADR 0023](../adr/0023-personal-access-tokens-are-auth-sessions.md) records the design.
 
 This spec leaves out:
 
@@ -15,7 +15,7 @@ This spec leaves out:
 
 | Entity | Root of | Fields that a user sets | States |
 |---|---|---|---|
-| A PAT, a row of `auth_sessions` with the kind `pat` | None | name, permissions, journal access, expiry | Live, Revoked |
+| A PAT, a row of `auth_sessions` with the kind `pat` | None | name, permissions, journal access, job tools, expiry | Live, Revoked |
 
 Expired is not a stored state. It comes from the expiry and the current time.
 
@@ -40,6 +40,7 @@ Expired is not a stored state. It comes from the expiry and the current time.
 | PAT-10 | `revoke-others` from a session revokes each PAT of the user, and a PAT that calls it gets 403. A delete of the user or of its tenant removes each PAT of the user. | `SessionStore.RevokeOthersAsync`, `InteractiveSessionOnly`, `RemoveLoginsWhenUserDeleted` | |
 | PAT-11 | A PAT works only as a bearer, and needs no `X-CSRF` header. A PAT value in the cookie authenticates nothing. | `AppSessionHandler` | |
 | PAT-12 | A PAT does not pass the self exception of `RequireSelfOr` or the Owner gate. | `Caller.RequireSelfOr`, `OwnerGuard` | |
+| PAT-21 | A PAT reaches the job tools at `/backwave-mcp` only when its grant holds `job_tools` and its person is the Owner, read on each request. A PAT whose person stops being the Owner sees no job tool on its next request. Only the Owner, in a web or native session, makes a PAT with `job_tools`. Anyone else gets 403 and no PAT. A grant encoded before `job_tools` existed holds none. A build from before `job_tools` drops only that name of the grant. `job_tools` passes no other Owner gate. | `TokenGrant`, `Caller.JobToolsUserId`, `OwnerGuard.JobToolsCallerIfOwnerAsync`, `AddPersonalAccessToken` | |
 | PAT-13 | An Admin lists the PATs of another user of the tenant with `read_users`, and revokes one with `manage_user_access`. A user of another tenant gives 404. A person with neither permission sees only their own PATs. No list holds a value. | `GetUserPersonalAccessTokens`, `RevokePersonalAccessToken` | Tenant filter on `users` |
 | PAT-14 | Each write by a PAT records the PAT ID as `actor_client` and the person as `actor_user_id`. | `AuditActor.Of` | |
 | PAT-19 | A create and a revoke of a PAT record an audit action with the PAT ID, its name, its grant, and its expiry, so a reader can map a `pat_…` actor to a name after the row is gone. Only the revoke that ends a live PAT records one, also when revokes race. | `AccessTokenCreated`, `AccessTokenRevoked`, the concurrency token on `revoked_at` | |
@@ -68,6 +69,7 @@ None. A PAT uses the existing permissions: `read_users` to list the PATs of anot
 |---|---|---|
 | PAT-2 | 403 | Only a person signed in to Recall can do this. |
 | PAT-4 | 403 | This personal access token has no grant to {words}. Make a token that has it. |
+| PAT-21 | 403 | Only the Owner of this install can give a token the job tools. Make the token without them. |
 | PAT-5 | 422 | A token that changes your journal must also read it. |
 | PAT-7 | 403 | This personal access token can read your journal but cannot change it. |
 | PAT-8 | 422 | Pick an expiry date in the future, or pick Never. |

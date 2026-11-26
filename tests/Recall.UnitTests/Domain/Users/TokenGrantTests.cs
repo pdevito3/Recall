@@ -12,6 +12,8 @@ public class TokenGrantTests
         yield return () => new TokenGrant([Permission.ReadUsers()], JournalAccess.Read);
         yield return () => new TokenGrant([Permission.ManageUsers(), Permission.ReadAuditLog()], JournalAccess.ReadWrite);
         yield return () => new TokenGrant(Permission.GetAll(), JournalAccess.ReadWrite);
+        yield return () => new TokenGrant([], JournalAccess.None, jobTools: true);
+        yield return () => new TokenGrant([Permission.ReadUsers()], JournalAccess.Read, jobTools: true);
     }
 
     [Test]
@@ -24,6 +26,7 @@ public class TokenGrantTests
         // Assert
         decoded.ShouldBe(grant);
         decoded.Journal.ShouldBe(grant.Journal);
+        decoded.JobTools.ShouldBe(grant.JobTools);
         decoded.Permissions.ShouldBe(grant.Permissions, ignoreOrder: true);
     }
 
@@ -37,6 +40,41 @@ public class TokenGrantTests
         // Act & Assert
         one.Encode().ShouldBe("read:manage_users,read_users");
         other.Encode().ShouldBe(one.Encode());
+    }
+
+    [Test]
+    [Property("Rule", "PAT-21")]
+    public void the_job_tools_are_a_name_of_the_list_and_a_grant_from_before_them_holds_none()
+    {
+        // Arrange
+        var withJobTools = new TokenGrant([Permission.ReadUsers()], JournalAccess.Read, jobTools: true);
+
+        // Act
+        var text = withJobTools.Encode();
+        var older = TokenGrant.Decode("read:read_users");
+
+        // Assert
+        text.ShouldBe("read:job_tools,read_users");
+        new TokenGrant([Permission.ReadUsers()], JournalAccess.Read).Encode().ShouldBe("read:read_users");
+        older.JobTools.ShouldBeFalse();
+        older.ShouldNotBe(withJobTools);
+    }
+
+    [Test]
+    [Property("Rule", "PAT-21")]
+    [Arguments("read:job_tools,run_spaceships", true)]
+    [Arguments("read:run_spaceships", false)]
+    [Arguments("read:JOB_TOOLS", false)]
+    [Arguments("read::job_tools", false)]
+    public void an_item_that_the_build_does_not_know_is_dropped(string text, bool jobTools)
+    {
+        // Act
+        var grant = TokenGrant.Decode(text);
+
+        // Assert
+        grant.JobTools.ShouldBe(jobTools);
+        grant.Journal.ShouldBe(JournalAccess.Read);
+        grant.Permissions.ShouldBeEmpty();
     }
 
     [Test]

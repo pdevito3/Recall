@@ -10,6 +10,7 @@ export const personalAccessTokenForCreationDtoSchema = z.object({
   permissions: z.array(z.enum(['manage_agents', 'manage_model_providers', 'manage_tenant', 'manage_user_access', 'manage_users', 'read_agents', 'read_audit_log', 'read_audit_log_sensitive', 'read_users'])).nullish().describe('The permissions of the grant. The caller must hold each one. No permission when it is not sent.'),
   readJournal: z.boolean().describe('The token reads the journal of the person.'),
   writeJournal: z.boolean().describe('The token changes the journal of the person. It needs readJournal.'),
+  jobTools: z.boolean().nullish().describe('The token may use the job tools at /backwave-mcp. Only the Owner can send true. False when it is not sent.'),
   expiresAt: z.iso.datetime().nullish().describe('The end of the token, in the future. Send it or neverExpires, not both.'),
   neverExpires: z.boolean().nullish().describe('True for a token that works until a revoke. Send it or expiresAt, not both.'),
 })

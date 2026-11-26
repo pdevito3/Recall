@@ -39,6 +39,11 @@ export type PersonalAccessTokenForCreationDto = {
     */
     writeJournal: boolean;
     /**
+     * @description The token may use the job tools at /backwave-mcp. Only the Owner can send true. False when it is not sent.
+     * @type boolean | undefined
+    */
+    jobTools?: boolean | null;
+    /**
      * @description The end of the token, in the future. Send it or neverExpires, not both.
      *
      * Format: `date-time`

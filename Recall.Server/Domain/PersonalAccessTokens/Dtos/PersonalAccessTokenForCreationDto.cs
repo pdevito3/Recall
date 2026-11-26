@@ -20,6 +20,9 @@ public sealed record PersonalAccessTokenForCreationDto
     /// <summary>The token changes the journal of the person. It needs readJournal.</summary>
     public required bool WriteJournal { get; init; }
 
+    /// <summary>The token may use the job tools at /backwave-mcp. Only the Owner can send true. False when it is not sent.</summary>
+    public bool? JobTools { get; init; }
+
     /// <summary>The end of the token, in the future. Send it or neverExpires, not both.</summary>
     public DateTimeOffset? ExpiresAt { get; init; }
 

@@ -10,7 +10,8 @@ public static class GetCurrentUser
 {
     public sealed record Query : IRequest<CurrentUserDto>;
 
-    public sealed class Handler(ICurrentUserService currentUserService, AppDbContext dbContext) : IRequestHandler<Query, CurrentUserDto>
+    public sealed class Handler(ICurrentUserService currentUserService, AppDbContext dbContext, IOwnerGuard ownerGuard)
+        : IRequestHandler<Query, CurrentUserDto>
     {
         public async Task<CurrentUserDto> Handle(Query request, CancellationToken cancellationToken)
         {
@@ -27,7 +28,8 @@ public static class GetCurrentUser
                 name = user?.FullName;
             }
 
-            return new CurrentUserDto { Identifier = identifier, Name = name };
+            var isOwner = await ownerGuard.CallerIfOwnerAsync(cancellationToken) is not null;
+            return new CurrentUserDto { Identifier = identifier, Name = name, IsOwner = isOwner };
         }
     }
 }

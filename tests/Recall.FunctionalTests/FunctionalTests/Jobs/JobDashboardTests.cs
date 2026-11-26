@@ -8,6 +8,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.RegularExpressions;
 using BackWave.Monitor;
+using BackWave.Operations;
 using BackWave.Storage;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -23,7 +24,7 @@ using Recall.Server.Resources.Entrypoints.Jobs;
 using Recall.Server.Resources.Jobs;
 using Shouldly;
 
-[NotInParallel(nameof(JobDashboardTests))]
+[NotInParallel(AuthHosts.JobsOwnerLock)]
 public partial class JobDashboardTests
 {
     private const string OwnerSubject = "jobs-owner";
@@ -358,7 +359,7 @@ public partial class JobDashboardTests
     }
 
     [Test]
-    public async Task a_failing_job_retries_to_the_dead_letter_list_and_only_a_valid_owner_post_requeues_it()
+    public async Task a_failing_job_retries_to_the_dead_letter_list_and_only_a_valid_owner_post_requeues_it_with_the_owner_as_actor()
     {
         // Arrange
         var host = AuthHosts.FailingJobs;
@@ -370,6 +371,8 @@ public partial class JobDashboardTests
         using var failures = await owner.GetAsync($"{JobDashboard.Path}/failures");
         var token = AntiforgeryTokenIn(await failures.Content.ReadAsStringAsync());
         var monitor = host.Services.GetRequiredService<BackWaveMonitor>();
+        var ownerId = await host.WithDatabaseAsync(database => database.Set<ExternalLogin>().IgnoreQueryFilters()
+            .Where(login => login.Subject == OwnerSubject).Select(login => login.UserId).SingleAsync());
 
         // Act
         using var noToken = await owner.PostFormAsync(requeue, []);
@@ -384,6 +387,9 @@ public partial class JobDashboardTests
         stateBeforeValidPost.ShouldBe(JobState.DeadLettered);
         valid.StatusCode.ShouldBe(HttpStatusCode.SeeOther);
         (await monitor.GetJobAsync(dead.JobId))!.State.ShouldNotBe(JobState.DeadLettered);
+        var audit = await host.Services.GetRequiredService<BackWaveOperator>().ListAuditRecordsAsync(dead.JobId.ToString());
+        audit.ShouldHaveSingleItem().Actor.ShouldBe(ownerId);
+        audit[0].Action.ShouldBe(OperatorAction.Requeue);
     }
 
     [Test]

@@ -12,6 +12,7 @@ export const personalAccessTokenDtoSchema = z.object({
   permissions: z.array(z.enum(['manage_agents', 'manage_model_providers', 'manage_tenant', 'manage_user_access', 'manage_users', 'read_agents', 'read_audit_log', 'read_audit_log_sensitive', 'read_users'])).describe('The permissions of the grant. The token holds only those that its person holds too.'),
   readJournal: z.boolean(),
   writeJournal: z.boolean(),
+  jobTools: z.boolean().describe('The token may use the job tools at /backwave-mcp while its person is the Owner.'),
   createdAt: z.iso.datetime(),
   expiresAt: z.iso.datetime().nullish().describe('Null for a token that never expires.'),
   lastUsedAt: z.iso.datetime().nullish().describe('Null for a token with no use yet. It can be up to an hour stale.'),

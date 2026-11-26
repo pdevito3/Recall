@@ -32,43 +32,58 @@ public sealed class JournalAccess : SmartEnum<JournalAccess>
 
 /// <summary>
 /// The most that a personal access token can do, fixed when the token is made. The token holds only the permissions
-/// that both its person and <see cref="Permissions"/> hold.
+/// that both its person and <see cref="Permissions"/> hold. <see cref="JobTools"/> lets it reach the job tools at
+/// <c>/backwave-mcp</c>, and only while its person is the Owner.
 /// </summary>
 public sealed record TokenGrant
 {
+    private const string JobToolsItem = "job_tools";
+
     private static readonly FrozenSet<string> KnownPermissions = Permission.ListNames().ToFrozenSet(StringComparer.Ordinal);
 
-    public TokenGrant(IEnumerable<Permission> permissions, JournalAccess journal)
+    public TokenGrant(IEnumerable<Permission> permissions, JournalAccess journal, bool jobTools = false)
     {
         Permissions = permissions.ToFrozenSet();
         Journal = journal;
+        JobTools = jobTools;
     }
 
     public IReadOnlySet<Permission> Permissions { get; }
 
     public JournalAccess Journal { get; }
 
-    /// <summary>The text of the grant, for example <c>read:manage_users,read_users</c>.</summary>
-    public string Encode()
-        => $"{Journal.Name}:{string.Join(',', Permissions.Select(p => p.Value).Order(StringComparer.Ordinal))}";
+    /// <summary>The token may use the job tools of the Owner.</summary>
+    public bool JobTools { get; }
 
     /// <summary>
-    /// Reads the text of <see cref="Encode"/>. A permission name that this build does not know is dropped, and a
-    /// journal access that it does not know is <see cref="JournalAccess.None"/>, so a removed name grants nothing.
+    /// The text of the grant, for example <c>read:manage_users,read_users</c>, or <c>read:job_tools,read_users</c> with
+    /// <see cref="JobTools"/>. <c>job_tools</c> is a name of the list, so a build that does not know it drops only that name.
+    /// </summary>
+    public string Encode()
+    {
+        var names = Permissions.Select(p => p.Value).Concat(JobTools ? [JobToolsItem] : []);
+        return $"{Journal.Name}:{string.Join(',', names.Order(StringComparer.Ordinal))}";
+    }
+
+    /// <summary>
+    /// Reads the text of <see cref="Encode"/>. A name that this build does not know is dropped, and a journal access that it
+    /// does not know is <see cref="JournalAccess.None"/>, so a removed name grants nothing.
     /// </summary>
     public static TokenGrant Decode(string text)
     {
-        var (journal, permissions) = text.IndexOf(':') is var colon and >= 0
+        var (journal, list) = text.IndexOf(':') is var colon and >= 0
             ? (text[..colon], text[(colon + 1)..])
             : (text, "");
+        var names = list.Split(',', StringSplitOptions.RemoveEmptyEntries);
         return new TokenGrant(
-            permissions.Split(',', StringSplitOptions.RemoveEmptyEntries).Where(KnownPermissions.Contains).Select(Permission.Of),
-            JournalAccess.TryFromName(journal, out var access) ? access : JournalAccess.None);
+            names.Where(KnownPermissions.Contains).Select(Permission.Of),
+            JournalAccess.TryFromName(journal, out var access) ? access : JournalAccess.None,
+            names.Contains(JobToolsItem, StringComparer.Ordinal));
     }
 
     public bool Equals(TokenGrant? other)
-        => other is not null && Journal == other.Journal && Permissions.SetEquals(other.Permissions);
+        => other is not null && Journal == other.Journal && JobTools == other.JobTools && Permissions.SetEquals(other.Permissions);
 
     public override int GetHashCode()
-        => HashCode.Combine(Journal, Permissions.Aggregate(0, (hash, p) => hash ^ p.GetHashCode()));
+        => HashCode.Combine(Journal, JobTools, Permissions.Aggregate(0, (hash, p) => hash ^ p.GetHashCode()));
 }

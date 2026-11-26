@@ -29,8 +29,9 @@ export const usersApi = {
     return [usersApi.currentIs({ identifier: actorSubject, name: identity.user.name })]
   },
 
-  currentIs(user: CurrentUserDto): MockRoute {
-    return { method: 'get', path: usersPaths.current, status: 200, body: user }
+  currentIs(user: Omit<CurrentUserDto, 'isOwner'> & Partial<Pick<CurrentUserDto, 'isOwner'>>): MockRoute {
+    const body: CurrentUserDto = { isOwner: false, ...user }
+    return { method: 'get', path: usersPaths.current, status: 200, body }
   },
 
   currentFails(problem: Buildable<ProblemDetails>): MockRoute {

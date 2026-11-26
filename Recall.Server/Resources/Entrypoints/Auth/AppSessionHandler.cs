@@ -76,6 +76,9 @@ public sealed class AppSessionHandler(
         if (SessionCookie.Read(Request) is not { } cookie)
             return AuthenticateResult.NoResult();
 
+        if (JobMcp.Serves(Request.Path))
+            return AuthenticateResult.Fail("The job tools take a bearer credential, not a session cookie.");
+
         return HasCsrfHeader(Request) || JobDashboard.Serves(Request.Path)
             ? await ResultOfAsync(cookie, SessionKind.Web)
             : AuthenticateResult.Fail("A session cookie needs the X-CSRF header.");

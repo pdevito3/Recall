@@ -33,6 +33,11 @@ export type PersonalAccessTokenDto = {
     readJournal: boolean;
     writeJournal: boolean;
     /**
+     * @description The token may use the job tools at /backwave-mcp while its person is the Owner.
+     * @type boolean
+    */
+    jobTools: boolean;
+    /**
      * @description
      * Format: `date-time`
      * @type string
