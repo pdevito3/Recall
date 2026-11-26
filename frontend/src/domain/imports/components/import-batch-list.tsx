@@ -5,13 +5,9 @@ import type { ImportBatchDto } from '@/api/generated/models/types/import-batch-d
 import { QueryError } from '@/components/query-error'
 import { Badge } from '@/components/ui/badge'
 import { Link } from '@/components/ui/link'
-import { browserTimeZone, formatInstant } from '@/lib/zoned-time'
 
 import { DiscardImportBatch } from './discard-import-batch'
-import { entriesWord, zoneLabelOf } from './import-words'
-
-const timeOf = (instant: string) =>
-  formatInstant(new Date(instant), browserTimeZone(), { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+import { entriesWord, momentOf, zoneLabelOf } from './import-words'
 
 interface ImportBatchListProps {
   batches: UseQueryResult<ImportBatchDto[]>
@@ -57,7 +53,7 @@ export function ImportBatchList({ batches, headingRef }: ImportBatchListProps) {
                 : `${entriesWord(batch.entryCount)}. Times in ${zoneLabelOf(batch.timeZone)}.`}
             </span>
             <span className="text-muted-foreground">
-              Opened on {timeOf(batch.openedAt)}.{batch.acceptedAt && ` Accepted on ${timeOf(batch.acceptedAt)}.`}
+              Opened on {momentOf(batch.openedAt)}.{batch.acceptedAt && ` Accepted on ${momentOf(batch.acceptedAt)}.`}
             </span>
           </div>
           {batch.state === 'Open' && (
