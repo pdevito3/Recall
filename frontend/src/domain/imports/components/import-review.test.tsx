@@ -603,7 +603,7 @@ test('@IMP-43 an accepted batch shows the counts of its result and a link to the
   await expect.element(screen.getByRole('heading', { level: 1, name: 'Diary 2024' })).toHaveFocus()
 })
 
-test('@IMP-44 a 409 of a changed batch keeps the dialog open with the message, and the dialog shows the counts of a new read', async () => {
+test('@IMP-44 a 409 of a changed batch keeps the dialog open, and after a new read shows its counts and one status line, not the message of the Server', async () => {
   const { screen } = await renderReview()
   await userEvent.click(screen.getByRole('button', { name: 'Accept', exact: true }))
   const dialog = screen.getByRole('alertdialog', { name: 'Accept “Diary 2024”?' })
@@ -629,8 +629,8 @@ test('@IMP-44 a 409 of a changed batch keeps the dialog open with the message, a
   await expect.element(dialog.getByRole('status')).not.toBeInTheDocument()
   await expect.element(dialog).toMatchTextContent('3 entries go into your journal')
   await commands.releaseRequests(daysPath)
-  await expect.element(dialog.getByRole('alert')).toHaveTextContent(changed, { normalizeWhitespace: true })
-  await expect.element(dialog.getByRole('status')).toHaveTextContent('Recall read the batch again. Check the new counts, then accept it.')
+  await expect.element(dialog.getByRole('status')).toHaveTextContent('The batch changed. Recall read it again. Check the new counts, then accept the batch.')
+  await expect.element(dialog.getByRole('alert')).not.toBeInTheDocument()
   await expect.element(dialog).toMatchTextContent('4 entries go into your journal')
   await expect.element(dialog.getByRole('button', { name: 'Accept batch' })).not.toHaveAttribute('aria-disabled')
   await commands.answerRequests([
@@ -641,8 +641,11 @@ test('@IMP-44 a 409 of a changed batch keeps the dialog open with the message, a
     entriesAre([coffee, walk, london], '2024-03-01', '2024-03-03'),
     { method: 'POST', path: '/api/v1/import-batches/imp_1/accept', status: 409, body: problem(409, changed, 'urn:recall:problem:stale-version') }])
   await userEvent.click(dialog.getByRole('button', { name: 'Accept batch' }))
-  await expect.element(dialog.getByRole('alert')).toMatchTextContent(changed)
-  expect((await commands.takeSentRequests()).map((r) => r.body)).toEqual([{ version: 4 }, { version: 7 }])
+  await expect.element(dialog.getByRole('status')).toHaveTextContent('The batch changed. Recall read it again. Check the new counts, then accept the batch.')
+  await expect.element(dialog.getByRole('alert')).not.toBeInTheDocument()
+  const sent: unknown[] = []
+  await expect.poll(async () => sent.push(...(await commands.takeSentRequests()).map((r) => r.body))).toBe(2)
+  expect(sent).toEqual([{ version: 4 }, { version: 7 }])
 })
 
 test('@IMP-44 a 409 of a review of a batch that an accept closed shows the message, and the page reads the batch again', async () => {

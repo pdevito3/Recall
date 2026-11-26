@@ -11,7 +11,7 @@ An agent puts the entries of an old journal into an import batch over REST or MC
 - `edit` opens the form `Edit the entry` from `Edit the entry at <time>`: `Words`, `Time`, `Save`, `Cancel`, and after an edit `Use the import words` and `Use the import time`, which are off with `Save or cancel your change first.` while the form has a change. A refusal shows in the form.
 - `reject` sends `Reject the entry at <time>` or `Keep the entry at <time>`. `Reject <day>` and `Keep <day>` do the same for a day.
 - `counts` in `Counts of this batch` show `<n entries>: <k> kept, <r> rejected` and change after each review.
-- `accept` opens `Accept “<name>”?` with the kept and rejected counts. `Accept batch` shows `Result of the accept` and `Go to your journal`. A 409 keeps the dialog open, reads the batch again, and then shows the message, the new counts, and the status `Recall read the batch again. Check the new counts, then accept it.`
+- `accept` opens `Accept “<name>”?` with the kept and rejected counts. `Accept batch` shows `Result of the accept` and `Go to your journal`. A 409 keeps the dialog open, reads the batch again, and then shows the new counts and the status `The batch changed. Recall read it again. Check the new counts, then accept the batch.`, with no alert
 - `refusals`: a 404 or a 409 of a review shows the message of the Server in a toast, reads the batch again, and moves the focus to the heading when the entry leaves. A batch that does not exist says `This import batch does not exist. Pick a batch from your imports.` with `Go to your imports` on its own line.
 - `setting` on `/settings`, section `Imports`: the checkbox `Only I can accept an import batch`.
 

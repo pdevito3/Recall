@@ -29,7 +29,8 @@ export function AcceptImportBatch({ batchId, batchName, counts, version, nothing
   const [isOpen, setIsOpen] = useState(false)
   const accept = useAcceptImportBatch(batchId)
   const isReviewing = useIsReviewing(batchId)
-  const problem = accept.error && messagesOf(accept.error)
+  const isStale = isStaleVersionError(accept.error)
+  const problem = accept.error && !isStale && messagesOf(accept.error)
   const hasNothingKept = counts.kept === 0
 
   const open = (next: boolean) => {
@@ -57,9 +58,9 @@ export function AcceptImportBatch({ batchId, batchName, counts, version, nothing
             ))}
           </div>
         )}
-        {isStaleVersionError(accept.error) && (
+        {isStale && (
           <p role="status" className="mt-2 text-sm text-muted-foreground">
-            Recall read the batch again. Check the new counts, then accept it.
+            The batch changed. Recall read it again. Check the new counts, then accept the batch.
           </p>
         )}
         <ResponsiveDialogFooter>
