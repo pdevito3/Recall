@@ -88,7 +88,7 @@ If the agent cannot connect, look for these causes in this order:
 
 - The MCP URL is wrong. Copy it again from **Imports** in Recall.
 - The URL starts with `http://`, and the Claude Desktop entry has no `"--allow-http"`.
-- Claude Desktop cannot find `npx`. Run `which npx` in a terminal, and put the full path that it gives in `"command"`.
+- Claude Desktop cannot find `npx`. Run `which npx` in a terminal, and put the full path that it gives in `"command"`. On Windows, run `where npx`.
 - Else the token is wrong, expired, or revoked. Make a new token.
 
 ### Give the agent the skill
@@ -107,7 +107,7 @@ Ask the agent to import your journal, and give it the folder of the export. The 
 | `open_import_batch` | Opens a batch with a name of 1 to 200 characters and an IANA time zone, such as `America/Chicago`. | Change |
 | `list_import_batches` | Gives each batch, newest first, with its state, its entry count, and its version. | Read |
 | `put_import_entries` | Adds or changes at most 500 entries of an open batch, by `clientSessionId`. Each entry gets an outcome. | Change |
-| `list_import_entries` | Gives the entries of a batch in the order of date and position, with an optional range of dates. Each entry has its `raw` as the agent sent it, the review of the person, and `startsAt`. | Read |
+| `list_import_entries` | Gives the entries of a batch in the order of date and position. A batch can be large, so give `from` and `to`, at most 31 days apart. Each entry has its `raw` as the agent sent it, the review of the person, and `startsAt`. | Read |
 | `remove_import_entries` | Removes entries of an open batch by `clientSessionId`. Each ID gets `Removed`, `NotFound`, or `Rejected`. | Change |
 | `discard_import_batch` | Deletes an open batch and each of its entries. | Change |
 | `accept_import_batch` | Makes a Session of each kept entry. With the import review on, only you can accept, in Recall in a browser. | Change |
@@ -171,9 +171,9 @@ A put of the same call again changes nothing. So the agent can send a put again 
 A put never changes your review, and it removes no entry. So a second run with other split rules can put the same text again under other IDs. A wrong source word in the IDs has the same result. So the skill tells the agent to check its rules before it puts more.
 
 - If an accepted batch of the same source exists, the agent opens a check batch, "Rules check, discard me". It puts the entries of one day that the journal has, and reads the outcomes. Then it discards the check batch at once. The check batch holds no review of yours, so the agent does not ask you first.
-- In the check, an outcome `InJournal` or `Deleted` shows that the source word is correct. If no entry gets one of them, the agent asks you for the word.
+- In the check, an outcome `InJournal`, `Deleted`, or `InOtherBatch` shows that the source word is correct. If no entry gets one of them, the agent asks you for the word.
 - If a day has another count of entries than of Sessions, the agent tells you. Then it asks whether to go on. A reject in an earlier batch can cause a difference. A deleted Session or a Session that you made in Recall can too.
-- If an open batch of the same source exists, the agent compares some of its dates with its rules. After its last put, it compares the entry count of the batch with its own count.
+- If an open batch of the same source exists, the agent compares the entries of some dates of the batch with its rules. An entry that the batch does not hold yet is not a difference. After its last put, it compares the entry count of the batch with its own count.
 - If the open batch holds entries of other rules, the agent tells you. It discards the batch only after your yes, because a discard also deletes your rejects and edits.
 
 ### The review gate

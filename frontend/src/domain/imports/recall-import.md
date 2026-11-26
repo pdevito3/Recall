@@ -9,7 +9,7 @@ You split the source into entries and put them in an import batch. The person re
 
 ## The tools
 
-- A batch can be large. So always give `from` and `to` to `list_import_entries`, at most 31 days apart.
+- A batch can be large. So in each call of `list_import_entries`, give `from` and `to`, at most 31 days apart.
 - Use `remove_import_entries` only for an entry that you put by mistake, and only after the person says yes.
 - Leave `accept_import_batch` to the person.
 
@@ -37,7 +37,7 @@ If you do not see `open_import_batch` or `put_import_entries`, your token cannot
    - If the text gives an hour with no am or pm, such as "at 6", ask. Use the answer for each such time.
 
    Then wait for a yes to the rules. If the person changes a rule, propose the rules again.
-5. Call `list_journal_days` over the dates of the source. If the journal has none of these days, go to step 7. Else tell the person these items:
+5. Call `list_journal_days` over the dates of the source, with one call for each year. If the journal has none of these days, go to step 7. Else tell the person these items:
    - Each day that the journal has, with its count of Sessions.
    - With yes, Recall skips each entry whose ID is in the journal.
    - Each other entry goes next to the Sessions of its day.
@@ -49,7 +49,7 @@ If you do not see `open_import_batch` or `put_import_entries`, your token cannot
    - Pick such a day also after a no in step 5, because the check batch puts nothing into the journal.
    - Open a check batch with the name "Rules check, discard me" and the zone of the source. Put the entries of that day in it.
    - Then call `discard_import_batch` on the check batch at once. It holds no review of the person, so you need no yes.
-   - If no entry gives `InJournal` or `Deleted`, the source word is wrong. Ask the person for the word, and check again.
+   - If no entry gives `InJournal`, `Deleted`, or `InOtherBatch`, the source word can be wrong. Ask the person for the word. If the person gives the same word, check another day.
    - A difference is a day of step 5 whose count of Sessions is not your count of entries.
    - An `Added` entry of the check at a position below that count is also a difference.
    - If you find a difference, tell the person each one. Name the causes: a reject in an earlier batch, a deleted Session, a Session made in Recall, or other split rules.
@@ -60,15 +60,16 @@ If you do not see `open_import_batch` or `put_import_entries`, your token cannot
    - Else open one batch with `open_import_batch`. Name it for the source and the years, for example "Notion 2019 to 2023". Use a name that no other batch has. If Recall refuses the time zone, ask the person for another zone.
    - If you lose the result of `open_import_batch`, call `list_import_batches`. If it shows a batch with that name, use it. Else open the batch again.
 8. If the batch held entries of this source before this run, check a sample of them against your rules.
-   - Check the dates of the three entries of step 3. Also check the date of the source with the most entries.
-   - Read one date in each call: give `list_import_entries` that date as `from` and `to`.
-   - For each entry of such a date, your rules must give the same `clientSessionId`, `position`, `time`, and `raw`. Your rules must give no other entry on that date.
+   - Pick four dates that the batch holds. Look near the dates of step 3 and the date of the source with the most entries.
+   - For each entry that the batch holds on such a date, your rules must give an entry with the same `clientSessionId`, `position`, `time`, and `raw`.
+   - An entry of your rules that the batch does not hold is not a failure. The put adds it.
    - If the check fails, do the steps of "If the split rules change".
 9. Do a test on a small part. Put the entries of three to five days, with one day of many entries if the source has one. If the source has five days or fewer, the test is the whole source.
 10. Read the test back with `list_import_entries`. Compare each entry with the source. `startsAt` is in UTC, so convert it to the zone of the entry before you compare it.
 11. Tell the person to open Imports in Recall, choose the batch, and check the test entries. Wait for a yes.
-12. Put the full batch, in calls of at most 500 entries and at most 16 MB. The test entries give `Unchanged`, or `Rejected` when the person rejected them. Check the outcome of each entry.
-13. After the last put, call `list_import_batches`. Count your entries whose last outcome is `Added`, `Changed`, `Unchanged`, or `Rejected`.
+12. Put the full batch, in calls of at most 500 entries and at most 16 MB. If a call is too long for you to write, send fewer entries in each call. The test entries give `Unchanged`, or `Rejected` when the person rejected them. Check the outcome of each entry.
+    - Keep a count of each outcome, and add the outcomes of each put to it. If you can write files, keep the count in a file. Read the counts of steps 13 and 14 from it.
+13. After the last put, call `list_import_batches`. Count your entries whose last outcome is `Added`, `Changed`, `Unchanged`, or `Rejected`. Do not count the entries that you removed.
     - The entry count of the batch must be the same as your count.
     - If the batch has more entries, it holds entries of other rules. Put nothing more, and do the steps of "If the split rules change".
     - Tell the person both counts. Do not read the whole batch to find the other entries.
@@ -112,7 +113,8 @@ Do these steps in each of these cases:
 If a put or a discard fails with no outcomes, read the error.
 
 - If the error says "This batch is in your journal, so it cannot change.", the person accepted the batch. Stop, and tell the person.
-- If the error says "This import batch does not exist.", the person discarded the batch. Stop, and tell the person.
+- If the error says "This import batch does not exist." after a discard of the check batch, the discard is done. Go on.
+- Else, if the error says "This import batch does not exist.", the person discarded the batch. Stop, and tell the person.
 - If the error says nothing that you can correct, or you lose the result, send the same put again. A put of the same entries again changes nothing.
 - If the same put fails two times with no result, send half of its entries in each call.
 
