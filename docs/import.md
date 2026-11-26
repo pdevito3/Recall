@@ -131,7 +131,7 @@ Each entry of a put gets the first outcome that applies.
 | `Changed` | The put changed the entry. | Go on. |
 | `Added` | The put added the entry. | Go on. |
 
-Only `Rejected`, `Changed`, and `Added` store the entry.
+Only `Rejected`, `Changed`, and `Added` write the entry. `Unchanged` means that the batch already holds the same entry.
 
 ### A put again is safe
 
