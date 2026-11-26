@@ -58,6 +58,9 @@ export const imports = (page: Page) => ({
   copyCommand: page.getByRole('button', { name: 'Copy command', exact: true }),
   mcpUrlValue: page.getByRole('group', { name: 'MCP URL', exact: true }).locator('code'),
   tokenHeader: page.getByRole('region', { name: 'Import with an agent', exact: true }).getByText('Authorization: Bearer <your token>', { exact: true }),
+  tokenHeaderParagraph: page.getByRole('region', { name: 'Import with an agent', exact: true }).getByText('Authorization: Bearer <your token>', { exact: true }).locator('..'),
+  tokenHeaderParts: ['Authorization: Bearer', '<your token>'].map((part) =>
+    page.getByRole('region', { name: 'Import with an agent', exact: true }).getByText('Authorization: Bearer <your token>', { exact: true }).getByText(part, { exact: true })),
   commandValue: page.getByRole('group', { name: 'Claude Code command', exact: true }).locator('code'),
   commandText: (command: string) => page.getByRole('group', { name: 'Claude Code command', exact: true }).getByText(command, { exact: true }),
   skillRow: page.getByRole('button', { name: 'Copy skill', exact: true }).locator('..'),

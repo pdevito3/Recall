@@ -175,9 +175,9 @@ test.describe('the recall-import skill', () => {
       const imports = importsPage(page)
       await imports.openList()
 
-      // The header of the token is one unit, so it never breaks inside.
+      // From the sm width up, the header of the token is one unit, so it never breaks inside.
       await expect(imports.at.tokenHeader).toHaveText('Authorization: Bearer <your token>')
-      expect(await imports.lineCountOf(imports.at.tokenHeader)).toBe(1)
+      if (size.width >= 640) expect(await imports.lineCountOf(imports.at.tokenHeader)).toBe(1)
       const cardText = await imports.textLeftOf(imports.at.batchLink('Diary 2024'))
       expect(await imports.textLeftOf(imports.at.mcpUrlValue)).toBe(cardText)
       expect(await imports.textLeftOf(imports.at.commandValue)).toBe(cardText)
@@ -195,6 +195,34 @@ test.describe('the recall-import skill', () => {
       expect(await imports.textLeftOf(imports.at.skillToggle)).toBe(cardText)
     })
   }
+
+  for (const width of [320, 390]) {
+    test(`at ${width} px and a root font size of 20 px, the header of the token breaks only before <your token>, inside its paragraph`, { tag: '@IMP-46' }, async ({ page, api }) => {
+      await page.setViewportSize({ width, height: 844 })
+      api.mock(importsApi.listIs([diary]))
+      const imports = importsPage(page)
+      await imports.openList()
+      await page.addStyleTag({ content: 'html { font-size: 20px }' })
+
+      // The whole header is wider than the paragraph here, so it can break between its two parts, and never inside one.
+      // The page moves while it lays out the new size, so the test reads the edges until they agree.
+      await expect.poll(() => imports.rightOverhangOf(imports.at.tokenHeader, imports.at.tokenHeaderParagraph)).toBeLessThanOrEqual(0)
+      expect(await imports.sideScrollRange()).toBe(0)
+      expect(await imports.lineCountOf(imports.at.tokenHeader)).toBeLessThanOrEqual(2)
+      for (const part of imports.at.tokenHeaderParts) expect(await imports.lineCountOf(part)).toBe(1)
+    })
+  }
+
+  test('at 1280 px and a root font size of 20 px, the header of the token stays on one line', { tag: '@IMP-46' }, async ({ page, api }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    api.mock(importsApi.listIs([diary]))
+    const imports = importsPage(page)
+    await imports.openList()
+    await page.addStyleTag({ content: 'html { font-size: 20px }' })
+
+    await expect(imports.at.tokenHeader).toHaveText('Authorization: Bearer <your token>')
+    await expect.poll(() => imports.lineCountOf(imports.at.tokenHeader)).toBe(1)
+  })
 
   test('at a root font size of 20 px, the arrow of the skill starts at the text edge of the MCP URL, closed and open', { tag: '@IMP-46' }, async ({ page, api }) => {
     api.mock(importsApi.listIs([diary]))

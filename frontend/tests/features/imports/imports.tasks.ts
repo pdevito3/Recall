@@ -38,8 +38,15 @@ export function importsPage(page: Page) {
       return box !== null && box.x >= 0 && box.x + box.width <= width
     },
 
-    /** The count of the lines of an inline element. */
-    lineCountOf: (element: Locator) => element.evaluate((node) => node.getClientRects().length),
+    /** How far the right edge of an element runs past the right edge of its container. A value of 0 or less is inside. */
+    async rightOverhangOf(element: Locator, container: Locator) {
+      const inner = (await element.boundingBox())!
+      const outer = (await container.boundingBox())!
+      return inner.x + inner.width - (outer.x + outer.width)
+    },
+
+    /** The count of the lines of an inline element. An element with inline children has a box for each child on a line, so the count is of the distinct tops. */
+    lineCountOf: (element: Locator) => element.evaluate((node) => new Set([...node.getClientRects()].map((box) => Math.round(box.top))).size),
 
     async hitAreaOf(element: Locator) {
       const box = (await element.boundingBox())!
