@@ -51,6 +51,11 @@ export function importsPage(page: Page) {
       return (await element.boundingBox())!.width
     },
 
+    async middleOf(element: Locator) {
+      const box = (await element.boundingBox())!
+      return box.y + box.height / 2
+    },
+
     async isBelow(element: Locator, above: Locator) {
       const [box, aboveBox] = [(await element.boundingBox())!, (await above.boundingBox())!]
       return box.y >= aboveBox.y + aboveBox.height
