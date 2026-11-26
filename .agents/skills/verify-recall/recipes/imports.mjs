@@ -3,10 +3,29 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
   const phone = { width: 390, height: 844 }
   const answered = (method, pattern) =>
     page.waitForResponse((r) => r.request().method() === method && pattern.test(new URL(r.url()).pathname))
+  // A capture shows the page as a person sees it: no hover state of the last click, and no toast of an earlier step.
+  const shot = async (name, { keepToast = false, ...options } = {}) => {
+    if (!keepToast) {
+      for (const close of await page.locator('[data-slot="toast-region"]').getByRole('button', { name: 'Close' }).all()) await close.click()
+      await expect(page.locator('[data-slot="toast-region"]').getByRole('button', { name: 'Close' })).toHaveCount(0)
+    }
+    const size = page.viewportSize()
+    await page.mouse.move(size.width - 2, size.height - 2)
+    await capture(name, options)
+  }
   const asPhone = async (name, options) => {
     await page.setViewportSize(phone)
-    await capture(name, options)
+    await settle()
+    await shot(name, options)
     await page.setViewportSize(desktop)
+    await settle()
+  }
+  const asDark = async (name, options) => {
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await settle()
+    await shot(name, options)
+    await page.emulateMedia({ colorScheme: 'light' })
+    await settle()
   }
 
   await login()
@@ -40,7 +59,7 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     await expect(page.getByRole('heading', { level: 1, name: 'Imports' })).toBeVisible()
     await expect(page.getByText(/^You have no import batches\. An agent opens a batch with a personal access token, then you review it here\.$/)).toBeVisible()
   })
-  await capture('empty')
+  await shot('empty')
   await asPhone('empty-phone')
 
   const id = () => crypto.randomUUID()
@@ -75,9 +94,9 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     name = shown.name
     expect(shown.entryCount).toBe(8)
     await expect(row()).toContainText('Open')
-    await expect(row()).toContainText('8 entries in Eastern Time')
+    await expect(row()).toContainText('8 entries. Times in Eastern Time.')
   })
-  await capture('list')
+  await shot('list')
   await asPhone('list-phone')
 
   const card = (text) => page.getByRole('listitem', { name: /^Entry at / }).filter({ hasText: text })
@@ -92,25 +111,30 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
       await expect(page.getByRole('heading', { level: 2, name: day })).toBeVisible()
     await expect(card('Coffee on the porch')).toContainText('8:30 AM')
     await expect(card('Flew to London')).toContainText('9:00 PMUnited Kingdom Time')
-    await expect(card('Long walk')).toContainText('12:01 PMTime from its place in the day')
+    await expect(card('Long walk')).toContainText('12:01 PMNo time given. Set from its place in the day.')
     await expect(card('Planted tomatoes').getByRole('list', { name: 'Moods and topics' })).toHaveText(/Hopeful\s*Garden\s*Spring/i)
   })
-  await capture('detail')
+  await shot('detail')
   await asPhone('detail-phone')
+  await asDark('detail-dark')
 
-  await step('Edit: new words and a new time; the review sends both, and the entry shows them', async () => {
+  await step('Edit: a few more words that keep the bold word, and a new time; the review sends both, and the entry shows them', async () => {
     await card('Coffee on the porch').getByRole('button', { name: 'Edit the entry at 8:30 AM' }).click()
     const form = page.getByRole('form', { name: 'Edit the entry' })
     const words = form.getByRole('textbox', { name: 'Words' })
     await words.click()
-    await page.keyboard.press('ControlOrMeta+a')
-    await page.keyboard.type('Woke early. Coffee on the porch, then a run.')
+    await page.keyboard.press('ControlOrMeta+End')
+    await page.keyboard.press('Backspace')
+    await page.keyboard.type(', then a run.')
+    await expect(words.locator('strong')).toHaveText('Coffee')
+    await expect(form.getByText('In Eastern Time. Leave it empty to use the import time.')).toBeVisible()
     await form.getByRole('spinbutton', { name: /^hour,/ }).click()
     await page.keyboard.type('0745')
     await expect(form.getByRole('group', { name: 'Time' })).toContainText(/7:45\W*AM/)
     await settle()
   })
-  await capture('editing', { fullPage: false })
+  await shot('editing', { fullPage: false })
+  await asPhone('editing-phone', { fullPage: false })
 
   await step('Save sends the whole review, and the entry shows the edit', async () => {
     const reviewed = answered('PUT', /\/entries\/review$/)
@@ -120,7 +144,9 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     const sent = res.request().postDataJSON()
     expect(sent).toMatchObject({ clientSessionId: e.coffee, rejected: false, time: '07:45' })
     expect(sent.words).toContain('then a run.')
+    expect(JSON.parse(sent.words).content[0].content.find((node) => node.text === 'Coffee').marks).toEqual([{ type: 'bold' }])
     await expect(card('then a run')).toContainText('7:45 AMEdited')
+    await expect(card('then a run').locator('strong')).toHaveText('Coffee')
     await expect(page.getByRole('button', { name: 'Edit the entry at 7:45 AM' })).toBeFocused()
   })
 
@@ -134,9 +160,11 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     await form.getByRole('button', { name: 'Save', exact: true }).click()
     expect((await reviewed).status()).toBe(422)
     await expect(form.getByRole('alert')).toHaveText('Give the entry some words, or reject it to leave it out.')
+    await expect(form.getByRole('textbox', { name: 'Words' })).toBeFocused()
+    await expect(form.getByRole('textbox', { name: 'Words' })).toHaveAttribute('aria-invalid', 'true')
     await settle()
   })
-  await capture('blank-words-refused', { fullPage: false })
+  await shot('blank-words-refused', { fullPage: false })
 
   await step('Cancel; the agent puts the entry again with other words; the entry says that the accept keeps the edit', async () => {
     await page.getByRole('form', { name: 'Edit the entry' }).getByRole('button', { name: 'Cancel', exact: true }).click()
@@ -148,7 +176,7 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     expect(read.wordsChangedAfterEdit).toBe(true)
     await expect(card('then a run')).toContainText('The import changed the words after your edit. The accept keeps your edit.')
   })
-  await capture('edited-flag')
+  await shot('edited-flag')
   await asPhone('edited-flag-phone')
 
   await step('Reject an entry: it shows Rejected, and the counts change', async () => {
@@ -159,18 +187,19 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     await expect(card('Long walk').getByRole('button', { name: 'Keep the entry at 12:01 PM' })).toBeVisible()
     await expect(counts).toHaveText('8 entries: 7 kept, 1 rejected')
   })
-  await capture('rejected-entry')
+  await shot('rejected-entry')
 
-  await step('Reject day: each entry of the day shows Rejected with its day, and the counts change', async () => {
+  await step('Reject day: the day and each of its entries say rejected with the day, and the counts change', async () => {
     const reviewed = answered('PUT', /\/days\/review$/)
     await page.getByRole('button', { name: 'Reject Sunday, March 3, 2024' }).click()
     expect((await reviewed).request().postDataJSON()).toEqual({ date: '2024-03-03', rejected: true })
-    await expect(card('Rainy day')).toContainText('Rejected with its day')
-    await expect(card('Dinner with Sam')).toContainText('Rejected with its day')
+    await expect(card('Rainy day')).toContainText('Rejected with the day')
+    await expect(card('Dinner with Sam')).toContainText('Rejected with the day')
+    await expect(page.getByRole('region', { name: 'Sunday, March 3, 2024' })).toContainText('2 entries, rejected with the day')
     await expect(page.getByRole('button', { name: 'Keep Sunday, March 3, 2024' })).toBeVisible()
     await expect(counts).toHaveText('8 entries: 5 kept, 3 rejected')
   })
-  await capture('rejected-day')
+  await shot('rejected-day')
   await asPhone('rejected-day-phone')
 
   await step('the agent removes an entry that the page shows; its Reject shows the 404 of the Server, the page reads the batch again, and the focus goes to the heading', async () => {
@@ -184,19 +213,17 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     await expect(counts).toHaveText('7 entries: 4 kept, 3 rejected')
     await expect(page.getByRole('heading', { level: 1, name, exact: true })).toBeFocused()
   })
-  await capture('entry-gone', { fullPage: false })
+  await shot('entry-gone', { fullPage: false, keepToast: true })
 
-  const dialog = page.getByRole('alertdialog', { name: 'Accept this batch?' })
+  const dialog = page.getByRole('alertdialog', { name: `Accept “${name}”?` })
   await step('Accept asks first, with the kept and the rejected counts', async () => {
     await page.getByRole('button', { name: 'Accept', exact: true }).click()
     await expect(dialog).toContainText('4 entries go into your journal, and 3 entries that you rejected stay out.')
     await settle()
   })
-  await capture('accept-confirm', { fullPage: false })
-  await page.setViewportSize(phone)
-  await settle()
-  await capture('accept-confirm-phone', { fullPage: false })
-  await page.setViewportSize(desktop)
+  await shot('accept-confirm', { fullPage: false })
+  await asPhone('accept-confirm-phone', { fullPage: false })
+  await asDark('accept-confirm-dark', { fullPage: false })
 
   await step('the agent puts one more entry while the dialog is open: the accept gets the 409, and the dialog shows the new counts', async () => {
     await agent('PUT', `/api/v1/import-batches/${batch.id}/entries`, {
@@ -205,11 +232,14 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     const accepted = answered('POST', /\/accept$/)
     await dialog.getByRole('button', { name: 'Accept batch', exact: true }).click()
     expect((await accepted).status()).toBe(409)
-    await expect(dialog.getByRole('alert')).toHaveText('This batch changed after you read it. Read it again, then accept it.')
+    await expect(dialog.getByRole('alert')).toHaveText(
+      'This batch changed after you read it. Read it again, then accept it.The counts above are new. Check them, then accept the batch.',
+    )
     await expect(dialog).toContainText('5 entries go into your journal, and 3 entries that you rejected stay out.')
     await settle()
   })
-  await capture('accept-stale', { fullPage: false })
+  await shot('accept-stale', { fullPage: false })
+  await asPhone('accept-stale-phone', { fullPage: false })
 
   const result = await step('Accept batch: the page shows the counts of the result, with a link to the journal', async () => {
     const accepted = answered('POST', /\/accept$/)
@@ -220,11 +250,11 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     expect(body.result).toEqual({ sessionsMade: 5, entriesRejected: 3, daysRejected: 1, skippedInJournal: 0, skippedDeleted: 0 })
     const list = page.getByRole('list', { name: 'Result of the accept' })
     await expect(list).toContainText('5 entries made in your journal')
-    await expect(list).toContainText('3 entries rejected')
-    await expect(list).toContainText('1 day rejected')
+    await expect(list).toContainText('3 entries rejected, alone or with their days')
+    await expect(list).toContainText('1 day rejected as a whole')
     return body
   })
-  await capture('accept-result')
+  await shot('accept-result')
   await asPhone('accept-result-phone')
 
   await step('Go to your journal: the Sessions of the accept have the start times of the review', async () => {
@@ -241,7 +271,7 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     ])
     await expect(page.getByText('Woke early. Coffee on the porch, then a run.')).toBeVisible()
   })
-  await capture('journal')
+  await shot('journal')
 
   await step('Settings: the import review says who can accept, and a change sends it', async () => {
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Settings', exact: true }).click()
@@ -259,23 +289,36 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     expect((await back).status()).toBe(200)
     await expect(box).toBeChecked()
   })
-  await capture('setting')
+  await shot('setting')
   await asPhone('setting-phone')
 
-  const second = await step('Discard asks first with the name and the count, then the batch leaves the list', async () => {
+  const second = await step('a batch of 300 entries on two days has two pages, and the pager names the dates of each', async () => {
     const opened = await agent('POST', '/api/v1/import-batches', { name: 'Notes to throw away', timeZone: 'Europe/Berlin' })
-    await agent('PUT', `/api/v1/import-batches/${opened.body.id}/entries`, {
-      entries: [{ clientSessionId: id(), date: '2023-07-01', position: 0, raw: 'Draft.' }],
-    })
+    const entries = ['2023-07-01', '2023-07-02'].flatMap((date) =>
+      Array.from({ length: 150 }, (_, position) => ({ clientSessionId: id(), date, position, raw: `Note ${position + 1} of ${date}.` })),
+    )
+    expect((await agent('PUT', `/api/v1/import-batches/${opened.body.id}/entries`, { entries })).status).toBe(200)
     const listed = answered('GET', /^\/api\/v1\/import-batches$/)
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Imports', exact: true }).click()
     const shown = (await (await listed).json()).find((b) => b.id === opened.body.id)
-    await page.getByRole('button', { name: `Discard ${shown.name}` }).click()
-    await expect(page.getByRole('alertdialog')).toContainText('This batch and its 1 entry leave Recall, and nothing of it reaches your journal.')
-    await settle()
+    await page.getByRole('link', { name: shown.name, exact: true }).click()
+    const pager = page.getByRole('navigation', { name: 'Pages of this batch', exact: true })
+    await expect(pager).toContainText('Page 1 of 2: Jul 1, 2023')
+    await expect(page.getByLabel('Counts of this batch')).toHaveText('300 entries: 300 kept, 0 rejected')
     return shown
   })
-  await capture('discard-confirm', { fullPage: false })
+  await shot('pager', { fullPage: false })
+  await asPhone('pager-phone', { fullPage: false })
+
+  await step('Discard asks first with the quoted name and the count of the days that the page read', async () => {
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Imports', exact: true }).click()
+    await page.getByRole('button', { name: `Discard ${second.name}` }).click()
+    const confirm = page.getByRole('alertdialog', { name: `Discard “${second.name}”?` })
+    await expect(confirm).toContainText('This batch and its 300 entries are deleted. Nothing of it goes into your journal. You cannot undo a discard.')
+    await settle()
+  })
+  await shot('discard-confirm', { fullPage: false })
+  await asPhone('discard-confirm-phone', { fullPage: false })
 
   await step('Discard batch: the batch leaves the list, and the accepted batch stays with no Discard', async () => {
     const discarded = answered('DELETE', /^\/api\/v1\/import-batches\/[^/]+$/)
@@ -285,11 +328,13 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     await expect(row()).toContainText('In your journal')
     await expect(row().getByRole('button')).toHaveCount(0)
   })
-  await capture('list-after-discard')
+  await shot('list-after-discard')
 
   await step('a batch that does not exist says so, with a link to the imports', async () => {
     await page.goto(`/imports/${second.id}`)
+    await expect(page.getByRole('heading', { level: 1, name: 'Batch not found' })).toBeVisible()
     await expect(page.getByText('This import batch does not exist. It may have been discarded.')).toBeVisible()
   })
-  await capture('missing')
+  await shot('missing')
+  await asPhone('missing-phone')
 }
