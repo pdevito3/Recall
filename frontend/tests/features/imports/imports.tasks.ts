@@ -84,6 +84,10 @@ export function importsPage(page: Page) {
         return new Set([...range.getClientRects()].filter((rect) => rect.width > 0).map((rect) => Math.round(rect.top))).size
       }, words),
 
+    clipboardText: () => page.evaluate(() => navigator.clipboard.readText()),
+
+    sideScrollOf: (element: Locator) => element.evaluate((box) => box.scrollWidth - box.clientWidth),
+
     sideScrollRange: () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
 
     async reject(id: string, time: string) {
