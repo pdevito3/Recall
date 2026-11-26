@@ -18,15 +18,17 @@ A token with only **Read my journal** sees only the list tools. It gets an error
 
 ### Add Recall to the agent
 
-The MCP URL is the address of your Recall with `/mcp` at the end, for example `https://recall.example.com/mcp`. **Imports** in Recall shows this URL, with **Copy MCP URL**. The agent sends the token in the header `Authorization: Bearer <token>`. In the examples below, the environment variable `RECALL_PAT` holds the token.
+The MCP URL is the address of your Recall with `/mcp` at the end, for example `https://recall.example.com/mcp`. **Imports** in Recall shows this URL, with **Copy MCP URL**. The agent sends the token in the header `Authorization: Bearer <token>`.
 
-For Claude Code, **Imports** in Recall shows this command with your MCP URL, with **Copy command**:
+The examples below read the token from the environment variable `RECALL_PAT`. Set it before you start the agent, for example `export RECALL_PAT=rcl_pat_...`. A token that you type in a command goes into the history of your shell, so the variable is safer.
+
+For Claude Code, run this command with your MCP URL:
 
 ```bash
 claude mcp add --transport http recall https://recall.example.com/mcp --header "Authorization: Bearer $RECALL_PAT"
 ```
 
-By default, `claude mcp add` adds Recall only to the project of the current directory. To add it to all your projects, put `--scope user` after `add`.
+**Imports** in Recall shows the same command with your MCP URL and with `<your token>` in place of `$RECALL_PAT`, with **Copy command**. By default, `claude mcp add` adds Recall only to the project of the current directory. To add it to all your projects, put `--scope user` after `add`.
 
 For Claude Code with a `.mcp.json` file at the root of the project:
 
@@ -42,7 +44,7 @@ For Claude Code with a `.mcp.json` file at the root of the project:
 }
 ```
 
-Claude Desktop starts a local MCP server for each entry of its config file. Use a bridge, such as `mcp-remote`, that sends the header to `/mcp`. The bridge needs Node.js, which also gives `npx`.
+Claude Desktop starts a local MCP server for each entry of its config file. Use a bridge, such as `mcp-remote`, that sends the header to `/mcp`. The bridge needs Node.js 18 or later, which also gives `npx`.
 
 1. In Claude Desktop, open **Settings** > **Developer**, and choose **Edit Config**. This opens the folder of `claude_desktop_config.json`.
 2. Add the entry below to the file, with your MCP URL and your token.
@@ -62,7 +64,7 @@ Claude Desktop starts a local MCP server for each entry of its config file. Use 
 
 If your MCP URL starts with `http://`, put `"--allow-http"` after the URL in `args`. Use plain HTTP only on a private network, because another device on the network can read the token. To turn on HTTPS, see [install.md](install.md#turn-on-https).
 
-Another MCP client uses the Streamable HTTP transport. The server keeps no MCP session, so each request stands alone. Send JSON-RPC with `POST`, and accept both JSON and an event stream:
+Connect another MCP client with the Streamable HTTP transport. The server keeps no MCP session, so each request stands alone. Send JSON-RPC with `POST`, and accept both JSON and an event stream:
 
 ```bash
 curl https://recall.example.com/mcp \
@@ -74,9 +76,15 @@ curl https://recall.example.com/mcp \
 
 The response is an event stream. The JSON-RPC result is on the `data:` line. Call a tool with the method `tools/call` and `params` of `{ "name": "<tool>", "arguments": { ... } }`. The other auth rules of a token are in [authentication.md](authentication.md#personal-access-tokens).
 
+If the agent cannot connect, the token is wrong, expired, or revoked. Make a new token.
+
 ### Give the agent the skill
 
 Open **Imports** in Recall. The section **Import with an agent**, below the list of batches, has the `recall-import` skill. Choose **Copy skill**, and give the text to your agent. To read the skill first, open **The recall-import skill**. For Claude Code, save it as `.claude/skills/recall-import/SKILL.md` in your project, or as `~/.claude/skills/recall-import/SKILL.md` for all your projects. For another agent, save it as a skill of the agent, or paste it at the start of the chat. The file of the skill is [`frontend/src/domain/imports/recall-import.md`](../frontend/src/domain/imports/recall-import.md).
+
+### Start the import
+
+Ask the agent to import your journal, and give it the folder of the export. The agent proposes its split rules and a test before it puts all the entries. Claude Desktop reads only the files that you attach to the chat. For a large export, use Claude Code, or add a file-system MCP server to Claude Desktop.
 
 ## The tools
 
@@ -131,7 +139,7 @@ Each entry of a put gets the first outcome that applies.
 | `Invalid` | A field is not valid. `field` and `reason` say which and why. | Correct the entry and put it again. |
 | `InJournal` | A Session of the journal has this ID. | Skip it. |
 | `Deleted` | You deleted the Session of this ID. | Skip it. |
-| `InOtherBatch` | Another open batch holds this ID. | Tell you. Find the batch with `list_import_batches`. |
+| `InOtherBatch` | Another open batch holds this ID. | Tell you. Find the batch with `list_import_entries` on each open batch. |
 | `InTheFuture` | The start time is in the future. An entry of today with no time starts at 12:00 plus its position, so before that time it gets this outcome. | For an entry of today with no time, put it again after that time, or ask you for its time. For another entry, read the source again for the date and the time. |
 | `PositionTaken` | Another entry of the date has the position. `positionTakenBy` names it. | Correct the positions and put again. |
 | `Rejected` | You rejected the entry or its day. The put stored the new words, and the reject stays. If the put moved the entry off a rejected day, it stored nothing. | Leave it. |
