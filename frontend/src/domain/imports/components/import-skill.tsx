@@ -92,6 +92,8 @@ export function ImportSkill() {
   }
 
   // Each lead paragraph is close to its box and far from the box before it.
+  // From sm up, the header of the token stays on one line. Below sm, a large root font can make it wider than the
+  // paragraph, so there it breaks only before the placeholder.
   return (
     <section aria-labelledby="import-skill-heading" className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
@@ -99,7 +101,7 @@ export function ImportSkill() {
         <p className="max-w-prose text-muted-foreground">
           Connect your agent to this MCP URL with a{' '}
           <Link to="/settings/personal-access-tokens" className="underline underline-offset-4 hover:text-primary">personal access token</Link>
-          {' '}that has “Change my journal”. The agent sends the token in the header <code className="font-mono text-sm whitespace-nowrap">Authorization: Bearer &lt;your token&gt;</code>.
+          {' '}that has “Change my journal”. The agent sends the token in the header <code className="font-mono text-sm sm:whitespace-nowrap"><span className="whitespace-nowrap">Authorization: Bearer</span> {yourToken}</code>.
         </p>
         <CopyRow
           label="MCP URL"
