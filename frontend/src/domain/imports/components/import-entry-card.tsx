@@ -79,8 +79,12 @@ export function ImportEntryCard({ batchId, batchZone, entry, dayIsRejected, onGo
           ))}
         </ul>
       )}
-      {entry.wordsChangedAfterEdit && <ChangeNote>The import changed the words after your edit. The accept keeps your edit.</ChangeNote>}
-      {entry.timeChangedAfterEdit && <ChangeNote>The import changed the time after your edit. The accept keeps your time.</ChangeNote>}
+      {entry.wordsChangedAfterEdit && (
+        <ChangeNote>The import changed the words after your edit. The accept keeps your edit. To use the new words, choose Edit, then Use the import words.</ChangeNote>
+      )}
+      {entry.timeChangedAfterEdit && (
+        <ChangeNote>The import changed the time after your edit. The accept keeps your time. To use the new time, choose Edit, then Use the import time.</ChangeNote>
+      )}
       <div className="flex flex-wrap gap-2">
         <Button ref={editButton} variant="outline" size="sm" className="max-sm:h-11" aria-label={`Edit the entry at ${time}`} onPress={() => setIsEditing(true)}>
           Edit
@@ -129,6 +133,8 @@ function ImportEntryEdit({ batchId, entry, zone, onDone, onGone }: ImportEntryEd
   const problem = refusal?.problem
   const wordsId = useId()
   const wordsErrorId = `${wordsId}-error`
+  const importValuesOffId = `${wordsId}-import-values-off`
+  const hasImportValues = entry.review.words != null || entry.review.time != null
   useEffect(() => {
     if (wordsError) document.getElementById(wordsId)?.focus()
   }, [wordsError, wordsId])
@@ -150,7 +156,7 @@ function ImportEntryEdit({ batchId, entry, zone, onDone, onGone }: ImportEntryEd
       }}
     >
       <div className="flex flex-col gap-2">
-        <span aria-hidden="true" className="text-sm leading-none font-medium select-none">Words</span>
+        <span aria-hidden="true" className={cn('text-sm leading-none font-medium select-none', wordsError && 'text-destructive')}>Words</span>
         <JournalEditor
           initialText={entry.document}
           revision={0}
@@ -175,7 +181,7 @@ function ImportEntryEdit({ batchId, entry, zone, onDone, onGone }: ImportEntryEd
         }
         value={time}
         onChange={setTime}
-        className="max-w-60"
+        className="[&>[role=group]]:max-w-60"
       />
       {problem?.kind === 'refused' && (
         <div role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive wrap-anywhere">
@@ -188,16 +194,33 @@ function ImportEntryEdit({ batchId, entry, zone, onDone, onGone }: ImportEntryEd
         <Button type="submit" isPending={review.isPending} className="max-sm:h-11">Save</Button>
         <Button variant="outline" className="max-sm:h-11" onPress={onDone}>Cancel</Button>
         {entry.review.words != null && (
-          <Button variant="outline" className="max-sm:h-11" isDisabled={review.isPending || hasChanges} onPress={() => send({ words: null })}>
+          <Button
+            variant="outline"
+            className="max-sm:h-11"
+            isDisabled={review.isPending || hasChanges}
+            aria-describedby={hasChanges ? importValuesOffId : undefined}
+            onPress={() => send({ words: null })}
+          >
             Use the import words
           </Button>
         )}
         {entry.review.time != null && (
-          <Button variant="outline" className="max-sm:h-11" isDisabled={review.isPending || hasChanges} onPress={() => send({ time: null })}>
+          <Button
+            variant="outline"
+            className="max-sm:h-11"
+            isDisabled={review.isPending || hasChanges}
+            aria-describedby={hasChanges ? importValuesOffId : undefined}
+            onPress={() => send({ time: null })}
+          >
             Use the import time
           </Button>
         )}
       </div>
+      {hasImportValues && hasChanges && (
+        <p id={importValuesOffId} className="text-sm text-muted-foreground">
+          Save or cancel your change first.
+        </p>
+      )}
     </form>
   )
 }
