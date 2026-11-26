@@ -152,7 +152,7 @@ test.describe('the recall-import skill', () => {
 
     await expect(imports.at.text('Command copied')).toBeVisible()
     await expect.poll(() => imports.clipboardText()).toBe(command)
-    await expect(imports.at.claudeCodeCommand.getByText(command, { exact: true })).toBeVisible()
+    await expect(imports.at.commandText(command)).toBeVisible()
     expect(await imports.isFocused(imports.at.copyCommand)).toBe(true)
   })
 
@@ -176,8 +176,8 @@ test.describe('the recall-import skill', () => {
       await imports.openList()
 
       const cardText = await imports.textLeftOf(imports.at.batchLink('Diary 2024'))
-      expect(await imports.textLeftOf(imports.at.mcpUrl.locator('code'))).toBe(cardText)
-      expect(await imports.textLeftOf(imports.at.claudeCodeCommand.locator('code'))).toBe(cardText)
+      expect(await imports.textLeftOf(imports.at.mcpUrlValue)).toBe(cardText)
+      expect(await imports.textLeftOf(imports.at.commandValue)).toBe(cardText)
       expect(await imports.textLeftOf(imports.at.skillToggle)).toBe(cardText)
       // The card is inside the border of the list, and each box of the panel has its own border of 1 px.
       const { right: padding } = await imports.insetOf(imports.at.discardOf('Diary 2024'), imports.at.batch('Diary 2024'))
@@ -185,7 +185,7 @@ test.describe('the recall-import skill', () => {
       const sideOfButton = size.width < 640 ? 'bottom' : 'right'
       expect((await imports.insetOf(imports.at.copyMcpUrl, imports.at.mcpUrl))[sideOfButton]).toBe(padding + 1)
       expect((await imports.insetOf(imports.at.copyCommand, imports.at.claudeCodeCommand))[sideOfButton]).toBe(padding + 1)
-      expect(await imports.insetOf(imports.at.copySkill, imports.at.copySkill.locator('..'))).toEqual({ right: padding, bottom: padding })
+      expect(await imports.insetOf(imports.at.copySkill, imports.at.skillRow)).toEqual({ right: padding, bottom: padding })
     })
   }
 
