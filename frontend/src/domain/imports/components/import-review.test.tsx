@@ -838,7 +838,7 @@ test('@IMP-45 the setting says who can accept, and a change sends the version of
   const box = screen.getByRole('checkbox', { name: 'Only I can accept an import batch' })
   await expect.element(box).toBeChecked()
   await expect.element(box).toHaveAccessibleDescription(
-    'With this on, only you can accept an import batch, from Recall in a browser. With it off, an agent with a personal access token can accept a batch too.',
+    'With this on, only you can accept an import batch, and only in Recall in a browser. With it off, an app or an agent that can write to your journal, such as an agent with a personal access token, can accept a batch too.',
   )
   const saved = { ...memberSetting, requireImportReview: false, version: 2 }
   await commands.answerRequests([...signedInMember, noPeople, { method: 'PUT', path: '/api/v1/me/settings/import-review', body: saved }])
