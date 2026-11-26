@@ -4,6 +4,7 @@ import { EditorContent, Extension, useEditor, type Editor } from '@tiptap/react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 
 import { useAddPerson, usePeopleDirectory } from '@/domain/people/apis/people'
+import { cn } from '@/lib/utils'
 
 import { contentOf } from './content-of'
 import { PersonMention, textExtensions } from './journal-extensions'
@@ -30,6 +31,10 @@ interface JournalEditorProps {
   /** A new value opens `initialText` in this editor, as a new document with no undo. The editor stays mounted, so a key at this moment reaches it. */
   revision: number
   label: string
+  /** The ID of the text box, so a form can move the focus to it. */
+  id?: string
+  /** The ID of the message of a refused value. The box then shows as invalid and names the message. */
+  errorId?: string
   placeholder?: string
   autoFocus?: boolean
   /** A text that the Server refused can be very long, so it scrolls in its box and the page stays usable. */
@@ -57,7 +62,7 @@ function useMentionSource(): MentionSource {
   )
 }
 
-export function JournalEditor({ initialText, revision, label, placeholder, autoFocus, isBounded, onChange, onSubmit, toolbar, barRef }: JournalEditorProps) {
+export function JournalEditor({ initialText, revision, label, id, errorId, placeholder, autoFocus, isBounded, onChange, onSubmit, toolbar, barRef }: JournalEditorProps) {
   const mentionSource = useMentionSource()
   const callbacks = useRef({ onChange, onSubmit, placeholder })
   useLayoutEffect(() => {
@@ -83,6 +88,8 @@ export function JournalEditor({ initialText, revision, label, placeholder, autoF
         role: 'textbox',
         'aria-multiline': 'true',
         'aria-label': label,
+        ...(id && { id }),
+        ...(errorId && { 'aria-invalid': 'true', 'aria-describedby': errorId }),
         dir: 'auto',
         class: 'journal-prose min-h-32 px-3 py-2 outline-none',
       },
@@ -113,7 +120,12 @@ export function JournalEditor({ initialText, revision, label, placeholder, autoF
   }, [editor, barHeight, isBounded])
 
   return (
-    <div className="flex flex-col rounded-lg border bg-card focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
+    <div
+      className={cn(
+        'flex flex-col rounded-lg border bg-card focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50',
+        errorId && 'border-destructive focus-within:border-destructive focus-within:ring-destructive/20 dark:focus-within:ring-destructive/40',
+      )}
+    >
       {editor && toolbar?.(editor)}
       <EditorContent editor={editor} className={isBounded ? 'max-h-[60svh] overflow-y-auto' : undefined} />
     </div>
