@@ -19,6 +19,7 @@ public static class ImportBatchMapper
 
     public static ImportEntryDto ToImportEntryDto(this ImportEntry entry, ImportBatch batch) => new()
     {
+        Document = entry.RawAtAccept(),
         ClientSessionId = entry.ClientSessionId,
         Date = entry.Agent.Date,
         Position = entry.Agent.Position,
@@ -27,7 +28,24 @@ public static class ImportBatchMapper
         Raw = entry.Agent.Raw,
         Moods = entry.Agent.Moods,
         Topics = entry.Agent.Topics,
-        Review = new ImportReviewDto { Rejected = entry.Review.Rejected, Words = entry.Review.Words, Time = ImportTimeOfDay.Text(entry.Review.Time) },
+        Review = entry.ToImportReviewDto(),
+        IsRejected = entry.IsRejectedIn(batch),
+        StartsAt = entry.StartIn(batch),
+        WordsChangedAfterEdit = entry.WordsChangedAfterEdit,
+        TimeChangedAfterEdit = entry.TimeChangedAfterEdit,
+    };
+
+    public static ImportEntryForAgentDto ToImportEntryForAgentDto(this ImportEntry entry, ImportBatch batch) => new()
+    {
+        ClientSessionId = entry.ClientSessionId,
+        Date = entry.Agent.Date,
+        Position = entry.Agent.Position,
+        Time = ImportTimeOfDay.Text(entry.Agent.Time),
+        TimeZone = entry.Agent.TimeZone,
+        Raw = entry.Agent.Raw,
+        Moods = entry.Agent.Moods,
+        Topics = entry.Agent.Topics,
+        Review = entry.ToImportReviewDto(),
         IsRejected = entry.IsRejectedIn(batch),
         StartsAt = entry.StartIn(batch),
         WordsChangedAfterEdit = entry.WordsChangedAfterEdit,
@@ -51,6 +69,13 @@ public static class ImportBatchMapper
     {
         Version = batch.Version,
         Outcomes = remove.Results.Select(r => new ImportRemoveOutcomeDto { ClientSessionId = r.ClientSessionId, Outcome = r.Outcome.ToString() }).ToList(),
+    };
+
+    private static ImportReviewDto ToImportReviewDto(this ImportEntry entry) => new()
+    {
+        Rejected = entry.Review.Rejected,
+        Words = entry.Review.Words,
+        Time = ImportTimeOfDay.Text(entry.Review.Time),
     };
 
     private static ImportAcceptResultDto ToImportAcceptResultDto(this ImportAcceptResult result) => new()

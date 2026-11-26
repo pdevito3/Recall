@@ -6,6 +6,11 @@
 import type { ImportReviewDto } from './import-review-dto'
 
 export type ImportEntryDto = {
+    /**
+     * @description The words that the accept stores now, as a ProseMirror document: the edit of the person, else Raw as a document.
+     * @type string
+    */
+    document: string;
     clientSessionId: string;
     /**
      * @description

@@ -10,6 +10,10 @@ public static partial class SessionMapper
 {
     /// <summary>The DTO with the matches that each proposal has in <paramref name="people"/> now.</summary>
     public static SessionDto ToSessionDto(this Session session, ProposalPeople people)
+        => session.ToSyncSessionDto(people).ToSessionDto(session.ImportBatchId);
+
+    /// <summary>The DTO of the Sync feed, which does not carry the Import batch, with the matches that each proposal has in <paramref name="people"/> now.</summary>
+    public static SyncSessionDto ToSyncSessionDto(this Session session, ProposalPeople people)
         => session.ToDtoWithoutDerivedValues() with
         {
             Topics = TopicsOf(session.UserTopics, session.AiTopics),
@@ -57,11 +61,13 @@ public static partial class SessionMapper
         Version = session.Version,
     };
 
-    [MapProperty(nameof(Session.MentionedPersonIds), nameof(SessionDto.PersonIds))]
-    [MapperIgnoreTarget(nameof(SessionDto.Topics))]
-    [MapperIgnoreTarget(nameof(SessionDto.CleanupFailure))]
-    [MapperIgnoreTarget(nameof(SessionDto.Suggestions))]
-    [MapperIgnoreTarget(nameof(SessionDto.PeopleProposals))]
+    private static partial SessionDto ToSessionDto(this SyncSessionDto dto, string? importBatchId);
+
+    [MapProperty(nameof(Session.MentionedPersonIds), nameof(SyncSessionDto.PersonIds))]
+    [MapperIgnoreTarget(nameof(SyncSessionDto.Topics))]
+    [MapperIgnoreTarget(nameof(SyncSessionDto.CleanupFailure))]
+    [MapperIgnoreTarget(nameof(SyncSessionDto.Suggestions))]
+    [MapperIgnoreTarget(nameof(SyncSessionDto.PeopleProposals))]
     [MapperIgnoreSource(nameof(Session.CleanupFailure))]
     [MapperIgnoreSource(nameof(Session.CleanupRunId))]
     [MapperIgnoreSource(nameof(Session.TopicSuggestions))]
@@ -77,5 +83,6 @@ public static partial class SessionMapper
     [MapperIgnoreSource(nameof(Session.LastModifiedOn))]
     [MapperIgnoreSource(nameof(Session.IsDeleted))]
     [MapperIgnoreSource(nameof(Session.DomainEvents))]
-    private static partial SessionDto ToDtoWithoutDerivedValues(this Session session);
+    [MapperIgnoreSource(nameof(Session.ImportBatchId))]
+    private static partial SyncSessionDto ToDtoWithoutDerivedValues(this Session session);
 }

@@ -7,6 +7,7 @@ import * as z from 'zod'
 import { importReviewDtoSchema } from './import-review-dto'
 
 export const importEntryDtoSchema = z.object({
+  document: z.string().describe('The words that the accept stores now, as a ProseMirror document: the edit of the person, else Raw as a document.'),
   clientSessionId: z.string(),
   date: z.iso.date(),
   position: z.int32(),

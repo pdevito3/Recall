@@ -1,6 +1,7 @@
 import {
   AiBrain01Icon,
   Book02Icon,
+  InboxDownloadIcon,
   InformationCircleIcon,
   Key01Icon,
   Login01Icon,
@@ -54,6 +55,11 @@ const navItems = [
     title: "Corrections",
     url: "/corrections",
     icon: TextCheckIcon,
+  },
+  {
+    title: "Imports",
+    url: "/imports",
+    icon: InboxDownloadIcon,
   },
   {
     title: "Settings",

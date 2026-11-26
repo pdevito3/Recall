@@ -40,7 +40,7 @@ declare module '@tanstack/react-router' {
   interface StaticDataRouteOption {
     /** The name of the page in the breadcrumb of the layout header. Each page route sets it. */
     breadcrumb?: string
-    breadcrumbParent?: { title: string; to: '/' | '/users' | '/settings' }
+    breadcrumbParent?: { title: string; to: '/' | '/users' | '/settings' | '/imports' }
   }
 }
 

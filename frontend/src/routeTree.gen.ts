@@ -18,8 +18,10 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as UsersIndexRouteImport } from './routes/users/index'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as PeopleIndexRouteImport } from './routes/people/index'
+import { Route as ImportsIndexRouteImport } from './routes/imports/index'
 import { Route as CorrectionsIndexRouteImport } from './routes/corrections/index'
 import { Route as SettingsPersonalAccessTokensRouteImport } from './routes/settings/personal-access-tokens'
+import { Route as ImportsIdRouteImport } from './routes/imports/$id'
 import { Route as UsersIdIndexRouteImport } from './routes/users/$id/index'
 import { Route as SessionsIdIndexRouteImport } from './routes/sessions/$id/index'
 
@@ -68,6 +70,11 @@ const PeopleIndexRoute = PeopleIndexRouteImport.update({
   path: '/people/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ImportsIndexRoute = ImportsIndexRouteImport.update({
+  id: '/imports/',
+  path: '/imports/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CorrectionsIndexRoute = CorrectionsIndexRouteImport.update({
   id: '/corrections/',
   path: '/corrections/',
@@ -79,6 +86,11 @@ const SettingsPersonalAccessTokensRoute =
     path: '/settings/personal-access-tokens',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ImportsIdRoute = ImportsIdRouteImport.update({
+  id: '/imports/$id',
+  path: '/imports/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const UsersIdIndexRoute = UsersIdIndexRouteImport.update({
   id: '/users/$id/',
   path: '/users/$id/',
@@ -97,8 +109,10 @@ export interface FileRoutesByFullPath {
   '/model-providers': typeof ModelProvidersRoute
   '/summaries': typeof SummariesRoute
   '/transcription-engine': typeof TranscriptionEngineRoute
+  '/imports/$id': typeof ImportsIdRoute
   '/settings/personal-access-tokens': typeof SettingsPersonalAccessTokensRoute
   '/corrections': typeof CorrectionsIndexRoute
+  '/imports': typeof ImportsIndexRoute
   '/people': typeof PeopleIndexRoute
   '/settings': typeof SettingsIndexRoute
   '/users': typeof UsersIndexRoute
@@ -112,8 +126,10 @@ export interface FileRoutesByTo {
   '/model-providers': typeof ModelProvidersRoute
   '/summaries': typeof SummariesRoute
   '/transcription-engine': typeof TranscriptionEngineRoute
+  '/imports/$id': typeof ImportsIdRoute
   '/settings/personal-access-tokens': typeof SettingsPersonalAccessTokensRoute
   '/corrections': typeof CorrectionsIndexRoute
+  '/imports': typeof ImportsIndexRoute
   '/people': typeof PeopleIndexRoute
   '/settings': typeof SettingsIndexRoute
   '/users': typeof UsersIndexRoute
@@ -128,8 +144,10 @@ export interface FileRoutesById {
   '/model-providers': typeof ModelProvidersRoute
   '/summaries': typeof SummariesRoute
   '/transcription-engine': typeof TranscriptionEngineRoute
+  '/imports/$id': typeof ImportsIdRoute
   '/settings/personal-access-tokens': typeof SettingsPersonalAccessTokensRoute
   '/corrections/': typeof CorrectionsIndexRoute
+  '/imports/': typeof ImportsIndexRoute
   '/people/': typeof PeopleIndexRoute
   '/settings/': typeof SettingsIndexRoute
   '/users/': typeof UsersIndexRoute
@@ -145,8 +163,10 @@ export interface FileRouteTypes {
     | '/model-providers'
     | '/summaries'
     | '/transcription-engine'
+    | '/imports/$id'
     | '/settings/personal-access-tokens'
     | '/corrections'
+    | '/imports'
     | '/people'
     | '/settings'
     | '/users'
@@ -160,8 +180,10 @@ export interface FileRouteTypes {
     | '/model-providers'
     | '/summaries'
     | '/transcription-engine'
+    | '/imports/$id'
     | '/settings/personal-access-tokens'
     | '/corrections'
+    | '/imports'
     | '/people'
     | '/settings'
     | '/users'
@@ -175,8 +197,10 @@ export interface FileRouteTypes {
     | '/model-providers'
     | '/summaries'
     | '/transcription-engine'
+    | '/imports/$id'
     | '/settings/personal-access-tokens'
     | '/corrections/'
+    | '/imports/'
     | '/people/'
     | '/settings/'
     | '/users/'
@@ -191,8 +215,10 @@ export interface RootRouteChildren {
   ModelProvidersRoute: typeof ModelProvidersRoute
   SummariesRoute: typeof SummariesRoute
   TranscriptionEngineRoute: typeof TranscriptionEngineRoute
+  ImportsIdRoute: typeof ImportsIdRoute
   SettingsPersonalAccessTokensRoute: typeof SettingsPersonalAccessTokensRoute
   CorrectionsIndexRoute: typeof CorrectionsIndexRoute
+  ImportsIndexRoute: typeof ImportsIndexRoute
   PeopleIndexRoute: typeof PeopleIndexRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
   UsersIndexRoute: typeof UsersIndexRoute
@@ -265,6 +291,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PeopleIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/imports/': {
+      id: '/imports/'
+      path: '/imports'
+      fullPath: '/imports'
+      preLoaderRoute: typeof ImportsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/corrections/': {
       id: '/corrections/'
       path: '/corrections'
@@ -277,6 +310,13 @@ declare module '@tanstack/react-router' {
       path: '/settings/personal-access-tokens'
       fullPath: '/settings/personal-access-tokens'
       preLoaderRoute: typeof SettingsPersonalAccessTokensRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/imports/$id': {
+      id: '/imports/$id'
+      path: '/imports/$id'
+      fullPath: '/imports/$id'
+      preLoaderRoute: typeof ImportsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/users/$id/': {
@@ -303,8 +343,10 @@ const rootRouteChildren: RootRouteChildren = {
   ModelProvidersRoute: ModelProvidersRoute,
   SummariesRoute: SummariesRoute,
   TranscriptionEngineRoute: TranscriptionEngineRoute,
+  ImportsIdRoute: ImportsIdRoute,
   SettingsPersonalAccessTokensRoute: SettingsPersonalAccessTokensRoute,
   CorrectionsIndexRoute: CorrectionsIndexRoute,
+  ImportsIndexRoute: ImportsIndexRoute,
   PeopleIndexRoute: PeopleIndexRoute,
   SettingsIndexRoute: SettingsIndexRoute,
   UsersIndexRoute: UsersIndexRoute,

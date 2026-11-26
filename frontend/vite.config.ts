@@ -9,6 +9,7 @@ import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
 import {
   answerRequests,
   beginTest,
+  countHeldRequests,
   emulateReducedMotion,
   holdRequests,
   movePointerOnto,
@@ -179,6 +180,7 @@ export default defineConfig({
             commands: {
               answerRequests,
               beginTest,
+              countHeldRequests,
               emulateReducedMotion,
               holdRequests,
               movePointerOnto,

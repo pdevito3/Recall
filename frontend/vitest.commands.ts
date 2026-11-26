@@ -10,11 +10,20 @@ type RouteHandler = Parameters<Page['route']>[1]
 
 interface Hold {
   release: () => void
+  /** The requests that wait on the hold now. */
+  waiting: number
   matcher: (url: URL) => boolean
   handler: RouteHandler
 }
 
-const holds = new Map<string, Hold>()
+// Each page has its own holds: the test files run in parallel in their own pages.
+const holds = new WeakMap<Page, Map<string, Hold>>()
+
+function holdsOf(page: Page): Map<string, Hold> {
+  let ofPage = holds.get(page)
+  if (!ofPage) holds.set(page, (ofPage = new Map()))
+  return ofPage
+}
 
 function matches(path: string): (url: URL) => boolean {
   return (url) => url.pathname + url.search === path
@@ -22,26 +31,36 @@ function matches(path: string): (url: URL) => boolean {
 
 /** Holds each request for `path` (pathname and query) until `releaseRequests(path)`. */
 export const holdRequests: BrowserCommand<[path: string]> = async ({ page }, path) => {
-  if (holds.has(path)) {
+  if (holdsOf(page).has(path)) {
     throw new Error(`The requests for ${path} are already held`)
   }
   let release = () => {}
   const held = new Promise<void>((resolve) => (release = resolve))
   const matcher = matches(path)
-  const handler: RouteHandler = async (route) => {
-    await held
-    // Not continue(): Playwright's unroute in releaseRequests can continue an in-flight request first, and a second continue throws "Route is already handled!".
-    await route.fallback()
+  const hold: Hold = {
+    release,
+    matcher,
+    waiting: 0,
+    handler: async (route) => {
+      hold.waiting++
+      await held
+      hold.waiting--
+      // Not continue(): Playwright's unroute in releaseRequests can continue an in-flight request first, and a second continue throws "Route is already handled!".
+      await route.fallback()
+    },
   }
-  holds.set(path, { release, matcher, handler })
-  await page.route(matcher, handler)
+  holdsOf(page).set(path, hold)
+  await page.route(matcher, hold.handler)
 }
+
+/** The count of the requests for `path` that wait on `holdRequests(path)` now. */
+export const countHeldRequests: BrowserCommand<[path: string]> = async ({ page }, path) => holdsOf(page).get(path)?.waiting ?? 0
 
 /** Lets the held requests for `path` go on, and removes the route. Does nothing if `path` is not held. */
 export const releaseRequests: BrowserCommand<[path: string]> = async ({ page }, path) => {
-  const hold = holds.get(path)
+  const hold = holdsOf(page).get(path)
   if (!hold) return
-  holds.delete(path)
+  holdsOf(page).delete(path)
   hold.release()
   await page.unroute(hold.matcher, hold.handler)
 }
@@ -121,6 +140,8 @@ export const answerRequests: BrowserCommand<[answers: Answer[]]> = async ({ page
 }
 
 export const beginTest: BrowserCommand<[test: string]> = async (context, test) => {
+  // A test that fails before its release must not hold the requests of the next test.
+  for (const path of [...holdsOf(context.page).keys()]) await releaseRequests(context, path)
   await answerRequests(context, [])
   const state = answering.get(context.page)
   if (!state) return
