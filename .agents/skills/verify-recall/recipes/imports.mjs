@@ -98,6 +98,7 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
   })
   await shot('list')
   await asPhone('list-phone')
+  await asDark('list-dark')
 
   const card = (text) => page.getByRole('listitem', { name: /^Entry at / }).filter({ hasText: text })
   const counts = page.getByLabel('Counts of this batch')
@@ -135,6 +136,7 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
   })
   await shot('editing', { fullPage: false })
   await asPhone('editing-phone', { fullPage: false })
+  await asDark('editing-dark', { fullPage: false })
 
   await step('Save sends the whole review, and the entry shows the edit', async () => {
     const reviewed = answered('PUT', /\/entries\/review$/)
@@ -162,6 +164,8 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     await expect(form.getByRole('alert')).toHaveText('Give the entry some words, or reject it to leave it out.')
     await expect(form.getByRole('textbox', { name: 'Words' })).toBeFocused()
     await expect(form.getByRole('textbox', { name: 'Words' })).toHaveAttribute('aria-invalid', 'true')
+    await expect(form.getByRole('button', { name: 'Use the import words', exact: true })).toHaveAccessibleDescription('Save or cancel your change first.')
+    await expect(form.getByText('Save or cancel your change first.')).toBeVisible()
     await settle()
   })
   await shot('blank-words-refused', { fullPage: false })
@@ -174,7 +178,9 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     await page.reload()
     const read = (await (await entries).json()).entries.find((x) => x.clientSessionId === e.coffee)
     expect(read.wordsChangedAfterEdit).toBe(true)
-    await expect(card('then a run')).toContainText('The import changed the words after your edit. The accept keeps your edit.')
+    await expect(card('then a run')).toContainText(
+      'The import changed the words after your edit. The accept keeps your edit. To use the new words, choose Edit, then Use the import words.',
+    )
   })
   await shot('edited-flag')
   await asPhone('edited-flag-phone')
@@ -232,9 +238,8 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     const accepted = answered('POST', /\/accept$/)
     await dialog.getByRole('button', { name: 'Accept batch', exact: true }).click()
     expect((await accepted).status()).toBe(409)
-    await expect(dialog.getByRole('alert')).toHaveText(
-      'This batch changed after you read it. Read it again, then accept it.The counts above are new. Check them, then accept the batch.',
-    )
+    await expect(dialog.getByRole('alert')).toHaveText('This batch changed after you read it. Read it again, then accept it.')
+    await expect(dialog.getByRole('status')).toHaveText('Recall read the batch again. Check the new counts, then accept it.')
     await expect(dialog).toContainText('5 entries go into your journal, and 3 entries that you rejected stay out.')
     await settle()
   })
@@ -249,13 +254,18 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     const body = await res.json()
     expect(body.result).toEqual({ sessionsMade: 5, entriesRejected: 3, daysRejected: 1, skippedInJournal: 0, skippedDeleted: 0 })
     const list = page.getByRole('list', { name: 'Result of the accept' })
-    await expect(list).toContainText('5 entries made in your journal')
-    await expect(list).toContainText('3 entries rejected, alone or with their days')
-    await expect(list).toContainText('1 day rejected as a whole')
+    await expect(list.getByRole('listitem')).toHaveText([
+      '5 entries made in your journal',
+      '3 entries left out because you rejected them or their day',
+      '1 day that you rejected',
+      '0 entries skipped because your journal has them',
+      '0 entries skipped because you deleted them from your journal',
+    ])
     return body
   })
   await shot('accept-result')
   await asPhone('accept-result-phone')
+  await asDark('accept-result-dark')
 
   await step('Go to your journal: the Sessions of the accept have the start times of the review', async () => {
     const timeline = answered('GET', /^\/api\/v1\/sessions$/)
@@ -277,7 +287,7 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Settings', exact: true }).click()
     const box = page.getByRole('checkbox', { name: 'Only I can accept an import batch' })
     await expect(box).toBeChecked()
-    await expect(page.getByText(/^With this on, only you can accept an import batch, in Recall in a browser\./)).toBeVisible()
+    await expect(page.getByText(/^With this on, only you can accept an import batch, from Recall in a browser\./)).toBeVisible()
     const changed = answered('PUT', /^\/api\/v1\/me\/settings\/import-review$/)
     await box.click({ force: true })
     const res = await changed
@@ -314,7 +324,7 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Imports', exact: true }).click()
     await page.getByRole('button', { name: `Discard ${second.name}` }).click()
     const confirm = page.getByRole('alertdialog', { name: `Discard “${second.name}”?` })
-    await expect(confirm).toContainText('This batch and its 300 entries are deleted. Nothing of it goes into your journal. You cannot undo a discard.')
+    await expect(confirm).toContainText('Discard deletes this batch and its 300 entries. None of them go into your journal. You cannot undo a discard.')
     await settle()
   })
   await shot('discard-confirm', { fullPage: false })
@@ -333,8 +343,10 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
   await step('a batch that does not exist says so, with a link to the imports', async () => {
     await page.goto(`/imports/${second.id}`)
     await expect(page.getByRole('heading', { level: 1, name: 'Batch not found' })).toBeVisible()
-    await expect(page.getByText('This import batch does not exist. It may have been discarded.')).toBeVisible()
+    await expect(page.getByText('This import batch does not exist. Pick a batch from your imports.')).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Go to your imports' })).toHaveAttribute('href', '/imports')
   })
   await shot('missing')
   await asPhone('missing-phone')
+  await asDark('missing-dark')
 }
