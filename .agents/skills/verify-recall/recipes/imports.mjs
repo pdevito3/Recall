@@ -179,7 +179,7 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     const read = (await (await entries).json()).entries.find((x) => x.clientSessionId === e.coffee)
     expect(read.wordsChangedAfterEdit).toBe(true)
     await expect(card('then a run')).toContainText(
-      'The import changed the words after your edit. The accept keeps your edit. To use the new words, choose Edit, then Use the import words.',
+      'The import changed the words after your edit. The accept keeps your edit. To use the new words, choose “Edit”, then “Use the import words”.',
     )
   })
   await shot('edited-flag')
@@ -349,4 +349,46 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
   await shot('missing')
   await asPhone('missing-phone')
   await asDark('missing-dark')
+
+  const openBatchAt = async (batchName) => {
+    const opened = await agent('POST', '/api/v1/import-batches', { name: batchName, timeZone: 'America/New_York' })
+    expect(opened.status).toBe(201)
+    return opened.body
+  }
+  const showBatch = async (batchId) => {
+    const days = answered('GET', /^\/api\/v1\/import-batches\/[^/]+\/days$/)
+    await page.goto(`/imports/${batchId}`)
+    expect((await days).status()).toBe(200)
+  }
+  const accept = page.getByRole('button', { name: 'Accept', exact: true })
+
+  await step('a batch with no kept entry: Accept is off, and the page says to keep an entry or to discard the batch', async () => {
+    const left = await openBatchAt('Notes to leave out')
+    const put = await agent('PUT', `/api/v1/import-batches/${left.id}/entries`, {
+      entries: [
+        { clientSessionId: id(), date: '2022-05-10', position: 0, time: '07:00', raw: 'A test line.' },
+        { clientSessionId: id(), date: '2022-05-10', position: 1, raw: 'Another test line.' },
+      ],
+    })
+    expect(put.status).toBe(200)
+    await showBatch(left.id)
+    const reviewed = answered('PUT', /\/days\/review$/)
+    await page.getByRole('button', { name: 'Reject Tuesday, May 10, 2022' }).click()
+    expect((await reviewed).status()).toBe(200)
+    await expect(page.getByLabel('Counts of this batch')).toHaveText('2 entries: 0 kept, 2 rejected')
+    await expect(accept).toBeDisabled()
+    await expect(accept).toHaveAccessibleDescription('Keep an entry to accept this batch, or discard it.')
+    await expect(page.getByText('Keep an entry to accept this batch, or discard it.')).toBeVisible()
+  })
+  await shot('nothing-kept')
+
+  await step('a batch with no entry: Accept is off, and the page says to wait for the agent or to discard the batch', async () => {
+    const empty = await openBatchAt('Batch with no entries')
+    await showBatch(empty.id)
+    await expect(page.getByLabel('Counts of this batch')).toHaveText('0 entries: 0 kept, 0 rejected')
+    await expect(accept).toBeDisabled()
+    await expect(accept).toHaveAccessibleDescription('Wait for the agent to add entries, or discard this batch.')
+    await expect(page.getByText('This batch has no entries yet. The agent adds them, then you review them here.')).toBeVisible()
+  })
+  await shot('empty-batch')
 }
