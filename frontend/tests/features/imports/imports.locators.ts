@@ -14,6 +14,7 @@ export const imports = (page: Page) => ({
   counts: page.getByLabel('Counts of this batch'),
   dayRegion: (heading: string) => page.getByRole('region', { name: heading, exact: true }),
   day: (heading: string) => page.getByRole('heading', { level: 2, name: heading, exact: true }),
+  dayCounts: (heading: string, counts: string) => page.getByRole('region', { name: heading, exact: true }).getByText(counts, { exact: true }),
   entriesOf: (heading: string) => page.getByRole('list', { name: `Entries of ${heading}`, exact: true }).getByRole('listitem', { name: /^Entry at / }),
   entry: (time: string) => page.getByRole('listitem', { name: `Entry at ${time}`, exact: true }),
   loadingEntries: page.getByRole('status', { name: 'Loading the entries' }),
