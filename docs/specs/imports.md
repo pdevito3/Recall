@@ -121,7 +121,7 @@ The review routes have no MCP tool, because the review is the work of the person
 | IMP-1 | 422 | Give the batch a name of 1 to 200 characters. |
 | IMP-1 | 422 | This server does not know this time zone. Pick another zone. |
 | IMP-1 | 404 | This import batch does not exist. |
-| IMP-6 | 404 | This entry is not in the batch. |
+| IMP-6 | 404 | This entry is no longer in the batch. Review the other entries of the batch. |
 | IMP-9 | 422 | The time of an entry cannot be in the future. |
 | IMP-17 | 409 | This batch changed after you read it. Read it again, then accept it. |
 | IMP-18 | 403 | The import review is on, so only you can accept this batch, in Recall in a browser. |
