@@ -9427,11 +9427,11 @@
       },
       "ImportEntryDto": {
         "required": [
+          "document",
           "clientSessionId",
           "date",
           "position",
           "raw",
-          "document",
           "moods",
           "topics",
           "review",
@@ -9442,6 +9442,10 @@
         ],
         "type": "object",
         "properties": {
+          "document": {
+            "type": "string",
+            "description": "The words that the accept stores now, as a ProseMirror document: the edit of the person, else Raw as a document."
+          },
           "clientSessionId": {
             "type": "string"
           },
@@ -9470,10 +9474,6 @@
           "raw": {
             "type": "string",
             "description": "The Markdown of the agent, as the put sent it."
-          },
-          "document": {
-            "type": "string",
-            "description": "The words that the accept stores now, as a ProseMirror document: the edit of the person, else Raw as a document."
           },
           "moods": {
             "type": "array",

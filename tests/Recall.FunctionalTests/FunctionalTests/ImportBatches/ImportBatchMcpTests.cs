@@ -133,6 +133,7 @@ public class ImportBatchMcpTests : TestBase
     [Property("Rule", "IMP-3")]
     [Property("Rule", "IMP-7")]
     [Property("Rule", "IMP-21")]
+    [Property("Rule", "IMP-32")]
     public async Task an_agent_with_a_token_imports_over_mcp_and_only_the_person_accepts_with_the_review_on()
     {
         // Arrange
@@ -167,6 +168,7 @@ public class ImportBatchMcpTests : TestBase
                 ("first", "Words of **first**", new DateTimeOffset(2024, 3, 1, 12, 0, 0, TimeSpan.Zero)),
                 ("second", "Words of **second**", new DateTimeOffset(2024, 3, 1, 12, 1, 0, TimeSpan.Zero)),
             ]);
+        entries.GetProperty("entries").EnumerateArray().Select(e => e.TryGetProperty("document", out _)).ShouldBe([false, false]);
         days.GetProperty("items").EnumerateArray().ShouldBeEmpty();
         accept.ShouldBeToolError("permission_denied");
         DetailOf(accept).ShouldBe(AcceptImportBatch.ReviewMessage);
