@@ -1,5 +1,6 @@
 namespace Recall.FunctionalTests.FunctionalTests.AuditEntries;
 
+using Recall.SharedTestHelpers.Fakes.User;
 using System.Net;
 using System.Net.Http.Json;
 using Recall.Server.Domain.AuditEntries.Dtos;
@@ -31,7 +32,7 @@ public class GetAuditEntryPageTests : TestBase
         (created.Kind, created.EntityId).ShouldBe(("Created", target.Id));
         var values = created.Values.ToDictionary(v => v.Name);
         values["FirstName"].ShouldBe(new AuditValueDto { Name = "FirstName", Hidden = true });
-        values["Role"].ShouldBe(new AuditValueDto { Name = "Role", New = "User" });
+        values["TenantId"].ShouldBe(new AuditValueDto { Name = "TenantId", New = target.TenantId });
     }
 
     [Test]
@@ -72,7 +73,7 @@ public class GetAuditEntryPageTests : TestBase
     {
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUsers(out var users, u => u.Role = "User", u => u.Role = "User");
+            .AddUsers(out var users, u => u.Roles = [], u => u.Roles = []);
         users[0].AddPermissions(permissions);
         await InsertAsync(tenant);
         foreach (var user in users)

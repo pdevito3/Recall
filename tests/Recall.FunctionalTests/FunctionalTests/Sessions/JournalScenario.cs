@@ -19,7 +19,7 @@ internal static class JournalScenario
     {
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUsers(out var users, u => u.Role = "Admin", u => u.Role = "User");
+            .AddUsers(out var users, u => u.Roles = ["Admin"], u => u.Roles = []);
         await TestBase.InsertAsync(tenant);
         await TestBase.InsertAsync(users);
         return (users[0], users[1]);

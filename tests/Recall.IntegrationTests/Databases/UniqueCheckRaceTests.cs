@@ -52,7 +52,7 @@ public class UniqueCheckRaceTests : TestBase
         await using var services = pause.BuildServices();
         await new TestingServiceScope().StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var admin, u => u.Role = "Admin")
+            .AddUser(out var admin, u => u.Roles = ["Admin"])
             .BuildAsync();
         var underTest = new TestingServiceScope(services);
         var rival = new TestingServiceScope();
@@ -109,7 +109,7 @@ public class UniqueCheckRaceTests : TestBase
         await using var services = pause.BuildServices();
         await new TestingServiceScope().StartGraph(out _)
             .AddTenant(out _)
-            .AddUser(out var admin, u => u.Role = "Admin")
+            .AddUser(out var admin, u => u.Roles = ["Admin"])
             .BuildAsync();
         var underTest = new TestingServiceScope(services);
         var rival = new TestingServiceScope();

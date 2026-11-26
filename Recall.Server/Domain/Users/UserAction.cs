@@ -22,7 +22,8 @@ public partial class UserAction : ValueObject, IFixedNames
     public static List<string> ListNames() => UserActionEnum.List.Select(x => x.Name).ToList();
 
     public static UserAction Update() => new(UserActionEnum.Update);
-    public static UserAction UpdateRole() => new(UserActionEnum.UpdateRole);
+    public static UserAction AddRole() => new(UserActionEnum.AddRole);
+    public static UserAction RemoveRole() => new(UserActionEnum.RemoveRole);
     public static UserAction AddPermission() => new(UserActionEnum.AddPermission);
     public static UserAction RemovePermission() => new(UserActionEnum.RemovePermission);
     public static UserAction Delete() => new(UserActionEnum.Delete);
@@ -56,28 +57,31 @@ public partial class UserAction : ValueObject, IFixedNames
         public static readonly UserActionEnum Update = new(nameof(Update), 0,
             always: [], unlessOwnRecord: [Permission.ManageUsers(), Permission.ReadUsers()], revokesUserPermissions: false);
 
-        public static readonly UserActionEnum UpdateRole = new(nameof(UpdateRole), 1,
-            always: [Permission.ManageUserAccess()], unlessOwnRecord: [Permission.ReadUsers()], revokesUserPermissions: true);
-
-        public static readonly UserActionEnum AddPermission = new(nameof(AddPermission), 2,
+        public static readonly UserActionEnum AddRole = new(nameof(AddRole), 1,
             always: [Permission.ManageUserAccess()], unlessOwnRecord: [Permission.ReadUsers()], revokesUserPermissions: false);
 
-        // The caller must hold each permission of the user, as for UpdateRole and Delete. Otherwise a user with only
-        // manage_user_access could take it away from each admin, and no admin could then take it away from that user (ADR 0009).
-        public static readonly UserActionEnum RemovePermission = new(nameof(RemovePermission), 3,
+        public static readonly UserActionEnum RemoveRole = new(nameof(RemoveRole), 2,
             always: [Permission.ManageUserAccess()], unlessOwnRecord: [Permission.ReadUsers()], revokesUserPermissions: true);
 
-        public static readonly UserActionEnum Delete = new(nameof(Delete), 4,
+        public static readonly UserActionEnum AddPermission = new(nameof(AddPermission), 3,
+            always: [Permission.ManageUserAccess()], unlessOwnRecord: [Permission.ReadUsers()], revokesUserPermissions: false);
+
+        // The caller must hold each permission of the user, as for RemoveRole and Delete. Otherwise a user with only
+        // manage_user_access could take it away from each admin, and no admin could then take it away from that user (ADR 0009).
+        public static readonly UserActionEnum RemovePermission = new(nameof(RemovePermission), 4,
+            always: [Permission.ManageUserAccess()], unlessOwnRecord: [Permission.ReadUsers()], revokesUserPermissions: true);
+
+        public static readonly UserActionEnum Delete = new(nameof(Delete), 5,
             always: [Permission.ManageUsers()], unlessOwnRecord: [], revokesUserPermissions: true);
 
         // The caller can then sign in as the user, so the caller must hold each permission of the user (PWD-14). The
         // answer holds no record of the user, so it needs no read_users.
-        public static readonly UserActionEnum IssueTemporaryPassword = new(nameof(IssueTemporaryPassword), 5,
+        public static readonly UserActionEnum IssueTemporaryPassword = new(nameof(IssueTemporaryPassword), 6,
             always: [Permission.ManageUserAccess()], unlessOwnRecord: [], revokesUserPermissions: true);
 
         // A removal takes a way in from the user, as a role change can, so another caller must hold each permission of the user (IDP-12).
         // The user lists and removes their own links with no permission.
-        public static readonly UserActionEnum ManageExternalLogins = new(nameof(ManageExternalLogins), 6,
+        public static readonly UserActionEnum ManageExternalLogins = new(nameof(ManageExternalLogins), 7,
             always: [], unlessOwnRecord: [Permission.ManageUserAccess()], revokesUserPermissions: true);
 
         private readonly Permission[] _always;

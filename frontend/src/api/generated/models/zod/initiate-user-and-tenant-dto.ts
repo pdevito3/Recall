@@ -11,5 +11,5 @@ export const initiateUserAndTenantDtoSchema = z.object({
   lastName: z.string().max(200),
   email: z.string().max(320),
   username: z.string().max(100),
-  role: z.enum(['Admin', 'User']),
+  roles: z.array(z.enum(['Admin', 'Auditor', 'UserManager'])).describe('The roles of the new user. An empty list makes a Member, who has only their own journal.'),
 })

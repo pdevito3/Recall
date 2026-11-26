@@ -141,7 +141,7 @@ public class TenantIdProviderTests : TestBase
         var provider = testingServiceScope.GetService<ITenantIdProvider>();
         await testingServiceScope.StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUsers(out var users, u => u.Role = "Admin", _ => { })
+            .AddUsers(out var users, u => u.Roles = ["Admin"], _ => { })
             .BuildAsync();
         foreach (var user in users)
             (await provider.FindLiveUserAsync(user.Identifier)).ShouldBe(new LiveUser(user.Id, tenant.Id));

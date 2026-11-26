@@ -20,7 +20,7 @@ public class UserErrorResponseTests : TestBase
         // Arrange
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var user, u => u.Role = "Admin");
+            .AddUser(out var user, u => u.Roles = ["Admin"]);
         await InsertAsync(tenant);
         await InsertAsync(user);
         FactoryClient.SignInAsAppUser(user.Identifier);
@@ -73,7 +73,7 @@ public class UserErrorResponseTests : TestBase
         // Arrange
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var user, u => u.Role = "Admin");
+            .AddUser(out var user, u => u.Roles = ["Admin"]);
         await InsertAsync(tenant);
         await InsertAsync(user);
         FactoryClient.SignInAsAppUser(user.Identifier);
@@ -137,7 +137,7 @@ public class UserErrorResponseTests : TestBase
         // Arrange
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var user, u => u.Role = "Admin");
+            .AddUser(out var user, u => u.Roles = ["Admin"]);
         await InsertAsync(tenant);
         await InsertAsync(user);
         FactoryClient.SignInAsAppUser(user.Identifier);
@@ -163,12 +163,12 @@ public class UserErrorResponseTests : TestBase
         // Arrange
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var user, u => u.Role = "Admin");
+            .AddUser(out var user, u => u.Roles = ["Admin"]);
         await InsertAsync(tenant);
         await InsertAsync(user);
         FactoryClient.SignInAsAppUser(user.Identifier);
         var dto = new FakeUserForCreationDto()
-            .RuleFor(x => x.Role, _ => "NotARole")
+            .RuleFor(x => x.Roles, _ => ["Auditor", "NotARole"])
             .Generate();
 
         // Act
@@ -178,7 +178,7 @@ public class UserErrorResponseTests : TestBase
         result.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
         result.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
         var problem = (await result.Content.ReadFromJsonAsync<ValidationProblemDetails>()).ShouldNotBeNull();
-        problem.Errors.ShouldHaveSingleItem().Key.ShouldBe("role");
+        problem.Errors.ShouldHaveSingleItem().Key.ShouldBe("roles[1]");
     }
 
     [Test]
@@ -187,7 +187,7 @@ public class UserErrorResponseTests : TestBase
         // Arrange
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var user, u => u.Role = "Admin");
+            .AddUser(out var user, u => u.Roles = ["Admin"]);
         await InsertAsync(tenant);
         await InsertAsync(user);
         FactoryClient.SignInAsAppUser(user.Identifier);
@@ -208,7 +208,7 @@ public class UserErrorResponseTests : TestBase
         // Arrange
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var user, u => u.Role = "Admin");
+            .AddUser(out var user, u => u.Roles = ["Admin"]);
         await InsertAsync(tenant);
         await InsertAsync(user);
         FactoryClient.SignInAsAppUser(user.Identifier);
@@ -217,7 +217,7 @@ public class UserErrorResponseTests : TestBase
         // Act
         var result = await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.Create, new
         {
-            dto.LastName, dto.Email, dto.Username, dto.Role,
+            dto.LastName, dto.Email, dto.Username, dto.Roles,
         });
 
         // Assert
@@ -236,14 +236,14 @@ public class UserErrorResponseTests : TestBase
         // Arrange
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var user, u => u.Role = "Admin");
+            .AddUser(out var user, u => u.Roles = ["Admin"]);
         await InsertAsync(tenant);
         await InsertAsync(user);
         FactoryClient.SignInAsAppUser(user.Identifier);
 
         // Act
         var result = field == "role"
-            ? await FactoryClient.PutJsonRequestAsync(ApiRoutes.Users.UpdateRole(user.Id), new { })
+            ? await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.AddRole(user.Id), new { })
             : await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.AddPermission(user.Id), new { });
 
         // Assert
@@ -260,7 +260,7 @@ public class UserErrorResponseTests : TestBase
         // Arrange
         await StartGraph()
             .AddTenant(out _)
-            .AddUser(out var admin, u => u.Role = "Admin")
+            .AddUser(out var admin, u => u.Roles = ["Admin"])
             .BuildAsync();
         FactoryClient.SignInAsAppUser(admin.Identifier);
 

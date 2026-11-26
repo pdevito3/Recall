@@ -139,7 +139,7 @@ public partial class SupportBundleTests
         using var member = await SignedInAsync($"bundle-member-{Guid.NewGuid():N}");
         var adminSubject = $"bundle-admin-{Guid.NewGuid():N}";
         using var admin = await SignedInAsync(adminSubject);
-        var promoted = await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Users.UpdateRole(await UserIdOfAsync(adminSubject)), new { role = "Admin" });
+        var promoted = await SendJsonAsync(owner, HttpMethod.Post, ApiRoutes.Users.AddRole(await UserIdOfAsync(adminSubject)), new { role = "Admin" });
         promoted.IsSuccessStatusCode.ShouldBeTrue();
 
         // Act
@@ -164,12 +164,12 @@ public partial class SupportBundleTests
         using var later = new AuthBrowser(host);
         await later.LoginWebAsync("later-admin");
         var ids = await host.WithDatabaseAsync(database => database.Set<ExternalLogin>().IgnoreQueryFilters().ToDictionaryAsync(login => login.Subject, login => login.UserId));
-        (await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Users.UpdateRole(ids["next-admin"]), new { role = "Admin" })).IsSuccessStatusCode.ShouldBeTrue();
-        (await SendJsonAsync(owner, HttpMethod.Put, ApiRoutes.Users.UpdateRole(ids["later-admin"]), new { role = "Admin" })).IsSuccessStatusCode.ShouldBeTrue();
+        (await SendJsonAsync(owner, HttpMethod.Post, ApiRoutes.Users.AddRole(ids["next-admin"]), new { role = "Admin" })).IsSuccessStatusCode.ShouldBeTrue();
+        (await SendJsonAsync(owner, HttpMethod.Post, ApiRoutes.Users.AddRole(ids["later-admin"]), new { role = "Admin" })).IsSuccessStatusCode.ShouldBeTrue();
         (await owner.GetAsync($"/{ApiRoutes.SupportBundle}", csrf: true)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // Act
-        var demoted = await SendJsonAsync(next, HttpMethod.Put, ApiRoutes.Users.UpdateRole(ids["demoted-owner"]), new { role = "User" });
+        var demoted = await SendJsonAsync(next, HttpMethod.Delete, ApiRoutes.Users.RemoveRole(ids["demoted-owner"], "Admin"), new { });
 
         // Assert
         demoted.IsSuccessStatusCode.ShouldBeTrue(await demoted.Content.ReadAsStringAsync());

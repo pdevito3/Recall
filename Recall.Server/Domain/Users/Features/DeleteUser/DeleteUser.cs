@@ -32,15 +32,14 @@ public static class DeleteUser
                 var user = await dbContext.Users
                     .TagWithOperationCallSite("users.delete.load")
                     .Include(u => u.UserPermissions)
+                    .Include(u => u.Roles)
                     .GetById(request.Id, ct);
                 user.GuardAllows(UserAction.Delete(), caller);
                 await LastAdmin.GuardAsync(dbContext, modes, user, ct);
 
-                // Remove permissions first (due to PropertyAccessMode.Field)
-                foreach (var permission in user.UserPermissions.ToList())
-                {
-                    dbContext.UserPermissions.Remove(permission);
-                }
+                // A soft delete runs no cascade, so the roles and the overrides are deleted here.
+                dbContext.UserPermissions.RemoveRange(user.UserPermissions);
+                dbContext.UserRoles.RemoveRange(user.Roles);
 
                 dbContext.Users.Remove(user.Delete());
                 await dbContext.SaveChangesAsync(ct);

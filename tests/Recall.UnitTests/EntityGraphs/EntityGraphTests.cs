@@ -38,19 +38,19 @@ public class EntityGraphTests
     {
         // Act
         TestGraph.Start(out _)
-            .AddUsers(out var users, u => u.Role = "Admin", u => u.Role = "User");
+            .AddUsers(out var users, u => u.Roles = ["Admin"], u => u.Roles = []);
 
         // Assert
         users.Length.ShouldBe(2);
-        users[0].Role.ShouldBe(UserRole.Admin());
-        users[1].Role.ShouldBe(UserRole.User());
+        users[0].Roles.Select(r => r.Role).ShouldBe([UserRole.Admin()]);
+        users[1].Roles.ShouldBeEmpty();
     }
 
     [Test]
     public void stacked_customizers_apply_to_one_entity()
     {
         // Arrange
-        Action<UserInput> admin = u => u.Role = "Admin";
+        Action<UserInput> admin = u => u.Roles = ["Admin"];
         Action<UserInput> named = u => u.FirstName = "Grace";
 
         // Act
@@ -60,7 +60,7 @@ public class EntityGraphTests
         // Assert
         users.ShouldHaveSingleItem();
         users[0].FirstName.ShouldBe("Grace");
-        users[0].Role.ShouldBe(UserRole.Admin());
+        users[0].Roles.Select(r => r.Role).ShouldBe([UserRole.Admin()]);
     }
 
     [Test]
@@ -95,14 +95,14 @@ public class EntityGraphTests
         // Act
         TestGraph.Start(out _)
             .AddTenant(out var tenant, t => t.Id = "ten_fixed")
-            .AddUser(out var user, u => { u.Id = "usr_fixed"; u.Role = "Admin"; });
+            .AddUser(out var user, u => { u.Id = "usr_fixed"; u.Roles = ["Admin"]; });
 
         // Assert
         tenant.Id.ShouldBe("ten_fixed");
         user.Id.ShouldBe("usr_fixed");
         user.TenantId.ShouldBe("ten_fixed");
-        user.UserPermissions.ShouldNotBeEmpty();
-        user.UserPermissions.ShouldAllBe(p => p.UserId == "usr_fixed");
+        user.Roles.ShouldNotBeEmpty();
+        user.Roles.ShouldAllBe(r => r.UserId == "usr_fixed");
     }
 
     [Test]

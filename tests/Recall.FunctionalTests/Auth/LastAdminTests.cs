@@ -1,7 +1,6 @@
 namespace Recall.FunctionalTests.Auth;
 
 using System.Net;
-using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Recall.FunctionalTests.TestUtilities;
@@ -38,8 +37,7 @@ public class LastAdminTests
         using var browser = new AuthBrowser(AuthHosts.Closed);
         await browser.LoginWebAsync("owner");
         var ownerId = await OwnerIdAsync();
-        var request = await AsThePageOfAsync(browser, HttpMethod.Put, $"/{ApiRoutes.Users.UpdateRole(ownerId)}");
-        request.Content = JsonContent.Create(new { role = "User" });
+        var request = await AsThePageOfAsync(browser, HttpMethod.Delete, $"/{ApiRoutes.Users.RemoveRole(ownerId, "Admin")}");
 
         // Act
         var response = await browser.SendAsync(request);

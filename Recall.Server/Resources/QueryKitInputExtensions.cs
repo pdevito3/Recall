@@ -35,6 +35,11 @@ public static class QueryKitInputExtensions
     private const string AllowedActionsMember = "AllowedActions";
     // The user list adds the login name of each row after the page loads, as it adds the allowed actions.
     private const string LoginNameMember = "LoginName";
+    private const string AddableRolesMember = "AddableRoles";
+    // The roles of a user give their permissions in code, so the user list adds the permissions after the page loads. The
+    // permissions of an agent are rows, so the agent list still filters and sorts on them.
+    private static readonly System.Reflection.PropertyInfo UserPermissionsMember =
+        typeof(Domain.Users.Dtos.UserDto).GetProperty(nameof(Domain.Users.Dtos.UserDto.Permissions))!;
 
     public static IQueryable<T> ApplyFilters<T>(this IQueryable<T> query, string filters, IQueryKitConfiguration config)
         where T : class
@@ -74,8 +79,14 @@ public static class QueryKitInputExtensions
         if (MemberReader.Reads(expression, AllowedActionsMember))
             throw new QueryInputException(parameter,
                 $"The {Words(parameter)} cannot use the allowed actions, because they depend on the user. Choose another field.");
+        if (MemberReader.Reads(expression, AddableRolesMember))
+            throw new QueryInputException(parameter,
+                $"The {Words(parameter)} cannot use the addable roles, because they depend on the caller. Choose another field.");
         if (MemberReader.Reads(expression, LoginNameMember))
             throw new QueryInputException(parameter, $"The {Words(parameter)} cannot use the login name. Choose another field.");
+        if (MemberReader.Reads(expression, UserPermissionsMember))
+            throw new QueryInputException(parameter,
+                $"The {Words(parameter)} cannot use the permissions, because the roles give them. Choose another field.");
     }
 
     // QueryKit reads a member of a field, such as startsAt.ticks, also a private one. EF cannot translate most of them, and
@@ -171,26 +182,32 @@ public static class QueryKitInputExtensions
 
     private static string FieldsOf<T>() => string.Join(", ", RequestRules.For(typeof(T))
         .Where(rule => rule.Holds == PropertyHolds.Value
-            && rule.Property.Name is not (nameof(BaseEntity.Version) or AllowedActionsMember or LoginNameMember))
+            && rule.Property.Name is not (nameof(BaseEntity.Version) or AllowedActionsMember or LoginNameMember or AddableRolesMember)
+            && rule.Property != UserPermissionsMember)
         .Select(rule => rule.JsonName));
 
     private static string NotReadMessage(string parameter) =>
         parameter == SortOrderParameter ? SortOrderNotReadMessage : FilterNotReadMessage;
 
-    private sealed class MemberReader(string memberName) : ExpressionVisitor
+    private sealed class MemberReader(Func<System.Reflection.MemberInfo, bool> matches) : ExpressionVisitor
     {
         private bool _reads;
 
-        public static bool Reads(Expression expression, string memberName)
+        public static bool Reads(Expression expression, string memberName) => Reads(expression, member => member.Name == memberName);
+
+        public static bool Reads(Expression expression, System.Reflection.MemberInfo member)
+            => Reads(expression, read => read.Name == member.Name && read.DeclaringType == member.DeclaringType);
+
+        private static bool Reads(Expression expression, Func<System.Reflection.MemberInfo, bool> matches)
         {
-            var reader = new MemberReader(memberName);
+            var reader = new MemberReader(matches);
             reader.Visit(expression);
             return reader._reads;
         }
 
         protected override Expression VisitMember(MemberExpression node)
         {
-            _reads |= node.Member.Name == memberName;
+            _reads |= matches(node.Member);
             return base.VisitMember(node);
         }
     }

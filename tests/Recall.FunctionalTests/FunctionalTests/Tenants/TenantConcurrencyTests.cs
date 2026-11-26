@@ -136,7 +136,7 @@ public class TenantConcurrencyTests : TestBase
     {
         await StartGraph()
             .AddTenant(out var tenant)
-            .AddUser(out var admin, u => u.Role = "Admin")
+            .AddUser(out var admin, u => u.Roles = ["Admin"])
             .BuildAsync();
         FactoryClient.SignInAsAppUser(admin.Identifier);
         return tenant;

@@ -5,8 +5,9 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Recall.Server.Databases;
+using Recall.Server.Domain;
+using Recall.Server.Domain.Users;
 using Recall.Server.Domain.Tenants;
-using Recall.SharedTestHelpers.EntityGraphs;
 using Recall.SharedTestHelpers.Utilities;
 using Shouldly;
 
@@ -111,18 +112,18 @@ public sealed class AddPersonalAccessTokensMigrationTests : IAsyncDisposable
         await system.ServiceProvider.GetRequiredService<AppDbContext>().GetService<IMigrator>().MigrateAsync(target);
     }
 
+    // The schema of the migration before has the column users.role, so the current model cannot save a user there.
     private async Task<string> AddUserAsync()
     {
-        TestGraph.Start(out _)
-            .AddTenant(out var tenant)
-            .AddUser(out var user)
-            .Under(tenant);
-        await using var system = _services.GetRequiredService<IServiceScopeFactory>().CreateSystemScope();
-        var dbContext = system.ServiceProvider.GetRequiredService<AppDbContext>();
-        dbContext.Tenants.Add(tenant);
-        dbContext.Users.Add(user);
-        await dbContext.SaveChangesAsync();
-        return user.Id;
+        var userId = EntityId.New(User.IdPrefix);
+        var hasRole = (long)(await ScalarAsync("SELECT count(*) FROM pragma_table_info('users') WHERE name = 'role'"))! == 1;
+        var (roleColumn, roleValue) = hasRole ? (", role", ", 'User'") : ("", "");
+        await ExecuteAsync($"""
+            INSERT INTO tenants (id, name, is_deleted, version) VALUES ('ten_pat', 'Token tenant', false, 1);
+            INSERT INTO users (id, tenant_id, first_name, last_name, identifier, username, email{roleColumn}, is_deleted, version)
+            VALUES ('{userId}', 'ten_pat', 'Ada', 'Lovelace', '{userId}', 'ada', 'ada@example.com'{roleValue}, false, 1);
+            """);
+        return userId;
     }
 
     private async Task<SqliteConnection> OpenAsync()

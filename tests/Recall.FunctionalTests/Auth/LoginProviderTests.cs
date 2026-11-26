@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Recall.FunctionalTests.TestUtilities;
 using Recall.Server.Auth;
 using Recall.Server.Auth.Entities;
 using Recall.Server.Domain.LoginProviders;
@@ -437,7 +438,7 @@ public class LoginProviderTests
         await ClearRowsAsync(Host);
         var (browser, admin) = await SignedInAdminAsync();
         using var signedIn = browser;
-        var other = await PatPeople.AddPersonAsync(Host, admin.TenantId, UserRole.Admin());
+        var other = await PatPeople.AddPersonAsync(Host, admin.TenantId, [UserRole.Admin()]);
         await Host.WithDatabaseAsync(async db =>
         {
             var link = await db.Set<ExternalLogin>().SingleAsync(l => l.UserId == other.UserId);
@@ -447,7 +448,7 @@ public class LoginProviderTests
         });
 
         // Act
-        var demote = await SendAsync(browser, HttpMethod.Put, $"/api/v1/users/{admin.UserId}/role", new { role = "User" });
+        var demote = await SendAsync(browser, HttpMethod.Delete, $"/{ApiRoutes.Users.RemoveRole(admin.UserId, "Admin")}");
 
         // Assert
         demote.StatusCode.ShouldBe(HttpStatusCode.Conflict);
@@ -536,7 +537,7 @@ public class LoginProviderTests
         var (browser, admin) = await SignedInAdminAsync();
         using var signedIn = browser;
         (await SendAsync(browser, HttpMethod.Post, Providers, RowBody())).StatusCode.ShouldBe(HttpStatusCode.OK);
-        var other = await PatPeople.AddPersonAsync(Host, admin.TenantId, UserRole.Admin());
+        var other = await PatPeople.AddPersonAsync(Host, admin.TenantId, [UserRole.Admin()]);
         await Host.WithDatabaseAsync(async db =>
         {
             var link = await db.Set<ExternalLogin>().SingleAsync(l => l.UserId == other.UserId);
@@ -546,7 +547,7 @@ public class LoginProviderTests
         });
 
         // Act
-        var demote = await SendAsync(browser, HttpMethod.Put, $"/api/v1/users/{admin.UserId}/role", new { role = "User" });
+        var demote = await SendAsync(browser, HttpMethod.Delete, $"/{ApiRoutes.Users.RemoveRole(admin.UserId, "Admin")}");
 
         // Assert
         demote.StatusCode.ShouldBe(HttpStatusCode.OK);

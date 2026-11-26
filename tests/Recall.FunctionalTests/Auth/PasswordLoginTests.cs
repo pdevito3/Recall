@@ -797,9 +797,9 @@ public class PasswordLoginTests
         after.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         setup.Services.GetRequiredService<SetupCode>().IsLive.ShouldBeFalse();
         status.GetProperty("setupRequired").GetBoolean().ShouldBeFalse();
-        var owner = await setup.WithDatabaseAsync(db => db.Users.IgnoreQueryFilters().Include(u => u.UserPermissions).SingleAsync());
-        owner.Role.Value.ShouldBe("Admin");
-        owner.UserPermissions.Count.ShouldBe(Recall.Server.Domain.Users.UserRole.Admin().GetDefaultPermissions().Length);
+        var owner = await setup.WithDatabaseAsync(db => db.Users.IgnoreQueryFilters().Include(u => u.Roles).Include(u => u.UserPermissions).SingleAsync());
+        owner.Roles.Select(r => r.Role.Value).ShouldBe(["Admin"]);
+        owner.UserPermissions.ShouldBeEmpty();
         (await setup.WithDatabaseAsync(db => db.Set<PasswordCredential>().SingleAsync())).State.ShouldBe(PasswordState.Chosen);
     }
 
@@ -823,8 +823,8 @@ public class PasswordLoginTests
         host.Services.GetRequiredService<SetupCode>().IsLive.ShouldBeFalse();
         page.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         post.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        var owner = await host.WithDatabaseAsync(db => db.Users.IgnoreQueryFilters().SingleAsync());
-        owner.Role.Value.ShouldBe("Admin");
+        var owner = await host.WithDatabaseAsync(db => db.Users.IgnoreQueryFilters().Include(u => u.Roles).SingleAsync());
+        owner.Roles.Select(r => r.Role.Value).ShouldBe(["Admin"]);
         (await host.WithDatabaseAsync(db => db.Tenants.IgnoreQueryFilters().CountAsync())).ShouldBe(1);
     }
 }

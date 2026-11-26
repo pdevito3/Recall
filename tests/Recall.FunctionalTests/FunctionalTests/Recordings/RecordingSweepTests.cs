@@ -70,7 +70,7 @@ public class RecordingSweepTests : TestBase
     {
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var user, u => u.Role = UserRole.Admin().Value);
+            .AddUser(out var user, u => u.Roles = [UserRole.Admin().Value]);
         await InsertAsync(tenant);
         await InsertAsync(user);
         return (tenant, user);

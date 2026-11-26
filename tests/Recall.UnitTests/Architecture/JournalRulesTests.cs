@@ -23,6 +23,7 @@ public class JournalRulesTests
     private static readonly string[] OwnedByAPersonButNoJournal =
     [
         "UserPermission",
+        "UserRoleAssignment",
         "AppCode",
         "AuthSession",
         "ExternalLogin",

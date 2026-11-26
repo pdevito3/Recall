@@ -33,26 +33,15 @@ public static class RemoveUserPermission
                 var user = await dbContext.Users
                     .TagWithOperationCallSite("users.remove_permission.load")
                     .Include(u => u.UserPermissions)
+                    .Include(u => u.Roles)
                     .GetById(request.Id, ct);
                 user.GuardAllows(UserAction.RemovePermission(), caller);
                 await LastAdmin.GuardAsync(dbContext, modes, user, ct);
 
-                var existingPermissions = user.UserPermissions.ToList();
-
-                user.RemovePermission(permission);
-
-                // Explicitly remove permissions that were removed from the collection
-                var remainingIds = user.UserPermissions.Select(p => p.Id).ToHashSet();
-                foreach (var existingPermission in existingPermissions)
-                {
-                    if (!remainingIds.Contains(existingPermission.Id))
-                    {
-                        dbContext.UserPermissions.Remove(existingPermission);
-                    }
-                }
-
+                var held = user.HasPermission(permission);
+                dbContext.Track(user.RemovePermission(permission));
                 await dbContext.SaveChangesAsync(ct);
-                return (user, user.UserPermissions.Count < existingPermissions.Count);
+                return (user, held);
             }, cancellationToken);
 
             if (removed)

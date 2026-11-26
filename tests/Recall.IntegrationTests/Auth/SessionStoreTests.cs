@@ -30,7 +30,7 @@ public sealed class SessionStoreTests : TestBase
     {
         await using var scope = TestFixture.BaseScopeFactory.CreateSystemScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var user = User.CreateFromLogin(new NewPerson("Ada", null, null, "ada"), TestFixture.DefaultTenant.Id, UserRole.User());
+        var user = User.CreateFromLogin(new NewPerson("Ada", null, null, "ada"), TestFixture.DefaultTenant.Id, []);
         dbContext.Users.Add(user);
         await dbContext.SaveChangesAsync();
         Person = user;

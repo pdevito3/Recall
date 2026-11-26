@@ -29,7 +29,7 @@ public class AgentCallerTests : TestBase
         var testingServiceScope = new TestingServiceScope();
         await testingServiceScope.StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var admin, u => u.Role = "Admin")
+            .AddUser(out var admin, u => u.Roles = ["Admin"])
             .Under(tenant)
             .AddAgent(out var agent, a => a.Permissions = [Permission.Names.ManageTenant])
             .BuildAsync();
@@ -52,7 +52,7 @@ public class AgentCallerTests : TestBase
         var testingServiceScope = new TestingServiceScope();
         await testingServiceScope.StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var member, u => u.Role = "User")
+            .AddUser(out var member, u => u.Roles = [])
             .Under(tenant)
             .AddAgent(out var agent, a => a.Permissions = [Permission.Names.ManageTenant])
             .BuildAsync();
@@ -92,7 +92,7 @@ public class AgentCallerTests : TestBase
         var testingServiceScope = new TestingServiceScope();
         await testingServiceScope.StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var admin, u => u.Role = "Admin")
+            .AddUser(out var admin, u => u.Roles = ["Admin"])
             .Under(tenant)
             .AddAgent(out var agent, a => a.Permissions = [Permission.Names.ManageTenant])
             .BuildAsync();

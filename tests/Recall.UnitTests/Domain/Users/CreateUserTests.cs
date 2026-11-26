@@ -96,35 +96,67 @@ public class CreateUserTests
     }
 
     [Test]
-    public void admin_user_gets_default_permissions()
+    public void an_admin_holds_each_permission_through_the_role_with_no_override()
     {
         // Arrange
         var userForCreation = new FakeUserForCreation()
-            .RuleFor(x => x.Role, _ => "Admin")
+            .RuleFor(x => x.Roles, _ => ["Admin"])
             .Generate();
 
         // Act
         var user = User.Create(userForCreation);
 
         // Assert
-        user.Role.Value.ShouldBe("Admin");
-        user.UserPermissions.Select(p => p.Permission).ShouldBe(Permission.GetAll(), ignoreOrder: true);
+        user.Roles.Select(r => r.Role.Value).ShouldBe(["Admin"]);
+        user.UserPermissions.ShouldBeEmpty();
+        user.Permissions().ShouldBe(Permission.GetAll(), ignoreOrder: true);
     }
 
     [Test]
-    public void regular_user_gets_no_default_permissions()
+    public void a_member_has_no_role_and_no_permission()
     {
         // Arrange
         var userForCreation = new FakeUserForCreation()
-            .RuleFor(x => x.Role, _ => "User")
+            .RuleFor(x => x.Roles, _ => [])
             .Generate();
 
         // Act
         var user = User.Create(userForCreation);
 
         // Assert
-        user.Role.Value.ShouldBe("User");
+        user.Roles.ShouldBeEmpty();
         user.UserPermissions.ShouldBeEmpty();
+        user.Permissions().ShouldBeEmpty();
+    }
+
+    [Test]
+    public void a_role_named_twice_is_one_role()
+    {
+        // Arrange
+        var userForCreation = new FakeUserForCreation()
+            .RuleFor(x => x.Roles, _ => ["Auditor", "auditor", "UserManager"])
+            .Generate();
+
+        // Act
+        var user = User.Create(userForCreation);
+
+        // Assert
+        user.Roles.Select(r => r.Role.Value).ShouldBe(["Auditor", "UserManager"], ignoreOrder: true);
+    }
+
+    [Test]
+    public void an_invalid_role_names_its_item_of_the_list()
+    {
+        // Arrange
+        var userForCreation = new FakeUserForCreation()
+            .RuleFor(x => x.Roles, _ => ["Auditor", "User"])
+            .Generate();
+
+        // Act
+        var exception = Should.Throw<ValidationException>(() => User.Create(userForCreation));
+
+        // Assert
+        exception.Property.ShouldBe("roles[1]");
     }
 
     [Test]

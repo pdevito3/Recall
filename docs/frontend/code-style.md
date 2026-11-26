@@ -14,7 +14,7 @@ These rules apply to the TypeScript and React code in `frontend/src/`. `pnpm lin
 8. A file under `src/domain/` reads the answers of the Server and formats them. It does not decide a business rule. See rule 8 of [server-state.md](server-state.md#rules).
 
 ```typescript
-export const USER_ROLES = ['Admin', 'User'] as const
+export const USER_ROLES = ['Admin', 'UserManager', 'Auditor'] as const
 export type UserRole = (typeof USER_ROLES)[number]
 
 function isUserDto(value: unknown): value is UserDto {

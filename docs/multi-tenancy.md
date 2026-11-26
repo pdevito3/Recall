@@ -142,7 +142,7 @@ A personal access token has the journal of its person only with journal access R
 
 These rules stop a caller from joining a tenant that is not theirs:
 
-- `POST /api/v1/users` needs the `manage_users` permission, and each default permission of the new role (see [backend.md](backend.md#permissions)). The server puts the new user in the tenant of the caller. The request body does not need a tenant. A `tenantId` that is empty or has only spaces is the same as no `tenantId`.
+- `POST /api/v1/users` needs the `manage_users` permission, and each permission of the roles of the new user (see [backend.md](backend.md#permissions)). The server puts the new user in the tenant of the caller. The request body does not need a tenant. A `tenantId` that is empty or has only spaces is the same as no `tenantId`.
 - A caller with `TenantScope.AllTenants` has no tenant of its own, so it must send `tenantId` in the body. If the tenant does not exist, the request gets 422.
 - If a user sends `tenantId`, it must be their own tenant. Other requests get 403.
 - `POST /api/v1/users/initiate` creates a tenant and its first user. The caller must be able to manage all tenants. Other requests get 403, including a user of a first-party client. The first login of a person creates their user and tenant, as `docs/authentication.md` says.

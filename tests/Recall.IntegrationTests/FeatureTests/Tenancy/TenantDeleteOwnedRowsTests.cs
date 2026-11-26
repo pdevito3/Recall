@@ -25,9 +25,12 @@ public class TenantDeleteOwnedRowsTests : TestBase
     {
         // Arrange
         var scope = new TestingServiceScope();
-        await scope.StartGraph(out _)
+        var graph = scope.StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var admin, u => u.Role = UserRole.Admin().Value)
+            .AddUser(out var admin, u => u.Roles = [UserRole.Admin().Value]);
+        // The role Admin gives each permission, so a removed one makes the row of user_permissions.
+        admin.RemovePermission(Permission.ReadAuditLogSensitive());
+        await graph
             .Under(tenant)
             .AddAgent(out _, a => a.Permissions = [Permission.Names.ReadAgents])
             // new-feature:tenant-owned-rows

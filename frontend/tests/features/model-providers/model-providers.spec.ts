@@ -6,11 +6,13 @@ import { aUser } from '@tests/support/builders/user-builder'
 import { expect, test } from '@tests/support/fixtures'
 import { modelProviders } from './model-providers.locators'
 
-const signedInAs = (role: 'Admin' | 'User') => ({
+const signedInAs = (role: 'Admin' | 'Member') => ({
   method: 'get' as const,
   path: membershipPaths.userOf(actorSubject),
   status: 200,
-  body: aUser().identifiedBy(actorSubject).inRole(role).build(),
+  body: role === 'Admin'
+    ? { ...aUser().identifiedBy(actorSubject).inRoles('Admin').build(), permissions: ['manage_model_providers' as const] }
+    : aUser().identifiedBy(actorSubject).build(),
 })
 
 test.describe('the model providers page', () => {
@@ -156,7 +158,17 @@ test.describe('the model providers page', () => {
   })
 
   test('a member who is no Admin does not ask for the providers', async ({ page, api }) => {
-    api.mock(signedInAs('User'))
+    api.mock(signedInAs('Member'))
+    const at = modelProviders(page)
+
+    await page.goto('/model-providers')
+
+    await expect(at.noAdminNote).toBeVisible()
+    expect(api.last('get', modelProviderPaths.list)).toBeUndefined()
+  })
+
+  test('an Admin whose manage_model_providers was removed does not ask for the providers', async ({ page, api }) => {
+    api.mock({ ...signedInAs('Admin'), body: { ...signedInAs('Admin').body, permissions: [] } })
     const at = modelProviders(page)
 
     await page.goto('/model-providers')

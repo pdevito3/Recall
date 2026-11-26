@@ -48,12 +48,10 @@ public class LastTenantTests
         var tenant = await TenantOfAsync(host, subject);
         await host.WithDatabaseAsync(async db =>
         {
-            var user = await db.Users.Include(u => u.UserPermissions)
+            var user = await db.Users.Include(u => u.Roles).Include(u => u.UserPermissions)
                 .SingleAsync(u => db.Set<ExternalLogin>().Any(link => link.Subject == subject && link.UserId == u.Id));
-            user.Role.Value.ShouldBe(UserRole.User().Value);
-            var held = user.UserPermissions.ToList();
-            user.AddPermission(Permission.ManageTenant());
-            db.UserPermissions.AddRange(user.UserPermissions.Except(held));
+            user.Roles.ShouldBeEmpty();
+            db.Track(user.AddPermission(Permission.ManageTenant()));
             return await db.SaveChangesAsync();
         });
 
@@ -97,12 +95,10 @@ public class LastTenantTests
         {
             var tenant = Tenant.Create(new TenantForCreation { Name = $"Second {subject}" });
             var person = NewPerson.FromClaims(new Profile("Grace", "Hopper", "Grace Hopper", null, subject[..20]));
-            var user = User.CreateFromLogin(person, tenant.Id, UserRole.User());
-            var held = user.UserPermissions.ToList();
+            var user = User.CreateFromLogin(person, tenant.Id, []);
             user.AddPermission(Permission.ManageTenant());
             db.Tenants.Add(tenant);
             db.Users.Add(user);
-            db.UserPermissions.AddRange(user.UserPermissions.Except(held));
             var now = TimeProvider.System.GetUtcNow();
             db.Set<ExternalLogin>().Add(new ExternalLogin { Issuer = StubOidcProvider.Issuer, Subject = subject, UserId = user.Id, CreatedAt = now, LastLoginAt = now });
             await db.SaveChangesAsync();

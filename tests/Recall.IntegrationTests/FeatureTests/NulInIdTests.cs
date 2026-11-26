@@ -23,7 +23,8 @@ public class NulInIdTests : TestBase
             FirstName = "Ada", LastName = "Lovelace", Email = "ada@example.com", Username = "ada", Version = 1,
         }));
         yield return () => (nameof(DeleteUser), new DeleteUser.Command(NulUserId));
-        yield return () => (nameof(UpdateUserRole), new UpdateUserRole.Command(NulUserId, "User"));
+        yield return () => (nameof(AddUserRole), new AddUserRole.Command(NulUserId, "Auditor"));
+        yield return () => (nameof(RemoveUserRole), new RemoveUserRole.Command(NulUserId, "Auditor"));
         yield return () => (nameof(AddUserPermission), new AddUserPermission.Command(NulUserId, "read_users"));
         yield return () => (nameof(RemoveUserPermission), new RemoveUserPermission.Command(NulUserId, "read_users"));
         yield return () => (nameof(GetTenant), new GetTenant.Query(NulTenantId));

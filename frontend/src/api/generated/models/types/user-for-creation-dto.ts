@@ -3,12 +3,13 @@
 * Do not edit manually.
 */
 
-export const userForCreationDtoRoleEnum = {
+export const userForCreationDtoRolesEnum = {
     Admin: "Admin",
-    User: "User"
+    Auditor: "Auditor",
+    UserManager: "UserManager"
 } as const;
 
-export type UserForCreationDtoRoleEnumKey = (typeof userForCreationDtoRoleEnum)[keyof typeof userForCreationDtoRoleEnum];
+export type UserForCreationDtoRolesEnumKey = (typeof userForCreationDtoRolesEnum)[keyof typeof userForCreationDtoRolesEnum];
 
 export type UserForCreationDto = {
     /**
@@ -36,5 +37,9 @@ export type UserForCreationDto = {
      * @type string
     */
     username: string;
-    role: UserForCreationDtoRoleEnumKey;
+    /**
+     * @description The roles of the new user. An empty list makes a Member, who has only their own journal.
+     * @type array
+    */
+    roles: UserForCreationDtoRolesEnumKey[];
 };

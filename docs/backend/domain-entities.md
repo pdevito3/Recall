@@ -6,7 +6,7 @@ A domain entity holds its data and its business rules. Code outside the entity c
 
 1. Give each property a private setter.
 2. Create the entity with a static `Create` method that takes a creation model. Do not use a public constructor.
-3. Add one public method for each change, for example `Update`, `UpdateRole`, or `AddPermission`. Each method returns `this`.
+3. Add one public method for each change, for example `Update`, `AddRole`, or `AddPermission`. Each method returns `this`, except a method that adds or removes child rows of a navigation with field access. That method returns the rows that it changed, such as the `RoleChange` of `AddRole`, so that the handler tells the context about them.
 4. Validate in the entity. Throw a `ValidationException` when a rule fails. Give it the name of the request field in camelCase, for example `"firstName"`. This name is the key in the `errors` of the problem.
 5. Queue a domain event in each method that changes the state. See [domain-events.md](domain-events.md).
 6. Keep collections private. Expose an `IReadOnlyCollection<T>`, and change it only with entity methods.
@@ -36,10 +36,11 @@ public class User : BaseEntity, ITenantable, IDeletedWithEvent
     // ...
     [Sensitive] public EmailAddress? Email { get; private set; }
     // ...
-    [NotSensitive] public UserRole Role { get; private set; } = default!;
+    [Sensitive] public string Username { get; private set; } = default!;
 
-    private readonly List<UserPermission> _userPermissions = [];
-    public IReadOnlyCollection<UserPermission> UserPermissions => _userPermissions.AsReadOnly();
+    private readonly List<UserRoleAssignment> _roles = [];
+    // ...
+    public IReadOnlyCollection<UserRoleAssignment> Roles => _roles.AsReadOnly();
 
     // ...
     public static User Create(UserForCreation userForCreation)
@@ -50,14 +51,18 @@ public class User : BaseEntity, ITenantable, IDeletedWithEvent
             FirstName = userForCreation.FirstName,
             // ...
             Email = EmailOf(userForCreation.Email),
-            // ...
-            Role = UserRole.Of(userForCreation.Role)
+            Username = userForCreation.Username,
         };
-        // Set the ID before the permissions, because each permission copies the user ID.
+        // Set the ID before the roles, because each role copies the user ID.
         if (userForCreation.Id is not null)
             user.SetId(userForCreation.Id);
 
-        user.ResetPermissionsToDefault();
+        foreach (var (name, i) in userForCreation.Roles.Select((name, i) => (name, i)))
+        {
+            var role = UserRole.Of(name, $"roles[{i}]");
+            if (!user.HasRole(role))
+                user._roles.Add(UserRoleAssignment.Create(user, role));
+        }
 
         ValidateUser(user);
         user.QueueDomainEvent(new UserCreated(user.Id));
@@ -66,16 +71,21 @@ public class User : BaseEntity, ITenantable, IDeletedWithEvent
     }
 
     // ...
-    public User UpdateRole(UserRole newRole)
+    public RoleChange AddRole(UserRole role)
     {
-        if (newRole == Role)
-            return this;
+        var given = role.Permissions().ToHashSet();
+        var cleared = _userPermissions.Where(x => given.Contains(x.Permission)).ToList();
+        foreach (var row in cleared)
+            _userPermissions.Remove(row);
 
-        Role = newRole;
-        ResetPermissionsToDefault();
-        QueueDomainEvent(new UserUpdated(Id));
+        var added = HasRole(role) ? null : UserRoleAssignment.Create(this, role);
+        if (added is not null)
+            _roles.Add(added);
 
-        return this;
+        var change = new RoleChange(added, null, cleared);
+        if (change.Changed)
+            QueueDomainEvent(new UserUpdated(Id));
+        return change;
     }
 
     // ...
@@ -115,7 +125,7 @@ public Tenant Update(TenantForUpdate tenantForUpdate)
 }
 ```
 
-A method for one intent, such as `UpdateRole` or `AddPermission`, gets no version. The context still checks the loaded version when it saves, and the command runs again when it loses. See [concurrency.md](concurrency.md#run-again).
+A method for one intent, such as `AddRole` or `AddPermission`, gets no version. The context still checks the loaded version when it saves, and the command runs again when it loses. See [concurrency.md](concurrency.md#run-again).
 
 ## Guards
 
@@ -180,6 +190,7 @@ var user = await LastAdmin.RunWithTenantLockAsync(dbContext, request.Id, async c
     var user = await dbContext.Users
         .TagWithOperationCallSite("users.delete.load")
         .Include(u => u.UserPermissions)
+        .Include(u => u.Roles)
         .GetById(request.Id, ct);
     user.GuardAllows(UserAction.Delete(), caller);
 ```
@@ -204,36 +215,26 @@ public partial class UserRole : ValueObject, IFixedNames
     public string Value
     {
         get => _role.Name;
-        private set
-        {
-            if (!UserRoleEnum.TryFromName(value, true, out var parsed))
-                throw new ValidationException(RequestField, $"Invalid role: {value}");
-
-            _role = parsed;
-        }
+        private set => _role = Parse(value, RequestField);
     }
 
     // ...
-    public Permission[] GetDefaultPermissions() => _role.GetDefaultPermissions();
+    public IReadOnlyList<Permission> Permissions() => _role.Permissions;
 
     public override string ToString() => Value;
 
     public static UserRole Of(string value) => new(value);
     // ...
     public static List<string> ListNames() => UserRoleEnum.List.Select(x => x.Name).ToList();
-    public static UserRole Admin() => new(UserRoleEnum.Admin.Name);
     // ...
-    private abstract class UserRoleEnum(string name, int value)
+    private sealed class UserRoleEnum(string name, int value, Func<IReadOnlyList<Permission>> permissions)
         : SmartEnum<UserRoleEnum>(name, value)
     {
-        public static readonly UserRoleEnum Admin = new AdminType();
         // ...
-        public abstract Permission[] GetDefaultPermissions();
+        public static readonly UserRoleEnum Admin = new(AdminName, 0, () => Permission.GetAll());
 
-        private sealed class AdminType() : UserRoleEnum("Admin", 0)
-        {
-            public override Permission[] GetDefaultPermissions() => [.. Permission.GetAll()];
-        }
+        public static readonly UserRoleEnum UserManager = new("UserManager", 1,
+            () => [Permission.ManageUsers(), Permission.ManageUserAccess(), Permission.ReadUsers()]);
         // ...
     }
 }

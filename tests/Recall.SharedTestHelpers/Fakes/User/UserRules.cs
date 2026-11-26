@@ -14,5 +14,5 @@ public static class UserRules
     public static string Identifier(Faker f) => f.Random.Guid().ToString();
     public static string Email(Faker f) => f.Internet.Email();
     public static string Username(Faker f) => f.Internet.UserName();
-    public static string Role(Faker f) => f.PickRandom(UserRole.ListNames());
+    public static IReadOnlyList<string> Roles(Faker f) => f.PickRandom(UserRole.ListNames(), f.Random.Int(0, UserRole.ListNames().Count)).ToList();
 }

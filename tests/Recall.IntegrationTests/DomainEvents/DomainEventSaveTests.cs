@@ -49,8 +49,8 @@ public class DomainEventSaveTests : TestBase
         var failures = 1;
         await using var services = TestFixture.BuildServiceProvider(s => s.AddTestHandler<TenantUpdated>(async (_, db, ct) =>
         {
-            var user = await db.Users.SingleAsync(u => u.Id == userId, ct);
-            user.UpdateRole(UserRole.Admin());
+            var user = await db.Users.Include(u => u.Roles).Include(u => u.UserPermissions).SingleAsync(u => u.Id == userId, ct);
+            db.Track(user.AddRole(UserRole.Admin()));
             if (failures-- > 0)
                 throw new InvalidOperationException("The handler failed.");
         }));
@@ -69,7 +69,7 @@ public class DomainEventSaveTests : TestBase
         (await act.ShouldThrowAsync<InvalidOperationException>()).Message.ShouldBe("The handler failed.");
         (await ReadAsync(read => read.Tenants.Where(t => t.Id == tenant.Id).Select(t => t.Name).SingleAsync()))
             .ShouldBe(scenario.Tenant.Name);
-        (await ReadAsync(read => read.Users.SingleAsync(u => u.Id == userId))).Role.ShouldBe(UserRole.User());
+        (await ReadAsync(read => read.UserRoles.Where(r => r.UserId == userId).ToListAsync())).ShouldBeEmpty();
 
         var saveAgain = () => db.SaveChangesAsync();
         (await saveAgain.ShouldThrowAsync<InvalidOperationException>()).Message.ShouldContain("Use a new DI scope");
@@ -82,7 +82,8 @@ public class DomainEventSaveTests : TestBase
         await retryDb.SaveChangesAsync();
         (await ReadAsync(read => read.Tenants.Where(t => t.Id == tenant.Id).Select(t => t.Name).SingleAsync()))
             .ShouldBe(newName);
-        (await ReadAsync(read => read.Users.SingleAsync(u => u.Id == userId))).Role.ShouldBe(UserRole.Admin());
+        (await ReadAsync(read => read.UserRoles.Where(r => r.UserId == userId).Select(r => r.Role).ToListAsync()))
+            .ShouldBe([UserRole.Admin()]);
     }
 
     [Test]
@@ -121,20 +122,21 @@ public class DomainEventSaveTests : TestBase
             .AddTestHandler<TenantUpdated>(async (e, db, ct) =>
             {
                 runs.Add($"{nameof(TenantUpdated)}:{e.Id}");
-                (await db.Users.SingleAsync(u => u.Id == adminId, ct)).UpdateRole(UserRole.User());
+                var admin = await db.Users.Include(u => u.Roles).SingleAsync(u => u.Id == adminId, ct);
+                db.Track(admin.RemoveRole(UserRole.Admin()));
             }));
         var scope = new TestingServiceScope(services);
         var scenario = await scope.StartTenantScenarioAsync();
         adminId = scenario.Admin.Id;
         var db = scope.GetService<AppDbContext>();
         var tenant = await db.Tenants.SingleAsync(t => t.Id == scenario.Tenant.Id);
-        var firstUser = await db.Users.SingleAsync(u => u.Id == scenario.FirstUser.Id);
-        var secondUser = await db.Users.SingleAsync(u => u.Id == scenario.SecondUser.Id);
+        var firstUser = await db.Users.Include(u => u.Roles).Include(u => u.UserPermissions).SingleAsync(u => u.Id == scenario.FirstUser.Id);
+        var secondUser = await db.Users.Include(u => u.Roles).Include(u => u.UserPermissions).SingleAsync(u => u.Id == scenario.SecondUser.Id);
 
         // Act
-        secondUser.UpdateRole(UserRole.Admin());
+        db.Track(secondUser.AddRole(UserRole.Admin()));
         tenant.Update(new TenantForUpdate { Name = $"renamed-{Guid.NewGuid()}", Version = tenant.Version });
-        firstUser.UpdateRole(UserRole.Admin());
+        db.Track(firstUser.AddRole(UserRole.Admin()));
         await db.SaveChangesAsync();
 
         // Assert

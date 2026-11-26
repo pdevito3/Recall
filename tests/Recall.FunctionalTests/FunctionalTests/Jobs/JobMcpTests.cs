@@ -352,11 +352,11 @@ public class JobMcpTests
         await next.LoginWebAsync("tools-next-admin");
         var token = await TokenOfAsync(host, "tools-owner", JobToolsOnly);
         var nextToken = await TokenOfAsync(host, "tools-next-admin", JobToolsOnly);
-        (await SendRoleAsync(owner, await UserIdOfAsync(host, "tools-next-admin"), "Admin")).IsSuccessStatusCode.ShouldBeTrue();
+        (await SendRoleAsync(owner, HttpMethod.Post, ApiRoutes.Users.AddRole(await UserIdOfAsync(host, "tools-next-admin")))).IsSuccessStatusCode.ShouldBeTrue();
         var before = await JobToolsOfAsync(host, token);
 
         // Act
-        using var demoted = await SendRoleAsync(next, await UserIdOfAsync(host, "tools-owner"), "User");
+        using var demoted = await SendRoleAsync(next, HttpMethod.Delete, ApiRoutes.Users.RemoveRole(await UserIdOfAsync(host, "tools-owner"), "Admin"));
         var after = await JobToolsOfAsync(host, token);
         var ofTheNextOwner = await JobToolsOfAsync(host, nextToken);
 
@@ -367,9 +367,11 @@ public class JobMcpTests
         ofTheNextOwner.ShouldContain("get_queue_depths");
     }
 
-    private static async Task<HttpResponseMessage> SendRoleAsync(AuthBrowser browser, string userId, string role)
+    private static async Task<HttpResponseMessage> SendRoleAsync(AuthBrowser browser, HttpMethod method, string route)
     {
-        var request = new HttpRequestMessage(HttpMethod.Put, $"/{ApiRoutes.Users.UpdateRole(userId)}") { Content = JsonContent.Create(new { role }) };
+        var request = new HttpRequestMessage(method, $"/{route}");
+        if (method == HttpMethod.Post)
+            request.Content = JsonContent.Create(new { role = "Admin" });
         request.Headers.Add("X-CSRF", "1");
         request.Headers.Add(PageUserCheck.Header, await browser.UserOfSessionAsync());
         return await browser.SendAsync(request);

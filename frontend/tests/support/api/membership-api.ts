@@ -18,7 +18,7 @@ export const membershipApi = {
 
   /** A person whose role lets them read the list of users. */
   userMayReadUsers(): MockRoute {
-    const body = { ...aUser().identifiedBy(actorSubject).inRole('Admin').build(), permissions: ['read_users' as const] }
+    const body = { ...aUser().identifiedBy(actorSubject).inRoles('Admin').build(), permissions: ['read_users' as const] }
     return { method: 'get', path: membershipPaths.userOf(actorSubject), status: 200, body }
   },
 

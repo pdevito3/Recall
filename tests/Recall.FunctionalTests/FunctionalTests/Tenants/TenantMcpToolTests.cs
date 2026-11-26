@@ -638,7 +638,7 @@ public class TenantMcpToolTests : TestBase
     {
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var admin, u => u.Role = "Admin")
+            .AddUser(out var admin, u => u.Roles = ["Admin"])
             .Under(tenant)
             .AddAgent(out var agent, a =>
             {
@@ -651,13 +651,15 @@ public class TenantMcpToolTests : TestBase
         return (tenant, admin, agent);
     }
 
-    private static async Task<(Tenant Tenant, User User)> AddTenantWithUserAsync(string role = "User")
+    private static async Task<(Tenant Tenant, User User)> AddTenantWithUserAsync(string role = "Member")
     {
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var user, u => u.Role = role);
+            .AddUser(out var user, u => u.Roles = RolesOf(role));
         await InsertAsync(tenant);
         await InsertAsync(user);
         return (tenant, user);
     }
+
+    private static IReadOnlyList<string> RolesOf(string role) => role == "Member" ? [] : [role];
 }

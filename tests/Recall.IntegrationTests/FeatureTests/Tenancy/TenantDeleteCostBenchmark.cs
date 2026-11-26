@@ -22,7 +22,7 @@ public class TenantDeleteCostBenchmark : TestBase
         var scope = new TestingServiceScope();
         await scope.StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var admin, u => u.Role = UserRole.Admin().Value)
+            .AddUser(out var admin, u => u.Roles = [UserRole.Admin().Value])
             .Under(tenant)
             .AddUsers(out _, users)
             .BuildAsync();

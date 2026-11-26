@@ -23,7 +23,7 @@ public class CharacterNotStorableTests : TestBase
     public async Task a_nul_in_a_first_name_returns_a_validation_problem_for_the_field_and_saves_no_user()
     {
         // Arrange
-        TestGraph.Start(out _).AddTenant(out var tenant).AddUser(out var admin, u => u.Role = "Admin");
+        TestGraph.Start(out _).AddTenant(out var tenant).AddUser(out var admin, u => u.Roles = ["Admin"]);
         await InsertAsync(tenant);
         await InsertAsync(admin);
         FactoryClient.SignInAsAppUser(admin.Identifier);
@@ -106,7 +106,7 @@ public class CharacterNotStorableTests : TestBase
 
     private async Task<(HttpMethod Method, string Url, JsonObject Body)> ArrangeAsync(string endpoint)
     {
-        TestGraph.Start(out _).AddTenant(out var tenant).AddUser(out var admin, u => u.Role = "Admin");
+        TestGraph.Start(out _).AddTenant(out var tenant).AddUser(out var admin, u => u.Roles = ["Admin"]);
         await InsertAsync(tenant);
         await InsertAsync(admin);
         FactoryClient.SignInAsAppUser(admin.Identifier);

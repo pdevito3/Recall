@@ -16,7 +16,7 @@ public class DomainEventTracingTests : TestBase
         // Arrange
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var admin, u => u.Role = "Admin");
+            .AddUser(out var admin, u => u.Roles = ["Admin"]);
         await InsertAsync(tenant);
         await InsertAsync(admin);
         FactoryClient.SignInAsAppUser(admin.Identifier);

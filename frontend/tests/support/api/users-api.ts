@@ -14,7 +14,8 @@ export const usersPaths = {
   current: '/api/v1/users/me',
   list: '/api/v1/users',
   one: (id: string) => `/api/v1/users/${id}`,
-  role: (id: string) => `/api/v1/users/${id}/role`,
+  roles: (id: string) => `/api/v1/users/${id}/roles`,
+  role: (id: string, role: string) => `/api/v1/users/${id}/roles/${role}`,
   temporaryPassword: (id: string) => `/api/v1/users/${id}/temporary-password`,
 }
 
@@ -57,13 +58,18 @@ export const usersApi = {
     return { method: 'get', path: usersPaths.one(body.id), status: 200, body }
   },
 
-  roleChanges(user: Buildable<UserDto>): MockRoute {
+  addsRole(user: Buildable<UserDto>): MockRoute {
     const body = user.build()
-    return { method: 'put', path: usersPaths.role(body.id), status: 200, body }
+    return { method: 'post', path: usersPaths.roles(body.id), status: 200, body }
   },
 
-  roleChangeFails(id: string, problem: Buildable<ProblemDetails>): MockRoute {
-    return problemAt('put', usersPaths.role(id), problem)
+  addRoleFails(id: string, problem: Buildable<ProblemDetails>): MockRoute {
+    return problemAt('post', usersPaths.roles(id), problem)
+  },
+
+  removesRole(user: Buildable<UserDto>, role: string): MockRoute {
+    const body = user.build()
+    return { method: 'delete', path: usersPaths.role(body.id, role), status: 200, body }
   },
 
   deletes(id: string): MockRoute {

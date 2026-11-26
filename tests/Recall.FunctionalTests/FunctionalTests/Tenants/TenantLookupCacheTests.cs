@@ -25,7 +25,7 @@ public class TenantLookupCacheTests : TestBase
         await StartGraph().AddTenant(out _).BuildAsync();
         await StartGraph()
             .AddTenant(out var tenant)
-            .AddUsers(out var users, u => u.Role = "Admin", _ => { })
+            .AddUsers(out var users, u => u.Roles = ["Admin"], _ => { })
             .BuildAsync();
         var (owner, member) = (users[0], users[1]);
         SignInAs(member);
@@ -50,7 +50,7 @@ public class TenantLookupCacheTests : TestBase
         await StartGraph().AddTenant(out _).BuildAsync();
         await StartGraph()
             .AddTenant(out var tenant)
-            .AddUsers(out var users, u => u.Role = "Admin", _ => { })
+            .AddUsers(out var users, u => u.Roles = ["Admin"], _ => { })
             .BuildAsync();
         var (owner, member) = (users[0], users[1]);
         SignInAs(owner);
@@ -88,7 +88,7 @@ public class TenantLookupCacheTests : TestBase
         // Arrange
         await StartGraph()
             .AddTenant(out var tenant)
-            .AddUsers(out var users, u => u.Role = "Admin", _ => { })
+            .AddUsers(out var users, u => u.Roles = ["Admin"], _ => { })
             .BuildAsync();
         var (admin, removed) = (users[0], users[1]);
         SignInAs(removed);
@@ -113,7 +113,7 @@ public class TenantLookupCacheTests : TestBase
         // Arrange
         await StartGraph()
             .AddTenant(out _)
-            .AddUsers(out var users, u => u.Role = "Admin", _ => { })
+            .AddUsers(out var users, u => u.Roles = ["Admin"], _ => { })
             .BuildAsync();
         var (admin, removed) = (users[0], users[1]);
         SignInAs(removed);
@@ -126,7 +126,7 @@ public class TenantLookupCacheTests : TestBase
 
         // Act
         FactoryClient.SignInAsTrustedMachineClient();
-        var dto = new FakeInitiateUserAndTenantDto().Generate() with { Role = "Admin" };
+        var dto = new FakeInitiateUserAndTenantDto().Generate() with { Roles = ["Admin"] };
         var initiated = await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.Initiate, dto);
 
         // Assert

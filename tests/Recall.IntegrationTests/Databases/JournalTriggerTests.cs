@@ -132,7 +132,7 @@ public class JournalTriggerTests : TestBase
         var scope = new TestingServiceScope();
         await scope.StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var admin, u => u.Role = "Admin")
+            .AddUser(out var admin, u => u.Roles = ["Admin"])
             .Under(tenant)
             .BuildAsync();
         scope.SetUserWithDefaults(identifier: admin.Identifier);

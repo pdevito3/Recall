@@ -28,9 +28,10 @@ public static class AddUser
 
             var caller = await permissionGuard.GetCallerAsync(cancellationToken);
             caller.Require(Permission.ManageUsers());
-            var role = UserRole.Of(request.Dto.Role);
-            Activity.Current?.SetTag("app.user.role", role.Value);
-            caller.Require(role.GetDefaultPermissions());
+            var roles = request.Dto.Roles.Select((name, i) => UserRole.Of(name, $"roles[{i}]")).Distinct().ToList();
+            Activity.Current?.SetTag("app.user.roles", string.Join(",", roles.Select(r => r.Value)));
+            // A caller can give only what the caller holds (ADR 0009).
+            caller.Require(EffectivePermissions.FromRoles(roles));
 
             var tenantId = ResolveTenantId(request.Dto.TenantId);
             Activity.Current?.SetTag("app.tenant_id", tenantId);
@@ -55,7 +56,7 @@ public static class AddUser
                 return user;
             }, cancellationToken);
 
-            _logger.Here().Information("Added user {UserId} to tenant {TenantId} with role {Role}", added.Id, tenantId, role.Value);
+            _logger.Here().Information("Added user {UserId} to tenant {TenantId} with roles {Roles}", added.Id, tenantId, roles.Select(r => r.Value).ToList());
             
             // TODO handle IDP creation
 

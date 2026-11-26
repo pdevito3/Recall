@@ -83,7 +83,7 @@ public class AddAgentCommandTests : TestBase
         await using var services = pause.BuildServices();
         await new TestingServiceScope().StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var admin, u => u.Role = "Admin")
+            .AddUser(out var admin, u => u.Roles = ["Admin"])
             .BuildAsync();
         var deleter = new TestingServiceScope(services);
         var underTest = new TestingServiceScope();
@@ -168,7 +168,7 @@ public class AddAgentCommandTests : TestBase
     {
         // Arrange
         var testingServiceScope = new TestingServiceScope();
-        await testingServiceScope.StartGraph(out _).AddUser(out var member, u => u.Role = "User").BuildAsync();
+        await testingServiceScope.StartGraph(out _).AddUser(out var member, u => u.Roles = []).BuildAsync();
         testingServiceScope.SetUserWithDefaults(identifier: member.Identifier);
         var dto = new FakeAgentForCreationDto().Generate();
 
@@ -185,7 +185,7 @@ public class AddAgentCommandTests : TestBase
     {
         // Arrange
         var testingServiceScope = new TestingServiceScope();
-        var graph = testingServiceScope.StartGraph(out _).AddUser(out var member, u => u.Role = "User");
+        var graph = testingServiceScope.StartGraph(out _).AddUser(out var member, u => u.Roles = []);
         member.AddPermission(Permission.ManageAgents());
         await graph.BuildAsync();
         testingServiceScope.SetUserWithDefaults(identifier: member.Identifier);

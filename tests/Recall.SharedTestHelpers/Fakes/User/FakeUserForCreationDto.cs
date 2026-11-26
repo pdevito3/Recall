@@ -13,6 +13,6 @@ public sealed class FakeUserForCreationDto : AutoFaker<UserForCreationDto>
         RuleFor(x => x.LastName, UserRules.LastName);
         RuleFor(x => x.Email, UserRules.Email);
         RuleFor(x => x.Username, UserRules.Username);
-        RuleFor(x => x.Role, UserRules.Role);
+        RuleFor(x => x.Roles, UserRules.Roles);
     }
 }

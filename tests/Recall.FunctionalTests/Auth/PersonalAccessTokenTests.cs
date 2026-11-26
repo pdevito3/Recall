@@ -187,7 +187,7 @@ public class PersonalAccessTokenTests
         {
             var user = User.Create(new UserForCreation
             {
-                TenantId = admin.TenantId, FirstName = "Swagger", Identifier = subject, Username = subject[..20], Role = UserRole.Admin().Value,
+                TenantId = admin.TenantId, FirstName = "Swagger", Identifier = subject, Username = subject[..20], Roles = [UserRole.Admin().Value],
             });
             db.Users.Add(user);
             await db.SaveChangesAsync();
@@ -223,7 +223,7 @@ public class PersonalAccessTokenTests
         // Arrange
         var (admin, member) = await PatPeople.AddTenantAsync(Host);
         var (_, otherMember) = await PatPeople.AddTenantAsync(Host);
-        var reader = await PatPeople.AddPersonAsync(Host, admin.TenantId, UserRole.User(), Permission.ReadUsers());
+        var reader = await PatPeople.AddPersonAsync(Host, admin.TenantId, [], Permission.ReadUsers());
         var memberToken = await PatPeople.StartTokenAsync(Host, member, NoPermissions);
         var otherToken = await PatPeople.StartTokenAsync(Host, otherMember, NoPermissions);
         using var adminBrowser = new AuthBrowser(Host);
@@ -580,11 +580,8 @@ public class PersonalAccessTokenTests
     private static Task<bool> SetPermissionAsync(PatPerson person, Permission permission, bool held)
         => Host.WithDatabaseAsync(async db =>
         {
-            var user = await db.Users.Include(u => u.UserPermissions).SingleAsync(u => u.Id == person.UserId);
-            if (held)
-                user.AddPermission(permission);
-            else
-                user.RemovePermission(permission);
+            var user = await db.Users.Include(u => u.Roles).Include(u => u.UserPermissions).SingleAsync(u => u.Id == person.UserId);
+            db.Track(held ? user.AddPermission(permission) : user.RemovePermission(permission));
             await db.SaveChangesAsync();
             return true;
         });

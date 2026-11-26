@@ -458,7 +458,7 @@ public sealed class PasswordLogin(
                 if (!await dbContext.Tenants.TagWithOperationCallSite("auth.password.claim_tenant_is_live").AnyAsync(t => t.Id == tenantId, ct))
                     return new PasswordOutcome.NoClaim();
 
-                admin = User.CreateFromLogin(NewPerson.FromClaims(new Profile(null, null, loginName.Value, null, loginName.Value)), tenantId, UserRole.Admin());
+                admin = User.CreateFromLogin(NewPerson.FromClaims(new Profile(null, null, loginName.Value, null, loginName.Value)), tenantId, [UserRole.Admin()]);
                 dbContext.Users.Add(admin);
             }
 
@@ -514,7 +514,7 @@ public sealed class PasswordLogin(
         await using var scope = scopeFactory.CreateSystemScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var tenant = Tenant.Create(new TenantForCreation { Name = FirstTenantName });
-        var user = User.CreateFromLogin(person, tenant.Id, UserRole.Admin());
+        var user = User.CreateFromLogin(person, tenant.Id, [UserRole.Admin()]);
         dbContext.Tenants.Add(tenant);
         dbContext.Users.Add(user);
         var credential = PasswordCredential.Choose(user.Id, loginName, hash, timeProvider.GetUtcNow());

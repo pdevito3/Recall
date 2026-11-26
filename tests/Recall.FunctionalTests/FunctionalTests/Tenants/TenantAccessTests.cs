@@ -20,7 +20,7 @@ public class TenantAccessTests : TestBase
     public async Task user_can_get_their_own_tenant()
     {
         // Arrange
-        var (tenant, user) = await AddTenantWithUserAsync("User");
+        var (tenant, user) = await AddTenantWithUserAsync("Member");
         SignInAs(user);
 
         // Act
@@ -35,8 +35,8 @@ public class TenantAccessTests : TestBase
     public async Task user_cannot_get_another_tenant()
     {
         // Arrange
-        var (_, user) = await AddTenantWithUserAsync("User");
-        var (otherTenant, _) = await AddTenantWithUserAsync("User");
+        var (_, user) = await AddTenantWithUserAsync("Member");
+        var (otherTenant, _) = await AddTenantWithUserAsync("Member");
         SignInAs(user);
 
         // Act
@@ -50,8 +50,8 @@ public class TenantAccessTests : TestBase
     public async Task user_sees_only_their_own_tenant_in_the_list()
     {
         // Arrange
-        var (tenant, user) = await AddTenantWithUserAsync("User");
-        await AddTenantWithUserAsync("User");
+        var (tenant, user) = await AddTenantWithUserAsync("Member");
+        await AddTenantWithUserAsync("Member");
         SignInAs(user);
 
         // Act
@@ -67,7 +67,7 @@ public class TenantAccessTests : TestBase
     public async Task user_with_no_user_record_sees_no_tenants()
     {
         // Arrange
-        await AddTenantWithUserAsync("User");
+        await AddTenantWithUserAsync("Member");
         FactoryClient.SignInAsAppUser($"unknown-{Guid.NewGuid()}");
 
         // Act
@@ -83,7 +83,7 @@ public class TenantAccessTests : TestBase
     {
         // Arrange
         var (_, user) = await AddTenantWithUserAsync("Admin");
-        var (otherTenant, _) = await AddTenantWithUserAsync("User");
+        var (otherTenant, _) = await AddTenantWithUserAsync("Member");
         SignInAs(user);
 
         // Act
@@ -102,7 +102,7 @@ public class TenantAccessTests : TestBase
     {
         // Arrange
         var (_, user) = await AddTenantWithUserAsync("Admin");
-        var (otherTenant, _) = await AddTenantWithUserAsync("User");
+        var (otherTenant, _) = await AddTenantWithUserAsync("Member");
         SignInAs(user);
 
         // Act
@@ -118,7 +118,7 @@ public class TenantAccessTests : TestBase
     public async Task basic_member_cannot_update_their_own_tenant()
     {
         // Arrange
-        var (tenant, member) = await AddTenantWithUserAsync("User");
+        var (tenant, member) = await AddTenantWithUserAsync("Member");
         SignInAs(member);
 
         // Act
@@ -167,7 +167,7 @@ public class TenantAccessTests : TestBase
     {
         // Arrange
         var (tenant, admin) = await AddTenantWithUserAsync("Admin");
-        var (otherTenant, _) = await AddTenantWithUserAsync("User");
+        var (otherTenant, _) = await AddTenantWithUserAsync("Member");
         SignInAs(admin);
 
         // Act
@@ -186,7 +186,7 @@ public class TenantAccessTests : TestBase
     public async Task basic_member_cannot_delete_their_own_tenant()
     {
         // Arrange
-        var (tenant, member) = await AddTenantWithUserAsync("User");
+        var (tenant, member) = await AddTenantWithUserAsync("Member");
         SignInAs(member);
 
         // Act
@@ -202,7 +202,7 @@ public class TenantAccessTests : TestBase
     public async Task user_cannot_add_a_tenant()
     {
         // Arrange
-        var (_, user) = await AddTenantWithUserAsync("User");
+        var (_, user) = await AddTenantWithUserAsync("Member");
         SignInAs(user);
 
         // Act
@@ -217,7 +217,7 @@ public class TenantAccessTests : TestBase
     public async Task trusted_machine_client_can_add_and_get_any_tenant()
     {
         // Arrange
-        var (otherTenant, _) = await AddTenantWithUserAsync("User");
+        var (otherTenant, _) = await AddTenantWithUserAsync("Member");
         FactoryClient.SetFakeBearerToken(new Dictionary<string, object>
         {
             ["client_id"] = TestingWebApplicationFactory.TrustedMachineClientId
@@ -237,8 +237,8 @@ public class TenantAccessTests : TestBase
     public async Task read_only_machine_client_can_read_all_tenants()
     {
         // Arrange
-        var (firstTenant, _) = await AddTenantWithUserAsync("User");
-        var (secondTenant, _) = await AddTenantWithUserAsync("User");
+        var (firstTenant, _) = await AddTenantWithUserAsync("Member");
+        var (secondTenant, _) = await AddTenantWithUserAsync("Member");
         SignInAsReadOnlyMachineClient();
 
         // Act
@@ -273,7 +273,7 @@ public class TenantAccessTests : TestBase
     public async Task read_only_machine_client_cannot_change_a_tenant()
     {
         // Arrange
-        var (tenant, _) = await AddTenantWithUserAsync("User");
+        var (tenant, _) = await AddTenantWithUserAsync("Member");
         SignInAsReadOnlyMachineClient();
 
         // Act
@@ -315,9 +315,11 @@ public class TenantAccessTests : TestBase
     {
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var user, u => u.Role = role);
+            .AddUser(out var user, u => u.Roles = RolesOf(role));
         await InsertAsync(tenant);
         await InsertAsync(user);
         return (tenant, user);
     }
+
+    private static IReadOnlyList<string> RolesOf(string role) => role == "Member" ? [] : [role];
 }

@@ -61,11 +61,7 @@ public class OwnerClaimLogTests
             linked.SessionCookie.ShouldNotBeNull();
             stranger.SessionCookie.ShouldNotBeNull();
             File.Exists(file).ShouldBeTrue();
-            var role = await host.WithDatabaseAsync(db => db.Users
-                .Where(u => db.Set<ExternalLogin>().Any(link => link.Subject == strangerSubject && link.UserId == u.Id))
-                .Select(u => u.Role.Value)
-                .SingleAsync());
-            role.ShouldBe(UserRole.User().Value);
+            (await RolesOfAsync(host, strangerSubject)).ShouldBeEmpty();
             host.Logs.Holding(file).ShouldContain(line => line.Level == LogEventLevel.Warning && line.MessageTemplate.Text.Contains("Could not remove", StringComparison.Ordinal));
         }
         finally
@@ -117,7 +113,7 @@ public class OwnerClaimLogTests
             // Assert
             linked.SessionCookie.ShouldNotBeNull();
             stranger.SessionCookie.ShouldNotBeNull();
-            (await RoleOfAsync(host, strangerSubject)).ShouldBe(UserRole.User().Value);
+            (await RolesOfAsync(host, strangerSubject)).ShouldBeEmpty();
             host.Logs.All.Skip(seen).Count(line => line.Level == LogEventLevel.Warning && line.RenderMessage(CultureInfo.InvariantCulture).Contains(file, StringComparison.Ordinal)).ShouldBe(2);
         }
         finally
@@ -179,7 +175,7 @@ public class OwnerClaimLogTests
         var adminRole = UserRole.Admin().Value;
         var moved = await host.WithDatabaseAsync(async db =>
         {
-            var admins = await db.Users.Where(u => u.Role.Value == adminRole && u.Identifier == u.Id).ToListAsync();
+            var admins = await db.Users.Where(u => u.Roles.Any(r => r.Role.Value == adminRole) && u.Identifier == u.Id).ToListAsync();
             admins.ForEach(admin => db.Entry(admin).Property(u => u.Identifier).CurrentValue = $"elsewhere-{admin.Id}");
             await db.SaveChangesAsync();
             return admins.Select(admin => admin.Id).ToList();
@@ -193,7 +189,7 @@ public class OwnerClaimLogTests
             await claimant.LoginWebAsync(subject);
 
             // Assert
-            (await RoleOfAsync(host, subject)).ShouldBe(adminRole);
+            (await RolesOfAsync(host, subject)).ShouldBe([adminRole]);
             var added = await host.WithDatabaseAsync(db => db.Set<ExternalLogin>().Where(link => link.Subject == subject).Select(link => link.UserId).SingleAsync());
             added.ShouldNotBeOneOf(moved.ToArray());
             host.Logs.Holding(added).ShouldContain(line => line.Level == LogEventLevel.Warning);
@@ -209,11 +205,11 @@ public class OwnerClaimLogTests
         }
     }
 
-    private static Task<string> RoleOfAsync(AuthFlowFactory host, string subject)
-        => host.WithDatabaseAsync(db => db.Users
-            .Where(u => db.Set<ExternalLogin>().Any(link => link.Subject == subject && link.UserId == u.Id))
-            .Select(u => u.Role.Value)
-            .SingleAsync());
+    private static Task<List<string>> RolesOfAsync(AuthFlowFactory host, string subject)
+        => host.WithDatabaseAsync(db => db.UserRoles
+            .Where(r => db.Set<ExternalLogin>().Any(link => link.Subject == subject && link.UserId == r.UserId))
+            .Select(r => r.Role.Value)
+            .ToListAsync());
 
     private static async Task ChangeFlagAsync(string flag, string path)
     {

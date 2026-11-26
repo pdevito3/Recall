@@ -5,11 +5,11 @@ using MediatR;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Resources.Entrypoints.Http;
 
-public sealed class UpdateUserRoleEndpoint : IEndpoint
+public sealed class AddUserRoleEndpoint : IEndpoint
 {
     public void Map(IEndpointRouteBuilder versionedGroup) => versionedGroup
-        .MapPut("/users/{id}/role", Handle)
-        .WithName("UpdateUserRole")
+        .MapPost("/users/{id}/roles", Handle)
+        .WithName("AddUserRole")
         .WithTags("Users")
         .MapToApiVersion(ApiVersions.V1)
         .RequireAuthorization()
@@ -20,15 +20,15 @@ public sealed class UpdateUserRoleEndpoint : IEndpoint
         .ProducesValidationProblem(StatusCodes.Status409Conflict);
 
     /// <summary>
-    /// Updates a User's role. This resets all permissions to the new role's defaults.
+    /// Adds a role to a User. The permissions of the roles add up. The user then holds each permission of the role, so a removed permission of the role comes back.
     /// </summary>
     public static async Task<Ok<UserDto>> Handle(
         string id,
-        UpdateUserRoleDto dto,
+        UserRoleDto dto,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new UpdateUserRole.Command(id, dto.Role), cancellationToken);
+        var result = await mediator.Send(new AddUserRole.Command(id, dto.Role), cancellationToken);
         return TypedResults.Ok(result);
     }
 }

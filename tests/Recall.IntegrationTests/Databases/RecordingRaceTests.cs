@@ -26,7 +26,7 @@ public class RecordingRaceTests : TestBase
     {
         await new TestingServiceScope().StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var owner, u => u.Role = "User")
+            .AddUser(out var owner, u => u.Roles = [])
             .BuildAsync();
         var underTest = new TestingServiceScope(services);
         var rival = new TestingServiceScope();

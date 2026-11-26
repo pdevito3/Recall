@@ -27,6 +27,8 @@ public sealed class UserPermissionConfiguration : IEntityTypeConfiguration<UserP
                 .IsRequired();
         });
 
+        builder.Property(e => e.Effect).HasConversion<string>().HasMaxLength(10);
+
         builder.HasIndex(e => e.UserId);
 
         builder.ApplyTenanting(e => e.User.TenantId);

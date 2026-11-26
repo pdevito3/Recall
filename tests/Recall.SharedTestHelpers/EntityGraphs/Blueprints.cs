@@ -53,14 +53,14 @@ public static class Blueprints
                 Identifier = input.Identifier!,
                 Email = input.Email!,
                 Username = input.Username!,
-                Role = input.Role!,
+                Roles = input.Roles!,
             }))
         .Derive(i => i.FirstName, (_, _) => UserRules.FirstName(Faker))
         .Derive(i => i.LastName, (_, _) => UserRules.LastName(Faker))
         .Derive(i => i.Identifier, (_, _) => UserRules.Identifier(Faker))
         .Derive(i => i.Email, (_, _) => UserRules.Email(Faker))
         .Derive(i => i.Username, (_, _) => UserRules.Username(Faker))
-        .Derive(i => i.Role, (_, _) => UserRules.Role(Faker));
+        .Derive(i => i.Roles, (_, _) => UserRules.Roles(Faker));
 
     /// <summary>
     /// An agent is a child of a tenant. The tenant id comes from the parent, never from the test. An operator grants

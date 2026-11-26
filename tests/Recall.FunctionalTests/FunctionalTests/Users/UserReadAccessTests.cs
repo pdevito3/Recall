@@ -28,7 +28,7 @@ public class UserReadAccessTests : TestBase
     public async Task member_without_read_users_cannot_list_the_users()
     {
         // Arrange
-        var (member, _) = await AddTwoUsersAsync("User", "User");
+        var (member, _) = await AddTwoUsersAsync("Member", "Member");
         SignInAs(member);
 
         // Act
@@ -42,7 +42,7 @@ public class UserReadAccessTests : TestBase
     public async Task member_without_read_users_cannot_get_another_user()
     {
         // Arrange
-        var (member, other) = await AddTwoUsersAsync("User", "User");
+        var (member, other) = await AddTwoUsersAsync("Member", "Member");
         SignInAs(member);
 
         // Act
@@ -56,7 +56,7 @@ public class UserReadAccessTests : TestBase
     public async Task member_without_read_users_cannot_get_another_user_by_identifier()
     {
         // Arrange
-        var (member, other) = await AddTwoUsersAsync("User", "User");
+        var (member, other) = await AddTwoUsersAsync("Member", "Member");
         SignInAs(member);
 
         // Act
@@ -71,7 +71,7 @@ public class UserReadAccessTests : TestBase
     public async Task member_without_read_users_is_forbidden_for_an_unknown_identifier()
     {
         // Arrange
-        var (member, _) = await AddTwoUsersAsync("User", "User");
+        var (member, _) = await AddTwoUsersAsync("Member", "Member");
         SignInAs(member);
 
         // Act
@@ -85,7 +85,7 @@ public class UserReadAccessTests : TestBase
     public async Task member_without_read_users_can_get_their_own_record()
     {
         // Arrange
-        var (member, _) = await AddTwoUsersAsync("User", "User");
+        var (member, _) = await AddTwoUsersAsync("Member", "Member");
         SignInAs(member);
 
         // Act
@@ -102,7 +102,7 @@ public class UserReadAccessTests : TestBase
     public async Task member_without_read_users_can_get_their_own_record_by_identifier()
     {
         // Arrange
-        var (member, _) = await AddTwoUsersAsync("User", "User");
+        var (member, _) = await AddTwoUsersAsync("Member", "Member");
         SignInAs(member);
 
         // Act
@@ -120,7 +120,7 @@ public class UserReadAccessTests : TestBase
     public async Task user_with_no_user_record_gets_not_found_for_their_own_identifier()
     {
         // Arrange
-        await AddTwoUsersAsync("Admin", "User");
+        await AddTwoUsersAsync("Admin", "Member");
         var identifier = $"new-{Guid.NewGuid()}";
         FactoryClient.SignInAsAppUser(identifier);
 
@@ -141,7 +141,7 @@ public class UserReadAccessTests : TestBase
     public async Task deleted_user_with_a_cached_tenant_is_forbidden_for_an_unknown_identifier()
     {
         // Arrange
-        var (member, _) = await AddTwoUsersAsync("User", "User");
+        var (member, _) = await AddTwoUsersAsync("Member", "Member");
         SignInAs(member);
         (await FactoryClient.GetRequestAsync(ApiRoutes.Users.GetRecord(member.Id))).StatusCode
             .ShouldBe(HttpStatusCode.OK);
@@ -158,7 +158,7 @@ public class UserReadAccessTests : TestBase
     public async Task user_role_member_granted_read_users_can_list_the_users()
     {
         // Arrange
-        var (member, other) = await AddTwoUsersAsync("User", "User",
+        var (member, other) = await AddTwoUsersAsync("Member", "Member",
             first => first.AddPermission(Permission.ReadUsers()));
         SignInAs(member);
 
@@ -175,7 +175,7 @@ public class UserReadAccessTests : TestBase
     public async Task user_role_member_granted_read_users_can_get_another_user()
     {
         // Arrange
-        var (member, other) = await AddTwoUsersAsync("User", "User",
+        var (member, other) = await AddTwoUsersAsync("Member", "Member",
             first => first.AddPermission(Permission.ReadUsers()));
         SignInAs(member);
 
@@ -191,7 +191,7 @@ public class UserReadAccessTests : TestBase
     public async Task user_role_member_granted_read_users_can_get_another_user_by_identifier()
     {
         // Arrange
-        var (member, other) = await AddTwoUsersAsync("User", "User",
+        var (member, other) = await AddTwoUsersAsync("Member", "Member",
             first => first.AddPermission(Permission.ReadUsers()));
         SignInAs(member);
 
@@ -207,7 +207,7 @@ public class UserReadAccessTests : TestBase
     public async Task member_with_read_users_gets_not_found_for_an_unknown_identifier()
     {
         // Arrange
-        var (member, _) = await AddTwoUsersAsync("User", "User",
+        var (member, _) = await AddTwoUsersAsync("Member", "Member",
             first => first.AddPermission(Permission.ReadUsers()));
         SignInAs(member);
 
@@ -223,7 +223,7 @@ public class UserReadAccessTests : TestBase
     public async Task admin_without_read_users_cannot_list_the_users()
     {
         // Arrange
-        var (admin, _) = await AddTwoUsersAsync("Admin", "User",
+        var (admin, _) = await AddTwoUsersAsync("Admin", "Member",
             first => first.RemovePermission(Permission.ReadUsers()));
         SignInAs(admin);
 
@@ -238,7 +238,7 @@ public class UserReadAccessTests : TestBase
     public async Task read_only_machine_client_cannot_read_the_users()
     {
         // Arrange
-        var (_, other) = await AddTwoUsersAsync("Admin", "User");
+        var (_, other) = await AddTwoUsersAsync("Admin", "Member");
         FactoryClient.SetFakeBearerToken(new Dictionary<string, object>
         {
             ["client_id"] = TestingWebApplicationFactory.ReadOnlyMachineClientId
@@ -259,7 +259,7 @@ public class UserReadAccessTests : TestBase
     public async Task member_with_only_manage_user_access_cannot_remove_a_permission_of_another_user()
     {
         // Arrange
-        var (member, other) = await AddTwoUsersAsync("User", "User",
+        var (member, other) = await AddTwoUsersAsync("Member", "Member",
             first => first.AddPermission(Permission.ManageUserAccess()),
             second => second.AddPermission(Permission.ManageUserAccess()));
         SignInAs(member);
@@ -277,7 +277,7 @@ public class UserReadAccessTests : TestBase
     public async Task member_with_only_manage_user_access_cannot_add_a_permission_to_another_user()
     {
         // Arrange
-        var (member, other) = await AddTwoUsersAsync("User", "User",
+        var (member, other) = await AddTwoUsersAsync("Member", "Member",
             first => first.AddPermission(Permission.ManageUserAccess()));
         SignInAs(member);
 
@@ -294,14 +294,14 @@ public class UserReadAccessTests : TestBase
     public async Task member_with_only_manage_user_access_cannot_change_the_role_of_another_user()
     {
         // Arrange
-        var (member, other) = await AddTwoUsersAsync("User", "User",
+        var (member, other) = await AddTwoUsersAsync("Member", "Member",
             first => first.AddPermission(Permission.ManageUserAccess()),
             second => second.AddPermission(Permission.ManageUserAccess()));
         SignInAs(member);
 
         // Act
-        var result = await FactoryClient.PutJsonRequestAsync(ApiRoutes.Users.UpdateRole(other.Id),
-            new UpdateUserRoleDto { Role = "User" });
+        var result = await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.AddRole(other.Id),
+            new UserRoleDto { Role = "Auditor" });
 
         // Assert
         await ShouldBeForbiddenAsync(result, ReadUsersDenial);
@@ -312,7 +312,7 @@ public class UserReadAccessTests : TestBase
     public async Task member_with_only_manage_users_cannot_update_another_user()
     {
         // Arrange
-        var (member, other) = await AddTwoUsersAsync("User", "User",
+        var (member, other) = await AddTwoUsersAsync("Member", "Member",
             first => first.AddPermission(Permission.ManageUsers()));
         SignInAs(member);
 
@@ -331,7 +331,7 @@ public class UserReadAccessTests : TestBase
     public async Task member_with_only_manage_user_access_can_remove_their_own_permission()
     {
         // Arrange
-        var (member, _) = await AddTwoUsersAsync("User", "User",
+        var (member, _) = await AddTwoUsersAsync("Member", "Member",
             first => first.AddPermission(Permission.ManageUserAccess()));
         SignInAs(member);
 
@@ -377,7 +377,7 @@ public class UserReadAccessTests : TestBase
     {
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUsers(out var users, u => u.Role = firstRole, u => u.Role = secondRole);
+            .AddUsers(out var users, u => u.Roles = RolesOf(firstRole), u => u.Roles = RolesOf(secondRole));
         changeFirst?.Invoke(users[0]);
         changeSecond?.Invoke(users[1]);
         await InsertAsync(tenant);
@@ -385,4 +385,6 @@ public class UserReadAccessTests : TestBase
             await InsertAsync(user);
         return (users[0], users[1]);
     }
+
+    private static IReadOnlyList<string> RolesOf(string role) => role == "Member" ? [] : [role];
 }

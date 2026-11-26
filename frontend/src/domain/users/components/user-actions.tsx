@@ -2,9 +2,9 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import type { ReactElement } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 
-import type { UpdateUserRoleDto } from '@/api/generated/models/types/update-user-role-dto'
 import type { UserDto, UserDtoAllowedActionsEnumKey } from '@/api/generated/models/types/user-dto'
-import { updateUserRoleDtoSchema } from '@/api/generated/models/zod/update-user-role-dto'
+import type { UserRoleDto } from '@/api/generated/models/types/user-role-dto'
+import { userRoleDtoSchema } from '@/api/generated/models/zod/user-role-dto'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import {
@@ -19,7 +19,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 import { TemporaryPasswordDialog } from './temporary-password-dialog'
-import { isUserRole, ROLE_LABELS, USER_ROLES, type UserRole } from './user-role'
+import { isUserRole, ROLE_LABELS, type UserRole } from './user-role'
 
 export type UserAction = UserDtoAllowedActionsEnumKey
 
@@ -28,7 +28,8 @@ interface UserActionsProps {
   pendingAction?: UserAction
   /** The user is the caller, so a temporary password keeps the session of this page. Undefined until the current user loads. */
   isSelf?: boolean
-  onChangeRole: (role: UserRole) => void
+  onAddRole: (role: UserRole) => void
+  onRemoveRole: (role: UserRole) => void
   onDelete: () => void
 }
 
@@ -36,7 +37,8 @@ type ActionControl = (props: UserActionsProps) => ReactElement | null
 
 const CONTROLS: Record<UserAction, ActionControl | null> = {
   Update: null,
-  UpdateRole: ChangeRole,
+  AddRole,
+  RemoveRole,
   AddPermission: null,
   RemovePermission: null,
   Delete: ConfirmDelete,
@@ -46,7 +48,8 @@ const CONTROLS: Record<UserAction, ActionControl | null> = {
   ManageExternalLogins: null,
 }
 
-export function UserActions({ user, pendingAction, isSelf, onChangeRole, onDelete }: UserActionsProps) {
+export function UserActions(props: UserActionsProps) {
+  const { user } = props
   const controls = user.allowedActions.flatMap((action) => {
     const control = CONTROLS[action]
     return control ? [{ action, Control: control }] : []
@@ -59,7 +62,7 @@ export function UserActions({ user, pendingAction, isSelf, onChangeRole, onDelet
   return (
     <div role="group" aria-label={`Actions for ${user.fullName}`} className="flex flex-wrap gap-2">
       {controls.map(({ action, Control }) => (
-        <Control key={action} user={user} pendingAction={pendingAction} isSelf={isSelf} onChangeRole={onChangeRole} onDelete={onDelete} />
+        <Control key={action} {...props} />
       ))}
     </div>
   )
@@ -70,36 +73,74 @@ const buttonState = (action: UserAction, pendingAction: UserAction | undefined) 
   isDisabled: pendingAction !== undefined && pendingAction !== action,
 })
 
-function ChangeRole({ user, pendingAction, onChangeRole }: UserActionsProps) {
+function AddRole(props: UserActionsProps) {
+  const choices = props.user.addableRoles
+  if (choices.length === 0) return null
+  return (
+    <RoleDialog
+      {...props}
+      action="AddRole"
+      choices={choices}
+      button="Add role"
+      title={`Add a role to ${props.user.fullName}`}
+      description="The user gets each permission of the role, also one that was removed before. The other roles stay."
+      keep="Keep roles"
+      onPick={props.onAddRole}
+    />
+  )
+}
+
+function RemoveRole(props: UserActionsProps) {
+  if (props.user.roles.length === 0) return null
+  return (
+    <RoleDialog
+      {...props}
+      action="RemoveRole"
+      choices={props.user.roles}
+      button="Remove role"
+      title={`Remove a role from ${props.user.fullName}`}
+      description="The user keeps a permission that another role or an added permission gives. With no role, the user has only their own journal."
+      keep="Keep roles"
+      onPick={props.onRemoveRole}
+    />
+  )
+}
+
+interface RoleDialogProps extends UserActionsProps {
+  action: 'AddRole' | 'RemoveRole'
+  choices: readonly UserRole[]
+  button: string
+  title: string
+  description: string
+  keep: string
+  onPick: (role: UserRole) => void
+}
+
+function RoleDialog({ action, pendingAction, button, ...props }: RoleDialogProps) {
   return (
     <ResponsiveDialogTrigger>
-      <Button variant="outline" {...buttonState('UpdateRole', pendingAction)}>
-        Change role
+      <Button variant="outline" {...buttonState(action, pendingAction)}>
+        {button}
       </Button>
       <ResponsiveDialog>
-        <ChangeRoleForm user={user} onChangeRole={onChangeRole} />
+        <RoleForm button={button} {...props} />
       </ResponsiveDialog>
     </ResponsiveDialogTrigger>
   )
 }
 
-function ChangeRoleForm({ user, onChangeRole }: Pick<UserActionsProps, 'user' | 'onChangeRole'>) {
-  const form = useForm<UpdateUserRoleDto>({
-    resolver: zodResolver(updateUserRoleDtoSchema),
-    defaultValues: { role: user.role },
+function RoleForm({ choices, button, title, description, keep, onPick }: Pick<RoleDialogProps, 'choices' | 'button' | 'title' | 'description' | 'keep' | 'onPick'>) {
+  const form = useForm<UserRoleDto>({
+    resolver: zodResolver(userRoleDtoSchema),
+    defaultValues: { role: choices[0] },
   })
-  const handleConfirm = () =>
-    void form.handleSubmit(({ role }) => {
-      if (role !== user.role) onChangeRole(role)
-    })()
+  const handleConfirm = () => void form.handleSubmit(({ role }) => onPick(role))()
 
   return (
     <>
       <ResponsiveDialogHeader>
-        <ResponsiveDialogTitle>Change the role of {user.fullName}</ResponsiveDialogTitle>
-        <ResponsiveDialogDescription>
-          The new role replaces the permissions of the user with the permissions of that role.
-        </ResponsiveDialogDescription>
+        <ResponsiveDialogTitle>{title}</ResponsiveDialogTitle>
+        <ResponsiveDialogDescription>{description}</ResponsiveDialogDescription>
       </ResponsiveDialogHeader>
       <div className="pt-3 pb-4">
         <Controller
@@ -118,7 +159,7 @@ function ChangeRoleForm({ user, onChangeRole }: Pick<UserActionsProps, 'user' | 
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {USER_ROLES.map((role) => (
+                {choices.map((role) => (
                   <SelectItem key={role} id={role}>
                     {ROLE_LABELS[role]}
                   </SelectItem>
@@ -129,9 +170,9 @@ function ChangeRoleForm({ user, onChangeRole }: Pick<UserActionsProps, 'user' | 
         />
       </div>
       <ResponsiveDialogFooter>
-        <ResponsiveDialogClose>Keep role</ResponsiveDialogClose>
+        <ResponsiveDialogClose>{keep}</ResponsiveDialogClose>
         <ResponsiveDialogClose variant="default" onPress={handleConfirm}>
-          Change role
+          {button}
         </ResponsiveDialogClose>
       </ResponsiveDialogFooter>
     </>

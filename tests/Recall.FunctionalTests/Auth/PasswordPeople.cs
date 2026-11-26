@@ -42,7 +42,7 @@ public static partial class PasswordPeople
                 ? null
                 : await db.Users.IgnoreQueryFilters().Where(u => u.Id == sameTenantAs.UserId).Select(u => u.TenantId).SingleAsync();
             var tenant = tenantId is null ? Tenant.Create(new TenantForCreation { Name = $"Tenant {Guid.NewGuid():N}" }) : null;
-            var user = User.CreateFromLogin(new NewPerson("Ada", "Lovelace", null, "ada"), tenantId ?? tenant!.Id, UserRole.Admin());
+            var user = User.CreateFromLogin(new NewPerson("Ada", "Lovelace", null, "ada"), tenantId ?? tenant!.Id, [UserRole.Admin()]);
             LoginName.TryOf(loginName, out var name).ShouldBeTrue();
             var credential = issueTemporary is { } issuedAt
                 ? PasswordCredential.IssueTemporary(user.Id, name!, stored, issuedAt)

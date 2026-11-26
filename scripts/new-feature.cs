@@ -688,7 +688,10 @@ internal sealed partial class Repo(string root, string app)
     // dotnet-ef hides the compiler errors of its own build, so the script builds first and gives --no-build
     private void BuildServer(string failure) => Run("dotnet", ["build", Path.Combine(Server, $"{Server}.csproj")], failure);
 
-    /// <summary>Adds the migration once. It gives the new permission to each admin that exists.</summary>
+    /// <summary>
+    /// Adds the migration once. The role Admin gives each permission in code, so the migration gives no row. Its Down
+    /// deletes the overrides of the permission, which the code before it does not know.
+    /// </summary>
     public IReadOnlyList<string> AddMigration(Spec spec)
     {
         var n = spec.Names;
@@ -704,13 +707,11 @@ internal sealed partial class Repo(string root, string app)
         var text = File.ReadAllText(migration);
         var newline = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
         var down = text.IndexOf("protected override void Down(MigrationBuilder migrationBuilder)", StringComparison.Ordinal);
-        var upEnd = down < 0 ? -1 : text.LastIndexOf($"{newline}        }}", down, StringComparison.Ordinal);
-        if (upEnd < 0)
-            throw new FeatureException($"The script could not find Up and Down in {migration}. Add the permission lines by hand.");
+        if (down < 0)
+            throw new FeatureException($"The script could not find Down in {migration}. Add the permission line by hand.");
         var downStart = text.IndexOf($"{{{newline}", down, StringComparison.Ordinal) + 1 + newline.Length;
 
         text = text.Insert(downStart, $"            migrationBuilder.DeletePermission(\"{n.PermissionName}\");{newline}{newline}");
-        text = text.Insert(upEnd, $"{newline}{newline}            migrationBuilder.GrantPermissionToRole(\"Admin\", \"{n.PermissionName}\");");
         File.WriteAllText(migration, text);
 
         return Directory.GetFiles(folder, $"*_{n.Migration}*.cs")
@@ -2107,7 +2108,7 @@ internal static class Templates
                     // Arrange
                     var testingServiceScope = new TestingServiceScope();
                     await testingServiceScope.StartGraph(out var seed)
-                        .AddUser(out var member, u => u.Role = "User")
+                        .AddUser(out var member, u => u.Roles = [])
                         .Under(seed.Tenant){{addParent}}.Add{{e}}(out var {{v}})
                         .BuildAsync();
                     testingServiceScope.SetUserWithDefaults(identifier: member.Identifier);
@@ -2321,7 +2322,7 @@ internal static class Templates
                     await using var services = pause.BuildServices();
                     await new TestingServiceScope().StartGraph(out _)
                         .AddTenant(out var tenant)
-                        .AddUser(out var admin, u => u.Role = "Admin"){{parent}}
+                        .AddUser(out var admin, u => u.Roles = ["Admin"]){{parent}}
                         .BuildAsync();
                     var underTest = new TestingServiceScope(services);
                     var rival = new TestingServiceScope();
@@ -2349,7 +2350,7 @@ internal static class Templates
                     await using var services = pause.BuildServices();
                     await new TestingServiceScope().StartGraph(out _)
                         .AddTenant(out var tenant)
-                        .AddUser(out var admin, u => u.Role = "Admin"){{parent}}
+                        .AddUser(out var admin, u => u.Roles = ["Admin"]){{parent}}
                         .BuildAsync();
                     var underTest = new TestingServiceScope(services);
                     var rival = new TestingServiceScope();
@@ -2380,11 +2381,11 @@ internal static class Templates
         => s.Parent is { } p && p.BlueprintNamespace != $"{s.Names.App}.SharedTestHelpers.EntityGraphs" ? $"\nusing {p.BlueprintNamespace};" : "";
 
     private static string FunctionalArrange(Spec s) => $$"""
-        private async Task<{{s.Names.Entity}}> Add{{s.Names.Entity}}AndSignInAsync(string role)
+        private async Task<{{s.Names.Entity}}> Add{{s.Names.Entity}}AndSignInAsync(params string[] roles)
         {
             await StartGraph()
                 .AddTenant(out var tenant)
-                .AddUser(out var user, u => u.Role = role)
+                .AddUser(out var user, u => u.Roles = roles)
                 .Under(tenant){{s.ParentGraphStep}}.Add{{s.Names.Entity}}(out var {{s.Names.Var}})
                 .BuildAsync();
             SignInAs(user.Identifier);
@@ -2441,7 +2442,7 @@ internal static class Templates
                 public async Task a_member_reads_and_lists_but_cannot_add()
                 {
                     // Arrange
-                    var {{v}} = await Add{{e}}AndSignInAsync("User");
+                    var {{v}} = await Add{{e}}AndSignInAsync();
 
                     // Act
                     var read = await FactoryClient.GetRequestAsync($"{Route}/{{{v}}.Id}");
@@ -2514,12 +2515,12 @@ internal static class Templates
                     ["add_{{n.Snake}}", "get_{{n.Snake}}", "list_{{n.SnakePlural}}", "update_{{n.Snake}}"];
 
                 [Test]
-                [Arguments("User", new[] { "get_{{n.Snake}}", "list_{{n.SnakePlural}}" })]
+                [Arguments("Member", new[] { "get_{{n.Snake}}", "list_{{n.SnakePlural}}" })]
                 [Arguments("Admin", new[] { "add_{{n.Snake}}", "get_{{n.Snake}}", "list_{{n.SnakePlural}}", "update_{{n.Snake}}" })]
                 public async Task tools_list_shows_only_the_tools_that_the_caller_can_use(string role, string[] expected)
                 {
                     // Arrange
-                    await Add{{e}}AndSignInAsync(role);
+                    await Add{{e}}AndSignInAsync(role == "Member" ? [] : [role]);
                     await using var client = await CreateMcpClientAsync();
 
                     // Act
@@ -2533,7 +2534,7 @@ internal static class Templates
                 public async Task a_member_reads_and_lists_with_the_tools()
                 {
                     // Arrange
-                    var {{v}} = await Add{{e}}AndSignInAsync("User");
+                    var {{v}} = await Add{{e}}AndSignInAsync();
                     await using var client = await CreateMcpClientAsync();
 
                     // Act
@@ -2552,7 +2553,7 @@ internal static class Templates
                 public async Task a_member_cannot_add_with_the_tool()
                 {
                     // Arrange
-                    {{keep}}await Add{{e}}AndSignInAsync("User");
+                    {{keep}}await Add{{e}}AndSignInAsync();
                     await using var client = await CreateMcpClientAsync();
 
                     // Act

@@ -55,11 +55,11 @@ public sealed class PermissionGuard(
             { CanManageAllTenants: true } => Caller.AllTenantsManager.Instance,
             CallerIdentity.AllTenantsClient => new Caller.Outsider(OutsiderKind.MachineClient),
             CallerIdentity.User user => await LoadUserAsync(user.Subject, cancellationToken) is { } member
-                ? new Caller.Member(member.Id, member.UserPermissions.Select(p => p.Permission))
+                ? new Caller.Member(member.Id, member.Permissions())
                 : new Caller.Outsider(OutsiderKind.NoUserRecord),
             CallerIdentity.DelegatedAgent agent => await LoadDelegatedAgentAsync(agent, cancellationToken),
             CallerIdentity.PersonalAccessToken token => await LoadUserAsync(token.Subject, cancellationToken) is { } user
-                ? new Caller.PersonalAccessToken(token.TokenId, user.Id, user.UserPermissions.Select(p => p.Permission), token.Grant)
+                ? new Caller.PersonalAccessToken(token.TokenId, user.Id, user.Permissions(), token.Grant)
                 : new Caller.Outsider(OutsiderKind.NoUserRecord),
             CallerIdentity.MachineAgent agent => await LoadGrantAsync(agent.AgentId, cancellationToken) is { } grant
                 ? new Caller.MachineAgent(agent.ClientId, grant)
@@ -78,7 +78,7 @@ public sealed class PermissionGuard(
         if (await LoadGrantAsync(agent.AgentId, cancellationToken) is not { } grant)
             return new Caller.Outsider(OutsiderKind.UnknownClient);
 
-        return new Caller.DelegatedAgent(agent.ClientId, user.UserPermissions.Select(p => p.Permission), grant);
+        return new Caller.DelegatedAgent(agent.ClientId, user.Permissions(), grant);
     }
 
     private Task<User?> LoadUserAsync(string identifier, CancellationToken cancellationToken)
@@ -86,6 +86,7 @@ public sealed class PermissionGuard(
             .TagWithOperationCallSite("users.permission_guard.load")
             .AsNoTracking()
             .Include(u => u.UserPermissions)
+            .Include(u => u.Roles)
             .FirstOrDefaultAsync(u => u.Identifier == identifier, cancellationToken);
 
     private async Task<IEnumerable<Permission>?> LoadGrantAsync(string agentId, CancellationToken cancellationToken)

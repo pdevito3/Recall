@@ -38,6 +38,7 @@ public class AppDbContext(
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<User> Users => Set<User>();
     public DbSet<UserPermission> UserPermissions => Set<UserPermission>();
+    public DbSet<UserRoleAssignment> UserRoles => Set<UserRoleAssignment>();
     public DbSet<Agent> Agents => Set<Agent>();
     public DbSet<AgentPermission> AgentPermissions => Set<AgentPermission>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();

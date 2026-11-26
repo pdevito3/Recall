@@ -40,7 +40,8 @@ public class RequestValidationBehaviorTests
             () => Send(new AddUser.Command(new UserForCreationDto { FirstName = "Ada" })));
 
         // Assert
-        exception.Errors.Keys.ShouldBe(["username", "role"], ignoreOrder: true);
+        // The roles are optional: no roles makes a Member.
+        exception.Errors.Keys.ShouldBe(["username"]);
         exception.Errors["username"].ShouldBe(["The username field is required."]);
     }
 
@@ -141,7 +142,7 @@ public class RequestValidationBehaviorTests
     {
         // Act
         var exception = await Should.ThrowAsync<RequestValidationException>(
-            () => Send(new UpdateUserRole.Command("usr_1", null!)));
+            () => Send(new AddUserRole.Command("usr_1", null!)));
 
         // Assert
         exception.Errors.ShouldHaveSingleItem().Key.ShouldBe("role");

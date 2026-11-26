@@ -164,8 +164,8 @@ public sealed class SqliteFileTests
         await using var connection = await OpenAppConnectionAsync();
         await using var command = connection.CreateCommand();
         command.CommandText =
-            "INSERT INTO users (id, tenant_id, first_name, last_name, identifier, username, email, role, is_deleted, version) " +
-            $"VALUES ('usr_{Guid.NewGuid():N}', 'ten_missing', 'A', 'B', '{Guid.NewGuid():N}', '{Guid.NewGuid():N}', 'e@example.com', 'User', 0, 1)";
+            "INSERT INTO users (id, tenant_id, first_name, last_name, identifier, username, email, is_deleted, version) " +
+            $"VALUES ('usr_{Guid.NewGuid():N}', 'ten_missing', 'A', 'B', '{Guid.NewGuid():N}', '{Guid.NewGuid():N}', 'e@example.com', 0, 1)";
 
         // Act
         var act = () => command.ExecuteNonQueryAsync();

@@ -1,5 +1,6 @@
 namespace Recall.IntegrationTests.FeatureTests.Users;
 
+using Recall.Server.Domain.Users;
 using Recall.Server.Domain.Users.Features;
 using Recall.Server.Exceptions;
 using Recall.SharedTestHelpers.EntityGraphs;
@@ -83,7 +84,7 @@ public class GetUserByIdentifierQueryTests : TestBase
         var testingServiceScope = new TestingServiceScope();
         var uniqueIdentifier = $"admin-idp-{Guid.NewGuid()}";
         await testingServiceScope.StartGraph(out _)
-            .AddUser(out var fakeUser, u => { u.Identifier = uniqueIdentifier; u.Role = "Admin"; })
+            .AddUser(out var fakeUser, u => { u.Identifier = uniqueIdentifier; u.Roles = ["Admin"]; })
             .BuildAsync();
 
         // Act
@@ -92,8 +93,8 @@ public class GetUserByIdentifierQueryTests : TestBase
 
         // Assert
         userReturned.ShouldNotBeNull();
-        userReturned.Role.ShouldBe("Admin");
-        userReturned.Permissions.ShouldNotBeEmpty();
+        userReturned.Roles.ShouldBe(["Admin"]);
+        userReturned.Permissions.ShouldBe(Permission.ListNames(), ignoreOrder: true);
         userReturned.Permissions.ShouldContain("manage_tenant");
     }
 

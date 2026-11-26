@@ -5,11 +5,11 @@ import { aUser } from '@tests/support/builders/user-builder'
 import { expect, test } from '@tests/support/fixtures'
 import { aboutPage } from './about.tasks'
 
-const signedInAs = (role: 'Admin' | 'User') => ({
+const signedInAs = (role: 'Admin' | 'Member') => ({
   method: 'get' as const,
   path: membershipPaths.userOf(actorSubject),
   status: 200,
-  body: aUser().identifiedBy(actorSubject).inRole(role).build(),
+  body: aUser().identifiedBy(actorSubject).inRoles(...(role === 'Admin' ? ['Admin' as const] : [])).build(),
 })
 
 test.describe('the support bundle on the about page', () => {
@@ -39,7 +39,7 @@ test.describe('the support bundle on the about page', () => {
   })
 
   test('a Member does not see the section', async ({ page, api }) => {
-    api.mock(signedInAs('User'))
+    api.mock(signedInAs('Member'))
     const about = aboutPage(page)
 
     await about.openFromHomeWithTheMembershipLoaded()

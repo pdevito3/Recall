@@ -32,7 +32,7 @@ public class UserDeletedTests : TestBase
             foundInHandler = await db.Users.AnyAsync(u => u.Id == e.UserId, ct);
             db.Users.Add(NewUser(tenantId!, linkIdentifier));
         }));
-        await new TestingServiceScope().StartGraph(out _).AddUser(out var user, u => u.Role = "User").BuildAsync();
+        await new TestingServiceScope().StartGraph(out _).AddUser(out var user, u => u.Roles = []).BuildAsync();
         tenantId = user.TenantId;
 
         // Act
@@ -51,7 +51,7 @@ public class UserDeletedTests : TestBase
         // Arrange
         await using var services = TestFixture.BuildServiceProvider(s => s.AddTestHandler<UserDeleted>((_, _, _) =>
             throw new InvalidOperationException("The link did not change.")));
-        await new TestingServiceScope().StartGraph(out _).AddUser(out var user, u => u.Role = "User").BuildAsync();
+        await new TestingServiceScope().StartGraph(out _).AddUser(out var user, u => u.Roles = []).BuildAsync();
 
         // Act
         var act = () => new TestingServiceScope(services).SendAsync(new DeleteUser.Command(user.Id));
@@ -66,7 +66,7 @@ public class UserDeletedTests : TestBase
     {
         // Arrange
         var scope = new TestingServiceScope();
-        await scope.StartGraph(out _).AddUser(out var user, u => u.Role = "User").BuildAsync();
+        await scope.StartGraph(out _).AddUser(out var user, u => u.Roles = []).BuildAsync();
 
         // Act
         var act = () => scope.ExecuteDbContextAsync(async db =>
@@ -97,7 +97,7 @@ public class UserDeletedTests : TestBase
                 db.Users.Add(NewUser(tenantId!, linkIdentifier));
                 return Task.CompletedTask;
             }));
-        await new TestingServiceScope().StartGraph(out _).AddUser(out var user, u => u.Role = "User").BuildAsync();
+        await new TestingServiceScope().StartGraph(out _).AddUser(out var user, u => u.Roles = []).BuildAsync();
         tenantId = user.TenantId;
 
         // Act

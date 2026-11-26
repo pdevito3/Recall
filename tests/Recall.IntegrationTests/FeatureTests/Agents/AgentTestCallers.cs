@@ -1,5 +1,6 @@
 namespace Recall.IntegrationTests.FeatureTests.Agents;
 
+using Recall.SharedTestHelpers.Fakes.User;
 using Recall.Server.Domain.Users;
 using Recall.SharedTestHelpers.EntityGraphs;
 
@@ -12,7 +13,7 @@ internal static class AgentTestCallers
     public static async Task<User> SignInAsMemberWithOnlyAsync(
         this TestingServiceScope scope, params Permission[] permissions)
     {
-        var graph = scope.StartGraph(out _).AddUser(out var member, u => u.Role = "User");
+        var graph = scope.StartGraph(out _).AddUser(out var member, u => u.Roles = []);
         member.AddPermissions(permissions);
         await graph.BuildAsync();
 

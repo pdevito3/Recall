@@ -54,12 +54,16 @@ public sealed record UserDto
     public string? Email { get; init; }
     // ...
     [NamesOf<UserRole>]
-    public string Role { get; init; } = default!;
+    public IReadOnlyList<string> Roles { get; init; } = [];
+    // ...
     [NamesOf<Permission>]
     public IReadOnlyList<string> Permissions { get; init; } = [];
     // ...
     [NamesOf<UserAction>]
     public IReadOnlyList<string> AllowedActions { get; init; } = [];
+    // ...
+    [NamesOf<UserRole>]
+    public IReadOnlyList<string> AddableRoles { get; init; } = [];
     public uint Version { get; init; }
 }
 ```
@@ -106,7 +110,7 @@ Mapperly makes the map at build time. Do not write a reflection mapper. See [sou
 3. Add an `IQueryable` projection for list queries. Mapperly turns it into one SQL query.
 4. Map a value object to its primitive with a private method.
 5. Ignore `LastModifiedOn`, `IsDeleted`, and `DomainEvents` on the source of the DTO mapping.
-6. When the DTO has the allowed actions of the caller, write the public map by hand. It calls a private generated map that ignores `AllowedActions`, and adds the actions. The `IQueryable` projection takes the configuration of the private map.
+6. When the DTO has the allowed actions of the caller, write the public map by hand. It calls a private generated map that ignores `AllowedActions`, and adds the actions. The `IQueryable` projection takes the configuration of the private map. A value that only code computes, such as the permissions that the roles of a user give, is also added in the public map, and the list handler adds it after the page loads. A filter or a sort cannot read such a value, because SQL does not have it.
 
 <!-- code: Recall.Server/Domain/Users/Mappings/UserMapper.cs -->
 ```csharp
@@ -119,8 +123,11 @@ public static partial class UserMapper
         var dto = user.ToUserDtoWithoutActions();
         return dto with
         {
-            Permissions = InOneOrder(dto.Permissions),
+            Roles = InOneOrder(dto.Roles),
+            Permissions = InOneOrder(user.Permissions().Select(p => p.Value)),
+            // ...
             AllowedActions = NamesOf(user.AllowedActions(caller)),
+            AddableRoles = user.AddableRoles(caller).Select(r => r.Value).ToList(),
             LoginName = loginName?.Value,
         };
     }
@@ -139,15 +146,18 @@ public static partial class UserMapper
     [MapperIgnoreSource(nameof(User.IsDeleted))]
     [MapperIgnoreSource(nameof(User.DomainEvents))]
     [MapperIgnoreTarget(nameof(UserDto.AllowedActions))]
+    [MapperIgnoreTarget(nameof(UserDto.AddableRoles))]
     [MapperIgnoreTarget(nameof(UserDto.LoginName))]
-    [MapProperty(nameof(User.UserPermissions), nameof(UserDto.Permissions))]
+    [MapperIgnoreSource(nameof(User.UserPermissions))]
+    [MapperIgnoreTarget(nameof(UserDto.Permissions))]
+    [MapProperty(nameof(User.Roles), nameof(UserDto.Roles))]
+    [MapPropertyFromSource(nameof(UserDto.AddedPermissions), Use = nameof(MapAddedPermissions))]
+    [MapPropertyFromSource(nameof(UserDto.RemovedPermissions), Use = nameof(MapRemovedPermissions))]
     [MapPropertyFromSource(nameof(UserDto.FullName), Use = nameof(MapFullName))]
     private static partial UserDto ToUserDtoWithoutActions(this User user);
 
     // ...
     private static string MapEmail(EmailAddress email) => email.Value;
-    // ...
-    private static string MapRole(UserRole role) => role.Value;
     // ...
 }
 ```

@@ -33,58 +33,64 @@ public class PermissionsInResponseTests : TestBase
     {
         [Name(typeof(AddUser.Command))] = async a =>
         {
-            var dto = new FakeUserForCreationDto().Generate() with { Role = UserRole.Admin().Value };
+            var dto = new FakeUserForCreationDto().Generate() with { Roles = [UserRole.Admin().Value] };
             var user = await ReadAsync<UserDto>(
                 await a.Client.PostJsonRequestAsync(ApiRoutes.Users.Create, dto), HttpStatusCode.Created);
             return Returned.OfUser(user);
         },
         [Name(typeof(UpdateUser.Command))] = async a =>
         {
-            var target = await a.AddUserAsync(UserRole.User(), Permission.ReadUsers(), Permission.ReadAgents());
+            var target = await a.AddUserAsync([], Permission.ReadUsers(), Permission.ReadAgents());
             var dto = new FakeUserForUpdateDto().Generate() with { Version = target.Version };
             return Returned.OfUser(await ReadAsync<UserDto>(
                 await a.Client.PutJsonRequestAsync(ApiRoutes.Users.Put(target.Id), dto)));
         },
-        [Name(typeof(UpdateUserRole.Command))] = async a =>
+        [Name(typeof(AddUserRole.Command))] = async a =>
         {
-            // The new role replaces each row, so a row that the handler did not load stays in the database
-            var target = await a.AddUserAsync(UserRole.User(), Permission.ReadUsers());
-            return Returned.OfUser(await ReadAsync<UserDto>(await a.Client.PutJsonRequestAsync(
-                ApiRoutes.Users.UpdateRole(target.Id), new UpdateUserRoleDto { Role = UserRole.Admin().Value })));
+            // The new role ends the added read_users, so a row that the handler did not load stays in the database
+            var target = await a.AddUserAsync([], Permission.ReadUsers(), Permission.ManageAgents());
+            return Returned.OfUser(await ReadAsync<UserDto>(await a.Client.PostJsonRequestAsync(
+                ApiRoutes.Users.AddRole(target.Id), new UserRoleDto { Role = UserRole.Auditor().Value })));
+        },
+        [Name(typeof(RemoveUserRole.Command))] = async a =>
+        {
+            var target = await a.AddUserAsync([UserRole.UserManager(), UserRole.Auditor()], Permission.ManageAgents());
+            return Returned.OfUser(await ReadAsync<UserDto>(await a.Client.DeleteRequestAsync(
+                ApiRoutes.Users.RemoveRole(target.Id, UserRole.Auditor().Value))));
         },
         [Name(typeof(AddUserPermission.Command))] = async a =>
         {
-            var target = await a.AddUserAsync(UserRole.User(), Permission.ReadUsers());
+            var target = await a.AddUserAsync([], Permission.ReadUsers());
             return Returned.OfUser(await ReadAsync<UserDto>(await a.Client.PostJsonRequestAsync(
                 ApiRoutes.Users.AddPermission(target.Id), new UserPermissionDto { Permission = Permission.Names.ReadAgents })));
         },
         [Name(typeof(RemoveUserPermission.Command))] = async a =>
         {
-            var target = await a.AddUserAsync(UserRole.Admin());
+            var target = await a.AddUserAsync([UserRole.Admin()]);
             return Returned.OfUser(await ReadAsync<UserDto>(await a.Client.DeleteRequestAsync(
                 ApiRoutes.Users.RemovePermission(target.Id, Permission.Names.ReadAgents))));
         },
         [Name(typeof(GetUser.Query))] = async a =>
         {
-            var target = await a.AddUserAsync(UserRole.User(), Permission.ReadUsers(), Permission.ReadAgents());
+            var target = await a.AddUserAsync([], Permission.ReadUsers(), Permission.ReadAgents());
             return Returned.OfUser(await ReadAsync<UserDto>(
                 await a.Client.GetRequestAsync(ApiRoutes.Users.GetRecord(target.Id))));
         },
         [Name(typeof(GetUserByIdentifier.Query))] = async a =>
         {
-            var target = await a.AddUserAsync(UserRole.User(), Permission.ReadUsers(), Permission.ReadAgents());
+            var target = await a.AddUserAsync([], Permission.ReadUsers(), Permission.ReadAgents());
             return Returned.OfUser(await ReadAsync<UserDto>(
                 await a.Client.GetRequestAsync(ApiRoutes.Users.GetByIdentifier(target.Identifier))));
         },
         [Name(typeof(GetUserList.Query))] = async a =>
         {
-            var target = await a.AddUserAsync(UserRole.User(), Permission.ReadUsers(), Permission.ReadAgents());
+            var target = await a.AddUserAsync([], Permission.ReadUsers(), Permission.ReadAgents());
             var users = await ReadAsync<List<UserDto>>(await a.Client.GetRequestAsync(ApiRoutes.Users.GetList));
             return Returned.OfUser(users.Single(u => u.Id == target.Id));
         },
         [Name(typeof(InitiateUserAndTenant.Command))] = async a =>
         {
-            var dto = new FakeInitiateUserAndTenantDto().Generate() with { Role = UserRole.Admin().Value };
+            var dto = new FakeInitiateUserAndTenantDto().Generate() with { Roles = [UserRole.Admin().Value] };
             a.Client.SignInAsTrustedMachineClient();
             var initiated = await ReadAsync<InitiateUserAndTenantResponseDto>(
                 await a.Client.PostJsonRequestAsync(ApiRoutes.Users.Initiate, dto), HttpStatusCode.Created);
@@ -169,7 +175,7 @@ public class PermissionsInResponseTests : TestBase
     {
         // Arrange
         var arranged = await ArrangeAsync();
-        var target = await arranged.AddUserAsync(UserRole.User(), Permission.ReadUsers(), Permission.ManageTenant(), Permission.ReadAgents());
+        var target = await arranged.AddUserAsync([], Permission.ReadUsers(), Permission.ManageTenant(), Permission.ReadAgents());
 
         // Act
         var users = await ReadAsync<List<UserDto>>(await FactoryClient.GetRequestAsync(ApiRoutes.Users.GetList));
@@ -237,9 +243,9 @@ public class PermissionsInResponseTests : TestBase
 
     private sealed record Arranged(HttpClient Client, TestSeed Seed)
     {
-        public async Task<User> AddUserAsync(UserRole role, params Permission[] permissions)
+        public async Task<User> AddUserAsync(IReadOnlyList<UserRole> roles, params Permission[] permissions)
         {
-            TestGraph.Start(Seed, NullStore.Instance).AddUser(out var user, u => u.Role = role.Value);
+            TestGraph.Start(Seed, NullStore.Instance).AddUser(out var user, u => u.Roles = [.. roles.Select(r => r.Value)]);
             user.AddPermissions(permissions);
             await InsertAsync(user);
             return user;
@@ -265,11 +271,17 @@ public class PermissionsInResponseTests : TestBase
 
     private sealed record Returned(IReadOnlyList<string> Permissions, Func<Task<List<string>>> StoredAsync)
     {
+        // The permissions that the stored roles and overrides of the user give.
         public static Returned OfUser(UserDto user)
-            => new(user.Permissions, () => ExecuteDbContextAsync(db => db.UserPermissions
-                .Where(p => p.UserId == user.Id)
-                .Select(p => p.Permission.Value)
-                .ToListAsync()));
+            => new(user.Permissions, () => ExecuteDbContextAsync(async db =>
+            {
+                var roles = await db.UserRoles.Where(r => r.UserId == user.Id).Select(r => r.Role).ToListAsync();
+                var overrides = await db.UserPermissions.Where(p => p.UserId == user.Id).ToListAsync();
+                return roles.SelectMany(r => r.Permissions()).Select(p => p.Value)
+                    .Union(overrides.Where(p => p.Effect == PermissionEffect.Grant).Select(p => p.Permission.Value))
+                    .Except(overrides.Where(p => p.Effect == PermissionEffect.Deny).Select(p => p.Permission.Value))
+                    .ToList();
+            }));
 
         public static Returned OfToken(PersonalAccessTokenDto token)
             => new(token.Permissions, async () => [.. TokenGrant.Decode(await ExecuteDbContextAsync(db => db.Set<AuthSession>()

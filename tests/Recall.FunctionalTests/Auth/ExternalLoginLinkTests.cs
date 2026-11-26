@@ -479,7 +479,7 @@ public sealed partial class ExternalLoginLinkTests
         var subject = NewSubject();
         var authorize = await LinkAuthorizeAsync(browser);
         LinkResultOf(await browser.CallbackAsync(authorize.State, Host.Provider.Approve(authorize, new StubLogin(subject)))).ShouldBe(OidcEndpoints.Linked);
-        var reader = await PatPeople.AddPersonAsync(Host, admin.TenantId, UserRole.User(), Permission.ReadAuditLog(), Permission.ReadUsers());
+        var reader = await PatPeople.AddPersonAsync(Host, admin.TenantId, [], Permission.ReadAuditLog(), Permission.ReadUsers());
         using var readerBrowser = new AuthBrowser(Host);
         await readerBrowser.LoginWebAsync(reader.Subject);
 
@@ -540,7 +540,7 @@ public sealed partial class ExternalLoginLinkTests
     {
         // Arrange
         var (admin, member) = await PatPeople.AddTenantAsync(Host);
-        var manager = await PatPeople.AddPersonAsync(Host, admin.TenantId, UserRole.User(), Permission.ManageUserAccess(), Permission.ReadUsers());
+        var manager = await PatPeople.AddPersonAsync(Host, admin.TenantId, [], Permission.ManageUserAccess(), Permission.ReadUsers());
         using var memberBrowser = new AuthBrowser(Host);
         await memberBrowser.LoginWebAsync(member.Subject);
         using var managerBrowser = new AuthBrowser(Host);

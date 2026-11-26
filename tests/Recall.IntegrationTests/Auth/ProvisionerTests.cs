@@ -36,11 +36,11 @@ public sealed class ProvisionerTests
 
         // Assert
         var userId = UserIdOf(outcome);
-        var user = await database.ReadAsync(db => db.Users.Include(u => u.UserPermissions).SingleAsync());
+        var user = await database.ReadAsync(db => db.Users.Include(u => u.Roles).Include(u => u.UserPermissions).SingleAsync());
         user.Id.ShouldBe(userId);
         user.Identifier.ShouldBe(userId);
-        user.Role.Value.ShouldBe(UserRole.Admin().Value);
-        user.UserPermissions.ShouldNotBeEmpty();
+        user.Roles.Select(r => r.Role).ShouldBe([UserRole.Admin()]);
+        user.Permissions().ShouldBe(Permission.GetAll(), ignoreOrder: true);
         user.FirstName.ShouldBe("Ada");
         user.LastName.ShouldBe("Lovelace");
         (await database.ReadAsync(db => db.Tenants.SingleAsync())).Name.ShouldBe("Recall");
@@ -68,7 +68,7 @@ public sealed class ProvisionerTests
     }
 
     [Test]
-    public async Task a_second_subject_gets_signup_closed_and_with_open_signup_joins_as_a_user()
+    public async Task a_second_subject_gets_signup_closed_and_with_open_signup_joins_as_a_member()
     {
         // Arrange
         await using var database = await AuthTestDatabase.CreateAsync();
@@ -82,8 +82,9 @@ public sealed class ProvisionerTests
 
         // Assert
         refused.ShouldBeOfType<ProvisionOutcome.SignupClosed>();
-        var user = await database.ReadAsync(db => db.Users.SingleAsync(u => u.Id == joined));
-        user.Role.Value.ShouldBe(UserRole.User().Value);
+        var user = await database.ReadAsync(db => db.Users.Include(u => u.Roles).Include(u => u.UserPermissions).SingleAsync(u => u.Id == joined));
+        user.Roles.ShouldBeEmpty();
+        user.Permissions().ShouldBeEmpty();
         user.Identifier.ShouldBe(joined);
         var ownerRow = await database.ReadAsync(db => db.Users.SingleAsync(u => u.Id == owner));
         user.TenantId.ShouldBe(ownerRow.TenantId);
@@ -157,8 +158,8 @@ public sealed class ProvisionerTests
         // Assert
         userId.ShouldNotBe(ownerId);
         (await database.ReadAsync(db => db.Tenants.CountAsync())).ShouldBe(1);
-        (await database.ReadAsync(db => db.Users.SingleAsync(u => u.Id == ownerId))).Role.Value.ShouldBe(UserRole.Admin().Value);
-        (await database.ReadAsync(db => db.Users.SingleAsync(u => u.Id == userId))).Role.Value.ShouldBe(UserRole.User().Value);
+        (await RolesOfAsync(database, ownerId)).ShouldBe([UserRole.Admin()]);
+        (await RolesOfAsync(database, userId)).ShouldBeEmpty();
     }
 
     [Test]
@@ -342,7 +343,7 @@ public sealed class ProvisionerTests
         claimed.ShouldNotBe(owner);
         var user = await database.ReadAsync(db => db.Users.SingleAsync(u => u.Id == claimed));
         user.Identifier.ShouldBe(claimed);
-        user.Role.Value.ShouldBe(UserRole.Admin().Value);
+        (await RolesOfAsync(database, claimed)).ShouldBe([UserRole.Admin()]);
         File.Exists(database.ClaimFilePath).ShouldBeFalse();
     }
 
@@ -417,14 +418,7 @@ public sealed class ProvisionerTests
         await using var database = await AuthTestDatabase.CreateAsync();
         var underTest = ProvisionerOf(database.BuildServices());
         var owner = UserIdOf(await underTest.ResolveAsync(Person("old-subject"), CancellationToken.None));
-        await database.ReadAsync(async db =>
-        {
-            var user = await db.Users.Include(u => u.UserPermissions).SingleAsync(u => u.Id == owner);
-            var lost = user.UserPermissions.Take(2).ToList();
-            lost.ForEach(permission => user.RemovePermission(permission));
-            db.UserPermissions.RemoveRange(lost);
-            return await db.SaveChangesAsync();
-        });
+        await RemoveTwoPermissionsAsync(database, owner);
         await File.WriteAllTextAsync(database.ClaimFilePath, "");
 
         // Act
@@ -432,8 +426,8 @@ public sealed class ProvisionerTests
 
         // Assert
         UserIdOf(outcome).ShouldBe(owner);
-        var held = await database.ReadAsync(db => db.UserPermissions.Where(p => p.UserId == owner).Select(p => p.Permission).ToListAsync());
-        held.ShouldBe(Permission.GetAll(), ignoreOrder: true);
+        (await HeldPermissionsAsync(database, owner)).ShouldBe(Permission.GetAll(), ignoreOrder: true);
+        (await database.ReadAsync(db => db.UserPermissions.CountAsync(p => p.UserId == owner))).ShouldBe(0);
     }
 
     [Test]
@@ -518,15 +512,18 @@ public sealed class ProvisionerTests
     private static Task<int> RemoveTwoPermissionsAsync(AuthTestDatabase database, string userId)
         => database.ReadAsync(async db =>
         {
-            var user = await db.Users.Include(u => u.UserPermissions).SingleAsync(u => u.Id == userId);
-            var lost = user.UserPermissions.Take(2).ToList();
-            lost.ForEach(permission => user.RemovePermission(permission));
-            db.UserPermissions.RemoveRange(lost);
+            var user = await db.Users.Include(u => u.Roles).Include(u => u.UserPermissions).SingleAsync(u => u.Id == userId);
+            db.Track(user.RemovePermission(Permission.ManageTenant()));
+            db.Track(user.RemovePermission(Permission.ReadAuditLog()));
             return await db.SaveChangesAsync();
         });
 
-    private static Task<List<Permission>> HeldPermissionsAsync(AuthTestDatabase database, string userId)
-        => database.ReadAsync(db => db.UserPermissions.Where(p => p.UserId == userId).Select(p => p.Permission).ToListAsync());
+    private static Task<IReadOnlySet<Permission>> HeldPermissionsAsync(AuthTestDatabase database, string userId)
+        => database.ReadAsync(async db =>
+            (await db.Users.Include(u => u.Roles).Include(u => u.UserPermissions).SingleAsync(u => u.Id == userId)).Permissions());
+
+    private static Task<List<UserRole>> RolesOfAsync(AuthTestDatabase database, string userId)
+        => database.ReadAsync(db => db.UserRoles.Where(r => r.UserId == userId).Select(r => r.Role).ToListAsync());
 
     private static async Task<int> ExclusiveCountOfLinksAsync(IServiceProvider services, string tenantId)
     {
@@ -592,7 +589,7 @@ public sealed class ProvisionerTests
         // Assert
         var user = await database.ReadAsync(db => db.Users.SingleAsync());
         UserIdOf(first).ShouldBe(user.Id);
-        user.Role.Value.ShouldBe(UserRole.Admin().Value);
+        (await RolesOfAsync(database, user.Id)).ShouldBe([UserRole.Admin()]);
     }
 
     [Test]
@@ -618,7 +615,7 @@ public sealed class ProvisionerTests
 
         // Assert
         outcome.ShouldNotBe(deleted);
-        (await database.ReadAsync(db => db.Users.SingleAsync())).Role.Value.ShouldBe(UserRole.Admin().Value);
+        (await RolesOfAsync(database, outcome)).ShouldBe([UserRole.Admin()]);
     }
 
     [Test]

@@ -135,12 +135,16 @@ A Summary whose last run gave no words. It shows a closed reason, such as no mod
 A person with a login, and the owner of their journal data. Recall keeps one seeded tenant, so a tenant does not separate one person from another. All journal data belongs to exactly one User. A delete removes the journal and keeps the row of the User with its ID and its identifier, and with no name, email, or username.
 _Avoid_: Account
 
+**Role**:
+A named set of permissions: `Admin`, `UserManager`, or `Auditor`. A User has any number of Roles. The permissions of each Role add up, and the overrides of the User go on top: an added permission that no Role gives, or a removed permission that a Role gives. An add of a Role gives back each removed permission of that Role. The journal of a User needs no permission, so no Role and no override can take it away.
+_Avoid_: Group, permission set
+
 **Admin**:
-A User who manages users, app-wide settings, and system health. An Admin has no access to the journal of another User.
+A User with the Role `Admin`, which gives each permission. An Admin manages users, app-wide settings, and system health. An Admin has no access to the journal of another User.
 _Avoid_: Superuser
 
 **Member**:
-A User with full use of their own journal and no admin pages. The code names this role `User`.
+A User with no Role: full use of their own journal and no admin pages. An added permission can still give a Member one admin page.
 
 **Owner**:
 The person whose first login on a new install created its tenant. An Owner is an Admin. No row marks this place, so the server takes the oldest linked Admin of the oldest live tenant. When that Admin loses the role, the next oldest linked Admin becomes the Owner, and the former Owner gets a refusal. Control of the data directory can move this place to another identity.

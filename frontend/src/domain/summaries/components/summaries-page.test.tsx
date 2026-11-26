@@ -142,7 +142,7 @@ test('an answer that the app cannot use names the model as the likely cause, and
 
 test('an Admin who sees an answer that the app cannot use gets a link to the Model providers page', async () => {
   // Arrange
-  const admin = { ...member, role: 'Admin', permissions: ['manage_model_providers'] }
+  const admin = { ...member, roles: ['Admin'], permissions: ['manage_model_providers'] }
   const { screen } = await openPage('/summaries?period=Week&date=2026-06-03', [
     { method: 'GET', path: `/api/v1/users/by-identifier/${member.identifier}`, body: admin },
     open(weekPath, week({ status: 'Failed', failure: 'BadModelOutput', content: '' })),

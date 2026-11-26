@@ -14,7 +14,7 @@ public class UserActionTests
 {
     private static readonly UserAction[] Actions =
     [
-        UserAction.Update(), UserAction.UpdateRole(), UserAction.AddPermission(), UserAction.RemovePermission(),
+        UserAction.Update(), UserAction.AddRole(), UserAction.RemoveRole(), UserAction.AddPermission(), UserAction.RemovePermission(),
         UserAction.Delete(), UserAction.IssueTemporaryPassword(), UserAction.ManageExternalLogins(),
     ];
 
@@ -44,60 +44,71 @@ public class UserActionTests
         // An admin holds each permission. The caller must hold them all to take them away, and manage_agents is first.
         const string adminPermissionDenial = "You cannot manage agents. Ask an admin for access.";
 
-        yield return () => ("user on their own record", "User", UserAction.Update(), OwnRecord, null);
-        yield return () => ("user on another user", "User", UserAction.Update(), _ => MemberWith(), manageUsersDenial);
-        yield return () => ("manager without read_users", "User", UserAction.Update(),
+        yield return () => ("user on their own record", "Member", UserAction.Update(), OwnRecord, null);
+        yield return () => ("user on another user", "Member", UserAction.Update(), _ => MemberWith(), manageUsersDenial);
+        yield return () => ("manager without read_users", "Member", UserAction.Update(),
             _ => MemberWith(Permission.ManageUsers()), readUsersDenial);
-        yield return () => ("manager with read_users", "User", UserAction.Update(),
+        yield return () => ("manager with read_users", "Member", UserAction.Update(),
             _ => MemberWith(Permission.ManageUsers(), Permission.ReadUsers()), null);
 
-        yield return () => ("user on their own record", "User", UserAction.UpdateRole(),
+        yield return () => ("member on their own record", "Member", UserAction.AddRole(),
             OwnRecord, manageUserAccessDenial);
-        yield return () => ("admin on their own record", "Admin", UserAction.UpdateRole(), OwnRecord, null);
-        yield return () => ("access manager without read_users", "User", UserAction.UpdateRole(),
+        yield return () => ("admin on their own record", "Admin", UserAction.AddRole(), OwnRecord, null);
+        yield return () => ("access manager without read_users", "Member", UserAction.AddRole(),
             _ => MemberWith(Permission.ManageUserAccess()), readUsersDenial);
-        yield return () => ("access manager on a user", "User", UserAction.UpdateRole(),
+        yield return () => ("access manager on a member", "Member", UserAction.AddRole(),
             _ => MemberWith(Permission.ManageUserAccess(), Permission.ReadUsers()), null);
-        yield return () => ("access manager on an admin", "Admin", UserAction.UpdateRole(),
+        // An add takes no permission away, so the record allows it. The command checks each permission of the new role.
+        yield return () => ("access manager on an admin", "Admin", UserAction.AddRole(),
+            _ => MemberWith(Permission.ManageUserAccess(), Permission.ReadUsers()), null);
+
+        yield return () => ("member on their own record", "Member", UserAction.RemoveRole(),
+            OwnRecord, manageUserAccessDenial);
+        yield return () => ("admin on their own record", "Admin", UserAction.RemoveRole(), OwnRecord, null);
+        yield return () => ("access manager without read_users", "Member", UserAction.RemoveRole(),
+            _ => MemberWith(Permission.ManageUserAccess()), readUsersDenial);
+        yield return () => ("access manager on a member", "Member", UserAction.RemoveRole(),
+            _ => MemberWith(Permission.ManageUserAccess(), Permission.ReadUsers()), null);
+        yield return () => ("access manager on an admin", "Admin", UserAction.RemoveRole(),
             _ => MemberWith(Permission.ManageUserAccess(), Permission.ReadUsers()), adminPermissionDenial);
-        yield return () => ("admin on an admin", "Admin", UserAction.UpdateRole(),
+        yield return () => ("admin on an admin", "Admin", UserAction.RemoveRole(),
             _ => MemberWith([.. Permission.GetAll()]), null);
 
-        yield return () => ("user on another user", "User", UserAction.AddPermission(), _ => MemberWith(), manageUserAccessDenial);
+        yield return () => ("user on another user", "Member", UserAction.AddPermission(), _ => MemberWith(), manageUserAccessDenial);
         yield return () => ("access manager on an admin", "Admin", UserAction.AddPermission(),
             _ => MemberWith(Permission.ManageUserAccess(), Permission.ReadUsers()), null);
-        yield return () => ("access manager without read_users", "User", UserAction.RemovePermission(),
+        yield return () => ("access manager without read_users", "Member", UserAction.RemovePermission(),
             _ => MemberWith(Permission.ManageUserAccess()), readUsersDenial);
-        yield return () => ("access manager on a user", "User", UserAction.RemovePermission(),
+        yield return () => ("access manager on a user", "Member", UserAction.RemovePermission(),
             _ => MemberWith(Permission.ManageUserAccess(), Permission.ReadUsers()), null);
         yield return () => ("access manager on an admin", "Admin", UserAction.RemovePermission(),
             _ => MemberWith(Permission.ManageUserAccess(), Permission.ReadUsers()), adminPermissionDenial);
         yield return () => ("admin on an admin", "Admin", UserAction.RemovePermission(),
             _ => MemberWith([.. Permission.GetAll()]), null);
 
-        yield return () => ("user on their own record", "User", UserAction.Delete(), OwnRecord, manageUsersDenial);
-        yield return () => ("manager without read_users", "User", UserAction.Delete(),
+        yield return () => ("user on their own record", "Member", UserAction.Delete(), OwnRecord, manageUsersDenial);
+        yield return () => ("manager without read_users", "Member", UserAction.Delete(),
             _ => MemberWith(Permission.ManageUsers()), null);
         yield return () => ("manager on an admin", "Admin", UserAction.Delete(),
             _ => MemberWith(Permission.ManageUsers()), adminPermissionDenial);
-        yield return () => ("anonymous", "User", UserAction.Delete(),
+        yield return () => ("anonymous", "Member", UserAction.Delete(),
             _ => new Caller.Outsider(OutsiderKind.Anonymous), "Sign in to do this.");
         yield return () => ("delegated agent whose grant lacks a permission of the user", "Admin", UserAction.Delete(),
             _ => new Caller.DelegatedAgent("clinic-assistant", Permission.GetAll(), [Permission.ManageUsers()]),
             "This agent has no grant to manage agents. A tenant admin can grant it.");
 
-        yield return () => ("user on their own record", "User", UserAction.IssueTemporaryPassword(), OwnRecord, manageUserAccessDenial);
+        yield return () => ("user on their own record", "Member", UserAction.IssueTemporaryPassword(), OwnRecord, manageUserAccessDenial);
         yield return () => ("admin on their own record", "Admin", UserAction.IssueTemporaryPassword(), OwnRecord, null);
-        yield return () => ("access manager without read_users on a user", "User", UserAction.IssueTemporaryPassword(),
+        yield return () => ("access manager without read_users on a user", "Member", UserAction.IssueTemporaryPassword(),
             _ => MemberWith(Permission.ManageUserAccess()), null);
         yield return () => ("access manager on an admin", "Admin", UserAction.IssueTemporaryPassword(),
             _ => MemberWith(Permission.ManageUserAccess(), Permission.ReadUsers()), adminPermissionDenial);
         yield return () => ("admin on an admin", "Admin", UserAction.IssueTemporaryPassword(),
             _ => MemberWith([.. Permission.GetAll()]), null);
 
-        yield return () => ("user on their own record", "User", UserAction.ManageExternalLogins(), OwnRecord, null);
-        yield return () => ("user on another user", "User", UserAction.ManageExternalLogins(), _ => MemberWith(), manageUserAccessDenial);
-        yield return () => ("access manager on a user", "User", UserAction.ManageExternalLogins(),
+        yield return () => ("user on their own record", "Member", UserAction.ManageExternalLogins(), OwnRecord, null);
+        yield return () => ("user on another user", "Member", UserAction.ManageExternalLogins(), _ => MemberWith(), manageUserAccessDenial);
+        yield return () => ("access manager on a user", "Member", UserAction.ManageExternalLogins(),
             _ => MemberWith(Permission.ManageUserAccess()), null);
         yield return () => ("access manager on an admin", "Admin", UserAction.ManageExternalLogins(),
             _ => MemberWith(Permission.ManageUserAccess(), Permission.ReadUsers()), adminPermissionDenial);
@@ -132,7 +143,7 @@ public class UserActionTests
     }
 
     [Test]
-    [Arguments("User")]
+    [Arguments("Member")]
     [Arguments("Admin")]
     public void the_list_and_the_guards_agree_for_each_caller_and_action(string targetRole)
     {
@@ -159,7 +170,7 @@ public class UserActionTests
     }
 
     [Test]
-    [Arguments("User")]
+    [Arguments("Member")]
     [Arguments("Admin")]
     public void a_row_of_the_list_query_gets_the_actions_of_the_record(string targetRole)
     {
@@ -183,7 +194,7 @@ public class UserActionTests
     public void the_list_keeps_the_order_of_the_table()
     {
         // Arrange
-        var user = UserWithRole("User");
+        var user = UserWithRole("Member");
 
         // Act
         var allowedActions = user.AllowedActions(Caller.AllTenantsManager.Instance);
@@ -198,7 +209,7 @@ public class UserActionTests
         // Arrange
         var user = UserWithRole("Admin");
         var callerBeforeTheChange = OwnRecord(user);
-        user.UpdateRole(UserRole.User());
+        user.RemoveRole(UserRole.Admin());
 
         // Act
         var allowedActions = user.AllowedActions(callerBeforeTheChange);
@@ -207,12 +218,12 @@ public class UserActionTests
         allowedActions.ShouldBe([UserAction.Update(), UserAction.ManageExternalLogins()]);
     }
 
-    // A member holds the permission rows of their own user.
-    private static Caller.Member OwnRecord(User user) => new(user.Id, user.UserPermissions.Select(p => p.Permission));
+    // A member holds the permissions of their own user.
+    private static Caller.Member OwnRecord(User user) => new(user.Id, user.Permissions());
 
     private static User UserWithRole(string role)
     {
-        TestGraph.Start(out _).AddTenant(out _).AddUser(out var user, u => u.Role = role);
+        TestGraph.Start(out _).AddTenant(out _).AddUser(out var user, u => u.Roles = role == "Member" ? [] : [role]);
         return user;
     }
 

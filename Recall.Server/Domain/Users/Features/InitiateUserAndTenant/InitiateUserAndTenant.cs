@@ -58,7 +58,7 @@ public static class InitiateUserAndTenant
                 Identifier = id,
                 Email = request.Dto.Email,
                 Username = request.Dto.Username,
-                Role = request.Dto.Role
+                Roles = request.Dto.Roles
             };
             var user = User.Create(userForCreation);
             Activity.Current?.SetTag("app.user_id", user.Id);
