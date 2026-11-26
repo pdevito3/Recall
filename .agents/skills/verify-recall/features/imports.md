@@ -4,15 +4,15 @@ An agent puts the entries of an old journal into an import batch over REST or MC
 
 ## Sub-features
 
-- `list` at `/imports` shows `Your import batches`: each name links to its batch, with `Open` or `In your journal`, `<n entries> in <zone>`, and `Opened on ...`. With no batch, the text names the personal access token.
+- `list` at `/imports` shows `Your import batches`: each name links to its batch, with `Open` or `In your journal`, `<n entries>. Times in <zone>.`, and `Opened on ...`. With no batch, the text names the personal access token.
 - `discard` opens `Discard <name>?` from `Discard <name>` and drops the batch with `Discard batch` and the toast `Batch discarded`. An accepted batch has no Discard.
 - `days` show as `h2` headings with the list `Entries of <day>`. Each entry is the list item `Entry at <time>`. A batch of more than 200 entries has the pager `Pages of this batch`, and the URL has `?page=<n>`.
-- `entry` shows its time, the zone when it is not the zone of the batch, `Time from its place in the day` when no one gave a time, `Edited`, `Rejected` or `Rejected with the day`, and the notes `The import changed the words after your edit. ...` and `The import changed the time after your edit. ...`.
-- `edit` opens the form `Edit the entry` from `Edit the entry at <time>`: `Words`, `Time`, `Save`, `Cancel`, and after an edit `Use the import words` and `Use the import time`. A refusal shows in the form.
+- `entry` shows its time, the zone when it is not the zone of the batch, `No time given. Set from its place in the day.` when no one gave a time, `Edited`, `Rejected` or `Rejected with the day`, and the notes `The import changed the words after your edit. ...` and `The import changed the time after your edit. ...`, each with the next step.
+- `edit` opens the form `Edit the entry` from `Edit the entry at <time>`: `Words`, `Time`, `Save`, `Cancel`, and after an edit `Use the import words` and `Use the import time`, which are off with `Save or cancel your change first.` while the form has a change. A refusal shows in the form.
 - `reject` sends `Reject the entry at <time>` or `Keep the entry at <time>`. `Reject <day>` and `Keep <day>` do the same for a day.
 - `counts` in `Counts of this batch` show `<n entries>: <k> kept, <r> rejected` and change after each review.
-- `accept` opens `Accept this batch?` with the kept and rejected counts. `Accept batch` shows `Result of the accept` and `Go to your journal`. A 409 keeps the dialog open with the message and the new counts.
-- `refusals`: a 404 or a 409 of a review shows the message of the Server in a toast, reads the batch again, and moves the focus to the heading when the entry leaves. A batch that does not exist says `This import batch does not exist.` with `Go to your imports`.
+- `accept` opens `Accept “<name>”?` with the kept and rejected counts. `Accept batch` shows `Result of the accept` and `Go to your journal`. A 409 keeps the dialog open, reads the batch again, and then shows the message, the new counts, and the status `Recall read the batch again. Check the new counts, then accept it.`
+- `refusals`: a 404 or a 409 of a review shows the message of the Server in a toast, reads the batch again, and moves the focus to the heading when the entry leaves. A batch that does not exist says `This import batch does not exist. Pick a batch from your imports.` with `Go to your imports` on its own line.
 - `setting` on `/settings`, section `Imports`: the checkbox `Only I can accept an import batch`.
 
 ## How to get to it (user POV)
