@@ -162,7 +162,7 @@ test('@IMP-33 with no batch, the list says that the batches of an agent show her
   expect(empty.getByRole('link').elements()).toHaveLength(0)
 })
 
-test('@IMP-46 the panel shows the MCP URL and the whole recall-import skill, and Copy skill puts it on the clipboard', async () => {
+test('@IMP-46 the panel shows the MCP URL, the Claude Code command, and the whole recall-import skill, and each copy puts its text on the clipboard', async () => {
   const copied: string[] = []
   vi.spyOn(navigator.clipboard, 'writeText').mockImplementation((text) => {
     copied.push(text)
@@ -173,7 +173,11 @@ test('@IMP-46 the panel shows the MCP URL and the whole recall-import skill, and
 
   await expect.element(panel).toMatchTextContent(/save it as a skill of the agent, or paste it at the start of a chat\./)
   await expect.element(panel.getByRole('link', { name: 'personal access token' })).toHaveAttribute('href', '/settings/personal-access-tokens')
+  await expect.element(panel).toMatchTextContent(/that has Change my journal\. The agent sends the token in the header Authorization: Bearer <token>\./)
   await expect.element(panel.getByRole('group', { name: 'MCP URL' }).getByText(`${window.location.origin}/mcp`, { exact: true })).toBeVisible()
+  const command = `claude mcp add --transport http recall ${window.location.origin}/mcp --header "Authorization: Bearer <your token>"`
+  await expect.element(panel.getByRole('group', { name: 'Claude Code command' }).getByText(command, { exact: true })).toBeVisible()
+  expect(panel.element().textContent).not.toContain('Claude Desktop')
   expect(panel.getByRole('region', { name: 'The text of the recall-import skill', includeHidden: true }).element().textContent).toBe(skill)
   await expect.element(panel.getByRole('button', { name: 'The recall-import skill' })).toHaveAttribute('aria-expanded', 'false')
   const copySkill = panel.getByRole('button', { name: 'Copy skill' })
@@ -184,6 +188,20 @@ test('@IMP-46 the panel shows the MCP URL and the whole recall-import skill, and
   await userEvent.click(panel.getByRole('button', { name: 'Copy MCP URL' }))
   await vi.waitFor(() => expect(copied).toEqual([skill, `${window.location.origin}/mcp`]))
   await expect.element(screen.getByRole('alertdialog').filter({ hasText: 'MCP URL copied' })).toBeVisible()
+  await userEvent.click(panel.getByRole('button', { name: 'Copy command' }))
+  await vi.waitFor(() => expect(copied).toEqual([skill, `${window.location.origin}/mcp`, command]))
+  await expect.element(screen.getByRole('alertdialog').filter({ hasText: 'Command copied' })).toBeVisible()
+})
+
+test('@IMP-46 when the browser refuses the copy of the command, Recall selects the whole command, and a toast says to copy it by hand', async () => {
+  vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('Not allowed'))
+  vi.spyOn(document, 'execCommand').mockReturnValue(false)
+  const { screen } = await renderAt('/imports', [batchesAre([diary])])
+
+  await userEvent.click(screen.getByRole('button', { name: 'Copy command' }))
+
+  await expect.element(screen.getByRole('alertdialog').filter({ hasText: 'The browser did not copy the command. Recall selected it, so copy it by hand.' })).toBeVisible()
+  expect(window.getSelection()!.toString()).toBe(`claude mcp add --transport http recall ${window.location.origin}/mcp --header "Authorization: Bearer <your token>"`)
 })
 
 test('@IMP-46 a copy through the hidden field gives the focus back to Copy skill', async () => {

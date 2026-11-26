@@ -95,6 +95,23 @@ export function importsPage(page: Page) {
 
     selectedText: () => page.evaluate(() => window.getSelection()?.toString() ?? ''),
 
+    /** The left edge of the first line of text in the element, or of its first icon. */
+    textLeftOf: (element: Locator) =>
+      element.evaluate((node) => {
+        const first = node.querySelector('svg') ?? node
+        if (first !== node) return Math.round(first.getBoundingClientRect().left)
+        const range = document.createRange()
+        range.selectNodeContents(node)
+        return Math.round(range.getClientRects()[0].left)
+      }),
+
+    /** The space between the element and the right and the bottom edges of the box that holds it. */
+    insetOf: async (element: Locator, box: Locator) => {
+      const inner = (await element.boundingBox())!
+      const outer = (await box.boundingBox())!
+      return { right: Math.round(outer.x + outer.width - (inner.x + inner.width)), bottom: Math.round(outer.y + outer.height - (inner.y + inner.height)) }
+    },
+
     isFocused: (element: Locator) => element.evaluate((node) => node === document.activeElement),
 
     async topOf(element: Locator) {
