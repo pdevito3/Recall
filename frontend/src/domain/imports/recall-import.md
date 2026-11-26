@@ -57,7 +57,7 @@ If you do not see `open_import_batch` or `put_import_entries`, your token cannot
 7. Get the batch.
    - If an open batch already holds this source, use it.
    - If the source has more than 20,000 entries, open one batch for each year. One accept takes at most 20,000 entries. Do steps 8 to 13 for each batch.
-   - Else open one batch with `open_import_batch`. Name it for the source and the years, for example "Notion 2019 to 2023". If Recall refuses the time zone, ask the person for another zone.
+   - Else open one batch with `open_import_batch`. Name it for the source and the years, for example "Notion 2019 to 2023". Use a name that no other batch has. If Recall refuses the time zone, ask the person for another zone.
    - If you lose the result of `open_import_batch`, call `list_import_batches`. If it shows a batch with that name, use it. Else open the batch again.
 8. If the batch held entries of this source before this run, check a sample of them against your rules.
    - Check the dates of the three entries of step 3. Also check the date of the source with the most entries.
