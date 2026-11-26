@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 import { importPaths } from '@tests/support/api/imports-api'
 import { imports } from './imports.locators'
 
@@ -30,6 +30,12 @@ export function importsPage(page: Page) {
     async openSettings() {
       await page.goto('/settings')
       await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible()
+    },
+
+    async isInsideTheWindowWidth(element: Locator) {
+      const box = await element.boundingBox()
+      const width = page.viewportSize()?.width ?? 0
+      return box !== null && box.x >= 0 && box.x + box.width <= width
     },
 
     sideScrollRange: () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
