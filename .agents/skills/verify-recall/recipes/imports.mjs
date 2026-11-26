@@ -96,13 +96,13 @@ export default async ({ page, context, step, capture, settle, expect, login, sta
     await settle()
   }
   await step('the panel after the list: the MCP URL of this Recall with the Bearer header, the Claude Code command, and the whole recall-import file in a closed disclosure', async () => {
-    await expect(skillPanel.getByText(/^Connect your agent to this MCP URL with a personal access token that has Change my journal\. The agent sends the token in the header Authorization: Bearer <token>\.$/)).toBeVisible()
+    await expect(skillPanel.getByText(/^Connect your agent to this MCP URL with a personal access token that has “Change my journal”\. The agent sends the token in the header Authorization: Bearer <your token>\.$/)).toBeVisible()
     await expect(skillPanel.getByRole('link', { name: 'personal access token', exact: true })).toHaveAttribute('href', '/settings/personal-access-tokens')
     await expect(skillPanel.getByRole('group', { name: 'MCP URL', exact: true }).getByText(mcpUrl, { exact: true })).toBeVisible()
-    await expect(skillPanel.getByText('For Claude Code, run this command with your token in place of <your token>.', { exact: true })).toBeVisible()
+    await expect(skillPanel.getByText('For Claude Code, run this command with your token in place of <your token>. Your shell then keeps the token in its history.', { exact: true })).toBeVisible()
     await expect(commandRow.getByText(command, { exact: true })).toBeVisible()
     await expect(skillPanel).not.toContainText('Claude Desktop')
-    await expect(skillPanel.getByText(/save it as a skill of the agent, or paste it at the start of a chat\.$/)).toBeVisible()
+    await expect(skillPanel.getByText(/save it as a skill of the agent, or paste it at the start of a chat\. For Claude Code, save it as ~\/\.claude\/skills\/recall-import\/SKILL\.md\.$/)).toBeVisible()
     await expect(skillToggle).toHaveAttribute('aria-expanded', 'false')
     await expect(skillBox).toBeHidden()
     expect(await skillBox.textContent()).toBe(skillFile)
@@ -139,10 +139,15 @@ export default async ({ page, context, step, capture, settle, expect, login, sta
     await expect(copySkill).toBeFocused()
   })
   await atSkill('skill-copied', { keepToast: true })
-  await step('the disclosure opens the skill, and a list item wraps under its words', async () => {
+  await step('the disclosure opens the skill at its top, with the frontmatter', async () => {
     await skillToggle.click()
     await expect(skillToggle).toHaveAttribute('aria-expanded', 'true')
     await expect(skillBox).toBeVisible()
+    expect(await skillBox.evaluate((box) => box.scrollTop)).toBe(0)
+    expect(await skillBox.locator('span').nth(1).textContent()).toBe('name: recall-import\n')
+  })
+  await atSkill('skill-open-top')
+  await step('a list item of the skill wraps under its words', async () => {
     const item = skillBox.locator('span').filter({ hasText: /^- `list_journal_days`/ })
     expect(await item.evaluate((line) => getComputedStyle(line).textIndent)).not.toBe('0px')
     // Scroll the box to the list of tools, so that the shots show how a wrapped list item lines up.
