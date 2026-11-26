@@ -287,7 +287,7 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Settings', exact: true }).click()
     const box = page.getByRole('checkbox', { name: 'Only I can accept an import batch' })
     await expect(box).toBeChecked()
-    await expect(page.getByText(/^With this on, only you can accept an import batch, from Recall in a browser\./)).toBeVisible()
+    await expect(page.getByText(/^With this on, only you can accept an import batch, and only in Recall in a browser\./)).toBeVisible()
     const changed = answered('PUT', /^\/api\/v1\/me\/settings\/import-review$/)
     await box.click({ force: true })
     const res = await changed
