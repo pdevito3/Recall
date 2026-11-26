@@ -141,6 +141,54 @@ test.describe('the recall-import skill', () => {
     await expect(imports.at.mcpUrl).toContainText(`${new URL(baseURL!).origin}/mcp`)
   })
 
+  test('Copy command puts the Claude Code command with the MCP URL of this Recall on the clipboard', { tag: '@IMP-46' }, async ({ page, context, api, baseURL }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    api.mock(importsApi.listIs([]))
+    const imports = importsPage(page)
+    const command = `claude mcp add --transport http recall ${new URL(baseURL!).origin}/mcp --header "Authorization: Bearer <your token>"`
+    await imports.openList()
+
+    await imports.at.copyCommand.click()
+
+    await expect(imports.at.text('Command copied')).toBeVisible()
+    await expect.poll(() => imports.clipboardText()).toBe(command)
+    await expect(imports.at.claudeCodeCommand.getByText(command, { exact: true })).toBeVisible()
+    expect(await imports.isFocused(imports.at.copyCommand)).toBe(true)
+  })
+
+  test('when the browser refuses the copy of the MCP URL, Recall selects the whole URL', { tag: '@IMP-46' }, async ({ page, api, baseURL }) => {
+    api.mock(importsApi.listIs([]))
+    const imports = importsPage(page)
+    await imports.refuseEachCopy()
+    await imports.openList()
+
+    await imports.at.copyMcpUrl.click()
+
+    await expect(imports.at.text('The browser did not copy the MCP URL. Recall selected it, so copy it by hand.')).toBeVisible()
+    expect(await imports.selectedText()).toBe(`${new URL(baseURL!).origin}/mcp`)
+  })
+
+  for (const size of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+    test(`at ${size.width} px, the text of each box of the panel lines up with the text of a batch card, with the same inner padding`, { tag: '@IMP-46' }, async ({ page, api }) => {
+      await page.setViewportSize(size)
+      api.mock(importsApi.listIs([diary]))
+      const imports = importsPage(page)
+      await imports.openList()
+
+      const cardText = await imports.textLeftOf(imports.at.batchLink('Diary 2024'))
+      expect(await imports.textLeftOf(imports.at.mcpUrl.locator('code'))).toBe(cardText)
+      expect(await imports.textLeftOf(imports.at.claudeCodeCommand.locator('code'))).toBe(cardText)
+      expect(await imports.textLeftOf(imports.at.skillToggle)).toBe(cardText)
+      // The card is inside the border of the list, and each box of the panel has its own border of 1 px.
+      const { right: padding } = await imports.insetOf(imports.at.discardOf('Diary 2024'), imports.at.batch('Diary 2024'))
+      // On a phone, a copy button wraps below its value. Else it is at the right, in the middle of the box.
+      const sideOfButton = size.width < 640 ? 'bottom' : 'right'
+      expect((await imports.insetOf(imports.at.copyMcpUrl, imports.at.mcpUrl))[sideOfButton]).toBe(padding + 1)
+      expect((await imports.insetOf(imports.at.copyCommand, imports.at.claudeCodeCommand))[sideOfButton]).toBe(padding + 1)
+      expect(await imports.insetOf(imports.at.copySkill, imports.at.copySkill.locator('..'))).toEqual({ right: padding, bottom: padding })
+    })
+  }
+
   test('the skill opens, and its box takes the keyboard focus after Copy skill', { tag: '@IMP-46' }, async ({ page, api }) => {
     api.mock(importsApi.listIs([diary]))
     const imports = importsPage(page)
@@ -183,6 +231,7 @@ test.describe('the recall-import skill', () => {
     expect(await imports.sideScrollOf(imports.at.skillText)).toBe(0)
     expect(await imports.hitAreaOf(imports.at.copySkill)).toBeGreaterThanOrEqual(44)
     expect(await imports.hitAreaOf(imports.at.copyMcpUrl)).toBeGreaterThanOrEqual(44)
+    expect(await imports.hitAreaOf(imports.at.copyCommand)).toBeGreaterThanOrEqual(44)
     expect(await imports.hitAreaOf(imports.at.skillToggle)).toBeGreaterThanOrEqual(44)
   })
 })

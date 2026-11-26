@@ -54,5 +54,7 @@ export const imports = (page: Page) => ({
   copySkill: page.getByRole('button', { name: 'Copy skill', exact: true }),
   mcpUrl: page.getByRole('group', { name: 'MCP URL', exact: true }),
   copyMcpUrl: page.getByRole('button', { name: 'Copy MCP URL', exact: true }),
+  claudeCodeCommand: page.getByRole('group', { name: 'Claude Code command', exact: true }),
+  copyCommand: page.getByRole('button', { name: 'Copy command', exact: true }),
   text: (text: string) => page.getByText(text, { exact: true }),
 })
