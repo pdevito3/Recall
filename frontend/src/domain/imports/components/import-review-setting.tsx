@@ -14,7 +14,7 @@ export function ImportReviewSetting() {
     <section className="flex flex-col gap-2" aria-labelledby="settings-imports">
       <h2 id="settings-imports" className="text-lg font-semibold">Imports</h2>
       <p id="settings-imports-review" className="text-sm text-muted-foreground">
-        With this on, only you can accept an import batch, in Recall in a browser. With it off, an agent with a personal access token can accept a
+        With this on, only you can accept an import batch, from Recall in a browser. With it off, an agent with a personal access token can accept a
         batch too.
       </p>
       <Checkbox

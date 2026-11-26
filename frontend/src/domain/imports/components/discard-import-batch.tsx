@@ -22,6 +22,12 @@ interface DiscardImportBatchProps {
   onSettled?: () => void
 }
 
+const discardTextOf = (entryCount: number) => {
+  if (entryCount === 0) return 'Discard deletes this batch, which has no entries.'
+  if (entryCount === 1) return 'Discard deletes this batch and its 1 entry. The entry does not go into your journal.'
+  return `Discard deletes this batch and its ${entriesWord(entryCount)}. None of them go into your journal.`
+}
+
 export function DiscardImportBatch({ batch, entryCount = batch.entryCount, onDiscarded, onSettled }: DiscardImportBatchProps) {
   const discard = useDiscardImportBatch()
 
@@ -43,8 +49,7 @@ export function DiscardImportBatch({ batch, entryCount = batch.entryCount, onDis
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle className="wrap-anywhere">Discard “{batch.name}”?</ResponsiveDialogTitle>
           <ResponsiveDialogDescription>
-            {entryCount === 0 ? 'This batch is deleted.' : `This batch and its ${entriesWord(entryCount)} are deleted.`} Nothing of it goes into your journal. You
-            cannot undo a discard.
+            {discardTextOf(entryCount)} You cannot undo a discard.
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
         <ResponsiveDialogFooter>
