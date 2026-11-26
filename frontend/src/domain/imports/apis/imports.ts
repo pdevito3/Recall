@@ -41,13 +41,19 @@ export function useImportEntries(id: string, from: string, to: string) {
   })
 }
 
-export const isOutdated = (error: Error) => isProblemDetailsError(error) && (error.status === 404 || error.status === 409)
+const isOutdated = (error: Error) => isProblemDetailsError(error) && (error.status === 404 || error.status === 409)
 
-function readAgainAfterARefusal(queryClient: QueryClient, id: string, error: Error) {
-  if (isOutdated(error)) {
-    void queryClient.invalidateQueries({ queryKey: ImportKeys.lists() })
-    void queryClient.invalidateQueries({ queryKey: ImportKeys.batch(id) })
-  }
+/**
+ * Reads the batches and the batch again after a refusal that says the page is old. The mutation returns this from its
+ * `onError`, so it stays pending until the new counts and version are in: Accept stays off, and the dialog of a stale
+ * accept shows the new counts with its message.
+ */
+async function readAgainAfterARefusal(queryClient: QueryClient, id: string, error: Error): Promise<void> {
+  if (!isOutdated(error)) return
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: ImportKeys.lists() }),
+    queryClient.invalidateQueries({ queryKey: ImportKeys.batch(id) }),
+  ])
 }
 
 export function useDiscardImportBatch() {
@@ -58,7 +64,14 @@ export function useDiscardImportBatch() {
   })
 }
 
-export function useReviewImportEntry(id: string, { inForm = false } = {}) {
+interface ReviewImportEntryOptions {
+  /** True for a review from the form of an edit, which shows each other refusal itself. */
+  inForm?: boolean
+  /** Runs when the refusal says that the page is old, before the read again can take the entry off the page. */
+  onOutdated?: () => void
+}
+
+export function useReviewImportEntry(id: string, { inForm = false, onOutdated }: ReviewImportEntryOptions = {}) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationKey: ImportKeys.reviews(id),
@@ -73,8 +86,11 @@ export function useReviewImportEntry(id: string, { inForm = false } = {}) {
       return queryClient.invalidateQueries({ queryKey: ImportKeys.batch(id) })
     },
     onError: (error) => {
-      if (inForm && isOutdated(error)) Notification.error(error.message)
-      readAgainAfterARefusal(queryClient, id, error)
+      if (isOutdated(error)) {
+        if (inForm) Notification.error(error.message)
+        onOutdated?.()
+      }
+      return readAgainAfterARefusal(queryClient, id, error)
     },
   })
 }

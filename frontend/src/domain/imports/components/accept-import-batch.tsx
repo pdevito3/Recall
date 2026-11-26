@@ -55,8 +55,12 @@ export function AcceptImportBatch({ batchId, batchName, counts, version, nothing
             {problem.map((message, i) => (
               <p key={`${i}-${message}`}>{message}</p>
             ))}
-            {isStaleVersionError(accept.error) && <p className="mt-1">The counts above are new. Check them, then accept the batch.</p>}
           </div>
+        )}
+        {isStaleVersionError(accept.error) && (
+          <p role="status" className="mt-2 text-sm text-muted-foreground">
+            Recall read the batch again. Check the new counts, then accept it.
+          </p>
         )}
         <ResponsiveDialogFooter>
           <ResponsiveDialogClose isDisabled={accept.isPending}>Keep reviewing</ResponsiveDialogClose>

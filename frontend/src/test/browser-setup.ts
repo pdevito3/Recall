@@ -14,13 +14,15 @@ declare module 'vitest/browser' {
   interface BrowserCommands {
     /** Answers each request that matches an answer. A later answer wins. `[]` removes all answers. */
     answerRequests: (answers: Answer[]) => Promise<void>
-    /** Removes all answers and forgets the requests so far. A request of an earlier test does not count after this. */
+    /** Releases each held request, removes all answers, and forgets the requests so far. A request of an earlier test does not count after this. */
     beginTest: (test: string) => Promise<void>
     takeUnansweredRequests: () => Promise<string[]>
     /** The method, pathname, and JSON body of each request other than a GET since the last call. */
     takeSentRequests: () => Promise<{ method: string; path: string; body: JsonValue | null }[]>
     /** Holds each request for `path` (pathname and query) until `releaseRequests(path)`. */
     holdRequests: (path: string) => Promise<void>
+    /** The count of the requests for `path` that wait on `holdRequests(path)` now. */
+    countHeldRequests: (path: string) => Promise<number>
     /** Lets the held requests for `path` go on. */
     releaseRequests: (path: string) => Promise<void>
     /** Moves the mouse onto the element with `role` and `name` without a scroll of the page. */
