@@ -279,6 +279,40 @@ test('@IMP-38 a save of a new time sends the whole review with the words of the 
   ])
 })
 
+test('@IMP-38 a save after a read that changed the agent time keeps the time of the agent, because the person did not change it', async () => {
+  const { screen } = await renderReview()
+  await userEvent.click(screen.getByRole('button', { name: 'Edit the entry at 8:30 AM' }))
+  const form = screen.getByRole('form', { name: 'Edit the entry' })
+  const moved = { ...coffee, time: '08:45', startsAt: '2024-03-01T13:45:00Z' }
+  const rejected = { ...london, review: { rejected: true, words: null, time: null }, isRejected: true }
+  await commands.answerRequests([
+    ...signedInMember,
+    noPeople,
+    batchesAre([diary]),
+    daysAre([dayOf('2024-03-01', 2), dayOf('2024-03-02', 1, { rejectedCount: 1 })], 5),
+    entriesAre([moved, walk, rejected]),
+    { method: 'PUT', path: '/api/v1/import-batches/imp_1/entries/review', body: { version: 5, entry: rejected } },
+  ])
+  await userEvent.click(screen.getByRole('button', { name: 'Reject the entry at 9:00 PM' }))
+  await expect.element(screen.getByRole('listitem', { name: 'Entry at 8:45 AM' })).toBeVisible()
+  await commands.answerRequests([
+    ...signedInMember,
+    noPeople,
+    batchesAre([diary]),
+    daysAre([dayOf('2024-03-01', 2), dayOf('2024-03-02', 1, { rejectedCount: 1 })], 6),
+    entriesAre([moved, walk, rejected]),
+    { method: 'PUT', path: '/api/v1/import-batches/imp_1/entries/review', body: { version: 6, entry: moved } },
+  ])
+  await commands.takeSentRequests()
+
+  await userEvent.click(form.getByRole('button', { name: 'Save' }))
+
+  await expect.element(form).not.toBeInTheDocument()
+  expect(await commands.takeSentRequests()).toEqual([
+    { method: 'PUT', path: '/api/v1/import-batches/imp_1/entries/review', body: { clientSessionId: 'c1', rejected: false, words: null, time: null } },
+  ])
+})
+
 test('@IMP-38 Use the import words sends null for the words and keeps the time of the last edit', async () => {
   const edited = { ...coffee, review: { rejected: false, words: documentOf('Mine.'), time: '09:00' }, document: documentOf('Mine.') }
   const { screen } = await renderAt('/imports/imp_1', [batchesAre([diary]), daysAre(twoDays), entriesAre([edited, walk, london])])
