@@ -26,8 +26,8 @@ If you see none of these tools, tell the person to connect you to Recall with a 
 2. Propose the split rules to the person. Say how you find a day and its date, how you split a day into entries, how you find a time, and which time zone you use. Show three entries as you will write them, with their date, position, time, Moods, and Topics. Ask the person about each date or time that you cannot read for certain.
 3. Wait for a yes. If the person changes a rule, propose the rules again.
 4. Call `list_journal_days` over the dates of the source. If the journal already has some of these days, tell the person before you write.
-5. Open one batch with `open_import_batch`. Name it for the source and the years, for example "Notion 2019 to 2023". If the source has more than 20,000 entries, open one batch for each year, because one accept takes at most 20,000 entries.
-6. Do a test on a small part. Put the entries of three to five days, with one day of many entries if the source has one.
+5. Call `list_import_batches`. If an open batch already holds this source, use it, and do not open another. Else open one batch with `open_import_batch`. Name it for the source and the years, for example "Notion 2019 to 2023". If the source has more than 20,000 entries, open one batch for each year, because one accept takes at most 20,000 entries.
+6. Do a test on a small part. Put the entries of three to five days, with one day of many entries if the source has one. If the source has five days or fewer, the test is the whole source.
 7. Read the test back with `list_import_entries`. Compare each entry with the source. `startsAt` is in UTC, so convert it to the zone of the entry before you compare it.
 8. Tell the person to open Imports in Recall, choose the batch, and check the test entries. Wait for a yes.
 9. If the person asks for other split rules, call `discard_import_batch`, change the rules, and go back to step 5.
@@ -39,9 +39,9 @@ If you see none of these tools, tell the person to connect you to Recall with a 
 - `clientSessionId`: an ID that is the same for the same source entry on each run, of at most 100 characters. Make it from the source, the date, and the position, for example `notion-2021-03-03-1`. Never make it random.
 - `date`: the day of the source as `YYYY-MM-DD`.
 - `position`: the order of the entry in its day, from 0. Two entries of one date never share a position. A day holds at most 720 entries, positions 0 to 719.
-- `time`: the time as `HH:mm` on a 24-hour clock. Give it only when the text gives a time, such as "at 9pm" (`21:00`) or a time stamp. If the text gives an hour with no am or pm, such as "at 6", ask the person in step 2. Otherwise leave it out, and Recall starts the entry at 12:00 plus one minute for each position.
+- `time`: the time as `HH:mm` on a 24-hour clock. Give it only when the text gives a time, such as "at 9pm" (`21:00`) or a time stamp. If the text gives the time of an event, such as "Up at 5am", use that time. If the text gives an hour with no am or pm, such as "at 6", ask the person in step 2. Otherwise leave it out, and Recall starts the entry at 12:00 plus one minute for each position.
 - `timeZone`: leave it out, so that the entry takes the zone of the batch. Give an IANA zone only when the source shows that the person wrote the entry in another zone.
-- `raw`: the words of the person as Markdown, exactly as the source has them. Keep each word, line break, list, and emphasis. Leave out only the structure of the source: the title of the page, the date title, the divider, and the indent of a toggle body. Never fix, summarize, translate, or reword the text.
+- `raw`: the words of the person as Markdown, exactly as the source has them. Keep each word, line break, list, and emphasis. Leave out only the structure of the source: the title of the page, the date title, the divider, the indent of a toggle body, and the blank lines at the start and the end of an entry. Keep two spaces at the end of a line, because they are a line break in Markdown. Never fix, summarize, translate, or reword the text.
 - `moods`: at most three Moods that the text shows, or none. Use only these Moods: Joyful, Content, Calm, Neutral, Tired, Anxious, Sad, Angry, Excited, Grateful.
 - `topics`: one to five short Topics of the entry in title case, such as "Work" or "Running". Each Topic has at most 100 characters.
 
