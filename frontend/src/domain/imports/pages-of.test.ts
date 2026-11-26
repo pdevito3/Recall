@@ -28,6 +28,12 @@ describe('pagesOf', () => {
     expect(pagesOf(days, 4)).toEqual([{ from: '2024-03-01', to: '2024-03-03', days }])
   })
 
+  it('@IMP-35 puts a day of 0 entries on the page of a day of more entries than the size', () => {
+    const days = [day('2024-03-01', 250), day('2024-03-02', 0, 0, true), day('2024-03-03', 3)]
+
+    expect(pagesOf(days).map((page) => page.days.map((d) => d.date))).toEqual([['2024-03-01', '2024-03-02'], ['2024-03-03']])
+  })
+
   it('@IMP-35 gives no page for a batch with no day', () => {
     expect(pagesOf([])).toEqual([])
   })
