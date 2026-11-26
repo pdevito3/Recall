@@ -43,7 +43,9 @@ export default async ({ page, context, step, capture, settle, expect, login, sta
     await page.getByRole('button', { name: 'New token', exact: true }).click()
     const dialog = page.getByRole('dialog')
     await dialog.getByRole('textbox', { name: 'Name' }).fill('Import agent')
-    await dialog.getByRole('checkbox', { name: 'Change my journal' }).click({ force: true })
+    // A forced click on the hidden input skips the wait for a still target, and it once left the box clear. A click on the label waits.
+    await dialog.getByText('Change my journal', { exact: true }).click()
+    await expect(dialog.getByRole('checkbox', { name: 'Change my journal' })).toBeChecked()
     const created = answered('POST', /^\/api\/v1\/personal-access-tokens$/)
     await dialog.getByRole('button', { name: 'Create token', exact: true }).click()
     const body = await (await created).json()
