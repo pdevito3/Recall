@@ -1,14 +1,22 @@
-export default async ({ page, step, capture, settle, expect, login, stack }) => {
+import { readFileSync } from 'node:fs'
+
+const skillFile = readFileSync(new URL('../../../../frontend/src/domain/imports/recall-import.md', import.meta.url), 'utf8')
+
+export default async ({ page, context, step, capture, settle, expect, login, stack }) => {
   const desktop = { width: 1280, height: 800 }
   const phone = { width: 390, height: 844 }
   const answered = (method, pattern) =>
     page.waitForResponse((r) => r.request().method() === method && pattern.test(new URL(r.url()).pathname))
   // A capture shows the page as a person sees it: no hover state of the last click, and no toast of an earlier step.
+  const closeToasts = async () => {
+    // Close the first toast each time: the list moves when a toast closes, so a stored second locator can point at
+    // nothing. A toast can also close by itself between the count and the click, so a missed click only counts again.
+    const closers = page.locator('[data-slot="toast-region"]').getByRole('button', { name: 'Close' })
+    while ((await closers.count()) > 0) await closers.first().click({ timeout: 2000 }).catch(() => {})
+    await expect(page.locator('[data-slot="toast-region"]').getByRole('button', { name: 'Close' })).toHaveCount(0)
+  }
   const shot = async (name, { keepToast = false, ...options } = {}) => {
-    if (!keepToast) {
-      for (const close of await page.locator('[data-slot="toast-region"]').getByRole('button', { name: 'Close' }).all()) await close.click()
-      await expect(page.locator('[data-slot="toast-region"]').getByRole('button', { name: 'Close' })).toHaveCount(0)
-    }
+    if (!keepToast) await closeToasts()
     const size = page.viewportSize()
     await page.mouse.move(size.width - 2, size.height - 2)
     await capture(name, options)
@@ -35,7 +43,9 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     await page.getByRole('button', { name: 'New token', exact: true }).click()
     const dialog = page.getByRole('dialog')
     await dialog.getByRole('textbox', { name: 'Name' }).fill('Import agent')
-    await dialog.getByRole('checkbox', { name: 'Change my journal' }).click({ force: true })
+    // A forced click on the hidden input skips the wait for a still target, and it once left the box clear. A click on the label waits.
+    await dialog.getByText('Change my journal', { exact: true }).click()
+    await expect(dialog.getByRole('checkbox', { name: 'Change my journal' })).toBeChecked()
     const created = answered('POST', /^\/api\/v1\/personal-access-tokens$/)
     await dialog.getByRole('button', { name: 'Create token', exact: true }).click()
     const body = await (await created).json()
@@ -57,10 +67,141 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Imports', exact: true }).click()
     expect((await listed).status()).toBe(200)
     await expect(page.getByRole('heading', { level: 1, name: 'Imports' })).toBeVisible()
-    await expect(page.getByText(/^You have no import batches\. An agent opens a batch with a personal access token, then you review it here\.$/)).toBeVisible()
+    await expect(page.getByText(/^You have no import batches\. When an agent opens a batch, you review it here\.$/)).toBeVisible()
   })
   await shot('empty')
   await asPhone('empty-phone')
+
+  const skillPanel = page.getByRole('region', { name: 'Import with an agent', exact: true })
+  const skillBox = skillPanel.getByRole('region', { name: 'The text of the recall-import skill', exact: true, includeHidden: true })
+  const skillToggle = skillPanel.getByRole('button', { name: 'The recall-import skill', exact: true })
+  const copySkill = skillPanel.getByRole('button', { name: 'Copy skill', exact: true })
+  const toast = (text) => page.locator('[data-slot="toast-region"]').getByText(text, { exact: true })
+  const mcpUrl = `${new URL(stack.urls.web).origin}/mcp`
+  const command = `claude mcp add --transport http recall ${mcpUrl} --header "Authorization: Bearer <your token>"`
+  const commandRow = skillPanel.getByRole('group', { name: 'Claude Code command', exact: true })
+  const atSkill = async (name, options) => {
+    await skillPanel.scrollIntoViewIfNeeded()
+    await shot(name, { fullPage: false, ...options })
+  }
+  const panelShots = async (name) => {
+    await atSkill(name)
+    await page.setViewportSize(phone)
+    await settle()
+    await atSkill(`${name}-phone`)
+    await page.setViewportSize(desktop)
+    await settle()
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await settle()
+    await atSkill(`${name}-dark`)
+    await page.emulateMedia({ colorScheme: 'light' })
+    await settle()
+  }
+  await step('the panel after the list: the MCP URL of this Recall with the Bearer header, the Claude Code command, and the whole recall-import file in a closed disclosure', async () => {
+    await expect(skillPanel.getByText(/^Connect your agent to this MCP URL with a personal access token that has “Change my journal”\. The agent sends the token in the header Authorization: Bearer <your token>\.$/)).toBeVisible()
+    await expect(skillPanel.getByRole('link', { name: 'personal access token', exact: true })).toHaveAttribute('href', '/settings/personal-access-tokens')
+    await expect(skillPanel.getByRole('group', { name: 'MCP URL', exact: true }).getByText(mcpUrl, { exact: true })).toBeVisible()
+    await expect(skillPanel.getByText('For Claude Code, run this command with your token in place of <your token>. Your shell then keeps the token in its history.', { exact: true })).toBeVisible()
+    await expect(commandRow.getByText(command, { exact: true })).toBeVisible()
+    await expect(skillPanel).not.toContainText('Claude Desktop')
+    await expect(skillPanel.getByText(/save it as a skill of the agent, or paste it at the start of a chat\. For Claude Code, save it as ~\/\.claude\/skills\/recall-import\/SKILL\.md\.$/)).toBeVisible()
+    await expect(skillToggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(skillBox).toBeHidden()
+    expect(await skillBox.textContent()).toBe(skillFile)
+  })
+  await panelShots('panel-empty')
+  await step('the MCP URL of the panel answers an MCP client with the token of the agent', async () => {
+    const res = await fetch(mcpUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+    })
+    expect(res.status).toBe(200)
+    expect(await res.text()).toContain('"put_import_entries"')
+  })
+  await step('Copy MCP URL puts the URL on the clipboard and says so', async () => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    await skillPanel.getByRole('button', { name: 'Copy MCP URL', exact: true }).click()
+    await expect(toast('MCP URL copied')).toBeVisible()
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(mcpUrl)
+  })
+  await atSkill('mcp-url-copied', { keepToast: true })
+  await step('Copy command puts the Claude Code command with this MCP URL on the clipboard and says so', async () => {
+    await closeToasts()
+    await skillPanel.getByRole('button', { name: 'Copy command', exact: true }).click()
+    await expect(toast('Command copied')).toBeVisible()
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(command)
+  })
+  await atSkill('command-copied', { keepToast: true })
+  await step('Copy skill, with the skill closed, puts the whole file on the clipboard, says so, and keeps the focus', async () => {
+    await closeToasts()
+    await copySkill.click()
+    await expect(toast('Skill copied')).toBeVisible()
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(skillFile)
+    await expect(copySkill).toBeFocused()
+  })
+  await atSkill('skill-copied', { keepToast: true })
+  await step('the disclosure opens the skill at its top, with the frontmatter', async () => {
+    await skillToggle.click()
+    await expect(skillToggle).toHaveAttribute('aria-expanded', 'true')
+    await expect(skillBox).toBeVisible()
+    expect(await skillBox.evaluate((box) => box.scrollTop)).toBe(0)
+    expect(await skillBox.locator('span').nth(1).textContent()).toBe('name: recall-import\n')
+  })
+  await atSkill('skill-open-top')
+  await step('a list item of the skill wraps under its words', async () => {
+    const item = skillBox.locator('span').filter({ hasText: /^- A batch can be large\./ })
+    expect(await item.evaluate((line) => getComputedStyle(line).textIndent)).not.toBe('0px')
+    // Scroll the box to the list of tools, so that the shots show how a wrapped list item lines up.
+    await skillBox.evaluate((box) => {
+      const tools = [...box.children].find((line) => line.textContent.startsWith('## The tools'))
+      box.scrollTop += tools.getBoundingClientRect().top - box.getBoundingClientRect().top - 12
+    })
+  })
+  await panelShots('skill-open')
+  await step('Tab from Copy skill puts the keyboard focus on the box of the skill', async () => {
+    await copySkill.focus()
+    await page.keyboard.press('Tab')
+    await expect(skillBox).toBeFocused()
+  })
+  await atSkill('skill-focus')
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await settle()
+  await step('the box keeps the focus in the dark theme', async () => {
+    await expect(skillBox).toBeFocused()
+  })
+  await atSkill('skill-focus-dark')
+  await page.emulateMedia({ colorScheme: 'light' })
+  await settle()
+  await step('a browser that refuses the copy: the skill opens with its whole text selected, and a toast says to copy it by hand', async () => {
+    await skillToggle.click()
+    await expect(skillBox).toBeHidden()
+    await page.evaluate(() => {
+      navigator.clipboard.writeText = () => Promise.reject(new Error('Not allowed'))
+      document.execCommand = () => false
+    })
+    await copySkill.click()
+    await expect(toast('The browser did not copy the skill. Recall selected the whole text of the skill, so copy it by hand.')).toBeVisible()
+    await expect(skillBox).toBeVisible()
+    expect(await page.evaluate(() => window.getSelection().toString())).toBe(skillFile.trimEnd())
+  })
+  await atSkill('skill-copy-failed', { keepToast: true })
+  await step('a browser that refuses the copy of the MCP URL: Recall selects the whole URL, and a toast says to copy it by hand', async () => {
+    await closeToasts()
+    await skillPanel.getByRole('button', { name: 'Copy MCP URL', exact: true }).click()
+    await expect(toast('The browser did not copy the MCP URL. Recall selected it, so copy it by hand.')).toBeVisible()
+    expect(await page.evaluate(() => window.getSelection().toString())).toBe(mcpUrl)
+  })
+  await atSkill('mcp-url-copy-failed', { keepToast: true })
+  await step('a browser that refuses the copy of the command: Recall selects the whole command, and a toast says to copy it by hand', async () => {
+    await closeToasts()
+    await skillPanel.getByRole('button', { name: 'Copy command', exact: true }).click()
+    await expect(toast('The browser did not copy the command. Recall selected it, so copy it by hand.')).toBeVisible()
+    expect(await page.evaluate(() => window.getSelection().toString())).toBe(command)
+  })
+  await atSkill('command-copy-failed', { keepToast: true })
+  await page.reload()
+  await expect(page.getByRole('heading', { level: 1, name: 'Imports' })).toBeVisible()
 
   const id = () => crypto.randomUUID()
   const e = { walk: id(), coffee: id(), london: id(), rain: id(), dinner: id(), garden: id(), evening: id(), gone: id(), late: id() }
@@ -99,6 +240,7 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
   await shot('list')
   await asPhone('list-phone')
   await asDark('list-dark')
+  await panelShots('panel-batches')
 
   const card = (text) => page.getByRole('listitem', { name: /^Entry at / }).filter({ hasText: text })
   const counts = page.getByLabel('Counts of this batch')

@@ -38,6 +38,16 @@ export function importsPage(page: Page) {
       return box !== null && box.x >= 0 && box.x + box.width <= width
     },
 
+    /** How far the right edge of an element runs past the right edge of its container. A value of 0 or less is inside. */
+    async rightOverhangOf(element: Locator, container: Locator) {
+      const inner = (await element.boundingBox())!
+      const outer = (await container.boundingBox())!
+      return inner.x + inner.width - (outer.x + outer.width)
+    },
+
+    /** The count of the lines of an inline element. An element with inline children has a box for each child on a line, so the count is of the distinct tops. */
+    lineCountOf: (element: Locator) => element.evaluate((node) => new Set([...node.getClientRects()].map((box) => Math.round(box.top))).size),
+
     async hitAreaOf(element: Locator) {
       const box = (await element.boundingBox())!
       return Math.min(box.width, box.height)
@@ -83,6 +93,56 @@ export function importsPage(page: Page) {
         range.setEnd(...at(to))
         return new Set([...range.getClientRects()].filter((rect) => rect.width > 0).map((rect) => Math.round(rect.top))).size
       }, words),
+
+    clipboardText: () => page.evaluate(() => navigator.clipboard.readText()),
+
+    /** The browser refuses each copy, as a browser on plain HTTP with no copy command does. */
+    refuseEachCopy: () =>
+      page.addInitScript(() => {
+        navigator.clipboard.writeText = () => Promise.reject(new Error('Not allowed'))
+        document.execCommand = () => false
+      }),
+
+    selectedText: () => page.evaluate(() => window.getSelection()?.toString() ?? ''),
+
+    /** The left edge of the first line of text in the element, or of the stroke of its icon. */
+    textLeftOf: (element: Locator) =>
+      element.evaluate((node) => {
+        // An icon has empty space at the left of its glyph, so take the left edge of its stroke on the screen.
+        const shapes = [...node.querySelectorAll<SVGGeometryElement>('svg path')]
+        if (shapes.length > 0) {
+          return Math.round(Math.min(...shapes.flatMap((shape) => {
+            const box = shape.getBBox()
+            const half = parseFloat(getComputedStyle(shape).strokeWidth) / 2
+            const toScreen = shape.getScreenCTM()!
+            return [box.y - half, box.y + box.height + half].flatMap((y) =>
+              [box.x - half, box.x + box.width + half].map((x) => new DOMPoint(x, y).matrixTransform(toScreen).x))
+          })))
+        }
+        const range = document.createRange()
+        range.selectNodeContents(node)
+        return Math.round(range.getClientRects()[0].left)
+      }),
+
+    /** The space between the element and the right and the bottom edges of the box that holds it. */
+    insetOf: async (element: Locator, box: Locator) => {
+      const inner = (await element.boundingBox())!
+      const outer = (await box.boundingBox())!
+      return { right: Math.round(outer.x + outer.width - (inner.x + inner.width)), bottom: Math.round(outer.y + outer.height - (inner.y + inner.height)) }
+    },
+
+    isFocused: (element: Locator) => element.evaluate((node) => node === document.activeElement),
+
+    async topOf(element: Locator) {
+      return (await element.boundingBox())!.y
+    },
+
+    async bottomOf(element: Locator) {
+      const box = (await element.boundingBox())!
+      return box.y + box.height
+    },
+
+    sideScrollOf: (element: Locator) => element.evaluate((box) => box.scrollWidth - box.clientWidth),
 
     sideScrollRange: () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
 

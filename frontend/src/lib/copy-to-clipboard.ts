@@ -9,12 +9,15 @@ export async function copyToClipboard(text: string): Promise<void> {
     // On iOS a field that can take text raises the keyboard, and a font under 16px zooms the page.
     field.readOnly = true
     field.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px'
+    const focused = document.activeElement
     // The focus trap of a modal takes the focus back from a field outside it, and the copy then copies nothing.
-    const host = document.activeElement?.closest('[role=dialog]') ?? document.body
+    const host = focused?.closest('[role=dialog]') ?? document.body
     host.append(field)
     field.select()
     const isCopied = document.execCommand('copy')
     field.remove()
+    // The field took the focus, and a removed field leaves it on the body. A keyboard user goes on from the button.
+    if (focused instanceof HTMLElement) focused.focus({ preventScroll: true })
     if (!isCopied) throw new Error('The browser refused the copy.')
   }
 }

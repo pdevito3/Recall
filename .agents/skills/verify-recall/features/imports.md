@@ -4,7 +4,13 @@ An agent puts the entries of an old journal into an import batch over REST or MC
 
 ## Sub-features
 
-- `list` at `/imports` shows `Your import batches`: each name links to its batch, with `Open` or `In your journal`, `<n entries>. Times in <zone>.`, and `Opened on ...`. With no batch, the text names the personal access token.
+- `list` at `/imports` shows `Your import batches`: each name links to its batch, with `Open` or `In your journal`, `<n entries>. Times in <zone>.`, and `Opened on ...`. With no batch, the text says `You have no import batches. When an agent opens a batch, you review it here.`, with no link, because the panel names the token.
+- `panel` at `/imports`, the region `Import with an agent`, after the list: the text links `personal access token`, names `Change my journal`, and gives the header `Authorization: Bearer <token>`. It names no agent other than Claude Code.
+  - The group `MCP URL` shows the origin of the page and `/mcp`. `Copy MCP URL` puts it on the clipboard with the toast `MCP URL copied`.
+  - The group `Claude Code command` shows `claude mcp add --transport http recall <MCP URL> --header "Authorization: Bearer <your token>"`. `Copy command` puts it on the clipboard with the toast `Command copied`.
+  - The disclosure trigger, the button `The recall-import skill`, is closed by default. `Copy skill` is on its row and puts the whole text of `frontend/src/domain/imports/recall-import.md` on the clipboard with the toast `Skill copied`, also with the disclosure closed.
+  - The region `The text of the recall-import skill` (a `pre` that scrolls and takes the focus) holds the whole file. Its focus ring is the primary color.
+  - A refused copy of the skill opens the disclosure and selects the whole text, with the toast `The browser did not copy the skill. Recall selected the whole text of the skill, so copy it by hand.` A refused copy of the URL or the command selects it, with `The browser did not copy the MCP URL. Recall selected it, so copy it by hand.` or `The browser did not copy the command. Recall selected it, so copy it by hand.`
 - `discard` opens `Discard <name>?` from `Discard <name>` and drops the batch with `Discard batch` and the toast `Batch discarded`. An accepted batch has no Discard.
 - `days` show as `h2` headings with the list `Entries of <day>`. Each entry is the list item `Entry at <time>`. A batch of more than 200 entries has the pager `Pages of this batch`, and the URL has `?page=<n>`.
 - `entry` shows its time, the zone when it is not the zone of the batch, `No time given. Set from its place in the day.` when no one gave a time, `Edited`, `Rejected` or `Rejected with the day`, and the notes `The import changed the words after your edit. ...` and `The import changed the time after your edit. ...`, each with the next step.
@@ -29,6 +35,7 @@ Preconditions:
 
 - **Token.** On `/settings/personal-access-tokens`, make a token with `Change my journal`. The agent calls use it as `Authorization: Bearer <value>`.
 - **Agent.** `POST /api/v1/import-batches` with a name and `America/New_York`, then `PUT /api/v1/import-batches/<id>/entries` with entries on several days: with a time, without a time, with its own zone, with Moods and Topics.
+- **Panel.** On `/imports`, the region `The text of the recall-import skill` has the text of the skill file. Grant the clipboard, then choose `Copy MCP URL`, `Copy command`, and `Copy skill`: the clipboard holds the URL, the command, and the file. `POST <MCP URL>` with the token and `tools/list` answers with the import tools. Tab from `Copy skill` with the disclosure open focuses the box; read the ring pixels of the shot in light and dark. Replace `navigator.clipboard.writeText` and `document.execCommand` to refuse, then press each copy button: the selection is the whole value.
 - **List.** Open `/imports`. The row of the batch shows the count and the zone of the API answer.
 - **Review.** Choose the batch. Each entry shows the start time in its zone. Edit words and time, `Save`, and the `PUT .../entries/review` body has the whole review.
 - **Reject.** `Reject the entry at <time>` and `Reject <day>`. The counts change.
@@ -41,6 +48,7 @@ Recipe: `recipes/imports.mjs`.
 
 ## Gotchas
 
+- The recipe reads the skill file from the checkout, so it compares the page with the file of the same commit. A stack in `--preview` serves the build of its launch, so launch it again after a change to the file.
 - The sweep gives each batch name a long value, so the recipe reads the name from the list answer, not from a literal.
 - The text of the `Time` field has Unicode isolate marks, so match it with a pattern such as `/7:45\W*AM/`.
 - A fetch from the page needs `X-CSRF: 1` and `X-Recall-User: <sub of /auth/me>`. A token needs `neverExpires: true` or a future `expiresAt`.

@@ -1,8 +1,12 @@
+import { readFileSync } from 'node:fs'
+
 import { anImportBatch, anImportDay, anImportEntry, documentOf, importPaths, importsApi } from '@tests/support/api/imports-api'
 import { aSetting, settingsApi } from '@tests/support/api/settings-api'
 import { aProblem } from '@tests/support/builders/problem-details-builder'
 import { expect, test, type Api } from '@tests/support/fixtures'
 import { importsPage } from './imports.tasks'
+
+const skillFile = readFileSync(new URL('../../../src/domain/imports/recall-import.md', import.meta.url), 'utf8')
 
 const diary = anImportBatch('imp_1', 'Diary 2024', { entryCount: 3, version: 4 })
 const friday = 'Friday, March 1, 2024'
@@ -37,13 +41,13 @@ test.describe('the list of import batches', () => {
     await expect(imports.at.batchLink('Diary 2024')).toHaveAttribute('href', '/imports/imp_1')
   })
 
-  test('with no batch, the list says how an agent opens one', { tag: '@IMP-33' }, async ({ page, api }) => {
+  test('with no batch, the list says that the batches of an agent show here', { tag: '@IMP-33' }, async ({ page, api }) => {
     api.mock(importsApi.listIs([]))
     const imports = importsPage(page)
 
     await imports.openList()
 
-    await expect(imports.at.empty).toBeVisible()
+    await expect(imports.at.empty).toHaveText('You have no import batches. When an agent opens a batch, you review it here.')
   })
 
   test('discard asks first with the name and the count, sends the delete, and the batch leaves the list', { tag: '@IMP-34' }, async ({ page, api }) => {
@@ -103,6 +107,182 @@ test.describe('the list of import batches', () => {
     await imports.openList()
 
     expect(await imports.heightOf(imports.at.batchLink('Diary 2024'))).toBeGreaterThanOrEqual(44)
+  })
+})
+
+test.describe('the recall-import skill', () => {
+  test('the panel comes after the list, and Copy skill puts the whole file on the clipboard with the skill closed', { tag: '@IMP-46' }, async ({ page, context, api }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    api.mock(importsApi.listIs([diary]))
+    const imports = importsPage(page)
+    await imports.openList()
+
+    await imports.at.copySkill.click()
+
+    await expect(imports.at.text('Skill copied')).toBeVisible()
+    await expect.poll(() => imports.clipboardText()).toBe(skillFile)
+    expect(await imports.isFocused(imports.at.copySkill)).toBe(true)
+    await expect(imports.at.skillToggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(imports.at.skillText).toBeHidden()
+    expect(await imports.at.skillText.textContent()).toBe(skillFile)
+    expect(await imports.topOf(imports.at.skillPanel)).toBeGreaterThan(await imports.bottomOf(imports.at.batches))
+  })
+
+  test('the panel shows the MCP URL of this Recall, and Copy MCP URL puts it on the clipboard', { tag: '@IMP-46' }, async ({ page, context, api, baseURL }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    api.mock(importsApi.listIs([]))
+    const imports = importsPage(page)
+    await imports.openList()
+
+    await imports.at.copyMcpUrl.click()
+
+    await expect(imports.at.text('MCP URL copied')).toBeVisible()
+    await expect.poll(() => imports.clipboardText()).toBe(`${new URL(baseURL!).origin}/mcp`)
+    await expect(imports.at.mcpUrl).toContainText(`${new URL(baseURL!).origin}/mcp`)
+  })
+
+  test('Copy command puts the Claude Code command with the MCP URL of this Recall on the clipboard', { tag: '@IMP-46' }, async ({ page, context, api, baseURL }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    api.mock(importsApi.listIs([]))
+    const imports = importsPage(page)
+    const command = `claude mcp add --transport http recall ${new URL(baseURL!).origin}/mcp --header "Authorization: Bearer <your token>"`
+    await imports.openList()
+
+    await imports.at.copyCommand.click()
+
+    await expect(imports.at.text('Command copied')).toBeVisible()
+    await expect.poll(() => imports.clipboardText()).toBe(command)
+    await expect(imports.at.commandText(command)).toBeVisible()
+    expect(await imports.isFocused(imports.at.copyCommand)).toBe(true)
+  })
+
+  test('when the browser refuses the copy of the MCP URL, Recall selects the whole URL', { tag: '@IMP-46' }, async ({ page, api, baseURL }) => {
+    api.mock(importsApi.listIs([]))
+    const imports = importsPage(page)
+    await imports.refuseEachCopy()
+    await imports.openList()
+
+    await imports.at.copyMcpUrl.click()
+
+    await expect(imports.at.text('The browser did not copy the MCP URL. Recall selected it, so copy it by hand.')).toBeVisible()
+    expect(await imports.selectedText()).toBe(`${new URL(baseURL!).origin}/mcp`)
+  })
+
+  for (const size of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+    test(`at ${size.width} px, the text of each box of the panel lines up with the text of a batch card, with the same inner padding`, { tag: '@IMP-46' }, async ({ page, api }) => {
+      await page.setViewportSize(size)
+      api.mock(importsApi.listIs([diary]))
+      const imports = importsPage(page)
+      await imports.openList()
+
+      // From the sm width up, the header of the token is one unit, so it never breaks inside.
+      await expect(imports.at.tokenHeader).toHaveText('Authorization: Bearer <your token>')
+      if (size.width >= 640) expect(await imports.lineCountOf(imports.at.tokenHeader)).toBe(1)
+      const cardText = await imports.textLeftOf(imports.at.batchLink('Diary 2024'))
+      expect(await imports.textLeftOf(imports.at.mcpUrlValue)).toBe(cardText)
+      expect(await imports.textLeftOf(imports.at.commandValue)).toBe(cardText)
+      expect(await imports.textLeftOf(imports.at.skillToggle)).toBe(cardText)
+      // The card is inside the border of the list, and each box of the panel has its own border of 1 px.
+      const { right: padding } = await imports.insetOf(imports.at.discardOf('Diary 2024'), imports.at.batch('Diary 2024'))
+      // On a phone, a copy button wraps below its value. Else it is at the right, in the middle of the box.
+      const sideOfButton = size.width < 640 ? 'bottom' : 'right'
+      expect((await imports.insetOf(imports.at.copyMcpUrl, imports.at.mcpUrl))[sideOfButton]).toBe(padding + 1)
+      expect((await imports.insetOf(imports.at.copyCommand, imports.at.claudeCodeCommand))[sideOfButton]).toBe(padding + 1)
+      expect(await imports.insetOf(imports.at.copySkill, imports.at.skillRow)).toMatchObject({ [sideOfButton]: padding, bottom: padding })
+
+      await imports.at.skillToggle.click()
+      await expect(imports.at.skillToggle).toHaveAttribute('aria-expanded', 'true')
+      expect(await imports.textLeftOf(imports.at.skillToggle)).toBe(cardText)
+    })
+  }
+
+  for (const width of [320, 390]) {
+    test(`at ${width} px and a root font size of 20 px, the header of the token breaks only before <your token>, inside its paragraph`, { tag: '@IMP-46' }, async ({ page, api }) => {
+      await page.setViewportSize({ width, height: 844 })
+      api.mock(importsApi.listIs([diary]))
+      const imports = importsPage(page)
+      await imports.openList()
+      await page.addStyleTag({ content: 'html { font-size: 20px }' })
+
+      // The whole header is wider than the paragraph here, so it can break between its two parts, and never inside one.
+      // The page moves while it lays out the new size, so the test reads the edges until they agree.
+      await expect.poll(() => imports.rightOverhangOf(imports.at.tokenHeader, imports.at.tokenHeaderParagraph)).toBeLessThanOrEqual(0)
+      expect(await imports.sideScrollRange()).toBe(0)
+      expect(await imports.lineCountOf(imports.at.tokenHeader)).toBeLessThanOrEqual(2)
+      for (const part of imports.at.tokenHeaderParts) expect(await imports.lineCountOf(part)).toBe(1)
+    })
+  }
+
+  test('at 1280 px and a root font size of 20 px, the header of the token stays on one line', { tag: '@IMP-46' }, async ({ page, api }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    api.mock(importsApi.listIs([diary]))
+    const imports = importsPage(page)
+    await imports.openList()
+    await page.addStyleTag({ content: 'html { font-size: 20px }' })
+
+    await expect(imports.at.tokenHeader).toHaveText('Authorization: Bearer <your token>')
+    await expect.poll(() => imports.lineCountOf(imports.at.tokenHeader)).toBe(1)
+  })
+
+  test('at a root font size of 20 px, the arrow of the skill starts at the text edge of the MCP URL, closed and open', { tag: '@IMP-46' }, async ({ page, api }) => {
+    api.mock(importsApi.listIs([diary]))
+    const imports = importsPage(page)
+    await imports.openList()
+    // A person can set a larger font in the browser. The icon is 1rem, so its offsets must grow with it.
+    await page.addStyleTag({ content: 'html { font-size: 20px }' })
+
+    // The page moves while it lays out the new size, so the test reads both edges until they agree.
+    const arrowFromText = async () => (await imports.textLeftOf(imports.at.skillToggle)) - (await imports.textLeftOf(imports.at.mcpUrlValue))
+    await expect.poll(arrowFromText).toBe(0)
+    await imports.at.skillToggle.click()
+    await expect(imports.at.skillToggle).toHaveAttribute('aria-expanded', 'true')
+    await expect.poll(arrowFromText).toBe(0)
+  })
+
+  test('the skill opens, and its box takes the keyboard focus after Copy skill', { tag: '@IMP-46' }, async ({ page, api }) => {
+    api.mock(importsApi.listIs([diary]))
+    const imports = importsPage(page)
+    await imports.openList()
+
+    await imports.at.skillToggle.click()
+    await imports.at.copySkill.focus()
+    await page.keyboard.press('Tab')
+
+    await expect(imports.at.skillToggle).toHaveAttribute('aria-expanded', 'true')
+    await expect(imports.at.skillText).toBeVisible()
+    await expect(imports.at.skillText).toBeFocused()
+  })
+
+  test('when the browser refuses the copy, the skill opens with its whole text selected', { tag: '@IMP-46' }, async ({ page, api }) => {
+    api.mock(importsApi.listIs([diary]))
+    const imports = importsPage(page)
+    await imports.refuseEachCopy()
+    await imports.openList()
+
+    await imports.at.copySkill.click()
+
+    await expect(imports.at.text('The browser did not copy the skill. Recall selected the whole text of the skill, so copy it by hand.')).toBeVisible()
+    await expect(imports.at.skillText).toBeVisible()
+    // A copy of a selection drops the line break at the end of the file, and keeps each other line.
+    expect(await imports.selectedText()).toBe(skillFile.trimEnd())
+  })
+
+  test('on a phone, the panel wraps in the page, and its buttons have a hit area of at least 44 px', { tag: '@IMP-46' }, async ({ page, api }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    api.mock(importsApi.listIs([diary]))
+    const imports = importsPage(page)
+    await imports.openList()
+
+    await imports.at.skillToggle.click()
+
+    await expect(imports.at.skillText).toBeVisible()
+    expect(await imports.isInsideTheWindowWidth(imports.at.skillPanel)).toBe(true)
+    expect(await imports.sideScrollRange()).toBe(0)
+    expect(await imports.sideScrollOf(imports.at.skillText)).toBe(0)
+    expect(await imports.hitAreaOf(imports.at.copySkill)).toBeGreaterThanOrEqual(44)
+    expect(await imports.hitAreaOf(imports.at.copyMcpUrl)).toBeGreaterThanOrEqual(44)
+    expect(await imports.hitAreaOf(imports.at.copyCommand)).toBeGreaterThanOrEqual(44)
+    expect(await imports.hitAreaOf(imports.at.skillToggle)).toBeGreaterThanOrEqual(44)
   })
 })
 
@@ -471,7 +651,7 @@ test.describe('the import review setting', () => {
     await imports.at.importReviewLabel.click()
 
     await expect(imports.at.importReview).not.toBeChecked()
-    expect(api.last('put', importPaths.importReview)?.body).toEqual({ requireImportReview: false, version: 1 })
+    await expect.poll(() => api.last('put', importPaths.importReview)?.body).toEqual({ requireImportReview: false, version: 1 })
   })
 
   test('a change from an old version reads the settings again and sends the change once more', { tag: '@IMP-45' }, async ({ page, api }) => {
@@ -486,7 +666,7 @@ test.describe('the import review setting', () => {
     await imports.at.importReviewLabel.click()
 
     await expect(imports.at.importReview).not.toBeChecked()
-    expect(api.all('put', importPaths.importReview).map((r) => r.body)).toEqual([
+    await expect.poll(() => api.all('put', importPaths.importReview).map((r) => r.body)).toEqual([
       { requireImportReview: false, version: 1 },
       { requireImportReview: false, version: 3 },
     ])
