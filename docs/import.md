@@ -18,15 +18,17 @@ A token with only **Read my journal** sees only the list tools. It gets an error
 
 ### Add Recall to the agent
 
-The MCP endpoint of Recall is `https://<your Recall host>/mcp`. **Imports** in Recall shows this URL, with **Copy MCP URL**. The agent sends the token in the `Authorization` header. In the examples below, the environment variable `RECALL_PAT` holds the token.
+The MCP URL is the address of your Recall with `/mcp` at the end, for example `https://recall.example.com/mcp`. **Imports** in Recall shows this URL, with **Copy MCP URL**. The agent sends the token in the header `Authorization: Bearer <token>`. In the examples below, the environment variable `RECALL_PAT` holds the token.
 
-For Claude Code:
+For Claude Code, **Imports** in Recall shows this command with your MCP URL, with **Copy command**:
 
 ```bash
 claude mcp add --transport http recall https://recall.example.com/mcp --header "Authorization: Bearer $RECALL_PAT"
 ```
 
-For Claude Code with a `.mcp.json` file:
+By default, `claude mcp add` adds Recall only to the project of the current directory. To add it to all your projects, put `--scope user` after `add`.
+
+For Claude Code with a `.mcp.json` file at the root of the project:
 
 ```json
 {
@@ -40,7 +42,11 @@ For Claude Code with a `.mcp.json` file:
 }
 ```
 
-Claude Desktop starts a local MCP server for each entry of `claude_desktop_config.json`. Use a bridge, such as `mcp-remote`, that sends the header to `/mcp`. The bridge needs Node.js, which also gives `npx`:
+Claude Desktop starts a local MCP server for each entry of its config file. Use a bridge, such as `mcp-remote`, that sends the header to `/mcp`. The bridge needs Node.js, which also gives `npx`.
+
+1. In Claude Desktop, open **Settings** > **Developer**, and choose **Edit Config**. This opens the folder of `claude_desktop_config.json`.
+2. Add the entry below to the file, with your MCP URL and your token.
+3. Quit Claude Desktop, and start it again.
 
 ```json
 {
@@ -54,6 +60,8 @@ Claude Desktop starts a local MCP server for each entry of `claude_desktop_confi
 }
 ```
 
+If your MCP URL starts with `http://`, put `"--allow-http"` after the URL in `args`. Use plain HTTP only on a private network, because another device on the network can read the token. To turn on HTTPS, see [install.md](install.md#turn-on-https).
+
 Another MCP client uses the Streamable HTTP transport. The server keeps no MCP session, so each request stands alone. Send JSON-RPC with `POST`, and accept both JSON and an event stream:
 
 ```bash
@@ -64,7 +72,7 @@ curl https://recall.example.com/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
-The answer is an event stream. The JSON-RPC result is on the `data:` line. Call a tool with the method `tools/call` and `params` of `{ "name": "<tool>", "arguments": { ... } }`. The other auth rules of a token are in [authentication.md](authentication.md#personal-access-tokens).
+The response is an event stream. The JSON-RPC result is on the `data:` line. Call a tool with the method `tools/call` and `params` of `{ "name": "<tool>", "arguments": { ... } }`. The other auth rules of a token are in [authentication.md](authentication.md#personal-access-tokens).
 
 ### Give the agent the skill
 
@@ -124,7 +132,7 @@ Each entry of a put gets the first outcome that applies.
 | `InJournal` | A Session of the journal has this ID. | Skip it. |
 | `Deleted` | You deleted the Session of this ID. | Skip it. |
 | `InOtherBatch` | Another open batch holds this ID. | Tell you. Find the batch with `list_import_batches`. |
-| `InTheFuture` | The start time is in the future. | Read the source again for the date and the time. |
+| `InTheFuture` | The start time is in the future. An entry of today with no time starts at 12:00 plus its position, so before that time it gets this outcome. | For an entry of today with no time, put it again after that time, or ask you for its time. For another entry, read the source again for the date and the time. |
 | `PositionTaken` | Another entry of the date has the position. `positionTakenBy` names it. | Correct the positions and put again. |
 | `Rejected` | You rejected the entry or its day. The put stored the new words, and the reject stays. If the put moved the entry off a rejected day, it stored nothing. | Leave it. |
 | `Unchanged` | The batch already holds this entry. | Go on. |
@@ -135,7 +143,7 @@ Each entry of a put gets the first outcome that applies.
 
 ### A put again is safe
 
-A put of the same call again changes nothing. So the agent can send a put again after an error or a lost answer. A call of `open_import_batch` again opens a second batch. So after a lost answer of `open_import_batch`, the agent finds the batch with `list_import_batches`. A second run of a whole import also stores only the new entries, because each entry that is already in the journal gets `InJournal`. An entry that you rejected in an accepted or a discarded batch is not in the journal, so it gets `Added` again. Reject it again in the review. A put never changes your review, and it removes no entry.
+A put of the same call again changes nothing. So the agent can send a put again after an error or a lost result. A call of `open_import_batch` again opens a second batch. So after a lost result of `open_import_batch`, the agent finds the batch with `list_import_batches`. A second run of a whole import also stores only the new entries, because each entry that is already in the journal gets `InJournal`. An entry that you rejected in an accepted or a discarded batch is not in the journal, so it gets `Added` again. Reject it again in the review. A put never changes your review, and it removes no entry.
 
 ### The review gate
 
