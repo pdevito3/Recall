@@ -297,6 +297,7 @@ test.describe('the review of a batch', () => {
 
     await expect(imports.at.dayRegion(wednesday)).toContainText('12 entries, day rejected')
     expect(await imports.heightOf(imports.at.day(wednesday))).toBeLessThan(30)
+    expect(await imports.isBelow(imports.at.dayCounts(wednesday, '12 entries, day rejected'), imports.at.day(wednesday))).toBe(true)
     expect(Math.abs((await imports.middleOf(imports.at.keepDay(wednesday))) - (await imports.middleOf(imports.at.day(wednesday))))).toBeLessThanOrEqual(3)
   })
 
