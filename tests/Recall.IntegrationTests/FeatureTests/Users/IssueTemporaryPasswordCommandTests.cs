@@ -1,5 +1,6 @@
 namespace Recall.IntegrationTests.FeatureTests.Users;
 
+using Recall.SharedTestHelpers.Fakes.User;
 using System.Buffers.Binary;
 using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
@@ -28,7 +29,7 @@ public class IssueTemporaryPasswordCommandTests : TestBase
         // Arrange
         var scope = new TestingServiceScope();
         await scope.StartGraph(out _)
-            .AddUsers(out var users, u => u.Role = "Admin", u => u.Role = "User")
+            .AddUsers(out var users, u => u.Roles = ["Admin"], u => u.Roles = [])
             .BuildAsync();
         var (admin, person) = (users[0], users[1]);
         SignInAsPerson(scope, admin);
@@ -59,7 +60,7 @@ public class IssueTemporaryPasswordCommandTests : TestBase
         // Arrange
         var scope = new TestingServiceScope();
         await scope.StartGraph(out _)
-            .AddUsers(out var users, u => u.Role = "Admin", u => u.Role = "User")
+            .AddUsers(out var users, u => u.Roles = ["Admin"], u => u.Roles = [])
             .BuildAsync();
         var (admin, person) = (users[0], users[1]);
         await StartAsync(scope, store => store.StartWebAsync(person.Id, "oidc", CancellationToken.None));
@@ -89,7 +90,7 @@ public class IssueTemporaryPasswordCommandTests : TestBase
         // Arrange
         var scope = new TestingServiceScope();
         await scope.StartGraph(out _)
-            .AddUser(out var admin, u => u.Role = "Admin")
+            .AddUser(out var admin, u => u.Roles = ["Admin"])
             .BuildAsync();
         var current = await StartAsync(scope, store => store.StartWebAsync(admin.Id, "oidc", CancellationToken.None));
         var otherWeb = await StartAsync(scope, store => store.StartWebAsync(admin.Id, "oidc", CancellationToken.None));
@@ -114,7 +115,7 @@ public class IssueTemporaryPasswordCommandTests : TestBase
         // Arrange
         var scope = new TestingServiceScope();
         await scope.StartGraph(out _)
-            .AddUsers(out var users, u => u.Role = "Admin", u => u.Role = "User")
+            .AddUsers(out var users, u => u.Roles = ["Admin"], u => u.Roles = [])
             .BuildAsync();
         var (admin, person) = (users[0], users[1]);
         await StartAsync(scope, async store =>
@@ -145,7 +146,7 @@ public class IssueTemporaryPasswordCommandTests : TestBase
         // Arrange
         var scope = new TestingServiceScope();
         await scope.StartGraph(out _)
-            .AddUsers(out var users, u => u.Role = "Admin", u => u.Role = "User")
+            .AddUsers(out var users, u => u.Roles = ["Admin"], u => u.Roles = [])
             .BuildAsync();
         var (admin, person) = (users[0], users[1]);
         SignInAsPerson(scope, admin);
@@ -173,7 +174,7 @@ public class IssueTemporaryPasswordCommandTests : TestBase
         // Arrange
         var scope = new TestingServiceScope();
         await scope.StartGraph(out _)
-            .AddUsers(out var users, u => u.Role = "Admin", u => u.Role = "User")
+            .AddUsers(out var users, u => u.Roles = ["Admin"], u => u.Roles = [])
             .BuildAsync();
         var (admin, person) = (users[0], users[1]);
         await scope.AddPasswordAsync(person, stopped: true);
@@ -197,7 +198,7 @@ public class IssueTemporaryPasswordCommandTests : TestBase
         // Arrange
         var scope = new TestingServiceScope();
         await scope.StartGraph(out _)
-            .AddUsers(out var users, u => u.Role = "Admin", u => u.Role = "User")
+            .AddUsers(out var users, u => u.Roles = ["Admin"], u => u.Roles = [])
             .BuildAsync();
         var (admin, linked) = (users[0], users[1]);
         await scope.AddSignInLinkAsync(linked);
@@ -222,7 +223,7 @@ public class IssueTemporaryPasswordCommandTests : TestBase
         // Arrange
         var scope = new TestingServiceScope();
         await scope.StartGraph(out _)
-            .AddUsers(out var users, u => u.Role = "Admin", u => u.Role = "User")
+            .AddUsers(out var users, u => u.Roles = ["Admin"], u => u.Roles = [])
             .BuildAsync();
         var (admin, person) = (users[0], users[1]);
         SignInAsPerson(scope, admin);
@@ -244,7 +245,7 @@ public class IssueTemporaryPasswordCommandTests : TestBase
         // Arrange
         var scope = new TestingServiceScope();
         await scope.StartGraph(out _)
-            .AddUsers(out var users, u => u.Role = "Admin", u => u.Role = "User")
+            .AddUsers(out var users, u => u.Roles = ["Admin"], u => u.Roles = [])
             .BuildAsync();
         await scope.StartGraph(out _).AddTenant(out _).AddUser(out var stranger).BuildAsync();
         var (admin, person) = (users[0], users[1]);
@@ -269,7 +270,7 @@ public class IssueTemporaryPasswordCommandTests : TestBase
     {
         // Arrange
         var scope = new TestingServiceScope();
-        var graph = scope.StartGraph(out _).AddUsers(out var users, u => u.Role = "User", u => u.Role = "Admin");
+        var graph = scope.StartGraph(out _).AddUsers(out var users, u => u.Roles = [], u => u.Roles = ["Admin"]);
         var (manager, admin) = (users[0], users[1]);
         manager.AddPermissions([Permission.ManageUserAccess(), Permission.ReadUsers()]);
         await graph.BuildAsync();
@@ -289,7 +290,7 @@ public class IssueTemporaryPasswordCommandTests : TestBase
     {
         // Arrange
         var scope = new TestingServiceScope();
-        await scope.StartGraph(out _).AddUser(out var admin, u => u.Role = "Admin").BuildAsync();
+        await scope.StartGraph(out _).AddUser(out var admin, u => u.Roles = ["Admin"]).BuildAsync();
         await scope.StartGraph(out _).AddTenant(out _).AddUser(out var stranger).BuildAsync();
         SignInAsPerson(scope, admin);
 
@@ -307,7 +308,7 @@ public class IssueTemporaryPasswordCommandTests : TestBase
         // Arrange
         var scope = new TestingServiceScope();
         await scope.StartGraph(out _)
-            .AddUsers(out var users, u => u.Role = "Admin", u => u.Role = "User")
+            .AddUsers(out var users, u => u.Roles = ["Admin"], u => u.Roles = [])
             .BuildAsync();
         var (admin, person) = (users[0], users[1]);
 
@@ -332,7 +333,7 @@ public class IssueTemporaryPasswordCommandTests : TestBase
         // Arrange
         var scope = new TestingServiceScope();
         await scope.StartGraph(out _)
-            .AddUsers(out var users, u => u.Role = "Admin", u => u.Role = "User")
+            .AddUsers(out var users, u => u.Roles = ["Admin"], u => u.Roles = [])
             .BuildAsync();
         var (admin, person) = (users[0], users[1]);
         SignInAsPerson(scope, admin);

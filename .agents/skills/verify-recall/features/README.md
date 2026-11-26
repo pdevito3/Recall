@@ -46,7 +46,7 @@ Keep implementation details out of the map. Name only user paths, stable handles
 - [Journal](./journal.md) covers capture on `/`, autosave, two tabs, two devices, the history, the delete, a phone width, the keyboard, a lost connection, and the file store notice.
 - [Mic](./mic.md) covers the mic card on `/`: one tap records into a new entry, and the audio outlives a closed tab, a lost network, and a stopped Server until its words are in the journal.
 - [Job dashboard](./job-dashboard.md) covers `/backwave`: the BackWave console of the Owner, the finished health job, and the 403 for each other caller.
-- [Users](./users.md) covers `/users` and `/users/<id>`: the list of the users of the tenant, the actions from `allowedActions`, the role change, the delete, and the refusal for a member.
+- [Users](./users.md) covers `/users` and `/users/<id>`: the list of the users of the tenant, the actions from `allowedActions`, adding and removing a role, the delete, and the refusal for a member.
 - [Personal access tokens](./personal-access-tokens.md) covers `/settings/personal-access-tokens` and the section on `/users/<id>`: make a token, see its value once, use it as a bearer, and revoke it.
 - [Model providers and Cleanup](./model-providers.md) covers `/model-providers`: connect, test, pick a model, and make it active with a local fake, a second provider with a model that does not take the place of the active provider, a wrong key, and a Cleanup that runs after the page closes.
 - [People](./people.md) covers `/people`: the list, the add, the full name and the notes of a Person, and the choice between two People of one name on the People proposal of an entry.

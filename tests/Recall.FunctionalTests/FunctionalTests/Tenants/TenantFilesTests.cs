@@ -74,7 +74,7 @@ public class TenantFilesTests : TestBase
     public async Task a_delete_that_a_member_may_not_make_keeps_the_files()
     {
         // Arrange
-        var (tenant, member) = await AddTenantWithUserAsync(UserRole.User());
+        var (tenant, member) = await AddTenantWithUserAsync([]);
         var files = FileKey.ForTenant(tenant.Id, "recordings", "rec_1", "00001");
         await WriteAsync(files, [1]);
         FactoryClient.SignInAsAppUser(member.Identifier);
@@ -162,13 +162,13 @@ public class TenantFilesTests : TestBase
         await Store.WriteAsync(key, content, CancellationToken.None);
     }
 
-    private static Task<(Tenant Tenant, User User)> AddTenantWithAdminAsync() => AddTenantWithUserAsync(UserRole.Admin());
+    private static Task<(Tenant Tenant, User User)> AddTenantWithAdminAsync() => AddTenantWithUserAsync([UserRole.Admin()]);
 
-    private static async Task<(Tenant Tenant, User User)> AddTenantWithUserAsync(UserRole role)
+    private static async Task<(Tenant Tenant, User User)> AddTenantWithUserAsync(IReadOnlyList<UserRole> roles)
     {
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var user, u => u.Role = role.Value);
+            .AddUser(out var user, u => u.Roles = [.. roles.Select(r => r.Value)]);
         await InsertAsync(tenant);
         await InsertAsync(user);
         return (tenant, user);

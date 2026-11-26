@@ -39,11 +39,14 @@ public class EntityIdTests
     {
         // Act
         var tenant = Tenant.Create(new FakeTenantForCreation().Generate());
-        var user = User.Create(new FakeUserForCreation().Generate() with { Role = UserRole.Admin() });
+        var user = User.Create(new FakeUserForCreation().Generate() with { Roles = [UserRole.Admin()] });
+        user.RemovePermission(Permission.ReadUsers());
 
         // Assert
         tenant.Id.ShouldStartWith("ten_");
         user.Id.ShouldStartWith("usr_");
+        user.Roles.ShouldNotBeEmpty();
+        user.Roles.ShouldAllBe(r => r.Id.StartsWith("urole_") && r.UserId == user.Id);
         user.UserPermissions.ShouldNotBeEmpty();
         user.UserPermissions.ShouldAllBe(p => p.Id.StartsWith("uperm_") && p.UserId == user.Id);
     }
@@ -62,18 +65,18 @@ public class EntityIdTests
     }
 
     [Test]
-    public void user_uses_the_id_in_the_creation_model_for_the_user_and_the_permissions()
+    public void user_uses_the_id_in_the_creation_model_for_the_user_and_the_roles()
     {
         // Arrange
         var id = EntityId.New(User.IdPrefix);
 
         // Act
-        var user = User.Create(new FakeUserForCreation().Generate() with { Id = id, Role = UserRole.Admin() });
+        var user = User.Create(new FakeUserForCreation().Generate() with { Id = id, Roles = [UserRole.Admin(), UserRole.Auditor()] });
 
         // Assert
         user.Id.ShouldBe(id);
-        user.UserPermissions.ShouldNotBeEmpty();
-        user.UserPermissions.ShouldAllBe(p => p.UserId == id);
+        user.Roles.Count.ShouldBe(2);
+        user.Roles.ShouldAllBe(r => r.UserId == id);
     }
 
     [Test]

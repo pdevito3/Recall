@@ -23,9 +23,6 @@ public class UserListQueryTests : TestBase
     [Arguments("Username == \"{username}\"")]
     [Arguments("Identifier == \"{identifier}\"")]
     [Arguments("Id == \"{id}\"")]
-    [Arguments("Role == \"{role}\"")]
-    [Arguments("Permissions ^$ \"{permission}\"")]
-    [Arguments("Permissions == \"{permission}\"")]
     public async Task filter_on_a_dto_field_returns_the_matching_user(string filterTemplate)
     {
         // Arrange
@@ -36,9 +33,7 @@ public class UserListQueryTests : TestBase
             .Replace("{email}", target.Email!.Value)
             .Replace("{username}", target.Username)
             .Replace("{identifier}", target.Identifier)
-            .Replace("{id}", target.Id.ToString())
-            .Replace("{role}", target.Role.Value)
-            .Replace("{permission}", Permission.ManageTenant().Value);
+            .Replace("{id}", target.Id.ToString());
 
         // Act
         var result = await FactoryClient.GetRequestAsync($"{ApiRoutes.Users.GetList}?filters={Uri.EscapeDataString(filters)}");
@@ -56,7 +51,6 @@ public class UserListQueryTests : TestBase
     [Arguments("FullName", true)]
     [Arguments("Email desc", false)]
     [Arguments("Username", true)]
-    [Arguments("Role", true)]
     public async Task sort_on_a_dto_field_returns_the_users_in_order(string sortOrder, bool targetFirst)
     {
         // Arrange
@@ -104,12 +98,12 @@ public class UserListQueryTests : TestBase
         users.Select(u => u.Id).ShouldBe([first.Id, second.Id, third.Id]);
     }
 
-    // The users have the same role, so only the tie-break on Id puts each user on exactly one page.
+    // The users have the same email, so only the tie-break on Id puts each user on exactly one page. No index has the email.
     // Each insert is separate and in the reverse of the Id order, so the order of the rows on disk cannot give the correct result.
     // A sort on the names uses the index on the tenant and the names, which also has the Id, so it cannot show a missing tie-break.
     [Test]
-    [Arguments("Role")]
-    [Arguments("Role desc")]
+    [Arguments("Email")]
+    [Arguments("Email desc")]
     public async Task users_with_the_same_sort_value_each_show_on_one_page_in_id_order(string sortOrder)
     {
         // Arrange
@@ -122,7 +116,7 @@ public class UserListQueryTests : TestBase
         var users = ids.Reverse()
             .Select(id => User.Create(FakeUserInTenant(tenant.Id, "")
                 .RuleFor(u => u.Id, id)
-                .RuleFor(u => u.Role, UserRole.User().Value)
+                .RuleFor(u => u.Email, "same@example.com")
                 .Generate()))
             .ToArray();
         users[0].AddPermission(Permission.ReadUsers());
@@ -201,12 +195,15 @@ public class UserListQueryTests : TestBase
         problem.Errors.ShouldHaveSingleItem().Key.ShouldBe(parameter);
     }
 
-    // The handler adds the allowed actions after the page loads, so they are not a column of the query
+    // The handler adds the allowed actions, the addable roles, and the permissions after the page loads, so they are not columns of the query.
     [Test]
     [Arguments("filters", "allowedActions @=* \"Del\"")]
     [Arguments("filters", "AllowedActions.Count > 0")]
     [Arguments("sortOrder", "allowedActions")]
-    public async Task query_on_the_allowed_actions_returns_bad_request(string parameter, string value)
+    [Arguments("filters", "permissions ^$ \"manage_tenant\"")]
+    [Arguments("filters", "permissions == \"manage_tenant\"")]
+    [Arguments("filters", "addableRoles ^$ \"Admin\"")]
+    public async Task query_on_a_field_the_list_adds_after_the_load_returns_bad_request(string parameter, string value)
     {
         // Arrange
         await ArrangeTwoUsersAsync();
@@ -221,19 +218,15 @@ public class UserListQueryTests : TestBase
     }
 
     // Makes a new tenant with two users, signs in as the second user, and returns the first user.
-    // The first user is an admin with a permission, and the second user is not an admin and has only read_users.
-    // So a filter on the role or on the permissions matches only the first user.
+    // The first user is an admin, and the second user is a member with only read_users.
     // The values of the first user start with "a" and the values of the second user start with "b",
     // so each sort on a text field has one correct order in each collation.
     private async Task<User> ArrangeTwoUsersAsync()
     {
         var tenant = Tenant.Create(new FakeTenantForCreation().Generate());
         await InsertAsync(tenant);
-        var target = User.Create(FakeUserInTenant(tenant.Id, "a").Generate());
-        target.UpdateRole(UserRole.Admin());
-        target.AddPermission(Permission.ManageTenant());
+        var target = User.Create(FakeUserInTenant(tenant.Id, "a").RuleFor(u => u.Roles, [UserRole.Admin().Value]).Generate());
         var caller = User.Create(FakeUserInTenant(tenant.Id, "b").Generate());
-        caller.UpdateRole(UserRole.User());
         caller.AddPermission(Permission.ReadUsers());
         await InsertAsync(target, caller);
         FactoryClient.SignInAsAppUser(caller.Identifier);
@@ -247,7 +240,8 @@ public class UserListQueryTests : TestBase
             .RuleFor(u => u.FirstName, f => prefix + UserRules.FirstName(f))
             .RuleFor(u => u.LastName, f => prefix + UserRules.LastName(f))
             .RuleFor(u => u.Email, f => prefix + UserRules.Email(f))
-            .RuleFor(u => u.Username, f => prefix + UserRules.Username(f));
+            .RuleFor(u => u.Username, f => prefix + UserRules.Username(f))
+            .RuleFor(u => u.Roles, []);
         return faker;
     }
 }

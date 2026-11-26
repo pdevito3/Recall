@@ -34,7 +34,7 @@ public class GetUserQueryTests : TestBase
         // Arrange
         var testingServiceScope = new TestingServiceScope();
         await testingServiceScope.StartGraph(out _)
-            .AddUser(out var fakeUser, u => u.Role = "Admin")
+            .AddUser(out var fakeUser, u => u.Roles = ["Admin"])
             .BuildAsync();
 
         // Act
@@ -43,8 +43,8 @@ public class GetUserQueryTests : TestBase
 
         // Assert
         userReturned.ShouldNotBeNull();
-        userReturned.Role.ShouldBe("Admin");
-        userReturned.Permissions.ShouldNotBeEmpty();
+        userReturned.Roles.ShouldBe(["Admin"]);
+        userReturned.Permissions.ShouldBe(Permission.ListNames(), ignoreOrder: true);
     }
 
     [Test]

@@ -15,7 +15,8 @@ public class UserMalformedIdTests : TestBase
         ["GET"] = HttpStatusCode.OK,
         ["PUT"] = HttpStatusCode.OK,
         ["DELETE"] = HttpStatusCode.NoContent,
-        ["role"] = HttpStatusCode.OK,
+        ["add-role"] = HttpStatusCode.OK,
+        ["remove-role"] = HttpStatusCode.OK,
         ["add-permission"] = HttpStatusCode.OK,
         ["remove-permission"] = HttpStatusCode.OK,
     };
@@ -61,7 +62,8 @@ public class UserMalformedIdTests : TestBase
         "GET" => FactoryClient.GetRequestAsync(ApiRoutes.Users.GetRecord(id)),
         "PUT" => FactoryClient.PutJsonRequestAsync(ApiRoutes.Users.Put(id), new FakeUserForUpdateDto().Generate() with { Version = version }),
         "DELETE" => FactoryClient.DeleteRequestAsync(ApiRoutes.Users.Delete(id)),
-        "role" => FactoryClient.PutJsonRequestAsync(ApiRoutes.Users.UpdateRole(id), new { role = "Admin" }),
+        "add-role" => FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.AddRole(id), new { role = "Auditor" }),
+        "remove-role" => FactoryClient.DeleteRequestAsync(ApiRoutes.Users.RemoveRole(id, "Auditor")),
         "add-permission" => FactoryClient.PostJsonRequestAsync(
             ApiRoutes.Users.AddPermission(id), new { permission = "manage_tenant" }),
         "remove-permission" => FactoryClient.DeleteRequestAsync(
@@ -78,7 +80,7 @@ public class UserMalformedIdTests : TestBase
     private static async Task<User> AddUserAsync()
     {
         var tenant = Tenant.Create(new FakeTenantForCreation().Generate());
-        var user = User.Create(new FakeUserForCreation().RuleFor(u => u.TenantId, tenant.Id).RuleFor(u => u.Role, UserRole.User()).Generate());
+        var user = User.Create(new FakeUserForCreation().RuleFor(u => u.TenantId, tenant.Id).RuleFor(u => u.Roles, []).Generate());
         await InsertAsync(tenant);
         await InsertAsync(user);
         return user;

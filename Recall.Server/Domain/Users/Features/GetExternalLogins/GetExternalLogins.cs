@@ -28,6 +28,7 @@ public static class GetExternalLogins
                 .TagWithOperationCallSite("users.external_logins.user")
                 .AsNoTracking()
                 .Include(u => u.UserPermissions)
+                .Include(u => u.Roles)
                 .GetById(userId, cancellationToken);
             user.GuardAllows(UserAction.ManageExternalLogins(), caller);
 

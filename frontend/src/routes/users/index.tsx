@@ -10,7 +10,7 @@ import { Pager } from '@/components/ui/pager'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useMembership } from '@/domain/membership/apis/get-membership'
 import { useUserList } from '@/domain/users/apis/get-user-list'
-import { ROLE_LABELS } from '@/domain/users/components/user-role'
+import { rolesWords } from '@/domain/users/components/user-role'
 import { useIsMobile } from '@/hooks/use-mobile'
 
 const listSearchSchema = z.object({
@@ -81,7 +81,7 @@ function UserRows({ list, page, onPageChange }: UserRowsProps) {
           <TableHeader>
             <TableHead isRowHeader>Name</TableHead>
             {!isMobile && <TableHead>Email</TableHead>}
-            <TableHead>Role</TableHead>
+            <TableHead>Roles</TableHead>
           </TableHeader>
           <TableBody>
             {users.map((user) => (
@@ -93,7 +93,7 @@ function UserRows({ list, page, onPageChange }: UserRowsProps) {
                   {isMobile && user.email && <p className="text-sm text-muted-foreground">{user.email}</p>}
                 </TableCell>
                 {!isMobile && <TableCell className="wrap-anywhere">{user.email}</TableCell>}
-                <TableCell className="whitespace-nowrap">{ROLE_LABELS[user.role]}</TableCell>
+                <TableCell className="whitespace-nowrap">{rolesWords(user.roles)}</TableCell>
               </TableRow>
             ))}
           </TableBody>

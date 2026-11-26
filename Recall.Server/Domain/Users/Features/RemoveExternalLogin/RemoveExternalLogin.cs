@@ -37,6 +37,7 @@ public static class RemoveExternalLogin
                 var user = await dbContext.Users
                     .TagWithOperationCallSite("users.remove_external_login.user")
                     .Include(u => u.UserPermissions)
+                    .Include(u => u.Roles)
                     .GetById(userId, ct);
                 user.GuardAllows(UserAction.ManageExternalLogins(), caller);
 

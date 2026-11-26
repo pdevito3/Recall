@@ -108,7 +108,7 @@ public sealed class Provisioner(
             return await AddFirstOwnerAsync(dbContext, identity, cancellationToken);
 
         if (options.Value.OpenSignup && oldestTenantId is not null)
-            return await JoinAsync(dbContext, identity, oldestTenantId, UserRole.User(), cancellationToken);
+            return await JoinAsync(dbContext, identity, oldestTenantId, [], cancellationToken);
 
         return new ProvisionOutcome.SignupClosed();
     }
@@ -149,7 +149,7 @@ public sealed class Provisioner(
             return new ProvisionOutcome.Provisioned(admin.Id, admin.FullName);
         }, cancellationToken);
 
-        return linked ?? await JoinAsync(dbContext, identity, tenantId, UserRole.Admin(), cancellationToken);
+        return linked ?? await JoinAsync(dbContext, identity, tenantId, [UserRole.Admin()], cancellationToken);
     }
 
     /// <summary>A permission that a later release adds reaches no Admin, and only a claim recovers that when no Admin holds each one.</summary>
@@ -163,13 +163,13 @@ public sealed class Provisioner(
         if (tenantId is null)
             return false;
 
-        var adminRole = UserRole.Admin().Value;
         return await RootLock.Tenant.RunSharedAsync(dbContext, tenantId, async ct =>
         {
             var admin = await dbContext.Users
                 .TagWithOperationCallSite("auth.provision.linked_admin")
                 .Include(u => u.UserPermissions)
-                .FirstOrDefaultAsync(u => u.Id == userId && u.Role.Value == adminRole, ct);
+                .Include(u => u.Roles)
+                .FirstOrDefaultAsync(u => u.Id == userId && u.Roles.Any(r => r.Role.Value == UserRole.AdminName), ct);
             if (admin is null || !GiveBackEachPermission(dbContext, admin))
                 return false;
 
@@ -194,24 +194,24 @@ public sealed class Provisioner(
         => dbContext.Users
             .TagWithOperationCallSite("auth.provision.oldest_admin")
             .Include(u => u.UserPermissions)
+            .Include(u => u.Roles)
             .OwnerFirstIn(tenantId)
             .FirstOrDefaultAsync(cancellationToken);
 
-    /// <summary>Gives the Admin each Admin permission that it lacks, as the owner claim does, and says if it gave one.</summary>
+    /// <summary>Gives the Admin back each removed permission, as the owner claim does, and says if it gave one.</summary>
     internal static bool GiveBackEachPermission(AppDbContext dbContext, User admin)
     {
-        var held = admin.UserPermissions.ToList();
-        admin.AddPermissions(admin.Role.GetDefaultPermissions());
-        var given = admin.UserPermissions.Except(held).ToList();
-        dbContext.UserPermissions.AddRange(given);
-        return given.Count > 0;
+        var removed = admin.UserPermissions.Where(p => p.Effect == PermissionEffect.Deny).Select(p => p.Permission).ToList();
+        foreach (var permission in removed)
+            dbContext.Track(admin.AddPermission(permission));
+        return removed.Count > 0;
     }
 
     private async Task<ProvisionOutcome> AddFirstOwnerAsync(
         AppDbContext dbContext, ExternalIdentity identity, CancellationToken cancellationToken)
     {
         var tenant = Tenant.Create(new TenantForCreation { Name = FirstTenantName });
-        var user = User.CreateFromLogin(NewPerson.FromClaims(identity.Profile), tenant.Id, UserRole.Admin());
+        var user = User.CreateFromLogin(NewPerson.FromClaims(identity.Profile), tenant.Id, [UserRole.Admin()]);
         dbContext.Tenants.Add(tenant);
         dbContext.Users.Add(user);
         dbContext.Set<ExternalLogin>().Add(LinkOf(identity, user.Id));
@@ -222,7 +222,7 @@ public sealed class Provisioner(
     }
 
     private async Task<ProvisionOutcome> JoinAsync(
-        AppDbContext dbContext, ExternalIdentity identity, string tenantId, UserRole role, CancellationToken cancellationToken)
+        AppDbContext dbContext, ExternalIdentity identity, string tenantId, IReadOnlyList<UserRole> roles, CancellationToken cancellationToken)
     {
         return await RootLock.Tenant.RunSharedAsync<ProvisionOutcome>(dbContext, tenantId, async ct =>
         {
@@ -232,14 +232,14 @@ public sealed class Provisioner(
             if (!tenantIsLive)
                 return new ProvisionOutcome.SignupClosed();
 
-            var user = User.CreateFromLogin(NewPerson.FromClaims(identity.Profile), tenantId, role);
+            var user = User.CreateFromLogin(NewPerson.FromClaims(identity.Profile), tenantId, roles);
             dbContext.Users.Add(user);
             dbContext.Set<ExternalLogin>().Add(LinkOf(identity, user.Id));
             await dbContext.SaveChangesAsync(ct);
 
             // Only a claim adds an Admin here, and the operator must be able to find who got it.
-            var level = role.Value == UserRole.Admin().Value ? LogEventLevel.Warning : LogEventLevel.Information;
-            _logger.Here().Write(level, "A login added user {UserId} to tenant {TenantId} with role {Role}", user.Id, tenantId, role.Value);
+            var level = roles.Contains(UserRole.Admin()) ? LogEventLevel.Warning : LogEventLevel.Information;
+            _logger.Here().Write(level, "A login added user {UserId} to tenant {TenantId} with roles {Roles}", user.Id, tenantId, roles.Select(r => r.Value).ToList());
             return new ProvisionOutcome.Provisioned(user.Id, user.FullName);
         }, cancellationToken);
     }

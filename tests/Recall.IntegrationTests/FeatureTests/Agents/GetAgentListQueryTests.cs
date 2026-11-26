@@ -17,7 +17,7 @@ public class GetAgentListQueryTests : TestBase
         var testingServiceScope = new TestingServiceScope();
         var graph = testingServiceScope.StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var member, u => u.Role = "User")
+            .AddUser(out var member, u => u.Roles = [])
             .Under(tenant)
             .AddAgents(out var agents, a => a.Name = "Zeta sync", a => a.Name = "Alpha assistant");
         member.AddPermission(Permission.ReadAgents());

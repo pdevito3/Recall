@@ -149,30 +149,42 @@ Before you add a row with a unique value, check for the value in the handler and
 
 ## Permissions
 
-A command, or a query that reads data that needs a permission, checks a permission in its handler with `IPermissionGuard` (see [features-and-cqrs.md](backend/features-and-cqrs.md#permission-checks)). A permission is a value of `Permission` in `Domain/Users/Permission.cs`. A user has a permission when they have a `UserPermission` row for it.
+A command, or a query that reads data that needs a permission, checks a permission in its handler with `IPermissionGuard` (see [features-and-cqrs.md](backend/features-and-cqrs.md#permission-checks)). A permission is a value of `Permission` in `Domain/Users/Permission.cs`. A user has a permission when a role of the user gives it and no override removes it, or when an override adds it (see [Roles](#roles)).
 
 | Permission | Handlers that require it |
 |------------|--------------------------|
 | `manage_users` | `AddUser`, `UpdateUser` for another user, `DeleteUser` |
-| `manage_user_access` | `UpdateUserRole`, `AddUserPermission`, `RemoveUserPermission` |
+| `manage_user_access` | `AddUserRole`, `RemoveUserRole`, `AddUserPermission`, `RemoveUserPermission` |
 | `manage_tenant` | `UpdateTenant`, `DeleteTenant` |
 | `manage_agents` | `AddAgent`, `DeleteAgent`, `AddAgentPermission`, `RemoveAgentPermission` |
 | `read_audit_log` | `GetAuditEntryPage` |
 | `read_audit_log_sensitive` | None. `GetAuditEntryPage` shows the sensitive values of the audit log only to a caller with it. |
-| `read_users` | `GetUserList`, `GetUser` for another user, `GetUserByIdentifier` for another user or for an identifier that no user has. `UpdateUser`, `UpdateUserRole`, `AddUserPermission`, and `RemoveUserPermission` for another user, because they return the user. |
+| `read_users` | `GetUserList`, `GetUser` for another user, `GetUserByIdentifier` for another user or for an identifier that no user has. `UpdateUser`, `AddUserRole`, `RemoveUserRole`, `AddUserPermission`, and `RemoveUserPermission` for another user, because they return the user. |
 | `manage_model_providers` | `AddModelProvider`, `UpdateModelProvider`, `DeleteModelProvider`, `GetModelProviderList`, `TestModelProvider`. A person with a journal reads only the name of the active provider, with `GetActiveModelProvider`. `Agent.Grant` refuses this permission, so no agent holds it. |
 | `read_agents` | `GetAgentList`, `GetAgent`. `AddAgentPermission` and `RemoveAgentPermission`, because they return the agent. |
 
-The role of a user gives the default permissions. `UserRole.GetDefaultPermissions` gives each permission to `Admin` and no permission to `User`. `User.Create` and `UpdateRole` write the defaults as rows. After that, `AddUserPermission` and `RemoveUserPermission` change the rows, and the rows decide. The guard does not read the role.
+### Roles
 
-A caller can give or take away a permission only if they have it. Thus a user with only `manage_users` cannot add or delete an `Admin`, and a user with only `manage_user_access` cannot give or take away `manage_tenant` or change the role of an `Admin`. As a result, a user with only some of the permissions cannot take access away from an admin. `manage_tenant` gives both the rename and the delete of the tenant, so give it only to a user who can delete the tenant.
+A role is a named set of permissions in `Domain/Users/UserRole.cs`. The code holds the set, so a release that adds a permission to a role gives it to each user with the role, with no migration.
+
+| Role | Permissions |
+|------|-------------|
+| `Admin` | Each permission, also one that a later release adds |
+| `UserManager` | `manage_users`, `manage_user_access`, `read_users` |
+| `Auditor` | `read_audit_log`, `read_audit_log_sensitive`, `read_users`, `read_agents` |
+
+A user has any number of roles, as rows of `user_roles`. A user with no role is a Member: the journal of the user needs no permission (see [multi-tenancy.md](multi-tenancy.md#the-journal-of-a-person)), so a Member has the full journal and no admin pages. A row of `user_permissions` is an override with an `Effect`. A `Grant` adds a permission that no role of the user gives, and a `Deny` removes one that a role gives. `EffectivePermissions` is the one rule: each permission of each role, with each Grant, less each Deny. The guard reads `User.Permissions()`, which applies it.
+
+`AddUserPermission` and `RemoveUserPermission` keep an override only when it differs from the roles. An add of a permission that a role gives ends its Deny and writes no Grant. A removal of a Grant writes no Deny when no role gives the permission. `AddUserRole` ends each override of a permission of the role, so the user then holds each permission of the role. `RemoveUserRole` keeps each permission that another role or a Grant gives. The reasons are in [ADR 0026](adr/0026-roles-are-sets-of-permissions.md).
+
+A caller can give or take away a permission only if they have it. Thus a user with only `manage_users` cannot add or delete an `Admin`, and a user with only `manage_user_access` cannot give or take away `manage_tenant`, give the role `Admin`, or remove a role from an `Admin`. As a result, a user with only some of the permissions cannot take access away from an admin. `manage_tenant` gives both the rename and the delete of the tenant, so give it only to a user who can delete the tenant.
 
 ### The callers that pass
 
 | Caller | Result of a permission check |
 |--------|------------------------------|
 | A user with a user record | Passes if the user has the permission |
-| The user that the command is about, for `Caller.RequireSelfOr` or the `unlessOwnRecord` permissions of `UserAction` | Passes. `UserAction.Update` needs `manage_users` and `read_users` only for another user, so that a user can update their own record. `UpdateRole`, `AddPermission`, and `RemovePermission` need `read_users` only for another user. The update DTO has no role, so a user cannot give themselves access. `GetUser` and `GetUserByIdentifier` use the same exception, so that a user can read their own record. |
+| The user that the command is about, for `Caller.RequireSelfOr` or the `unlessOwnRecord` permissions of `UserAction` | Passes. `UserAction.Update` needs `manage_users` and `read_users` only for another user, so that a user can update their own record. `AddRole`, `RemoveRole`, `AddPermission`, and `RemovePermission` need `read_users` only for another user. They still need `manage_user_access` and each permission that they give, so a user cannot give themselves access. `GetUser` and `GetUserByIdentifier` use the same exception, so that a user can read their own record. |
 | A delegated agent | Passes if both its user and its grant have the permission. It does not get the exception of `Caller.RequireSelfOr`. |
 | A machine agent | Passes if its grant has the permission |
 | A client in `Tenancy:ManageAllTenantsClientIds`, or system work in a system scope | Passes for each permission. The tenant filter still applies. |
@@ -186,14 +198,14 @@ A caller can give or take away a permission only if they have it. Thus a user wi
 
 ### Where the permissions come from
 
-The guard reads the user and their permission rows from the database in each handler that checks. It does not cache them and does not read them from the token. As a result, a removed permission or a deleted user is denied on the next request on each server instance. The cost is one indexed query in each handler that checks. The reasons are in [ADR 0009](adr/0009-permission-checks-in-the-handler.md).
+The guard reads the user, their roles, and their overrides from the database in each handler that checks. It does not cache them and does not read them from the token. As a result, a removed permission or a deleted user is denied on the next request on each server instance. The cost is one indexed query in each handler that checks. The reasons are in [ADR 0009](adr/0009-permission-checks-in-the-handler.md).
 
 ### Add a permission
 
 `scripts/new-feature.cs` does steps 1, 2, and 6 for the permission of a new entity. For another permission:
 
 1. Add a constant to `Permission.Names` in `Permission.cs`, a value of `PermissionEnum` with that constant as its name, and a static method that returns it, for example `Permission.ManageOrders()`. Use a snake case name, for example `manage_orders`.
-2. Add an EF Core migration that gives the permission to the admins that exist (see [Migrations](#migrations)). Call `migrationBuilder.GrantPermissionToRole("Admin", "manage_orders")` in `Up`. Write the name as a string, so that the migration does not change when `Permission` changes. New admins get the permission from the role defaults. Without this migration, no Admin who exists holds each Admin permission, so each Admin change gets 409 (see [First login and the Owner](authentication.md#first-login-and-the-owner)). `GrantPermissionToRoleMigrationTests` fails until the migration exists. If the users with another permission also need the new one, call `GrantPermissionToHoldersOf` too, for example `GrantPermissionToHoldersOf("read_agents", "read_users")`.
+2. Decide which roles give the permission. `Admin` gives it with no change. To give it to another role, add it to the set of that role in `UserRole.cs`. Add an EF Core migration (see [Migrations](#migrations)) whose `Down` calls `migrationBuilder.DeletePermission("manage_orders")`, so that after a rollback no override names a permission that the old code does not know. Write the name as a string, so that the migration does not change when `Permission` changes. If the agents with another permission also need the new one, call `GrantPermissionToHoldersOf` in `Up`, for example `GrantPermissionToHoldersOf("read_agents", "read_users")`. It also gives the permission to each user with a Grant of the other one. A user who holds the other permission through a role gets the new one only when that role gives it. Do not call `GrantPermissionToRole`, because it reads the column `users.role`, which `ReplaceTheRoleWithRoleSets` dropped.
 3. Call `permissionGuard.RequireAsync(Permission.ManageOrders(), cancellationToken)` first in each handler that needs it.
 4. Declare the 403 on each HTTP endpoint of these handlers. Give each MCP tool of these handlers `[ToolAccess(Permission.Names.ManageOrders)]` (see [endpoints.md](backend/endpoints.md#tool-access)).
 5. Add an integration test for a user with the permission and a user without it.

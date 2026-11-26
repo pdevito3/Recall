@@ -18,7 +18,7 @@ public class UserConcurrencyTests : TestBase
         // Arrange
         await StartGraph()
             .AddTenant(out _)
-            .AddUser(out var user, u => u.Role = "Admin")
+            .AddUser(out var user, u => u.Roles = ["Admin"])
             .BuildAsync();
         FactoryClient.SignInAsAppUser(user.Identifier);
         var first = await FactoryClient.PutJsonRequestAsync(ApiRoutes.Users.Put(user.Id),

@@ -1,5 +1,6 @@
 namespace Recall.FunctionalTests.FunctionalTests.Agents;
 
+using Recall.SharedTestHelpers.Fakes.User;
 using System.Net;
 using System.Text.Json;
 using Recall.Server.Domain.Agents;
@@ -125,7 +126,7 @@ public class AgentAllowedActionsTests : TestBase
     {
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var member, u => u.Role = "User")
+            .AddUser(out var member, u => u.Roles = [])
             .Under(tenant)
             .AddAgent(out var agent);
         member.AddPermissions(permissions);

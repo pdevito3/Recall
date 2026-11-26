@@ -107,10 +107,9 @@ public class OwnerPasswordClaimTests
         var newer = await PasswordPeople.AddAsync(Host);
         await Host.WithDatabaseAsync(async db =>
         {
-            var user = await db.Users.Include(u => u.UserPermissions).SingleAsync(u => u.Id == Owner.UserId);
-            var lost = user.UserPermissions.Take(2).ToList();
-            lost.ForEach(permission => user.RemovePermission(permission));
-            db.UserPermissions.RemoveRange(lost);
+            var user = await db.Users.Include(u => u.Roles).Include(u => u.UserPermissions).SingleAsync(u => u.Id == Owner.UserId);
+            db.Track(user.RemovePermission(Permission.ManageTenant()));
+            db.Track(user.RemovePermission(Permission.ReadAuditLog()));
             var credential = await db.Set<PasswordCredential>().SingleAsync(c => c.UserId == Owner.UserId);
             for (var i = 0; i < PasswordCredential.StopAt; i++)
                 credential.NoteFailure();
@@ -140,8 +139,10 @@ public class OwnerPasswordClaimTests
         var credential = await PasswordPeople.CredentialOfAsync(Host, Owner.UserId);
         credential.State.ShouldBe(PasswordState.Chosen);
         credential.LoginName.Value.ShouldBe(loginName);
-        var held = await Host.WithDatabaseAsync(db => db.UserPermissions.Where(p => p.UserId == Owner.UserId).Select(p => p.Permission).ToListAsync());
+        var held = await Host.WithDatabaseAsync(async db =>
+            (await db.Users.Include(u => u.Roles).Include(u => u.UserPermissions).SingleAsync(u => u.Id == Owner.UserId)).Permissions());
         held.ShouldBe(Permission.GetAll(), ignoreOrder: true);
+        (await Host.WithDatabaseAsync(db => db.UserPermissions.CountAsync(p => p.UserId == Owner.UserId))).ShouldBe(0);
         (await PatPeople.RowAsync(Host, token.Token.Id)).RevokedReason.ShouldBe(RevokeReason.OwnerClaim);
         (await ClaimActionsOfOwnerAsync()).ShouldBe(claimsBefore + 1);
         (await PasswordPeople.CredentialOfAsync(Host, newer.UserId)).LoginName.Value.ShouldBe(newer.LoginName);
@@ -278,11 +279,11 @@ public class OwnerPasswordClaimTests
             page.ShouldContain("Sign in with Stub");
             File.Exists(file).ShouldBeFalse();
             browser.SessionCookie.ShouldNotBeNull();
-            var role = await host.WithDatabaseAsync(db => db.Users
-                .Where(u => db.Set<ExternalLogin>().Any(link => link.Subject == claimer && link.UserId == u.Id))
-                .Select(u => u.Role.Value)
-                .SingleAsync());
-            role.ShouldBe(UserRole.Admin().Value);
+            var roles = await host.WithDatabaseAsync(db => db.UserRoles
+                .Where(r => db.Set<ExternalLogin>().Any(link => link.Subject == claimer && link.UserId == r.UserId))
+                .Select(r => r.Role.Value)
+                .ToListAsync());
+            roles.ShouldBe([UserRole.Admin().Value]);
         }
         finally
         {

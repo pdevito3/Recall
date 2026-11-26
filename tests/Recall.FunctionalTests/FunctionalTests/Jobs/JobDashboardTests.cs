@@ -57,9 +57,17 @@ public partial class JobDashboardTests
 
     private static readonly string[] DatabaseFiles = ["test.db", "test.db-wal"];
 
-    private static async Task<HttpResponseMessage> SendRoleAsync(AuthBrowser browser, string userId, string role)
+    private static Task<HttpResponseMessage> AddAdminRoleAsync(AuthBrowser browser, string userId)
+        => SendAsPageAsync(browser, new HttpRequestMessage(HttpMethod.Post, $"/{ApiRoutes.Users.AddRole(userId)}")
+        {
+            Content = JsonContent.Create(new { role = "Admin" }),
+        });
+
+    private static Task<HttpResponseMessage> RemoveAdminRoleAsync(AuthBrowser browser, string userId)
+        => SendAsPageAsync(browser, new HttpRequestMessage(HttpMethod.Delete, $"/{ApiRoutes.Users.RemoveRole(userId, "Admin")}"));
+
+    private static async Task<HttpResponseMessage> SendAsPageAsync(AuthBrowser browser, HttpRequestMessage request)
     {
-        var request = new HttpRequestMessage(HttpMethod.Put, $"/{ApiRoutes.Users.UpdateRole(userId)}") { Content = JsonContent.Create(new { role }) };
         request.Headers.Add("X-CSRF", "1");
         request.Headers.Add(PageUserCheck.Header, await browser.UserOfSessionAsync());
         return await browser.SendAsync(request);
@@ -227,7 +235,7 @@ public partial class JobDashboardTests
             .Where(login => login.Subject == adminSubject)
             .Select(login => login.UserId)
             .SingleAsync());
-        using var promote = new HttpRequestMessage(HttpMethod.Put, $"/{ApiRoutes.Users.UpdateRole(adminId)}")
+        using var promote = new HttpRequestMessage(HttpMethod.Post, $"/{ApiRoutes.Users.AddRole(adminId)}")
         {
             Content = JsonContent.Create(new { role = "Admin" }),
         };
@@ -322,14 +330,14 @@ public partial class JobDashboardTests
         using var owner = await SignedInAsync(host);
         using var next = await SignedInAsync(host, "jobs-next-admin");
         var ids = await host.WithDatabaseAsync(database => database.Set<ExternalLogin>().IgnoreQueryFilters().ToDictionaryAsync(login => login.Subject, login => login.UserId));
-        using var promoted = await SendRoleAsync(owner, ids["jobs-next-admin"], "Admin");
+        using var promoted = await AddAdminRoleAsync(owner, ids["jobs-next-admin"]);
         promoted.IsSuccessStatusCode.ShouldBeTrue();
         var clock = Stopwatch.StartNew();
 
         // Act
         var stream = owner.GetAsync($"{JobDashboard.Path}?live=1");
         await Task.Delay(TimeSpan.FromSeconds(1));
-        using var demoted = await SendRoleAsync(next, ids[OwnerSubject], "User");
+        using var demoted = await RemoveAdminRoleAsync(next, ids[OwnerSubject]);
         using var ended = await stream;
         var streamed = clock.Elapsed;
         using var afterDemotion = await owner.GetAsync($"{JobDashboard.Path}?live=1");

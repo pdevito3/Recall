@@ -71,7 +71,7 @@ public class AddUserCommandTests : TestBase
         // Arrange
         var testingServiceScope = new TestingServiceScope();
         var fakeUserDto = new FakeUserForCreationDto()
-            .RuleFor(x => x.Role, _ => "Admin")
+            .RuleFor(x => x.Roles, _ => ["Admin"])
             .Generate();
 
         // Act
@@ -81,22 +81,45 @@ public class AddUserCommandTests : TestBase
         // Assert
         var userInDb = await testingServiceScope.ExecuteDbContextAsync(db =>
             db.Users
+                .Include(u => u.Roles)
                 .Include(u => u.UserPermissions)
                 .FirstOrDefaultAsync(u => u.Id == userReturned.Id));
 
         userInDb.ShouldNotBeNull();
-        userInDb.Role.Value.ShouldBe("Admin");
-        userInDb.UserPermissions.ShouldNotBeEmpty();
+        userInDb.Roles.Select(r => r.Role.Value).ShouldBe(["Admin"]);
+        userInDb.UserPermissions.ShouldBeEmpty();
         userInDb.HasPermission(Permission.ManageTenant()).ShouldBeTrue();
+        userReturned.Permissions.ShouldBe(Permission.ListNames(), ignoreOrder: true);
     }
 
     [Test]
-    public async Task can_add_user_with_user_role()
+    public async Task can_add_user_with_two_roles()
     {
         // Arrange
         var testingServiceScope = new TestingServiceScope();
         var fakeUserDto = new FakeUserForCreationDto()
-            .RuleFor(x => x.Role, _ => "User")
+            .RuleFor(x => x.Roles, _ => ["UserManager", "Auditor"])
+            .Generate();
+
+        // Act
+        var userReturned = await testingServiceScope.SendAsync(new AddUser.Command(fakeUserDto));
+
+        // Assert
+        userReturned.Roles.ShouldBe(["UserManager", "Auditor"], ignoreOrder: true);
+        userReturned.Permissions.ShouldBe(
+            ["manage_users", "manage_user_access", "read_users", "read_audit_log", "read_audit_log_sensitive", "read_agents"],
+            ignoreOrder: true);
+        userReturned.AddedPermissions.ShouldBeEmpty();
+        userReturned.RemovedPermissions.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task can_add_a_member_with_no_role()
+    {
+        // Arrange
+        var testingServiceScope = new TestingServiceScope();
+        var fakeUserDto = new FakeUserForCreationDto()
+            .RuleFor(x => x.Roles, _ => [])
             .Generate();
 
         // Act
@@ -106,12 +129,14 @@ public class AddUserCommandTests : TestBase
         // Assert
         var userInDb = await testingServiceScope.ExecuteDbContextAsync(db =>
             db.Users
+                .Include(u => u.Roles)
                 .Include(u => u.UserPermissions)
                 .FirstOrDefaultAsync(u => u.Id == userReturned.Id));
 
         userInDb.ShouldNotBeNull();
-        userInDb.Role.Value.ShouldBe("User");
+        userInDb.Roles.ShouldBeEmpty();
         userInDb.UserPermissions.ShouldBeEmpty();
+        userReturned.Permissions.ShouldBeEmpty();
     }
 
     [Test]

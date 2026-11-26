@@ -22,7 +22,7 @@ public class UserManagementAccessTests : TestBase
     public async Task basic_member_cannot_delete_another_user()
     {
         // Arrange
-        var (member, other) = await AddTwoUsersAsync("User", "User");
+        var (member, other) = await AddTwoUsersAsync("Member", "Member");
         SignInAs(member);
 
         // Act
@@ -38,7 +38,7 @@ public class UserManagementAccessTests : TestBase
     public async Task admin_can_delete_a_user_of_their_tenant()
     {
         // Arrange
-        var (admin, other) = await AddTwoUsersAsync("Admin", "User");
+        var (admin, other) = await AddTwoUsersAsync("Admin", "Member");
         SignInAs(admin);
 
         // Act
@@ -52,7 +52,7 @@ public class UserManagementAccessTests : TestBase
     public async Task admin_without_manage_users_gets_a_forbidden_problem_on_delete()
     {
         // Arrange
-        var (admin, other) = await AddTwoUsersAsync("Admin", "User",
+        var (admin, other) = await AddTwoUsersAsync("Admin", "Member",
             first => first.RemovePermission(Permission.ManageUsers()));
         SignInAs(admin);
 
@@ -70,7 +70,7 @@ public class UserManagementAccessTests : TestBase
     public async Task user_role_member_granted_manage_users_can_delete_a_user()
     {
         // Arrange
-        var (member, other) = await AddTwoUsersAsync("User", "User",
+        var (member, other) = await AddTwoUsersAsync("Member", "Member",
             first => first.AddPermission(Permission.ManageUsers()));
         SignInAs(member);
 
@@ -85,7 +85,7 @@ public class UserManagementAccessTests : TestBase
     public async Task delete_with_no_token_is_unauthorized_not_forbidden()
     {
         // Arrange
-        var (_, other) = await AddTwoUsersAsync("Admin", "User");
+        var (_, other) = await AddTwoUsersAsync("Admin", "Member");
 
         // Act
         var result = await FactoryClient.DeleteRequestAsync(ApiRoutes.Users.Delete(other.Id));
@@ -98,7 +98,7 @@ public class UserManagementAccessTests : TestBase
     public async Task basic_member_cannot_update_another_user()
     {
         // Arrange
-        var (member, other) = await AddTwoUsersAsync("User", "User");
+        var (member, other) = await AddTwoUsersAsync("Member", "Member");
         SignInAs(member);
 
         // Act
@@ -116,7 +116,7 @@ public class UserManagementAccessTests : TestBase
     public async Task basic_member_can_update_their_own_record()
     {
         // Arrange
-        var (member, _) = await AddTwoUsersAsync("User", "User");
+        var (member, _) = await AddTwoUsersAsync("Member", "Member");
         SignInAs(member);
         var dto = new FakeUserForUpdateDto().Generate() with { Version = member.Version };
 
@@ -132,7 +132,7 @@ public class UserManagementAccessTests : TestBase
     public async Task admin_can_update_another_user_of_their_tenant()
     {
         // Arrange
-        var (admin, other) = await AddTwoUsersAsync("Admin", "User");
+        var (admin, other) = await AddTwoUsersAsync("Admin", "Member");
         SignInAs(admin);
         var dto = new FakeUserForUpdateDto().Generate() with { Version = other.Version };
 
@@ -148,7 +148,7 @@ public class UserManagementAccessTests : TestBase
     public async Task read_only_machine_client_cannot_change_a_user()
     {
         // Arrange
-        var (_, other) = await AddTwoUsersAsync("Admin", "User");
+        var (_, other) = await AddTwoUsersAsync("Admin", "Member");
         FactoryClient.SetFakeBearerToken(new Dictionary<string, object>
         {
             ["client_id"] = TestingWebApplicationFactory.ReadOnlyMachineClientId
@@ -180,11 +180,13 @@ public class UserManagementAccessTests : TestBase
     {
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUsers(out var users, u => u.Role = firstRole, u => u.Role = secondRole);
+            .AddUsers(out var users, u => u.Roles = RolesOf(firstRole), u => u.Roles = RolesOf(secondRole));
         changeFirst?.Invoke(users[0]);
         await InsertAsync(tenant);
         foreach (var user in users)
             await InsertAsync(user);
         return (users[0], users[1]);
     }
+
+    private static IReadOnlyList<string> RolesOf(string role) => role == "Member" ? [] : [role];
 }

@@ -215,8 +215,8 @@ public class PersonalAccessTokenCallerTests : TestBase
         var before = await FactoryClient.GetAsync(ApiRoutes.Users.GetList);
         await ExecuteDbContextAsync(async db =>
         {
-            var user = await db.Users.Include(u => u.UserPermissions).SingleAsync(u => u.Id == admin.Id);
-            user.RemovePermission(Permission.ReadUsers());
+            var user = await db.Users.Include(u => u.Roles).Include(u => u.UserPermissions).SingleAsync(u => u.Id == admin.Id);
+            db.Track(user.RemovePermission(Permission.ReadUsers()));
             await db.SaveChangesAsync();
         });
 

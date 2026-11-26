@@ -333,6 +333,8 @@ public class EndpointAccessSweepTests : TestBase
     private sealed record RecordIds(IReadOnlyDictionary<string, string> IdsByKind, string Identifier)
     {
         private static readonly string PermissionName = Permission.ListNames()[0];
+        // Not Admin, so the control call does not meet the last-Admin rule.
+        private static readonly string RoleName = UserRole.Auditor().Value;
 
         public RecordIds Unknown() => new(
             IdsByKind.ToDictionary(kind => kind.Key, kind => EntityId.New(kind.Value[..kind.Value.IndexOf('_')])),
@@ -357,6 +359,7 @@ public class EndpointAccessSweepTests : TestBase
                 : throw new SweepSetupException($"It has the route value {{{name}}} under '{kind}', which the sweep does not know. "
                     + $"Make a record of this kind in {nameof(AddTenantAsync)} and add its ID under '{kind}/{name}'."),
             "permission" => PermissionName,
+            "role" => RoleName,
             "number" => "1",
             "index" => "0",
             "name" => "audio.webm",
@@ -370,14 +373,12 @@ public class EndpointAccessSweepTests : TestBase
     {
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUsers(out var users, u => u.Role = "User", u => u.Role = "Admin", u => u.Role = "User")
+            .AddUsers(out var users, u => u.Roles = [], u => u.Roles = ["Admin"], u => u.Roles = [])
             .Under(tenant)
             // new-feature:sweep-graph
             .AddAgent(out var agent);
         var (member, admin, otherUser) = (users[0], users[1], users[2]);
-        foreach (var permission in member.UserPermissions.ToList())
-            member.RemovePermission(permission);
-        admin.AddPermissions(Permission.GetAll());
+        // The member has no role and no override, so it holds no permission. The admin holds each one through the role.
 
         await InsertAsync(tenant);
         await InsertAsync(users);

@@ -125,7 +125,7 @@ public class McpTelemetryTests : TestBase
     {
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var admin, u => u.Role = "Admin")
+            .AddUser(out var admin, u => u.Roles = ["Admin"])
             .Under(tenant)
             .AddAgent(out var agent, a => a.Mode = "delegated");
         await InsertAsync(tenant);

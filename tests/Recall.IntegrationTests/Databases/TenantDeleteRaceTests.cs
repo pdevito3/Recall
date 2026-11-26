@@ -28,7 +28,7 @@ public class TenantDeleteRaceTests : TestBase
         await using var services = pause.BuildServices();
         await new TestingServiceScope().StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var admin, u => u.Role = "Admin")
+            .AddUser(out var admin, u => u.Roles = ["Admin"])
             .BuildAsync();
         var underTest = new TestingServiceScope(services);
         var rival = new TestingServiceScope();
@@ -57,7 +57,7 @@ public class TenantDeleteRaceTests : TestBase
         await using var services = pause.BuildServices();
         await new TestingServiceScope().StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var admin, u => u.Role = "Admin")
+            .AddUser(out var admin, u => u.Roles = ["Admin"])
             .BuildAsync();
         var underTest = new TestingServiceScope(services);
         var rival = new TestingServiceScope();
@@ -87,13 +87,13 @@ public class TenantDeleteRaceTests : TestBase
         await using var services = pause.BuildServices();
         await new TestingServiceScope().StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var admin, u => u.Role = "Admin")
+            .AddUser(out var admin, u => u.Roles = ["Admin"])
             .BuildAsync();
         var underTest = new TestingServiceScope(services);
         var rival = new TestingServiceScope();
         underTest.SetUserWithDefaults(identifier: admin.Identifier);
         rival.SetUserWithDefaults(identifier: admin.Identifier);
-        var newUser = new FakeUserForCreationDto().RuleFor(x => x.Role, _ => "User").Generate();
+        var newUser = new FakeUserForCreationDto().RuleFor(x => x.Roles, _ => []).Generate();
 
         // Act
         var delete = underTest.SendAsync(new DeleteTenant.Command(tenant.Id));
@@ -117,13 +117,13 @@ public class TenantDeleteRaceTests : TestBase
         await using var services = pause.BuildServices();
         await new TestingServiceScope().StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var admin, u => u.Role = "Admin")
+            .AddUser(out var admin, u => u.Roles = ["Admin"])
             .BuildAsync();
         var underTest = new TestingServiceScope(services);
         var rival = new TestingServiceScope();
         underTest.SetUserWithDefaults(identifier: admin.Identifier);
         rival.SetUserWithDefaults(identifier: admin.Identifier);
-        var newUser = new FakeUserForCreationDto().RuleFor(x => x.Role, _ => "User").Generate();
+        var newUser = new FakeUserForCreationDto().RuleFor(x => x.Roles, _ => []).Generate();
 
         // Act
         var add = underTest.SendAsync(new AddUser.Command(newUser));

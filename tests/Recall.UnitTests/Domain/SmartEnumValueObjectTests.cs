@@ -10,7 +10,7 @@ public class SmartEnumValueObjectTests
     public void each_smart_enum_value_object_shows_as_its_value()
     {
         // Act & Assert
-        UserRole.User().ToString().ShouldBe("User");
+        UserRole.Auditor().ToString().ShouldBe("Auditor");
         AgentMode.Machine().ToString().ShouldBe("machine");
         Permission.ManageUsers().ToString().ShouldBe("manage_users");
     }
@@ -19,11 +19,11 @@ public class SmartEnumValueObjectTests
     public void a_failed_assertion_names_both_values()
     {
         // Act
-        var failure = Should.Throw<ShouldAssertException>(() => UserRole.User().ShouldBe(UserRole.Admin()));
+        var failure = Should.Throw<ShouldAssertException>(() => UserRole.Auditor().ShouldBe(UserRole.Admin()));
 
         // Assert
         failure.Message.ShouldContain("Admin");
-        failure.Message.TrimEnd().ShouldEndWith("User");
+        failure.Message.TrimEnd().ShouldEndWith("Auditor");
         failure.Message.ShouldNotContain(typeof(UserRole).FullName!);
     }
 }

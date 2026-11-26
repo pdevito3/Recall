@@ -100,7 +100,7 @@ public class DomainEventOwnerVersionTests : TestBase
             async (_, db, ct) =>
             {
                 var untrackedUser = await db.Users.AsNoTracking().SingleAsync(u => u.Id == userId, ct);
-                db.UserPermissions.Add(UserPermission.Create(untrackedUser, Permission.ManageUsers()));
+                db.UserPermissions.Add(UserPermission.Create(untrackedUser, Permission.ManageUsers(), PermissionEffect.Grant));
             }));
         var scope = new TestingServiceScope(services);
         var scenario = await scope.StartTenantScenarioAsync();

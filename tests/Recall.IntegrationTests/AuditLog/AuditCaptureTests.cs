@@ -25,11 +25,11 @@ using static Recall.IntegrationTests.DomainEvents.DomainEventTestServices;
 public class AuditCaptureTests : TestBase
 {
     [Test]
-    public async Task added_user_has_a_created_entry_and_its_permissions_have_entries_in_the_history_of_the_user()
+    public async Task added_user_has_a_created_entry_and_its_roles_have_entries_in_the_history_of_the_user()
     {
         // Arrange
         var scope = new TestingServiceScope();
-        var dto = new FakeUserForCreationDto().Generate() with { Role = UserRole.Admin().Value };
+        var dto = new FakeUserForCreationDto().Generate() with { Roles = [UserRole.Admin(), UserRole.Auditor()] };
 
         // Act
         var user = await scope.SendAsync(new AddUser.Command(dto));
@@ -43,9 +43,10 @@ public class AuditCaptureTests : TestBase
         ChangeOf(created, "Email").ShouldBe(new Change(HasOld: false, Old: null, New: dto.Email));
         Paths(created).ShouldNotContain(nameof(User.Id));
         Paths(created).ShouldNotContain(nameof(User.LastModifiedOn));
-        entries.Where(e => e.EntityType == nameof(UserPermission))
-            .Select(e => ChangeOf(e, "Permission").New)
-            .ShouldBe(Permission.GetAll().Select(p => p.Value), ignoreOrder: true);
+        entries.Where(e => e.EntityType == nameof(UserRoleAssignment))
+            .Select(e => ChangeOf(e, "Role").New)
+            .ShouldBe(["Admin", "Auditor"], ignoreOrder: true);
+        entries.ShouldNotContain(e => e.EntityType == nameof(UserPermission));
         entries.ShouldAllBe(e => e.RecordId == created.RecordId && e.Kind == AuditEntryKind.Created
                                  && e.ActorSubject == TestFixture.DefaultUser.Identifier
                                  && e.ActorUserId == TestFixture.DefaultUser.Id && e.ActorAgentId == null
@@ -82,11 +83,14 @@ public class AuditCaptureTests : TestBase
     }
 
     [Test]
-    public async Task delete_records_a_deleted_entry_for_the_user_and_each_of_its_permissions()
+    public async Task delete_records_a_deleted_entry_for_the_user_and_each_of_its_roles_and_overrides()
     {
         // Arrange
         var scope = new TestingServiceScope();
-        await scope.StartGraph(out _).AddUser(out var user, u => u.Role = UserRole.Admin().Value).BuildAsync();
+        var graph = scope.StartGraph(out _).AddUser(out var user, u => u.Roles = [UserRole.Auditor().Value]);
+        user.AddPermissions([Permission.ManageAgents()]);
+        user.RemovePermission(Permission.ReadAgents());
+        await graph.BuildAsync();
 
         // Act
         await scope.SendAsync(new DeleteUser.Command(user.Id));
@@ -94,20 +98,22 @@ public class AuditCaptureTests : TestBase
         // Assert
         var deleted = (await EntriesOfRootAsync(user.Id)).Where(e => e.Kind == AuditEntryKind.Deleted).ToList();
         deleted.Select(e => e.EntityId)
-            .ShouldBe(user.UserPermissions.Select(p => p.Id).Append(user.Id), ignoreOrder: true);
+            .ShouldBe(user.Roles.Select(r => r.Id).Concat(user.UserPermissions.Select(p => p.Id)).Append(user.Id), ignoreOrder: true);
+        deleted.Count.ShouldBe(4);
         deleted.Select(e => e.RecordId).Distinct().ShouldHaveSingleItem();
         deleted.Single(e => e.EntityId == user.Id).Data.ShouldContain(user.Identifier);
     }
 
     [Test]
-    public async Task tenant_delete_records_a_deleted_entry_for_each_user_of_the_tenant_and_each_of_its_permissions()
+    public async Task tenant_delete_records_a_deleted_entry_for_each_user_of_the_tenant_and_each_of_its_roles_and_overrides()
     {
         // Arrange
         var scope = new TestingServiceScope();
-        await scope.StartGraph(out _)
+        var graph = scope.StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUsers(out var users, u => u.Role = UserRole.Admin().Value, _ => { })
-            .BuildAsync();
+            .AddUsers(out var users, u => u.Roles = [UserRole.Admin().Value], u => u.Roles = [UserRole.Auditor().Value]);
+        users[1].AddPermissions([Permission.ManageAgents()]);
+        await graph.BuildAsync();
         scope.SetUserWithDefaults(identifier: users[0].Identifier);
 
         // Act
@@ -118,7 +124,7 @@ public class AuditCaptureTests : TestBase
         {
             var deleted = (await EntriesOfRootAsync(user.Id)).Where(e => e.Kind == AuditEntryKind.Deleted).ToList();
             deleted.Select(e => e.EntityId)
-                .ShouldBe(user.UserPermissions.Select(p => p.Id).Append(user.Id), ignoreOrder: true);
+                .ShouldBe(user.Roles.Select(r => r.Id).Concat(user.UserPermissions.Select(p => p.Id)).Append(user.Id), ignoreOrder: true);
             deleted.ShouldAllBe(e => e.TenantId == tenant.Id && e.RequestName == "DeleteTenant.Command");
         }
     }
@@ -130,7 +136,7 @@ public class AuditCaptureTests : TestBase
         var scope = new TestingServiceScope();
         await scope.StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var admin, u => u.Role = UserRole.Admin().Value)
+            .AddUser(out var admin, u => u.Roles = [UserRole.Admin().Value])
             .Under(tenant)
             .AddAgents(out var agents,
                 a => a.Permissions = [Permission.Names.ManageTenant, Permission.Names.ReadUsers],
@@ -157,17 +163,19 @@ public class AuditCaptureTests : TestBase
     }
 
     [Test]
-    public async Task permission_removed_from_the_user_is_deleted_in_its_history_and_the_owner_touch_records_nothing()
+    public async Task added_permission_removed_from_the_user_is_deleted_in_its_history_and_the_owner_touch_records_nothing()
     {
         // Arrange
         var scope = new TestingServiceScope();
-        await scope.StartGraph(out _).AddUser(out var user, u => u.Role = UserRole.Admin().Value).BuildAsync();
+        var graph = scope.StartGraph(out _).AddUser(out var user, u => u.Roles = [UserRole.Auditor().Value]);
+        user.AddPermissions([Permission.ManageAgents()]);
+        await graph.BuildAsync();
         var db = scope.GetService<AppDbContext>();
-        var loaded = await db.Users.Include(u => u.UserPermissions).SingleAsync(u => u.Id == user.Id);
-        var removed = loaded.UserPermissions.First();
+        var loaded = await db.Users.Include(u => u.Roles).Include(u => u.UserPermissions).SingleAsync(u => u.Id == user.Id);
+        var removed = loaded.UserPermissions.Single();
 
         // Act
-        loaded.RemovePermission(removed.Permission);
+        db.Track(loaded.RemovePermission(removed.Permission));
         await db.SaveChangesAsync();
 
         // Assert
@@ -248,7 +256,7 @@ public class AuditCaptureTests : TestBase
         var scope = new TestingServiceScope();
         await scope.StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var admin, u => u.Role = UserRole.Admin().Value)
+            .AddUser(out var admin, u => u.Roles = [UserRole.Admin().Value])
             .Under(tenant)
             .AddAgent(out var agent, a => a.Permissions = [Permission.Names.ManageTenant])
             .BuildAsync();
@@ -295,7 +303,7 @@ public class AuditCaptureTests : TestBase
     {
         // Arrange
         var scope = new TestingServiceScope();
-        await scope.StartGraph(out _).AddTenant(out var tenant).AddUser(out var admin, u => u.Role = UserRole.Admin().Value)
+        await scope.StartGraph(out _).AddTenant(out var tenant).AddUser(out var admin, u => u.Roles = [UserRole.Admin().Value])
             .BuildAsync();
         scope.SetUserWithDefaults(identifier: admin.Identifier);
         await scope.SendAsync(new UpdateTenant.Command(tenant.Id,

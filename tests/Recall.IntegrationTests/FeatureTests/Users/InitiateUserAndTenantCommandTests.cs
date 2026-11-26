@@ -52,7 +52,7 @@ public class InitiateUserAndTenantCommandTests : TestBase
         var initiator = new TestingServiceScope();
         initiator.SetMachineClient(TestFixture.TrustedMachineClientId);
         var started = await initiator.SendAsync(new InitiateUserAndTenant.Command(
-            new FakeInitiateUserAndTenantDto().Generate() with { Role = "Admin" }));
+            new FakeInitiateUserAndTenantDto().Generate() with { Roles = ["Admin"] }));
         var session = new TestingServiceScope();
         session.SetUserWithDefaults(identifier: started.User.Id);
 
@@ -69,14 +69,14 @@ public class InitiateUserAndTenantCommandTests : TestBase
     {
         // Arrange
         var testingServiceScope = new TestingServiceScope();
-        var dto = new FakeInitiateUserAndTenantDto().Generate() with { Role = "Admin" };
+        var dto = new FakeInitiateUserAndTenantDto().Generate() with { Roles = ["Admin"] };
         testingServiceScope.SetMachineClient(TestFixture.TrustedMachineClientId);
 
         // Act
         var result = await testingServiceScope.SendAsync(new InitiateUserAndTenant.Command(dto));
 
         // Assert
-        result.User.AllowedActions.ShouldBe(["Update", "UpdateRole", "AddPermission", "RemovePermission", "Delete", "IssueTemporaryPassword", "ManageExternalLogins"]);
+        result.User.AllowedActions.ShouldBe(["Update", "AddRole", "RemoveRole", "AddPermission", "RemovePermission", "Delete", "IssueTemporaryPassword", "ManageExternalLogins"]);
     }
 
     [Test]

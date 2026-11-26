@@ -16,7 +16,7 @@ public class AddUserPermissionCommandTests : TestBase
         // Arrange
         var testingServiceScope = new TestingServiceScope();
         await testingServiceScope.StartGraph(out _)
-            .AddUser(out var createdUser, u => u.Role = "User")
+            .AddUser(out var createdUser, u => u.Roles = [])
             .BuildAsync();
 
         // Act
@@ -34,7 +34,7 @@ public class AddUserPermissionCommandTests : TestBase
         // Arrange
         var testingServiceScope = new TestingServiceScope();
         await testingServiceScope.StartGraph(out _)
-            .AddUser(out var createdUser, u => u.Role = "User")
+            .AddUser(out var createdUser, u => u.Roles = [])
             .BuildAsync();
 
         // Act
@@ -54,15 +54,16 @@ public class AddUserPermissionCommandTests : TestBase
     [Test]
     public async Task adding_duplicate_permission_is_idempotent()
     {
-        // Arrange - Admin already has manage_tenant by default
+        // Arrange - A member has no role, so the add stores a row
         var testingServiceScope = new TestingServiceScope();
         await testingServiceScope.StartGraph(out _)
-            .AddUser(out var createdUser, u => u.Role = "Admin")
+            .AddUser(out var createdUser, u => u.Roles = [])
             .BuildAsync();
+        await testingServiceScope.SendAsync(new AddUserPermission.Command(createdUser.Id, "manage_tenant"));
 
         // Act - Add the same permission again
         var command = new AddUserPermission.Command(createdUser.Id, "manage_tenant");
-        var userReturned = await testingServiceScope.SendAsync(command);
+        await testingServiceScope.SendAsync(command);
 
         // Assert - Should still have exactly one instance of the permission
         var userInDb = await testingServiceScope.ExecuteDbContextAsync(db =>
@@ -74,6 +75,25 @@ public class AddUserPermissionCommandTests : TestBase
         userInDb.UserPermissions
             .Count(p => p.Permission.Value == "manage_tenant")
             .ShouldBe(1);
+    }
+
+    [Test]
+    public async Task adding_a_permission_that_the_role_gives_stores_no_row()
+    {
+        // Arrange - Admin already has manage_tenant through the role
+        var testingServiceScope = new TestingServiceScope();
+        await testingServiceScope.StartGraph(out _)
+            .AddUser(out var createdUser, u => u.Roles = ["Admin"])
+            .BuildAsync();
+
+        // Act
+        var userReturned = await testingServiceScope.SendAsync(new AddUserPermission.Command(createdUser.Id, "manage_tenant"));
+
+        // Assert
+        userReturned.Permissions.ShouldContain("manage_tenant");
+        userReturned.AddedPermissions.ShouldBeEmpty();
+        (await testingServiceScope.ExecuteDbContextAsync(db => db.UserPermissions.CountAsync(p => p.UserId == createdUser.Id)))
+            .ShouldBe(0);
     }
 
     [Test]
@@ -110,7 +130,7 @@ public class AddUserPermissionCommandTests : TestBase
         // Arrange
         var testingServiceScope = new TestingServiceScope();
         await testingServiceScope.StartGraph(out _)
-            .AddUser(out var createdUser, u => u.Role = "User")
+            .AddUser(out var createdUser, u => u.Roles = [])
             .BuildAsync();
 
         // Act
@@ -128,7 +148,7 @@ public class AddUserPermissionCommandTests : TestBase
         // Arrange
         var testingServiceScope = new TestingServiceScope();
         await testingServiceScope.StartGraph(out _)
-            .AddUser(out var createdUser, u => u.Role = "User")
+            .AddUser(out var createdUser, u => u.Roles = [])
             .BuildAsync();
 
         // Act

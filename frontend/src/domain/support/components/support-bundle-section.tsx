@@ -7,7 +7,7 @@ export function SupportBundleSection() {
   const membership = useMembership()
   const download = useDownloadSupportBundle()
 
-  const mightBeTheOwner = membership.status === 'member' && membership.user.role === 'Admin'
+  const mightBeTheOwner = membership.status === 'member' && membership.user.roles.includes('Admin')
   if (!mightBeTheOwner) return null
 
   return (

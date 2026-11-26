@@ -61,10 +61,10 @@ public partial class NoProviderBootTests
         await using var command = connection.CreateCommand();
         command.CommandText = """
             INSERT INTO tenants (id, name, is_deleted, version) VALUES ($tenant, 'Kept', 0, 1);
-            INSERT INTO users (id, tenant_id, first_name, identifier, username, role, is_deleted, version)
-            VALUES ($user, $tenant, 'Ada', $user, 'ada', 'Admin', 0, 1);
-            INSERT INTO user_permissions (id, user_id, permission, is_deleted, version)
-            VALUES ($permission, $user, 'manage_tenant', 0, 1);
+            INSERT INTO users (id, tenant_id, first_name, identifier, username, is_deleted, version)
+            VALUES ($user, $tenant, 'Ada', $user, 'ada', 0, 1);
+            INSERT INTO user_roles (id, user_id, role, is_deleted, version)
+            VALUES ($permission, $user, 'Admin', 0, 1);
             INSERT INTO auth_sessions (id, user_id, client_kind, login_mode, access_hash, access_expires_at, expires_at, created_at, name, "grant")
             VALUES ($token, $user, 'pat', 'pat', $hash, $never, $never, $now, 'Laptop', 'none:manage_tenant');
             INSERT INTO auth_sessions (id, user_id, client_kind, login_mode, access_hash, access_expires_at, expires_at, created_at, name, "grant", revoked_at, revoked_reason)
@@ -72,7 +72,7 @@ public partial class NoProviderBootTests
             """;
         command.Parameters.AddWithValue("$tenant", tenantId);
         command.Parameters.AddWithValue("$user", userId);
-        command.Parameters.AddWithValue("$permission", EntityId.New("uperm"));
+        command.Parameters.AddWithValue("$permission", EntityId.New("urole"));
         command.Parameters.AddWithValue("$token", EntityId.New(PatClaims.IdPrefix));
         command.Parameters.AddWithValue("$hash", TokenHash.Of(value).Hex);
         command.Parameters.AddWithValue("$revokedToken", EntityId.New(PatClaims.IdPrefix));

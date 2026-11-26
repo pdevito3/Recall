@@ -65,7 +65,7 @@ public class ConcurrencyTests : TestBase
         // Arrange
         var testingServiceScope = new TestingServiceScope();
         await testingServiceScope.StartGraph(out _)
-            .AddUser(out var user, u => u.Role = "User")
+            .AddUser(out var user, u => u.Roles = [])
             .BuildAsync();
         var first = new TestingServiceScope();
         var second = new TestingServiceScope();
@@ -91,11 +91,11 @@ public class ConcurrencyTests : TestBase
         // Arrange
         var testingServiceScope = new TestingServiceScope();
         await testingServiceScope.StartGraph(out _)
-            .AddUser(out var user, u => u.Role = "User")
+            .AddUser(out var user, u => u.Roles = [])
             .BuildAsync();
         var dbContext = testingServiceScope.GetService<AppDbContext>();
         var untrackedUser = await dbContext.Users.AsNoTracking().GetById(user.Id);
-        dbContext.UserPermissions.Add(UserPermission.Create(untrackedUser, Permission.ManageUsers()));
+        dbContext.UserPermissions.Add(UserPermission.Create(untrackedUser, Permission.ManageUsers(), PermissionEffect.Grant));
 
         // Act
         Func<Task> act = () => dbContext.SaveChangesAsync();
@@ -129,7 +129,7 @@ public class ConcurrencyTests : TestBase
     {
         await new TestingServiceScope().StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var admin, u => u.Role = "Admin")
+            .AddUser(out var admin, u => u.Roles = ["Admin"])
             .BuildAsync();
         var underTest = underTestServices is null ? new TestingServiceScope() : new TestingServiceScope(underTestServices);
         var rival = new TestingServiceScope();

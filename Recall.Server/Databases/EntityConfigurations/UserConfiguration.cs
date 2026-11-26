@@ -49,13 +49,13 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
                 .IsRequired();
         });
 
-        builder.ComplexProperty(e => e.Role, role =>
-        {
-            role.Property(r => r.Value)
-                .HasColumnName("role")
-                .HasMaxLength(50)
-                .IsRequired();
-        });
+        builder.HasMany(e => e.Roles)
+            .WithOne(r => r.User)
+            .HasForeignKey(r => r.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Navigation(e => e.Roles)
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
 
         builder.HasMany(e => e.UserPermissions)
             .WithOne(up => up.User)

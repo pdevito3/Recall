@@ -101,9 +101,9 @@ public class UserCreationAccessTests : TestBase
     public async Task basic_member_cannot_add_a_user()
     {
         // Arrange
-        var (_, member) = await AddTenantWithUserAsync("User");
+        var (_, member) = await AddTenantWithUserAsync("Member");
         SignInAs(member);
-        var dto = new FakeUserForCreationDto().RuleFor(x => x.Role, _ => "Admin").Generate();
+        var dto = new FakeUserForCreationDto().RuleFor(x => x.Roles, _ => ["Admin"]).Generate();
 
         // Act
         var result = await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.Create, dto);
@@ -119,11 +119,11 @@ public class UserCreationAccessTests : TestBase
     public async Task basic_member_cannot_change_a_role()
     {
         // Arrange
-        var (_, member) = await AddTenantWithUserAsync("User");
+        var (_, member) = await AddTenantWithUserAsync("Member");
         SignInAs(member);
 
         // Act
-        var result = await FactoryClient.PutJsonRequestAsync(ApiRoutes.Users.UpdateRole(member.Id), new { role = "Admin" });
+        var result = await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.AddRole(member.Id), new { role = "Admin" });
 
         // Assert
         await ShouldBeForbiddenAsync(result, "You cannot manage the access of users. Ask an admin for access.");
@@ -200,9 +200,11 @@ public class UserCreationAccessTests : TestBase
     {
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var user, u => u.Role = role);
+            .AddUser(out var user, u => u.Roles = RolesOf(role));
         await InsertAsync(tenant);
         await InsertAsync(user);
         return (tenant, user);
     }
+
+    private static IReadOnlyList<string> RolesOf(string role) => role == "Member" ? [] : [role];
 }

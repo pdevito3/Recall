@@ -25,6 +25,7 @@ public static class GetUserByIdentifier
                     .TagWithOperationCallSite("users.get_by_identifier")
                     .AsNoTracking()
                     .Include(u => u.UserPermissions)
+                    .Include(u => u.Roles)
                     .FirstOrDefaultAsync(u => u.Identifier == request.Identifier, cancellationToken)
                 : null;
             Activity.Current?.SetTag("app.user_id", user?.Id);

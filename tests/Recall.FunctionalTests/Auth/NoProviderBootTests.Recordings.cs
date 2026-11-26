@@ -36,10 +36,10 @@ public partial class NoProviderBootTests
             await using var command = connection.CreateCommand();
             command.CommandText = """
                 INSERT INTO tenants (id, name, is_deleted, version) VALUES ($deleted, 'Deleted', 0, 1), ($kept, 'Kept', 0, 1);
-                INSERT INTO users (id, tenant_id, first_name, identifier, username, role, is_deleted, version)
-                VALUES ($admin, $deleted, 'Ada', $admin, 'ada', 'Admin', 0, 1);
-                INSERT INTO user_permissions (id, user_id, permission, is_deleted, version)
-                VALUES ($permission, $admin, 'manage_tenant', 0, 1);
+                INSERT INTO users (id, tenant_id, first_name, identifier, username, is_deleted, version)
+                VALUES ($admin, $deleted, 'Ada', $admin, 'ada', 0, 1);
+                INSERT INTO user_roles (id, user_id, role, is_deleted, version)
+                VALUES ($permission, $admin, 'Admin', 0, 1);
                 INSERT INTO auth_sessions (id, user_id, client_kind, login_mode, access_hash, access_expires_at, expires_at, created_at, last_slid_at)
                 VALUES ($session, $admin, 'web', 'stub', $hash, $expires, $expires, $now, $now);
                 """;
@@ -47,7 +47,7 @@ public partial class NoProviderBootTests
             command.Parameters.AddWithValue("$kept", kept);
             command.Parameters.AddWithValue("$admin", admin);
             command.Parameters.AddWithValue("$session", EntityId.New(AuthSession.IdPrefix));
-            command.Parameters.AddWithValue("$permission", EntityId.New("uperm"));
+            command.Parameters.AddWithValue("$permission", EntityId.New("urole"));
             command.Parameters.AddWithValue("$hash", TokenHash.Of(cookie).Hex);
             command.Parameters.AddWithValue("$expires", now.AddDays(1).ToString("yyyy-MM-ddTHH:mm:ss.ffffffZ", CultureInfo.InvariantCulture));
             command.Parameters.AddWithValue("$now", now.ToString("yyyy-MM-ddTHH:mm:ss.ffffffZ", CultureInfo.InvariantCulture));

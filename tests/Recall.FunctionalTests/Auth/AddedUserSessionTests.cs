@@ -22,7 +22,7 @@ public class AddedUserSessionTests
 
         var add = new HttpRequestMessage(HttpMethod.Post, "/api/v1/users")
         {
-            Content = JsonContent.Create(new { firstName = "Grace", lastName = "Hopper", username = "grace", role = "User" }),
+            Content = JsonContent.Create(new { firstName = "Grace", lastName = "Hopper", username = "grace", roles = Array.Empty<string>() }),
         };
         add.Headers.Add("X-CSRF", "1");
         add.Headers.Add(PageUserCheck.Header, admin.UserId);

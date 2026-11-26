@@ -22,7 +22,7 @@ export default async ({ page, context, step, capture, expect, login, logout }) =
     })
     expect(users.status).toBe(200)
     expect(users.body.map((u) => u.identifier)).toEqual([owner.identifier])
-    expect(users.body[0].role).toBe('Admin')
+    expect(users.body[0].roles).toEqual(['Admin'])
   })
 
   await step('log out, and clear the cookies of the browser', async () => {

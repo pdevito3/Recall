@@ -23,7 +23,7 @@ public class WriteGuardTests : TestBase
         yield return () => ("SaveChangesAsync", (db, _, ct) => db.SaveChangesAsync(ct));
         yield return () => ("ExecuteUpdateAsync", (db, userId, ct) => db.Users.Where(u => u.Id == userId)
             .ExecuteUpdateAsync(set => set.SetProperty(u => u.FirstName, "Changed"), ct));
-        yield return () => ("ExecuteDeleteAsync", (db, userId, ct) => db.UserPermissions.Where(p => p.UserId == userId)
+        yield return () => ("ExecuteDeleteAsync", (db, userId, ct) => db.UserRoles.Where(r => r.UserId == userId)
             .ExecuteDeleteAsync(ct));
         yield return () => ("raw SQL", (db, userId, ct) => db.Database.ExecuteSqlAsync(
             $"UPDATE users SET first_name = 'Changed' WHERE id = {userId}", ct));
@@ -50,8 +50,8 @@ public class WriteGuardTests : TestBase
     {
         yield return () => ("ExecuteUpdateAsync", "users", (db, userId) => db.Users.Where(u => u.Id == userId)
             .ExecuteUpdateAsync(set => set.SetProperty(u => u.FirstName, "Changed")));
-        yield return () => ("ExecuteDeleteAsync", "user_permissions", (db, userId) => db.UserPermissions
-            .Where(p => p.UserId == userId).ExecuteDeleteAsync());
+        yield return () => ("ExecuteDeleteAsync", "user_roles", (db, userId) => db.UserRoles
+            .Where(r => r.UserId == userId).ExecuteDeleteAsync());
         yield return () => ("raw SQL", "users", (db, userId) => db.Database.ExecuteSqlAsync(
             $"UPDATE users SET first_name = 'Changed' WHERE id = {userId}"));
         yield return () => ("raw SQL on the audit log", "audit_entries", (db, userId) => db.Database.ExecuteSqlAsync(
@@ -82,7 +82,7 @@ public class WriteGuardTests : TestBase
         // Arrange
         var scope = new TestingServiceScope();
         var scenario = await scope.StartTenantScenarioAsync();
-        var permissionsBefore = await ReadAsync(read => read.UserPermissions.CountAsync(p => p.UserId == scenario.FirstUser.Id));
+        var rowsBefore = await RowsOfAsync(scenario.FirstUser.Id);
         var auditEntriesBefore = await ReadAsync(read => read.AuditEntries.CountAsync(e => e.RootId == scenario.FirstUser.Id));
 
         // Act
@@ -91,7 +91,7 @@ public class WriteGuardTests : TestBase
         // Assert
         (await act.ShouldThrowAsync<InvalidOperationException>()).Message
             .ShouldStartWith($"{table} is audited, so write it through SaveChangesAsync.", customMessage: write);
-        await ShouldBeUnchangedAsync(scenario, permissionsBefore);
+        await ShouldBeUnchangedAsync(scenario, rowsBefore);
         (await ReadAsync(read => read.AuditEntries.CountAsync(e => e.RootId == scenario.FirstUser.Id)))
             .ShouldBe(auditEntriesBefore);
     }
@@ -128,7 +128,7 @@ public class WriteGuardTests : TestBase
         var scope = new TestingServiceScope(services);
         var scenario = await scope.StartTenantScenarioAsync();
         userId = scenario.FirstUser.Id;
-        var permissionsBefore = await ReadAsync(read => read.UserPermissions.CountAsync(p => p.UserId == userId));
+        var rowsBefore = await RowsOfAsync(userId);
         var db = scope.GetService<AppDbContext>();
         var tenant = await db.Tenants.SingleAsync(t => t.Id == scenario.Tenant.Id);
 
@@ -139,7 +139,7 @@ public class WriteGuardTests : TestBase
         // Assert
         (await act.ShouldThrowAsync<InvalidOperationException>()).Message
             .ShouldStartWith("A domain event handler must not", customMessage: write);
-        await ShouldBeUnchangedAsync(scenario, permissionsBefore);
+        await ShouldBeUnchangedAsync(scenario, rowsBefore);
     }
 
     [Test]
@@ -158,7 +158,8 @@ public class WriteGuardTests : TestBase
             reads.Add((await db.Users.AsNoTracking().Include(u => u.UserPermissions).SingleAsync(u => u.Id == userId, ct)).Id);
             await db.Entry(user!).Collection(u => u.UserPermissions).LoadAsync(ct);
             reads.Add(db.Entry(user!).Collection(u => u.UserPermissions).IsLoaded);
-            user!.UpdateRole(UserRole.Admin());
+            await db.Entry(user!).Collection(u => u.Roles).LoadAsync(ct);
+            db.Track(user!.AddRole(UserRole.Auditor()));
         }));
         var scope = new TestingServiceScope(services);
         var scenario = await scope.StartTenantScenarioAsync();
@@ -172,7 +173,8 @@ public class WriteGuardTests : TestBase
 
         // Assert
         reads.ShouldBe(new object?[] { userId, userId, 3, true, userId, true });
-        (await ReadAsync(read => read.Users.SingleAsync(u => u.Id == userId))).Role.ShouldBe(UserRole.Admin());
+        (await ReadAsync(read => read.UserRoles.Where(r => r.UserId == userId).Select(r => r.Role).ToListAsync()))
+            .ShouldBe([UserRole.Auditor()]);
     }
 
     [Test]
@@ -186,7 +188,7 @@ public class WriteGuardTests : TestBase
         var scope = new TestingServiceScope(services);
         var scenario = await scope.StartTenantScenarioAsync();
         userId = scenario.FirstUser.Id;
-        var permissionsBefore = await ReadAsync(read => read.UserPermissions.CountAsync(p => p.UserId == userId));
+        var rowsBefore = await RowsOfAsync(userId);
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseSqlite(scope.GetService<IConfiguration>().GetConnectionString(DatabaseConsts.DatabaseName))
             .UseSnakeCaseNamingConvention()
@@ -201,16 +203,20 @@ public class WriteGuardTests : TestBase
 
         // Assert
         (await act.ShouldThrowAsync<InvalidOperationException>()).Message.ShouldStartWith("A domain event handler must not");
-        await ShouldBeUnchangedAsync(scenario, permissionsBefore);
+        await ShouldBeUnchangedAsync(scenario, rowsBefore);
     }
 
-    private static async Task ShouldBeUnchangedAsync(TenantScenario scenario, int permissionsBefore)
+    // The role rows and the override rows of the user.
+    private static async Task<int> RowsOfAsync(string userId)
+        => await ReadAsync(read => read.UserRoles.CountAsync(r => r.UserId == userId))
+            + await ReadAsync(read => read.UserPermissions.CountAsync(p => p.UserId == userId));
+
+    private static async Task ShouldBeUnchangedAsync(TenantScenario scenario, int rowsBefore)
     {
         (await ReadAsync(read => read.Tenants.Where(t => t.Id == scenario.Tenant.Id).Select(t => t.Name).SingleAsync()))
             .ShouldBe(scenario.Tenant.Name);
         (await ReadAsync(read => read.Users.Where(u => u.Id == scenario.FirstUser.Id).Select(u => u.FirstName).SingleAsync()))
             .ShouldBe(scenario.FirstUser.FirstName);
-        (await ReadAsync(read => read.UserPermissions.CountAsync(p => p.UserId == scenario.FirstUser.Id)))
-            .ShouldBe(permissionsBefore);
+        (await RowsOfAsync(scenario.FirstUser.Id)).ShouldBe(rowsBefore);
     }
 }

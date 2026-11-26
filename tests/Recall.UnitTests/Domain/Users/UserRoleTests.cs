@@ -7,23 +7,17 @@ using Shouldly;
 public class UserRoleTests
 {
     [Test]
-    public void can_create_admin_role()
+    public void can_create_each_role()
     {
         // Arrange & Act
-        var role = UserRole.Admin();
+        var admin = UserRole.Admin();
+        var userManager = UserRole.UserManager();
+        var auditor = UserRole.Auditor();
 
         // Assert
-        role.Value.ShouldBe("Admin");
-    }
-
-    [Test]
-    public void can_create_user_role()
-    {
-        // Arrange & Act
-        var role = UserRole.User();
-
-        // Assert
-        role.Value.ShouldBe("User");
+        admin.Value.ShouldBe("Admin");
+        userManager.Value.ShouldBe("UserManager");
+        auditor.Value.ShouldBe("Auditor");
     }
 
     [Test]
@@ -31,11 +25,11 @@ public class UserRoleTests
     {
         // Arrange & Act
         var adminRole = UserRole.Of("Admin");
-        var userRole = UserRole.Of("User");
+        var auditorRole = UserRole.Of("Auditor");
 
         // Assert
         adminRole.Value.ShouldBe("Admin");
-        userRole.Value.ShouldBe("User");
+        auditorRole.Value.ShouldBe("Auditor");
     }
 
     [Test]
@@ -62,29 +56,52 @@ public class UserRoleTests
     }
 
     [Test]
-    public void admin_role_has_every_permission_by_default()
+    public void the_old_role_user_is_no_role()
     {
-        // Arrange
-        var adminRole = UserRole.Admin();
+        // Act & Assert
+        Should.Throw<ValidationException>(() => UserRole.Of("User"));
+    }
 
+    [Test]
+    public void an_invalid_item_of_a_list_names_its_request_field()
+    {
         // Act
-        var permissions = adminRole.GetDefaultPermissions();
+        var exception = Should.Throw<ValidationException>(() => UserRole.Of("Owner", "roles[1]"));
+
+        // Assert
+        exception.Property.ShouldBe("roles[1]");
+    }
+
+    [Test]
+    public void admin_role_has_every_permission()
+    {
+        // Act
+        var permissions = UserRole.Admin().Permissions();
 
         // Assert
         permissions.ShouldBe(Permission.GetAll(), ignoreOrder: true);
     }
 
     [Test]
-    public void user_role_has_no_default_permissions()
+    public void user_manager_role_manages_and_reads_users()
     {
-        // Arrange
-        var userRole = UserRole.User();
-
         // Act
-        var permissions = userRole.GetDefaultPermissions();
+        var permissions = UserRole.UserManager().Permissions();
 
         // Assert
-        permissions.ShouldBeEmpty();
+        permissions.Select(p => p.Value).ShouldBe(
+            ["manage_users", "manage_user_access", "read_users"], ignoreOrder: true);
+    }
+
+    [Test]
+    public void auditor_role_reads_the_audit_log_the_users_and_the_agents()
+    {
+        // Act
+        var permissions = UserRole.Auditor().Permissions();
+
+        // Assert
+        permissions.Select(p => p.Value).ShouldBe(
+            ["read_audit_log", "read_audit_log_sensitive", "read_users", "read_agents"], ignoreOrder: true);
     }
 
     [Test]
@@ -94,8 +111,6 @@ public class UserRoleTests
         var names = UserRole.ListNames();
 
         // Assert
-        names.ShouldContain("Admin");
-        names.ShouldContain("User");
-        names.Count.ShouldBe(2);
+        names.ShouldBe(["Admin", "UserManager", "Auditor"], ignoreOrder: true);
     }
 }

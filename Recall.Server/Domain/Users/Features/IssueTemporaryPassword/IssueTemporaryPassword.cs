@@ -48,6 +48,7 @@ public static class IssueTemporaryPassword
                 var user = await dbContext.Users
                     .TagWithOperationCallSite("users.issue_temporary_password.load")
                     .Include(u => u.UserPermissions)
+                    .Include(u => u.Roles)
                     .GetById(request.Id, ct);
                 user.GuardAllows(UserAction.IssueTemporaryPassword(), caller);
 

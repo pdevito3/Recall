@@ -75,7 +75,7 @@ public class DeleteUserCommandTests : TestBase
         var scope = new TestingServiceScope();
         await scope.StartGraph(out _)
             .AddTenant(out _)
-            .AddUser(out var owner, u => u.Role = "Admin")
+            .AddUser(out var owner, u => u.Roles = ["Admin"])
             .BuildAsync();
         await scope.AddSignInLinkAsync(owner);
         scope.SetUserWithDefaults(identifier: owner.Identifier);
@@ -96,9 +96,9 @@ public class DeleteUserCommandTests : TestBase
         var scope = new TestingServiceScope();
         await scope.StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var owner, u => u.Role = "Admin")
+            .AddUser(out var owner, u => u.Roles = ["Admin"])
             .Under(tenant)
-            .AddUser(out var other, u => u.Role = "Admin")
+            .AddUser(out var other, u => u.Roles = ["Admin"])
             .BuildAsync();
         await scope.AddSignInLinkAsync(other);
         scope.SetUserWithDefaults(identifier: owner.Identifier);
@@ -117,7 +117,7 @@ public class DeleteUserCommandTests : TestBase
         var scope = new TestingServiceScope();
         await scope.StartGraph(out _)
             .AddTenant(out _)
-            .AddUser(out var owner, u => u.Role = "Admin")
+            .AddUser(out var owner, u => u.Roles = ["Admin"])
             .BuildAsync();
         scope.SetUserWithDefaults(identifier: owner.Identifier);
 
@@ -135,9 +135,9 @@ public class DeleteUserCommandTests : TestBase
         var scope = new TestingServiceScope();
         await scope.StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var owner, u => u.Role = "Admin")
+            .AddUser(out var owner, u => u.Roles = ["Admin"])
             .Under(tenant)
-            .AddUser(out var other, u => u.Role = "Admin")
+            .AddUser(out var other, u => u.Roles = ["Admin"])
             .BuildAsync();
         scope.SetUserWithDefaults(identifier: other.Identifier);
 
@@ -155,9 +155,9 @@ public class DeleteUserCommandTests : TestBase
         var scope = new TestingServiceScope();
         await scope.StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var owner, u => u.Role = "Admin")
+            .AddUser(out var owner, u => u.Roles = ["Admin"])
             .Under(tenant)
-            .AddUser(out _, u => u.Role = "Admin")
+            .AddUser(out _, u => u.Roles = ["Admin"])
             .BuildAsync();
         await scope.AddSignInLinkAsync(owner);
         scope.SetUserWithDefaults(identifier: owner.Identifier);
@@ -176,9 +176,9 @@ public class DeleteUserCommandTests : TestBase
         var scope = new TestingServiceScope();
         await scope.StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var owner, u => u.Role = "Admin")
+            .AddUser(out var owner, u => u.Roles = ["Admin"])
             .Under(tenant)
-            .AddUser(out var member, u => u.Role = "User")
+            .AddUser(out var member, u => u.Roles = [])
             .BuildAsync();
         await scope.AddSignInLinkAsync(member);
         scope.SetUserWithDefaults(identifier: owner.Identifier);
@@ -199,11 +199,11 @@ public class DeleteUserCommandTests : TestBase
         var scope = new TestingServiceScope();
         await scope.StartGraph(out _)
             .AddTenant(out _)
-            .AddUser(out var elsewhere, u => u.Role = "Admin")
+            .AddUser(out var elsewhere, u => u.Roles = ["Admin"])
             .BuildAsync();
         await scope.StartGraph(out _)
             .AddTenant(out _)
-            .AddUser(out var owner, u => u.Role = "Admin")
+            .AddUser(out var owner, u => u.Roles = ["Admin"])
             .BuildAsync();
         await scope.AddSignInLinkAsync(elsewhere);
         scope.SetMachineClient(TestFixture.TrustedMachineClientId);
@@ -224,9 +224,9 @@ public class DeleteUserCommandTests : TestBase
         var scope = new TestingServiceScope();
         await scope.StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var first, u => u.Role = "Admin")
+            .AddUser(out var first, u => u.Roles = ["Admin"])
             .Under(tenant)
-            .AddUser(out var second, u => u.Role = "Admin")
+            .AddUser(out var second, u => u.Roles = ["Admin"])
             .BuildAsync();
         await scope.AddSignInLinkAsync(first);
         await scope.AddSignInLinkAsync(second);

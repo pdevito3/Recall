@@ -19,7 +19,7 @@ public class AgentErrorResponseTests : TestBase
         // Arrange
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var admin, u => u.Role = "Admin")
+            .AddUser(out var admin, u => u.Roles = ["Admin"])
             .Under(tenant);
         await InsertAsync(tenant);
         await InsertAsync(admin);
@@ -49,7 +49,7 @@ public class AgentErrorResponseTests : TestBase
         // Arrange
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var admin, u => u.Role = "Admin")
+            .AddUser(out var admin, u => u.Roles = ["Admin"])
             .Under(tenant);
         await InsertAsync(tenant);
         await InsertAsync(admin);

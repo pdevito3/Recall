@@ -1749,17 +1749,6 @@ namespace Recall.Server.Databases.Migrations
                                 .HasColumnName("email");
                         });
 
-                    b.ComplexProperty(typeof(Dictionary<string, object>), "Role", "Recall.Server.Domain.Users.User.Role#UserRole", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("Value")
-                                .IsRequired()
-                                .HasMaxLength(50)
-                                .HasColumnType("TEXT")
-                                .HasColumnName("role");
-                        });
-
                     b.HasKey("Id")
                         .HasName("pk_users");
 
@@ -1784,6 +1773,12 @@ namespace Recall.Server.Databases.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("id")
                         .UseCollation("BINARY");
+
+                    b.Property<string>("Effect")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("effect");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("INTEGER")
@@ -1823,6 +1818,54 @@ namespace Recall.Server.Databases.Migrations
                         .HasDatabaseName("ix_user_permissions_user_id");
 
                     b.ToTable("user_permissions", (string)null);
+                });
+
+            modelBuilder.Entity("Recall.Server.Domain.Users.UserRoleAssignment", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id")
+                        .UseCollation("BINARY");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("LastModifiedOn")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_modified_on");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id")
+                        .UseCollation("BINARY");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.ComplexProperty(typeof(Dictionary<string, object>), "Role", "Recall.Server.Domain.Users.UserRoleAssignment.Role#UserRole", b1 =>
+                        {
+                            b1.IsRequired();
+
+                            b1.Property<string>("Value")
+                                .IsRequired()
+                                .HasMaxLength(50)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("role");
+                        });
+
+                    b.HasKey("Id")
+                        .HasName("pk_user_roles");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_user_roles_user_id");
+
+                    b.ToTable("user_roles", (string)null);
                 });
 
             modelBuilder.Entity("Recall.Server.Auth.Entities.AppCode", b =>
@@ -2064,6 +2107,18 @@ namespace Recall.Server.Databases.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Recall.Server.Domain.Users.UserRoleAssignment", b =>
+                {
+                    b.HasOne("Recall.Server.Domain.Users.User", "User")
+                        .WithMany("Roles")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_roles_users_user_id");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Recall.Server.Domain.Agents.Agent", b =>
                 {
                     b.Navigation("Permissions");
@@ -2078,6 +2133,8 @@ namespace Recall.Server.Databases.Migrations
 
             modelBuilder.Entity("Recall.Server.Domain.Users.User", b =>
                 {
+                    b.Navigation("Roles");
+
                     b.Navigation("UserPermissions");
                 });
 #pragma warning restore 612, 618

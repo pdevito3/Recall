@@ -29,7 +29,7 @@ public static class DomainEventTestServices
     {
         await scope.StartGraph(out _)
             .AddTenant(out var tenant)
-            .AddUsers(out var users, u => u.Role = "Admin", u => u.Role = "User", u => u.Role = "User")
+            .AddUsers(out var users, u => u.Roles = ["Admin"], u => u.Roles = [], u => u.Roles = [])
             .BuildAsync();
         scope.SetUserWithDefaults(identifier: users[0].Identifier);
         return new TenantScenario(tenant, users[0], users[1], users[2]);
@@ -44,6 +44,6 @@ public static class DomainEventTestServices
     public static User NewUser(string tenantId, string identifier) => User.Create(new FakeUserForCreation()
         .RuleFor(u => u.TenantId, _ => tenantId)
         .RuleFor(u => u.Identifier, _ => identifier)
-        .RuleFor(u => u.Role, _ => "User")
+        .RuleFor(u => u.Roles, _ => [])
         .Generate());
 }

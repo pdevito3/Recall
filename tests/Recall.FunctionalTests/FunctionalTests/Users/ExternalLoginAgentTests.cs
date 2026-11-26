@@ -21,7 +21,7 @@ public class ExternalLoginAgentTests : TestBase
         // Arrange
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var admin, u => u.Role = "Admin")
+            .AddUser(out var admin, u => u.Roles = ["Admin"])
             .Under(tenant)
             .AddAgents(out var agents, a =>
             {

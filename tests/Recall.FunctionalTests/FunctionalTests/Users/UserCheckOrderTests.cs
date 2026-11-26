@@ -17,7 +17,7 @@ public class UserCheckOrderTests : TestBase
     public async Task body_that_does_not_bind_is_a_bad_request_for_a_caller_without_the_permission()
     {
         // Arrange
-        await AddUserAsync("User");
+        await AddUserAsync("Member");
         var dto = new FakeUserForUpdateDto().Generate();
 
         // Act
@@ -34,7 +34,7 @@ public class UserCheckOrderTests : TestBase
     public async Task unknown_id_is_forbidden_for_a_caller_without_the_permission()
     {
         // Arrange
-        await AddUserAsync("User");
+        await AddUserAsync("Member");
 
         // Act
         var result = await FactoryClient.PutJsonRequestAsync(ApiRoutes.Users.Put(UnknownUserId()),
@@ -97,7 +97,7 @@ public class UserCheckOrderTests : TestBase
     {
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var user, u => u.Role = role);
+            .AddUser(out var user, u => u.Roles = RolesOf(role));
         await InsertAsync(tenant);
         await InsertAsync(user);
         FactoryClient.SignInAsAppUser(user.Identifier);
@@ -105,4 +105,6 @@ public class UserCheckOrderTests : TestBase
     }
 
     private static string UnknownUserId() => EntityId.New(User.IdPrefix);
+
+    private static IReadOnlyList<string> RolesOf(string role) => role == "Member" ? [] : [role];
 }

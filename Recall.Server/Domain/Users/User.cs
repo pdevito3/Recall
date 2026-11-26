@@ -21,9 +21,13 @@ public class User : BaseEntity, ITenantable, IDeletedWithEvent
     [Sensitive] public string Identifier { get; private set; } = default!;
     [Sensitive] public EmailAddress? Email { get; private set; }
     [Sensitive] public string Username { get; private set; } = default!;
-    [NotSensitive] public UserRole Role { get; private set; } = default!;
+
+    private readonly List<UserRoleAssignment> _roles = [];
+    /// <summary>The roles of the user. A user with no role is a Member.</summary>
+    public IReadOnlyCollection<UserRoleAssignment> Roles => _roles.AsReadOnly();
 
     private readonly List<UserPermission> _userPermissions = [];
+    /// <summary>The overrides of the user on top of <see cref="Roles"/>. See <see cref="Permissions"/>.</summary>
     public IReadOnlyCollection<UserPermission> UserPermissions => _userPermissions.AsReadOnly();
 
     public string FullName => LastName is null ? FirstName : $"{FirstName} {LastName}";
@@ -42,13 +46,17 @@ public class User : BaseEntity, ITenantable, IDeletedWithEvent
             Identifier = userForCreation.Identifier,
             Email = EmailOf(userForCreation.Email),
             Username = userForCreation.Username,
-            Role = UserRole.Of(userForCreation.Role)
         };
-        // Set the ID before the permissions, because each permission copies the user ID.
+        // Set the ID before the roles, because each role copies the user ID.
         if (userForCreation.Id is not null)
             user.SetId(userForCreation.Id);
 
-        user.ResetPermissionsToDefault();
+        foreach (var (name, i) in userForCreation.Roles.Select((name, i) => (name, i)))
+        {
+            var role = UserRole.Of(name, $"roles[{i}]");
+            if (!user.HasRole(role))
+                user._roles.Add(UserRoleAssignment.Create(user, role));
+        }
 
         ValidateUser(user);
         user.QueueDomainEvent(new UserCreated(user.Id));
@@ -56,7 +64,7 @@ public class User : BaseEntity, ITenantable, IDeletedWithEvent
         return user;
     }
 
-    public static User CreateFromLogin(NewPerson person, string tenantId, UserRole role)
+    public static User CreateFromLogin(NewPerson person, string tenantId, IReadOnlyList<UserRole> roles)
     {
         var id = EntityId.New(IdPrefix);
         return Create(new UserForCreation
@@ -68,7 +76,7 @@ public class User : BaseEntity, ITenantable, IDeletedWithEvent
             Identifier = id,
             Email = person.Email,
             Username = person.Username,
-            Role = role.Value,
+            Roles = roles.Select(r => r.Value).ToList(),
         });
     }
 
@@ -99,59 +107,88 @@ public class User : BaseEntity, ITenantable, IDeletedWithEvent
         return this;
     }
 
-    public User UpdateRole(UserRole newRole)
-    {
-        if (newRole == Role)
-            return this;
+    public bool HasRole(UserRole role) => _roles.Any(x => x.Role == role);
 
-        Role = newRole;
-        ResetPermissionsToDefault();
+    /// <summary>
+    /// Adds the role, and ends each override of a permission that the role gives: a Deny, so the user holds each
+    /// permission of the role after the add, and a Grant, which the role makes redundant. A second add of a role that
+    /// the user has ends the same overrides, so it sets the user back to each permission of the role.
+    /// </summary>
+    public RoleChange AddRole(UserRole role)
+    {
+        var given = role.Permissions().ToHashSet();
+        var cleared = _userPermissions.Where(x => given.Contains(x.Permission)).ToList();
+        foreach (var row in cleared)
+            _userPermissions.Remove(row);
+
+        var added = HasRole(role) ? null : UserRoleAssignment.Create(this, role);
+        if (added is not null)
+            _roles.Add(added);
+
+        var change = new RoleChange(added, null, cleared);
+        if (change.Changed)
+            QueueDomainEvent(new UserUpdated(Id));
+        return change;
+    }
+
+    /// <summary>
+    /// Removes the role. A permission that another role or an added permission gives stays. A Deny of a permission that
+    /// no role left gives ends, because it removes nothing, so the overrides hold only what differs from the roles.
+    /// </summary>
+    public RoleChange RemoveRole(UserRole role)
+    {
+        var removed = _roles.FirstOrDefault(x => x.Role == role);
+        if (removed is null)
+            return RoleChange.None;
+
+        _roles.Remove(removed);
+        var given = FromRoles();
+        var cleared = _userPermissions.Where(x => x.Effect == PermissionEffect.Deny && !given.Contains(x.Permission)).ToList();
+        foreach (var row in cleared)
+            _userPermissions.Remove(row);
+
         QueueDomainEvent(new UserUpdated(Id));
-
-        return this;
+        return new RoleChange(null, removed, cleared);
     }
 
-    public User AddPermission(Permission permission)
+    /// <summary>
+    /// Gives the user the permission. A removal of it ends, and an addition is kept only when no role gives it, so
+    /// the overrides hold only what differs from the roles.
+    /// </summary>
+    public OverrideChange AddPermission(Permission permission)
+        => SetOverride(permission, FromRoles().Contains(permission) ? null : PermissionEffect.Grant);
+
+    /// <summary>
+    /// Takes the permission away from the user. An addition of it ends, and a removal is kept only when a role gives it.
+    /// </summary>
+    public OverrideChange RemovePermission(Permission permission)
+        => SetOverride(permission, FromRoles().Contains(permission) ? PermissionEffect.Deny : null);
+
+    private OverrideChange SetOverride(Permission permission, PermissionEffect? effect)
     {
-        if (_userPermissions.Any(x => x.Permission == permission))
-            return this;
+        var existing = _userPermissions.FirstOrDefault(x => x.Permission == permission);
+        if (existing?.Effect == effect)
+            return OverrideChange.None;
 
-        var userPermission = UserPermission.Create(this, permission);
-        _userPermissions.Add(userPermission);
+        if (existing is not null)
+            _userPermissions.Remove(existing);
+        var added = effect is { } e ? UserPermission.Create(this, permission, e) : null;
+        if (added is not null)
+            _userPermissions.Add(added);
 
-        return this;
+        return new OverrideChange(added, existing);
     }
 
-    public User AddPermissions(IEnumerable<Permission> permissions)
-    {
-        foreach (var permission in permissions)
-        {
-            AddPermission(permission);
-        }
+    /// <summary>The permissions that the user holds: <see cref="Roles"/> with <see cref="UserPermissions"/> on top.</summary>
+    /// <remarks>Load <see cref="Roles"/> and <see cref="UserPermissions"/> first.</remarks>
+    public IReadOnlySet<Permission> Permissions()
+        => EffectivePermissions.Of(
+            _roles.Select(x => x.Role),
+            _userPermissions.Where(x => x.Effect == PermissionEffect.Grant).Select(x => x.Permission),
+            _userPermissions.Where(x => x.Effect == PermissionEffect.Deny).Select(x => x.Permission));
 
-        return this;
-    }
-
-    public User RemovePermission(UserPermission permission)
-    {
-        _userPermissions.RemoveAll(x => x.Id == permission.Id);
-        return this;
-    }
-
-    public User RemovePermission(Permission permission)
-    {
-        _userPermissions.RemoveAll(x => x.Permission == permission);
-        return this;
-    }
-
-    public User ResetPermissionsToDefault()
-    {
-        _userPermissions.Clear();
-        var defaultPermissions = Role.GetDefaultPermissions();
-        AddPermissions(defaultPermissions);
-
-        return this;
-    }
+    /// <summary>The permissions that the user would hold with no override.</summary>
+    public IReadOnlySet<Permission> FromRoles() => EffectivePermissions.FromRoles(_roles.Select(x => x.Role));
 
     /// <summary>
     /// Call it in the feature that removes the user. A handler of <see cref="UserDeleted"/> in another domain can then
@@ -173,18 +210,28 @@ public class User : BaseEntity, ITenantable, IDeletedWithEvent
 
     bool IDeletedWithEvent.DeleteQueued => DeleteQueued;
 
-    public bool HasPermission(Permission permission)
-        => _userPermissions.Any(x => x.Permission == permission);
+    public bool HasPermission(Permission permission) => Permissions().Contains(permission);
 
     /// <summary>
     /// The actions that the caller can send for this user now. The read DTO carries them, so the SPA shows a button
     /// only for an action that <see cref="GuardAllows"/> lets through.
     /// </summary>
-    /// <remarks>Load <see cref="UserPermissions"/> first, because two actions read them.</remarks>
+    /// <remarks>Load <see cref="Roles"/> and <see cref="UserPermissions"/> first, because some actions read them.</remarks>
     public IReadOnlyList<UserAction> AllowedActions(Caller caller)
     {
         var permissions = CurrentPermissions();
         return UserAction.AllowedFor(OnThisRecord(caller, permissions), Id, permissions);
+    }
+
+    /// <summary>
+    /// The roles that the user lacks and the caller can add now: the caller may send AddRole and holds each permission
+    /// of the role, as the command requires.
+    /// </summary>
+    /// <remarks>Load <see cref="Roles"/> and <see cref="UserPermissions"/> first.</remarks>
+    public IReadOnlyList<UserRole> AddableRoles(Caller caller)
+    {
+        var permissions = CurrentPermissions();
+        return UserRole.AddableBy(OnThisRecord(caller, permissions), Id, permissions, _roles.Select(x => x.Role.Value));
     }
 
     /// <summary>The check that each command of <see cref="UserAction"/> makes after it loads the user.</summary>
@@ -195,7 +242,7 @@ public class User : BaseEntity, ITenantable, IDeletedWithEvent
         action.Guard(OnThisRecord(caller, permissions), Id, permissions);
     }
 
-    private Permission[] CurrentPermissions() => _userPermissions.Select(x => x.Permission).ToArray();
+    private Permission[] CurrentPermissions() => [.. Permissions()];
 
     // A member holds the permissions of their own user. After a command changes them, the caller that the handler
     // loaded still has the old set, so the response would list the actions from before the change.
@@ -231,8 +278,26 @@ public class User : BaseEntity, ITenantable, IDeletedWithEvent
             $"A username can have no more than {UsernameMaxLength} characters.");
         Exceptions.ValidationException.ThrowWhenHasCharacterNotStorable(user.Username, "username",
             "A username has a character that is not allowed.");
-        Exceptions.ValidationException.ThrowWhenNull(user.Role, "role", "Please provide a role.");
     }
 
     protected User() : base(IdPrefix) { } // For EF Core
+}
+
+/// <summary>
+/// The rows that a change of an override adds and removes. The navigation uses field access, so the handler tells the
+/// context about each row.
+/// </summary>
+public sealed record OverrideChange(UserPermission? Added, UserPermission? Removed)
+{
+    public static OverrideChange None { get; } = new(null, null);
+
+    public bool Changed => Added is not null || Removed is not null;
+}
+
+/// <summary>The rows that a change of a role adds and removes, with each override that the change ends.</summary>
+public sealed record RoleChange(UserRoleAssignment? Added, UserRoleAssignment? Removed, IReadOnlyList<UserPermission> ClearedOverrides)
+{
+    public static RoleChange None { get; } = new(null, null, []);
+
+    public bool Changed => Added is not null || Removed is not null || ClearedOverrides.Count > 0;
 }

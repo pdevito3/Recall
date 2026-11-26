@@ -20,8 +20,11 @@ const bob: UserDto = {
   identifier: 'bob',
   email: 'bob@example.com',
   username: 'bob',
-  role: 'User',
+  roles: [],
   permissions: [],
+  addedPermissions: [],
+  removedPermissions: [],
+  addableRoles: [],
   allowedActions: ['IssueTemporaryPassword'],
   version: 1,
 }

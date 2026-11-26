@@ -27,18 +27,18 @@ A SQL span with no tag gives no help. Compare one trace before and after the rul
 
 ```
 Before:
-PUT api/v{version}/users/{id}/role
-└─ UpdateUserRole.Command            430ms   app.caller.kind=user  app.caller.tenant_id=ten_01J...
+DELETE api/v{version}/users/{id}/roles/{role}
+└─ RemoveUserRole.Command            430ms   app.caller.kind=user  app.caller.tenant_id=ten_01J...
    ├─ <database>                     412ms
    └─ <database>                       8ms
 
 After:
-PUT api/v{version}/users/{id}/role
-└─ UpdateUserRole.Command            430ms   app.caller.kind=user  app.caller.tenant_id=ten_01J...
+DELETE api/v{version}/users/{id}/roles/{role}
+└─ RemoveUserRole.Command            430ms   app.caller.kind=user  app.caller.tenant_id=ten_01J...
                                               app.user_id=usr_01J...  app.user.role=Admin
-   ├─ SQL: users.update_role.load    412ms   code.file.path=.../UpdateUserRole.cs  code.line.number=34
+   ├─ SQL: users.remove_role.load    412ms   code.file.path=.../RemoveUserRole.cs  code.line.number=33
    └─ SQL: <the save>                  8ms
-Log: Changed the role of user usr_01J... to Admin   CallSite=UpdateUserRole.cs:Handle@71  CallerTenantId=ten_01J...
+Log: Removed the role Admin from user usr_01J...   CallSite=RemoveUserRole.cs:Handle@50  CallerTenantId=ten_01J...
 ```
 
 ## The support questions
@@ -62,7 +62,7 @@ Write telemetry to answer a question that a person asks during an incident. If n
 1. Tag each EF query with `TagWithOperationCallSite`.
    - Put the tag directly after the `DbSet`. If you build the query in parts, tag the first part.
    - The tag must be on the `IQueryable`, before `ToListAsync` or `FirstOrDefaultAsync`.
-   - Use a constant name in the form `area.operation`, for example `users.update_role.load`. Never put an id or a value in the name.
+   - Use a constant name in the form `area.operation`, for example `users.remove_role.load`. Never put an id or a value in the name.
    - Before you add a name, search the code for it. Each name identifies one query.
    - The build refuses a query on a `DbSet` of `AppDbContext` that has no `TagWithOperationCallSite` (FSTTEL001). The build follows the query through `?:`, `??`, and a `switch` expression.
    - If a method returns an untagged query as an `IQueryable`, also through an `IQueryable` local that the method returns, the build checks each caller of the method and refuses a caller that does not tag the query (FSTTEL003). This check needs the whole project, so the IDE shows it only after a build.
@@ -77,7 +77,7 @@ Write telemetry to answer a question that a person asks during an incident. If n
    - The build refuses a request handler that calls `SaveChangesAsync` or `SaveChanges` and has no `Activity.Current?.SetTag` with a constant name of the form `app.*_id` (FSTTEL002). A local that holds `Activity.Current` also counts.
 3. Write an `Information` log for each state change or business decision that a person can need later.
    - Write one log for each outcome, not one log for each step.
-   - Put the ids in named properties: `_logger.Here().Information("Changed the role of user {UserId} to {Role}", user.Id, role)`.
+   - Put the ids in named properties: `_logger.Here().Information("Removed the role {Role} from user {UserId}", role.Value, user.Id)`.
    - Use a message template. Do not use string interpolation.
    - Do not write a log that only repeats a span, such as "Handling UpdateUser" or "Query done".
    - The build refuses a request handler that calls `SaveChangesAsync` or `SaveChanges` and has no `_logger.Here().Information` call with a constant message template (FSTTEL002). The build checks only that the handler has the log, not that each outcome has one. The build does not see a save in another service that the handler calls.
@@ -155,7 +155,7 @@ Production keeps `Information` and higher (`appsettings.json`). Thus a `Debug` l
 
 ## Example
 
-`UpdateUserRole` has this telemetry. A role change gives or removes access, so support needs to find it later.
+`RemoveUserRole` has this telemetry, and `AddUserRole` has the same. A role change gives or removes access, so support needs to find it later.
 
 `Domain/Users/UserMetrics.cs`:
 
@@ -171,13 +171,13 @@ public static class UserMetrics
     public static readonly Counter<long> RoleChanged = Telemetry.Meter.CreateCounter<long>(
         "app.users.role_changed",
         unit: "{user}",
-        description: "Number of role changes, tagged with the new role");
+        description: "Number of role changes, tagged with the role and with the change, added or removed");
 }
 ```
 
-`Domain/Users/Features/UpdateUserRole/UpdateUserRole.cs`, the telemetry lines and the lines around them:
+`Domain/Users/Features/RemoveUserRole/RemoveUserRole.cs`, the telemetry lines and the lines around them:
 
-<!-- code: Recall.Server/Domain/Users/Features/UpdateUserRole/UpdateUserRole.cs -->
+<!-- code: Recall.Server/Domain/Users/Features/RemoveUserRole/RemoveUserRole.cs -->
 ```csharp
 private readonly ILogger _logger = Log.ForContext<Handler>();
 
@@ -186,24 +186,25 @@ public async Task<UserDto> Handle(Command request, CancellationToken cancellatio
     Activity.Current?.SetTag("app.user_id", request.Id);
 
     var caller = await permissionGuard.GetCallerAsync(cancellationToken);
-    UserAction.UpdateRole().GuardBeforeLoad(caller, request.Id);
-    var newRole = UserRole.Of(request.Role);
-    Activity.Current?.SetTag("app.user.role", newRole.Value);
-    // ...
-    var (user, oldRole) = await LastAdmin.RunWithTenantLockAsync(dbContext, request.Id, async ct =>
+    UserAction.RemoveRole().GuardBeforeLoad(caller, request.Id);
+    var role = UserRole.Of(request.Role);
+    Activity.Current?.SetTag("app.user.role", role.Value);
+
+    var (user, removed) = await LastAdmin.RunWithTenantLockAsync(dbContext, request.Id, async ct =>
     {
         // ...
-        var oldRole = user.Role;
-        user.UpdateRole(newRole);
-        // ...
+        var change = user.RemoveRole(role);
+        dbContext.Track(change);
         await dbContext.SaveChangesAsync(ct);
-        return (user, oldRole);
+        return (user, change.Changed);
     }, cancellationToken);
 
-    if (newRole != oldRole)
+    if (removed)
     {
-        _logger.Here().Information("Changed the role of user {UserId} to {Role}", user.Id, newRole.Value);
-        UserMetrics.RoleChanged.Add(1, new KeyValuePair<string, object?>("app.user.role", newRole.Value));
+        _logger.Here().Information("Removed the role {Role} from user {UserId}", role.Value, user.Id);
+        UserMetrics.RoleChanged.Add(1,
+            new KeyValuePair<string, object?>("app.user.role", role.Value),
+            new KeyValuePair<string, object?>("app.user.role_change", "removed"));
     }
 
     return user.ToUserDto(caller, await UserLoginNames.OfAsync(dbContext, user.Id, cancellationToken));
@@ -212,10 +213,10 @@ public async Task<UserDto> Handle(Command request, CancellationToken cancellatio
 
 The example obeys these rules:
 
-- The id is on the span, and the log has it as a property. The metric has the role only.
+- The id is on the span, and the log has it as a property. The metric has the role and the kind of change only.
 - The role is a value from a fixed set, so it is safe as a metric tag.
 - The log and the metric come after the save. Thus they record only a change that the database kept.
-- A request for the role that the user already has changes no role. Thus it writes no log and counts nothing.
+- A removal of a role that the user does not have changes nothing. Thus it writes no log and counts nothing.
 
 ## Test the telemetry
 

@@ -15,6 +15,6 @@ public sealed class FakeUserForCreation : AutoFaker<UserForCreation>
         RuleFor(x => x.Identifier, UserRules.Identifier);
         RuleFor(x => x.Email, UserRules.Email);
         RuleFor(x => x.Username, UserRules.Username);
-        RuleFor(x => x.Role, UserRules.Role);
+        RuleFor(x => x.Roles, UserRules.Roles);
     }
 }

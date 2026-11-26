@@ -6294,6 +6294,118 @@
         }
       }
     },
+    "/api/v1/users/{id}/roles": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Adds a role to a User. The permissions of the roles add up. The user then holds each permission of the role, so a removed permission of the role comes back.",
+        "operationId": "AddUserRole",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Recall-User",
+            "in": "header",
+            "description": "The `sub` of `GET /auth/me` when the page opened. A request with the session cookie must send it, and any other value gets a 409 problem with the type `urn:recall:problem:page-user-mismatch`. A request with a bearer token does not send it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserRoleDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          },
+          "507": {
+            "description": "The disk of the server is full, so nothing changed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/users/{id}": {
       "delete": {
         "tags": [
@@ -7227,16 +7339,24 @@
         }
       }
     },
-    "/api/v1/users/{id}/role": {
-      "put": {
+    "/api/v1/users/{id}/roles/{role}": {
+      "delete": {
         "tags": [
           "Users"
         ],
-        "summary": "Updates a User's role. This resets all permissions to the new role's defaults.",
-        "operationId": "UpdateUserRole",
+        "summary": "Removes a role from a User. A permission that another role or an added permission gives stays.",
+        "operationId": "RemoveUserRole",
         "parameters": [
           {
             "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "role",
             "in": "path",
             "required": true,
             "schema": {
@@ -7252,16 +7372,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateUserRoleDto"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "200": {
             "description": "OK",
@@ -7289,16 +7399,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
                 }
               }
             }
@@ -8104,7 +8204,7 @@
           "lastName",
           "email",
           "username",
-          "role"
+          "roles"
         ],
         "type": "object",
         "properties": {
@@ -8128,12 +8228,17 @@
             "maxLength": 100,
             "type": "string"
           },
-          "role": {
-            "enum": [
-              "Admin",
-              "User"
-            ],
-            "type": "string"
+          "roles": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "Admin",
+                "Auditor",
+                "UserManager"
+              ],
+              "type": "string"
+            },
+            "description": "The roles of the new user. An empty list makes a Member, who has only their own journal."
           }
         }
       },
@@ -10201,21 +10306,6 @@
         },
         "description": "What a person needs to know about the work behind all audio, whatever the Recording."
       },
-      "UpdateUserRoleDto": {
-        "required": [
-          "role"
-        ],
-        "type": "object",
-        "properties": {
-          "role": {
-            "enum": [
-              "Admin",
-              "User"
-            ],
-            "type": "string"
-          }
-        }
-      },
       "UserDto": {
         "required": [
           "id",
@@ -10224,9 +10314,12 @@
           "fullName",
           "identifier",
           "username",
-          "role",
+          "roles",
           "permissions",
+          "addedPermissions",
+          "removedPermissions",
           "allowedActions",
+          "addableRoles",
           "version"
         ],
         "type": "object",
@@ -10268,12 +10361,17 @@
             ],
             "description": "The name that the user types to sign in with a password. Null until a first temporary password sets it."
           },
-          "role": {
-            "enum": [
-              "Admin",
-              "User"
-            ],
-            "type": "string"
+          "roles": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "Admin",
+                "Auditor",
+                "UserManager"
+              ],
+              "type": "string"
+            },
+            "description": "The roles of the user. The permissions of each role add up. No role means a Member."
           },
           "permissions": {
             "type": "array",
@@ -10290,23 +10388,73 @@
                 "read_users"
               ],
               "type": "string"
-            }
+            },
+            "description": "The permissions that the user holds: those of the roles, with the added ones, less the removed ones."
+          },
+          "addedPermissions": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "manage_agents",
+                "manage_model_providers",
+                "manage_tenant",
+                "manage_user_access",
+                "manage_users",
+                "read_agents",
+                "read_audit_log",
+                "read_audit_log_sensitive",
+                "read_users"
+              ],
+              "type": "string"
+            },
+            "description": "The permissions that this user holds and no role of the user gives."
+          },
+          "removedPermissions": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "manage_agents",
+                "manage_model_providers",
+                "manage_tenant",
+                "manage_user_access",
+                "manage_users",
+                "read_agents",
+                "read_audit_log",
+                "read_audit_log_sensitive",
+                "read_users"
+              ],
+              "type": "string"
+            },
+            "description": "The permissions that a role of the user gives and this user does not hold."
           },
           "allowedActions": {
             "type": "array",
             "items": {
               "enum": [
                 "AddPermission",
+                "AddRole",
                 "Delete",
                 "IssueTemporaryPassword",
                 "ManageExternalLogins",
                 "RemovePermission",
-                "Update",
-                "UpdateRole"
+                "RemoveRole",
+                "Update"
               ],
               "type": "string"
             },
             "description": "The actions that the caller can send for this user now. A button in the SPA reads this list."
+          },
+          "addableRoles": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "Admin",
+                "Auditor",
+                "UserManager"
+              ],
+              "type": "string"
+            },
+            "description": "The roles that the user does not have and the caller can add now. Empty when the caller cannot add a role."
           },
           "version": {
             "maximum": 4294967295,
@@ -10319,7 +10467,7 @@
         "required": [
           "firstName",
           "username",
-          "role"
+          "roles"
         ],
         "type": "object",
         "properties": {
@@ -10352,12 +10500,17 @@
             "maxLength": 100,
             "type": "string"
           },
-          "role": {
-            "enum": [
-              "Admin",
-              "User"
-            ],
-            "type": "string"
+          "roles": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "Admin",
+                "Auditor",
+                "UserManager"
+              ],
+              "type": "string"
+            },
+            "description": "The roles of the new user. An empty list makes a Member, who has only their own journal."
           }
         }
       },
@@ -10416,6 +10569,22 @@
               "read_audit_log",
               "read_audit_log_sensitive",
               "read_users"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "UserRoleDto": {
+        "required": [
+          "role"
+        ],
+        "type": "object",
+        "properties": {
+          "role": {
+            "enum": [
+              "Admin",
+              "Auditor",
+              "UserManager"
             ],
             "type": "string"
           }

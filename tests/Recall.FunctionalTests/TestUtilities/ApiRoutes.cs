@@ -17,7 +17,8 @@ public static class ApiRoutes
         public static string Initiate => $"{Base}/users/initiate";
         public static string Put(string id) => $"{Base}/users/{id}";
         public static string Delete(string id) => $"{Base}/users/{id}";
-        public static string UpdateRole(string id) => $"{Base}/users/{id}/role";
+        public static string AddRole(string id) => $"{Base}/users/{id}/roles";
+        public static string RemoveRole(string id, string role) => $"{Base}/users/{id}/roles/{role}";
         public static string AddPermission(string id) => $"{Base}/users/{id}/permissions";
         public static string RemovePermission(string id, string permission) => $"{Base}/users/{id}/permissions/{permission}";
     }

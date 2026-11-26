@@ -88,12 +88,13 @@ public class StringColumnLengthTests
 
     private static readonly Dictionary<string, IReadOnlyList<string>> FixedOptionColumns = new()
     {
-        ["users.role"] = UserRole.ListNames(),
+        ["user_roles.role"] = UserRole.ListNames(),
         ["model_providers.kind"] = Enum.GetNames<ModelProviderKind>(),
         ["sessions.cleanup_failure"] = Enum.GetNames<CleanupFailure>(),
         ["agents.mode"] = [AgentMode.Delegated().Value, AgentMode.Machine().Value],
         ["audit_entries.kind"] = Enum.GetNames<AuditEntryKind>(),
         ["user_permissions.permission"] = Permission.GetAll().Select(p => p.Value).ToList(),
+        ["user_permissions.effect"] = Enum.GetNames<PermissionEffect>(),
         ["agent_permissions.permission"] = Permission.GetAll().Select(p => p.Value).ToList(),
         ["auth_sessions.client_kind"] = SessionKindText.All,
         ["auth_sessions.revoked_reason"] = RevokeReasonText.All,

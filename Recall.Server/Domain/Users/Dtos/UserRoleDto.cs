@@ -2,7 +2,7 @@ namespace Recall.Server.Domain.Users.Dtos;
 
 using Resources;
 
-public sealed record UpdateUserRoleDto
+public sealed record UserRoleDto
 {
     [RequiredField]
     [NamesOf<UserRole>]

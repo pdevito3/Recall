@@ -20,7 +20,7 @@ public sealed record UserForCreationDto
     [RequiredField]
     [SchemaMaxLength(typeof(User), nameof(User.UsernameMaxLength))]
     public string Username { get; init; } = default!;
-    [RequiredField]
+    /// <summary>The roles of the new user. An empty list makes a Member, who has only their own journal.</summary>
     [NamesOf<UserRole>]
-    public string Role { get; init; } = default!;
+    public IReadOnlyList<string> Roles { get; init => field = value ?? []; } = [];
 }

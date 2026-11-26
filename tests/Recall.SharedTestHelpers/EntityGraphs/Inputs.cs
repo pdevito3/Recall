@@ -23,8 +23,11 @@ public sealed class UserInput
     public string? Email { get; set; }
     public string? Username { get; set; }
 
-    /// <summary>A <c>UserRole</c> name, for example "Admin" or "User". Role defaults give the permissions.</summary>
-    public string? Role { get; set; }
+    /// <summary>
+    /// The <c>UserRole</c> names of the user, for example <c>["Admin"]</c>. An empty list makes a Member. The roles
+    /// give the permissions. Null picks a random set.
+    /// </summary>
+    public IReadOnlyList<string>? Roles { get; set; }
 }
 
 public sealed class AgentInput

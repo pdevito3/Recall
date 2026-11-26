@@ -10,5 +10,5 @@ public sealed record UserForCreation
     public string Identifier { get; init; } = default!;
     public string? Email { get; init; }
     public string Username { get; init; } = default!;
-    public string Role { get; init; } = default!;
+    public IReadOnlyList<string> Roles { get; init; } = [];
 }

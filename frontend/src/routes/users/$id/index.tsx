@@ -14,10 +14,11 @@ import { TokenList } from '@/domain/personal-access-tokens/components/token-list
 import { useDeleteUser } from '@/domain/users/apis/delete-user'
 import { useCurrentUser } from '@/domain/users/apis/get-current-user'
 import { useUser } from '@/domain/users/apis/get-user'
-import { useUpdateUserRole } from '@/domain/users/apis/update-user-role'
+import { useAddUserRole, useRemoveUserRole } from '@/domain/users/apis/user-roles'
 import { UserKeys } from '@/domain/users/apis/user.keys'
 import { UserActions } from '@/domain/users/components/user-actions'
-import { ROLE_LABELS } from '@/domain/users/components/user-role'
+import { rolesWords } from '@/domain/users/components/user-role'
+import { inFormOrder, permissionLabel } from '@/domain/personal-access-tokens/components/permission-labels'
 import { leaveDeletedRecord } from '@/lib/leave-deleted-record'
 
 export const Route = createFileRoute('/users/$id/')({
@@ -32,7 +33,8 @@ function UserPage() {
   const managesLinks = user.data?.allowedActions.includes('ManageExternalLogins') ?? false
   const links = useUserExternalLogins(id, managesLinks)
   const currentUser = useCurrentUser()
-  const changeRole = useUpdateUserRole(id)
+  const addRole = useAddUserRole(id)
+  const removeRole = useRemoveUserRole(id)
   const remove = useDeleteUser()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -55,7 +57,7 @@ function UserPage() {
     )
   }
 
-  const { fullName, email, username, loginName, role } = user.data
+  const { fullName, email, username, loginName, roles, permissions, addedPermissions, removedPermissions } = user.data
 
   const handleDelete = () =>
     remove.mutate(id, {
@@ -70,7 +72,9 @@ function UserPage() {
       onError: () => headingRef.current?.focus(),
     })
 
-  const pendingAction = (changeRole.isPending && 'UpdateRole') || (remove.isPending && 'Delete') || undefined
+  const pendingAction =
+    (addRole.isPending && 'AddRole') || (removeRole.isPending && 'RemoveRole') || (remove.isPending && 'Delete') || undefined
+  const focusHeading = { onSettled: () => headingRef.current?.focus() }
 
   return (
     <Page>
@@ -83,15 +87,36 @@ function UserPage() {
           <dd>{username}</dd>
           <dt className="text-muted-foreground">Login name</dt>
           <dd>{loginName ?? 'Not set'}</dd>
-          <dt className="text-muted-foreground">Role</dt>
-          <dd>{ROLE_LABELS[role]}</dd>
+          <dt className="text-muted-foreground">Roles</dt>
+          <dd>{rolesWords(roles)}</dd>
         </dl>
+      </section>
+      <section className="flex flex-col gap-2" aria-labelledby="user-permissions">
+        <h2 id="user-permissions" className="text-lg font-semibold">Permissions</h2>
+        {permissions.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Only their own journal.</p>
+        ) : (
+          <ul aria-label={`Permissions of ${fullName}`} className="flex flex-col gap-1 text-sm">
+            {inFormOrder(permissions).map((permission) => (
+              <li key={permission}>
+                {permissionLabel(permission)}
+                {addedPermissions.includes(permission) && <span className="text-muted-foreground"> (added)</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+        {removedPermissions.length > 0 && (
+          <p className="text-sm text-muted-foreground">
+            Removed from the roles: {inFormOrder(removedPermissions).map(permissionLabel).join(', ')}
+          </p>
+        )}
       </section>
       <UserActions
         user={user.data}
         pendingAction={pendingAction}
         isSelf={currentUser.data ? currentUser.data.identifier === user.data.identifier : undefined}
-        onChangeRole={(newRole) => changeRole.mutate(newRole, { onSettled: () => headingRef.current?.focus() })}
+        onAddRole={(role) => addRole.mutate(role, focusHeading)}
+        onRemoveRole={(role) => removeRole.mutate(role, focusHeading)}
         onDelete={handleDelete}
       />
       {managesLinks && (

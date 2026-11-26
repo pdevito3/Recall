@@ -4,7 +4,7 @@
 
 A tenant admin adds a colleague to the tenant with an invite link. The admin creates the invite in the SPA, copies the link, and sends it in any way. The colleague opens the link, signs in with the auth provider, and joins the tenant with the role of the invite. This flow works with each auth provider, because the app does not create the account in the provider. The colleague creates or uses their own account, and the claim binds its `sub` to a new user record.
 
-The SPA also gets a users page. It lists the users of the tenant, changes the role of a user, and removes a user. These features use the user endpoints that exist.
+The SPA also gets a users page. It lists the users of the tenant, adds and removes the roles of a user, and removes a user. These features use the user endpoints that exist.
 
 This spec leaves out:
 
@@ -30,9 +30,9 @@ An invite also has a tenant, a token hash, an expiry, and, after a claim, the ID
 | ID | Rule | Enforced by | Backstop |
 |---|---|---|---|
 | UM-1 | The users page lists the users of the tenant of the caller, with a pager. | `GetUserList` and its tenant filter | |
-| UM-2 | The users page changes the role of a user. The page shows the control only to a caller who can change the role. | `UpdateUserRole` handler check | |
+| UM-2 | The users page adds a role to a user and removes a role from a user, and lists the permissions of the user with each added and removed permission. The page shows a control only to a caller who can send it. | `AddUserRole` and `RemoveUserRole` handler checks | |
 | UM-3 | The users page removes a user after the caller confirms. The page shows the control only to a caller who can remove the user. | `DeleteUser` handler check | |
-| INV-1 (later) | Only a caller with `manage_users` and each default permission of the role can create an invite. A caller cannot invite with a role that has more permissions than the caller has. | `AddInvite` handler check | |
+| INV-1 (later) | Only a caller with `manage_users` and each permission of the roles of the invite can create an invite. A caller cannot invite with a role that has more permissions than the caller has. | `AddInvite` handler check | |
 | INV-2 (later) | The server stores only a hash of the token. The create response gives the link one time only. A list or a get of an invite never gives the token. | `Invite.Create` | |
 | INV-3 (later) | The link puts the token in the URL fragment (`/join#token=...`), so the token is not in a server log or a `Referer` header. | SPA `join` route | |
 | INV-4 (later) | An invite expires 7 days after its creation. A claim of an expired invite fails. | `Invite.Claim` | |

@@ -45,7 +45,7 @@ public sealed class NewPersonTests
 
         // Act
         var person = NewPerson.FromClaims(profile);
-        var user = User.CreateFromLogin(person, EntityTenantId(), UserRole.User());
+        var user = User.CreateFromLogin(person, EntityTenantId(), []);
 
         // Assert
         person.FirstName.Length.ShouldBe(User.FirstNameMaxLength);
@@ -63,7 +63,7 @@ public sealed class NewPersonTests
 
         // Act
         var person = NewPerson.FromClaims(new Profile(given, null, null, null, null));
-        var user = User.CreateFromLogin(person, EntityTenantId(), UserRole.User());
+        var user = User.CreateFromLogin(person, EntityTenantId(), []);
 
         // Assert
         person.FirstName.Length.ShouldBe(User.FirstNameMaxLength - 1);

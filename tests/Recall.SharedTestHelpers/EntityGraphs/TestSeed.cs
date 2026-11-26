@@ -15,7 +15,7 @@ public sealed record TestSeed(Tenant Tenant, User User)
     public static TestSeed Generate()
     {
         var tenant = Tenant.Create(new FakeTenantForCreation().Generate());
-        var user = User.Create(new FakeUserForCreation().Generate() with { TenantId = tenant.Id, Role = UserRole.Admin() });
+        var user = User.Create(new FakeUserForCreation().Generate() with { TenantId = tenant.Id, Roles = [UserRole.Admin()] });
         return new TestSeed(tenant, user);
     }
 }

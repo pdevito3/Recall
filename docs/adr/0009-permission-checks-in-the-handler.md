@@ -4,6 +4,8 @@ Each command handler that changes the data of a tenant calls `IPermissionGuard` 
 
 > A later change: `GetUser` now loads the `Caller` and calls `Caller.RequireSelfOr`. `IPermissionGuard.RequireSelfOrAsync` is deleted.
 
+> A later change: a user has a set of roles, and the rows of `UserPermission` are overrides on top of them. The guard reads the roles and the overrides, and `EffectivePermissions` gives the permissions. `UpdateUserRole` is now `AddUserRole` and `RemoveUserRole`, and a new permission needs no `GrantPermissionToRole`: a role gives its permissions in code. See [ADR 0026](0026-roles-are-sets-of-permissions.md).
+
 A handler is shared by HTTP and MCP. A check in the handler thus applies to each transport, and each transport maps the exception: 403 with problem details or a `permission_denied` tool error.
 
 ## Considered options

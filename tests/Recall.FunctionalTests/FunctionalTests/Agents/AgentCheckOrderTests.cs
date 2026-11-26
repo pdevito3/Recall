@@ -1,5 +1,6 @@
 namespace Recall.FunctionalTests.FunctionalTests.Agents;
 
+using Recall.SharedTestHelpers.Fakes.User;
 using System.Net;
 using Recall.Server.Domain;
 using Recall.Server.Domain.Agents;
@@ -17,7 +18,7 @@ public class AgentCheckOrderTests : TestBase
         // Arrange
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var member, u => u.Role = "User")
+            .AddUser(out var member, u => u.Roles = [])
             .Under(tenant);
         member.AddPermissions([Permission.ManageAgents(), Permission.ReadAgents()]);
         await InsertAsync(tenant);
@@ -38,7 +39,7 @@ public class AgentCheckOrderTests : TestBase
         // Arrange
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var member, u => u.Role = "User")
+            .AddUser(out var member, u => u.Roles = [])
             .Under(tenant);
         member.AddPermissions([Permission.ManageAgents(), Permission.ReadAgents()]);
         await InsertAsync(tenant);

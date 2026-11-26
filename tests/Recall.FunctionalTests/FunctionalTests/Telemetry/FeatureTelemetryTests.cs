@@ -17,48 +17,74 @@ using Telemetry = Recall.Server.Resources.Telemetry;
 [NotInParallel]
 public class FeatureTelemetryTests : TestBase
 {
-    private const string RoleChangedTemplate = "Changed the role of user {UserId} to {Role}";
+    private const string RoleAddedTemplate = "Added the role {Role} to user {UserId}, ending {ClearedOverrides} overrides";
+    private const string RoleRemovedTemplate = "Removed the role {Role} from user {UserId}";
 
     [Test]
-    public async Task a_role_change_tags_the_user_and_the_role_and_logs_the_change()
+    public async Task a_role_add_tags_the_user_and_the_role_and_logs_the_add()
     {
         // Arrange
         var (admin, member) = await AddAdminAndMemberAsync();
         FactoryClient.SignInAsAppUser(admin.Identifier);
 
         // Act
-        var result = await FactoryClient.PutJsonRequestAsync(ApiRoutes.Users.UpdateRole(member.Id), new { role = "Admin" });
+        var result = await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.AddRole(member.Id), new { role = "Admin" });
 
         // Assert
         result.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var slice = UpdateUserRoleSpanOf(admin);
+        var slice = SpanOf("AddUserRole.Command", admin);
         slice.GetTagItem("app.user_id").ShouldBe(member.Id);
         slice.GetTagItem("app.user.role").ShouldBe("Admin");
 
         var log = TestingWebApplicationFactory.Instance.CapturedLogs.InTrace(slice.TraceId)
-            .Where(e => e.MessageTemplate.Text == RoleChangedTemplate)
+            .Where(e => e.MessageTemplate.Text == RoleAddedTemplate)
             .ShouldHaveSingleItem();
         Scalar(log, "UserId").ShouldBe(member.Id);
         Scalar(log, "Role").ShouldBe("Admin");
-        Scalar(log, "CallSite").ShouldBeOfType<string>().ShouldStartWith("UpdateUserRole.cs:Handle@");
+        Scalar(log, "ClearedOverrides").ShouldBe(0);
+        Scalar(log, "CallSite").ShouldBeOfType<string>().ShouldStartWith("AddUserRole.cs:Handle@");
     }
 
     [Test]
-    public async Task a_forbidden_role_change_has_the_user_on_its_span_and_logs_no_change()
+    public async Task a_role_removal_tags_the_user_and_the_role_and_logs_the_removal()
+    {
+        // Arrange
+        var (admin, member) = await AddAdminAndMemberAsync(["Auditor"]);
+        FactoryClient.SignInAsAppUser(admin.Identifier);
+
+        // Act
+        var result = await FactoryClient.DeleteRequestAsync(ApiRoutes.Users.RemoveRole(member.Id, "Auditor"));
+
+        // Assert
+        result.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var slice = SpanOf("RemoveUserRole.Command", admin);
+        slice.GetTagItem("app.user_id").ShouldBe(member.Id);
+        slice.GetTagItem("app.user.role").ShouldBe("Auditor");
+
+        var log = TestingWebApplicationFactory.Instance.CapturedLogs.InTrace(slice.TraceId)
+            .Where(e => e.MessageTemplate.Text == RoleRemovedTemplate)
+            .ShouldHaveSingleItem();
+        Scalar(log, "UserId").ShouldBe(member.Id);
+        Scalar(log, "Role").ShouldBe("Auditor");
+        Scalar(log, "CallSite").ShouldBeOfType<string>().ShouldStartWith("RemoveUserRole.cs:Handle@");
+    }
+
+    [Test]
+    public async Task a_forbidden_role_removal_has_the_user_on_its_span_and_logs_no_change()
     {
         // Arrange
         var (admin, member) = await AddAdminAndMemberAsync();
         FactoryClient.SignInAsAppUser(member.Identifier);
 
         // Act
-        var result = await FactoryClient.PutJsonRequestAsync(ApiRoutes.Users.UpdateRole(admin.Id), new { role = "User" });
+        var result = await FactoryClient.DeleteRequestAsync(ApiRoutes.Users.RemoveRole(admin.Id, "Admin"));
 
         // Assert
         result.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        var slice = UpdateUserRoleSpanOf(member);
+        var slice = SpanOf("RemoveUserRole.Command", member);
         slice.GetTagItem("app.user_id").ShouldBe(admin.Id);
         TestingWebApplicationFactory.Instance.CapturedLogs.InTrace(slice.TraceId)
-            .ShouldNotContain(e => e.MessageTemplate.Text == RoleChangedTemplate);
+            .ShouldNotContain(e => e.MessageTemplate.Text == RoleRemovedTemplate);
     }
 
     [Test]
@@ -82,7 +108,7 @@ public class FeatureTelemetryTests : TestBase
         // Arrange
         await StartGraph()
             .AddTenant(out var tenant)
-            .AddUser(out var member, u => u.Role = "User")
+            .AddUser(out var member, u => u.Roles = [])
             .Under(tenant)
             .AddAgent(out var agent)
             .BuildAsync();
@@ -97,42 +123,47 @@ public class FeatureTelemetryTests : TestBase
     }
 
     [Test]
-    public async Task a_role_change_counts_on_the_role_changed_metric_with_the_new_role()
+    public async Task a_role_add_and_a_role_removal_count_on_the_role_changed_metric_with_the_role_and_the_change()
     {
         // Arrange
         var (admin, member) = await AddAdminAndMemberAsync();
         FactoryClient.SignInAsAppUser(admin.Identifier);
-        var before = RoleChangedTotal("Admin");
+        var addedBefore = RoleChangedTotal("Auditor", "added");
+        var removedBefore = RoleChangedTotal("Auditor", "removed");
 
         // Act
-        var result = await FactoryClient.PutJsonRequestAsync(ApiRoutes.Users.UpdateRole(member.Id), new { role = "Admin" });
+        var added = await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.AddRole(member.Id), new { role = "Auditor" });
+        var addedAfter = RoleChangedTotal("Auditor", "added");
+        var removed = await FactoryClient.DeleteRequestAsync(ApiRoutes.Users.RemoveRole(member.Id, "Auditor"));
 
         // Assert
-        result.StatusCode.ShouldBe(HttpStatusCode.OK);
-        RoleChangedTotal("Admin").ShouldBeGreaterThan(before);
+        added.StatusCode.ShouldBe(HttpStatusCode.OK);
+        removed.StatusCode.ShouldBe(HttpStatusCode.OK);
+        addedAfter.ShouldBeGreaterThan(addedBefore);
+        RoleChangedTotal("Auditor", "removed").ShouldBeGreaterThan(removedBefore);
     }
 
     [Test]
-    public async Task a_request_for_the_same_role_logs_no_change_and_counts_no_change()
+    public async Task an_add_of_a_held_role_with_no_override_logs_no_change_and_counts_no_change()
     {
         // Arrange
-        var (admin, member) = await AddAdminAndMemberAsync();
+        var (admin, member) = await AddAdminAndMemberAsync(["UserManager"]);
         FactoryClient.SignInAsAppUser(admin.Identifier);
-        var before = RoleChangedTotal("User");
+        var before = RoleChangedTotal("UserManager", "added");
 
         // Act
-        var result = await FactoryClient.PutJsonRequestAsync(ApiRoutes.Users.UpdateRole(member.Id), new { role = "User" });
+        var result = await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.AddRole(member.Id), new { role = "UserManager" });
 
         // Assert
         result.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var slice = UpdateUserRoleSpanOf(admin);
+        var slice = SpanOf("AddUserRole.Command", admin);
         TestingWebApplicationFactory.Instance.CapturedLogs.InTrace(slice.TraceId)
-            .ShouldNotContain(e => e.MessageTemplate.Text == RoleChangedTemplate);
-        RoleChangedTotal("User").ShouldBe(before);
+            .ShouldNotContain(e => e.MessageTemplate.Text == RoleAddedTemplate);
+        RoleChangedTotal("UserManager", "added").ShouldBe(before);
     }
 
     [Test]
-    public async Task a_role_change_that_the_database_does_not_save_logs_no_change()
+    public async Task a_role_add_that_the_database_does_not_save_logs_no_change()
     {
         // Arrange
         var (admin, member) = await AddAdminAndMemberAsync();
@@ -140,13 +171,13 @@ public class FeatureTelemetryTests : TestBase
         TestingWebApplicationFactory.Instance.FailingSaves.Arm(member.Id);
 
         // Act
-        var result = await FactoryClient.PutJsonRequestAsync(ApiRoutes.Users.UpdateRole(member.Id), new { role = "Admin" });
+        var result = await FactoryClient.PostJsonRequestAsync(ApiRoutes.Users.AddRole(member.Id), new { role = "Admin" });
 
         // Assert
         result.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
-        var slice = UpdateUserRoleSpanOf(admin);
+        var slice = SpanOf("AddUserRole.Command", admin);
         TestingWebApplicationFactory.Instance.CapturedLogs.InTrace(slice.TraceId)
-            .ShouldNotContain(e => e.MessageTemplate.Text == RoleChangedTemplate);
+            .ShouldNotContain(e => e.MessageTemplate.Text == RoleAddedTemplate);
     }
 
     [Test]
@@ -210,16 +241,14 @@ public class FeatureTelemetryTests : TestBase
             .ShouldBeEmpty();
     }
 
-    private static async Task<(User Admin, User Member)> AddAdminAndMemberAsync()
+    private static async Task<(User Admin, User Member)> AddAdminAndMemberAsync(IReadOnlyList<string>? memberRoles = null)
     {
         await StartGraph()
             .AddTenant(out _)
-            .AddUsers(out var users, u => u.Role = "Admin", u => u.Role = "User")
+            .AddUsers(out var users, u => u.Roles = ["Admin"], u => u.Roles = memberRoles ?? [])
             .BuildAsync();
         return (users[0], users[1]);
     }
-
-    private Activity UpdateUserRoleSpanOf(User caller) => SpanOf("UpdateUserRole.Command", caller);
 
     private Activity SpanOf(string feature, User caller) => ExportedSpans()
         .Where(a => a.DisplayName == feature && a.GetTagItem("app.caller.subject") as string == caller.Identifier)
@@ -228,8 +257,8 @@ public class FeatureTelemetryTests : TestBase
     private static object? Scalar(LogEvent logEvent, string property)
         => logEvent.Properties[property].ShouldBeOfType<ScalarValue>().Value;
 
-    // The exporter is cumulative, so the last point for the role holds the total since the app started
-    private static long RoleChangedTotal(string role)
+    // The exporter is cumulative, so the last point for the role and the change holds the total since the app started
+    private static long RoleChangedTotal(string role, string change)
     {
         var factory = TestingWebApplicationFactory.Instance;
         factory.Services.GetRequiredService<MeterProvider>().ForceFlush().ShouldBeTrue();
@@ -237,7 +266,7 @@ public class FeatureTelemetryTests : TestBase
         return factory.ExportedMetrics.Snapshot()
             .Where(m => m.Name == "app.users.role_changed" && m.MeterName == "Recall.Server")
             .SelectMany(m => m.MetricPoints)
-            .Where(p => HasTag(p, "app.user.role", role))
+            .Where(p => HasTag(p, "app.user.role", role) && HasTag(p, "app.user.role_change", change))
             .Select(p => p.GetSumLong())
             .DefaultIfEmpty(0)
             .Last();

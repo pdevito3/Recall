@@ -1,5 +1,6 @@
 namespace Recall.FunctionalTests.Auth;
 
+using Recall.SharedTestHelpers.Fakes.User;
 using System.Net.Http.Headers;
 using Microsoft.EntityFrameworkCore;
 using ModelContextProtocol.Client;
@@ -25,14 +26,14 @@ public static class PatPeople
             await db.SaveChangesAsync();
             return tenant.Id;
         });
-        return (await AddPersonAsync(host, tenantId, UserRole.Admin()), await AddPersonAsync(host, tenantId, UserRole.User()));
+        return (await AddPersonAsync(host, tenantId, [UserRole.Admin()]), await AddPersonAsync(host, tenantId, []));
     }
 
-    public static Task<PatPerson> AddPersonAsync(AuthFlowFactory host, string tenantId, UserRole role, params Permission[] permissions)
+    public static Task<PatPerson> AddPersonAsync(AuthFlowFactory host, string tenantId, IReadOnlyList<UserRole> roles, params Permission[] permissions)
         => host.WithDatabaseAsync(async db =>
         {
             var subject = $"pat-{Guid.NewGuid():N}";
-            var user = User.CreateFromLogin(NewPerson.FromClaims(new Profile("Ada", "Lovelace", "Ada Lovelace", null, subject[..20])), tenantId, role);
+            var user = User.CreateFromLogin(NewPerson.FromClaims(new Profile("Ada", "Lovelace", "Ada Lovelace", null, subject[..20])), tenantId, roles);
             user.AddPermissions(permissions);
             db.Users.Add(user);
             var now = TimeProvider.System.GetUtcNow();

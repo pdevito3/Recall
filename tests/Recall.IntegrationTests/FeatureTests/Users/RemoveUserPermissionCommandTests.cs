@@ -16,7 +16,7 @@ public class RemoveUserPermissionCommandTests : TestBase
         // Arrange - Create admin user
         var testingServiceScope = new TestingServiceScope();
         await testingServiceScope.StartGraph(out _)
-            .AddUser(out var createdUser, u => u.Role = "Admin")
+            .AddUser(out var createdUser, u => u.Roles = ["Admin"])
             .BuildAsync();
 
         // Verify permission exists first
@@ -31,12 +31,12 @@ public class RemoveUserPermissionCommandTests : TestBase
     }
 
     [Test]
-    public async Task permission_is_removed_from_database()
+    public async Task permission_of_the_role_is_removed_with_a_deny_row()
     {
         // Arrange
         var testingServiceScope = new TestingServiceScope();
         await testingServiceScope.StartGraph(out _)
-            .AddUser(out var createdUser, u => u.Role = "Admin")
+            .AddUser(out var createdUser, u => u.Roles = ["Admin"])
             .BuildAsync();
 
         // Act
@@ -46,12 +46,15 @@ public class RemoveUserPermissionCommandTests : TestBase
         // Assert
         var userInDb = await testingServiceScope.ExecuteDbContextAsync(db =>
             db.Users
+                .Include(u => u.Roles)
                 .Include(u => u.UserPermissions)
                 .FirstOrDefaultAsync(u => u.Id == createdUser.Id));
 
         userInDb.ShouldNotBeNull();
         userInDb.HasPermission(Permission.ManageTenant()).ShouldBeFalse();
-        userInDb.UserPermissions.Select(p => p.Permission.Value)
+        userInDb.UserPermissions.Select(p => (p.Permission.Value, p.Effect))
+            .ShouldBe([("manage_tenant", PermissionEffect.Deny)]);
+        userInDb.Permissions().Select(p => p.Value)
             .ShouldBe(Permission.ListNames().Except(["manage_tenant"]), ignoreOrder: true);
     }
 
@@ -61,7 +64,7 @@ public class RemoveUserPermissionCommandTests : TestBase
         // Arrange - User role has no permissions
         var testingServiceScope = new TestingServiceScope();
         await testingServiceScope.StartGraph(out _)
-            .AddUser(out var createdUser, u => u.Role = "User")
+            .AddUser(out var createdUser, u => u.Roles = [])
             .BuildAsync();
 
         // Act - Try to remove a permission that doesn't exist
@@ -107,7 +110,7 @@ public class RemoveUserPermissionCommandTests : TestBase
         // Arrange
         var testingServiceScope = new TestingServiceScope();
         await testingServiceScope.StartGraph(out _)
-            .AddUser(out var createdUser, u => u.Role = "Admin")
+            .AddUser(out var createdUser, u => u.Roles = ["Admin"])
             .BuildAsync();
 
         // Act
@@ -128,7 +131,7 @@ public class RemoveUserPermissionCommandTests : TestBase
         // Arrange
         var testingServiceScope = new TestingServiceScope();
         await testingServiceScope.StartGraph(out _)
-            .AddUser(out var createdUser, u => u.Role = "Admin")
+            .AddUser(out var createdUser, u => u.Roles = ["Admin"])
             .BuildAsync();
 
         // Act
@@ -136,7 +139,9 @@ public class RemoveUserPermissionCommandTests : TestBase
         var userReturned = await testingServiceScope.SendAsync(command);
 
         // Assert - Role should remain Admin even though permissions were removed
-        userReturned.Role.ShouldBe("Admin");
+        userReturned.Roles.ShouldBe(["Admin"]);
+        userReturned.RemovedPermissions.ShouldBe(["manage_tenant"]);
+        userReturned.Permissions.ShouldNotContain("manage_tenant");
     }
 
     [Test]
@@ -145,7 +150,7 @@ public class RemoveUserPermissionCommandTests : TestBase
         // Arrange
         var testingServiceScope = new TestingServiceScope();
         await testingServiceScope.StartGraph(out _)
-            .AddUser(out var createdUser, u => u.Role = "User")
+            .AddUser(out var createdUser, u => u.Roles = [])
             .BuildAsync();
 
         // Add permission

@@ -28,7 +28,7 @@ public class JournalFixtureTests
         var factory = TestingWebApplicationFactory.Instance;
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var member, u => u.Role = "User")
+            .AddUser(out var member, u => u.Roles = [])
             .Under(tenant);
         await using (var scope = factory.Services.CreateAsyncScope())
         {

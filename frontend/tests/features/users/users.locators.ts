@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test'
 
 export const users = (page: Page) => {
   const grid = page.getByRole('grid', { name: 'Users' })
-  const roleDialog = page.getByRole('dialog', { name: /^Change the role of / })
+  const roleDialog = page.getByRole('dialog', { name: /^(Add a role to|Remove a role from) / })
   const deleteDialog = page.getByRole('dialog', { name: /^Delete .+\?$/ })
   const details = page.getByRole('region', { name: 'Details' })
   const temporaryPasswordAsk = page.getByRole('dialog', { name: /^Set a temporary password for .+\?$/ })
@@ -39,8 +39,10 @@ export const users = (page: Page) => {
     roleDialog,
     roleSelect: roleDialog.getByRole('button', { name: / Role$/ }),
     roleOption: (label: string) => page.getByRole('option', { name: label, exact: true }),
-    keepRole: roleDialog.getByRole('button', { name: 'Keep role', exact: true }),
-    confirmRole: roleDialog.getByRole('button', { name: 'Change role', exact: true }),
+    keepRole: roleDialog.getByRole('button', { name: 'Keep roles', exact: true }),
+    confirmRole: (label: 'Add role' | 'Remove role') => roleDialog.getByRole('button', { name: label, exact: true }),
+    permissionItems: (name: string) => page.getByRole('list', { name: `Permissions of ${name}` }).getByRole('listitem'),
+    removedPermissions: page.getByText(/^Removed from the roles: /),
     deleteDialog,
     keepUser: deleteDialog.getByRole('button', { name: 'Keep user', exact: true }),
     confirmDelete: deleteDialog.getByRole('button', { name: 'Delete user', exact: true }),

@@ -1,20 +1,23 @@
 import type { InitiateUserAndTenantResponseDto } from '@/api/generated/models/types/initiate-user-and-tenant-response-dto'
-import type {
-  UserDto,
-  UserDtoAllowedActionsEnumKey,
-  UserDtoRoleEnumKey,
+import {
+  type UserDto,
+  type UserDtoAllowedActionsEnumKey,
+  type UserDtoRolesEnumKey,
+  userDtoRolesEnum,
 } from '@/api/generated/models/types/user-dto'
 
 let seed = 0
 const next = () => ++seed
 
-const ADMIN_ACTIONS: UserDtoAllowedActionsEnumKey[] = ['Update', 'UpdateRole', 'AddPermission', 'RemovePermission', 'Delete']
+const ADMIN_ACTIONS: UserDtoAllowedActionsEnumKey[] = ['Update', 'AddRole', 'RemoveRole', 'AddPermission', 'RemovePermission', 'Delete']
 
 class UserBuilder {
   private readonly user: UserDto
+  private readonly givable: UserDtoRolesEnumKey[] | undefined
 
-  private constructor(user: UserDto) {
+  private constructor(user: UserDto, givable?: UserDtoRolesEnumKey[]) {
     this.user = user
+    this.givable = givable
   }
 
   static create() {
@@ -27,15 +30,18 @@ class UserBuilder {
       identifier: '1',
       email: 'bob@example.com',
       username: 'bob',
-      role: 'User',
+      roles: [],
       permissions: [],
+      addedPermissions: [],
+      removedPermissions: [],
       allowedActions: [],
+      addableRoles: [],
       version: 1,
     })
   }
 
-  private with(patch: Partial<UserDto>) {
-    return new UserBuilder({ ...this.user, ...patch })
+  with(patch: Partial<UserDto>) {
+    return new UserBuilder({ ...this.user, ...patch }, this.givable)
   }
 
   /** The `sub` claim of the user. */
@@ -49,8 +55,8 @@ class UserBuilder {
     return this.with({ firstName, lastName: rest.join(' '), fullName, username, email: `${username}@example.com` })
   }
 
-  inRole(role: UserDtoRoleEnumKey) {
-    return this.with({ role })
+  inRoles(...roles: UserDtoRolesEnumKey[]) {
+    return this.with({ roles })
   }
 
   seenByAdmin() {
@@ -65,14 +71,22 @@ class UserBuilder {
     return this.with({ version: this.user.version + 1 })
   }
 
+  /** The roles that the caller can give. Without it, a caller who may add a role can give each one. */
+  givingOnly(...roles: UserDtoRolesEnumKey[]) {
+    return new UserBuilder(this.user, roles)
+  }
+
+  /** As the Server does, the addable roles are the ones the caller can give and the user does not have. */
   build(): UserDto {
-    return this.user
+    const givable = this.givable ?? Object.values(userDtoRolesEnum)
+    const addableRoles = this.user.allowedActions.includes('AddRole') ? givable.filter((r) => !this.user.roles.includes(r)) : []
+    return { ...this.user, addableRoles }
   }
 }
 
 export const aUser = () => UserBuilder.create()
 
 export const aStartedTenant = (name: string, user = aUser()): InitiateUserAndTenantResponseDto => {
-  const admin = { ...user.build(), role: 'Admin' as const }
+  const admin = { ...user.build(), roles: ['Admin' as const] }
   return { tenant: { id: admin.tenantId, name, version: 1 }, user: admin }
 }

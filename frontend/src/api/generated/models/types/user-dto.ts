@@ -3,12 +3,13 @@
 * Do not edit manually.
 */
 
-export const userDtoRoleEnum = {
+export const userDtoRolesEnum = {
     Admin: "Admin",
-    User: "User"
+    Auditor: "Auditor",
+    UserManager: "UserManager"
 } as const;
 
-export type UserDtoRoleEnumKey = (typeof userDtoRoleEnum)[keyof typeof userDtoRoleEnum];
+export type UserDtoRolesEnumKey = (typeof userDtoRolesEnum)[keyof typeof userDtoRolesEnum];
 
 export const userDtoPermissionsEnum = {
     manage_agents: "manage_agents",
@@ -24,17 +25,54 @@ export const userDtoPermissionsEnum = {
 
 export type UserDtoPermissionsEnumKey = (typeof userDtoPermissionsEnum)[keyof typeof userDtoPermissionsEnum];
 
+export const userDtoAddedPermissionsEnum = {
+    manage_agents: "manage_agents",
+    manage_model_providers: "manage_model_providers",
+    manage_tenant: "manage_tenant",
+    manage_user_access: "manage_user_access",
+    manage_users: "manage_users",
+    read_agents: "read_agents",
+    read_audit_log: "read_audit_log",
+    read_audit_log_sensitive: "read_audit_log_sensitive",
+    read_users: "read_users"
+} as const;
+
+export type UserDtoAddedPermissionsEnumKey = (typeof userDtoAddedPermissionsEnum)[keyof typeof userDtoAddedPermissionsEnum];
+
+export const userDtoRemovedPermissionsEnum = {
+    manage_agents: "manage_agents",
+    manage_model_providers: "manage_model_providers",
+    manage_tenant: "manage_tenant",
+    manage_user_access: "manage_user_access",
+    manage_users: "manage_users",
+    read_agents: "read_agents",
+    read_audit_log: "read_audit_log",
+    read_audit_log_sensitive: "read_audit_log_sensitive",
+    read_users: "read_users"
+} as const;
+
+export type UserDtoRemovedPermissionsEnumKey = (typeof userDtoRemovedPermissionsEnum)[keyof typeof userDtoRemovedPermissionsEnum];
+
 export const userDtoAllowedActionsEnum = {
     AddPermission: "AddPermission",
+    AddRole: "AddRole",
     Delete: "Delete",
     IssueTemporaryPassword: "IssueTemporaryPassword",
     ManageExternalLogins: "ManageExternalLogins",
     RemovePermission: "RemovePermission",
-    Update: "Update",
-    UpdateRole: "UpdateRole"
+    RemoveRole: "RemoveRole",
+    Update: "Update"
 } as const;
 
 export type UserDtoAllowedActionsEnumKey = (typeof userDtoAllowedActionsEnum)[keyof typeof userDtoAllowedActionsEnum];
+
+export const userDtoAddableRolesEnum = {
+    Admin: "Admin",
+    Auditor: "Auditor",
+    UserManager: "UserManager"
+} as const;
+
+export type UserDtoAddableRolesEnumKey = (typeof userDtoAddableRolesEnum)[keyof typeof userDtoAddableRolesEnum];
 
 export type UserDto = {
     id: string;
@@ -50,13 +88,36 @@ export type UserDto = {
      * @type string | undefined
     */
     loginName?: string | null;
-    role: UserDtoRoleEnumKey;
+    /**
+     * @description The roles of the user. The permissions of each role add up. No role means a Member.
+     * @type array
+    */
+    roles: UserDtoRolesEnumKey[];
+    /**
+     * @description The permissions that the user holds: those of the roles, with the added ones, less the removed ones.
+     * @type array
+    */
     permissions: UserDtoPermissionsEnumKey[];
+    /**
+     * @description The permissions that this user holds and no role of the user gives.
+     * @type array
+    */
+    addedPermissions: UserDtoAddedPermissionsEnumKey[];
+    /**
+     * @description The permissions that a role of the user gives and this user does not hold.
+     * @type array
+    */
+    removedPermissions: UserDtoRemovedPermissionsEnumKey[];
     /**
      * @description The actions that the caller can send for this user now. A button in the SPA reads this list.
      * @type array
     */
     allowedActions: UserDtoAllowedActionsEnumKey[];
+    /**
+     * @description The roles that the user does not have and the caller can add now. Empty when the caller cannot add a role.
+     * @type array
+    */
+    addableRoles: UserDtoAddableRolesEnumKey[];
     /**
      * @minLength 0
      * @maxLength 4294967295

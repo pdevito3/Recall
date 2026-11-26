@@ -166,7 +166,7 @@ public class JournalAccessTests : TestBase
     {
         TestGraph.Start(out _)
             .AddTenant(out var tenant)
-            .AddUser(out var member, u => u.Role = "User")
+            .AddUser(out var member, u => u.Roles = [])
             .Under(tenant)
             .AddAgents(out var agents,
                 a => { a.Mode = AgentMode.Machine().Value; a.Permissions = EachPermissionOfAnAgent(); },

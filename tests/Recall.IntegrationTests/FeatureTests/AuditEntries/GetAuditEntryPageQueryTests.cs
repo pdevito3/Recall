@@ -1,5 +1,6 @@
 namespace Recall.IntegrationTests.FeatureTests.AuditEntries;
 
+using Recall.SharedTestHelpers.Fakes.User;
 using Recall.Server.Domain.AuditEntries.Dtos;
 using Recall.Server.Domain.AuditEntries.Features;
 using Recall.Server.Domain.Users;
@@ -73,7 +74,7 @@ public class GetAuditEntryPageQueryTests : TestBase
         var values = page.Items.ShouldHaveSingleItem().Values.ToDictionary(v => v.Name);
         values["FirstName"].ShouldBe(new AuditValueDto { Name = "FirstName", Hidden = true });
         values["Email"].Hidden.ShouldBeTrue();
-        values["Role"].ShouldBe(new AuditValueDto { Name = "Role", New = "User" });
+        values["TenantId"].ShouldBe(new AuditValueDto { Name = "TenantId", New = target.TenantId });
         values["Identifier"].ShouldBe(new AuditValueDto { Name = "Identifier", Hidden = true });
     }
 
@@ -151,7 +152,7 @@ public class GetAuditEntryPageQueryTests : TestBase
         var scope = new TestingServiceScope();
         var graph = scope.StartGraph(out _)
             .AddTenant(out _)
-            .AddUsers(out var users, u => u.Role = "User", u => u.Role = "User");
+            .AddUsers(out var users, u => u.Roles = [], u => u.Roles = []);
         users[0].AddPermissions(permissions);
         await graph.BuildAsync();
 

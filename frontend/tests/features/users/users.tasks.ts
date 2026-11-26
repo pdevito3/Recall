@@ -59,23 +59,29 @@ export function usersPage(page: Page) {
       await settled
     },
 
-    async pickRole(name: string, role: string) {
-      await at.actionButton(name, 'Change role').click()
+    async pickRole(name: string, action: 'Add role' | 'Remove role', role: string) {
+      await at.actionButton(name, action).click()
       await expect(at.roleDialog).toBeVisible()
       await at.roleSelect.click()
       await at.roleOption(role).click()
       await expect(at.roleSelect).toHaveAccessibleName(`${role} Role`)
     },
 
-    async confirmRole(id: string) {
-      const settled = answered('PUT', usersPaths.role(id))
-      await at.confirmRole.click()
+    async confirmAddRole(id: string) {
+      const settled = answered('POST', usersPaths.roles(id))
+      await at.confirmRole('Add role').click()
       await settled
     },
 
-    async confirmRoleRefused(id: string) {
-      const settled = Promise.all([answered('PUT', usersPaths.role(id)), answered('GET', usersPaths.one(id))])
-      await at.confirmRole.click()
+    async confirmAddRoleRefused(id: string) {
+      const settled = Promise.all([answered('POST', usersPaths.roles(id)), answered('GET', usersPaths.one(id))])
+      await at.confirmRole('Add role').click()
+      await settled
+    },
+
+    async confirmRemoveRole(id: string, role: string) {
+      const settled = answered('DELETE', usersPaths.role(id, role))
+      await at.confirmRole('Remove role').click()
       await settled
     },
 

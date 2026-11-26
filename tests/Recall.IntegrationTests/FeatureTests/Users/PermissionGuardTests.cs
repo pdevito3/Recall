@@ -13,7 +13,7 @@ using NSubstitute;
 using Shouldly;
 
 /// <summary>
-/// The rows of user_permissions decide what a user can do, not the role. Each kind of caller gets the outcome
+/// The roles of a user with the overrides on top decide what a user can do. Each kind of caller gets the outcome
 /// of its variant of <see cref="Caller"/>, and a caller can give only the access that it holds.
 /// </summary>
 public class PermissionGuardTests : TestBase
@@ -22,7 +22,7 @@ public class PermissionGuardTests : TestBase
     public async Task user_role_member_granted_manage_users_can_delete_a_user()
     {
         // Arrange
-        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("User", Permission.ManageUsers());
+        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("Member", Permission.ManageUsers());
 
         // Act
         await scope.SendAsync(new DeleteUser.Command(target.Id));
@@ -35,7 +35,7 @@ public class PermissionGuardTests : TestBase
     public async Task user_role_member_without_manage_users_cannot_delete_a_user()
     {
         // Arrange
-        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("User");
+        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("Member");
 
         // Act
         var act = () => scope.SendAsync(new DeleteUser.Command(target.Id));
@@ -64,7 +64,7 @@ public class PermissionGuardTests : TestBase
     public async Task a_revoked_permission_stops_on_the_next_request()
     {
         // Arrange
-        var (scope, member, target) = await ArrangeCallerWithOnlyAsync("User", Permission.ManageUsers(), Permission.ReadUsers());
+        var (scope, member, target) = await ArrangeCallerWithOnlyAsync("Member", Permission.ManageUsers(), Permission.ReadUsers());
         var updated = await scope.SendAsync(
             new UpdateUser.Command(target.Id, new FakeUserForUpdateDto().Generate() with { Version = target.Version }));
         await new TestingServiceScope().SendAsync(new RemoveUserPermission.Command(member.Id, "manage_users"));
@@ -84,7 +84,7 @@ public class PermissionGuardTests : TestBase
     public async Task trusted_machine_client_can_delete_a_user()
     {
         // Arrange
-        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("User");
+        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("Member");
         scope.SetMachineClient(TestFixture.TrustedMachineClientId);
 
         // Act
@@ -100,7 +100,7 @@ public class PermissionGuardTests : TestBase
     public async Task machine_client_that_cannot_manage_all_tenants_cannot_delete_a_user(string clientId, string denial)
     {
         // Arrange
-        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("User");
+        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("Member");
         scope.SetMachineClient(clientId);
 
         // Act
@@ -115,7 +115,7 @@ public class PermissionGuardTests : TestBase
     public async Task anonymous_caller_cannot_delete_a_user()
     {
         // Arrange
-        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("User");
+        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("Member");
         scope.SetUserUnauthenticated();
 
         // Act
@@ -130,7 +130,7 @@ public class PermissionGuardTests : TestBase
     public async Task signed_in_caller_with_no_user_record_cannot_delete_a_user()
     {
         // Arrange
-        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("User");
+        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("Member");
         scope.SetUserWithDefaults(identifier: $"no-record-{Guid.NewGuid()}");
 
         // Act
@@ -146,7 +146,7 @@ public class PermissionGuardTests : TestBase
     public async Task system_scope_can_delete_a_user_even_when_its_user_has_no_permission()
     {
         // Arrange
-        var (_, member, target) = await ArrangeCallerWithOnlyAsync("User");
+        var (_, member, target) = await ArrangeCallerWithOnlyAsync("Member");
         await using var systemScope = TestFixture.BaseScopeFactory.CreateSystemScope();
         systemScope.ServiceProvider.GetRequiredService<ICurrentUserService>().UserIdentifier.Returns(member.Identifier);
 
@@ -161,7 +161,7 @@ public class PermissionGuardTests : TestBase
     public async Task member_without_manage_users_can_update_their_own_record()
     {
         // Arrange
-        var (scope, member, _) = await ArrangeCallerWithOnlyAsync("User");
+        var (scope, member, _) = await ArrangeCallerWithOnlyAsync("Member");
         var dto = new FakeUserForUpdateDto().Generate() with { Version = member.Version };
 
         // Act
@@ -175,7 +175,7 @@ public class PermissionGuardTests : TestBase
     public async Task member_without_manage_users_cannot_update_another_user()
     {
         // Arrange
-        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("User");
+        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("Member");
 
         // Act
         var act = () => scope.SendAsync(new UpdateUser.Command(target.Id, new FakeUserForUpdateDto().Generate()));
@@ -185,11 +185,11 @@ public class PermissionGuardTests : TestBase
     }
 
     [Test]
-    public async Task holder_of_only_manage_users_can_add_a_user_role_user()
+    public async Task holder_of_only_manage_users_can_add_a_member()
     {
         // Arrange
-        var (scope, _, _) = await ArrangeCallerWithOnlyAsync("User", Permission.ManageUsers());
-        var dto = new FakeUserForCreationDto().RuleFor(x => x.Role, _ => "User").Generate();
+        var (scope, _, _) = await ArrangeCallerWithOnlyAsync("Member", Permission.ManageUsers());
+        var dto = new FakeUserForCreationDto().RuleFor(x => x.Roles, _ => []).Generate();
 
         // Act
         var added = await scope.SendAsync(new AddUser.Command(dto));
@@ -202,8 +202,8 @@ public class PermissionGuardTests : TestBase
     public async Task holder_of_only_manage_users_cannot_add_an_admin()
     {
         // Arrange
-        var (scope, _, _) = await ArrangeCallerWithOnlyAsync("User", Permission.ManageUsers());
-        var dto = new FakeUserForCreationDto().RuleFor(x => x.Role, _ => "Admin").Generate();
+        var (scope, _, _) = await ArrangeCallerWithOnlyAsync("Member", Permission.ManageUsers());
+        var dto = new FakeUserForCreationDto().RuleFor(x => x.Roles, _ => ["Admin"]).Generate();
 
         // Act
         var act = () => scope.SendAsync(new AddUser.Command(dto));
@@ -219,22 +219,41 @@ public class PermissionGuardTests : TestBase
     public async Task invalid_role_from_a_holder_of_manage_users_is_a_validation_error()
     {
         // Arrange
-        var (scope, _, _) = await ArrangeCallerWithOnlyAsync("User", Permission.ManageUsers());
-        var dto = new FakeUserForCreationDto().RuleFor(x => x.Role, _ => "NotARole").Generate();
+        var (scope, _, _) = await ArrangeCallerWithOnlyAsync("Member", Permission.ManageUsers());
+        var dto = new FakeUserForCreationDto().RuleFor(x => x.Roles, _ => ["Auditor", "NotARole"]).Generate();
 
         // Act
         var act = () => scope.SendAsync(new AddUser.Command(dto));
 
         // Assert
-        await act.ShouldThrowAsync<ValidationException>();
+        (await act.ShouldThrowAsync<ValidationException>()).Property.ShouldBe("roles[1]");
+    }
+
+    [Test]
+    public async Task holder_of_the_permissions_of_user_manager_can_add_a_user_manager_and_not_an_auditor()
+    {
+        // Arrange
+        var (scope, _, _) = await ArrangeCallerWithOnlyAsync(
+            "UserManager", Permission.ManageUsers(), Permission.ManageUserAccess(), Permission.ReadUsers());
+        var userManager = new FakeUserForCreationDto().RuleFor(x => x.Roles, _ => ["UserManager"]).Generate();
+        var auditor = new FakeUserForCreationDto().RuleFor(x => x.Roles, _ => ["UserManager", "Auditor"]).Generate();
+
+        // Act
+        var added = await scope.SendAsync(new AddUser.Command(userManager));
+        var act = () => scope.SendAsync(new AddUser.Command(auditor));
+
+        // Assert
+        added.Roles.ShouldBe(["UserManager"]);
+        (await act.ShouldThrowAsync<ForbiddenAccessException>()).Message
+            .ShouldBe("You cannot read the audit log. Ask an admin for access.");
     }
 
     [Test]
     public async Task invalid_role_from_a_caller_without_manage_users_is_forbidden()
     {
         // Arrange
-        var (scope, _, _) = await ArrangeCallerWithOnlyAsync("User");
-        var dto = new FakeUserForCreationDto().RuleFor(x => x.Role, _ => "NotARole").Generate();
+        var (scope, _, _) = await ArrangeCallerWithOnlyAsync("Member");
+        var dto = new FakeUserForCreationDto().RuleFor(x => x.Roles, _ => ["NotARole"]).Generate();
 
         // Act
         var act = () => scope.SendAsync(new AddUser.Command(dto));
@@ -247,7 +266,7 @@ public class PermissionGuardTests : TestBase
     public async Task holder_of_only_manage_user_access_and_read_users_can_grant_manage_user_access()
     {
         // Arrange
-        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("User", Permission.ManageUserAccess(), Permission.ReadUsers());
+        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("Member", Permission.ManageUserAccess(), Permission.ReadUsers());
 
         // Act
         var updated = await scope.SendAsync(new AddUserPermission.Command(target.Id, "manage_user_access"));
@@ -260,7 +279,7 @@ public class PermissionGuardTests : TestBase
     public async Task holder_of_only_manage_user_access_and_read_users_cannot_grant_manage_tenant()
     {
         // Arrange
-        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("User", Permission.ManageUserAccess(), Permission.ReadUsers());
+        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("Member", Permission.ManageUserAccess(), Permission.ReadUsers());
 
         // Act
         var act = () => scope.SendAsync(new AddUserPermission.Command(target.Id, "manage_tenant"));
@@ -275,7 +294,7 @@ public class PermissionGuardTests : TestBase
     public async Task invalid_permission_from_a_holder_of_manage_user_access_is_a_validation_error()
     {
         // Arrange
-        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("User", Permission.ManageUserAccess(), Permission.ReadUsers());
+        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("Member", Permission.ManageUserAccess(), Permission.ReadUsers());
 
         // Act
         var act = () => scope.SendAsync(new AddUserPermission.Command(target.Id, "not_a_permission"));
@@ -288,30 +307,29 @@ public class PermissionGuardTests : TestBase
     public async Task holder_of_only_manage_user_access_and_read_users_cannot_make_a_user_an_admin()
     {
         // Arrange
-        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("User", Permission.ManageUserAccess(), Permission.ReadUsers());
+        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("Member", Permission.ManageUserAccess(), Permission.ReadUsers());
 
         // Act
-        var act = () => scope.SendAsync(new UpdateUserRole.Command(target.Id, "Admin"));
+        var act = () => scope.SendAsync(new AddUserRole.Command(target.Id, "Admin"));
 
         // Assert
         await act.ShouldThrowAsync<ForbiddenAccessException>();
-        var userInDb = await new TestingServiceScope().ExecuteDbContextAsync(db => db.Users
-            .SingleAsync(u => u.Id == target.Id));
-        userInDb.Role.Value.ShouldBe("User");
+        (await RolesOfAsync(target.Id)).ShouldBeEmpty();
     }
 
     [Test]
     public async Task holder_of_only_manage_user_access_and_read_users_cannot_demote_an_admin()
     {
         // Arrange
-        var (scope, _, _) = await ArrangeCallerWithOnlyAsync("User", Permission.ManageUserAccess(), Permission.ReadUsers());
+        var (scope, _, _) = await ArrangeCallerWithOnlyAsync("Member", Permission.ManageUserAccess(), Permission.ReadUsers());
         var admin = await AddAdminAsync();
 
         // Act
-        var act = () => scope.SendAsync(new UpdateUserRole.Command(admin.Id, "User"));
+        var act = () => scope.SendAsync(new RemoveUserRole.Command(admin.Id, "Admin"));
 
         // Assert
         await act.ShouldThrowAsync<ForbiddenAccessException>();
+        (await RolesOfAsync(admin.Id)).ShouldBe(["Admin"]);
         (await PermissionsOfAsync(admin.Id)).ShouldBe(Permission.ListNames(), ignoreOrder: true);
     }
 
@@ -319,7 +337,7 @@ public class PermissionGuardTests : TestBase
     public async Task holder_of_only_manage_user_access_and_read_users_cannot_take_manage_tenant_away()
     {
         // Arrange
-        var (scope, _, _) = await ArrangeCallerWithOnlyAsync("User", Permission.ManageUserAccess(), Permission.ReadUsers());
+        var (scope, _, _) = await ArrangeCallerWithOnlyAsync("Member", Permission.ManageUserAccess(), Permission.ReadUsers());
         var admin = await AddAdminAsync();
 
         // Act
@@ -335,7 +353,7 @@ public class PermissionGuardTests : TestBase
     public async Task holder_of_only_manage_user_access_and_read_users_cannot_take_manage_user_access_away_from_an_admin()
     {
         // Arrange
-        var (scope, _, _) = await ArrangeCallerWithOnlyAsync("User", Permission.ManageUserAccess(), Permission.ReadUsers());
+        var (scope, _, _) = await ArrangeCallerWithOnlyAsync("Member", Permission.ManageUserAccess(), Permission.ReadUsers());
         var admin = await AddAdminAsync();
 
         // Act
@@ -351,7 +369,7 @@ public class PermissionGuardTests : TestBase
     public async Task holder_of_only_manage_user_access_and_read_users_can_take_manage_user_access_away_from_a_peer()
     {
         // Arrange
-        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("User", Permission.ManageUserAccess(), Permission.ReadUsers());
+        var (scope, _, target) = await ArrangeCallerWithOnlyAsync("Member", Permission.ManageUserAccess(), Permission.ReadUsers());
         await new TestingServiceScope().SendAsync(new AddUserPermission.Command(target.Id, "manage_user_access"));
 
         // Act
@@ -365,7 +383,7 @@ public class PermissionGuardTests : TestBase
     public async Task holder_of_only_manage_users_cannot_delete_an_admin()
     {
         // Arrange
-        var (scope, _, _) = await ArrangeCallerWithOnlyAsync("User", Permission.ManageUsers());
+        var (scope, _, _) = await ArrangeCallerWithOnlyAsync("Member", Permission.ManageUsers());
         var admin = await AddAdminAsync();
 
         // Act
@@ -380,7 +398,7 @@ public class PermissionGuardTests : TestBase
     public async Task caller_without_manage_user_access_cannot_add_or_remove_a_permission()
     {
         // Arrange
-        var (scope, _, _) = await ArrangeCallerWithOnlyAsync("User", Permission.ManageUsers(), Permission.ManageTenant());
+        var (scope, _, _) = await ArrangeCallerWithOnlyAsync("Member", Permission.ManageUsers(), Permission.ManageTenant());
         var admin = await AddAdminAsync();
 
         // Act
@@ -399,7 +417,7 @@ public class PermissionGuardTests : TestBase
     public async Task deleted_user_is_denied_even_with_the_permission_rows()
     {
         // Arrange
-        var (scope, member, target) = await ArrangeCallerWithOnlyAsync("User", Permission.ManageUsers());
+        var (scope, member, target) = await ArrangeCallerWithOnlyAsync("Member", Permission.ManageUsers());
         await new TestingServiceScope().SendAsync(new DeleteUser.Command(member.Id));
 
         // Act
@@ -412,7 +430,7 @@ public class PermissionGuardTests : TestBase
     }
 
     [Test]
-    public async Task get_caller_gives_a_member_its_permission_rows_and_not_the_defaults_of_its_role()
+    public async Task get_caller_gives_a_member_the_permissions_of_its_role_less_the_removed_ones()
     {
         // Arrange
         var (scope, member, _) = await ArrangeCallerWithOnlyAsync("Admin", Permission.ManageUsers(), Permission.ManageTenant());
@@ -433,7 +451,7 @@ public class PermissionGuardTests : TestBase
     {
         var scope = new TestingServiceScope();
         var graph = scope.StartGraph(out _)
-            .AddUsers(out var users, u => u.Role = role, u => u.Role = "User");
+            .AddUsers(out var users, u => u.Roles = role == "Member" ? [] : [role], u => u.Roles = []);
         var caller = users[0];
         foreach (var permission in Permission.GetAll())
             caller.RemovePermission(permission);
@@ -447,14 +465,20 @@ public class PermissionGuardTests : TestBase
     private static async Task<User> AddAdminAsync()
     {
         var scope = new TestingServiceScope();
-        await scope.StartGraph(out _).AddUser(out var admin, u => u.Role = "Admin").BuildAsync();
+        await scope.StartGraph(out _).AddUser(out var admin, u => u.Roles = ["Admin"]).BuildAsync();
         return admin;
     }
 
     private static Task<bool> UserExistsAsync(string userId)
         => new TestingServiceScope().ExecuteDbContextAsync(db => db.Users.AnyAsync(u => u.Id == userId));
 
+    // The permissions that the user holds, from the roles and the overrides.
     private static Task<List<string>> PermissionsOfAsync(string userId)
-        => new TestingServiceScope().ExecuteDbContextAsync(db => db.UserPermissions
-            .Where(p => p.UserId == userId).Select(p => p.Permission.Value).ToListAsync());
+        => new TestingServiceScope().ExecuteDbContextAsync(async db =>
+            (await db.Users.Include(u => u.Roles).Include(u => u.UserPermissions).SingleAsync(u => u.Id == userId))
+            .Permissions().Select(p => p.Value).ToList());
+
+    private static Task<List<string>> RolesOfAsync(string userId)
+        => new TestingServiceScope().ExecuteDbContextAsync(db => db.UserRoles
+            .Where(r => r.UserId == userId).Select(r => r.Role.Value).ToListAsync());
 }

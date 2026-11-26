@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Recall.FunctionalTests.TestUtilities;
 using Recall.Server.Auth;
 using Recall.Server.Auth.Entities;
 using Recall.Server.Databases;
@@ -92,13 +93,13 @@ public class PasswordsOffTests
 
     /// <summary>A person of <paramref name="tenantId"/> with a password and no link.</summary>
     private static async Task<PasswordPerson> AddPasswordUserAsync(
-        AuthFlowFactory host, string tenantId, UserRole role, DateTimeOffset? issueTemporary = null, int wrongTries = 0)
+        AuthFlowFactory host, string tenantId, IReadOnlyList<UserRole> roles, DateTimeOffset? issueTemporary = null, int wrongTries = 0)
     {
         var loginName = $"off-{Guid.NewGuid():N}";
         var password = $"a long journal passphrase {Guid.NewGuid():N}";
         var userId = await host.WithDatabaseAsync(async db =>
         {
-            var user = User.CreateFromLogin(new NewPerson("Grace", "Hopper", null, "grace"), tenantId, role);
+            var user = User.CreateFromLogin(new NewPerson("Grace", "Hopper", null, "grace"), tenantId, roles);
             LoginName.TryOf(loginName, out var name).ShouldBeTrue();
             var hash = PasswordPeople.HashOf(password);
             var credential = issueTemporary is { } issuedAt
@@ -180,7 +181,7 @@ public class PasswordsOffTests
         var (browser, _) = await SignedInAdminAsync();
         using var signedIn = browser;
         var tenantId = await AddTenantAsync(Host);
-        var stranded = await AddPasswordUserAsync(Host, tenantId, UserRole.Admin());
+        var stranded = await AddPasswordUserAsync(Host, tenantId, [UserRole.Admin()]);
         await LinkAsync(stranded.UserId, "https://gone.example");
 
         // Act
@@ -205,13 +206,13 @@ public class PasswordsOffTests
         await ResetAsync(Host);
         var (browser, admin) = await SignedInAdminAsync();
         using var signedIn = browser;
-        var other = await AddPasswordUserAsync(Host, admin.TenantId, UserRole.Admin());
+        var other = await AddPasswordUserAsync(Host, admin.TenantId, [UserRole.Admin()]);
         await TurnOffAsync(browser);
 
         // Act
-        var refused = await SendAsync(browser, HttpMethod.Put, $"/api/v1/users/{admin.UserId}/role", new { role = "User" });
+        var refused = await SendAsync(browser, HttpMethod.Delete, $"/{ApiRoutes.Users.RemoveRole(admin.UserId, "Admin")}");
         (await TurnAsync(browser, PasswordLoginState.On)).StatusCode.ShouldBe(HttpStatusCode.OK);
-        var allowed = await SendAsync(browser, HttpMethod.Put, $"/api/v1/users/{admin.UserId}/role", new { role = "User" });
+        var allowed = await SendAsync(browser, HttpMethod.Delete, $"/{ApiRoutes.Users.RemoveRole(admin.UserId, "Admin")}");
 
         // Assert
         refused.StatusCode.ShouldBe(HttpStatusCode.Conflict);
@@ -231,7 +232,7 @@ public class PasswordsOffTests
         var row = new { id = RowId, displayName = "Row", issuer = AuthFlowFactory.RowIssuer, clientId = StubOidcProvider.ClientId, clientSecret = Host.RowProvider.ClientSecret, allowHttp = false };
         (await SendAsync(browser, HttpMethod.Post, Providers, row)).StatusCode.ShouldBe(HttpStatusCode.OK);
         var tenantId = await AddTenantAsync(Host);
-        var rowAdmin = await AddPasswordUserAsync(Host, tenantId, UserRole.Admin());
+        var rowAdmin = await AddPasswordUserAsync(Host, tenantId, [UserRole.Admin()]);
         await LinkAsync(rowAdmin.UserId, AuthFlowFactory.RowIssuer);
         await TurnOffAsync(browser);
 
@@ -257,7 +258,7 @@ public class PasswordsOffTests
         var (browser, _) = await SignedInAdminAsync();
         using var signedIn = browser;
         var tenantId = await AddTenantAsync(Host);
-        var last = await AddPasswordUserAsync(Host, tenantId, UserRole.Admin());
+        var last = await AddPasswordUserAsync(Host, tenantId, [UserRole.Admin()]);
         await LinkAsync(last.UserId);
         var link = await Host.WithDatabaseAsync(db => db.Set<ExternalLogin>().AsNoTracking().SingleAsync(l => l.UserId == last.UserId));
         using var lastBrowser = new AuthBrowser(Host);
@@ -303,7 +304,7 @@ public class PasswordsOffTests
         await ResetAsync(Host);
         var (browser, admin) = await SignedInAdminAsync();
         using var signedIn = browser;
-        var person = await AddPasswordUserAsync(Host, admin.TenantId, UserRole.User());
+        var person = await AddPasswordUserAsync(Host, admin.TenantId, []);
         using var personBrowser = new AuthBrowser(Host);
         var state = await personBrowser.FormStateAsync();
         var pause = PauseAtQuery.After("auth.password.find_credential");
@@ -378,8 +379,8 @@ public class PasswordsOffTests
         await ResetAsync(Host);
         var (browser, admin) = await SignedInAdminAsync();
         using var signedIn = browser;
-        var person = await AddPasswordUserAsync(Host, admin.TenantId, UserRole.User());
-        var stopped = await AddPasswordUserAsync(Host, admin.TenantId, UserRole.User(), wrongTries: PasswordCredential.StopAt);
+        var person = await AddPasswordUserAsync(Host, admin.TenantId, []);
+        var stopped = await AddPasswordUserAsync(Host, admin.TenantId, [], wrongTries: PasswordCredential.StopAt);
         using var personBrowser = new AuthBrowser(Host);
         (await personBrowser.SignInAsync(person.LoginName, person.Password)).StatusCode.ShouldBe(HttpStatusCode.Redirect);
         var token = await PatPeople.StartTokenAsync(Host, new PatPerson(person.LoginName, person.UserId, admin.TenantId), new TokenGrant([], JournalAccess.None));
@@ -428,7 +429,7 @@ public class PasswordsOffTests
         var host = AuthHosts.NoLoginMethod;
         await ResetAsync(host);
         var tenantId = await AddTenantAsync(host);
-        await AddPasswordUserAsync(host, tenantId, UserRole.Admin(), issueTemporary: DateTimeOffset.UtcNow - PasswordCredential.TemporaryLifetime - TimeSpan.FromMinutes(1));
+        await AddPasswordUserAsync(host, tenantId, [UserRole.Admin()], issueTemporary: DateTimeOffset.UtcNow - PasswordCredential.TemporaryLifetime - TimeSpan.FromMinutes(1));
         await host.WithDatabaseAsync(async db =>
         {
             var settings = await db.LoginSettings.SingleAsync();
@@ -440,7 +441,7 @@ public class PasswordsOffTests
         // Act
         using var browser = new AuthBrowser(host);
         var pageWithOnlyAnExpiredPassword = await (await browser.GetAsync(AuthRoutes.Login)).Content.ReadAsStringAsync();
-        await AddPasswordUserAsync(host, tenantId, UserRole.Admin(), issueTemporary: DateTimeOffset.UtcNow);
+        await AddPasswordUserAsync(host, tenantId, [UserRole.Admin()], issueTemporary: DateTimeOffset.UtcNow);
         var status = await StatusAsync(host);
         var page = await browser.GetAsync(AuthRoutes.Login);
         var form = await browser.GetAsync($"{AuthRoutes.Login}?{AuthPages.TemporaryPasswordQuery}=1");
@@ -510,7 +511,7 @@ public class PasswordsOffTests
         await ResetAsync(Host);
         var (browser, admin) = await SignedInAdminAsync();
         using var signedIn = browser;
-        var person = await AddPasswordUserAsync(Host, admin.TenantId, UserRole.User(), issueTemporary: DateTimeOffset.UtcNow);
+        var person = await AddPasswordUserAsync(Host, admin.TenantId, [], issueTemporary: DateTimeOffset.UtcNow);
         await TurnOffAsync(browser);
         using var personBrowser = new AuthBrowser(Host);
         var subject = $"off-{Guid.NewGuid():N}";
@@ -554,7 +555,7 @@ public class PasswordsOffTests
         await ResetAsync(Host);
         var (browser, admin) = await SignedInAdminAsync();
         using var signedIn = browser;
-        var person = await AddPasswordUserAsync(Host, admin.TenantId, UserRole.User(), issueTemporary: DateTimeOffset.UtcNow);
+        var person = await AddPasswordUserAsync(Host, admin.TenantId, [], issueTemporary: DateTimeOffset.UtcNow);
         await TurnOffAsync(browser);
         using var personBrowser = new AuthBrowser(Host);
 

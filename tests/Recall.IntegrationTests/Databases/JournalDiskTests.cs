@@ -209,7 +209,7 @@ public class JournalDiskTests
 
             TestGraph.Start(out _)
                 .AddTenant(out var tenant)
-                .AddUsers(out var users, u => u.Role = UserRole.Admin().Value, u => u.Role = UserRole.User().Value);
+                .AddUsers(out var users, u => u.Roles = [UserRole.Admin().Value], u => u.Roles = []);
 
             // An install keeps a live tenant, so a delete of a tenant needs another one.
             TestGraph.Start(out _).AddTenant(out var otherTenant);

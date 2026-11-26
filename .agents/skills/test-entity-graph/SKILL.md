@@ -38,7 +38,7 @@ Do not send a create command (for example `AddUser.Command`) to arrange data. Us
 ```csharp
 var testingServiceScope = new TestingServiceScope();
 await testingServiceScope.StartGraph(out _)
-    .AddUser(out var user, u => u.Role = "Admin")
+    .AddUser(out var user, u => u.Roles = ["Admin"])
     .BuildAsync();
 
 var result = await testingServiceScope.SendAsync(new GetUser.Query(user.Id));
@@ -64,9 +64,9 @@ user.TenantId.ShouldBe(seed.Tenant.Id);
 | Call | Result |
 |---|---|
 | `.AddUser(out var user)` | One user with realistic fake values |
-| `.AddUser(out var user, u => u.Role = "Admin")` | One user with the given value |
+| `.AddUser(out var user, u => u.Roles = ["Admin"])` | One user with the given value |
 | `.AddUsers(out var users, 3)` | Three users per tenant in the anchor |
-| `.AddUsers(out var users, u => u.Role = "Admin", u => u.Role = "User")` | One user per customizer. A comma makes a new entity. |
+| `.AddUsers(out var users, u => u.Roles = ["Admin"], u => u.Roles = [])` | One user per customizer. A comma makes a new entity. |
 | `.AddUsers(out var users, admin + named)` | One user with both customizers. `+` stacks customizers on one entity. |
 | `.AddTenant(out var tenant).AddUser(out var user)` | A new tenant, then a user in that tenant |
 | `.Under(seed.Tenant)` | Re-anchors to an entity that the session owns. Adds nothing. |
@@ -96,7 +96,7 @@ These features are in `Core/`. Use them in `Blueprints.cs`, in `TestGraph.cs`, o
 | Step-aware derive | `.Derive(i => i.Number, (i, ctx, step) => ...)` also gets `step`, the members of the current `Add` step in order. Use it when a derived value must not take the value of another member, for example the lowest free number. See the rule below. |
 | Frozen time | `ctx.Now`, `ctx.Ago(TimeSpan)`, and `ctx.FromNow(TimeSpan)`. Time is frozen when the session starts. Pass a `TimeProvider` to `TestGraph.Start` for a fixed time. For a date, use `ZonedDate.TodayAt(zone, ctx.Now)` with the zone of the entity that the date belongs to. Do not use `DateOnly.FromDateTime(ctx.Now.UtcDateTime)`. |
 | Context-aware customizer | `.AddUsers(out var users, (u, ctx) => ...)` or `builder.AddOne(bp, out var x, (e, ctx) => ...)`. `ctx` has `Seed`, `Index`, `Now`, `Next(sequence)`, `Ancestor<T>()`, `All<T>()`, and `Last<T>()`. |
-| Trait | `Blueprints.User.With(u => u.Role = "Admin")` makes a variant that sets the value on every output. |
+| Trait | `Blueprints.User.With(u => u.Roles = ["Admin"])` makes a variant that sets the value on every output. |
 | Transient | `bp.AsTransient()`, or `.Transient()` after an `AddX` call. The entities are built but `BuildAsync` does not save them. |
 | Aggregate | Implement `IGraphAggregate.GetEntities()` on a wrapper type. `BuildAsync` saves the parts in order, not the wrapper. |
 | Plain blueprint | `Blueprint.For` and `Blueprint.ChildOf` customize the entity directly. Use them only for types with settable properties. Domain entities have private setters, so use `FromInput` and `ChildFromInput` for them. |
