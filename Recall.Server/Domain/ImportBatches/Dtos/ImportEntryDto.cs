@@ -12,7 +12,21 @@ public sealed record ImportEntryPageDto
     public IReadOnlyList<DateOnly> RejectedDays { get; init; } = [];
 }
 
-public sealed record ImportEntryDto
+/// <summary>The entries of a batch as an agent reads them, with no document.</summary>
+public sealed record ImportEntryPageForAgentDto
+{
+    /// <summary>The version of the batch when the entries were read. Send it with the accept.</summary>
+    public uint Version { get; init; }
+
+    /// <summary>The entries in order of their date and position.</summary>
+    public IReadOnlyList<ImportEntryForAgentDto> Entries { get; init; } = [];
+
+    /// <summary>Each day that the person rejected. A rejected day holds each entry of its date.</summary>
+    public IReadOnlyList<DateOnly> RejectedDays { get; init; } = [];
+}
+
+/// <summary>An entry as an agent reads it. It has no document, because the agent sent Raw and reads Raw.</summary>
+public record ImportEntryForAgentDto
 {
     public string ClientSessionId { get; init; } = default!;
     public DateOnly Date { get; init; }
@@ -26,9 +40,6 @@ public sealed record ImportEntryDto
 
     /// <summary>The Markdown of the agent, as the put sent it.</summary>
     public string Raw { get; init; } = default!;
-
-    /// <summary>The words that the accept stores now, as a ProseMirror document: the edit of the person, else Raw as a document.</summary>
-    public string Document { get; init; } = default!;
     public IReadOnlyList<string> Moods { get; init; } = [];
     public IReadOnlyList<string> Topics { get; init; } = [];
     public ImportReviewDto Review { get; init; } = default!;
@@ -44,6 +55,16 @@ public sealed record ImportEntryDto
 
     /// <summary>True when a put changed the time after the last edit of the time by the person.</summary>
     public bool TimeChangedAfterEdit { get; init; }
+}
+
+public sealed record ImportEntryDto : ImportEntryForAgentDto
+{
+    public ImportEntryDto() { }
+
+    internal ImportEntryDto(ImportEntryForAgentDto entry, string document) : base(entry) => Document = document;
+
+    /// <summary>The words that the accept stores now, as a ProseMirror document: the edit of the person, else Raw as a document.</summary>
+    public string Document { get; init; } = default!;
 }
 
 public sealed record ImportReviewDto

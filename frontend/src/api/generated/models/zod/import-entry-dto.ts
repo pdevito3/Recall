@@ -7,13 +7,13 @@ import * as z from 'zod'
 import { importReviewDtoSchema } from './import-review-dto'
 
 export const importEntryDtoSchema = z.object({
+  document: z.string().describe('The words that the accept stores now, as a ProseMirror document: the edit of the person, else Raw as a document.'),
   clientSessionId: z.string(),
   date: z.iso.date(),
   position: z.int32(),
   time: z.string().nullish().describe('The time of the agent as `HH:mm`, or null.'),
   timeZone: z.string().nullish().describe('The zone of the agent, or null for the zone of the batch.'),
   raw: z.string().describe('The Markdown of the agent, as the put sent it.'),
-  document: z.string().describe('The words that the accept stores now, as a ProseMirror document: the edit of the person, else Raw as a document.'),
   moods: z.array(z.string()),
   topics: z.array(z.string()),
   review: importReviewDtoSchema,

@@ -17,7 +17,10 @@ public static class ImportBatchMapper
         Version = batch.Version,
     };
 
-    public static ImportEntryDto ToImportEntryDto(this ImportEntry entry, ImportBatch batch) => new()
+    public static ImportEntryDto ToImportEntryDto(this ImportEntry entry, ImportBatch batch)
+        => new(entry.ToImportEntryForAgentDto(batch), entry.RawAtAccept());
+
+    public static ImportEntryForAgentDto ToImportEntryForAgentDto(this ImportEntry entry, ImportBatch batch) => new()
     {
         ClientSessionId = entry.ClientSessionId,
         Date = entry.Agent.Date,
@@ -25,7 +28,6 @@ public static class ImportBatchMapper
         Time = ImportTimeOfDay.Text(entry.Agent.Time),
         TimeZone = entry.Agent.TimeZone,
         Raw = entry.Agent.Raw,
-        Document = entry.RawAtAccept(),
         Moods = entry.Agent.Moods,
         Topics = entry.Agent.Topics,
         Review = new ImportReviewDto { Rejected = entry.Review.Rejected, Words = entry.Review.Words, Time = ImportTimeOfDay.Text(entry.Review.Time) },
