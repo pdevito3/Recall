@@ -95,12 +95,20 @@ export function useReviewImportEntry(id: string, { inForm = false, onOutdated }:
   })
 }
 
-export function useReviewImportDay(id: string) {
+interface ReviewImportDayOptions {
+  /** Runs when the Server took the review, before the read again can take the day off the page. */
+  onReviewed?: () => void
+}
+
+export function useReviewImportDay(id: string, { onReviewed }: ReviewImportDayOptions = {}) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationKey: ImportKeys.reviews(id),
     mutationFn: (review: ImportDayReviewDto) => reviewImportDay({ path: { id }, body: review }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ImportKeys.batch(id) }),
+    onSuccess: () => {
+      onReviewed?.()
+      return queryClient.invalidateQueries({ queryKey: ImportKeys.batch(id) })
+    },
     onError: (error) => readAgainAfterARefusal(queryClient, id, error),
   })
 }

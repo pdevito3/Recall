@@ -442,6 +442,29 @@ test('@IMP-40 on a rejected day, an entry that the person rejected alone says Re
   await expect.element(cardOf(screen, '12:01 PM').getByRole('button', { name: /^(Keep|Reject) the entry/ })).not.toBeInTheDocument()
 })
 
+test('@IMP-40 @IMP-44 Keep day on a rejected day with no entries takes the day off the page and moves the focus to the heading of the batch', async () => {
+  const { screen } = await renderAt('/imports/imp_1', [
+    batchesAre([diary]),
+    daysAre([...twoDays, dayOf('2024-03-03', 0, { rejected: true })]),
+    entriesAre([coffee, walk, london], '2024-03-01', '2024-03-03'),
+  ])
+  await expect.element(screen.getByRole('button', { name: 'Keep Sunday, March 3, 2024' })).toBeVisible()
+  await commands.answerRequests([
+    ...signedInMember,
+    noPeople,
+    batchesAre([diary]),
+    daysAre(twoDays, 5),
+    entriesAre([coffee, walk, london]),
+    entriesAre([coffee, walk, london], '2024-03-01', '2024-03-03'),
+    { method: 'PUT', path: '/api/v1/import-batches/imp_1/days/review', body: { version: 5, date: '2024-03-03', rejected: false } },
+  ])
+
+  await userEvent.click(screen.getByRole('button', { name: 'Keep Sunday, March 3, 2024' }))
+
+  await expect.element(screen.getByRole('region', { name: 'Sunday, March 3, 2024' })).not.toBeInTheDocument()
+  await expect.element(screen.getByRole('heading', { level: 1, name: 'Diary 2024' })).toHaveFocus()
+})
+
 test('@IMP-41 the counts come from the days, and a review reads the days again', async () => {
   const { screen } = await renderReview()
   await expect.element(screen.getByLabelText('Counts of this batch')).toMatchTextContent('3 entries: 3 kept, 0 rejected')

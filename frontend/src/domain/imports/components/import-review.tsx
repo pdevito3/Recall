@@ -83,7 +83,7 @@ export function ImportReview({ batch, pageNumber }: ImportReviewProps) {
       {page && (
         <>
           {pages.length > 1 && <ImportPager label="Pages of this batch" page={page} shown={shown} total={pages.length} onPageChange={changePage} />}
-          <ImportPageEntries batch={batch} page={page} onEntryGone={() => headingRef.current?.focus()} />
+          <ImportPageEntries batch={batch} page={page} onGone={() => headingRef.current?.focus()} />
           {pages.length > 1 && <ImportPager label="Pages of this batch, at the end" page={page} shown={shown} total={pages.length} onPageChange={changePage} />}
         </>
       )}
@@ -116,10 +116,10 @@ function ImportPager({ label, page, shown, total, onPageChange }: ImportPagerPro
 interface ImportPageEntriesProps {
   batch: ImportBatchDto
   page: ImportPage
-  onEntryGone: () => void
+  onGone: () => void
 }
 
-function ImportPageEntries({ batch, page, onEntryGone }: ImportPageEntriesProps) {
+function ImportPageEntries({ batch, page, onGone }: ImportPageEntriesProps) {
   const entries = useImportEntries(batch.id, page.from, page.to)
 
   if (entries.isPending) {
@@ -134,7 +134,7 @@ function ImportPageEntries({ batch, page, onEntryGone }: ImportPageEntriesProps)
   return (
     <div className="flex flex-col gap-6">
       {page.days.map((day) => (
-        <ImportDayGroup key={day.date} batchId={batch.id} batchZone={batch.timeZone} day={day} entries={byDate.get(day.date) ?? noEntries} onEntryGone={onEntryGone} />
+        <ImportDayGroup key={day.date} batchId={batch.id} batchZone={batch.timeZone} day={day} entries={byDate.get(day.date) ?? noEntries} onGone={onGone} />
       ))}
     </div>
   )

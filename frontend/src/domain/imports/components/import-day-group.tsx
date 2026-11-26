@@ -11,11 +11,14 @@ interface ImportDayGroupProps {
   batchZone: string
   day: ImportDayDto
   entries: ImportEntryDto[]
-  onEntryGone: () => void
+  /** Runs when an entry or this day leaves the page, so the focus can go to the heading of the batch. */
+  onGone: () => void
 }
 
-export function ImportDayGroup({ batchId, batchZone, day, entries, onEntryGone }: ImportDayGroupProps) {
-  const review = useReviewImportDay(batchId)
+export function ImportDayGroup({ batchId, batchZone, day, entries, onGone }: ImportDayGroupProps) {
+  // A kept day with no entry is not a day of the batch (IMP-31), so the read after the review takes it off the page.
+  const leavesPage = day.rejected && day.entryCount === 0
+  const review = useReviewImportDay(batchId, { onReviewed: leavesPage ? onGone : undefined })
   const heading = dayOf(day.date)
   const headingId = `import-day-${day.date}`
 
@@ -45,7 +48,7 @@ export function ImportDayGroup({ batchId, batchZone, day, entries, onEntryGone }
       ) : (
         <ul aria-label={`Entries of ${heading}`} className="flex flex-col gap-2">
           {entries.map((entry) => (
-            <ImportEntryCard key={entry.clientSessionId} batchId={batchId} batchZone={batchZone} entry={entry} dayIsRejected={day.rejected} onGone={onEntryGone} />
+            <ImportEntryCard key={entry.clientSessionId} batchId={batchId} batchZone={batchZone} entry={entry} dayIsRejected={day.rejected} onGone={onGone} />
           ))}
         </ul>
       )}
