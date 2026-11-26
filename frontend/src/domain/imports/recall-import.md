@@ -28,10 +28,10 @@ If you see none of these tools, tell the person to connect you to Recall with a 
 4. Call `list_journal_days` over the dates of the source. If the journal already has some of these days, tell the person before you write.
 5. Open one batch with `open_import_batch`. Name it for the source and the years, for example "Notion 2019 to 2023". If the source has more than 20,000 entries, open one batch for each year, because one accept takes at most 20,000 entries.
 6. Do a test on a small part. Put the entries of three to five days, with one day of many entries if the source has one.
-7. Read the test back with `list_import_entries`. Compare each entry with the source.
+7. Read the test back with `list_import_entries`. Compare each entry with the source. `startsAt` is in UTC, so convert it to the zone of the entry before you compare it.
 8. Tell the person to open Imports in Recall, choose the batch, and check the test entries. Wait for a yes.
 9. If the person asks for other split rules, call `discard_import_batch`, change the rules, and go back to step 5.
-10. Write the full batch. Put the rest of the entries in calls of at most 500 entries and at most 16 MB. Check the outcome of each entry.
+10. Write the full batch. Put all the entries in calls of at most 500 entries and at most 16 MB. The test entries give `Unchanged`. Check the outcome of each entry.
 11. Tell the person how many entries you wrote and which outcomes need them. Tell them to review the batch in Imports in Recall and accept it there.
 
 ## The fields of an entry
@@ -39,9 +39,9 @@ If you see none of these tools, tell the person to connect you to Recall with a 
 - `clientSessionId`: an ID that is the same for the same source entry on each run, of at most 100 characters. Make it from the source, the date, and the position, for example `notion-2021-03-03-1`. Never make it random.
 - `date`: the day of the source as `YYYY-MM-DD`.
 - `position`: the order of the entry in its day, from 0. Two entries of one date never share a position. A day holds at most 720 entries, positions 0 to 719.
-- `time`: the time as `HH:mm` on a 24-hour clock. Give it only when the text gives a time, such as "at 9pm" (`21:00`) or a time stamp. Otherwise leave it out, and Recall starts the entry at 12:00 plus one minute for each position.
+- `time`: the time as `HH:mm` on a 24-hour clock. Give it only when the text gives a time, such as "at 9pm" (`21:00`) or a time stamp. If the text gives an hour with no am or pm, such as "at 6", ask the person in step 2. Otherwise leave it out, and Recall starts the entry at 12:00 plus one minute for each position.
 - `timeZone`: leave it out, so that the entry takes the zone of the batch. Give an IANA zone only when the source shows that the person wrote the entry in another zone.
-- `raw`: the words of the person as Markdown, exactly as the source has them. Keep each word, line break, list, and emphasis. Leave out only the structure of the source: the date title and the divider. Never fix, summarize, translate, or reword the text.
+- `raw`: the words of the person as Markdown, exactly as the source has them. Keep each word, line break, list, and emphasis. Leave out only the structure of the source: the title of the page, the date title, the divider, and the indent of a toggle body. Never fix, summarize, translate, or reword the text.
 - `moods`: at most three Moods that the text shows, or none. Use only these Moods: Joyful, Content, Calm, Neutral, Tired, Anxious, Sad, Angry, Excited, Grateful.
 - `topics`: one to five short Topics of the entry in title case, such as "Work" or "Running". Each Topic has at most 100 characters.
 
@@ -64,7 +64,7 @@ A put of the same entries again changes nothing. If a call fails or you lose the
 
 A Notion export has these shapes. One workspace can have each of them, in different years.
 
-- **A toggle for each day.** The title of the toggle is the date. In a Markdown export, the toggle is a list item `- <title>` with its body indented below it, or a `<details>` block with the title in `<summary>`. The body is one entry.
+- **A toggle for each day.** The title of the toggle is the date. In a Markdown export, the toggle is a list item `- <title>` at the left edge, with its body indented below it, or a `<details>` block with the title in `<summary>`. The body is one entry. Remove the indent of the body. A list item inside the body is text of the entry, not a day.
 - **A toggle with dividers.** A divider is a line `---` in the body. Each part between dividers is its own entry, in the order of the source. An empty part gives no entry.
 - **A page or a heading for each day.** The title of the page or the heading is the date. The body is the day, and dividers split it as in a toggle.
 
