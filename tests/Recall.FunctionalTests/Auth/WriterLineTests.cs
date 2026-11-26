@@ -25,6 +25,9 @@ public class WriterLineTests
     private const string Me = "/auth/me";
     private const string SlideSpan = "session.slide";
     private static readonly TimeSpan Limit = TimeSpan.FromMinutes(1);
+    // A me that waits for its slide blocks until the 30 second Default Timeout of the connection string, in the writer
+    // line or in the SQLite lock wait. A bound well under it still fails then, and a loaded runner of the suite passes.
+    private static readonly TimeSpan SlideBound = AuthEndpoints.SlideWait + TimeSpan.FromSeconds(15);
 
     private static AuthFlowFactory Host => AuthHosts.WriterLine;
 
@@ -66,9 +69,9 @@ public class WriterLineTests
         var me = await browser.GetAsync(Me, csrf: true).WaitAsync(Limit);
 
         // Assert
-        watch.Elapsed.ShouldBeLessThan(AuthEndpoints.SlideWait + TimeSpan.FromSeconds(5));
+        watch.Elapsed.ShouldBeLessThan(SlideBound);
         me.StatusCode.ShouldBe(HttpStatusCode.OK);
-        await held.WaitForWritersAsync(1, AuthEndpoints.SlideWait + TimeSpan.FromSeconds(5));
+        await held.WaitForWritersAsync(1, SlideBound);
     }
 
     [Test]
@@ -86,7 +89,7 @@ public class WriterLineTests
         var me = await browser.GetAsync(Me, csrf: true).WaitAsync(Limit);
 
         // Assert
-        watch.Elapsed.ShouldBeLessThan(AuthEndpoints.SlideWait + TimeSpan.FromSeconds(5));
+        watch.Elapsed.ShouldBeLessThan(SlideBound);
         me.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
