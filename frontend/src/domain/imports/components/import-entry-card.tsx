@@ -46,7 +46,7 @@ export function ImportEntryCard({ batchId, batchZone, entry, dayIsRejected, onGo
   if (isEditing) {
     return (
       <li aria-label={label} className="rounded-lg border bg-card p-3">
-        <ImportEntryEdit batchId={batchId} entry={entry} zone={editZone} onDone={() => setIsEditing(false)} onGone={onGone} />
+        <ImportEntryEdit batchId={batchId} entry={entry} initialTime={entry.review.time ?? entry.time ?? null} zone={editZone} onDone={() => setIsEditing(false)} onGone={onGone} />
       </li>
     )
   }
@@ -115,18 +115,23 @@ const hhmm = (time: Time) => `${String(time.hour).padStart(2, '0')}:${String(tim
 interface ImportEntryEditProps {
   batchId: string
   entry: ImportEntryDto
+  /**
+   * The time when the form opened. A read while the form is open can change the time of the agent, and that is no change
+   * of the person, so a save compares the typed time to this one.
+   */
+  initialTime: string | null
   /** The zone that a typed time is in. */
   zone: string
   onDone: () => void
   onGone: () => void
 }
 
-function ImportEntryEdit({ batchId, entry, zone, onDone, onGone }: ImportEntryEditProps) {
+function ImportEntryEdit({ batchId, entry, initialTime, zone, onDone, onGone }: ImportEntryEditProps) {
   const review = useReviewImportEntry(batchId, { inForm: true, onOutdated: onGone })
-  const shownTime = entry.review.time ?? entry.time ?? null
+  const [openedTime] = useState(initialTime)
   const [words, setWords] = useState<string | null>(null)
-  const [time, setTime] = useState<Time | null>(shownTime ? parseTime(shownTime) : null)
-  const timeChanged = (time ? hhmm(time) : null) !== shownTime
+  const [time, setTime] = useState<Time | null>(openedTime ? parseTime(openedTime) : null)
+  const timeChanged = (time ? hhmm(time) : null) !== openedTime
   const hasChanges = words !== null || timeChanged
   const refusal = review.error ? refusalOf(review.error, ['words']) : null
   const wordsError = refusal?.byField.words
