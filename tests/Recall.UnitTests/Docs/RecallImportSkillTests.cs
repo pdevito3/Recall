@@ -3,9 +3,9 @@ namespace Recall.UnitTests.Docs;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using ModelContextProtocol.Server;
-using Recall.Server.Domain.Sessions;
+using Recall.Server.Domain.ImportBatches;
+using Recall.Server.Domain.Sessions.Features;
 using Recall.Server.Domain.Sessions.Metadata;
-using Recall.Server.Resources.Entrypoints.Mcp;
 using Shouldly;
 
 /// <summary>
@@ -19,10 +19,7 @@ public partial class RecallImportSkillTests
     public void the_recall_import_skill_names_exactly_the_mcp_tools_of_the_import()
     {
         // Arrange
-        var tools = McpTools();
-        var importTools = tools.Where(t => t.Access is ToolAccessKind.JournalRead or ToolAccessKind.JournalWrite)
-            .Select(t => t.Name)
-            .ToHashSet(StringComparer.Ordinal);
+        var importTools = ImportToolNames();
         var skill = SkillText();
 
         // Act
@@ -31,7 +28,7 @@ public partial class RecallImportSkillTests
         // Assert
         importTools.ShouldNotBeEmpty();
         importTools.Except(named).Order(StringComparer.Ordinal)
-            .ShouldBeEmpty("Each MCP tool of the journal is a tool of the import. Name it in recall-import.md, so that an agent with the skill knows it.");
+            .ShouldBeEmpty("Each MCP tool of the ImportBatches domain, and list_journal_days, is a tool of the import. Name it in recall-import.md, so that an agent with the skill knows it.");
         named.Except(importTools).Order(StringComparer.Ordinal)
             .ShouldBeEmpty("recall-import.md names a tool that is not an MCP tool of the import. Use the name of the tool as the Server registers it, and write any other word without an underscore.");
     }
@@ -52,14 +49,19 @@ public partial class RecallImportSkillTests
             .ShouldBe(Mood.Names.Order(StringComparer.Ordinal), "The skill lists each Mood of Mood.Names, and no other.");
     }
 
-    private static List<(string Name, ToolAccessKind? Access)> McpTools()
-        => typeof(Session).Assembly.GetTypes()
+    // The tools of the import are the MCP tools of the ImportBatches domain, and the journal read that finds an overlap with
+    // the journal. Another journal tool, such as a later list of Sessions, is not for the import, so the skill need not name it.
+    private static HashSet<string> ImportToolNames()
+    {
+        var domain = typeof(ImportBatch).Namespace!;
+        return typeof(ImportBatch).Assembly.GetTypes()
             .Where(t => t.GetCustomAttribute<McpServerToolTypeAttribute>() is not null)
+            .Where(t => t == typeof(GetJournalDaysTool) || t.Namespace == domain || t.Namespace!.StartsWith(domain + ".", StringComparison.Ordinal))
             .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Static))
-            .Select(m => (Tool: m.GetCustomAttribute<McpServerToolAttribute>(), Access: m.GetCustomAttribute<ToolAccessAttribute>()))
-            .Where(m => m.Tool is not null)
-            .Select(m => (m.Tool!.Name!, m.Access?.Kind))
-            .ToList();
+            .Select(m => m.GetCustomAttribute<McpServerToolAttribute>()?.Name)
+            .OfType<string>()
+            .ToHashSet(StringComparer.Ordinal);
+    }
 
     private static string SkillText()
         => File.ReadAllText(Path.Combine(FindRepositoryRoot(), "frontend", "src", "domain", "imports", "recall-import.md"));
