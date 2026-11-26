@@ -60,12 +60,12 @@ If you do not see `open_import_batch` or `put_import_entries`, your token cannot
    - If the source has more than 20,000 entries, open one batch for each year. One accept takes at most 20,000 entries. Do steps 8 to 13 for each batch.
    - Else open one batch with `open_import_batch`. Name it for the source and the years, for example "Notion 2019 to 2023". Use a name that no other batch has. If Recall refuses the time zone, ask the person for another zone.
    - If you lose the result of `open_import_batch`, call `list_import_batches`. If it shows a batch with that name, use it. Else open the batch again.
-8. If the batch held entries of this source before this run, check a sample of them against your rules.
-   - Pick four dates that the batch holds, near the dates of step 3 and the date of the source with the most entries.
-   - Read one date in each call. If a date gives no entry, try the next date of the source.
-   - For each entry that the batch holds on such a date, your rules must give an entry with the same `clientSessionId`, `position`, `time`, and `raw`.
+8. If the batch held entries of this source before this run, check them before each put. A put replaces the words of an entry, and the review of the person stays on its ID.
+   - Before each put, read the dates of that put with `list_import_entries`, at most 31 days in each call.
+   - For each entry that the batch holds, your rules must give an entry with the same `clientSessionId`, `position`, `time`, and `raw`.
+   - Give each such entry the `moods` and `topics` that the batch holds for it. Then the put gives `Unchanged`.
    - An entry of your rules that the batch does not hold is not a failure. The put adds it.
-   - If the check fails, do the steps of "If the split rules change".
+   - If the check fails, put nothing more. Do the steps of "If the split rules change".
 9. Do a test on a small part. Put the entries of three to five days, with one day of many entries if the source has one. If the source has five days or fewer, the test is the whole source.
 10. Read the test back with `list_import_entries`. Compare each entry with the source. `startsAt` is in UTC, so convert it to the zone of the entry before you compare it.
 11. Tell the person to open Imports in Recall, choose the batch, and check the test entries. Wait for a yes.
