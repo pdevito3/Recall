@@ -8,7 +8,7 @@ The rules have IDs in [the imports spec](specs/imports.md). [ADR 0026](adr/0026-
 
 ### Make a token
 
-1. In Recall, open **Settings** > **Personal access tokens**, and choose **New token**.
+1. In Recall, open **Personal access tokens** in the sidebar, and choose **New token**.
 2. Give the token a name, such as "Import agent".
 3. Select **Change my journal**. A token that changes the journal also reads it. The import needs no other permission.
 4. Pick an expiry, and choose **Create token**.
@@ -20,7 +20,7 @@ A token with only **Read my journal** sees only the list tools. It gets an error
 
 The MCP URL is the address of your Recall with `/mcp` at the end, for example `https://recall.example.com/mcp`. **Imports** in Recall shows this URL, with **Copy MCP URL**. The agent sends the token in the header `Authorization: Bearer <token>`.
 
-The examples below read the token from the environment variable `RECALL_PAT`. Set it before you start the agent, for example `export RECALL_PAT=rcl_pat_...`. A token that you type in a command goes into the history of your shell, so the variable is safer.
+The examples below read the token from the environment variable `RECALL_PAT`. A token that you type in a command goes into the history of your shell. To keep it out of the history, run `read -rs RECALL_PAT`, paste the token, and press Enter. Then run `export RECALL_PAT`. Set the variable before you run `claude mcp add`, because the shell puts its value into the command when the command runs.
 
 For Claude Code, run this command with your MCP URL:
 
@@ -76,7 +76,12 @@ curl https://recall.example.com/mcp \
 
 The response is an event stream. The JSON-RPC result is on the `data:` line. Call a tool with the method `tools/call` and `params` of `{ "name": "<tool>", "arguments": { ... } }`. The other auth rules of a token are in [authentication.md](authentication.md#personal-access-tokens).
 
-If the agent cannot connect, the token is wrong, expired, or revoked. Make a new token.
+If the agent cannot connect, look for these causes in this order:
+
+- The MCP URL is wrong. Copy it again from **Imports** in Recall.
+- The URL starts with `http://`, and the Claude Desktop entry has no `"--allow-http"`.
+- Claude Desktop cannot find `npx`. Run `which npx` in a terminal, and put the full path that it gives in `"command"`.
+- Else the token is wrong, expired, or revoked. Make a new token.
 
 ### Give the agent the skill
 
@@ -151,7 +156,7 @@ Each entry of a put gets the first outcome that applies.
 
 ### A put again is safe
 
-A put of the same call again changes nothing. So the agent can send a put again after an error or a lost result. A call of `open_import_batch` again opens a second batch. So after a lost result of `open_import_batch`, the agent finds the batch with `list_import_batches`. A second run of a whole import also stores only the new entries, because each entry that is already in the journal gets `InJournal`. An entry that you rejected in an accepted or a discarded batch is not in the journal, so it gets `Added` again. Reject it again in the review. A put never changes your review, and it removes no entry.
+A put of the same call again changes nothing. So the agent can send a put again after an error or a lost result. A call of `open_import_batch` again opens a second batch. So after a lost result of `open_import_batch`, the agent finds the batch with `list_import_batches`. A second run of a whole import also stores only the new entries, because each entry that is already in the journal gets `InJournal`. An entry that you rejected in an accepted or a discarded batch is not in the journal, so it gets `Added` again. Reject it again in the review. A put never changes your review, and it removes no entry. So a second run with other split rules can put the same text again under other IDs. The skill tells the agent to compare its rules with the earlier entries before it puts more, and to stop and ask you when they differ.
 
 ### The review gate
 
