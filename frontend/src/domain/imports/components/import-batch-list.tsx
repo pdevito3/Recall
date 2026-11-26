@@ -23,10 +23,8 @@ export function ImportBatchList({ batches, headingRef }: ImportBatchListProps) {
   }
   if (batches.data.length === 0) {
     return (
-      <p className="max-w-prose text-muted-foreground wrap-anywhere">
-        You have no import batches. An agent opens a batch with a{' '}
-        <Link to="/settings/personal-access-tokens" className="underline underline-offset-4 hover:text-primary">personal access token</Link>
-        , then you review it here.
+      <p className="max-w-prose text-muted-foreground">
+        You have no import batches. When an agent opens a batch, you review it here.
       </p>
     )
   }
