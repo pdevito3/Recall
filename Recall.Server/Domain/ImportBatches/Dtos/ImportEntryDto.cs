@@ -26,6 +26,9 @@ public sealed record ImportEntryDto
 
     /// <summary>The Markdown of the agent, as the put sent it.</summary>
     public string Raw { get; init; } = default!;
+
+    /// <summary>The words that the accept stores now, as a ProseMirror document: the edit of the person, else Raw as a document.</summary>
+    public string Document { get; init; } = default!;
     public IReadOnlyList<string> Moods { get; init; } = [];
     public IReadOnlyList<string> Topics { get; init; } = [];
     public ImportReviewDto Review { get; init; } = default!;

@@ -1310,6 +1310,60 @@
         }
       }
     },
+    "/api/v1/import-batches/{id}/days": {
+      "get": {
+        "tags": [
+          "ImportBatches"
+        ],
+        "summary": "Gets each date of a batch in order, with the count of its entries, the count of the entries that the person rejected\none by one, and the reject of the day, and the version of the batch. A rejected day with no entry is in the list too.",
+        "operationId": "GetImportDays",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDaysDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no valid access token."
+          }
+        }
+      }
+    },
     "/api/v1/import-batches/{id}/entries": {
       "get": {
         "tags": [
@@ -9245,6 +9299,35 @@
           }
         }
       },
+      "ImportDayDto": {
+        "required": [
+          "date",
+          "entryCount",
+          "rejectedCount",
+          "rejected"
+        ],
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "entryCount": {
+            "type": "integer",
+            "description": "The entries of the date.",
+            "format": "int32"
+          },
+          "rejectedCount": {
+            "type": "integer",
+            "description": "The entries of the date that the person rejected one by one. The reject of the day does not count here.",
+            "format": "int32"
+          },
+          "rejected": {
+            "type": "boolean",
+            "description": "True when the person rejected the day, so that the accept makes no Session of an entry of the date."
+          }
+        }
+      },
       "ImportDayReviewDto": {
         "required": [
           "date",
@@ -9285,6 +9368,28 @@
           }
         }
       },
+      "ImportDaysDto": {
+        "required": [
+          "version",
+          "days"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer",
+            "description": "The version of the batch when the days were read. Send it with the accept."
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportDayDto"
+            },
+            "description": "Each date that has an entry or a reject of its day, in order."
+          }
+        }
+      },
       "ImportEntriesPutDto": {
         "required": [
           "entries"
@@ -9321,6 +9426,7 @@
           "date",
           "position",
           "raw",
+          "document",
           "moods",
           "topics",
           "review",
@@ -9359,6 +9465,10 @@
           "raw": {
             "type": "string",
             "description": "The Markdown of the agent, as the put sent it."
+          },
+          "document": {
+            "type": "string",
+            "description": "The words that the accept stores now, as a ProseMirror document: the edit of the person, else Raw as a document."
           },
           "moods": {
             "type": "array",

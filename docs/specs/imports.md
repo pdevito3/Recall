@@ -68,6 +68,8 @@ An accept deletes the `ImportEntry` and `ImportDay` rows. The `ImportBatch` row 
 | IMP-28 | The outcome of a put entry is the first that applies: `Invalid` with the field and the reason, `InJournal`, `Deleted`, `InOtherBatch`, `InTheFuture`, `PositionTaken`, `Rejected`, `Unchanged`, `Changed`, `Added`. `Invalid` covers a Client session ID that is blank or has more than 100 characters, a date that is not valid or is outside 1000-01-01 to 9998-12-31, a position outside 0 to 719, a time that is not `HH:mm`, a zone of IMP-10, a Raw of IMP-11, and Moods or Topics over the limits of a Session (50 values of at most 100 characters). Only `Rejected`, `Changed`, and `Added` store the agent layer. A whole call gets 422 when it names one Client session ID twice or holds more than 500 entries, and 413 when its HTTP body, on REST or on `/mcp`, is more than 16 MB. A client sure to read the 413 sends `Expect: 100-continue`. A client that sends the whole body first can see a closed connection. | `PutImportEntries`, `ImportPutOutcomes.Of`, `ImportAgentLayer.Of` | The request size limit of the REST route and of `/mcp` |
 | IMP-29 | A Session read and each row of the timeline (`GET /sessions`) carry `importBatchId`, null for a Session that no import made. The Sync feed does not carry it. | `SessionMapper`, `GetSessionPage` | |
 | IMP-30 (later) | The `recall-import` skill names exactly the MCP tools of the import. | `frontend/src/domain/imports/recall-import.md` | A test that compares the skill with the tool list |
+| IMP-31 | A list of the days of a batch gives each date that has an entry, and each rejected day with no entry, in date order. Each day has the count of its entries, the count of the entries that the person rejected one by one (IMP-6), and the reject of the day. The list has the version of the batch, so the SPA can show the kept and rejected counts of an accept and send that version with it (IMP-17). It is one grouped query, and it reads no words. | `GetImportDays` | |
+| IMP-32 | A read of entries gives `document` for each entry: the words that the accept stores now, as a ProseMirror document. It is the edit of the person, else Raw through `MarkdownToProseMirror` (IMP-11). The review shows it and starts an edit from it, so the person sees what the journal gets. | `ImportEntry.RawAtAccept`, `ImportBatchMapper` | |
 
 ## 4. Permissions
 
@@ -82,6 +84,7 @@ None. Each import route needs a caller with a journal (SES-15), and each write n
 | `PutImportEntries` | `PUT /api/v1/import-batches/{id}/entries` | `put_import_entries` | Journal write |
 | `RemoveImportEntries` | `POST /api/v1/import-batches/{id}/entries/remove` | `remove_import_entries` | Journal write |
 | `GetImportEntries` | `GET /api/v1/import-batches/{id}/entries`, with optional `from` and `to` dates, both included | `list_import_entries` | A journal |
+| `GetImportDays` | `GET /api/v1/import-batches/{id}/days` | None | A journal |
 | `GetJournalDays` | `GET /api/v1/journal-days` | `list_journal_days` | A journal |
 | `ReviewImportEntry` | `PUT /api/v1/import-batches/{id}/entries/review`, with the Client session ID in the body | None | Journal write |
 | `ReviewImportDay` | `PUT /api/v1/import-batches/{id}/days/review`, with the date in the body | None | Journal write |
@@ -89,7 +92,7 @@ None. Each import route needs a caller with a journal (SES-15), and each write n
 | `DiscardImportBatch` | `DELETE /api/v1/import-batches/{id}` | `discard_import_batch` | Journal write |
 | `ChangeImportReview` | `PUT /api/v1/me/settings/import-review` | None | A web session |
 
-The review routes have no MCP tool, because the review is the work of the person.
+The review routes have no MCP tool, because the review is the work of the person. `GetImportDays` has no MCP tool, because only the review in the SPA reads it.
 
 ## 6. Messages
 

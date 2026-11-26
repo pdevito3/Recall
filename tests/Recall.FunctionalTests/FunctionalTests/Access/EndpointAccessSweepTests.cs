@@ -109,6 +109,7 @@ public class EndpointAccessSweepTests : TestBase
         ["PutImportEntries"] = new(JournalOfEachMember, OwnerOnly: true),
         ["RemoveImportEntries"] = new(JournalOfEachMember, OwnerOnly: true),
         ["GetImportEntries"] = new(JournalOfEachMember, OwnerOnly: true),
+        ["GetImportDays"] = new(JournalOfEachMember, OwnerOnly: true),
         ["ReviewImportEntry"] = new(JournalOfEachMember, OwnerOnly: true),
         ["ReviewImportDay"] = new(JournalOfEachMember, OwnerOnly: true),
         ["AcceptImportBatch"] = new(JournalOfEachMember, OwnerOnly: true),

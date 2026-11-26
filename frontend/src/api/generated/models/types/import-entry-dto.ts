@@ -34,6 +34,11 @@ export type ImportEntryDto = {
      * @type string
     */
     raw: string;
+    /**
+     * @description The words that the accept stores now, as a ProseMirror document: the edit of the person, else Raw as a document.
+     * @type string
+    */
+    document: string;
     moods: string[];
     topics: string[];
     review: ImportReviewDto;

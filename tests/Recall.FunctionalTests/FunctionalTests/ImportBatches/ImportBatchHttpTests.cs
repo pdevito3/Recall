@@ -60,6 +60,7 @@ public class ImportBatchHttpTests : TestBase
             await FactoryClient.GetAsync(ApiRoutes.ImportBatches.Entries(batch.Id)),
             await FactoryClient.PutAsJsonAsync(ApiRoutes.ImportBatches.ReviewEntry(batch.Id), new { clientSessionId = "edited", rejected = false, words = $"edit {marker}", time = "20:00" }),
             await FactoryClient.PutAsJsonAsync(ApiRoutes.ImportBatches.ReviewDay(batch.Id), new { date = "2024-03-02", rejected = true }),
+            await FactoryClient.GetAsync(ApiRoutes.ImportBatches.Days(batch.Id)),
             await FactoryClient.PostAsJsonAsync(ApiRoutes.ImportBatches.RemoveEntries(batch.Id), new { clientSessionIds = new[] { marker } }),
             await FactoryClient.GetAsync(ApiRoutes.ImportBatches.Root),
         };
