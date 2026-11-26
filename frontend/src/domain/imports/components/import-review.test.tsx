@@ -683,7 +683,7 @@ test('@IMP-44 a 409 of a changed batch keeps the dialog open, and after a new re
   await expect.poll(() => commands.countHeldRequests(daysPath)).toBe(1)
   await expect.element(dialog.getByRole('button', { name: 'Accept batch' })).toHaveAttribute('aria-disabled', 'true')
   await expect.element(dialog.getByRole('alert')).not.toBeInTheDocument()
-  await expect.element(dialog.getByRole('status')).not.toBeInTheDocument()
+  await expect.element(dialog.getByRole('status')).toBeEmptyDOMElement()
   await expect.element(dialog).toMatchTextContent('3 entries go into your journal')
   await commands.releaseRequests(daysPath)
   await expect.element(dialog.getByRole('status')).toHaveTextContent('The batch changed. Recall read it again. Check the new counts, then accept the batch.')
