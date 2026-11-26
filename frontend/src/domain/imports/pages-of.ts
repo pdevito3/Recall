@@ -8,7 +8,6 @@ export interface ImportPage {
   days: ImportDayDto[]
 }
 
-/** Whole days, in their order, with at most `size` entries on a page. A day with more entries than that is a page alone. */
 export function pagesOf(days: readonly ImportDayDto[], size = entriesOnAPage): ImportPage[] {
   const pages: ImportDayDto[][] = []
   let count = 0
@@ -31,7 +30,6 @@ export interface ImportCounts {
   rejected: number
 }
 
-/** The counts of an accept: an entry is rejected by its own reject or by the reject of its day (IMP-6). */
 export function countsOf(days: readonly ImportDayDto[]): ImportCounts {
   const entries = days.reduce((sum, day) => sum + day.entryCount, 0)
   const kept = days.reduce((sum, day) => sum + (day.rejected ? 0 : day.entryCount - day.rejectedCount), 0)

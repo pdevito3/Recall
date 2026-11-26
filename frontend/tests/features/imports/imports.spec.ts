@@ -14,7 +14,7 @@ const london = anImportEntry('c3', '2024-03-02', 'Flew to London.', { time: '21:
 const twoDays = [anImportDay('2024-03-01', 2), anImportDay('2024-03-02', 1)]
 
 const reviewOf = (api: Api) => {
-  api.mock(importsApi.listIs([diary]), importsApi.daysAre(diary.id, twoDays, 4), importsApi.entriesAre(diary.id, [coffee, walk, london]))
+  api.mock(importsApi.listIs([diary]), importsApi.daysAre(diary.id, twoDays, 4), importsApi.entriesOfAnyRangeAre(diary.id, [coffee, walk, london]))
 }
 
 test.describe('the list of import batches', () => {
@@ -75,13 +75,13 @@ test.describe('the review of a batch', () => {
     api.mock(
       importsApi.listIs([diary]),
       importsApi.daysAre(diary.id, [anImportDay('2024-03-01', 150), anImportDay('2024-03-02', 100)]),
-      importsApi.entriesAre(diary.id, [coffee]),
+      importsApi.entriesOfAnyRangeAre(diary.id, [coffee]),
     )
     const imports = importsPage(page)
-    await imports.openReview(diary.id, 'Diary 2024')
+    await imports.openReviewWithEntries(diary.id, 'Diary 2024')
     await expect(imports.at.entry('8:30 AM')).toBeVisible()
     expect(api.last('get', importPaths.entries(diary.id))?.query.toString()).toBe('from=2024-03-01&to=2024-03-01')
-    api.mock(importsApi.entriesAre(diary.id, [london]))
+    api.mock(importsApi.entriesOfAnyRangeAre(diary.id, [london]))
 
     await imports.at.nextPage.click()
 
@@ -95,7 +95,7 @@ test.describe('the review of a batch', () => {
     reviewOf(api)
     const imports = importsPage(page)
 
-    await imports.openReview(diary.id, 'Diary 2024')
+    await imports.openReviewWithEntries(diary.id, 'Diary 2024')
 
     await expect(imports.at.entriesOf(friday)).toHaveCount(2)
     await expect(imports.at.entry('8:30 AM')).toContainText('8:30 AMCoffee on the porch.CalmMorning')
@@ -107,10 +107,10 @@ test.describe('the review of a batch', () => {
   test('the words of a long entry with no spaces stay in the page on a phone', { tag: '@IMP-36' }, async ({ page, api }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     const long = anImportEntry('c9', '2024-03-01', 'w'.repeat(2000), { moods: ['m'.repeat(200)] })
-    api.mock(importsApi.listIs([diary]), importsApi.daysAre(diary.id, [anImportDay('2024-03-01', 1)]), importsApi.entriesAre(diary.id, [long]))
+    api.mock(importsApi.listIs([diary]), importsApi.daysAre(diary.id, [anImportDay('2024-03-01', 1)]), importsApi.entriesOfAnyRangeAre(diary.id, [long]))
     const imports = importsPage(page)
 
-    await imports.openReview(diary.id, 'Diary 2024')
+    await imports.openReviewWithEntries(diary.id, 'Diary 2024')
     await imports.at.reject('8:30 AM').scrollIntoViewIfNeeded()
 
     await expect(imports.at.reject('8:30 AM')).toBeInViewport({ ratio: 1 })
@@ -121,10 +121,10 @@ test.describe('the review of a batch', () => {
 
   test('an entry that the import changed after the edit says that the accept keeps the edit', { tag: '@IMP-37' }, async ({ page, api }) => {
     const flagged = { ...coffee, review: { rejected: false, words: documentOf('Mine.'), time: '09:00' }, wordsChangedAfterEdit: true, timeChangedAfterEdit: true }
-    api.mock(importsApi.listIs([diary]), importsApi.daysAre(diary.id, twoDays), importsApi.entriesAre(diary.id, [flagged, walk, london]))
+    api.mock(importsApi.listIs([diary]), importsApi.daysAre(diary.id, twoDays), importsApi.entriesOfAnyRangeAre(diary.id, [flagged, walk, london]))
     const imports = importsPage(page)
 
-    await imports.openReview(diary.id, 'Diary 2024')
+    await imports.openReviewWithEntries(diary.id, 'Diary 2024')
 
     await expect(imports.at.entry('8:30 AM')).toContainText('The import changed the words after your edit. The accept keeps your edit.')
     await expect(imports.at.entry('8:30 AM')).toContainText('The import changed the time after your edit. The accept keeps your time.')
@@ -136,8 +136,8 @@ test.describe('the review of a batch', () => {
     const reply = { ...coffee, review: { rejected: false, words: null, time: '09:15' }, startsAt: '2024-03-01T14:15:00Z' }
     api.mock(importsApi.reviewsEntry(diary.id, reply))
     const imports = importsPage(page)
-    await imports.openReview(diary.id, 'Diary 2024')
-    api.mock(importsApi.entriesAre(diary.id, [reply, walk, london]))
+    await imports.openReviewWithEntries(diary.id, 'Diary 2024')
+    api.mock(importsApi.entriesOfAnyRangeAre(diary.id, [reply, walk, london]))
 
     await imports.editTime(diary.id, '8:30 AM', '0915')
 
@@ -149,12 +149,12 @@ test.describe('the review of a batch', () => {
   test('Use the import time sends null for the time and keeps the words of the last edit', { tag: '@IMP-38' }, async ({ page, api }) => {
     const mine = documentOf('Mine.')
     const edited = { ...coffee, document: mine, review: { rejected: false, words: mine, time: '09:00' }, startsAt: '2024-03-01T14:00:00Z' }
-    api.mock(importsApi.listIs([diary]), importsApi.daysAre(diary.id, twoDays), importsApi.entriesAre(diary.id, [edited, walk, london]))
+    api.mock(importsApi.listIs([diary]), importsApi.daysAre(diary.id, twoDays), importsApi.entriesOfAnyRangeAre(diary.id, [edited, walk, london]))
     const reply = { ...edited, review: { rejected: false, words: mine, time: null }, startsAt: coffee.startsAt }
     api.mock(importsApi.reviewsEntry(diary.id, reply))
     const imports = importsPage(page)
-    await imports.openReview(diary.id, 'Diary 2024')
-    api.mock(importsApi.entriesAre(diary.id, [reply, walk, london]))
+    await imports.openReviewWithEntries(diary.id, 'Diary 2024')
+    api.mock(importsApi.entriesOfAnyRangeAre(diary.id, [reply, walk, london]))
     await imports.at.edit('9:00 AM').click()
 
     await imports.at.useImportTime.click()
@@ -169,7 +169,7 @@ test.describe('the review of a batch', () => {
     const refused = 'Give the entry some words, or reject it to leave it out.'
     api.mock(importsApi.refusesEntryReview(diary.id, aProblem().invalid({ words: [refused] }).build()))
     const imports = importsPage(page)
-    await imports.openReview(diary.id, 'Diary 2024')
+    await imports.openReviewWithEntries(diary.id, 'Diary 2024')
     await imports.at.edit('8:30 AM').click()
     await imports.at.words.click()
     await page.keyboard.press('ControlOrMeta+a')
@@ -186,10 +186,10 @@ test.describe('the review of a batch', () => {
     const rejected = { ...walk, review: { rejected: true, words: null, time: null }, isRejected: true }
     api.mock(importsApi.reviewsEntry(diary.id, rejected))
     const imports = importsPage(page)
-    await imports.openReview(diary.id, 'Diary 2024')
+    await imports.openReviewWithEntries(diary.id, 'Diary 2024')
     api.mock(
       importsApi.daysAre(diary.id, [anImportDay('2024-03-01', 2, { rejectedCount: 1 }), anImportDay('2024-03-02', 1)], 5),
-      importsApi.entriesAre(diary.id, [coffee, rejected, london]),
+      importsApi.entriesOfAnyRangeAre(diary.id, [coffee, rejected, london]),
     )
 
     await imports.reject(diary.id, '12:01 PM')
@@ -204,11 +204,11 @@ test.describe('the review of a batch', () => {
     reviewOf(api)
     api.mock(importsApi.reviewsDay(diary.id, '2024-03-01', true))
     const imports = importsPage(page)
-    await imports.openReview(diary.id, 'Diary 2024')
+    await imports.openReviewWithEntries(diary.id, 'Diary 2024')
     const held = { isRejected: true }
     api.mock(
       importsApi.daysAre(diary.id, [anImportDay('2024-03-01', 2, { rejected: true }), anImportDay('2024-03-02', 1)], 5),
-      importsApi.entriesAre(diary.id, [{ ...coffee, ...held }, { ...walk, ...held }, london]),
+      importsApi.entriesOfAnyRangeAre(diary.id, [{ ...coffee, ...held }, { ...walk, ...held }, london]),
     )
 
     await imports.rejectDay(diary.id, friday)
@@ -225,11 +225,11 @@ test.describe('the review of a batch', () => {
     api.mock(
       importsApi.listIs([diary]),
       importsApi.daysAre(diary.id, [anImportDay('2024-03-01', 2, { rejectedCount: 1 }), anImportDay('2024-03-02', 1, { rejected: true }), anImportDay('2024-03-03', 0, { rejected: true })]),
-      importsApi.entriesAre(diary.id, [coffee, walk, london]),
+      importsApi.entriesOfAnyRangeAre(diary.id, [coffee, walk, london]),
     )
     const imports = importsPage(page)
 
-    await imports.openReview(diary.id, 'Diary 2024')
+    await imports.openReviewWithEntries(diary.id, 'Diary 2024')
 
     await expect(imports.at.counts).toHaveText('3 entries: 1 kept, 2 rejected')
   })
@@ -237,7 +237,7 @@ test.describe('the review of a batch', () => {
 
 test.describe('the accept of a batch', () => {
   test('Accept asks with the counts, sends the version of the days, and shows the result', { tag: ['@IMP-42', '@IMP-43'] }, async ({ page, api }) => {
-    api.mock(importsApi.listIs([diary]), importsApi.daysAre(diary.id, [anImportDay('2024-03-01', 2, { rejectedCount: 1 }), anImportDay('2024-03-02', 1)], 9), importsApi.entriesAre(diary.id, [coffee, walk, london]))
+    api.mock(importsApi.listIs([diary]), importsApi.daysAre(diary.id, [anImportDay('2024-03-01', 2, { rejectedCount: 1 }), anImportDay('2024-03-02', 1)], 9), importsApi.entriesOfAnyRangeAre(diary.id, [coffee, walk, london]))
     const accepted = anImportBatch(diary.id, diary.name, {
       state: 'Accepted',
       acceptedAt: '2026-11-25T10:00:00Z',
@@ -246,7 +246,7 @@ test.describe('the accept of a batch', () => {
     })
     api.mock(importsApi.accepts(accepted))
     const imports = importsPage(page)
-    await imports.openReview(diary.id, 'Diary 2024')
+    await imports.openReviewWithEntries(diary.id, 'Diary 2024')
     await imports.at.accept.click()
     await expect(imports.at.acceptDialog).toContainText('2 entries go into your journal, and 1 entry that you rejected stay out.')
     api.mock(importsApi.listIs([accepted]))
@@ -290,7 +290,7 @@ test.describe('the refusals of the Server', () => {
     const changed = 'This batch changed after you read it. Read it again, then accept it.'
     api.mock(importsApi.refusesAccept(diary.id, { ...aProblem().staleVersion().build(), detail: changed, errors: { version: [changed] } }))
     const imports = importsPage(page)
-    await imports.openReview(diary.id, 'Diary 2024')
+    await imports.openReviewWithEntries(diary.id, 'Diary 2024')
     api.mock(importsApi.daysAre(diary.id, [...twoDays, anImportDay('2024-03-03', 1)], 7))
 
     await imports.accept(diary.id)
@@ -304,8 +304,8 @@ test.describe('the refusals of the Server', () => {
     reviewOf(api)
     api.mock(importsApi.refusesEntryReview(diary.id, aProblem().notFound('This entry is not in the batch.').build()))
     const imports = importsPage(page)
-    await imports.openReview(diary.id, 'Diary 2024')
-    api.mock(importsApi.daysAre(diary.id, [anImportDay('2024-03-01', 1), anImportDay('2024-03-02', 1)], 5), importsApi.entriesAre(diary.id, [coffee, london]))
+    await imports.openReviewWithEntries(diary.id, 'Diary 2024')
+    api.mock(importsApi.daysAre(diary.id, [anImportDay('2024-03-01', 1), anImportDay('2024-03-02', 1)], 5), importsApi.entriesOfAnyRangeAre(diary.id, [coffee, london]))
 
     await imports.reject(diary.id, '12:01 PM')
 
@@ -318,7 +318,7 @@ test.describe('the refusals of the Server', () => {
     reviewOf(api)
     api.mock(importsApi.refusesEntryReview(diary.id, aProblem().conflict('This batch is in your journal, so it cannot change.').build()))
     const imports = importsPage(page)
-    await imports.openReview(diary.id, 'Diary 2024')
+    await imports.openReviewWithEntries(diary.id, 'Diary 2024')
     api.mock(importsApi.listIs([{ ...diary, state: 'Accepted', acceptedAt: '2026-11-25T10:00:00Z', result: { sessionsMade: 3, entriesRejected: 0, daysRejected: 0, skippedInJournal: 0, skippedDeleted: 0 } }]))
 
     await imports.reject(diary.id, '8:30 AM')

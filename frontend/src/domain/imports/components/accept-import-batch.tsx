@@ -59,8 +59,8 @@ export function AcceptImportBatch({ batchId, counts, version }: AcceptImportBatc
   )
 }
 
-/** The 409 of IMP-17 is a stale version, and its detail is the message of the accept. */
 function messagesOf(error: Error): string[] {
   const problem = refusalOf(error, []).problem
-  return problem?.kind === 'refused' ? problem.messages : [error.message]
+  if (problem?.kind === 'refused') return problem.messages
+  return [error.message]
 }

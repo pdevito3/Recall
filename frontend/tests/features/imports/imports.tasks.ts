@@ -21,10 +21,8 @@ export function importsPage(page: Page) {
       await expect(at.batchHeading(name)).toBeVisible()
     },
 
-    /** Waits for the entries too, so that a mock that the test sets after it answers only the reads of the next step. */
-    async openReview(id: string, name: string) {
+    async openReviewWithEntries(id: string, name: string) {
       await this.openBatch(id, name)
-      // The entries load after the counts, in the render that shows the counts.
       await expect(at.counts).toBeVisible()
       await expect(at.loadingEntries).toHaveCount(0)
     },

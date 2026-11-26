@@ -13,10 +13,10 @@ public sealed record ImportDayDto
 {
     public DateOnly Date { get; init; }
 
-    /// <summary>The entries of the date.</summary>
+    /// <summary>The count of the entries of the date.</summary>
     public int EntryCount { get; init; }
 
-    /// <summary>The entries of the date that the person rejected one by one. The reject of the day does not count here.</summary>
+    /// <summary>The count of the entries of the date that the person rejected one by one. The reject of the day does not count here.</summary>
     public int RejectedCount { get; init; }
 
     /// <summary>True when the person rejected the day, so that the accept makes no Session of an entry of the date.</summary>

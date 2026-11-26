@@ -1,4 +1,3 @@
-// The review of an import batch: an agent fills a batch over REST with a personal access token, and the person reviews and accepts it.
 export default async ({ page, step, capture, settle, expect, login, stack }) => {
   const desktop = { width: 1280, height: 800 }
   const phone = { width: 390, height: 844 }
@@ -67,7 +66,6 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
     return opened.body
   })
 
-  // The sweep gives each name a long value in the answers of the page, so the recipe takes the name from them.
   let name
   const row = () => page.getByRole('list', { name: 'Your import batches' }).getByRole('listitem').filter({ has: page.getByRole('link', { name, exact: true }) })
   await step('the list shows the batch with its count, its zone, and Open', async () => {
