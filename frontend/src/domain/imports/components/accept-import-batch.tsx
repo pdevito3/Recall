@@ -46,6 +46,11 @@ export function AcceptImportBatch({ batchId, batchName, counts, version, nothing
       <ResponsiveDialog role="alertdialog" isOpen={isOpen} onOpenChange={open} isDismissable={!accept.isPending}>
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle className="wrap-anywhere">Accept “{batchName}”?</ResponsiveDialogTitle>
+          {isStale && (
+            <p role="status" className="text-sm">
+              The batch changed. Recall read it again. Check the new counts, then accept the batch.
+            </p>
+          )}
           <ResponsiveDialogDescription>
             {entriesWord(counts.kept)} {agree(counts.kept, 'goes', 'go')} into your journal, and {entriesWord(counts.rejected)} that you rejected{' '}
             {agree(counts.rejected, 'stays', 'stay')} out. After the accept, the batch cannot change.
@@ -57,11 +62,6 @@ export function AcceptImportBatch({ batchId, batchName, counts, version, nothing
               <p key={`${i}-${message}`}>{message}</p>
             ))}
           </div>
-        )}
-        {isStale && (
-          <p role="status" className="mt-2 text-sm text-muted-foreground">
-            The batch changed. Recall read it again. Check the new counts, then accept the batch.
-          </p>
         )}
         <ResponsiveDialogFooter>
           <ResponsiveDialogClose isDisabled={accept.isPending}>Keep reviewing</ResponsiveDialogClose>
