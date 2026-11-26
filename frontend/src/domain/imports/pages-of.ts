@@ -13,7 +13,7 @@ export function pagesOf(days: readonly ImportDayDto[], size = entriesOnAPage): I
   let count = 0
   for (const day of days) {
     const page = pages[pages.length - 1] as ImportDayDto[] | undefined
-    if (page && count + day.entryCount <= size) {
+    if (page && (day.entryCount === 0 || count + day.entryCount <= size)) {
       page.push(day)
       count += day.entryCount
     } else {
