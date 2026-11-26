@@ -185,7 +185,11 @@ test.describe('the recall-import skill', () => {
       const sideOfButton = size.width < 640 ? 'bottom' : 'right'
       expect((await imports.insetOf(imports.at.copyMcpUrl, imports.at.mcpUrl))[sideOfButton]).toBe(padding + 1)
       expect((await imports.insetOf(imports.at.copyCommand, imports.at.claudeCodeCommand))[sideOfButton]).toBe(padding + 1)
-      expect(await imports.insetOf(imports.at.copySkill, imports.at.skillRow)).toEqual({ right: padding, bottom: padding })
+      expect(await imports.insetOf(imports.at.copySkill, imports.at.skillRow)).toMatchObject({ [sideOfButton]: padding, bottom: padding })
+
+      await imports.at.skillToggle.click()
+      await expect(imports.at.skillToggle).toHaveAttribute('aria-expanded', 'true')
+      expect(await imports.textLeftOf(imports.at.skillToggle)).toBe(cardText)
     })
   }
 

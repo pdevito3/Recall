@@ -95,11 +95,20 @@ export function importsPage(page: Page) {
 
     selectedText: () => page.evaluate(() => window.getSelection()?.toString() ?? ''),
 
-    /** The left edge of the first line of text in the element, or of its first icon. */
+    /** The left edge of the first line of text in the element, or of the stroke of its icon. */
     textLeftOf: (element: Locator) =>
       element.evaluate((node) => {
-        const first = node.querySelector('svg') ?? node
-        if (first !== node) return Math.round(first.getBoundingClientRect().left)
+        // An icon has empty space at the left of its glyph, so take the left edge of its stroke on the screen.
+        const shapes = [...node.querySelectorAll<SVGGeometryElement>('svg path')]
+        if (shapes.length > 0) {
+          return Math.round(Math.min(...shapes.flatMap((shape) => {
+            const box = shape.getBBox()
+            const half = parseFloat(getComputedStyle(shape).strokeWidth) / 2
+            const toScreen = shape.getScreenCTM()!
+            return [box.y - half, box.y + box.height + half].flatMap((y) =>
+              [box.x - half, box.x + box.width + half].map((x) => new DOMPoint(x, y).matrixTransform(toScreen).x))
+          })))
+        }
         const range = document.createRange()
         range.selectNodeContents(node)
         return Math.round(range.getClientRects()[0].left)
