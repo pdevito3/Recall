@@ -154,10 +154,10 @@ Each entry of a put gets the first outcome that applies.
 | `Deleted` | You deleted the Session of this ID. | Skip it. |
 | `InOtherBatch` | Another open batch holds this ID. | Tell you. Find the batch with `list_import_entries` on each open batch. |
 | `InTheFuture` | The start time is in the future. An entry of today with no time starts at 12:00 plus its position, so before that time it gets this outcome. | For an entry of today with no time, put it again after that time, or ask you for its time. For another entry, read the source again for the date and the time. |
-| `PositionTaken` | Another entry of the date has the position. `positionTakenBy` names it. | Correct the positions and put again. |
+| `PositionTaken` | Another entry of the date has the position. `positionTakenBy` names it. | Correct the positions and put again. If `positionTakenBy` names an entry that the agent did not put in this run, stop and tell you. |
 | `Rejected` | You rejected the entry or its day. The put stored the new words, and the reject stays. If the put moved the entry off a rejected day, it stored nothing. | Leave it. |
 | `Unchanged` | The batch already holds this entry. | Go on. |
-| `Changed` | The put changed the entry. | Go on. |
+| `Changed` | The put changed the entry. | Go on when the agent corrected the entry in this run. Else stop and tell you, because the batch holds entries of other rules. |
 | `Added` | The put added the entry. | Go on. |
 
 `Changed` and `Added` write the entry. `Rejected` writes the entry, but not when the put moves the entry off a rejected day. The other outcomes write nothing.

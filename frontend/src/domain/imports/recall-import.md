@@ -44,7 +44,7 @@ If you do not see `open_import_batch` or `put_import_entries`, your token cannot
    - An entry that the person rejected in an earlier batch comes back for the review.
 
    Then ask whether to import those days, and wait for the answer. With no, leave those days out of the batch.
-6. If an accepted batch of this source exists, check the rules before you get the batch. A put never removes an entry. So another word or other rules can bring the same text into the journal two times.
+6. If an accepted batch of this source exists, check the rules before you get the batch. The IDs of the accepted batch are in the journal. Another word or other rules give other IDs, so the same text can go into the journal two times.
    - Pick a day of step 5 whose count of Sessions is your count of entries. Else pick the day with the most Sessions.
    - Pick such a day also after a no in step 5, because the check batch puts nothing into the journal.
    - Open a check batch with the name "Rules check, discard me" and the zone of the source. Put the entries of that day in it.
@@ -62,16 +62,16 @@ If you do not see `open_import_batch` or `put_import_entries`, your token cannot
    - If you lose the result of `open_import_batch`, call `list_import_batches`. If it shows a batch with that name, use it. Else open the batch again.
 8. If the batch held entries of this source before this run, check them before each put. A put replaces the words of an entry, and the review of the person stays on its ID.
    - Before each put, read the dates of that put with `list_import_entries`, at most 31 days in each call.
-   - For each entry that the batch holds, your rules must give an entry with the same `clientSessionId`, `position`, `time`, and `raw`.
+   - For each entry that the batch holds, your rules must give an entry with the same `clientSessionId`, `position`, `time`, `timeZone`, and `raw`.
    - Give each such entry the `moods` and `topics` that the batch holds for it. Then the put gives `Unchanged`.
    - An entry of your rules that the batch does not hold is not a failure. The put adds it.
    - If the check fails, put nothing more. Do the steps of "If the split rules change".
 9. Do a test on a small part. Put the entries of three to five days, with one day of many entries if the source has one. If the source has five days or fewer, the test is the whole source.
-10. Read the test back with `list_import_entries`. Compare each entry with the source. `startsAt` is in UTC, so convert it to the zone of the entry before you compare it.
+10. Read the test back with `list_import_entries`. Compare each entry with the source. `startsAt` is in UTC, so convert it to the zone of the entry before you compare it. If an entry is wrong, correct the rule that made it, and put the test again.
 11. Tell the person to open Imports in Recall, choose the batch, and check the test entries. Wait for a yes.
-12. Put the full batch, in calls of at most 500 entries and at most 16 MB. If a call is too long for you to write, send fewer entries in each call. The test entries give `Unchanged`, or `Rejected` when the person rejected them. Check the outcome of each entry.
+12. Put the full batch, in calls of at most 500 entries and at most 16 MB. If a call is too long for you to write, send fewer entries in each call. Send each test entry with the same fields as your last put of it, also its `moods` and `topics`. Then it gives `Unchanged`, or `Rejected` when the person rejected it. Check the outcome of each entry.
     - Keep one line for each `clientSessionId` with its last outcome. If you can write files, keep the lines in a file. Count the lines for steps 13 and 14.
-13. After the last put, call `list_import_batches`. Count your entries whose last outcome is `Added`, `Changed`, `Unchanged`, or `Rejected`. Do not count the entries that you removed.
+13. After the last put, call `list_import_batches`. Count your entries that got `Added`, `Changed`, `Unchanged`, or `Rejected` at any put. A later outcome that writes nothing leaves the entry in the batch. Do not count the entries that you removed.
     - The entry count of the batch must be the same as your count.
     - If the batch has more entries, it holds entries of other rules. Put nothing more, and do the steps of "If the split rules change".
     - Tell the person both counts. Do not read the whole batch to find the other entries.
@@ -81,13 +81,14 @@ If you do not see `open_import_batch` or `put_import_entries`, your token cannot
 
 Do these steps in each of these cases:
 
-- The rules change after a put into an open batch, also after step 12.
+- The rules change after a put into an open batch, also after step 12. First read the held entries of the changed dates, as in step 8.
 - The check of step 8 fails.
 - The count of step 13 is too large.
 - A put gives `Changed` for an entry that you did not correct in this run.
 
 1. If the person changed the rules, propose the new rules, and wait for a yes.
 2. Tell the person that the batch holds entries of other rules, so you must discard it. Say that a discard deletes each entry of the batch, and each reject and edit of the person. Wait for a yes.
+   - If the person says no, put nothing more. Tell the person to review and accept the batch as it is, or to change the rules back.
 3. Call `discard_import_batch`.
 4. Start again at step 5 with the new rules.
 
