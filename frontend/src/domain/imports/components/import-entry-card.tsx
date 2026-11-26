@@ -80,10 +80,10 @@ export function ImportEntryCard({ batchId, batchZone, entry, dayIsRejected, onGo
         </ul>
       )}
       {entry.wordsChangedAfterEdit && (
-        <ChangeNote>The import changed the words after your edit. The accept keeps your edit. To use the new words, choose Edit, then Use the import words.</ChangeNote>
+        <ChangeNote>The import changed the words after your edit. The accept keeps your edit. To use the new words, choose “Edit”, then “Use the import words”.</ChangeNote>
       )}
       {entry.timeChangedAfterEdit && (
-        <ChangeNote>The import changed the time after your edit. The accept keeps your time. To use the new time, choose Edit, then Use the import time.</ChangeNote>
+        <ChangeNote>The import changed the time after your edit. The accept keeps your time. To use the new time, choose “Edit”, then “Use the import time”.</ChangeNote>
       )}
       <div className="flex flex-wrap gap-2">
         <Button ref={editButton} variant="outline" size="sm" className="max-sm:h-11" aria-label={`Edit the entry at ${time}`} onPress={() => setIsEditing(true)}>

@@ -245,10 +245,10 @@ test('@IMP-37 an entry whose words or time the import changed after the edit say
 
   const card = cardOf(screen, '8:30 AM')
   await expect
-    .element(card.getByText('The import changed the words after your edit. The accept keeps your edit. To use the new words, choose Edit, then Use the import words.'))
+    .element(card.getByText('The import changed the words after your edit. The accept keeps your edit. To use the new words, choose “Edit”, then “Use the import words”.'))
     .toBeVisible()
   await expect
-    .element(card.getByText('The import changed the time after your edit. The accept keeps your time. To use the new time, choose Edit, then Use the import time.'))
+    .element(card.getByText('The import changed the time after your edit. The accept keeps your time. To use the new time, choose “Edit”, then “Use the import time”.'))
     .toBeVisible()
   await expect.element(cardOf(screen, '12:01 PM').getByText(/The import changed/)).not.toBeInTheDocument()
 })

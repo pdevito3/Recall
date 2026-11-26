@@ -141,8 +141,8 @@ test.describe('the review of a batch', () => {
 
     await imports.openReviewWithEntries(diary.id, 'Diary 2024')
 
-    await expect(imports.at.entry('8:30 AM')).toContainText('The import changed the words after your edit. The accept keeps your edit. To use the new words, choose Edit, then Use the import words.')
-    await expect(imports.at.entry('8:30 AM')).toContainText('The import changed the time after your edit. The accept keeps your time. To use the new time, choose Edit, then Use the import time.')
+    await expect(imports.at.entry('8:30 AM')).toContainText('The import changed the words after your edit. The accept keeps your edit. To use the new words, choose “Edit”, then “Use the import words”.')
+    await expect(imports.at.entry('8:30 AM')).toContainText('The import changed the time after your edit. The accept keeps your time. To use the new time, choose “Edit”, then “Use the import time”.')
     await expect(imports.at.entry('12:01 PM')).not.toContainText('The import changed')
   })
 
