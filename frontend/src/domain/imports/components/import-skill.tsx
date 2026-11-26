@@ -99,7 +99,7 @@ export function ImportSkill() {
         <p className="max-w-prose text-muted-foreground">
           Connect your agent to this MCP URL with a{' '}
           <Link to="/settings/personal-access-tokens" className="underline underline-offset-4 hover:text-primary">personal access token</Link>
-          {' '}that has “Change my journal”. The agent sends the token in the header <code className={inlineCode}>Authorization: Bearer {yourToken}</code>.
+          {' '}that has “Change my journal”. The agent sends the token in the header <code className="font-mono text-sm whitespace-nowrap">Authorization: Bearer &lt;your token&gt;</code>.
         </p>
         <CopyRow
           label="MCP URL"
@@ -128,9 +128,10 @@ export function ImportSkill() {
         <Collapsible isExpanded={isExpanded} onExpandedChange={setIsExpanded} className="rounded-lg border">
           <div className={rowClass}>
             {/* The trigger has no fill and no side padding, so its arrow starts at the left edge of the text in the rows above.
-                The margin takes away the 1 px border of the button and the empty space at the left of the glyph (5.5 px at 16 px). The glyph turned down is 2 px wider at the left, so the open arrow moves 2 px right. */}
+                The margin takes away the 1 px border of the button and the empty space at the left of the glyph (5.5 px of 16 px). The glyph turned down is 2 px of 16 px wider at the left, so the open arrow moves right by that much.
+                The icon is 1rem, so the offsets are in rem and hold at each root font size. */}
             <CollapsibleTrigger className={buttonVariants({ variant: 'link', className: 'px-0 text-foreground' })}>
-              <HugeiconsIcon icon={ArrowRight01Icon} className="-ml-[6.5px] transition-transform group-aria-expanded/button:translate-x-[2px] group-aria-expanded/button:rotate-90 motion-reduce:transition-none" />
+              <HugeiconsIcon icon={ArrowRight01Icon} className="-ml-[calc(1px+0.34375rem)] transition-transform group-aria-expanded/button:translate-x-[0.125rem] group-aria-expanded/button:rotate-90 motion-reduce:transition-none" />
               The recall-import skill
             </CollapsibleTrigger>
             <Button variant="outline" onPress={() => void handleCopySkill()}>
