@@ -189,13 +189,13 @@ export default async ({ page, step, capture, settle, expect, login, stack }) => 
   })
   await shot('rejected-entry')
 
-  await step('Reject day: the day and each of its entries say rejected with the day, and the counts change', async () => {
+  await step('Reject day: the heading says the day is rejected, each entry says rejected with the day, and the counts change', async () => {
     const reviewed = answered('PUT', /\/days\/review$/)
     await page.getByRole('button', { name: 'Reject Sunday, March 3, 2024' }).click()
     expect((await reviewed).request().postDataJSON()).toEqual({ date: '2024-03-03', rejected: true })
     await expect(card('Rainy day')).toContainText('Rejected with the day')
     await expect(card('Dinner with Sam')).toContainText('Rejected with the day')
-    await expect(page.getByRole('region', { name: 'Sunday, March 3, 2024' })).toContainText('2 entries, rejected with the day')
+    await expect(page.getByRole('region', { name: 'Sunday, March 3, 2024' })).toContainText('2 entries, day rejected')
     await expect(page.getByRole('button', { name: 'Keep Sunday, March 3, 2024' })).toBeVisible()
     await expect(counts).toHaveText('8 entries: 5 kept, 3 rejected')
   })

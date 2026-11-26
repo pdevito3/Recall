@@ -7,7 +7,7 @@ An agent puts the entries of an old journal into an import batch over REST or MC
 - `list` at `/imports` shows `Your import batches`: each name links to its batch, with `Open` or `In your journal`, `<n entries> in <zone>`, and `Opened on ...`. With no batch, the text names the personal access token.
 - `discard` opens `Discard <name>?` from `Discard <name>` and drops the batch with `Discard batch` and the toast `Batch discarded`. An accepted batch has no Discard.
 - `days` show as `h2` headings with the list `Entries of <day>`. Each entry is the list item `Entry at <time>`. A batch of more than 200 entries has the pager `Pages of this batch`, and the URL has `?page=<n>`.
-- `entry` shows its time, the zone when it is not the zone of the batch, `Time from its place in the day` when no one gave a time, `Edited`, `Rejected` or `Rejected with its day`, and the notes `The import changed the words after your edit. ...` and `The import changed the time after your edit. ...`.
+- `entry` shows its time, the zone when it is not the zone of the batch, `Time from its place in the day` when no one gave a time, `Edited`, `Rejected` or `Rejected with the day`, and the notes `The import changed the words after your edit. ...` and `The import changed the time after your edit. ...`.
 - `edit` opens the form `Edit the entry` from `Edit the entry at <time>`: `Words`, `Time`, `Save`, `Cancel`, and after an edit `Use the import words` and `Use the import time`. A refusal shows in the form.
 - `reject` sends `Reject the entry at <time>` or `Keep the entry at <time>`. `Reject <day>` and `Keep <day>` do the same for a day.
 - `counts` in `Counts of this batch` show `<n entries>: <k> kept, <r> rejected` and change after each review.

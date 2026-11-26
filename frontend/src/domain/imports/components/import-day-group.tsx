@@ -26,7 +26,7 @@ export function ImportDayGroup({ batchId, batchZone, day, entries, onEntryGone }
           <h2 id={headingId} className="text-sm font-semibold text-muted-foreground">{heading}</h2>
           <span className="text-xs text-muted-foreground">
             {entriesWord(day.entryCount)}
-            {day.rejected ? ', rejected with the day' : day.rejectedCount > 0 && `, ${countOf(day.rejectedCount)} rejected`}
+            {day.rejected ? ', day rejected' : day.rejectedCount > 0 && `, ${countOf(day.rejectedCount)} rejected`}
           </span>
         </div>
         <Button

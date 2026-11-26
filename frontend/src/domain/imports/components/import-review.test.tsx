@@ -384,7 +384,7 @@ test('@IMP-39 Reject sends the whole review with rejected, and the entry then sa
   ])
 })
 
-test('@IMP-40 Reject day sends the review of the day, and the day and each of its entries say rejected with the day, with no Keep', async () => {
+test('@IMP-40 Reject day sends the review of the day, the heading says the day is rejected, and each entry says rejected with the day, with no Keep', async () => {
   const { screen } = await renderReview()
   const held = (entry: ImportEntryDto) => ({ ...entry, isRejected: true })
   await commands.answerRequests([
@@ -401,7 +401,7 @@ test('@IMP-40 Reject day sends the review of the day, and the day and each of it
 
   await expect.element(cardOf(screen, '8:30 AM')).toMatchTextContent('Rejected with the day')
   await expect.element(cardOf(screen, '12:01 PM')).toMatchTextContent('Rejected with the day')
-  await expect.element(screen.getByRole('region', { name: 'Friday, March 1, 2024' })).toMatchTextContent('2 entries, rejected with the day')
+  await expect.element(screen.getByRole('region', { name: 'Friday, March 1, 2024' })).toMatchTextContent('Friday, March 1, 20242 entries, day rejectedKeep day')
   await expect.element(cardOf(screen, '8:30 AM').getByRole('button', { name: /^(Keep|Reject) the entry/ })).not.toBeInTheDocument()
   await expect.element(screen.getByRole('button', { name: 'Keep Friday, March 1, 2024' })).toBeVisible()
   expect(await commands.takeSentRequests()).toEqual([{ method: 'PUT', path: '/api/v1/import-batches/imp_1/days/review', body: { date: '2024-03-01', rejected: true } }])
@@ -415,6 +415,22 @@ test('@IMP-40 an entry that the person rejected alone stays rejected, with Keep,
   await expect.element(cardOf(screen, '12:01 PM')).toMatchTextContent('Rejected')
   await expect.element(cardOf(screen, '12:01 PM')).not.toMatchTextContent('with the day')
   await expect.element(screen.getByRole('button', { name: 'Keep the entry at 12:01 PM' })).toBeVisible()
+})
+
+test('@IMP-40 on a rejected day, an entry that the person rejected alone says Rejected, not rejected with the day, so it stays rejected when the day is kept', async () => {
+  const alone = { ...walk, review: { rejected: true, words: null, time: null }, isRejected: true }
+  const held = { ...coffee, isRejected: true }
+
+  const { screen } = await renderAt('/imports/imp_1', [
+    batchesAre([diary]),
+    daysAre([dayOf('2024-03-01', 2, { rejected: true, rejectedCount: 1 }), dayOf('2024-03-02', 1)]),
+    entriesAre([held, alone, london]),
+  ])
+
+  await expect.element(cardOf(screen, '12:01 PM')).toMatchTextContent('Rejected')
+  await expect.element(cardOf(screen, '12:01 PM')).not.toMatchTextContent('with the day')
+  await expect.element(cardOf(screen, '8:30 AM')).toMatchTextContent('Rejected with the day')
+  await expect.element(cardOf(screen, '12:01 PM').getByRole('button', { name: /^(Keep|Reject) the entry/ })).not.toBeInTheDocument()
 })
 
 test('@IMP-41 the counts come from the days, and a review reads the days again', async () => {
