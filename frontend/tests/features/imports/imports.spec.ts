@@ -111,10 +111,9 @@ test.describe('the review of a batch', () => {
     const imports = importsPage(page)
 
     await imports.openReviewWithEntries(diary.id, 'Diary 2024')
-    await imports.at.reject('8:30 AM').scrollIntoViewIfNeeded()
 
-    await expect(imports.at.reject('8:30 AM')).toBeInViewport({ ratio: 1 })
-    await expect(imports.at.rejectDay(friday)).toBeInViewport({ ratio: 1 })
+    expect(await imports.isInsideTheWindowWidth(imports.at.reject('8:30 AM'))).toBe(true)
+    expect(await imports.isInsideTheWindowWidth(imports.at.rejectDay(friday))).toBe(true)
     await expect(imports.at.entry('8:30 AM')).toContainText('m'.repeat(200))
     expect(await imports.sideScrollRange()).toBe(0)
   })
