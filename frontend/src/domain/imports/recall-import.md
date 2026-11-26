@@ -67,9 +67,9 @@ If you do not see `open_import_batch` or `put_import_entries`, your token cannot
    - An entry of your rules that the batch does not hold is not a failure. The put adds it.
    - If the check fails, put nothing more. Do the steps of "If the split rules change".
 9. Do a test on a small part. Put the entries of three to five days, with one day of many entries if the source has one. If the source has five days or fewer, the test is the whole source.
-   - From the first put on, keep one line for each `clientSessionId` with its last outcome. Mark the line "stored" when a put gives `Added`, `Changed`, `Unchanged`, or `Rejected`. If you can write files, keep the lines in a file.
+   - From the first put of this step on, keep one line for each `clientSessionId` with its last outcome. Mark the line "stored" when a put gives `Added`, `Changed`, `Unchanged`, or `Rejected`. If you can write files, keep the lines in a file.
 10. Read the test back with `list_import_entries`. Compare each entry with the source. `startsAt` is in UTC, so convert it to the zone of the entry before you compare it.
-    - If an entry is wrong, correct the rule that made it. Then put the test again. Read it back again.
+    - If an entry is wrong, correct the rule that made it. Then put the test again. Also put again each line marked "stored" whose ID your new rules give. Read the entries of these puts back again.
     - Find each line marked "stored" whose ID your new rules do not give. The batch still holds that entry, also on a date that is not a test date now.
     - Tell the person the ID and the date of each such entry. Ask to remove them. Say that a remove also deletes an edit of the person.
     - After a yes, call `remove_import_entries` on them. After a no, do the steps of "If the split rules change".
