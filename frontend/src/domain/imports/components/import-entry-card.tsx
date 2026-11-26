@@ -12,14 +12,13 @@ import { refusalOf } from '@/hooks/use-server-errors'
 import { formatInstant, parseTimeZone, timeZoneLabel, type TimeZone } from '@/lib/zoned-time'
 import { cn } from '@/lib/utils'
 
-import { isGone, useReviewImportEntry } from '../apis/imports'
+import { isOutdated, useReviewImportEntry } from '../apis/imports'
 
 interface ImportEntryCardProps {
   batchId: string
   batchZone: string
   entry: ImportEntryDto
   dayIsRejected: boolean
-  /** The reread after a 404 or a 409 can take the entry off the page, so the focus must go somewhere that stays. */
   onGone: () => void
 }
 
@@ -43,7 +42,6 @@ export function ImportEntryCard({ batchId, batchZone, entry, dayIsRejected, onGo
   const [isEditing, setIsEditing] = useState(false)
   const editButton = useRef<HTMLButtonElement>(null)
   const wasEditing = useRef(false)
-  // The form leaves the page at its end, so the focus goes back to Edit and not to the body.
   useEffect(() => {
     if (wasEditing.current && !isEditing) editButton.current?.focus()
     wasEditing.current = isEditing
@@ -103,7 +101,7 @@ export function ImportEntryCard({ batchId, batchZone, entry, dayIsRejected, onGo
             className="max-sm:h-11"
             aria-label={`${entry.review.rejected ? 'Keep' : 'Reject'} the entry at ${time}`}
             isPending={review.isPending}
-            onPress={() => review.mutate(reviewOf(entry, { rejected: !entry.review.rejected }), { onError: (error) => isGone(error) && onGone() })}
+            onPress={() => review.mutate(reviewOf(entry, { rejected: !entry.review.rejected }), { onError: (error) => isOutdated(error) && onGone() })}
           >
             {entry.review.rejected ? 'Keep' : 'Reject'}
           </Button>
@@ -135,7 +133,7 @@ function ImportEntryEdit({ batchId, entry, zone, onDone, onGone }: ImportEntryEd
   const timeChanged = (time ? hhmm(time) : null) !== shownTime
   const problem = review.error ? refusalOf(review.error, []).problem : null
 
-  const send = (patch: Partial<ImportEntryReviewDto>) => review.mutate(reviewOf(entry, patch), { onSuccess: onDone, onError: (error) => isGone(error) && onGone() })
+  const send = (patch: Partial<ImportEntryReviewDto>) => review.mutate(reviewOf(entry, patch), { onSuccess: onDone, onError: (error) => isOutdated(error) && onGone() })
   const save = () =>
     send({
       ...(words !== null && { words }),
@@ -152,7 +150,6 @@ function ImportEntryEdit({ batchId, entry, zone, onDone, onGone }: ImportEntryEd
       }}
     >
       <div className="flex flex-col gap-2">
-        {/* The editor has the same name for a screen reader. */}
         <span aria-hidden="true" className="text-sm leading-none font-medium select-none">Words</span>
         <JournalEditor initialText={entry.document} revision={0} label="Words" autoFocus onChange={(text) => setWords(text)} />
       </div>

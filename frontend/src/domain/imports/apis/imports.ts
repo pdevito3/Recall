@@ -41,12 +41,10 @@ export function useImportEntries(id: string, from: string, to: string) {
   })
 }
 
-/** A 404 of an entry that the agent removed, or a 409 of a batch that an accept closed elsewhere: the page reads the batch again. */
-/** A 404 or a 409 says that the entry or the batch changed, so the page that shows it is old. */
-export const isGone = (error: Error) => isProblemDetailsError(error) && (error.status === 404 || error.status === 409)
+export const isOutdated = (error: Error) => isProblemDetailsError(error) && (error.status === 404 || error.status === 409)
 
 function readAgainAfterARefusal(queryClient: QueryClient, id: string, error: Error) {
-  if (isGone(error)) {
+  if (isOutdated(error)) {
     void queryClient.invalidateQueries({ queryKey: ImportKeys.lists() })
     void queryClient.invalidateQueries({ queryKey: ImportKeys.batch(id) })
   }
@@ -60,7 +58,6 @@ export function useDiscardImportBatch() {
   })
 }
 
-/** In a form, the form shows a refusal itself, so the call shows no toast. */
 export function useReviewImportEntry(id: string, { inForm = false } = {}) {
   const queryClient = useQueryClient()
   return useMutation({
@@ -75,8 +72,7 @@ export function useReviewImportEntry(id: string, { inForm = false } = {}) {
       return queryClient.invalidateQueries({ queryKey: ImportKeys.batch(id) })
     },
     onError: (error) => {
-      // The reread takes the form off the page with the entry, so the message goes in a toast.
-      if (inForm && isGone(error)) Notification.error(error.message)
+      if (inForm && isOutdated(error)) Notification.error(error.message)
       readAgainAfterARefusal(queryClient, id, error)
     },
   })
@@ -91,7 +87,6 @@ export function useReviewImportDay(id: string) {
   })
 }
 
-/** The dialog of the accept shows a refusal, so the call shows no toast. */
 export function useAcceptImportBatch(id: string) {
   const queryClient = useQueryClient()
   return useMutation({

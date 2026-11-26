@@ -6,10 +6,8 @@ import { SettingKeys } from '@/domain/settings/apis/setting.keys'
 import { userSettingOptions } from '@/domain/settings/apis/user-setting'
 import { isStaleVersionError } from '@/lib/problem-details'
 
-/** The choice of the person holds over a change from elsewhere, so a change from an old version reads the settings again and sends it once more. */
 export function useChangeImportReview() {
   const queryClient = useQueryClient()
-  // The setting shows a refusal next to the check box.
   const send = (requireImportReview: boolean, version: number) =>
     changeImportReview({ body: { requireImportReview, version }, options: { suppressErrorToast: true } })
 

@@ -37,7 +37,7 @@ export function ImportReview({ batch, pageNumber }: ImportReviewProps) {
   }
 
   const pages = days.data ? pagesOf(days.data.days) : []
-  const shown = Math.min(Math.max(pageNumber, 1), Math.max(pages.length, 1))
+  const shown = Math.min(pageNumber, Math.max(pages.length, 1))
   const page = pages[shown - 1] as ImportPage | undefined
   const counts = days.data ? countsOf(days.data.days) : null
   const changePage = (next: number) => {

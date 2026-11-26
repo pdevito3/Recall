@@ -31,7 +31,6 @@ export const anImportBatch = (id: string, name: string, patch: Partial<ImportBat
 
 export const documentOf = (text: string) => JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] })
 
-/** An entry of the batch in New York time, with a start time that the patch can name. */
 export const anImportEntry = (clientSessionId: string, date: string, text: string, patch: Partial<ImportEntryDto> = {}): ImportEntryDto => ({
   clientSessionId,
   date,
@@ -71,8 +70,7 @@ export const importsApi = {
     return { method: 'get', path: importPaths.days(id), status: problem.status ?? 500, body: problem }
   },
 
-  /** Each read of entries gets these, whatever its `from` and `to`. A test reads the query back to prove the range. */
-  entriesAre(id: string, entries: ImportEntryDto[], version = 1): MockRoute {
+  entriesOfAnyRangeAre(id: string, entries: ImportEntryDto[], version = 1): MockRoute {
     return { method: 'get', path: importPaths.entries(id), status: 200, body: { version, entries, rejectedDays: [] } }
   },
 

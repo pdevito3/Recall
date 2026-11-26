@@ -11,14 +11,14 @@ export type ImportDayDto = {
     */
     date: string;
     /**
-     * @description The entries of the date.
+     * @description The count of the entries of the date.
      *
      * Format: `int32`
      * @type integer
     */
     entryCount: number;
     /**
-     * @description The entries of the date that the person rejected one by one. The reject of the day does not count here.
+     * @description The count of the entries of the date that the person rejected one by one. The reject of the day does not count here.
      *
      * Format: `int32`
      * @type integer

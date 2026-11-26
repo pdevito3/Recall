@@ -10,7 +10,6 @@ import { daysWord, entriesWord } from './import-words'
 
 export function ImportResult({ batch }: { batch: ImportBatchDto }) {
   const headingRef = useRef<HTMLHeadingElement>(null)
-  // The accept removes the review and its dialog, so the focus goes to the heading of the result.
   useEffect(() => headingRef.current?.focus(), [])
   const result = batch.result
   const acceptedAt = batch.acceptedAt
