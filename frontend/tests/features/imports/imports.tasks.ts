@@ -38,6 +38,24 @@ export function importsPage(page: Page) {
       return box !== null && box.x >= 0 && box.x + box.width <= width
     },
 
+    async hitAreaOf(element: Locator) {
+      const box = (await element.boundingBox())!
+      return Math.min(box.width, box.height)
+    },
+
+    async heightOf(element: Locator) {
+      return (await element.boundingBox())!.height
+    },
+
+    async widthOf(element: Locator) {
+      return (await element.boundingBox())!.width
+    },
+
+    async isBelow(element: Locator, above: Locator) {
+      const [box, aboveBox] = [(await element.boundingBox())!, (await above.boundingBox())!]
+      return box.y >= aboveBox.y + aboveBox.height
+    },
+
     sideScrollRange: () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
 
     async reject(id: string, time: string) {

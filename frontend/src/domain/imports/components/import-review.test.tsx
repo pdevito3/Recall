@@ -161,7 +161,7 @@ test('@IMP-34 discard asks with the name and the count, sends the delete, and th
   const { screen } = await renderAt('/imports', [batchesAre([diary])])
   await userEvent.click(screen.getByRole('button', { name: 'Discard Diary 2024' }))
   await expect.element(screen.getByRole('alertdialog', { name: 'Discard “Diary 2024”?' })).toMatchTextContent(
-    'This batch and its 3 entries are deleted. Nothing of it goes into your journal. You cannot undo a discard.',
+    'Discard deletes this batch and its 3 entries. None of them go into your journal. You cannot undo a discard.',
   )
   await commands.answerRequests([...signedInMember, noPeople, batchesAre([]), { method: 'DELETE', path: '/api/v1/import-batches/imp_1', status: 204 }])
   await commands.takeSentRequests()
@@ -244,8 +244,12 @@ test('@IMP-37 an entry whose words or time the import changed after the edit say
   const { screen } = await renderAt('/imports/imp_1', [batchesAre([diary]), daysAre(twoDays), entriesAre([flagged, walk, london])])
 
   const card = cardOf(screen, '8:30 AM')
-  await expect.element(card.getByText('The import changed the words after your edit. The accept keeps your edit.')).toBeVisible()
-  await expect.element(card.getByText('The import changed the time after your edit. The accept keeps your time.')).toBeVisible()
+  await expect
+    .element(card.getByText('The import changed the words after your edit. The accept keeps your edit. To use the new words, choose Edit, then Use the import words.'))
+    .toBeVisible()
+  await expect
+    .element(card.getByText('The import changed the time after your edit. The accept keeps your time. To use the new time, choose Edit, then Use the import time.'))
+    .toBeVisible()
   await expect.element(cardOf(screen, '12:01 PM').getByText(/The import changed/)).not.toBeInTheDocument()
 })
 
@@ -336,6 +340,8 @@ test('@IMP-38 a refusal of the words shows under Words, marks Words invalid, and
   await expect.element(words).toHaveAttribute('aria-invalid', 'true')
   await expect.element(words).toHaveAccessibleDescription(blank)
   await expect.element(form.getByRole('alert')).toHaveTextContent(blank)
+  const colorOf = (element: Element) => getComputedStyle(element).color
+  expect(colorOf(form.getByText('Words', { exact: true }).element())).toBe(colorOf(form.getByRole('alert').element()))
 })
 
 test('@IMP-38 the time hint says what an empty time does: the time of the agent, else the place of the entry in its day', async () => {
@@ -348,7 +354,7 @@ test('@IMP-38 the time hint says what an empty time does: the time of the agent,
   await expect.element(screen.getByRole('form', { name: 'Edit the entry' }).getByText('In Eastern Time. Leave it empty to keep the place of the entry in its day.')).toBeVisible()
 })
 
-test('@IMP-38 Use the import words and Use the import time are off while the form has a change', async () => {
+test('@IMP-38 Use the import words and Use the import time are off while the form has a change, and say why', async () => {
   const edited = { ...coffee, review: { rejected: false, words: documentOf('Mine.'), time: '09:00' }, document: documentOf('Mine.'), startsAt: '2024-03-01T14:00:00Z' }
   const { screen } = await renderAt('/imports/imp_1', [batchesAre([diary]), daysAre(twoDays), entriesAre([edited, walk, london])])
   await userEvent.click(screen.getByRole('button', { name: 'Edit the entry at 9:00 AM' }))
@@ -358,8 +364,11 @@ test('@IMP-38 Use the import words and Use the import time are off while the for
   await userEvent.click(form.getByRole('spinbutton', { name: /^hour,/ }))
   await userEvent.keyboard('10')
 
-  await expect.element(form.getByRole('button', { name: 'Use the import words' })).toBeDisabled()
-  await expect.element(form.getByRole('button', { name: 'Use the import time' })).toBeDisabled()
+  for (const name of ['Use the import words', 'Use the import time']) {
+    await expect.element(form.getByRole('button', { name })).toBeDisabled()
+    await expect.element(form.getByRole('button', { name })).toHaveAccessibleDescription('Save or cancel your change first.')
+  }
+  await expect.element(form.getByText('Save or cancel your change first.')).toBeVisible()
 })
 
 test('@IMP-39 Reject sends the whole review with rejected, and the entry then says Rejected with Keep', async () => {
@@ -567,7 +576,7 @@ test('@IMP-34 Discard on the review names the count of the days that the review 
 
   await userEvent.click(screen.getByRole('button', { name: 'Discard Diary 2024' }))
 
-  await expect.element(screen.getByRole('alertdialog', { name: 'Discard “Diary 2024”?' })).toMatchTextContent('This batch and its 4 entries are deleted.')
+  await expect.element(screen.getByRole('alertdialog', { name: 'Discard “Diary 2024”?' })).toMatchTextContent('Discard deletes this batch and its 4 entries.')
 })
 
 test('@IMP-43 an accepted batch shows the counts of its result and a link to the journal, and no review action', async () => {
@@ -584,10 +593,10 @@ test('@IMP-43 an accepted batch shows the counts of its result and a link to the
   const lines = screen.getByRole('list', { name: 'Result of the accept' }).getByRole('listitem')
   expect(lines.elements().map((line) => line.textContent)).toEqual([
     '12 entries made in your journal',
-    '3 entries rejected, alone or with their days',
-    '1 day rejected as a whole',
-    '2 entries skipped, because your journal has them',
-    '1 entry skipped, because you deleted it from your journal',
+    '3 entries left out because you rejected them or their day',
+    '1 day that you rejected',
+    '2 entries skipped because your journal has them',
+    '1 entry skipped because you deleted it from your journal',
   ])
   await expect.element(screen.getByRole('link', { name: 'Go to your journal' })).toHaveAttribute('href', '/')
   await expect.element(screen.getByRole('button', { name: 'Accept', exact: true })).not.toBeInTheDocument()
@@ -700,8 +709,64 @@ test('@IMP-44 a batch that does not exist says so, with a link to the imports', 
   const { screen } = await renderAt('/imports/imp_9', [batchesAre([diary])])
 
   await expect.element(screen.getByRole('heading', { level: 1, name: 'Batch not found' })).toBeVisible()
-  await expect.element(screen.getByText(/^This import batch does not exist\. It may have been discarded\./)).toBeVisible()
+  await expect.element(screen.getByText('This import batch does not exist. Pick a batch from your imports.', { exact: true })).toBeVisible()
   await expect.element(screen.getByRole('link', { name: 'Go to your imports' })).toHaveAttribute('href', '/imports')
+})
+
+test('@IMP-33 @IMP-34 @IMP-42 @IMP-43 a count of 1 takes the word for one in the list, the discard, the accept, and the result', async () => {
+  const one: ImportBatchDto = { ...diary, entryCount: 1 }
+  const done: ImportBatchDto = {
+    ...diary,
+    id: 'imp_2',
+    name: 'Diary 2023',
+    state: 'Accepted',
+    acceptedAt: '2026-11-21T10:00:00Z',
+    entryCount: 0,
+    result: { sessionsMade: 1, entriesRejected: 1, daysRejected: 1, skippedInJournal: 1, skippedDeleted: 1 },
+  }
+  const { screen, router } = await renderAt('/imports', [
+    batchesAre([one, done]),
+    daysAre([dayOf('2024-03-01', 1), dayOf('2024-03-02', 1, { rejectedCount: 1 })]),
+    entriesAre([coffee, london]),
+  ])
+
+  await expect.element(screen.getByRole('listitem', { name: 'Diary 2024' })).toMatchTextContent('1 entry. Times in Eastern Time.')
+  await expect.element(screen.getByRole('listitem', { name: 'Diary 2023' })).toMatchTextContent('1 entry made in your journal.')
+  await userEvent.click(screen.getByRole('button', { name: 'Discard Diary 2024' }))
+  await expect
+    .element(screen.getByRole('alertdialog', { name: 'Discard “Diary 2024”?' }))
+    .toMatchTextContent('Discard deletes this batch and its 1 entry. The entry does not go into your journal. You cannot undo a discard.')
+  await userEvent.click(screen.getByRole('button', { name: 'Keep batch' }))
+
+  await router.navigate({ to: '/imports/$id', params: { id: 'imp_1' } })
+  await userEvent.click(screen.getByRole('button', { name: 'Accept', exact: true }))
+  await expect
+    .element(screen.getByRole('alertdialog', { name: 'Accept “Diary 2024”?' }))
+    .toMatchTextContent('1 entry goes into your journal, and 1 entry that you rejected stays out.')
+  await userEvent.click(screen.getByRole('button', { name: 'Keep reviewing' }))
+
+  await router.navigate({ to: '/imports/$id', params: { id: 'imp_2' } })
+  const lines = screen.getByRole('list', { name: 'Result of the accept' }).getByRole('listitem')
+  await expect.element(lines.first()).toBeVisible()
+  expect(lines.elements().map((line) => line.textContent)).toEqual([
+    '1 entry made in your journal',
+    '1 entry left out because you rejected it or its day',
+    '1 day that you rejected',
+    '1 entry skipped because your journal has it',
+    '1 entry skipped because you deleted it from your journal',
+  ])
+})
+
+test('@IMP-43 a row of the result with a count of 0 is muted', async () => {
+  const accepted: ImportBatchDto = { ...diary, state: 'Accepted', acceptedAt: '2026-11-25T10:00:00Z', result: { sessionsMade: 2, entriesRejected: 0, daysRejected: 0, skippedInJournal: 0, skippedDeleted: 0 } }
+
+  const { screen } = await renderAt('/imports/imp_1', [batchesAre([accepted])])
+
+  const list = screen.getByRole('list', { name: 'Result of the accept' })
+  const colorOf = (text: string) => getComputedStyle(list.getByText(text).element()).color
+  await expect.element(list.getByText('2 entries made in your journal')).toBeVisible()
+  expect(colorOf('0 days that you rejected')).not.toBe(colorOf('2 entries made in your journal'))
+  expect(colorOf('0 days that you rejected')).toBe(colorOf('0 entries skipped because your journal has them'))
 })
 
 test('@IMP-45 the setting says who can accept, and a change sends the version of the settings', async () => {
@@ -709,7 +774,7 @@ test('@IMP-45 the setting says who can accept, and a change sends the version of
   const box = screen.getByRole('checkbox', { name: 'Only I can accept an import batch' })
   await expect.element(box).toBeChecked()
   await expect.element(box).toHaveAccessibleDescription(
-    'With this on, only you can accept an import batch, in Recall in a browser. With it off, an agent with a personal access token can accept a batch too.',
+    'With this on, only you can accept an import batch, from Recall in a browser. With it off, an agent with a personal access token can accept a batch too.',
   )
   const saved = { ...memberSetting, requireImportReview: false, version: 2 }
   await commands.answerRequests([...signedInMember, noPeople, { method: 'PUT', path: '/api/v1/me/settings/import-review', body: saved }])

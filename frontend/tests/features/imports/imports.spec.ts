@@ -51,7 +51,7 @@ test.describe('the list of import batches', () => {
     const imports = importsPage(page)
     await imports.openList()
     await imports.at.discardOf('Diary 2024').click()
-    await expect(imports.at.discardDialog('Diary 2024')).toContainText('This batch and its 3 entries are deleted. Nothing of it goes into your journal. You cannot undo a discard.')
+    await expect(imports.at.discardDialog('Diary 2024')).toContainText('Discard deletes this batch and its 3 entries. None of them go into your journal. You cannot undo a discard.')
     api.mock(importsApi.listIs([]))
 
     await imports.at.discardBatch.click()
@@ -72,6 +72,16 @@ test.describe('the list of import batches', () => {
 
     await expect(imports.at.discardOf(name)).toBeInViewport({ ratio: 1 })
     expect(await imports.sideScrollRange()).toBe(0)
+  })
+
+  test('on a phone, the name of a batch in the list has a hit area of at least 44 px high', { tag: '@IMP-33' }, async ({ page, api }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    api.mock(importsApi.listIs([diary]))
+    const imports = importsPage(page)
+
+    await imports.openList()
+
+    expect(await imports.heightOf(imports.at.batchLink('Diary 2024'))).toBeGreaterThanOrEqual(44)
   })
 })
 
@@ -131,8 +141,8 @@ test.describe('the review of a batch', () => {
 
     await imports.openReviewWithEntries(diary.id, 'Diary 2024')
 
-    await expect(imports.at.entry('8:30 AM')).toContainText('The import changed the words after your edit. The accept keeps your edit.')
-    await expect(imports.at.entry('8:30 AM')).toContainText('The import changed the time after your edit. The accept keeps your time.')
+    await expect(imports.at.entry('8:30 AM')).toContainText('The import changed the words after your edit. The accept keeps your edit. To use the new words, choose Edit, then Use the import words.')
+    await expect(imports.at.entry('8:30 AM')).toContainText('The import changed the time after your edit. The accept keeps your time. To use the new time, choose Edit, then Use the import time.')
     await expect(imports.at.entry('12:01 PM')).not.toContainText('The import changed')
   })
 
@@ -149,6 +159,19 @@ test.describe('the review of a batch', () => {
     expect(api.last('put', importPaths.entryReview(diary.id))?.body).toEqual({ clientSessionId: 'c1', rejected: false, words: null, time: '09:15' })
     await expect(imports.at.entry('9:15 AM')).toContainText('9:15 AMEdited')
     await expect(imports.at.edit('9:15 AM')).toBeFocused()
+  })
+
+  test('the hint of the time has the width of the card, not of the time field', { tag: '@IMP-38' }, async ({ page, api }) => {
+    reviewOf(api)
+    const imports = importsPage(page)
+    await imports.openReviewWithEntries(diary.id, 'Diary 2024')
+
+    await imports.at.edit('12:01 PM').click()
+
+    const hint = imports.at.timeHint
+    await expect(hint).toHaveText('In Eastern Time. Leave it empty to keep the place of the entry in its day.')
+    expect(await imports.heightOf(hint)).toBeLessThan(30)
+    expect(await imports.widthOf(imports.at.timeInput)).toBeLessThanOrEqual(240)
   })
 
   test('Use the import time sends null for the time and keeps the words of the last edit', { tag: '@IMP-38' }, async ({ page, api }) => {
@@ -235,8 +258,7 @@ test.describe('the review of a batch', () => {
     await imports.openReviewWithEntries(diary.id, 'Diary 2024')
 
     for (const button of [imports.at.rejectDay(friday), imports.at.keepDay(saturday)]) {
-      const box = (await button.boundingBox())!
-      expect(Math.min(box.width, box.height)).toBeGreaterThanOrEqual(44)
+      expect(await imports.hitAreaOf(button)).toBeGreaterThanOrEqual(44)
     }
   })
 
@@ -286,14 +308,24 @@ test.describe('the accept of a batch', () => {
     expect(api.last('post', importPaths.accept(diary.id))?.body).toEqual({ version: 9 })
     await expect(imports.at.resultLines).toHaveText([
       '2 entries made in your journal',
-      '1 entry rejected, alone or with its day',
-      '0 days rejected as a whole',
-      '0 entries skipped, because your journal has them',
-      '0 entries skipped, because you deleted them from your journal',
+      '1 entry left out because you rejected it or its day',
+      '0 days that you rejected',
+      '0 entries skipped because your journal has them',
+      '0 entries skipped because you deleted them from your journal',
     ])
     await expect(imports.at.toJournal).toHaveAttribute('href', '/')
     await expect(imports.at.accept).toHaveCount(0)
     await expect(imports.at.batchHeading('Diary 2024')).toBeFocused()
+  })
+
+  test('on a phone, Go to your journal is at least 44 px high', { tag: '@IMP-43' }, async ({ page, api }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    api.mock(importsApi.listIs([anImportBatch(diary.id, diary.name, { state: 'Accepted', acceptedAt: '2026-11-25T10:00:00Z', result: { sessionsMade: 1, entriesRejected: 0, daysRejected: 0, skippedInJournal: 0, skippedDeleted: 0 } })]))
+    const imports = importsPage(page)
+
+    await imports.openBatch(diary.id, 'Diary 2024')
+
+    expect(await imports.heightOf(imports.at.toJournal)).toBeGreaterThanOrEqual(44)
   })
 
   test('an accepted batch shows its result and no review action', { tag: '@IMP-43' }, async ({ page, api }) => {
@@ -309,10 +341,10 @@ test.describe('the accept of a batch', () => {
 
     await expect(imports.at.resultLines).toHaveText([
       '12 entries made in your journal',
-      '3 entries rejected, alone or with their days',
-      '1 day rejected as a whole',
-      '2 entries skipped, because your journal has them',
-      '1 entry skipped, because you deleted it from your journal',
+      '3 entries left out because you rejected them or their day',
+      '1 day that you rejected',
+      '2 entries skipped because your journal has them',
+      '1 entry skipped because you deleted it from your journal',
     ])
     await expect(imports.at.discardOf('Diary 2024')).toHaveCount(0)
     await expect(imports.at.accept).toHaveCount(0)
@@ -330,7 +362,8 @@ test.describe('the refusals of the Server', () => {
 
     await imports.accept(diary.id)
 
-    await expect(imports.at.acceptAlert).toHaveText(`${changed}The counts above are new. Check them, then accept the batch.`)
+    await expect(imports.at.acceptAlert).toHaveText(changed)
+    await expect(imports.at.acceptReread).toHaveText('Recall read the batch again. Check the new counts, then accept it.')
     await expect(imports.at.acceptDialog).toContainText('4 entries go into your journal')
     await expect(imports.at.result).toHaveCount(0)
   })
@@ -369,9 +402,23 @@ test.describe('the refusals of the Server', () => {
     await page.goto('/imports/imp_9')
 
     await expect(imports.at.missingHeading).toBeVisible()
-    await expect(imports.at.missing).toBeVisible()
+    await expect(imports.at.missing).toHaveText('This import batch does not exist. Pick a batch from your imports.')
     await imports.at.toImports.click()
     await expect(imports.at.heading).toBeVisible()
+  })
+})
+
+test.describe('the missing batch on a phone', () => {
+  test('Go to your imports is on its own line under the text, and at least 44 px high', { tag: '@IMP-44' }, async ({ page, api }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    api.mock(importsApi.listIs([diary]))
+    const imports = importsPage(page)
+
+    await page.goto('/imports/imp_9')
+
+    await expect(imports.at.missingHeading).toBeVisible()
+    expect(await imports.heightOf(imports.at.toImports)).toBeGreaterThanOrEqual(44)
+    expect(await imports.isBelow(imports.at.toImports, imports.at.missing)).toBe(true)
   })
 })
 
