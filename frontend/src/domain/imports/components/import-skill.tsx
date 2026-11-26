@@ -128,9 +128,9 @@ export function ImportSkill() {
         <Collapsible isExpanded={isExpanded} onExpandedChange={setIsExpanded} className="rounded-lg border">
           <div className={rowClass}>
             {/* The trigger has no fill and no side padding, so its arrow starts at the left edge of the text in the rows above.
-                The margin of the arrow takes away the empty space at the left of the glyph. */}
+                The margin takes away the 1 px border of the button and the empty space at the left of the glyph (5.5 px at 16 px). The glyph turned down is 2 px wider at the left, so the open arrow moves 2 px right. */}
             <CollapsibleTrigger className={buttonVariants({ variant: 'link', className: 'px-0 text-foreground' })}>
-              <HugeiconsIcon icon={ArrowRight01Icon} className="-ml-1 transition-transform group-aria-expanded/button:rotate-90 motion-reduce:transition-none" />
+              <HugeiconsIcon icon={ArrowRight01Icon} className="-ml-[6.5px] transition-transform group-aria-expanded/button:translate-x-[2px] group-aria-expanded/button:rotate-90 motion-reduce:transition-none" />
               The recall-import skill
             </CollapsibleTrigger>
             <Button variant="outline" onPress={() => void handleCopySkill()}>
