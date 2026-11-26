@@ -46,7 +46,7 @@ export function AcceptImportBatch({ batchId, batchName, counts, version, nothing
       <ResponsiveDialog role="alertdialog" isOpen={isOpen} onOpenChange={open} isDismissable={!accept.isPending}>
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle className="wrap-anywhere">Accept “{batchName}”?</ResponsiveDialogTitle>
-          <p role="status" className="text-sm empty:hidden">
+          <p role="status" className="text-sm empty:sr-only">
             {isStale && 'The batch changed. Recall read it again. Check the new counts, then accept the batch.'}
           </p>
           <ResponsiveDialogDescription>
