@@ -24,7 +24,7 @@ export function ImportDayGroup({ batchId, batchZone, day, entries, onGone }: Imp
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-2">
-      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 bg-background py-1">
+      <div className="sticky top-0 z-10 flex items-baseline justify-between gap-3 bg-background py-1">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
           <h2 id={headingId} className="text-sm font-semibold text-muted-foreground">{heading}</h2>
           <span className="text-xs text-muted-foreground">

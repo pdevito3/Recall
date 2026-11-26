@@ -283,6 +283,23 @@ test.describe('the review of a batch', () => {
     }
   })
 
+  test('on a phone, a day heading on two lines has Keep day on its first line', { tag: '@IMP-40' }, async ({ page, api }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    const wednesday = 'Wednesday, September 30, 2026'
+    api.mock(
+      importsApi.listIs([diary]),
+      importsApi.daysAre(diary.id, [anImportDay('2026-09-30', 12, { rejected: true })], 4),
+      importsApi.entriesOfAnyRangeAre(diary.id, [{ ...coffee, date: '2026-09-30', isRejected: true }]),
+    )
+    const imports = importsPage(page)
+
+    await imports.openReviewWithEntries(diary.id, 'Diary 2024')
+
+    await expect(imports.at.dayRegion(wednesday)).toContainText('12 entries, day rejected')
+    expect(await imports.heightOf(imports.at.day(wednesday))).toBeLessThan(30)
+    expect(Math.abs((await imports.middleOf(imports.at.keepDay(wednesday))) - (await imports.middleOf(imports.at.day(wednesday))))).toBeLessThanOrEqual(3)
+  })
+
   test('with no kept entry, Accept is off and says why', { tag: '@IMP-42' }, async ({ page, api }) => {
     api.mock(importsApi.listIs([diary]), importsApi.daysAre(diary.id, [anImportDay('2024-03-01', 2, { rejected: true }), anImportDay('2024-03-02', 1, { rejectedCount: 1 })], 4), importsApi.entriesOfAnyRangeAre(diary.id, [coffee, walk, london]))
     const imports = importsPage(page)
