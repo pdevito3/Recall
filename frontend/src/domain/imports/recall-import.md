@@ -18,28 +18,40 @@ You read the source, split it into entries, and write the entries into an import
 - `discard_import_batch` deletes an open batch and each of its entries.
 - `accept_import_batch` moves a batch into the journal. Leave the accept to the person.
 
-If you do not see `open_import_batch` and `put_import_entries`, or a write gives a permission error, tell the person to connect you to Recall with a personal access token that has **Change my journal**. Write nothing until then.
+If you do not see `open_import_batch` and `put_import_entries`, or a put gives a permission error, tell the person to connect you to Recall with a personal access token that has **Change my journal**. Put nothing until then. A permission error of `accept_import_batch` does not mean a wrong token. It means that the import review is on, so only the person can accept.
 
 ## Steps
 
 1. Get samples of the source. Read some days from the start, the middle, and the end. If the source covers many years, read some days of each year, because the format can change from year to year.
-2. Propose the split rules to the person. Say how you find a day and its date, how you split a day into entries, how you find a time, and which time zone you use. Name the source word of the IDs, such as `notion`. Show three entries as you will write them, with their date, position, time, Moods, and Topics. Ask the person about each date or time that you cannot read for certain. If the source has no dates, ask the person for the dates. Use the time of a file only when the person says so.
+2. Propose the split rules to the person. Say how you find a day and its date, how you split a day into entries, how you find a time, and which time zone you use. Show three entries as you will put them, with their date, position, time, Moods, and Topics.
+   - Ask the person about each date or time that you cannot read for certain. If the source has no dates, ask the person for the dates. Use the time of a file only when the person says so.
+   - If the text gives an hour with no am or pm, such as "at 6", ask the person. Use the answer for each such time.
+   - Tell the person that an entry with no time starts at 12:00 plus its position. So it can show before an entry of the same day that has a time.
+   - Name the source word of the IDs, such as `notion`. Call `list_import_batches`. If a batch shows an earlier import, ask the person which source word it used. Pick a word that no earlier import used, for example `notion-work` for a second workspace.
 3. Wait for a yes. If the person changes a rule, propose the rules again.
-4. Call `list_journal_days` over the dates of the source. If the journal already has some of these days, tell the person which days, and how many Sessions each day has. Say that an earlier import can be among them. Ask whether to import those days, and wait for the answer.
-5. Call `list_import_batches`. If an open batch already holds this source, use it, and do not open another. Else open one batch with `open_import_batch`. Name it for the source and the years, for example "Notion 2019 to 2023". If the source has more than 20,000 entries, open one batch for each year, because one accept takes at most 20,000 entries. If an accepted batch holds this source, open a new batch. In it, each entry that is in the journal gives `InJournal`. An entry that the person rejected in the earlier batch gives `Added` again, so tell the person to reject it again.
+4. Call `list_journal_days` over the dates of the source. If the journal already has some of these days, tell the person which days, and how many Sessions each day has. Say that an earlier import can be among them. Ask whether to import those days, and wait for the answer. Tell the person what each answer does:
+   - Yes: an entry whose ID is in the journal gives `InJournal`, and Recall skips it. Each other entry of those days goes into the journal next to the Sessions of the day.
+   - No: you leave those days out of the batch.
+5. Call `list_import_batches`.
+   - If an open batch already holds this source, use it, and do not open another.
+   - If an accepted batch holds this source, use the source word and the split rules of that earlier run. If you do not know them, ask the person. With another word or other rules, the IDs change, and each entry goes into the journal again. Open a new batch. In it, each entry that is in the journal gives `InJournal`. An entry that the person rejected in the earlier batch gives `Added` again, so tell the person to reject it again.
+   - Else open one batch with `open_import_batch`. Name it for the source and the years, for example "Notion 2019 to 2023".
+   - If the source has more than 20,000 entries, open one batch for each year, because one accept takes at most 20,000 entries. Do steps 6 to 11 for each batch.
 6. Do a test on a small part. Put the entries of three to five days, with one day of many entries if the source has one. If the source has five days or fewer, the test is the whole source.
 7. Read the test back with `list_import_entries`. Compare each entry with the source. `startsAt` is in UTC, so convert it to the zone of the entry before you compare it.
 8. Tell the person to open Imports in Recall, choose the batch, and check the test entries. Wait for a yes.
-9. If the person asks for other split rules, call `discard_import_batch`, change the rules, and go back to step 5.
-10. Write the full batch. Put all the entries in calls of at most 500 entries and at most 16 MB. The test entries give `Unchanged`, or `Rejected` when the person rejected them. Check the outcome of each entry.
+9. If the person asks for other split rules, change the rules, propose them again, and wait for a yes. Then call `discard_import_batch`, and go back to step 5. After the full put of step 10, a discard also deletes the rejects and the edits of the person. So tell the person that first, and discard only after a yes.
+10. Put the full batch. Put all the entries in calls of at most 500 entries and at most 16 MB. The test entries give `Unchanged`, or `Rejected` when the person rejected them. Check the outcome of each entry.
 11. Tell the person the count of each outcome. Name each `InOtherBatch` entry and each entry that you could not correct. Tell them to review the batch in Imports in Recall and accept it there.
+
+To split one day again in an open batch, call `list_import_entries` with the date of that day. Call `remove_import_entries` with each ID of that day. Then put the new entries of the day. A remove also deletes the edits of the person, so tell the person first. An entry that the person rejected gives `Rejected`, and it stays. If the new split uses its ID, the put gives `Rejected`: it stores the new words, and the entry stays rejected. Tell the person to check it, and to choose Keep if it belongs in the journal. If the new split does not use its ID, it stays out of the journal. Tell the person.
 
 ## The fields of an entry
 
-- `clientSessionId`: `<source>-<YYYY-MM-DD>-<position>`, with one lowercase word for the source, for example `notion-2021-03-03-1`. So the same source entry gets the same ID on each run. Never make it random. It has at most 100 characters.
+- `clientSessionId`: `<source>-<YYYY-MM-DD>-<position>`, with the lowercase source word of step 2, for example `notion-2021-03-03-1` or `notion-work-2021-03-03-1`. So the same source entry gets the same ID on each run. Never make it random. It has at most 100 characters.
 - `date`: the day of the source as `YYYY-MM-DD`.
 - `position`: the order of the entry in its day, from 0. Two entries of one date never share a position. A day holds at most 720 entries, positions 0 to 719.
-- `time`: the time as `HH:mm` on a 24-hour clock. Give it only when the text gives a time, such as "at 9pm" (`21:00`), "Up at 5am" (`05:00`), or a time stamp. If the text gives more than one time, use the first. If the text gives an hour with no am or pm, such as "at 6", ask the person in step 2. Otherwise leave it out, and Recall starts the entry at 12:00 plus one minute for each position.
+- `time`: the clock time at which the entry happens, as `HH:mm` on a 24-hour clock, such as "at 9pm" (`21:00`), "Up at 5am" (`05:00`), or a time stamp. A time that ends something, such as "until midnight", is not the time of the entry. If the text gives more than one such time, use the first. If the text gives an hour with no am or pm, use the answer of step 2. If the text gives no such time, leave it out, and Recall starts the entry at 12:00 plus one minute for each position.
 - `timeZone`: leave it out, so that the entry takes the zone of the batch. Give an IANA zone only when the source shows that the person wrote the entry in another zone.
 - `raw`: the words of the person as Markdown, exactly as the source has them. Keep each word, line break, list, and emphasis. Leave out only the structure of the source. That is the title of the page, the date title, and the divider. It is also the indent of a toggle body, and the blank lines at the start and the end of an entry. Keep two spaces at the end of a line, because they are a line break in Markdown. Never fix, summarize, translate, or reword the text.
 - `moods`: at most three Moods, or none. The person cannot change the Moods in the review. So give a Mood only when the text names it or shows it clearly. If you are not sure, give none. Use only these Moods: Joyful, Content, Calm, Neutral, Tired, Anxious, Sad, Angry, Excited, Grateful.
@@ -52,11 +64,15 @@ If you do not see `open_import_batch` and `put_import_entries`, or a write gives
 - `Invalid`: the field and the reason say what is wrong. Correct the entry and put it again.
 - `PositionTaken`: another entry of that date has the position. `positionTakenBy` names it. Correct the positions and put again.
 - `InTheFuture`: the entry starts after now. An entry of today with no time starts at 12:00 plus its position, so before that time it gets `InTheFuture`. Put it again after that time, or ask the person for its time. For another entry, the date or the time is wrong. Read the source again.
-- `InJournal`: the journal already has this entry. Skip it.
+- `InJournal`: the journal already has this entry. Skip it. If you did not expect `InJournal`, tell the person, because an earlier import can have used the same source word.
 - `Deleted`: the person deleted this entry from the journal. Skip it, and keep its ID.
-- `InOtherBatch`: another open batch holds this ID. Tell the person, and find the batch with `list_import_batches`.
+- `InOtherBatch`: another open batch holds this ID. To find the batch, call `list_import_entries` with the date of the entry on each open batch of `list_import_batches`. Tell the person which batch holds it.
 
-If a call fails with no outcomes, read the error. Send each `clientSessionId` once in a call, and send fewer entries in each call.
+If a put fails with no outcomes, read the error, and do what it says.
+
+- If the error is about the size of the call, send fewer entries in each call. Send each `clientSessionId` once in a call.
+- If the error says "This batch is in your journal, so it cannot change.", the person accepted the batch. Stop, and tell the person.
+- If the error says "This import batch does not exist.", the person discarded the batch. Stop, and tell the person.
 
 A put of the same entries again changes nothing. So if a put fails or you lose its result, send the same put again. If you lose the result of `open_import_batch`, call `list_import_batches` and use that batch. Do not open another.
 
