@@ -126,12 +126,12 @@ Each entry of a put gets the first outcome that applies.
 | `InOtherBatch` | Another open batch holds this ID. | Tell you. Find the batch with `list_import_batches`. |
 | `InTheFuture` | The start time is in the future. | Read the source again for the date and the time. |
 | `PositionTaken` | Another entry of the date has the position. `positionTakenBy` names it. | Correct the positions and put again. |
-| `Rejected` | You rejected the entry or its day. The put stored the new words, and the reject stays. | Leave it. |
+| `Rejected` | You rejected the entry or its day. The put stored the new words, and the reject stays. If the put moved the entry off a rejected day, it stored nothing. | Leave it. |
 | `Unchanged` | The batch already holds this entry. | Go on. |
 | `Changed` | The put changed the entry. | Go on. |
 | `Added` | The put added the entry. | Go on. |
 
-Only `Rejected`, `Changed`, and `Added` write the entry. `Unchanged` means that the batch already holds the same entry.
+`Changed` and `Added` write the entry. `Rejected` writes the entry, but not when the put moves the entry off a rejected day. The other outcomes write nothing.
 
 ### A put again is safe
 
