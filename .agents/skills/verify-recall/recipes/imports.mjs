@@ -125,12 +125,14 @@ export default async ({ page, context, step, capture, settle, expect, login, sta
   })
   await atSkill('mcp-url-copied', { keepToast: true })
   await step('Copy command puts the Claude Code command with this MCP URL on the clipboard and says so', async () => {
+    await closeToasts()
     await skillPanel.getByRole('button', { name: 'Copy command', exact: true }).click()
     await expect(toast('Command copied')).toBeVisible()
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(command)
   })
   await atSkill('command-copied', { keepToast: true })
   await step('Copy skill, with the skill closed, puts the whole file on the clipboard, says so, and keeps the focus', async () => {
+    await closeToasts()
     await copySkill.click()
     await expect(toast('Skill copied')).toBeVisible()
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(skillFile)
