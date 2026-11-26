@@ -707,6 +707,8 @@ Or in a `.mcp.json`:
 
 The token holds each permission that both its person and its grant hold, and the guard reads the permissions of the person on each check. So a revoke, an expiry, or a permission that the person loses applies on the next request. A token is not the person: it gets no exception of `RequireSelfOr` and never passes the Owner gate. The one exception is a token with the job tools, which reaches `/backwave-mcp` while its person is the Owner, read on each request. It passes no other Owner gate, such as the dashboard or the support bundle. With journal access `none`, it sees no journal row and no user setting. With `read`, a change of a journal row gets 403.
 
+To import an old journal with an agent and a token, see [import.md](import.md).
+
 ### What `/auth` does with a token
 
 | Route | A token |

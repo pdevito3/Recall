@@ -120,6 +120,7 @@ Then [connect a login provider](docs/install.md#connect-a-login-provider) and [t
 | [docs/authentication.md](docs/authentication.md) | The login, the Owner, sessions, and the login providers |
 | [docs/backend.md](docs/backend.md) | The structure of the Server, and how to add a feature |
 | [docs/frontend.md](docs/frontend.md) | The structure of the SPA, the API client, and the routes |
+| [docs/import.md](docs/import.md) | How an AI agent imports an old journal, such as a Notion export, and how you review it |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | The logs of an install, and how to send a support bundle |
 | [CONTEXT.md](CONTEXT.md) | The words that Recall uses, such as Session, Raw, and Cleanup |
 | [docs/adr/](docs/adr/) | The decisions behind the design |
