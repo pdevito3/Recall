@@ -109,12 +109,12 @@ export function importsPage(page: Page) {
     textLeftOf: (element: Locator) =>
       element.evaluate((node) => {
         // An icon has empty space at the left of its glyph, so take the left edge of its stroke on the screen.
-        const shapes = [...node.querySelectorAll<SVGGeometryElement>('svg path')]
-        if (shapes.length > 0) {
-          return Math.round(Math.min(...shapes.flatMap((shape) => {
-            const box = shape.getBBox()
-            const half = parseFloat(getComputedStyle(shape).strokeWidth) / 2
-            const toScreen = shape.getScreenCTM()!
+        const paths = [...node.querySelectorAll<SVGGeometryElement>('svg path')]
+        if (paths.length > 0) {
+          return Math.round(Math.min(...paths.flatMap((path) => {
+            const box = path.getBBox()
+            const half = parseFloat(getComputedStyle(path).strokeWidth) / 2
+            const toScreen = path.getScreenCTM()!
             return [box.y - half, box.y + box.height + half].flatMap((y) =>
               [box.x - half, box.x + box.width + half].map((x) => new DOMPoint(x, y).matrixTransform(toScreen).x))
           })))
